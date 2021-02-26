@@ -1,0 +1,2 @@
+[alias]
+xfmt = "fmt -- --config merge_imports=true"
