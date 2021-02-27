@@ -1,6 +1,9 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// clippy complains about the Arbitrary impl for OutputFormat
+#![allow(clippy::unit_arg)]
+
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::{fmt, io, str::FromStr};
