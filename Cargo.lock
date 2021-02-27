@@ -70,9 +70,9 @@ checksum = "ae44d1a3d5a19df61dd0c8beb138458ac2a53a7ac09eba97d55592540004306b"
 
 [[package]]
 name = "camino"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "176c40258709f5883ce0f352f30b2065c64112843b33e3e318e1c1cc22960979"
+checksum = "9bb47ab72bdba43021afa16dc1ef4d80c980d366b17ed37ea8d2ebe2087075b9"
 
 [[package]]
 name = "cfg-if"
