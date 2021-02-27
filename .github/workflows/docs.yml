@@ -1,0 +1,34 @@
+on:
+  push:
+    branches:
+      - master
+      - main
+
+name: Docs
+
+jobs:
+  docs:
+    name: Build and deploy documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Build rustdoc
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          # cargo-compare currently pulls in cargo which bloats build times massively
+          args: --all-features --workspace
+      - name: Organize
+        run: |
+          mkdir target/gh-pages
+          mv target/doc target/gh-pages/rustdoc
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@releases/v3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: gh-pages
+          FOLDER: target/gh-pages
