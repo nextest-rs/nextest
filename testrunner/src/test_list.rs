@@ -8,6 +8,8 @@ use duct::cmd;
 use serde::Serialize;
 use std::{io, path::Path};
 
+// TODO: capture ignored and not-ignored tests
+
 /// List of tests, gotten by executing a test binary with the `--list` command.
 #[derive(Debug, Serialize)]
 pub struct TestList {
@@ -17,11 +19,15 @@ pub struct TestList {
 impl TestList {
     /// Creates a new test list by running the given command and applying the specified filter.
     pub fn new(test_bin: &Utf8Path, filter: &TestFilter) -> Result<Self> {
-        let test_bin_path: &Path = test_bin.as_ref();
-        let output = cmd!(test_bin_path, "--list", "--format", "terse")
-            .stdout_capture()
-            .read()
-            .with_context(|| format!("running '{} --list --format --terse' failed", test_bin))?;
+        let output = cmd!(
+            AsRef::<Path>::as_ref(test_bin),
+            "--list",
+            "--format",
+            "terse"
+        )
+        .stdout_capture()
+        .read()
+        .with_context(|| format!("running '{} --list --format --terse' failed", test_bin))?;
 
         // Parse the output.
         Self::parse(output, filter)
@@ -44,6 +50,11 @@ impl TestList {
             }
             OutputFormat::Serializable(format) => format.to_writer(self, writer),
         }
+    }
+
+    /// Iterates over the list of tests.
+    pub fn iter(&self) -> impl Iterator<Item = &'_ str> + '_ {
+        self.tests.iter().map(|s| &**s)
     }
 
     /// Outputs this list as a string with the given format.

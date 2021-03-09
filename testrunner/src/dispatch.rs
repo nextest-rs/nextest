@@ -1,7 +1,9 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{output::OutputFormat, test_filter::TestFilter, test_list::TestList};
+use crate::{
+    output::OutputFormat, runner::TestRunnerOpts, test_filter::TestFilter, test_list::TestList,
+};
 use anyhow::Result;
 use camino::Utf8PathBuf;
 use std::io;
@@ -24,6 +26,8 @@ pub enum Opts {
     Run {
         #[structopt(flatten)]
         bin_filter: TestBinFilter,
+        #[structopt(flatten)]
+        opts: TestRunnerOpts,
     },
 }
 
@@ -54,9 +58,13 @@ impl Opts {
                 let stdout_lock = stdout.lock();
                 test_list.write(format, stdout_lock)?;
             }
-            Opts::Run { bin_filter } => {
+            Opts::Run { bin_filter, opts } => {
                 println!("Running {}", bin_filter.test_bin);
-                unimplemented!()
+
+                let test_list = bin_filter.compute()?;
+                let runner = opts.build(&bin_filter.test_bin, &test_list);
+                let results = runner.execute();
+                println!("{:?}", results);
             }
         }
         Ok(())
