@@ -5,15 +5,15 @@ use crate::{output::OutputFormat, test_filter::TestFilter};
 use anyhow::{anyhow, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use duct::cmd;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io, path::Path};
 
 // TODO: capture ignored and not-ignored tests
 
 /// List of tests, gotten by executing a test binary with the `--list` command.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TestList {
-    tests: BTreeMap<Utf8PathBuf, Vec<Box<str>>>,
+    tests: BTreeMap<Utf8PathBuf, Vec<String>>,
 }
 
 impl TestList {
@@ -81,6 +81,11 @@ impl TestList {
         }
     }
 
+    /// Returns the tests for a given binary, or `None` if the binary wasn't in the list.
+    pub fn get(&self, test_bin: impl AsRef<Utf8Path>) -> Option<&[String]> {
+        self.tests.get(test_bin.as_ref()).map(|tests| &**tests)
+    }
+
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
         self.tests.iter().flat_map(|(test_bin, tests)| {
@@ -103,11 +108,11 @@ impl TestList {
     // ---
 
     /// Parses the output of --list --format terse.
-    fn parse(list_output: impl AsRef<str>, filter: &TestFilter) -> Result<Vec<Box<str>>> {
+    fn parse(list_output: impl AsRef<str>, filter: &TestFilter) -> Result<Vec<String>> {
         Self::parse_impl(list_output.as_ref(), filter)
     }
 
-    fn parse_impl(list_output: &str, filter: &TestFilter) -> Result<Vec<Box<str>>> {
+    fn parse_impl(list_output: &str, filter: &TestFilter) -> Result<Vec<String>> {
         // The output is in the form:
         // <test name>: test
         // <test name>: test
@@ -173,8 +178,8 @@ mod tests {
             tests.tests,
             btreemap! {
                 "/fake/binary".into() => vec![
-                    "tests::foo::test_bar".to_owned().into_boxed_str(),
-                    "tests::baz::test_quux".to_owned().into_boxed_str(),
+                    "tests::foo::test_bar".to_owned(),
+                    "tests::baz::test_quux".to_owned(),
                 ],
             }
         );

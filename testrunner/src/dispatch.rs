@@ -44,11 +44,11 @@ pub struct TestBinFilter {
         min_values = 1,
         number_of_values = 1
     )]
-    test_bin: Vec<Utf8PathBuf>,
+    pub test_bin: Vec<Utf8PathBuf>,
 
     // TODO: add regex-based filtering in the future?
     /// Test filter
-    filter: Vec<String>,
+    pub filter: Vec<String>,
 }
 
 impl TestBinFilter {
@@ -59,26 +59,25 @@ impl TestBinFilter {
 }
 
 impl Opts {
-    /// Execute this test binary.
-    pub fn exec(self) -> Result<()> {
+    /// Execute this test binary, writing results to the given writer.
+    pub fn exec(self, mut writer: impl io::Write) -> Result<()> {
         match self {
             Opts::ListTests { bin_filter, format } => {
                 let test_list = bin_filter.compute()?;
-                let stdout = io::stdout();
-                let stdout_lock = stdout.lock();
-                test_list.write(format, stdout_lock)?;
+                test_list.write(format, writer)?;
             }
             Opts::Run { bin_filter, opts } => {
-                println!("Running {:?}", bin_filter.test_bin);
+                writeln!(writer, "Running {:?}", bin_filter.test_bin)?;
 
                 let test_list = bin_filter.compute()?;
                 let runner = opts.build(&test_list);
                 let receiver = runner.execute();
                 for (test, run_status) in receiver.iter() {
-                    println!(
+                    writeln!(
+                        writer,
                         "{} {}: {} ({:?})",
                         test.test_bin, test.test_name, run_status.status, run_status.time_taken
-                    );
+                    )?;
                 }
             }
         }

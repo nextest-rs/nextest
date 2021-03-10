@@ -14,12 +14,12 @@ use std::{
 use structopt::StructOpt;
 
 /// Test runner options.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Default, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub struct TestRunnerOpts {
     /// Number of tests to run simultaneously [default: physical CPU count]
     #[structopt(short, long, alias = "test-threads")]
-    jobs: Option<usize>,
+    pub jobs: Option<usize>,
     // TODO: more test runner options
 }
 
