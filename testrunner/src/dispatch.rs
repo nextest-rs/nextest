@@ -15,6 +15,7 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub enum Opts {
+    /// List tests in binary
     ListTests {
         /// Output format
         #[structopt(short = "T", long, default_value, possible_values = &OutputFormat::variants(), case_insensitive = true)]
@@ -23,6 +24,7 @@ pub enum Opts {
         #[structopt(flatten)]
         bin_filter: TestBinFilter,
     },
+    /// Run tests
     Run {
         #[structopt(flatten)]
         bin_filter: TestBinFilter,
@@ -32,9 +34,17 @@ pub enum Opts {
 }
 
 #[derive(Debug, StructOpt)]
+#[structopt(rename_all = "kebab-case")]
 pub struct TestBinFilter {
-    /// Path to the test binary to run.
-    test_bin: Utf8PathBuf,
+    /// Path to test binary
+    #[structopt(
+        short = "b",
+        long,
+        required = true,
+        min_values = 1,
+        number_of_values = 1
+    )]
+    test_bin: Vec<Utf8PathBuf>,
 
     // TODO: add regex-based filtering in the future?
     /// Test filter
@@ -59,12 +69,17 @@ impl Opts {
                 test_list.write(format, stdout_lock)?;
             }
             Opts::Run { bin_filter, opts } => {
-                println!("Running {}", bin_filter.test_bin);
+                println!("Running {:?}", bin_filter.test_bin);
 
                 let test_list = bin_filter.compute()?;
-                let runner = opts.build(&bin_filter.test_bin, &test_list);
-                let results = runner.execute();
-                println!("{:?}", results);
+                let runner = opts.build(&test_list);
+                let receiver = runner.execute();
+                for (test, run_status) in receiver.iter() {
+                    println!(
+                        "{} {}: {} ({:?})",
+                        test.test_bin, test.test_name, run_status.status, run_status.time_taken
+                    );
+                }
             }
         }
         Ok(())

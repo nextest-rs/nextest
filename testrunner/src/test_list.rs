@@ -3,39 +3,65 @@
 
 use crate::{output::OutputFormat, test_filter::TestFilter};
 use anyhow::{anyhow, Context, Result};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use duct::cmd;
 use serde::Serialize;
-use std::{io, path::Path};
+use std::{collections::BTreeMap, io, path::Path};
 
 // TODO: capture ignored and not-ignored tests
 
 /// List of tests, gotten by executing a test binary with the `--list` command.
 #[derive(Debug, Serialize)]
 pub struct TestList {
-    tests: Vec<Box<str>>,
+    tests: BTreeMap<Utf8PathBuf, Vec<Box<str>>>,
 }
 
 impl TestList {
     /// Creates a new test list by running the given command and applying the specified filter.
-    pub fn new(test_bin: &Utf8Path, filter: &TestFilter) -> Result<Self> {
-        let output = cmd!(
-            AsRef::<Path>::as_ref(test_bin),
-            "--list",
-            "--format",
-            "terse"
-        )
-        .stdout_capture()
-        .read()
-        .with_context(|| format!("running '{} --list --format --terse' failed", test_bin))?;
+    pub fn new(
+        test_bins: impl IntoIterator<Item = impl Into<Utf8PathBuf>>,
+        filter: &TestFilter,
+    ) -> Result<Self> {
+        let tests = test_bins
+            .into_iter()
+            .map(|test_bin| {
+                let test_bin = test_bin.into();
 
-        // Parse the output.
-        Self::parse(output, filter)
+                let output = cmd!(
+                    AsRef::<Path>::as_ref(&test_bin),
+                    "--list",
+                    "--format",
+                    "terse"
+                )
+                .stdout_capture()
+                .read()
+                .with_context(|| {
+                    format!("running '{} --list --format --terse' failed", test_bin)
+                })?;
+
+                // Parse the output.
+                Ok((test_bin, Self::parse(output, filter)?))
+            })
+            .collect::<Result<BTreeMap<_, _>>>()?;
+
+        Ok(Self { tests })
     }
 
-    /// Creates a new test list by parsing the output of --list --format terse.
-    pub fn parse(list_output: impl AsRef<str>, filter: &TestFilter) -> Result<Self> {
-        let tests = Self::parse_impl(list_output.as_ref(), filter)?;
+    /// Creates a new test list with the given binary names and outputs.
+    pub fn new_with_outputs(
+        test_bin_outputs: impl IntoIterator<Item = (impl Into<Utf8PathBuf>, impl AsRef<str>)>,
+        filter: &TestFilter,
+    ) -> Result<Self> {
+        let tests = test_bin_outputs
+            .into_iter()
+            .map(|(test_bin, output)| {
+                let test_bin = test_bin.into();
+                let output = output.as_ref();
+
+                Ok((test_bin, Self::parse(output, filter)?))
+            })
+            .collect::<Result<BTreeMap<_, _>>>()?;
+
         Ok(Self { tests })
     }
 
@@ -43,8 +69,11 @@ impl TestList {
     pub fn write(&self, output_format: OutputFormat, mut writer: impl io::Write) -> Result<()> {
         match output_format {
             OutputFormat::Plain => {
-                for test in &self.tests {
-                    writeln!(writer, "{}", test).context("error writing output")?;
+                for (test_bin, tests) in &self.tests {
+                    writeln!(writer, "{}:", test_bin).context("error writing output")?;
+                    for test in tests {
+                        writeln!(writer, "    {}", test).context("error writing output")?;
+                    }
                 }
                 Ok(())
             }
@@ -52,9 +81,13 @@ impl TestList {
         }
     }
 
-    /// Iterates over the list of tests.
-    pub fn iter(&self) -> impl Iterator<Item = &'_ str> + '_ {
-        self.tests.iter().map(|s| &**s)
+    /// Iterates over the list of tests, returning the path and test name.
+    pub fn iter(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
+        self.tests.iter().flat_map(|(test_bin, tests)| {
+            tests
+                .iter()
+                .map(move |test_name| TestInstance::new(test_bin, test_name))
+        })
     }
 
     /// Outputs this list as a string with the given format.
@@ -68,6 +101,11 @@ impl TestList {
     // ---
     // Helper methods
     // ---
+
+    /// Parses the output of --list --format terse.
+    fn parse(list_output: impl AsRef<str>, filter: &TestFilter) -> Result<Vec<Box<str>>> {
+        Self::parse_impl(list_output.as_ref(), filter)
+    }
 
     fn parse_impl(list_output: &str, filter: &TestFilter) -> Result<Vec<Box<str>>> {
         // The output is in the form:
@@ -88,11 +126,37 @@ impl TestList {
     }
 }
 
+/// Represents a single test with its associated binary.
+#[derive(Clone, Copy, Debug, Hash, Ord, PartialOrd, Eq, PartialEq)]
+pub struct TestInstance<'a> {
+    /// The test binary.
+    pub test_bin: &'a Utf8Path,
+
+    /// The name of the test.
+    pub test_name: &'a str,
+}
+
+impl<'a> TestInstance<'a> {
+    /// Creates a new `TestInstance`.
+    pub fn new(
+        test_bin: &'a (impl AsRef<Utf8Path> + ?Sized),
+        test_name: &'a (impl AsRef<str> + ?Sized),
+    ) -> Self {
+        Self {
+            test_bin: test_bin.as_ref(),
+            test_name: test_name.as_ref(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::output::SerializableFormat;
     use indoc::indoc;
+    use maplit::btreemap;
+    use pretty_assertions::assert_eq;
+    use std::iter;
 
     #[test]
     fn test_parse() {
@@ -102,33 +166,41 @@ mod tests {
         "};
 
         let test_filter = TestFilter::any();
-        let tests = TestList::parse(&list_output, &test_filter).expect("valid output");
+        let tests =
+            TestList::new_with_outputs(iter::once(("/fake/binary", &list_output)), &test_filter)
+                .expect("valid output");
         assert_eq!(
             tests.tests,
-            vec![
-                "tests::foo::test_bar".to_owned().into_boxed_str(),
-                "tests::baz::test_quux".to_owned().into_boxed_str(),
-            ]
+            btreemap! {
+                "/fake/binary".into() => vec![
+                    "tests::foo::test_bar".to_owned().into_boxed_str(),
+                    "tests::baz::test_quux".to_owned().into_boxed_str(),
+                ],
+            }
         );
 
         // Check that the expected outputs are valid.
         static EXPECTED_PLAIN: &str = indoc! {"
-            tests::foo::test_bar
-            tests::baz::test_quux
+            /fake/binary:
+                tests::foo::test_bar
+                tests::baz::test_quux
         "};
         static EXPECTED_JSON: &str =
-            r#"{"tests":["tests::foo::test_bar","tests::baz::test_quux"]}"#;
+            r#"{"tests":{"/fake/binary":["tests::foo::test_bar","tests::baz::test_quux"]}}"#;
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
             {
-              "tests": [
-                "tests::foo::test_bar",
-                "tests::baz::test_quux"
-              ]
+              "tests": {
+                "/fake/binary": [
+                  "tests::foo::test_bar",
+                  "tests::baz::test_quux"
+                ]
+              }
             }"#};
         static EXPECTED_TOML: &str =
-            "tests = [\"tests::foo::test_bar\", \"tests::baz::test_quux\"]\n";
+            "[tests]\n\"/fake/binary\" = [\"tests::foo::test_bar\", \"tests::baz::test_quux\"]\n";
         static EXPECTED_TOML_PRETTY: &str = indoc! {r#"
-            tests = [
+            [tests]
+            "/fake/binary" = [
                 'tests::foo::test_bar',
                 'tests::baz::test_quux',
             ]
