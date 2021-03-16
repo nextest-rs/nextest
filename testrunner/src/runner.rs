@@ -30,7 +30,7 @@ pub struct TestRunnerOpts {
 impl TestRunnerOpts {
     /// Creates a new test runner.
     pub fn build(self, test_list: &TestList) -> TestRunner {
-        let jobs = self.jobs.unwrap_or_else(num_cpus::get_physical);
+        let jobs = self.jobs.unwrap_or_else(num_cpus::get);
         TestRunner {
             opts: self,
             test_list,
