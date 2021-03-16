@@ -12,7 +12,6 @@ camino = { version = "1.0.3", features = ["serde1"] }
 duct = "0.13.5"
 num_cpus = "1.13.0"
 rayon = "1.5.0"
-scoped-pool = "1.0.0"
 serde = { version = "1.0.123", features = ["derive"] }
 serde_json = "1.0.63"
 structopt = "0.3.21"

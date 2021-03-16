@@ -10,37 +10,67 @@ use std::{collections::BTreeMap, io, path::Path};
 
 // TODO: capture ignored and not-ignored tests
 
+/// Represents a test binary.
+///
+/// Accepted as input to `TestList::new`.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct TestBinary {
+    /// The test binary.
+    pub binary: Utf8PathBuf,
+
+    /// The working directory that this test should be executed in. If None, the current directory
+    /// will not be changed.
+    pub cwd: Option<Utf8PathBuf>,
+}
+
 /// List of tests, gotten by executing a test binary with the `--list` command.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TestList {
-    tests: BTreeMap<Utf8PathBuf, Vec<String>>,
+    tests: BTreeMap<Utf8PathBuf, TestBinInfo>,
+}
+
+/// Information about a test binary.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TestBinInfo {
+    /// Test names.
+    pub test_names: Vec<String>,
+
+    /// The working directory that this test binary will be executed in. If None, the current directory
+    /// will not be changed.
+    pub cwd: Option<Utf8PathBuf>,
 }
 
 impl TestList {
     /// Creates a new test list by running the given command and applying the specified filter.
     pub fn new(
-        test_bins: impl IntoIterator<Item = impl Into<Utf8PathBuf>>,
+        test_binaries: impl IntoIterator<Item = TestBinary>,
         filter: &TestFilter,
     ) -> Result<Self> {
-        let tests = test_bins
+        let tests = test_binaries
             .into_iter()
-            .map(|test_bin| {
-                let test_bin = test_bin.into();
+            .map(|test_binary| {
+                let TestBinary { binary, cwd } = test_binary;
 
-                let output = cmd!(
-                    AsRef::<Path>::as_ref(&test_bin),
+                let mut cmd = cmd!(
+                    AsRef::<Path>::as_ref(&binary),
                     "--list",
                     "--format",
                     "terse"
                 )
-                .stdout_capture()
-                .read()
-                .with_context(|| {
-                    format!("running '{} --list --format --terse' failed", test_bin)
+                .stdout_capture();
+                if let Some(cwd) = &cwd {
+                    cmd = cmd.dir(cwd);
+                };
+
+                let output = cmd.read().with_context(|| {
+                    format!("running '{} --list --format --terse' failed", binary)
                 })?;
 
                 // Parse the output.
-                Ok((test_bin, Self::parse(output, filter)?))
+                let test_names = Self::parse(output, filter)?;
+
+                Ok((binary, TestBinInfo { test_names, cwd }))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
 
@@ -49,16 +79,18 @@ impl TestList {
 
     /// Creates a new test list with the given binary names and outputs.
     pub fn new_with_outputs(
-        test_bin_outputs: impl IntoIterator<Item = (impl Into<Utf8PathBuf>, impl AsRef<str>)>,
+        test_bin_outputs: impl IntoIterator<Item = (TestBinary, impl AsRef<str>)>,
         filter: &TestFilter,
     ) -> Result<Self> {
         let tests = test_bin_outputs
             .into_iter()
-            .map(|(test_bin, output)| {
-                let test_bin = test_bin.into();
-                let output = output.as_ref();
+            .map(|(test_binary, output)| {
+                let TestBinary { binary, cwd } = test_binary;
 
-                Ok((test_bin, Self::parse(output, filter)?))
+                let output = output.as_ref();
+                let test_names = Self::parse(output, filter)?;
+
+                Ok((binary, TestBinInfo { test_names, cwd }))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
 
@@ -69,10 +101,13 @@ impl TestList {
     pub fn write(&self, output_format: OutputFormat, mut writer: impl io::Write) -> Result<()> {
         match output_format {
             OutputFormat::Plain => {
-                for (test_bin, tests) in &self.tests {
+                for (test_bin, info) in &self.tests {
                     writeln!(writer, "{}:", test_bin).context("error writing output")?;
-                    for test in tests {
-                        writeln!(writer, "    {}", test).context("error writing output")?;
+                    if let Some(cwd) = &info.cwd {
+                        writeln!(writer, "  cwd: {}", cwd).context("error writing output")?;
+                    }
+                    for test_name in &info.test_names {
+                        writeln!(writer, "    {}", test_name).context("error writing output")?;
                     }
                 }
                 Ok(())
@@ -82,16 +117,16 @@ impl TestList {
     }
 
     /// Returns the tests for a given binary, or `None` if the binary wasn't in the list.
-    pub fn get(&self, test_bin: impl AsRef<Utf8Path>) -> Option<&[String]> {
-        self.tests.get(test_bin.as_ref()).map(|tests| &**tests)
+    pub fn get(&self, test_bin: impl AsRef<Utf8Path>) -> Option<&TestBinInfo> {
+        self.tests.get(test_bin.as_ref())
     }
 
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
-        self.tests.iter().flat_map(|(test_bin, tests)| {
-            tests
+        self.tests.iter().flat_map(|(test_bin, info)| {
+            info.test_names
                 .iter()
-                .map(move |test_name| TestInstance::new(test_bin, test_name))
+                .map(move |test_name| TestInstance::new(test_bin, test_name, info.cwd.as_deref()))
         })
     }
 
@@ -135,21 +170,26 @@ impl TestList {
 #[derive(Clone, Copy, Debug, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct TestInstance<'a> {
     /// The test binary.
-    pub test_bin: &'a Utf8Path,
+    pub binary: &'a Utf8Path,
 
     /// The name of the test.
     pub test_name: &'a str,
+
+    /// The working directory for this test. If None, the test will not be changed.
+    pub cwd: Option<&'a Utf8Path>,
 }
 
 impl<'a> TestInstance<'a> {
     /// Creates a new `TestInstance`.
     pub fn new(
-        test_bin: &'a (impl AsRef<Utf8Path> + ?Sized),
+        binary: &'a (impl AsRef<Utf8Path> + ?Sized),
         test_name: &'a (impl AsRef<str> + ?Sized),
+        cwd: Option<&'a Utf8Path>,
     ) -> Self {
         Self {
-            test_bin: test_bin.as_ref(),
+            binary: binary.as_ref(),
             test_name: test_name.as_ref(),
+            cwd,
         }
     }
 }
@@ -171,44 +211,59 @@ mod tests {
         "};
 
         let test_filter = TestFilter::any();
+        let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
+        let test_binary = TestBinary {
+            binary: "/fake/binary".into(),
+            cwd: Some(fake_cwd.clone()),
+        };
         let tests =
-            TestList::new_with_outputs(iter::once(("/fake/binary", &list_output)), &test_filter)
+            TestList::new_with_outputs(iter::once((test_binary, &list_output)), &test_filter)
                 .expect("valid output");
         assert_eq!(
             tests.tests,
             btreemap! {
-                "/fake/binary".into() => vec![
-                    "tests::foo::test_bar".to_owned(),
-                    "tests::baz::test_quux".to_owned(),
-                ],
+                "/fake/binary".into() => TestBinInfo {
+                    test_names: vec![
+                        "tests::foo::test_bar".to_owned(),
+                        "tests::baz::test_quux".to_owned(),
+                    ],
+                    cwd: Some(fake_cwd),
+                }
             }
         );
 
         // Check that the expected outputs are valid.
         static EXPECTED_PLAIN: &str = indoc! {"
             /fake/binary:
+              cwd: /fake/cwd
                 tests::foo::test_bar
                 tests::baz::test_quux
         "};
-        static EXPECTED_JSON: &str =
-            r#"{"tests":{"/fake/binary":["tests::foo::test_bar","tests::baz::test_quux"]}}"#;
+        static EXPECTED_JSON: &str = r#"{"tests":{"/fake/binary":{"test-names":["tests::foo::test_bar","tests::baz::test_quux"],"cwd":"/fake/cwd"}}}"#;
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
             {
               "tests": {
-                "/fake/binary": [
-                  "tests::foo::test_bar",
-                  "tests::baz::test_quux"
-                ]
+                "/fake/binary": {
+                  "test-names": [
+                    "tests::foo::test_bar",
+                    "tests::baz::test_quux"
+                  ],
+                  "cwd": "/fake/cwd"
+                }
               }
             }"#};
-        static EXPECTED_TOML: &str =
-            "[tests]\n\"/fake/binary\" = [\"tests::foo::test_bar\", \"tests::baz::test_quux\"]\n";
+        static EXPECTED_TOML: &str = indoc! {r#"
+            [tests."/fake/binary"]
+            test-names = ["tests::foo::test_bar", "tests::baz::test_quux"]
+            cwd = "/fake/cwd"
+        "#};
         static EXPECTED_TOML_PRETTY: &str = indoc! {r#"
-            [tests]
-            "/fake/binary" = [
+            [tests."/fake/binary"]
+            test-names = [
                 'tests::foo::test_bar',
                 'tests::baz::test_quux',
             ]
+            cwd = '/fake/cwd'
         "#};
 
         assert_eq!(

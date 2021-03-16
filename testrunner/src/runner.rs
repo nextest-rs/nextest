@@ -67,6 +67,8 @@ impl<'a> TestRunner<'a> {
                     let _ = run_sender.send((test, res));
                 })
             });
+
+            drop(sender);
         });
 
         receiver
@@ -99,14 +101,18 @@ impl<'a> TestRunner<'a> {
         start_time: &Instant,
     ) -> Result<TestRunStatus<'a>> {
         // Capture stdout and stderr.
-        let cmd = cmd!(
-            AsRef::<Path>::as_ref(test.test_bin),
+        let mut cmd = cmd!(
+            AsRef::<Path>::as_ref(test.binary),
             test.test_name,
             "--nocapture"
         )
         .stdout_capture()
         .stderr_capture()
         .unchecked();
+
+        if let Some(cwd) = test.cwd {
+            cmd = cmd.dir(cwd);
+        }
 
         let handle = cmd.start()?;
 
@@ -144,7 +150,6 @@ pub enum TestStatus {
     Success,
     Failure,
     ExecutionFailure,
-    InfraFailure,
 }
 
 impl fmt::Display for TestStatus {
@@ -152,8 +157,7 @@ impl fmt::Display for TestStatus {
         match self {
             TestStatus::Success => write!(f, "success"),
             TestStatus::Failure => write!(f, "failure"),
-            TestStatus::ExecutionFailure => write!(f, "execution failure"),
-            TestStatus::InfraFailure => write!(f, "infra failure"),
+            TestStatus::ExecutionFailure => write!(f, "exec-fail"),
         }
     }
 }

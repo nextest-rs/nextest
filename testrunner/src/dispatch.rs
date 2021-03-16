@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    output::OutputFormat, runner::TestRunnerOpts, test_filter::TestFilter, test_list::TestList,
+    output::OutputFormat,
+    runner::TestRunnerOpts,
+    test_filter::TestFilter,
+    test_list::{TestBinary, TestList},
 };
 use anyhow::Result;
 use camino::Utf8PathBuf;
@@ -54,7 +57,14 @@ pub struct TestBinFilter {
 impl TestBinFilter {
     fn compute(&self) -> Result<TestList> {
         let test_filter = TestFilter::new(&self.filter);
-        TestList::new(&self.test_bin, &test_filter)
+        TestList::new(
+            self.test_bin.iter().map(|binary| TestBinary {
+                binary: binary.clone(),
+                // TODO: add support for cwd through this interface?
+                cwd: None,
+            }),
+            &test_filter,
+        )
     }
 }
 
@@ -76,7 +86,7 @@ impl Opts {
                     writeln!(
                         writer,
                         "{} {}: {} ({:?})",
-                        test.test_bin, test.test_name, run_status.status, run_status.time_taken
+                        test.binary, test.test_name, run_status.status, run_status.time_taken
                     )?;
                 }
             }

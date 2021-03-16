@@ -3,36 +3,57 @@
 
 //! Basic tests for the test runner.
 
-use camino::{Utf8Path, Utf8PathBuf};
+use anyhow::Result;
+use camino::Utf8Path;
 use cargo_metadata::Message;
 use duct::cmd;
 use maplit::btreemap;
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
-use std::{collections::BTreeMap, env, io::Cursor};
+use std::{
+    collections::{BTreeMap, HashMap},
+    env,
+    io::Cursor,
+};
 use testrunner::{
     dispatch::{Opts, TestBinFilter},
     output::{OutputFormat, SerializableFormat},
-    runner::TestRunnerOpts,
-    test_list::TestList,
+    runner::{TestRunnerOpts, TestStatus},
+    test_filter::TestFilter,
+    test_list::{TestBinary, TestInstance, TestList},
 };
 
-static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<&'static str>>> = Lazy::new(|| {
+#[derive(Copy, Clone, Debug)]
+struct TestFixture {
+    name: &'static str,
+    status: TestStatus,
+}
+
+impl PartialEq<String> for TestFixture {
+    fn eq(&self, other: &String) -> bool {
+        self.name == other
+    }
+}
+
+static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::new(|| {
     btreemap! {
         "basic" => vec![
-            "test_failure_assert",
-            "test_failure_error",
-            "test_failure_should_panic",
-            "test_success",
-            "test_success_should_panic",
+            TestFixture { name: "test_cwd", status: TestStatus::Success },
+            TestFixture { name: "test_failure_assert", status: TestStatus::Failure },
+            TestFixture { name: "test_failure_error", status: TestStatus::Failure },
+            TestFixture { name: "test_failure_should_panic", status: TestStatus::Failure },
+            TestFixture { name: "test_success", status: TestStatus::Success },
+            TestFixture { name: "test_success_should_panic", status: TestStatus::Success },
         ],
-        "testrunner-tests" => vec!["tests::unit_test_success"],
+        "testrunner-tests" => vec![
+            TestFixture { name: "tests::unit_test_success", status: TestStatus::Success },
+        ],
     }
 });
 
-static FIXTURE_TARGETS: Lazy<BTreeMap<String, Utf8PathBuf>> = Lazy::new(init_fixture_targets);
+static FIXTURE_TARGETS: Lazy<BTreeMap<String, TestBinary>> = Lazy::new(init_fixture_targets);
 
-fn init_fixture_targets() -> BTreeMap<String, Utf8PathBuf> {
+fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
     // TODO: actually productionize this, probably requires moving x into this repo
     let cmd_name = match env::var("CARGO") {
         Ok(v) => v,
@@ -57,9 +78,17 @@ fn init_fixture_targets() -> BTreeMap<String, Utf8PathBuf> {
         let message = message.expect("parsing message off output stream should succeed");
         if let Message::CompilerArtifact(artifact) = message {
             println!("build artifact: {:?}", artifact);
-            if let Some(executable) = artifact.executable {
-                targets.insert(artifact.target.name, executable);
+            if let Some(binary) = artifact.executable {
+                let mut cwd = artifact.target.src_path;
+                // Pop two levels to get the manifest dir.
+                cwd.pop();
+                cwd.pop();
+
+                let cwd = Some(cwd);
+                targets.insert(artifact.target.name, TestBinary { binary, cwd });
             }
+        } else if let Message::TextLine(line) = message {
+            println!("{}", line);
         }
     }
 
@@ -70,7 +99,10 @@ fn init_fixture_targets() -> BTreeMap<String, Utf8PathBuf> {
 fn test_list_tests() {
     let opts = Opts::ListTests {
         bin_filter: TestBinFilter {
-            test_bin: FIXTURE_TARGETS.values().cloned().collect(),
+            test_bin: FIXTURE_TARGETS
+                .values()
+                .map(|test_binary| test_binary.binary.clone())
+                .collect(),
             filter: vec![],
         },
         format: OutputFormat::Serializable(SerializableFormat::Json),
@@ -82,28 +114,47 @@ fn test_list_tests() {
     let test_list: TestList = serde_json::from_str(&out).expect("JSON parsing successful");
 
     for (name, expected) in &*EXPECTED_TESTS {
-        let path = FIXTURE_TARGETS
+        let test_binary = FIXTURE_TARGETS
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
-        let actual = test_list
-            .get(path)
-            .unwrap_or_else(|| panic!("test list not found for {}", path));
-        assert_eq!(expected, actual, "test list matches");
+        let info = test_list
+            .get(&test_binary.binary)
+            .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary));
+        assert_eq!(expected, &info.test_names, "test list matches");
     }
 }
 
 #[test]
-fn test_run() {
-    let opts = Opts::Run {
-        bin_filter: TestBinFilter {
-            test_bin: FIXTURE_TARGETS.values().cloned().collect(),
-            filter: vec![],
-        },
-        opts: TestRunnerOpts::default(),
-    };
+fn test_run() -> Result<()> {
+    let test_filter = TestFilter::any();
+    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
+    let test_list = TestList::new(test_bins, &test_filter)?;
+    let runner = TestRunnerOpts::default().build(&test_list);
+    let receiver = runner.execute();
 
-    let mut out: Vec<u8> = vec![];
-    opts.exec(&mut out).expect("execution was successful");
-    // TODO: expand this test, check results and outputs
-    println!("{}", String::from_utf8_lossy(&out));
+    let instance_statuses: HashMap<_, _> = receiver.iter().collect();
+    for (name, expected) in &*EXPECTED_TESTS {
+        let test_binary = FIXTURE_TARGETS
+            .get(*name)
+            .unwrap_or_else(|| panic!("unexpected test name {}", name));
+        for fixture in expected {
+            let instance = TestInstance {
+                binary: &test_binary.binary,
+                test_name: fixture.name,
+                cwd: test_binary.cwd.as_deref(),
+            };
+            let run_status = &instance_statuses[&instance];
+            assert_eq!(
+                run_status.status,
+                fixture.status,
+                "for {}, test {}, status matches\n\n---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",
+                name,
+                fixture.name,
+                String::from_utf8_lossy(&run_status.stdout),
+                String::from_utf8_lossy(&run_status.stderr)
+            );
+        }
+    }
+
+    Ok(())
 }
