@@ -155,9 +155,13 @@ impl TestList {
 
         let mut tests = vec![];
         for line in list_output.lines() {
-            let test_name = line
-                .strip_suffix(": test")
-                .ok_or_else(|| anyhow!("line '{}' did not end with the string ': test'", line))?;
+            let test_name = line.strip_suffix(": test").ok_or_else(|| {
+                anyhow!(
+                    "line '{}' did not end with the string ': test', full output:\n{}",
+                    line,
+                    list_output
+                )
+            })?;
             if filter.is_match(test_name) {
                 tests.push(test_name.into());
             }
