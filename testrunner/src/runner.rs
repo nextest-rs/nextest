@@ -6,9 +6,13 @@ use anyhow::Result;
 use duct::cmd;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
+    convert::Infallible,
     fmt,
     path::Path,
-    sync::{mpsc, mpsc::Receiver},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -50,18 +54,52 @@ pub struct TestRunner<'a> {
 impl<'a> TestRunner<'a> {
     /// Executes the listed tests, each one in its own process.
     ///
-    /// Returns a receiver which can be used to gather test results.
-    pub fn execute(&self) -> Receiver<(TestInstance<'a>, TestRunStatus<'a>)> {
+    /// The callback is called with the results of each test.
+    pub fn execute<F>(&self, mut callback: F)
+    where
+        F: FnMut(TestInstance<'a>, TestRunStatus<'a>) + Send,
+    {
+        let _ = self.try_execute::<Infallible, _>(|test_instance, run_status| {
+            callback(test_instance, run_status);
+            Ok(())
+        });
+    }
+
+    /// Executes the listed tests, each one in its own process.
+    ///
+    /// Accepts a callback that is called with the results of each test. If the callback returns an
+    /// error, the callback is no longer called.
+    pub fn try_execute<E, F>(&self, mut callback: F) -> Result<(), E>
+    where
+        F: FnMut(TestInstance<'a>, TestRunStatus<'a>) -> Result<(), E> + Send,
+        E: Send,
+    {
         // TODO: add support for other test-running approaches, measure performance.
 
         let (sender, receiver) = mpsc::channel();
 
         // This is move so that sender is moved into it. When the scope finishes the sender is
         // dropped, and the receiver below completes iteration.
+
+        let canceled = AtomicBool::new(false);
+        let canceled_ref = &canceled;
+
+        // XXX rayon requires its scope callback to be Send, there's no good reason for it but
+        // there's also no other well-maintained scoped threadpool :(
         self.run_pool.scope(move |run_scope| {
             self.test_list.iter().for_each(|test| {
+                if canceled_ref.load(Ordering::Acquire) {
+                    // Check for test cancellation.
+                    return;
+                }
+
                 let run_sender = sender.clone();
                 run_scope.spawn(move |_| {
+                    if canceled_ref.load(Ordering::Acquire) {
+                        // Check for test cancellation.
+                        return;
+                    }
+
                     let res = self.run_test(test);
                     // Failure to send means the receiver was dropped.
                     let _ = run_sender.send((test, res));
@@ -69,9 +107,16 @@ impl<'a> TestRunner<'a> {
             });
 
             drop(sender);
-        });
 
-        receiver
+            for (test_instance, run_status) in receiver.iter() {
+                if let Err(err) = callback(test_instance, run_status) {
+                    canceled_ref.store(true, Ordering::Release);
+                    return Err(err);
+                }
+            }
+
+            Ok(())
+        })
     }
 
     // ---

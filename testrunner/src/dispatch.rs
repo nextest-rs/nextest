@@ -70,7 +70,7 @@ impl TestBinFilter {
 
 impl Opts {
     /// Execute this test binary, writing results to the given writer.
-    pub fn exec(self, mut writer: impl io::Write) -> Result<()> {
+    pub fn exec(self, mut writer: impl io::Write + Send) -> Result<()> {
         match self {
             Opts::ListTests { bin_filter, format } => {
                 let test_list = bin_filter.compute()?;
@@ -81,14 +81,13 @@ impl Opts {
 
                 let test_list = bin_filter.compute()?;
                 let runner = opts.build(&test_list);
-                let receiver = runner.execute();
-                for (test, run_status) in receiver.iter() {
+                runner.try_execute(|test, run_status| {
                     writeln!(
                         writer,
                         "{} {}: {} ({:?})",
                         test.binary, test.test_name, run_status.status, run_status.time_taken
-                    )?;
-                }
+                    )
+                })?;
             }
         }
         Ok(())

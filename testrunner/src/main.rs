@@ -9,6 +9,5 @@ fn main() -> anyhow::Result<()> {
     let opts = Opts::from_args();
 
     let stdout = io::stdout();
-    let stdout_lock = stdout.lock();
-    opts.exec(stdout_lock)
+    opts.exec(stdout)
 }

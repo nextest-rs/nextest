@@ -130,9 +130,11 @@ fn test_run() -> Result<()> {
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
     let runner = TestRunnerOpts::default().build(&test_list);
-    let receiver = runner.execute();
+    let mut instance_statuses = HashMap::new();
+    runner.execute(|test_instance, run_status| {
+        instance_statuses.insert(test_instance, run_status);
+    });
 
-    let instance_statuses: HashMap<_, _> = receiver.iter().collect();
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .get(*name)
