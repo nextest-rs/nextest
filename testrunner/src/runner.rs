@@ -148,8 +148,9 @@ impl<'a> TestRunner<'a> {
         // Capture stdout and stderr.
         let mut cmd = cmd!(
             AsRef::<Path>::as_ref(test.binary),
+            "--exact",
             test.test_name,
-            "--nocapture"
+            "--nocapture",
         )
         .stdout_capture()
         .stderr_capture()
