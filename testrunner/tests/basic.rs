@@ -42,6 +42,8 @@ static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::ne
             TestFixture { name: "test_failure_assert", status: TestStatus::Failure },
             TestFixture { name: "test_failure_error", status: TestStatus::Failure },
             TestFixture { name: "test_failure_should_panic", status: TestStatus::Failure },
+            // XXX status should probably be skipped or similar (need to handle ignored tests better)
+            TestFixture { name: "test_ignored", status: TestStatus::Success },
             TestFixture { name: "test_success", status: TestStatus::Success },
             TestFixture { name: "test_success_should_panic", status: TestStatus::Success },
         ],

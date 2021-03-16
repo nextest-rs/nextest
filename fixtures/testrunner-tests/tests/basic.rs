@@ -30,3 +30,7 @@ fn test_cwd() {
     let compile_time_cwd = Path::new(env!("CARGO_MANIFEST_DIR"));
     assert_eq!(runtime_cwd, compile_time_cwd, "current dir matches");
 }
+
+#[test]
+#[ignore]
+fn test_ignored() {}
