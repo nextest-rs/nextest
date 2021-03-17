@@ -86,7 +86,14 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
                 cwd.pop();
 
                 let cwd = Some(cwd);
-                targets.insert(artifact.target.name, TestBinary { binary, cwd });
+                targets.insert(
+                    artifact.target.name,
+                    TestBinary {
+                        binary,
+                        cwd,
+                        friendly_name: Some("my-friendly-name".into()),
+                    },
+                );
             }
         } else if let Message::TextLine(line) = message {
             println!("{}", line);
@@ -139,6 +146,7 @@ fn test_run() -> Result<()> {
         for fixture in expected {
             let instance = TestInstance {
                 binary: &test_binary.binary,
+                friendly_name: Some("my-friendly-name"),
                 test_name: fixture.name,
                 cwd: test_binary.cwd.as_deref(),
             };

@@ -145,32 +145,16 @@ impl<'a> TestEvent<'a> {
                 write!(writer, "[{:>8.3?}s] ", run_status.time_taken.as_secs_f64())?;
 
                 // Finally, print the name of the test.
-                // TODO: should have a friendly name here
-                writeln!(
-                    writer,
-                    "  {}::{}",
-                    test_instance
-                        .binary
-                        .file_name()
-                        .expect("binaries should always have a file name"),
-                    test_instance.test_name
-                )?;
+                test_instance.write(&mut writer)?;
+                writeln!(writer)?;
             }
             TestEvent::TestSkipped { test_instance } => {
                 writer.set_color(&Self::skip_spec())?;
                 write!(writer, "        SKIP ")?;
                 writer.reset()?;
 
-                // TODO: should have a friendly name here
-                writeln!(
-                    writer,
-                    "  {}::{}",
-                    test_instance
-                        .binary
-                        .file_name()
-                        .expect("binaries should always have a file name"),
-                    test_instance.test_name
-                )?;
+                test_instance.write(&mut writer)?;
+                writeln!(writer)?;
             }
         }
         Ok(())

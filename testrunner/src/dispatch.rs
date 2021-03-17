@@ -70,7 +70,8 @@ impl TestBinFilter {
         TestList::new(
             self.test_bin.iter().map(|binary| TestBinary {
                 binary: binary.clone(),
-                // TODO: add support for cwd through this interface?
+                // TODO: add support for these through the CLI interface?
+                friendly_name: None,
                 cwd: None,
             }),
             &test_filter,

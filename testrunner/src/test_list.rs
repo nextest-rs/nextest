@@ -19,6 +19,9 @@ pub struct TestBinary {
     /// The test binary.
     pub binary: Utf8PathBuf,
 
+    /// A friendly name for this binary. If provided, this name will be used instead of the binary.
+    pub friendly_name: Option<String>,
+
     /// The working directory that this test should be executed in. If None, the current directory
     /// will not be changed.
     pub cwd: Option<Utf8PathBuf>,
@@ -34,6 +37,9 @@ pub struct TestList {
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct TestBinInfo {
+    /// A friendly name for this binary. If provided, this name will be used instead of the binary.
+    pub friendly_name: Option<String>,
+
     /// Test names.
     pub test_names: Vec<String>,
 
@@ -51,7 +57,11 @@ impl TestList {
         let tests = test_binaries
             .into_iter()
             .map(|test_binary| {
-                let TestBinary { binary, cwd } = test_binary;
+                let TestBinary {
+                    binary,
+                    cwd,
+                    friendly_name,
+                } = test_binary;
 
                 let mut cmd = cmd!(
                     AsRef::<Path>::as_ref(&binary),
@@ -71,7 +81,14 @@ impl TestList {
                 // Parse the output.
                 let test_names = Self::parse(output, filter)?;
 
-                Ok((binary, TestBinInfo { test_names, cwd }))
+                Ok((
+                    binary,
+                    TestBinInfo {
+                        test_names,
+                        cwd,
+                        friendly_name,
+                    },
+                ))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
 
@@ -86,12 +103,23 @@ impl TestList {
         let tests = test_bin_outputs
             .into_iter()
             .map(|(test_binary, output)| {
-                let TestBinary { binary, cwd } = test_binary;
+                let TestBinary {
+                    binary,
+                    cwd,
+                    friendly_name,
+                } = test_binary;
 
                 let output = output.as_ref();
                 let test_names = Self::parse(output, filter)?;
 
-                Ok((binary, TestBinInfo { test_names, cwd }))
+                Ok((
+                    binary,
+                    TestBinInfo {
+                        test_names,
+                        cwd,
+                        friendly_name,
+                    },
+                ))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
 
@@ -114,9 +142,14 @@ impl TestList {
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
         self.tests.iter().flat_map(|(test_bin, info)| {
-            info.test_names
-                .iter()
-                .map(move |test_name| TestInstance::new(test_bin, test_name, info.cwd.as_deref()))
+            info.test_names.iter().map(move |test_name| {
+                TestInstance::new(
+                    test_bin,
+                    info.friendly_name.as_deref(),
+                    test_name,
+                    info.cwd.as_deref(),
+                )
+            })
         })
     }
 
@@ -160,9 +193,9 @@ impl TestList {
     }
 
     fn write_plain(&self, mut writer: impl WriteColor) -> io::Result<()> {
-        let test_bin_spec = Self::test_bin_spec();
+        let test_bin_spec = test_bin_spec();
         let field_spec = Self::field_spec();
-        let test_name_spec = Self::test_name_spec();
+        let test_name_spec = test_name_spec();
 
         for (test_bin, info) in &self.tests {
             writer.set_color(&test_bin_spec)?;
@@ -186,24 +219,10 @@ impl TestList {
         Ok(())
     }
 
-    fn test_bin_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec.set_bold(true);
-        color_spec
-    }
-
     fn field_spec() -> ColorSpec {
         let mut color_spec = ColorSpec::new();
         color_spec
             .set_fg(Some(termcolor::Color::Yellow))
-            .set_bold(true);
-        color_spec
-    }
-
-    fn test_name_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec
-            .set_fg(Some(termcolor::Color::Blue))
             .set_bold(true);
         color_spec
     }
@@ -215,6 +234,9 @@ pub struct TestInstance<'a> {
     /// The test binary.
     pub binary: &'a Utf8Path,
 
+    /// The friendly name of the binary, if any.
+    pub friendly_name: Option<&'a str>,
+
     /// The name of the test.
     pub test_name: &'a str,
 
@@ -224,17 +246,63 @@ pub struct TestInstance<'a> {
 
 impl<'a> TestInstance<'a> {
     /// Creates a new `TestInstance`.
-    pub fn new(
+    pub(crate) fn new(
         binary: &'a (impl AsRef<Utf8Path> + ?Sized),
+        friendly_name: Option<&'a str>,
         test_name: &'a (impl AsRef<str> + ?Sized),
         cwd: Option<&'a Utf8Path>,
     ) -> Self {
         Self {
             binary: binary.as_ref(),
+            friendly_name,
             test_name: test_name.as_ref(),
             cwd,
         }
     }
+
+    /// Formats this `TestInstance` and writes it to the given `WriteColor`.
+    pub fn write(&self, mut writer: impl WriteColor) -> io::Result<()> {
+        let friendly_name = self.friendly_name.unwrap_or_else(|| {
+            self.binary
+                .file_name()
+                .expect("test binaries always have file names")
+        });
+
+        writer.set_color(&test_bin_spec())?;
+        // TODO: don't hardcode the maximum width (probably need to look at all the friendly names
+        // across all instances)
+        write!(writer, "{:>20}", friendly_name)?;
+        writer.reset()?;
+        write!(writer, "  ")?;
+
+        // Now look for the part of the test after the last ::, if any.
+        let mut splits = self.test_name.rsplitn(2, "::");
+        let trailing = splits.next().expect("test should have at least 1 element");
+        if let Some(rest) = splits.next() {
+            write!(writer, "{}::", rest)?;
+        }
+        writer.set_color(&test_name_spec())?;
+        write!(writer, "{}", trailing)?;
+        writer.reset()?;
+
+        Ok(())
+    }
+}
+
+fn test_bin_spec() -> ColorSpec {
+    let mut color_spec = ColorSpec::new();
+    color_spec
+        .set_fg(Some(termcolor::Color::Magenta))
+        .set_bold(true);
+    color_spec
+}
+
+fn test_name_spec() -> ColorSpec {
+    let mut color_spec = ColorSpec::new();
+    color_spec
+        .set_fg(Some(termcolor::Color::Blue))
+        .set_bold(true);
+    color_spec
 }
 
 #[cfg(test)]
@@ -255,9 +323,11 @@ mod tests {
 
         let test_filter = TestFilter::any();
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
+        let fake_friendly_name = "fake-package".to_owned();
         let test_binary = TestBinary {
             binary: "/fake/binary".into(),
             cwd: Some(fake_cwd.clone()),
+            friendly_name: Some(fake_friendly_name.clone()),
         };
         let tests =
             TestList::new_with_outputs(iter::once((test_binary, &list_output)), &test_filter)
@@ -271,6 +341,7 @@ mod tests {
                         "tests::baz::test_quux".to_owned(),
                     ],
                     cwd: Some(fake_cwd),
+                    friendly_name: Some(fake_friendly_name),
                 }
             }
         );
@@ -282,11 +353,11 @@ mod tests {
                 tests::foo::test_bar
                 tests::baz::test_quux
         "};
-        static EXPECTED_JSON: &str = r#"{"tests":{"/fake/binary":{"test-names":["tests::foo::test_bar","tests::baz::test_quux"],"cwd":"/fake/cwd"}}}"#;
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
             {
               "tests": {
                 "/fake/binary": {
+                  "friendly-name": "fake-package",
                   "test-names": [
                     "tests::foo::test_bar",
                     "tests::baz::test_quux"
@@ -295,13 +366,9 @@ mod tests {
                 }
               }
             }"#};
-        static EXPECTED_TOML: &str = indoc! {r#"
-            [tests."/fake/binary"]
-            test-names = ["tests::foo::test_bar", "tests::baz::test_quux"]
-            cwd = "/fake/cwd"
-        "#};
         static EXPECTED_TOML_PRETTY: &str = indoc! {r#"
             [tests."/fake/binary"]
+            friendly-name = 'fake-package'
             test-names = [
                 'tests::foo::test_bar',
                 'tests::baz::test_quux',
@@ -317,21 +384,9 @@ mod tests {
         );
         assert_eq!(
             tests
-                .to_string(OutputFormat::Serializable(SerializableFormat::Json))
-                .expect("json succeeded"),
-            EXPECTED_JSON
-        );
-        assert_eq!(
-            tests
                 .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
                 .expect("json-pretty succeeded"),
             EXPECTED_JSON_PRETTY
-        );
-        assert_eq!(
-            tests
-                .to_string(OutputFormat::Serializable(SerializableFormat::Toml))
-                .expect("toml succeeded"),
-            EXPECTED_TOML
         );
         assert_eq!(
             tests
