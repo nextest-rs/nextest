@@ -1,7 +1,10 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::test_list::{TestInstance, TestList};
+use crate::{
+    reporter::TestEvent,
+    test_list::{TestInstance, TestList},
+};
 use anyhow::Result;
 use duct::cmd;
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -57,10 +60,10 @@ impl<'a> TestRunner<'a> {
     /// The callback is called with the results of each test.
     pub fn execute<F>(&self, mut callback: F)
     where
-        F: FnMut(TestInstance<'a>, TestRunStatus<'a>) + Send,
+        F: FnMut(TestEvent<'a>) + Send,
     {
-        let _ = self.try_execute::<Infallible, _>(|test_instance, run_status| {
-            callback(test_instance, run_status);
+        let _ = self.try_execute::<Infallible, _>(|test_event| {
+            callback(test_event);
             Ok(())
         });
     }
@@ -71,7 +74,7 @@ impl<'a> TestRunner<'a> {
     /// error, the callback is no longer called.
     pub fn try_execute<E, F>(&self, mut callback: F) -> Result<(), E>
     where
-        F: FnMut(TestInstance<'a>, TestRunStatus<'a>) -> Result<(), E> + Send,
+        F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
     {
         // TODO: add support for other test-running approaches, measure performance.
@@ -87,7 +90,7 @@ impl<'a> TestRunner<'a> {
         // XXX rayon requires its scope callback to be Send, there's no good reason for it but
         // there's also no other well-maintained scoped threadpool :(
         self.run_pool.scope(move |run_scope| {
-            self.test_list.iter().for_each(|test| {
+            self.test_list.iter().for_each(|test_instance| {
                 if canceled_ref.load(Ordering::Acquire) {
                     // Check for test cancellation.
                     return;
@@ -100,16 +103,22 @@ impl<'a> TestRunner<'a> {
                         return;
                     }
 
-                    let res = self.run_test(test);
                     // Failure to send means the receiver was dropped.
-                    let _ = run_sender.send((test, res));
+                    let _ = run_sender.send(TestEvent::TestStarted { test_instance });
+
+                    let run_status = self.run_test(test_instance);
+                    // Failure to send means the receiver was dropped.
+                    let _ = run_sender.send(TestEvent::TestFinished {
+                        test_instance,
+                        run_status,
+                    });
                 })
             });
 
             drop(sender);
 
-            for (test_instance, run_status) in receiver.iter() {
-                if let Err(err) = callback(test_instance, run_status) {
+            for test_event in receiver.iter() {
+                if let Err(err) = callback(test_event) {
                     canceled_ref.store(true, Ordering::Release);
                     return Err(err);
                 }
@@ -124,13 +133,12 @@ impl<'a> TestRunner<'a> {
     // ---
 
     /// Run an individual test in its own process.
-    fn run_test(&self, test: TestInstance<'a>) -> TestRunStatus<'a> {
+    fn run_test(&self, test: TestInstance<'a>) -> TestRunStatus {
         let start_time = Instant::now();
 
         match self.run_test_inner(test, &start_time) {
             Ok(run_status) => run_status,
             Err(_) => TestRunStatus {
-                test,
                 // TODO: can we return more information in stdout/stderr? investigate this
                 stdout: vec![],
                 stderr: vec![],
@@ -144,7 +152,7 @@ impl<'a> TestRunner<'a> {
         &self,
         test: TestInstance<'a>,
         start_time: &Instant,
-    ) -> Result<TestRunStatus<'a>> {
+    ) -> Result<TestRunStatus> {
         // Capture stdout and stderr.
         let mut cmd = cmd!(
             AsRef::<Path>::as_ref(test.binary),
@@ -173,7 +181,6 @@ impl<'a> TestRunner<'a> {
             TestStatus::Failure
         };
         Ok(TestRunStatus {
-            test,
             stdout: output.stdout,
             stderr: output.stderr,
             status,
@@ -182,9 +189,9 @@ impl<'a> TestRunner<'a> {
     }
 }
 
+/// Information about a test that finished running.
 #[derive(Clone, Debug)]
-pub struct TestRunStatus<'a> {
-    pub test: TestInstance<'a>,
+pub struct TestRunStatus {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
     pub status: TestStatus,

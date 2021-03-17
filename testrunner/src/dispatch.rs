@@ -3,13 +3,13 @@
 
 use crate::{
     output::OutputFormat,
+    reporter::{Color, TestReporter},
     runner::TestRunnerOpts,
     test_filter::TestFilter,
     test_list::{TestBinary, TestList},
 };
 use anyhow::Result;
 use camino::Utf8PathBuf;
-use std::io;
 use structopt::StructOpt;
 
 /// This test runner accepts a Rust test binary and does fancy things with it.
@@ -17,11 +17,21 @@ use structopt::StructOpt;
 /// TODO: expand on this
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
-pub enum Opts {
+pub struct Opts {
+    #[structopt(long, default_value)]
+    /// Coloring: always, auto, never
+    color: Color,
+
+    #[structopt(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, StructOpt)]
+pub enum Command {
     /// List tests in binary
     ListTests {
         /// Output format
-        #[structopt(short = "T", long, default_value, possible_values = &OutputFormat::variants(), case_insensitive = true)]
+        #[structopt(short = "T", long, default_value, possible_values = & OutputFormat::variants(), case_insensitive = true)]
         format: OutputFormat,
 
         #[structopt(flatten)]
@@ -69,24 +79,21 @@ impl TestBinFilter {
 }
 
 impl Opts {
-    /// Execute this test binary, writing results to the given writer.
-    pub fn exec(self, mut writer: impl io::Write + Send) -> Result<()> {
-        match self {
-            Opts::ListTests { bin_filter, format } => {
-                let test_list = bin_filter.compute()?;
-                test_list.write(format, writer)?;
-            }
-            Opts::Run { bin_filter, opts } => {
-                writeln!(writer, "Running {:?}", bin_filter.test_bin)?;
+    /// Execute the command.
+    pub fn exec(self) -> Result<()> {
+        let reporter = TestReporter::new(self.color);
 
+        match self.command {
+            Command::ListTests { bin_filter, format } => {
+                let test_list = bin_filter.compute()?;
+                reporter.write_list(&test_list, format)?;
+            }
+            Command::Run { bin_filter, opts } => {
                 let test_list = bin_filter.compute()?;
                 let runner = opts.build(&test_list);
-                runner.try_execute(|test, run_status| {
-                    writeln!(
-                        writer,
-                        "{} {}: {} ({:?})",
-                        test.binary, test.test_name, run_status.status, run_status.time_taken
-                    )
+                runner.try_execute(|event| {
+                    reporter.report_event(event)
+                    // TODO: no-fail-fast logic
                 })?;
             }
         }

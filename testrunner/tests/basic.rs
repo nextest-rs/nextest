@@ -16,8 +16,7 @@ use std::{
     io::Cursor,
 };
 use testrunner::{
-    dispatch::{Opts, TestBinFilter},
-    output::{OutputFormat, SerializableFormat},
+    reporter::TestEvent,
     runner::{TestRunnerOpts, TestStatus},
     test_filter::TestFilter,
     test_list::{TestBinary, TestInstance, TestList},
@@ -98,22 +97,10 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
 }
 
 #[test]
-fn test_list_tests() {
-    let opts = Opts::ListTests {
-        bin_filter: TestBinFilter {
-            test_bin: FIXTURE_TARGETS
-                .values()
-                .map(|test_binary| test_binary.binary.clone())
-                .collect(),
-            filter: vec![],
-        },
-        format: OutputFormat::Serializable(SerializableFormat::Json),
-    };
-
-    let mut out: Vec<u8> = vec![];
-    opts.exec(&mut out).expect("execution was successful");
-    let out = String::from_utf8(out).expect("invalid utf8");
-    let test_list: TestList = serde_json::from_str(&out).expect("JSON parsing successful");
+fn test_list_tests() -> Result<()> {
+    let test_filter = TestFilter::any();
+    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
+    let test_list = TestList::new(test_bins, &test_filter)?;
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
@@ -124,6 +111,8 @@ fn test_list_tests() {
             .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary));
         assert_eq!(expected, &info.test_names, "test list matches");
     }
+
+    Ok(())
 }
 
 #[test]
@@ -133,8 +122,14 @@ fn test_run() -> Result<()> {
     let test_list = TestList::new(test_bins, &test_filter)?;
     let runner = TestRunnerOpts::default().build(&test_list);
     let mut instance_statuses = HashMap::new();
-    runner.execute(|test_instance, run_status| {
-        instance_statuses.insert(test_instance, run_status);
+    runner.execute(|event| {
+        if let TestEvent::TestFinished {
+            test_instance,
+            run_status,
+        } = event
+        {
+            instance_statuses.insert(test_instance, run_status);
+        }
     });
 
     for (name, expected) in &*EXPECTED_TESTS {

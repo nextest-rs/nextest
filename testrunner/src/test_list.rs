@@ -7,6 +7,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use duct::cmd;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io, path::Path};
+use termcolor::{ColorSpec, NoColor, WriteColor};
 
 // TODO: capture ignored and not-ignored tests
 
@@ -98,20 +99,9 @@ impl TestList {
     }
 
     /// Outputs this list to the given writer.
-    pub fn write(&self, output_format: OutputFormat, mut writer: impl io::Write) -> Result<()> {
+    pub fn write(&self, output_format: OutputFormat, writer: impl WriteColor) -> Result<()> {
         match output_format {
-            OutputFormat::Plain => {
-                for (test_bin, info) in &self.tests {
-                    writeln!(writer, "{}:", test_bin).context("error writing output")?;
-                    if let Some(cwd) = &info.cwd {
-                        writeln!(writer, "  cwd: {}", cwd).context("error writing output")?;
-                    }
-                    for test_name in &info.test_names {
-                        writeln!(writer, "    {}", test_name).context("error writing output")?;
-                    }
-                }
-                Ok(())
-            }
+            OutputFormat::Plain => self.write_plain(writer).context("error writing test list"),
             OutputFormat::Serializable(format) => format.to_writer(self, writer),
         }
     }
@@ -133,9 +123,9 @@ impl TestList {
     /// Outputs this list as a string with the given format.
     pub fn to_string(&self, output_format: OutputFormat) -> Result<String> {
         // Ugh this sucks. String really should have an io::Write impl that errors on non-UTF8 text.
-        let mut buf = vec![];
+        let mut buf = NoColor::new(vec![]);
         self.write(output_format, &mut buf)?;
-        Ok(String::from_utf8(buf).expect("buffer is valid UTF-8"))
+        Ok(String::from_utf8(buf.into_inner()).expect("buffer is valid UTF-8"))
     }
 
     // ---
@@ -167,6 +157,55 @@ impl TestList {
             }
         }
         Ok(tests)
+    }
+
+    fn write_plain(&self, mut writer: impl WriteColor) -> io::Result<()> {
+        let test_bin_spec = Self::test_bin_spec();
+        let field_spec = Self::field_spec();
+        let test_name_spec = Self::test_name_spec();
+
+        for (test_bin, info) in &self.tests {
+            writer.set_color(&test_bin_spec)?;
+            write!(writer, "{}", test_bin)?;
+            writer.reset()?;
+            writeln!(writer, ":")?;
+
+            if let Some(cwd) = &info.cwd {
+                writer.set_color(&field_spec)?;
+                write!(writer, "  cwd: ")?;
+                writer.reset()?;
+                writeln!(writer, "{}", cwd)?;
+            }
+
+            writer.set_color(&test_name_spec)?;
+            for test_name in &info.test_names {
+                writeln!(writer, "    {}", test_name)?;
+            }
+            writer.reset()?;
+        }
+        Ok(())
+    }
+
+    fn test_bin_spec() -> ColorSpec {
+        let mut color_spec = ColorSpec::new();
+        color_spec.set_bold(true);
+        color_spec
+    }
+
+    fn field_spec() -> ColorSpec {
+        let mut color_spec = ColorSpec::new();
+        color_spec
+            .set_fg(Some(termcolor::Color::Yellow))
+            .set_bold(true);
+        color_spec
+    }
+
+    fn test_name_spec() -> ColorSpec {
+        let mut color_spec = ColorSpec::new();
+        color_spec
+            .set_fg(Some(termcolor::Color::Blue))
+            .set_bold(true);
+        color_spec
     }
 }
 

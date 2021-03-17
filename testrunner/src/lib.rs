@@ -3,6 +3,7 @@
 
 pub mod dispatch;
 pub mod output;
+pub mod reporter;
 pub mod runner;
 pub mod test_filter;
 pub mod test_list;
