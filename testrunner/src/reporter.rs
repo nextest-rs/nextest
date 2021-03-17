@@ -3,11 +3,11 @@
 
 use crate::{
     output::OutputFormat,
-    runner::{TestRunStatus, TestStatus},
+    runner::{RunStats, TestRunStatus, TestStatus},
     test_list::{TestInstance, TestList},
 };
 use anyhow::{Context, Result};
-use std::{fmt, io};
+use std::{fmt, io, time::Instant};
 use structopt::clap::arg_enum;
 use termcolor::{BufferWriter, ColorChoice, ColorSpec, WriteColor};
 
@@ -115,23 +115,38 @@ pub enum TestEvent<'a> {
         // TODO: add skip reason
     },
 
+    /// A cancellation notice was received.
+    RunBeginCancel {
+        /// The number of tests still running.
+        running: usize,
+
+        /// The reason this run was canceled.
+        reason: CancelReason,
+    },
+
     /// The test run finished.
     RunFinished {
-        /// The total number of tests that were run.
+        /// The time at which the run was started.
+        start_time: Instant,
+
+        /// The total number of tests that were expected to be run.
+        ///
+        /// If the test run is canceled, this will be more than `run_stats.tests_run`.
         test_count: usize,
 
-        /// The number of tests that passed.
-        passed: usize,
-
-        /// The number of tests that failed.
-        failed: usize,
-
-        /// The number of tests that encountered an execution failure.
-        exec_failed: usize,
-
-        /// The number of tests that were skipped.
-        skipped: usize,
+        /// Statistics for the run.
+        run_stats: RunStats,
     },
+}
+
+/// The reason why a test run is being cancelled.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum CancelReason {
+    /// An error occurred while reporting results.
+    ReportError,
+
+    /// A termination signal was received.
+    Signal,
 }
 
 impl<'a> TestEvent<'a> {
@@ -190,18 +205,44 @@ impl<'a> TestEvent<'a> {
             }
             TestEvent::TestSkipped { test_instance } => {
                 writer.set_color(&Self::skip_spec())?;
-                write!(writer, "{:>12} ", &"SKIP")?;
+                write!(writer, "{:>12} ", "SKIP")?;
                 writer.reset()?;
 
                 test_instance.write(&mut writer)?;
                 writeln!(writer)?;
             }
+            TestEvent::RunBeginCancel { running, reason } => {
+                writer.set_color(&Self::fail_spec())?;
+                write!(writer, "{:>12} ", "Canceling")?;
+                writer.reset()?;
+                write!(writer, "due to ")?;
+
+                writer.set_color(&Self::count_spec())?;
+                match reason {
+                    CancelReason::Signal => write!(writer, "signal")?,
+                    // TODO: differentiate between control errors (e.g. fail-fast) and report errors
+                    CancelReason::ReportError => write!(writer, "error")?,
+                }
+                writer.reset()?;
+                write!(writer, ", ")?;
+
+                writer.set_color(&Self::count_spec())?;
+                write!(writer, "{}", running)?;
+                writer.reset()?;
+                writeln!(writer, " tests still running")?;
+            }
+
             TestEvent::RunFinished {
+                start_time,
                 test_count,
-                passed,
-                failed,
-                exec_failed,
-                skipped,
+                run_stats:
+                    RunStats {
+                        tests_run,
+                        passed,
+                        failed,
+                        exec_failed,
+                        skipped,
+                    },
             } => {
                 let summary_spec = if *failed > 0 || *exec_failed > 0 {
                     Self::fail_spec()
@@ -212,10 +253,20 @@ impl<'a> TestEvent<'a> {
                 write!(writer, "{:>12} ", "Summary")?;
                 writer.reset()?;
 
+                // Next, print the total time taken.
+                // * > means right-align.
+                // * 8 is the number of characters to pad to.
+                // * .3 means print two digits after the decimal point.
+                // TODO: better time printing mechanism than this
+                write!(writer, "[{:>8.3?}s] ", start_time.elapsed().as_secs_f64())?;
+
                 let count_spec = Self::count_spec();
 
                 writer.set_color(&count_spec)?;
-                write!(writer, "{}", test_count)?;
+                write!(writer, "{}", tests_run)?;
+                if tests_run != test_count {
+                    write!(writer, "/{}", test_count)?;
+                }
                 writer.reset()?;
                 write!(writer, " tests run: ")?;
 

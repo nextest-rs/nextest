@@ -130,6 +130,8 @@ fn test_run() -> Result<()> {
     let runner = TestRunnerOpts::default().build(&test_list);
     let mut instance_statuses = HashMap::new();
     runner.execute(|event| {
+        println!("*** event: {:?}", event);
+
         if let TestEvent::TestFinished {
             test_instance,
             run_status,

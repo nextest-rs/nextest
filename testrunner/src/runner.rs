@@ -2,20 +2,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    reporter::TestEvent,
+    reporter::{CancelReason, TestEvent},
     test_list::{TestInstance, TestList},
 };
 use anyhow::Result;
+use crossbeam_channel::Sender;
 use duct::cmd;
 use rayon::{ThreadPool, ThreadPoolBuilder};
+use signal_hook::{iterator::Handle, low_level::emulate_default_handler};
 use std::{
     convert::Infallible,
     fmt,
+    marker::PhantomData,
+    os::raw::c_int,
     path::Path,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -38,10 +39,11 @@ impl TestRunnerOpts {
             opts: self,
             test_list,
             run_pool: ThreadPoolBuilder::new()
-                .num_threads(jobs)
+                // The main run_pool closure will need its own thread.
+                .num_threads(jobs + 1)
                 .thread_name(|idx| format!("testrunner-run-{}", idx))
                 .build()
-                .expect("thread pool should build"),
+                .expect("run pool built"),
         }
     }
 }
@@ -72,14 +74,14 @@ impl<'a> TestRunner<'a> {
     ///
     /// Accepts a callback that is called with the results of each test. If the callback returns an
     /// error, the callback is no longer called.
-    pub fn try_execute<E, F>(&self, mut callback: F) -> Result<(), E>
+    pub fn try_execute<E, F>(&self, callback: F) -> Result<(), E>
     where
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
     {
         // TODO: add support for other test-running approaches, measure performance.
 
-        let (sender, receiver) = mpsc::channel();
+        let (run_sender, run_receiver) = crossbeam_channel::unbounded();
 
         // This is move so that sender is moved into it. When the scope finishes the sender is
         // dropped, and the receiver below completes iteration.
@@ -87,21 +89,34 @@ impl<'a> TestRunner<'a> {
         let canceled = AtomicBool::new(false);
         let canceled_ref = &canceled;
 
+        // ---
+        // Spawn the signal handler thread.
+        // ---
+        let (srp_sender, srp_receiver) = crossbeam_channel::bounded(1);
+        let (signal_sender, signal_receiver) = crossbeam_channel::unbounded();
+        spawn_signal_thread(signal_sender, srp_sender);
+
+        let mut ctx = CallbackContext::new(callback);
+
+        // Send the initial event.
+        // (Don't need to set the canceled atomic if this fails because the run hasn't started
+        // yet.)
+        ctx.run_started(self.test_list.test_count(), self.test_list.binary_count())?;
+
+        // Stores the first error that occurred. This error is propagated up.
+        let mut first_error = None;
+
+        let ctx_mut = &mut ctx;
+        let first_error_mut = &mut first_error;
+
+        // ---
+        // Spawn the test threads.
+        // ---
         // XXX rayon requires its scope callback to be Send, there's no good reason for it but
         // there's also no other well-maintained scoped threadpool :(
         self.run_pool.scope(move |run_scope| {
-            let mut passed = 0;
-            let mut failed = 0;
-            let mut exec_failed = 0;
-            let mut skipped = 0;
-
-            // Send the initial event.
-            // (Don't need to set the canceled atomic if this fails because the run hasn't started
-            // yet.)
-            callback(TestEvent::RunStarted {
-                test_count: self.test_list.test_count(),
-                binary_count: self.test_list.binary_count(),
-            })?;
+            // Block until signals are set up.
+            let _ = srp_receiver.recv();
 
             self.test_list.iter().for_each(|test_instance| {
                 if canceled_ref.load(Ordering::Acquire) {
@@ -109,7 +124,7 @@ impl<'a> TestRunner<'a> {
                     return;
                 }
 
-                let run_sender = sender.clone();
+                let this_run_sender = run_sender.clone();
                 run_scope.spawn(move |_| {
                     if canceled_ref.load(Ordering::Acquire) {
                         // Check for test cancellation.
@@ -117,46 +132,90 @@ impl<'a> TestRunner<'a> {
                     }
 
                     // Failure to send means the receiver was dropped.
-                    let _ = run_sender.send(TestEvent::TestStarted { test_instance });
+                    let _ = this_run_sender.send(InternalTestEvent::Started { test_instance });
 
                     let run_status = self.run_test(test_instance);
                     // Failure to send means the receiver was dropped.
-                    let _ = run_sender.send(TestEvent::TestFinished {
+                    let _ = this_run_sender.send(InternalTestEvent::Finished {
                         test_instance,
                         run_status,
                     });
                 })
             });
 
-            drop(sender);
+            drop(run_sender);
 
-            for test_event in receiver.iter() {
-                match &test_event {
-                    TestEvent::TestFinished { run_status, .. } => match run_status.status {
-                        TestStatus::Pass => passed += 1,
-                        TestStatus::Fail => failed += 1,
-                        TestStatus::ExecFail => exec_failed += 1,
+            loop {
+                let internal_event = crossbeam_channel::select! {
+                    recv(run_receiver) -> internal_event => {
+                        match internal_event {
+                            Ok(event) => InternalEvent::Test(event),
+                            Err(_) => {
+                                // All runs have been completed.
+                                break;
+                            }
+                        }
                     },
-                    TestEvent::TestSkipped { .. } => skipped += 1,
-                    _ => {}
+                    recv(signal_receiver) -> internal_event => {
+                        match internal_event {
+                            Ok(event) => InternalEvent::Signal(event),
+                            Err(_) => {
+                                // Ignore the signal thread being dropped.
+                                // XXX is this correct?
+                                continue;
+                            }
+                        }
+                    },
                 };
 
-                if let Err(err) = callback(test_event) {
-                    canceled_ref.store(true, Ordering::Release);
-                    return Err(err);
+                match ctx_mut.handle_event(internal_event) {
+                    Ok(()) => {}
+                    Err(err) => {
+                        // If an error happens, it is because either the callback failed or
+                        // a cancellation notice was received. If the callback failed, we need
+                        // to send a further cancellation notice as well.
+                        canceled_ref.store(true, Ordering::Release);
+
+                        match err {
+                            InternalError::Error(err) => {
+                                // Ignore errors that happen during error cancellation.
+                                if first_error_mut.is_none() {
+                                    *first_error_mut = Some(err);
+                                }
+                                let _ = ctx_mut.error_cancel();
+                            }
+                            InternalError::SignalCanceled(Some(err)) => {
+                                // Signal-based cancellation and an error was received during
+                                // cancellation.
+                                if first_error_mut.is_none() {
+                                    *first_error_mut = Some(err);
+                                }
+                            }
+                            InternalError::SignalCanceled(None) => {
+                                // Signal-based cancellation and no error was returned during
+                                // cancellation. Continue to handle events.
+                            }
+                        }
+                    }
                 }
             }
 
-            // Send the final event.
-            // (Don't need to set the canceled atomic if this fails because the run is over.)
-            callback(TestEvent::RunFinished {
-                test_count: self.test_list.test_count(),
-                passed,
-                failed,
-                exec_failed,
-                skipped,
-            })
-        })
+            Ok(())
+        })?;
+
+        match ctx.run_finished(self.test_list.test_count()) {
+            Ok(()) => {}
+            Err(err) => {
+                if first_error.is_none() {
+                    first_error = Some(err);
+                }
+            }
+        }
+
+        match first_error {
+            None => Ok(()),
+            Some(err) => Err(err),
+        }
     }
 
     // ---
@@ -227,6 +286,212 @@ pub struct TestRunStatus {
     pub stderr: Vec<u8>,
     pub status: TestStatus,
     pub time_taken: Duration,
+}
+
+/// Statistics for a test run.
+#[derive(Copy, Clone, Default, Debug)]
+pub struct RunStats {
+    /// The total number of tests that were run.
+    pub tests_run: usize,
+
+    /// The number of tests that passed.
+    pub passed: usize,
+
+    /// The number of tests that failed.
+    pub failed: usize,
+
+    /// The number of tests that encountered an execution failure.
+    pub exec_failed: usize,
+
+    /// The number of tests that were skipped.
+    pub skipped: usize,
+}
+
+fn spawn_signal_thread(sender: Sender<InternalSignalEvent>, srp_sender: Sender<()>) {
+    std::thread::spawn(move || {
+        use signal_hook::{
+            consts::*,
+            iterator::{exfiltrator::SignalOnly, SignalsInfo},
+        };
+
+        // Register the SignalsInfo.
+        let mut signals =
+            SignalsInfo::<SignalOnly>::new(TERM_SIGNALS).expect("SignalsInfo created");
+        let _ = sender.send(InternalSignalEvent::Handle {
+            handle: signals.handle(),
+        });
+        // Let the run pool know that the signal has been sent.
+        let _ = srp_sender.send(());
+
+        let mut term_once = false;
+
+        for signal in &mut signals {
+            if term_once {
+                // TODO: handle this error better?
+                let _ = emulate_default_handler(signal);
+            } else {
+                term_once = true;
+                let _ = sender.send(InternalSignalEvent::Canceled { signal });
+            }
+        }
+    });
+}
+
+struct CallbackContext<F, E> {
+    callback: F,
+    start_time: Instant,
+    run_stats: RunStats,
+    running: usize,
+    signal_handle: Option<Handle>,
+    cancel_state: CancelState,
+    phantom: PhantomData<E>,
+}
+
+impl<'a, F, E> CallbackContext<F, E>
+where
+    F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
+{
+    fn new(callback: F) -> Self {
+        Self {
+            callback,
+            start_time: Instant::now(),
+            run_stats: RunStats::default(),
+            running: 0,
+            signal_handle: None,
+            cancel_state: CancelState::None,
+            phantom: PhantomData,
+        }
+    }
+
+    fn run_started(&mut self, test_count: usize, binary_count: usize) -> Result<(), E> {
+        (self.callback)(TestEvent::RunStarted {
+            test_count,
+            binary_count,
+        })
+    }
+
+    fn handle_event(&mut self, event: InternalEvent<'a>) -> Result<(), InternalError<E>> {
+        match event {
+            InternalEvent::Signal(InternalSignalEvent::Handle { handle }) => {
+                self.signal_handle = Some(handle);
+                Ok(())
+            }
+            InternalEvent::Test(InternalTestEvent::Started { test_instance }) => {
+                self.running += 1;
+                (self.callback)(TestEvent::TestStarted { test_instance })
+                    .map_err(InternalError::Error)
+            }
+            InternalEvent::Test(InternalTestEvent::Finished {
+                test_instance,
+                run_status,
+            }) => {
+                self.running -= 1;
+                self.run_stats.tests_run += 1;
+                match run_status.status {
+                    TestStatus::Pass => self.run_stats.passed += 1,
+                    TestStatus::Fail => self.run_stats.failed += 1,
+                    TestStatus::ExecFail => self.run_stats.exec_failed += 1,
+                }
+
+                (self.callback)(TestEvent::TestFinished {
+                    test_instance,
+                    run_status,
+                })
+                .map_err(InternalError::Error)
+            }
+            InternalEvent::Test(InternalTestEvent::Skipped { test_instance }) => {
+                self.run_stats.skipped += 1;
+                (self.callback)(TestEvent::TestSkipped { test_instance })
+                    .map_err(InternalError::Error)
+            }
+            InternalEvent::Signal(InternalSignalEvent::Canceled { signal: _signal }) => {
+                debug_assert_ne!(
+                    self.cancel_state,
+                    CancelState::SignalCanceled,
+                    "can't receive signal-canceled twice"
+                );
+
+                self.cancel_state = CancelState::SignalCanceled;
+                // Don't close the signal handle because we're still interested in the second
+                // ctrl-c.
+
+                match (self.callback)(TestEvent::RunBeginCancel {
+                    running: self.running,
+                    reason: CancelReason::Signal,
+                }) {
+                    Ok(()) => Err(InternalError::SignalCanceled(None)),
+                    Err(err) => Err(InternalError::SignalCanceled(Some(err))),
+                }
+            }
+        }
+    }
+
+    fn error_cancel(&mut self) -> Result<(), E> {
+        if self.cancel_state == CancelState::None {
+            self.cancel_state = CancelState::ErrorCanceled;
+        }
+        (self.callback)(TestEvent::RunBeginCancel {
+            running: self.running,
+            reason: CancelReason::ReportError,
+        })
+    }
+
+    fn run_finished(&mut self, test_count: usize) -> Result<(), E> {
+        (self.callback)(TestEvent::RunFinished {
+            start_time: self.start_time,
+            test_count,
+            run_stats: self.run_stats,
+        })
+    }
+
+    // TODO: do we ever want to actually close the handle?
+    #[allow(dead_code)]
+    fn close_handle(&mut self) {
+        if let Some(handle) = &self.signal_handle {
+            handle.close();
+        }
+        self.signal_handle = None;
+    }
+}
+
+#[derive(Debug)]
+enum InternalEvent<'a> {
+    Test(InternalTestEvent<'a>),
+    Signal(InternalSignalEvent),
+}
+
+#[derive(Debug)]
+enum InternalTestEvent<'a> {
+    Started {
+        test_instance: TestInstance<'a>,
+    },
+    Finished {
+        test_instance: TestInstance<'a>,
+        run_status: TestRunStatus,
+    },
+    #[allow(dead_code)]
+    Skipped {
+        test_instance: TestInstance<'a>,
+    },
+}
+
+#[derive(Debug)]
+enum InternalSignalEvent {
+    Handle { handle: Handle },
+    Canceled { signal: c_int },
+}
+
+#[derive(Debug)]
+enum InternalError<E> {
+    Error(E),
+    SignalCanceled(Option<E>),
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum CancelState {
+    None,
+    ErrorCanceled,
+    SignalCanceled,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
