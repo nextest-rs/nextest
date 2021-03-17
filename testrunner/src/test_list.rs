@@ -15,6 +15,7 @@ use termcolor::{ColorSpec, NoColor, WriteColor};
 ///
 /// Accepted as input to `TestList::new`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct TestBinary {
     /// The test binary.
     pub binary: Utf8PathBuf,
@@ -29,8 +30,12 @@ pub struct TestBinary {
 
 /// List of tests, gotten by executing a test binary with the `--list` command.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct TestList {
+    /// Number of tests across all binaries.
+    test_count: usize,
     tests: BTreeMap<Utf8PathBuf, TestBinInfo>,
+    // TODO: handle ignored tests
 }
 
 /// Information about a test binary.
@@ -54,45 +59,36 @@ impl TestList {
         test_binaries: impl IntoIterator<Item = TestBinary>,
         filter: &TestFilter,
     ) -> Result<Self> {
+        let mut test_count = 0;
+
         let tests = test_binaries
             .into_iter()
             .map(|test_binary| {
-                let TestBinary {
-                    binary,
-                    cwd,
-                    friendly_name,
-                } = test_binary;
-
                 let mut cmd = cmd!(
-                    AsRef::<Path>::as_ref(&binary),
+                    AsRef::<Path>::as_ref(&test_binary.binary),
                     "--list",
                     "--format",
                     "terse"
                 )
                 .stdout_capture();
-                if let Some(cwd) = &cwd {
+                if let Some(cwd) = &test_binary.cwd {
                     cmd = cmd.dir(cwd);
                 };
 
                 let output = cmd.read().with_context(|| {
-                    format!("running '{} --list --format --terse' failed", binary)
+                    format!(
+                        "running '{} --list --format --terse' failed",
+                        test_binary.binary
+                    )
                 })?;
 
-                // Parse the output.
-                let test_names = Self::parse(output, filter)?;
-
-                Ok((
-                    binary,
-                    TestBinInfo {
-                        test_names,
-                        cwd,
-                        friendly_name,
-                    },
-                ))
+                let (bin, info) = Self::process_output(test_binary, filter, output.as_str())?;
+                test_count += info.test_names.len();
+                Ok((bin, info))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
 
-        Ok(Self { tests })
+        Ok(Self { tests, test_count })
     }
 
     /// Creates a new test list with the given binary names and outputs.
@@ -100,30 +96,33 @@ impl TestList {
         test_bin_outputs: impl IntoIterator<Item = (TestBinary, impl AsRef<str>)>,
         filter: &TestFilter,
     ) -> Result<Self> {
+        let mut test_count = 0;
+
         let tests = test_bin_outputs
             .into_iter()
             .map(|(test_binary, output)| {
-                let TestBinary {
-                    binary,
-                    cwd,
-                    friendly_name,
-                } = test_binary;
-
-                let output = output.as_ref();
-                let test_names = Self::parse(output, filter)?;
-
-                Ok((
-                    binary,
-                    TestBinInfo {
-                        test_names,
-                        cwd,
-                        friendly_name,
-                    },
-                ))
+                let (bin, info) = Self::process_output(test_binary, filter, output.as_ref())?;
+                test_count += info.test_names.len();
+                Ok((bin, info))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
 
-        Ok(Self { tests })
+        Ok(Self { tests, test_count })
+    }
+
+    /// Returns the total number of tests across all binaries.
+    pub fn test_count(&self) -> usize {
+        self.test_count
+    }
+
+    /// Returns the total number of binaries that contain tests.
+    pub fn binary_count(&self) -> usize {
+        self.tests.len()
+    }
+
+    /// Returns the tests for a given binary, or `None` if the binary wasn't in the list.
+    pub fn get(&self, test_bin: impl AsRef<Utf8Path>) -> Option<&TestBinInfo> {
+        self.tests.get(test_bin.as_ref())
     }
 
     /// Outputs this list to the given writer.
@@ -132,11 +131,6 @@ impl TestList {
             OutputFormat::Plain => self.write_plain(writer).context("error writing test list"),
             OutputFormat::Serializable(format) => format.to_writer(self, writer),
         }
-    }
-
-    /// Returns the tests for a given binary, or `None` if the binary wasn't in the list.
-    pub fn get(&self, test_bin: impl AsRef<Utf8Path>) -> Option<&TestBinInfo> {
-        self.tests.get(test_bin.as_ref())
     }
 
     /// Iterates over the list of tests, returning the path and test name.
@@ -164,6 +158,30 @@ impl TestList {
     // ---
     // Helper methods
     // ---
+
+    fn process_output(
+        test_binary: TestBinary,
+        filter: &TestFilter,
+        output: impl AsRef<str>,
+    ) -> Result<(Utf8PathBuf, TestBinInfo)> {
+        let TestBinary {
+            binary,
+            cwd,
+            friendly_name,
+        } = test_binary;
+
+        let output = output.as_ref();
+        let test_names = Self::parse(output, filter)?;
+
+        Ok((
+            binary,
+            TestBinInfo {
+                test_names,
+                cwd,
+                friendly_name,
+            },
+        ))
+    }
 
     /// Parses the output of --list --format terse.
     fn parse(list_output: impl AsRef<str>, filter: &TestFilter) -> Result<Vec<String>> {
@@ -355,6 +373,7 @@ mod tests {
         "};
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
             {
+              "test-count": 2,
               "tests": {
                 "/fake/binary": {
                   "friendly-name": "fake-package",
@@ -367,6 +386,7 @@ mod tests {
               }
             }"#};
         static EXPECTED_TOML_PRETTY: &str = indoc! {r#"
+            test-count = 2
             [tests."/fake/binary"]
             friendly-name = 'fake-package'
             test-names = [

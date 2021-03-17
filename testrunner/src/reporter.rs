@@ -84,6 +84,15 @@ impl fmt::Debug for TestReporter {
 
 #[derive(Clone, Debug)]
 pub enum TestEvent<'a> {
+    /// The test run started.
+    RunStarted {
+        /// The number of binaries that will be run.
+        binary_count: usize,
+
+        /// The total number of tests that will be run.
+        test_count: usize,
+    },
+
     /// A test started running.
     TestStarted {
         /// The test instance that was started.
@@ -105,12 +114,49 @@ pub enum TestEvent<'a> {
         test_instance: TestInstance<'a>,
         // TODO: add skip reason
     },
+
+    /// The test run finished.
+    RunFinished {
+        /// The total number of tests that were run.
+        test_count: usize,
+
+        /// The number of tests that passed.
+        passed: usize,
+
+        /// The number of tests that failed.
+        failed: usize,
+
+        /// The number of tests that encountered an execution failure.
+        exec_failed: usize,
+
+        /// The number of tests that were skipped.
+        skipped: usize,
+    },
 }
 
 impl<'a> TestEvent<'a> {
     /// Report this test event to the given writer.
     pub fn report(&self, mut writer: impl WriteColor) -> io::Result<()> {
         match self {
+            TestEvent::RunStarted {
+                test_count,
+                binary_count,
+            } => {
+                writer.set_color(&Self::pass_spec())?;
+                write!(writer, "{:>12} ", "Starting")?;
+                writer.reset()?;
+
+                let count_spec = Self::count_spec();
+
+                writer.set_color(&count_spec)?;
+                write!(writer, "{}", test_count)?;
+                writer.reset()?;
+                write!(writer, " tests across ")?;
+                writer.set_color(&count_spec)?;
+                write!(writer, "{}", binary_count)?;
+                writer.reset()?;
+                writeln!(writer, " binaries")?;
+            }
             TestEvent::TestStarted { .. } => {
                 // TODO
             }
@@ -120,22 +166,16 @@ impl<'a> TestEvent<'a> {
             } => {
                 // First, print the status.
                 match run_status.status {
-                    TestStatus::Success => {
+                    TestStatus::Pass => {
                         writer.set_color(&Self::pass_spec())?;
-                        write!(writer, "        PASS ")?;
-                        writer.reset()?;
                     }
-                    TestStatus::Failure => {
+                    TestStatus::Fail | TestStatus::ExecFail => {
                         writer.set_color(&Self::fail_spec())?;
-                        write!(writer, "        FAIL ")?;
-                        writer.reset()?;
-                    }
-                    TestStatus::ExecutionFailure => {
-                        writer.set_color(&Self::fail_spec())?;
-                        write!(writer, "    EXECFAIL ")?;
-                        writer.reset()?;
                     }
                 }
+
+                write!(writer, "{:>12} ", run_status.status)?;
+                writer.reset()?;
 
                 // Next, print the time taken.
                 // * > means right-align.
@@ -150,11 +190,69 @@ impl<'a> TestEvent<'a> {
             }
             TestEvent::TestSkipped { test_instance } => {
                 writer.set_color(&Self::skip_spec())?;
-                write!(writer, "        SKIP ")?;
+                write!(writer, "{:>12} ", &"SKIP")?;
                 writer.reset()?;
 
                 test_instance.write(&mut writer)?;
                 writeln!(writer)?;
+            }
+            TestEvent::RunFinished {
+                test_count,
+                passed,
+                failed,
+                exec_failed,
+                skipped,
+            } => {
+                let summary_spec = if *failed > 0 || *exec_failed > 0 {
+                    Self::fail_spec()
+                } else {
+                    Self::pass_spec()
+                };
+                writer.set_color(&summary_spec)?;
+                write!(writer, "{:>12} ", "Summary")?;
+                writer.reset()?;
+
+                let count_spec = Self::count_spec();
+
+                writer.set_color(&count_spec)?;
+                write!(writer, "{}", test_count)?;
+                writer.reset()?;
+                write!(writer, " tests run: ")?;
+
+                writer.set_color(&count_spec)?;
+                write!(writer, "{}", passed)?;
+                writer.set_color(&Self::pass_spec())?;
+                write!(writer, " passed")?;
+                writer.reset()?;
+                write!(writer, ", ")?;
+
+                if *failed > 0 {
+                    writer.set_color(&count_spec)?;
+                    write!(writer, "{}", failed)?;
+                    writer.set_color(&Self::fail_spec())?;
+                    write!(writer, " failed")?;
+                    writer.reset()?;
+                    write!(writer, ", ")?;
+                }
+
+                if *exec_failed > 0 {
+                    writer.set_color(&count_spec)?;
+                    write!(writer, "{}", exec_failed)?;
+                    writer.set_color(&Self::fail_spec())?;
+                    write!(writer, " exec failed")?;
+                    writer.reset()?;
+                    write!(writer, ", ")?;
+                }
+
+                writer.set_color(&count_spec)?;
+                write!(writer, "{}", skipped)?;
+                writer.set_color(&Self::skip_spec())?;
+                write!(writer, " skipped")?;
+                writer.reset()?;
+
+                writeln!(writer)?;
+
+                // TODO: print information about failing tests
             }
         }
         Ok(())
@@ -163,6 +261,12 @@ impl<'a> TestEvent<'a> {
     // ---
     // Helper methods
     // ---
+
+    fn count_spec() -> ColorSpec {
+        let mut color_spec = ColorSpec::new();
+        color_spec.set_bold(true);
+        color_spec
+    }
 
     fn pass_spec() -> ColorSpec {
         let mut color_spec = ColorSpec::new();

@@ -90,6 +90,19 @@ impl<'a> TestRunner<'a> {
         // XXX rayon requires its scope callback to be Send, there's no good reason for it but
         // there's also no other well-maintained scoped threadpool :(
         self.run_pool.scope(move |run_scope| {
+            let mut passed = 0;
+            let mut failed = 0;
+            let mut exec_failed = 0;
+            let mut skipped = 0;
+
+            // Send the initial event.
+            // (Don't need to set the canceled atomic if this fails because the run hasn't started
+            // yet.)
+            callback(TestEvent::RunStarted {
+                test_count: self.test_list.test_count(),
+                binary_count: self.test_list.binary_count(),
+            })?;
+
             self.test_list.iter().for_each(|test_instance| {
                 if canceled_ref.load(Ordering::Acquire) {
                     // Check for test cancellation.
@@ -118,13 +131,31 @@ impl<'a> TestRunner<'a> {
             drop(sender);
 
             for test_event in receiver.iter() {
+                match &test_event {
+                    TestEvent::TestFinished { run_status, .. } => match run_status.status {
+                        TestStatus::Pass => passed += 1,
+                        TestStatus::Fail => failed += 1,
+                        TestStatus::ExecFail => exec_failed += 1,
+                    },
+                    TestEvent::TestSkipped { .. } => skipped += 1,
+                    _ => {}
+                };
+
                 if let Err(err) = callback(test_event) {
                     canceled_ref.store(true, Ordering::Release);
                     return Err(err);
                 }
             }
 
-            Ok(())
+            // Send the final event.
+            // (Don't need to set the canceled atomic if this fails because the run is over.)
+            callback(TestEvent::RunFinished {
+                test_count: self.test_list.test_count(),
+                passed,
+                failed,
+                exec_failed,
+                skipped,
+            })
         })
     }
 
@@ -142,7 +173,7 @@ impl<'a> TestRunner<'a> {
                 // TODO: can we return more information in stdout/stderr? investigate this
                 stdout: vec![],
                 stderr: vec![],
-                status: TestStatus::ExecutionFailure,
+                status: TestStatus::ExecFail,
                 time_taken: start_time.elapsed(),
             },
         }
@@ -176,9 +207,9 @@ impl<'a> TestRunner<'a> {
 
         let time_taken = start_time.elapsed();
         let status = if output.status.success() {
-            TestStatus::Success
+            TestStatus::Pass
         } else {
-            TestStatus::Failure
+            TestStatus::Fail
         };
         Ok(TestRunStatus {
             stdout: output.stdout,
@@ -200,17 +231,17 @@ pub struct TestRunStatus {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum TestStatus {
-    Success,
-    Failure,
-    ExecutionFailure,
+    Pass,
+    Fail,
+    ExecFail,
 }
 
 impl fmt::Display for TestStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TestStatus::Success => write!(f, "success"),
-            TestStatus::Failure => write!(f, "failure"),
-            TestStatus::ExecutionFailure => write!(f, "exec-fail"),
+            TestStatus::Pass => f.pad("PASS"),
+            TestStatus::Fail => f.pad("FAIL"),
+            TestStatus::ExecFail => f.pad("EXECFAIL"),
         }
     }
 }

@@ -37,17 +37,17 @@ impl PartialEq<String> for TestFixture {
 static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::new(|| {
     btreemap! {
         "basic" => vec![
-            TestFixture { name: "test_cwd", status: TestStatus::Success },
-            TestFixture { name: "test_failure_assert", status: TestStatus::Failure },
-            TestFixture { name: "test_failure_error", status: TestStatus::Failure },
-            TestFixture { name: "test_failure_should_panic", status: TestStatus::Failure },
+            TestFixture { name: "test_cwd", status: TestStatus::Pass },
+            TestFixture { name: "test_failure_assert", status: TestStatus::Fail },
+            TestFixture { name: "test_failure_error", status: TestStatus::Fail },
+            TestFixture { name: "test_failure_should_panic", status: TestStatus::Fail },
             // XXX status should probably be skipped or similar (need to handle ignored tests better)
-            TestFixture { name: "test_ignored", status: TestStatus::Success },
-            TestFixture { name: "test_success", status: TestStatus::Success },
-            TestFixture { name: "test_success_should_panic", status: TestStatus::Success },
+            TestFixture { name: "test_ignored", status: TestStatus::Pass },
+            TestFixture { name: "test_success", status: TestStatus::Pass },
+            TestFixture { name: "test_success_should_panic", status: TestStatus::Pass },
         ],
         "testrunner-tests" => vec![
-            TestFixture { name: "tests::unit_test_success", status: TestStatus::Success },
+            TestFixture { name: "tests::unit_test_success", status: TestStatus::Pass },
         ],
     }
 });
