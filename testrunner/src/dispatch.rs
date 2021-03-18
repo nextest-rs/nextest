@@ -82,15 +82,15 @@ impl TestBinFilter {
 impl Opts {
     /// Execute the command.
     pub fn exec(self) -> Result<()> {
-        let reporter = TestReporter::new(self.color);
-
         match self.command {
             Command::ListTests { bin_filter, format } => {
                 let test_list = bin_filter.compute()?;
+                let reporter = TestReporter::new(&test_list, self.color);
                 reporter.write_list(&test_list, format)?;
             }
             Command::Run { bin_filter, opts } => {
                 let test_list = bin_filter.compute()?;
+                let reporter = TestReporter::new(&test_list, self.color);
                 let runner = opts.build(&test_list);
                 runner.try_execute(|event| {
                     reporter.report_event(event)

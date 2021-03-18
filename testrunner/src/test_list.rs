@@ -133,8 +133,13 @@ impl TestList {
         }
     }
 
+    /// Iterates over all the test binaries.
+    pub fn iter(&self) -> impl Iterator<Item = (&Utf8Path, &TestBinInfo)> + '_ {
+        self.tests.iter().map(|(path, info)| (path.as_path(), info))
+    }
+
     /// Iterates over the list of tests, returning the path and test name.
-    pub fn iter(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
+    pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
         self.tests.iter().flat_map(|(test_bin, info)| {
             info.test_names.iter().map(move |test_name| {
                 TestInstance::new(
@@ -277,37 +282,9 @@ impl<'a> TestInstance<'a> {
             cwd,
         }
     }
-
-    /// Formats this `TestInstance` and writes it to the given `WriteColor`.
-    pub fn write(&self, mut writer: impl WriteColor) -> io::Result<()> {
-        let friendly_name = self.friendly_name.unwrap_or_else(|| {
-            self.binary
-                .file_name()
-                .expect("test binaries always have file names")
-        });
-
-        writer.set_color(&test_bin_spec())?;
-        // TODO: don't hardcode the maximum width (probably need to look at all the friendly names
-        // across all instances)
-        write!(writer, "{:>20}", friendly_name)?;
-        writer.reset()?;
-        write!(writer, "  ")?;
-
-        // Now look for the part of the test after the last ::, if any.
-        let mut splits = self.test_name.rsplitn(2, "::");
-        let trailing = splits.next().expect("test should have at least 1 element");
-        if let Some(rest) = splits.next() {
-            write!(writer, "{}::", rest)?;
-        }
-        writer.set_color(&test_name_spec())?;
-        write!(writer, "{}", trailing)?;
-        writer.reset()?;
-
-        Ok(())
-    }
 }
 
-fn test_bin_spec() -> ColorSpec {
+pub(super) fn test_bin_spec() -> ColorSpec {
     let mut color_spec = ColorSpec::new();
     color_spec
         .set_fg(Some(termcolor::Color::Magenta))
@@ -315,7 +292,7 @@ fn test_bin_spec() -> ColorSpec {
     color_spec
 }
 
-fn test_name_spec() -> ColorSpec {
+pub(super) fn test_name_spec() -> ColorSpec {
     let mut color_spec = ColorSpec::new();
     color_spec
         .set_fg(Some(termcolor::Color::Blue))

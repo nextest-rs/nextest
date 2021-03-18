@@ -118,7 +118,7 @@ impl<'a> TestRunner<'a> {
             // Block until signals are set up.
             let _ = srp_receiver.recv();
 
-            self.test_list.iter().for_each(|test_instance| {
+            self.test_list.iter_tests().for_each(|test_instance| {
                 if canceled_ref.load(Ordering::Acquire) {
                     // Check for test cancellation.
                     return;
