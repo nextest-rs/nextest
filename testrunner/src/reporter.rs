@@ -8,9 +8,9 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use camino::Utf8Path;
-use std::{fmt, io, time::Instant};
-use structopt::clap::arg_enum;
-use termcolor::{BufferWriter, ColorChoice, ColorSpec, WriteColor};
+use std::{fmt, io, io::Write, time::Instant};
+use structopt::{clap::arg_enum, StructOpt};
+use termcolor::{BufferWriter, ColorChoice, ColorSpec, NoColor, WriteColor};
 
 arg_enum! {
     #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -44,17 +44,41 @@ impl Color {
     }
 }
 
+arg_enum! {
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub enum FailureOutput {
+        Immediate,
+        // TODO: report failures at the end of the process
+        Never,
+    }
+}
+
+impl Default for FailureOutput {
+    fn default() -> Self {
+        FailureOutput::Immediate
+    }
+}
+
+#[derive(Debug, Default, StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+pub struct ReporterOpts {
+    /// Output stdout and stderr on failures
+    #[structopt(long, default_value, possible_values = &FailureOutput::variants(), case_insensitive = true)]
+    failure_output: FailureOutput,
+}
+
 /// Functionality to report test results to stdout, and in the future to other formats (e.g. JUnit).
 pub struct TestReporter {
     stdout: BufferWriter,
     #[allow(dead_code)]
     stderr: BufferWriter,
+    opts: ReporterOpts,
     friendly_name_width: usize,
 }
 
 impl TestReporter {
     /// Creates a new instance with the given color choice.
-    pub fn new(test_list: &TestList, color: Color) -> Self {
+    pub fn new(test_list: &TestList, color: Color, opts: ReporterOpts) -> Self {
         let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
         let stderr = BufferWriter::stderr(color.color_choice(atty::Stream::Stderr));
         let friendly_name_width = test_list
@@ -65,6 +89,7 @@ impl TestReporter {
         Self {
             stdout,
             stderr,
+            opts,
             friendly_name_width,
         }
     }
@@ -136,9 +161,33 @@ impl TestReporter {
                 // TODO: better time printing mechanism than this
                 write!(writer, "[{:>8.3?}s] ", run_status.time_taken.as_secs_f64())?;
 
-                // Finally, print the name of the test.
+                // Print the name of the test.
                 self.write_instance(test_instance, &mut writer)?;
                 writeln!(writer)?;
+
+                // If the test failed to execute, print its output and error status.
+                if !run_status.status.is_success()
+                    && self.opts.failure_output == FailureOutput::Immediate
+                {
+                    writer.set_color(&Self::fail_spec())?;
+                    write!(writer, "\n--- STDOUT: ")?;
+                    self.write_instance(test_instance, NoColor::new(&mut writer))?;
+                    writeln!(writer, " ---")?;
+
+                    writer.set_color(&Self::fail_output_spec())?;
+                    NoColor::new(&mut writer).write_all(&run_status.stdout)?;
+
+                    writer.set_color(&Self::fail_spec())?;
+                    write!(writer, "--- STDERR: ")?;
+                    self.write_instance(test_instance, NoColor::new(&mut writer))?;
+                    writeln!(writer, " ---")?;
+
+                    writer.set_color(&Self::fail_output_spec())?;
+                    NoColor::new(&mut writer).write_all(&run_status.stderr)?;
+
+                    writer.reset()?;
+                    writeln!(writer)?;
+                }
             }
             TestEvent::TestSkipped { test_instance } => {
                 writer.set_color(&Self::skip_spec())?;
@@ -302,6 +351,12 @@ impl TestReporter {
         color_spec
             .set_fg(Some(termcolor::Color::Red))
             .set_bold(true);
+        color_spec
+    }
+
+    fn fail_output_spec() -> ColorSpec {
+        let mut color_spec = ColorSpec::new();
+        color_spec.set_fg(Some(termcolor::Color::Red));
         color_spec
     }
 

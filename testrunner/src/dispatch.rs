@@ -3,7 +3,7 @@
 
 use crate::{
     output::OutputFormat,
-    reporter::{Color, TestReporter},
+    reporter::{Color, ReporterOpts, TestReporter},
     runner::TestRunnerOpts,
     test_filter::TestFilter,
     test_list::{TestBinary, TestList},
@@ -42,7 +42,9 @@ pub enum Command {
         #[structopt(flatten)]
         bin_filter: TestBinFilter,
         #[structopt(flatten)]
-        opts: TestRunnerOpts,
+        runner_opts: TestRunnerOpts,
+        #[structopt(flatten)]
+        reporter_opts: ReporterOpts,
     },
 }
 
@@ -85,13 +87,17 @@ impl Opts {
         match self.command {
             Command::ListTests { bin_filter, format } => {
                 let test_list = bin_filter.compute()?;
-                let reporter = TestReporter::new(&test_list, self.color);
+                let reporter = TestReporter::new(&test_list, self.color, ReporterOpts::default());
                 reporter.write_list(&test_list, format)?;
             }
-            Command::Run { bin_filter, opts } => {
+            Command::Run {
+                bin_filter,
+                runner_opts,
+                reporter_opts,
+            } => {
                 let test_list = bin_filter.compute()?;
-                let reporter = TestReporter::new(&test_list, self.color);
-                let runner = opts.build(&test_list);
+                let reporter = TestReporter::new(&test_list, self.color, reporter_opts);
+                let runner = runner_opts.build(&test_list);
                 runner.try_execute(|event| {
                     reporter.report_event(event)
                     // TODO: no-fail-fast logic

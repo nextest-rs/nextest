@@ -501,6 +501,16 @@ pub enum TestStatus {
     ExecFail,
 }
 
+impl TestStatus {
+    /// Returns true if the test was successful.
+    pub fn is_success(self) -> bool {
+        match self {
+            TestStatus::Pass => true,
+            TestStatus::Fail | TestStatus::ExecFail => false,
+        }
+    }
+}
+
 impl fmt::Display for TestStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
