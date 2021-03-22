@@ -12,6 +12,7 @@ atty = "0.2.14"
 camino = { version = "1.0.4", features = ["serde1"] }
 crossbeam-channel = "0.5.0"
 duct = "0.13.5"
+once_cell = "1.7.2"
 num_cpus = "1.13.0"
 rayon = "1.5.0"
 serde = { version = "1.0.123", features = ["derive"] }
@@ -19,12 +20,10 @@ serde_json = "1.0.63"
 signal-hook = "0.3.7"
 structopt = "0.3.21"
 termcolor = "1.1.2"
-toml = "0.5.8"
 
 [dev-dependencies]
 cargo_metadata = "0.13.1"
 indoc = "1.0.3"
-once_cell = "1.7.2"
 maplit = "1.0.2"
 pretty_assertions = "0.7.1"
 proptest = "1.0.0"

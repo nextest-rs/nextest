@@ -5,7 +5,7 @@ use crate::{
     output::OutputFormat,
     reporter::{Color, ReporterOpts, TestReporter},
     runner::TestRunnerOpts,
-    test_filter::TestFilter,
+    test_filter::{RunIgnored, TestFilter},
     test_list::{TestBinary, TestList},
 };
 use anyhow::Result;
@@ -61,6 +61,10 @@ pub struct TestBinFilter {
     )]
     pub test_bin: Vec<Utf8PathBuf>,
 
+    /// Run ignored tests
+    #[structopt(long, possible_values = &RunIgnored::variants(), default_value, case_insensitive = true)]
+    pub run_ignored: RunIgnored,
+
     // TODO: add regex-based filtering in the future?
     /// Test filter
     pub filter: Vec<String>,
@@ -68,7 +72,7 @@ pub struct TestBinFilter {
 
 impl TestBinFilter {
     fn compute(&self) -> Result<TestList> {
-        let test_filter = TestFilter::new(&self.filter);
+        let test_filter = TestFilter::new(self.run_ignored, &self.filter);
         TestList::new(
             self.test_bin.iter().map(|binary| TestBinary {
                 binary: binary.clone(),

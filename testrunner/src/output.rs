@@ -16,8 +16,8 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
-    pub fn variants() -> [&'static str; 5] {
-        ["plain", "json", "json-pretty", "toml", "toml-pretty"]
+    pub fn variants() -> [&'static str; 3] {
+        ["plain", "json", "json-pretty"]
     }
 }
 
@@ -27,8 +27,6 @@ impl fmt::Display for OutputFormat {
             OutputFormat::Plain => write!(f, "plain"),
             OutputFormat::Serializable(SerializableFormat::Json) => write!(f, "json"),
             OutputFormat::Serializable(SerializableFormat::JsonPretty) => write!(f, "json-pretty"),
-            OutputFormat::Serializable(SerializableFormat::Toml) => write!(f, "toml"),
-            OutputFormat::Serializable(SerializableFormat::TomlPretty) => write!(f, "toml-pretty"),
         }
     }
 }
@@ -41,8 +39,6 @@ impl FromStr for OutputFormat {
             "plain" => OutputFormat::Plain,
             "json" => OutputFormat::Serializable(SerializableFormat::Json),
             "json-pretty" => OutputFormat::Serializable(SerializableFormat::JsonPretty),
-            "toml" => OutputFormat::Serializable(SerializableFormat::Toml),
-            "toml-pretty" => OutputFormat::Serializable(SerializableFormat::TomlPretty),
             other => bail!("unrecognized format: {}", other),
         };
         Ok(val)
@@ -60,27 +56,17 @@ impl Default for OutputFormat {
 pub enum SerializableFormat {
     Json,
     JsonPretty,
-    Toml,
-    TomlPretty,
 }
 
 impl SerializableFormat {
     /// Write this data in the given format to the writer.
-    pub fn to_writer(self, value: &impl Serialize, mut writer: impl io::Write) -> Result<()> {
+    pub fn to_writer(self, value: &impl Serialize, writer: impl io::Write) -> Result<()> {
         match self {
             SerializableFormat::Json => {
                 serde_json::to_writer(writer, value).context("error serializing to JSON")
             }
             SerializableFormat::JsonPretty => {
                 serde_json::to_writer_pretty(writer, value).context("error serializing to JSON")
-            }
-            SerializableFormat::Toml => {
-                let s = toml::to_string(value).context("error serializing to TOML")?;
-                write!(writer, "{}", s).context("error writing output")
-            }
-            SerializableFormat::TomlPretty => {
-                let s = toml::to_string_pretty(value).context("error serializing to TOML")?;
-                write!(writer, "{}", s).context("error writing output")
             }
         }
     }

@@ -12,42 +12,54 @@ use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use std::{
     collections::{BTreeMap, HashMap},
-    env,
+    env, fmt,
     io::Cursor,
 };
 use testrunner::{
     reporter::TestEvent,
-    runner::{TestRunnerOpts, TestStatus},
-    test_filter::TestFilter,
-    test_list::{TestBinary, TestInstance, TestList},
+    runner::{TestRunStatus, TestRunnerOpts},
+    test_filter::{FilterMatch, RunIgnored, TestFilter},
+    test_list::{TestBinary, TestList},
 };
 
 #[derive(Copy, Clone, Debug)]
 struct TestFixture {
     name: &'static str,
-    status: TestStatus,
+    status: FixtureStatus,
 }
 
-impl PartialEq<String> for TestFixture {
-    fn eq(&self, other: &String) -> bool {
-        self.name == other
+impl PartialEq<(&str, FilterMatch)> for TestFixture {
+    fn eq(&self, (name, filter_match): &(&str, FilterMatch)) -> bool {
+        &self.name == name && self.status.is_skip() != filter_match.is_match()
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum FixtureStatus {
+    Pass,
+    Fail,
+    Skip,
+}
+
+impl FixtureStatus {
+    fn is_skip(self) -> bool {
+        matches!(self, FixtureStatus::Skip)
     }
 }
 
 static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::new(|| {
     btreemap! {
         "basic" => vec![
-            TestFixture { name: "test_cwd", status: TestStatus::Pass },
-            TestFixture { name: "test_failure_assert", status: TestStatus::Fail },
-            TestFixture { name: "test_failure_error", status: TestStatus::Fail },
-            TestFixture { name: "test_failure_should_panic", status: TestStatus::Fail },
-            // XXX status should probably be skipped or similar (need to handle ignored tests better)
-            TestFixture { name: "test_ignored", status: TestStatus::Pass },
-            TestFixture { name: "test_success", status: TestStatus::Pass },
-            TestFixture { name: "test_success_should_panic", status: TestStatus::Pass },
+            TestFixture { name: "test_cwd", status: FixtureStatus::Pass },
+            TestFixture { name: "test_failure_assert", status: FixtureStatus::Fail },
+            TestFixture { name: "test_failure_error", status: FixtureStatus::Fail },
+            TestFixture { name: "test_failure_should_panic", status: FixtureStatus::Fail },
+            TestFixture { name: "test_ignored", status: FixtureStatus::Skip },
+            TestFixture { name: "test_success", status: FixtureStatus::Pass },
+            TestFixture { name: "test_success_should_panic", status: FixtureStatus::Pass },
         ],
         "testrunner-tests" => vec![
-            TestFixture { name: "tests::unit_test_success", status: TestStatus::Pass },
+            TestFixture { name: "tests::unit_test_success", status: FixtureStatus::Pass },
         ],
     }
 });
@@ -105,7 +117,7 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
 
 #[test]
 fn test_list_tests() -> Result<()> {
-    let test_filter = TestFilter::any();
+    let test_filter = TestFilter::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
 
@@ -116,15 +128,60 @@ fn test_list_tests() -> Result<()> {
         let info = test_list
             .get(&test_binary.binary)
             .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary));
-        assert_eq!(expected, &info.test_names, "test list matches");
+        let tests: Vec<_> = info
+            .tests
+            .iter()
+            .map(|(name, info)| (name.as_str(), info.filter_match))
+            .collect();
+        assert_eq!(expected, &tests, "test list matches");
     }
 
     Ok(())
 }
 
+#[derive(Clone, Debug)]
+struct InstanceValue<'a> {
+    friendly_name: Option<&'a str>,
+    cwd: Option<&'a Utf8Path>,
+    status: InstanceStatus,
+}
+
+#[derive(Clone)]
+enum InstanceStatus {
+    Skipped,
+    Finished(TestRunStatus),
+}
+
+impl fmt::Debug for InstanceStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            InstanceStatus::Skipped => write!(f, "<skipped>"),
+            InstanceStatus::Finished(run_status) => {
+                write!(
+                    f,
+                    "---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",
+                    String::from_utf8_lossy(&run_status.stdout),
+                    String::from_utf8_lossy(&run_status.stderr)
+                )
+            }
+        }
+    }
+}
+
+impl PartialEq<FixtureStatus> for InstanceStatus {
+    fn eq(&self, other: &FixtureStatus) -> bool {
+        match self {
+            InstanceStatus::Skipped => other.is_skip(),
+            InstanceStatus::Finished(status) => {
+                status.status.is_success() == (other == &FixtureStatus::Pass)
+            }
+        }
+    }
+}
+
 #[test]
 fn test_run() -> Result<()> {
-    let test_filter = TestFilter::any();
+    let test_filter = TestFilter::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
     let runner = TestRunnerOpts::default().build(&test_list);
@@ -132,13 +189,23 @@ fn test_run() -> Result<()> {
     runner.execute(|event| {
         println!("*** event: {:?}", event);
 
-        if let TestEvent::TestFinished {
-            test_instance,
-            run_status,
-        } = event
-        {
-            instance_statuses.insert(test_instance, run_status);
-        }
+        let (test_instance, status) = match event {
+            TestEvent::TestSkipped { test_instance } => (test_instance, InstanceStatus::Skipped),
+            TestEvent::TestFinished {
+                test_instance,
+                run_status,
+            } => (test_instance, InstanceStatus::Finished(run_status)),
+            _ => return,
+        };
+
+        instance_statuses.insert(
+            (test_instance.binary, test_instance.name),
+            InstanceValue {
+                friendly_name: test_instance.friendly_name,
+                cwd: test_instance.cwd,
+                status,
+            },
+        );
     });
 
     for (name, expected) in &*EXPECTED_TESTS {
@@ -146,21 +213,11 @@ fn test_run() -> Result<()> {
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
-            let instance = TestInstance {
-                binary: &test_binary.binary,
-                friendly_name: Some("my-friendly-name"),
-                test_name: fixture.name,
-                cwd: test_binary.cwd.as_deref(),
-            };
-            let run_status = &instance_statuses[&instance];
+            let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
             assert_eq!(
-                run_status.status,
-                fixture.status,
-                "for {}, test {}, status matches\n\n---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",
-                name,
-                fixture.name,
-                String::from_utf8_lossy(&run_status.stdout),
-                String::from_utf8_lossy(&run_status.stderr)
+                instance_value.status, fixture.status,
+                "for {}, test {}, status matches",
+                name, fixture.name,
             );
         }
     }

@@ -115,10 +115,7 @@ impl TestReporter {
     /// Report this test event to the given writer.
     fn write_event(&self, event: TestEvent<'_>, mut writer: impl WriteColor) -> io::Result<()> {
         match event {
-            TestEvent::RunStarted {
-                test_count,
-                binary_count,
-            } => {
+            TestEvent::RunStarted { test_list } => {
                 writer.set_color(&Self::pass_spec())?;
                 write!(writer, "{:>12} ", "Starting")?;
                 writer.reset()?;
@@ -126,13 +123,24 @@ impl TestReporter {
                 let count_spec = Self::count_spec();
 
                 writer.set_color(&count_spec)?;
-                write!(writer, "{}", test_count)?;
+                write!(writer, "{}", test_list.run_count())?;
                 writer.reset()?;
                 write!(writer, " tests across ")?;
                 writer.set_color(&count_spec)?;
-                write!(writer, "{}", binary_count)?;
+                write!(writer, "{}", test_list.binary_count())?;
                 writer.reset()?;
-                writeln!(writer, " binaries")?;
+                write!(writer, " binaries")?;
+
+                let skip_count = test_list.skip_count();
+                if skip_count > 0 {
+                    write!(writer, " (")?;
+                    writer.set_color(&count_spec)?;
+                    write!(writer, "{}", skip_count)?;
+                    writer.reset()?;
+                    write!(writer, " skipped)")?;
+                }
+
+                writeln!(writer)?;
             }
             TestEvent::TestStarted { .. } => {
                 // TODO
@@ -193,6 +201,8 @@ impl TestReporter {
                 writer.set_color(&Self::skip_spec())?;
                 write!(writer, "{:>12} ", "SKIP")?;
                 writer.reset()?;
+                // same spacing [   0.034s]
+                write!(writer, "[         ] ")?;
 
                 self.write_instance(test_instance, &mut writer)?;
                 writeln!(writer)?;
@@ -220,10 +230,10 @@ impl TestReporter {
 
             TestEvent::RunFinished {
                 start_time,
-                test_count,
+                initial_run_count,
                 run_stats:
                     RunStats {
-                        tests_run,
+                        run_count,
                         passed,
                         failed,
                         exec_failed,
@@ -249,9 +259,9 @@ impl TestReporter {
                 let count_spec = Self::count_spec();
 
                 writer.set_color(&count_spec)?;
-                write!(writer, "{}", tests_run)?;
-                if tests_run != test_count {
-                    write!(writer, "/{}", test_count)?;
+                write!(writer, "{}", run_count)?;
+                if run_count != initial_run_count {
+                    write!(writer, "/{}", initial_run_count)?;
                 }
                 writer.reset()?;
                 write!(writer, " tests run: ")?;
@@ -312,7 +322,7 @@ impl TestReporter {
         write!(writer, "  ")?;
 
         // Now look for the part of the test after the last ::, if any.
-        let mut splits = instance.test_name.rsplitn(2, "::");
+        let mut splits = instance.name.rsplitn(2, "::");
         let trailing = splits.next().expect("test should have at least 1 element");
         if let Some(rest) = splits.next() {
             write!(writer, "{}::", rest)?;
@@ -382,11 +392,10 @@ impl fmt::Debug for TestReporter {
 pub enum TestEvent<'a> {
     /// The test run started.
     RunStarted {
-        /// The number of binaries that will be run.
-        binary_count: usize,
-
-        /// The total number of tests that will be run.
-        test_count: usize,
+        /// The list of tests that will be run.
+        ///
+        /// The methods on the test list indicate the number of
+        test_list: &'a TestList,
     },
 
     /// A test started running.
@@ -428,7 +437,7 @@ pub enum TestEvent<'a> {
         /// The total number of tests that were expected to be run.
         ///
         /// If the test run is canceled, this will be more than `run_stats.tests_run`.
-        test_count: usize,
+        initial_run_count: usize,
 
         /// Statistics for the run.
         run_stats: RunStats,

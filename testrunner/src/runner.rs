@@ -101,7 +101,7 @@ impl<'a> TestRunner<'a> {
         // Send the initial event.
         // (Don't need to set the canceled atomic if this fails because the run hasn't started
         // yet.)
-        ctx.run_started(self.test_list.test_count(), self.test_list.binary_count())?;
+        ctx.run_started(self.test_list)?;
 
         // Stores the first error that occurred. This error is propagated up.
         let mut first_error = None;
@@ -128,6 +128,12 @@ impl<'a> TestRunner<'a> {
                 run_scope.spawn(move |_| {
                     if canceled_ref.load(Ordering::Acquire) {
                         // Check for test cancellation.
+                        return;
+                    }
+
+                    if !test_instance.info.filter_match.is_match() {
+                        // Failure to send means the receiver was dropped.
+                        let _ = this_run_sender.send(InternalTestEvent::Skipped { test_instance });
                         return;
                     }
 
@@ -203,7 +209,7 @@ impl<'a> TestRunner<'a> {
             Ok(())
         })?;
 
-        match ctx.run_finished(self.test_list.test_count()) {
+        match ctx.run_finished(self.test_list.run_count()) {
             Ok(()) => {}
             Err(err) => {
                 if first_error.is_none() {
@@ -247,7 +253,7 @@ impl<'a> TestRunner<'a> {
         let mut cmd = cmd!(
             AsRef::<Path>::as_ref(test.binary),
             "--exact",
-            test.test_name,
+            &test.name,
             "--nocapture",
         )
         .stdout_capture()
@@ -292,7 +298,7 @@ pub struct TestRunStatus {
 #[derive(Copy, Clone, Default, Debug)]
 pub struct RunStats {
     /// The total number of tests that were run.
-    pub tests_run: usize,
+    pub run_count: usize,
 
     /// The number of tests that passed.
     pub passed: usize,
@@ -363,11 +369,8 @@ where
         }
     }
 
-    fn run_started(&mut self, test_count: usize, binary_count: usize) -> Result<(), E> {
-        (self.callback)(TestEvent::RunStarted {
-            test_count,
-            binary_count,
-        })
+    fn run_started(&mut self, test_list: &'a TestList) -> Result<(), E> {
+        (self.callback)(TestEvent::RunStarted { test_list })
     }
 
     fn handle_event(&mut self, event: InternalEvent<'a>) -> Result<(), InternalError<E>> {
@@ -386,7 +389,7 @@ where
                 run_status,
             }) => {
                 self.running -= 1;
-                self.run_stats.tests_run += 1;
+                self.run_stats.run_count += 1;
                 match run_status.status {
                     TestStatus::Pass => self.run_stats.passed += 1,
                     TestStatus::Fail => self.run_stats.failed += 1,
@@ -436,10 +439,10 @@ where
         })
     }
 
-    fn run_finished(&mut self, test_count: usize) -> Result<(), E> {
+    fn run_finished(&mut self, initial_run_count: usize) -> Result<(), E> {
         (self.callback)(TestEvent::RunFinished {
             start_time: self.start_time,
-            test_count,
+            initial_run_count,
             run_stats: self.run_stats,
         })
     }
@@ -469,7 +472,6 @@ enum InternalTestEvent<'a> {
         test_instance: TestInstance<'a>,
         run_status: TestRunStatus,
     },
-    #[allow(dead_code)]
     Skipped {
         test_instance: TestInstance<'a>,
     },
