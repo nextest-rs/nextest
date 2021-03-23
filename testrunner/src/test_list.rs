@@ -63,6 +63,11 @@ pub struct TestBinInfo {
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RustTestInfo {
+    /// Returns true if this test is marked ignored.
+    ///
+    /// Ignored tests, if run, are executed with the `--ignored` argument.
+    pub ignored: bool,
+
     /// Whether the test matches the provided test filter.
     ///
     /// Only tests that match the filter are run.
@@ -218,6 +223,7 @@ impl TestList {
             tests.insert(
                 test_name.into(),
                 RustTestInfo {
+                    ignored: false,
                     filter_match: filter.filter_match(&test_name, false),
                 },
             );
@@ -229,6 +235,7 @@ impl TestList {
             tests.insert(
                 test_name.into(),
                 RustTestInfo {
+                    ignored: true,
                     filter_match: filter.filter_match(&test_name, true),
                 },
             );
@@ -434,15 +441,19 @@ mod tests {
                 "/fake/binary".into() => TestBinInfo {
                     tests: btreemap! {
                         "tests::foo::test_bar".to_owned() => RustTestInfo {
+                            ignored: false,
                             filter_match: FilterMatch::Matches,
                         },
                         "tests::baz::test_quux".to_owned() => RustTestInfo {
+                            ignored: false,
                             filter_match: FilterMatch::Matches,
                         },
                         "tests::ignored::test_bar".to_owned() => RustTestInfo {
+                            ignored: true,
                             filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                         },
                         "tests::baz::test_ignored".to_owned() => RustTestInfo {
+                            ignored: true,
                             filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                         },
                     },
@@ -469,22 +480,26 @@ mod tests {
                   "friendly-name": "fake-package",
                   "tests": {
                     "tests::baz::test_ignored": {
+                      "ignored": true,
                       "filter-match": {
                         "status": "mismatch",
                         "reason": "ignored"
                       }
                     },
                     "tests::baz::test_quux": {
+                      "ignored": false,
                       "filter-match": {
                         "status": "matches"
                       }
                     },
                     "tests::foo::test_bar": {
+                      "ignored": false,
                       "filter-match": {
                         "status": "matches"
                       }
                     },
                     "tests::ignored::test_bar": {
+                      "ignored": true,
                       "filter-match": {
                         "status": "mismatch",
                         "reason": "ignored"

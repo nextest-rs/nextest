@@ -34,3 +34,9 @@ fn test_cwd() {
 #[test]
 #[ignore]
 fn test_ignored() {}
+
+#[test]
+#[ignore]
+fn test_ignored_fail() {
+    panic!("ignored test that fails");
+}

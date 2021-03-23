@@ -250,16 +250,15 @@ impl<'a> TestRunner<'a> {
         test: TestInstance<'a>,
         start_time: &Instant,
     ) -> Result<TestRunStatus> {
-        // Capture stdout and stderr.
-        let mut cmd = cmd!(
-            AsRef::<Path>::as_ref(test.binary),
-            "--exact",
-            &test.name,
-            "--nocapture",
-        )
-        .stdout_capture()
-        .stderr_capture()
-        .unchecked();
+        let mut args = vec!["--exact", test.name, "--nocapture"];
+        if test.info.ignored {
+            args.push("--ignored");
+        }
+        let mut cmd = cmd(AsRef::<Path>::as_ref(test.binary), args)
+            // Capture stdout and stderr.
+            .stdout_capture()
+            .stderr_capture()
+            .unchecked();
 
         if let Some(cwd) = test.cwd {
             cmd = cmd.dir(cwd);
