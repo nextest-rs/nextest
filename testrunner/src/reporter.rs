@@ -230,10 +230,10 @@ impl TestReporter {
 
             TestEvent::RunFinished {
                 start_time,
-                initial_run_count,
                 run_stats:
                     RunStats {
-                        run_count,
+                        initial_run_count,
+                        final_run_count,
                         passed,
                         failed,
                         exec_failed,
@@ -259,8 +259,8 @@ impl TestReporter {
                 let count_spec = Self::count_spec();
 
                 writer.set_color(&count_spec)?;
-                write!(writer, "{}", run_count)?;
-                if run_count != initial_run_count {
+                write!(writer, "{}", final_run_count)?;
+                if final_run_count != initial_run_count {
                     write!(writer, "/{}", initial_run_count)?;
                 }
                 writer.reset()?;
@@ -433,11 +433,6 @@ pub enum TestEvent<'a> {
     RunFinished {
         /// The time at which the run was started.
         start_time: Instant,
-
-        /// The total number of tests that were expected to be run.
-        ///
-        /// If the test run is canceled, this will be more than `run_stats.tests_run`.
-        initial_run_count: usize,
 
         /// Statistics for the run.
         run_stats: RunStats,

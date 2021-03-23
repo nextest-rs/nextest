@@ -60,21 +60,22 @@ impl<'a> TestRunner<'a> {
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.
-    pub fn execute<F>(&self, mut callback: F)
+    pub fn execute<F>(&self, mut callback: F) -> RunStats
     where
         F: FnMut(TestEvent<'a>) + Send,
     {
-        let _ = self.try_execute::<Infallible, _>(|test_event| {
+        self.try_execute::<Infallible, _>(|test_event| {
             callback(test_event);
             Ok(())
-        });
+        })
+        .expect("Err branch is infallible")
     }
 
     /// Executes the listed tests, each one in its own process.
     ///
     /// Accepts a callback that is called with the results of each test. If the callback returns an
     /// error, the callback is no longer called.
-    pub fn try_execute<E, F>(&self, callback: F) -> Result<(), E>
+    pub fn try_execute<E, F>(&self, callback: F) -> Result<RunStats, E>
     where
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
@@ -96,7 +97,7 @@ impl<'a> TestRunner<'a> {
         let (signal_sender, signal_receiver) = crossbeam_channel::unbounded();
         spawn_signal_thread(signal_sender, srp_sender);
 
-        let mut ctx = CallbackContext::new(callback);
+        let mut ctx = CallbackContext::new(callback, self.test_list.run_count());
 
         // Send the initial event.
         // (Don't need to set the canceled atomic if this fails because the run hasn't started
@@ -209,7 +210,7 @@ impl<'a> TestRunner<'a> {
             Ok(())
         })?;
 
-        match ctx.run_finished(self.test_list.run_count()) {
+        match ctx.run_finished() {
             Ok(()) => {}
             Err(err) => {
                 if first_error.is_none() {
@@ -219,7 +220,7 @@ impl<'a> TestRunner<'a> {
         }
 
         match first_error {
-            None => Ok(()),
+            None => Ok(ctx.run_stats),
             Some(err) => Err(err),
         }
     }
@@ -297,8 +298,13 @@ pub struct TestRunStatus {
 /// Statistics for a test run.
 #[derive(Copy, Clone, Default, Debug)]
 pub struct RunStats {
-    /// The total number of tests that were run.
-    pub run_count: usize,
+    /// The total number of tests that were expected to be run at the beginning.
+    ///
+    /// If the test run is canceled, this will be more than `final_run_count`.
+    pub initial_run_count: usize,
+
+    /// The total number of tests that were actually run.
+    pub final_run_count: usize,
 
     /// The number of tests that passed.
     pub passed: usize,
@@ -311,6 +317,24 @@ pub struct RunStats {
 
     /// The number of tests that were skipped.
     pub skipped: usize,
+}
+
+impl RunStats {
+    /// Returns true if this run is considered a success.
+    ///
+    /// A run can be marked as failed if any of the following are true:
+    /// * the run was canceled: the initial run count is greater than the final run count
+    /// * any tests failed
+    /// * any tests encountered an execution failure
+    pub fn is_success(&self) -> bool {
+        if self.initial_run_count > self.final_run_count {
+            return false;
+        }
+        if self.failed > 0 || self.exec_failed > 0 {
+            return false;
+        }
+        true
+    }
 }
 
 fn spawn_signal_thread(sender: Sender<InternalSignalEvent>, srp_sender: Sender<()>) {
@@ -357,11 +381,14 @@ impl<'a, F, E> CallbackContext<F, E>
 where
     F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
 {
-    fn new(callback: F) -> Self {
+    fn new(callback: F, initial_run_count: usize) -> Self {
         Self {
             callback,
             start_time: Instant::now(),
-            run_stats: RunStats::default(),
+            run_stats: RunStats {
+                initial_run_count,
+                ..RunStats::default()
+            },
             running: 0,
             signal_handle: None,
             cancel_state: CancelState::None,
@@ -389,7 +416,7 @@ where
                 run_status,
             }) => {
                 self.running -= 1;
-                self.run_stats.run_count += 1;
+                self.run_stats.final_run_count += 1;
                 match run_status.status {
                     TestStatus::Pass => self.run_stats.passed += 1,
                     TestStatus::Fail => self.run_stats.failed += 1,
@@ -439,10 +466,9 @@ where
         })
     }
 
-    fn run_finished(&mut self, initial_run_count: usize) -> Result<(), E> {
+    fn run_finished(&mut self) -> Result<(), E> {
         (self.callback)(TestEvent::RunFinished {
             start_time: self.start_time,
-            initial_run_count,
             run_stats: self.run_stats,
         })
     }
@@ -520,5 +546,63 @@ impl fmt::Display for TestStatus {
             TestStatus::Fail => f.pad("FAIL"),
             TestStatus::ExecFail => f.pad("EXECFAIL"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_success() {
+        assert!(RunStats::default().is_success(), "empty run => success");
+        assert!(
+            RunStats {
+                initial_run_count: 42,
+                final_run_count: 42,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "initial run count = final run count => success"
+        );
+        assert!(
+            !RunStats {
+                initial_run_count: 42,
+                final_run_count: 41,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "initial run count > final run count => failure"
+        );
+        assert!(
+            !RunStats {
+                initial_run_count: 42,
+                final_run_count: 42,
+                failed: 1,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "failed => failure"
+        );
+        assert!(
+            !RunStats {
+                initial_run_count: 42,
+                final_run_count: 42,
+                exec_failed: 1,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "exec failed => failure"
+        );
+        assert!(
+            RunStats {
+                initial_run_count: 42,
+                final_run_count: 42,
+                skipped: 1,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "skipped => not considered a failure"
+        );
     }
 }

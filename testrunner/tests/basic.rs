@@ -186,7 +186,7 @@ fn test_run() -> Result<()> {
     let test_list = TestList::new(test_bins, &test_filter)?;
     let runner = TestRunnerOpts::default().build(&test_list);
     let mut instance_statuses = HashMap::new();
-    runner.execute(|event| {
+    let run_stats = runner.execute(|event| {
         println!("*** event: {:?}", event);
 
         let (test_instance, status) = match event {
@@ -222,5 +222,6 @@ fn test_run() -> Result<()> {
         }
     }
 
+    assert!(!run_stats.is_success(), "run should be marked failed");
     Ok(())
 }

@@ -8,7 +8,7 @@ use crate::{
     test_filter::{RunIgnored, TestFilter},
     test_list::{TestBinary, TestList},
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use camino::Utf8PathBuf;
 use structopt::StructOpt;
 
@@ -102,10 +102,13 @@ impl Opts {
                 let test_list = bin_filter.compute()?;
                 let reporter = TestReporter::new(&test_list, self.color, reporter_opts);
                 let runner = runner_opts.build(&test_list);
-                runner.try_execute(|event| {
+                let run_stats = runner.try_execute(|event| {
                     reporter.report_event(event)
                     // TODO: no-fail-fast logic
                 })?;
+                if !run_stats.is_success() {
+                    bail!("test run failed");
+                }
             }
         }
         Ok(())
