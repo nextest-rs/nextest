@@ -1,5 +1,5 @@
 // Copyright (c) The Diem Core Contributors
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 use datatest_stable::Result;
 use std::{fs::File, io::Read, path::Path};
