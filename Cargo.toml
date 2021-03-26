@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "datatest-stable",
     "quick-junit",
     "testrunner",
 ]
