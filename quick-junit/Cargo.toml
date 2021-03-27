@@ -1,0 +1,14 @@
+[package]
+name = "quick-junit"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+license = "Apache-2.0 OR MIT"
+edition = "2018"
+
+[dependencies]
+chrono = { version = "0.4.19" }
+indexmap = { version = "1.6.2" }
+quick-xml = { version = "0.22.0" }
+
+[dev-dependencies]
+goldenfile = "1.1.0"

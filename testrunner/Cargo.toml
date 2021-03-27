@@ -20,6 +20,7 @@ serde_json = "1.0.63"
 signal-hook = "0.3.7"
 structopt = "0.3.21"
 termcolor = "1.1.2"
+quick-junit = { path = "../quick-junit" }
 
 [dev-dependencies]
 cargo_metadata = "0.13.1"

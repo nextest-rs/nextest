@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="my-test-run" tests="4" failures="1" errors="1" time="42.235">
+    <testsuite name="testsuite0" tests="4" disabled="1" errors="1" failures="1">
+        <properties>
+            <property name="env" value="FOOBAR"/>
+        </properties>
+        <testcase name="testcase0">
+            <system-out>testcase0-output</system-out>
+        </testcase>
+        <testcase name="testcase1" time="4.242">
+            <failure message="testcase1-message">this is the failure description</failure>
+            <system-err>some sort of failure output</system-err>
+        </testcase>
+        <testcase name="testcase2" time="0.000">
+            <error type="error type">testcase2 error description</error>
+        </testcase>
+        <testcase name="testcase3" assertions="20">
+            <skipped message="skipped message" type="skipped type"/>
+            <system-out>testcase3 output</system-out>
+            <system-err>testcase3 error</system-err>
+        </testcase>
+    </testsuite>
+</testsuites>

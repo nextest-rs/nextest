@@ -159,6 +159,15 @@ pub enum MismatchReason {
     String,
 }
 
+impl fmt::Display for MismatchReason {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MismatchReason::Ignored => write!(f, "does not match the run-ignored option"),
+            MismatchReason::String => write!(f, "does not match the provided string filters"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

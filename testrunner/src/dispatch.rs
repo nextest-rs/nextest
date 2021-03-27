@@ -100,7 +100,7 @@ impl Opts {
                 reporter_opts,
             } => {
                 let test_list = bin_filter.compute()?;
-                let reporter = TestReporter::new(&test_list, self.color, reporter_opts);
+                let mut reporter = TestReporter::new(&test_list, self.color, reporter_opts);
                 let runner = runner_opts.build(&test_list);
                 let run_stats = runner.try_execute(|event| {
                     reporter.report_event(event)

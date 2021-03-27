@@ -4,11 +4,20 @@
 use crate::{
     output::OutputFormat,
     runner::{RunStats, TestRunStatus, TestStatus},
+    test_filter::MismatchReason,
     test_list::{test_bin_spec, test_name_spec, TestInstance, TestList},
 };
 use anyhow::{Context, Result};
-use camino::Utf8Path;
-use std::{fmt, io, io::Write, time::Instant};
+use camino::{Utf8Path, Utf8PathBuf};
+use quick_junit::{Report, Testcase, TestcaseStatus, Testsuite};
+use std::{
+    collections::HashMap,
+    fmt,
+    fs::File,
+    io,
+    io::Write,
+    time::{Duration, Instant},
+};
 use structopt::{clap::arg_enum, StructOpt};
 use termcolor::{BufferWriter, ColorChoice, ColorSpec, NoColor, WriteColor};
 
@@ -65,18 +74,28 @@ pub struct ReporterOpts {
     /// Output stdout and stderr on failures
     #[structopt(long, default_value, possible_values = &FailureOutput::variants(), case_insensitive = true)]
     failure_output: FailureOutput,
+    /// Output JUnit/XUnit to a file
+    #[structopt(long)]
+    junit: Option<Utf8PathBuf>,
 }
 
-/// Functionality to report test results to stdout, and in the future to other formats (e.g. JUnit).
-pub struct TestReporter {
+/// Functionality to report test results to stdout and JUnit
+pub struct TestReporter<'list> {
     stdout: BufferWriter,
     #[allow(dead_code)]
     stderr: BufferWriter,
-    opts: ReporterOpts,
+    failure_output: FailureOutput,
     friendly_name_width: usize,
+
+    // TODO: Improve this design. A better design would be:
+    // * add a ReportStore struct which receives test events and stores them
+    // * provide a list of reporters to that struct, e.g. StdoutReporter and JUnitReporter
+    // * that struct owns all the results (e.g. stdout and stderr) and calls the reporters
+    // * TestEvent gains a lifetime param? need to figure this out in more detail
+    junit_reporter: Option<JUnitReporter<'list>>,
 }
 
-impl TestReporter {
+impl<'list> TestReporter<'list> {
     /// Creates a new instance with the given color choice.
     pub fn new(test_list: &TestList, color: Color, opts: ReporterOpts) -> Self {
         let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
@@ -86,11 +105,13 @@ impl TestReporter {
             .map(|(path, info)| Self::friendly_name(info.friendly_name.as_deref(), path).len())
             .max()
             .unwrap_or_default();
+        let junit_reporter = opts.junit.map(JUnitReporter::new);
         Self {
             stdout,
             stderr,
-            opts,
+            failure_output: opts.failure_output,
             friendly_name_width,
+            junit_reporter,
         }
     }
 
@@ -102,7 +123,7 @@ impl TestReporter {
     }
 
     /// Report a test event.
-    pub fn report_event(&self, event: TestEvent<'_>) -> Result<()> {
+    pub fn report_event(&mut self, event: TestEvent<'list>) -> Result<()> {
         let mut buffer = self.stdout.buffer();
         self.write_event(event, &mut buffer)?;
         self.stdout.print(&buffer).context("error writing output")
@@ -113,8 +134,8 @@ impl TestReporter {
     // ---
 
     /// Report this test event to the given writer.
-    fn write_event(&self, event: TestEvent<'_>, mut writer: impl WriteColor) -> io::Result<()> {
-        match event {
+    fn write_event(&mut self, event: TestEvent<'list>, mut writer: impl WriteColor) -> Result<()> {
+        match &event {
             TestEvent::RunStarted { test_list } => {
                 writer.set_color(&Self::pass_spec())?;
                 write!(writer, "{:>12} ", "Starting")?;
@@ -170,16 +191,16 @@ impl TestReporter {
                 write!(writer, "[{:>8.3?}s] ", run_status.time_taken.as_secs_f64())?;
 
                 // Print the name of the test.
-                self.write_instance(test_instance, &mut writer)?;
+                self.write_instance(*test_instance, &mut writer)?;
                 writeln!(writer)?;
 
                 // If the test failed to execute, print its output and error status.
                 if !run_status.status.is_success()
-                    && self.opts.failure_output == FailureOutput::Immediate
+                    && self.failure_output == FailureOutput::Immediate
                 {
                     writer.set_color(&Self::fail_spec())?;
                     write!(writer, "\n--- STDOUT: ")?;
-                    self.write_instance(test_instance, NoColor::new(&mut writer))?;
+                    self.write_instance(*test_instance, NoColor::new(&mut writer))?;
                     writeln!(writer, " ---")?;
 
                     writer.set_color(&Self::fail_output_spec())?;
@@ -187,7 +208,7 @@ impl TestReporter {
 
                     writer.set_color(&Self::fail_spec())?;
                     write!(writer, "--- STDERR: ")?;
-                    self.write_instance(test_instance, NoColor::new(&mut writer))?;
+                    self.write_instance(*test_instance, NoColor::new(&mut writer))?;
                     writeln!(writer, " ---")?;
 
                     writer.set_color(&Self::fail_output_spec())?;
@@ -197,14 +218,17 @@ impl TestReporter {
                     writeln!(writer)?;
                 }
             }
-            TestEvent::TestSkipped { test_instance } => {
+            TestEvent::TestSkipped {
+                test_instance,
+                reason: _reason,
+            } => {
                 writer.set_color(&Self::skip_spec())?;
                 write!(writer, "{:>12} ", "SKIP")?;
                 writer.reset()?;
                 // same spacing [   0.034s]
                 write!(writer, "[         ] ")?;
 
-                self.write_instance(test_instance, &mut writer)?;
+                self.write_instance(*test_instance, &mut writer)?;
                 writeln!(writer)?;
             }
             TestEvent::RunBeginCancel { running, reason } => {
@@ -229,7 +253,8 @@ impl TestReporter {
             }
 
             TestEvent::RunFinished {
-                start_time,
+                start_time: _start_time,
+                elapsed,
                 run_stats:
                     RunStats {
                         initial_run_count,
@@ -240,7 +265,7 @@ impl TestReporter {
                         skipped,
                     },
             } => {
-                let summary_spec = if failed > 0 || exec_failed > 0 {
+                let summary_spec = if *failed > 0 || *exec_failed > 0 {
                     Self::fail_spec()
                 } else {
                     Self::pass_spec()
@@ -254,7 +279,7 @@ impl TestReporter {
                 // * 8 is the number of characters to pad to.
                 // * .3 means print two digits after the decimal point.
                 // TODO: better time printing mechanism than this
-                write!(writer, "[{:>8.3?}s] ", start_time.elapsed().as_secs_f64())?;
+                write!(writer, "[{:>8.3?}s] ", elapsed.as_secs_f64())?;
 
                 let count_spec = Self::count_spec();
 
@@ -273,7 +298,7 @@ impl TestReporter {
                 writer.reset()?;
                 write!(writer, ", ")?;
 
-                if failed > 0 {
+                if *failed > 0 {
                     writer.set_color(&count_spec)?;
                     write!(writer, "{}", failed)?;
                     writer.set_color(&Self::fail_spec())?;
@@ -282,7 +307,7 @@ impl TestReporter {
                     write!(writer, ", ")?;
                 }
 
-                if exec_failed > 0 {
+                if *exec_failed > 0 {
                     writer.set_color(&count_spec)?;
                     write!(writer, "{}", exec_failed)?;
                     writer.set_color(&Self::fail_spec())?;
@@ -302,12 +327,16 @@ impl TestReporter {
                 // TODO: print information about failing tests
             }
         }
+
+        if let Some(junit_reporter) = &mut self.junit_reporter {
+            junit_reporter.write_event(event)?;
+        }
         Ok(())
     }
 
     fn write_instance(
         &self,
-        instance: TestInstance<'_>,
+        instance: TestInstance<'list>,
         mut writer: impl WriteColor,
     ) -> io::Result<()> {
         let friendly_name = Self::friendly_name(instance.friendly_name, instance.binary);
@@ -334,7 +363,7 @@ impl TestReporter {
         Ok(())
     }
 
-    fn friendly_name<'a>(friendly_name: Option<&'a str>, binary: &'a Utf8Path) -> &'a str {
+    fn friendly_name(friendly_name: Option<&'list str>, binary: &'list Utf8Path) -> &'list str {
         friendly_name.unwrap_or_else(|| {
             binary
                 .file_name()
@@ -379,7 +408,7 @@ impl TestReporter {
     }
 }
 
-impl fmt::Debug for TestReporter {
+impl<'list> fmt::Debug for TestReporter<'list> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("TestReporter")
             .field("stdout", &"BufferWriter { .. }")
@@ -389,25 +418,28 @@ impl fmt::Debug for TestReporter {
 }
 
 #[derive(Clone, Debug)]
-pub enum TestEvent<'a> {
+pub enum TestEvent<'list> {
     /// The test run started.
     RunStarted {
         /// The list of tests that will be run.
         ///
         /// The methods on the test list indicate the number of
-        test_list: &'a TestList,
+        test_list: &'list TestList,
     },
 
+    // TODO: add events for BinaryStarted and BinaryFinished? May want a slightly different way to
+    // do things, maybe a couple of reporter traits (one for the run as a whole and one for each
+    // binary).
     /// A test started running.
     TestStarted {
         /// The test instance that was started.
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstance<'list>,
     },
 
     /// A test finished running.
     TestFinished {
         /// The test instance that finished running.
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstance<'list>,
 
         /// Information about how this test was run.
         run_status: TestRunStatus,
@@ -416,8 +448,10 @@ pub enum TestEvent<'a> {
     /// A test was skipped.
     TestSkipped {
         /// The test instance that was skipped.
-        test_instance: TestInstance<'a>,
-        // TODO: add skip reason
+        test_instance: TestInstance<'list>,
+
+        /// The reason this test was skipped.
+        reason: MismatchReason,
     },
 
     /// A cancellation notice was received.
@@ -434,6 +468,9 @@ pub enum TestEvent<'a> {
         /// The time at which the run was started.
         start_time: Instant,
 
+        /// The amount of time it took for the tests to run.
+        elapsed: Duration,
+
         /// Statistics for the run.
         run_stats: RunStats,
     },
@@ -447,4 +484,102 @@ pub enum CancelReason {
 
     /// A termination signal was received.
     Signal,
+}
+
+#[derive(Clone, Debug)]
+struct JUnitReporter<'list> {
+    path: Utf8PathBuf,
+    testsuites: HashMap<&'list str, Testsuite>,
+}
+
+impl<'list> JUnitReporter<'list> {
+    fn new(path: Utf8PathBuf) -> Self {
+        Self {
+            path,
+            testsuites: HashMap::new(),
+        }
+    }
+
+    fn write_event(&mut self, event: TestEvent<'list>) -> Result<()> {
+        match event {
+            TestEvent::RunStarted { .. } => {}
+            TestEvent::TestStarted { .. } => {}
+            TestEvent::TestFinished {
+                test_instance,
+                run_status,
+            } => {
+                let testsuite = self.testsuite_for(test_instance);
+
+                let testcase_status = match run_status.status {
+                    TestStatus::Pass => TestcaseStatus::success(),
+                    TestStatus::Fail => {
+                        let mut status = TestcaseStatus::failure();
+                        status.set_type("test failure");
+                        status
+                    }
+                    TestStatus::ExecFail => {
+                        let mut status = TestcaseStatus::error();
+                        status.set_type("execution failure");
+                        status
+                    }
+                };
+                // TODO: set message/description on testcase_status?
+
+                let mut testcase = Testcase::new(test_instance.name, testcase_status);
+                testcase.set_time(run_status.time_taken);
+
+                // TODO: also provide stdout and stderr for passing tests?
+                // TODO: allure seems to want the output to be in a format where text files are
+                // written out to disk:
+                // https://github.com/allure-framework/allure2/blob/master/plugins/junit-xml-plugin/src/main/java/io/qameta/allure/junitxml/JunitXmlPlugin.java#L192-L196
+                // we may have to update this format to handle that.
+                if !run_status.status.is_success() {
+                    testcase
+                        .set_system_out_lossy(run_status.stdout)
+                        .set_system_err_lossy(run_status.stderr);
+                }
+
+                testsuite.add_testcase(testcase);
+            }
+            TestEvent::TestSkipped { .. } => {
+                // TODO: report skipped tests? causes issues if we want to aggregate runs across
+                // skipped and non-skipped tests. Probably needs to be made configurable.
+
+                // let testsuite = self.testsuite_for(test_instance);
+                //
+                // let mut testcase_status = TestcaseStatus::skipped();
+                // testcase_status.set_message(format!("Skipped: {}", reason));
+                // let testcase = Testcase::new(test_instance.name, testcase_status);
+                //
+                // testsuite.add_testcase(testcase);
+            }
+            TestEvent::RunBeginCancel { .. } => {}
+            TestEvent::RunFinished { elapsed, .. } => {
+                // Write out the report to the given file.
+                // TODO: customize name
+                // TODO: write a separate report for each binary?
+                let mut report = Report::new("nextest-run");
+                report
+                    .set_time(elapsed)
+                    .add_testsuites(self.testsuites.drain().map(|(_, testsuite)| testsuite));
+
+                let f = File::create(&self.path).with_context(|| {
+                    format!("failed to open junit file '{}' for writing", self.path)
+                })?;
+                report
+                    .serialize(f)
+                    .with_context(|| format!("failed to serialize junit to {}", self.path))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn testsuite_for(&mut self, test_instance: TestInstance<'list>) -> &mut Testsuite {
+        let friendly_name =
+            TestReporter::friendly_name(test_instance.friendly_name, test_instance.binary);
+        self.testsuites
+            .entry(friendly_name)
+            .or_insert_with(|| Testsuite::new(friendly_name))
+    }
 }

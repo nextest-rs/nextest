@@ -3,6 +3,7 @@
 
 use crate::{
     reporter::{CancelReason, TestEvent},
+    test_filter::{FilterMatch, MismatchReason},
     test_list::{TestInstance, TestList},
 };
 use anyhow::Result;
@@ -132,9 +133,12 @@ impl<'list> TestRunner<'list> {
                         return;
                     }
 
-                    if !test_instance.info.filter_match.is_match() {
+                    if let FilterMatch::Mismatch { reason } = test_instance.info.filter_match {
                         // Failure to send means the receiver was dropped.
-                        let _ = this_run_sender.send(InternalTestEvent::Skipped { test_instance });
+                        let _ = this_run_sender.send(InternalTestEvent::Skipped {
+                            test_instance,
+                            reason,
+                        });
                         return;
                     }
 
@@ -428,10 +432,16 @@ where
                 })
                 .map_err(InternalError::Error)
             }
-            InternalEvent::Test(InternalTestEvent::Skipped { test_instance }) => {
+            InternalEvent::Test(InternalTestEvent::Skipped {
+                test_instance,
+                reason,
+            }) => {
                 self.run_stats.skipped += 1;
-                (self.callback)(TestEvent::TestSkipped { test_instance })
-                    .map_err(InternalError::Error)
+                (self.callback)(TestEvent::TestSkipped {
+                    test_instance,
+                    reason,
+                })
+                .map_err(InternalError::Error)
             }
             InternalEvent::Signal(InternalSignalEvent::Canceled { signal: _signal }) => {
                 debug_assert_ne!(
@@ -468,6 +478,7 @@ where
     fn run_finished(&mut self) -> Result<(), E> {
         (self.callback)(TestEvent::RunFinished {
             start_time: self.start_time,
+            elapsed: self.start_time.elapsed(),
             run_stats: self.run_stats,
         })
     }
@@ -499,6 +510,7 @@ enum InternalTestEvent<'list> {
     },
     Skipped {
         test_instance: TestInstance<'list>,
+        reason: MismatchReason,
     },
 }
 

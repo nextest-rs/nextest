@@ -18,7 +18,7 @@ use std::{
 use testrunner::{
     reporter::TestEvent,
     runner::{RunStats, TestRunStatus, TestRunner, TestRunnerOpts, TestStatus},
-    test_filter::{FilterMatch, RunIgnored, TestFilter},
+    test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilter},
     test_list::{TestBinary, TestList},
 };
 
@@ -160,14 +160,14 @@ struct InstanceValue<'a> {
 
 #[derive(Clone)]
 enum InstanceStatus {
-    Skipped,
+    Skipped(MismatchReason),
     Finished(TestRunStatus),
 }
 
 impl fmt::Debug for InstanceStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            InstanceStatus::Skipped => write!(f, "<skipped>"),
+            InstanceStatus::Skipped(reason) => write!(f, "skipped: {}", reason),
             InstanceStatus::Finished(run_status) => {
                 write!(
                     f,
@@ -197,7 +197,7 @@ fn test_run() -> Result<()> {
         for fixture in expected {
             let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
             let valid = match &instance_value.status {
-                InstanceStatus::Skipped => fixture.status.is_ignored(),
+                InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
                 InstanceStatus::Finished(status) => {
                     status.status == fixture.status.to_test_status()
                 }
@@ -231,7 +231,7 @@ fn test_run_ignored() -> Result<()> {
         for fixture in expected {
             let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
             let valid = match &instance_value.status {
-                InstanceStatus::Skipped => !fixture.status.is_ignored(),
+                InstanceStatus::Skipped(_) => !fixture.status.is_ignored(),
                 InstanceStatus::Finished(status) => {
                     status.status == fixture.status.to_test_status()
                 }
@@ -258,7 +258,10 @@ fn execute_collect<'a>(
     let mut instance_statuses = HashMap::new();
     let run_stats = runner.execute(|event| {
         let (test_instance, status) = match event {
-            TestEvent::TestSkipped { test_instance } => (test_instance, InstanceStatus::Skipped),
+            TestEvent::TestSkipped {
+                test_instance,
+                reason,
+            } => (test_instance, InstanceStatus::Skipped(reason)),
             TestEvent::TestFinished {
                 test_instance,
                 run_status,
