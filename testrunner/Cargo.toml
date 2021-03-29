@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 aho-corasick = "0.7.15"
-anyhow = "1.0.39"
+anyhow = "1.0.40"
 atty = "0.2.14"
 camino = { version = "1.0.4", features = ["serde1"] }
 crossbeam-channel = "0.5.0"
