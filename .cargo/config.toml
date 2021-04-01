@@ -1,2 +1,2 @@
 [alias]
-xfmt = "fmt -- --config merge_imports=true"
+xfmt = "fmt -- --config imports_granularity=Crate"
