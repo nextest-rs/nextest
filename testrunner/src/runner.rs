@@ -49,20 +49,20 @@ impl TestRunnerOpts {
 }
 
 /// Context for running tests.
-pub struct TestRunner<'a> {
+pub struct TestRunner<'list> {
     #[allow(dead_code)]
     opts: TestRunnerOpts,
-    test_list: &'a TestList,
+    test_list: &'list TestList,
     run_pool: ThreadPool,
 }
 
-impl<'a> TestRunner<'a> {
+impl<'list> TestRunner<'list> {
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.
     pub fn execute<F>(&self, mut callback: F) -> RunStats
     where
-        F: FnMut(TestEvent<'a>) + Send,
+        F: FnMut(TestEvent<'list>) + Send,
     {
         self.try_execute::<Infallible, _>(|test_event| {
             callback(test_event);
@@ -77,7 +77,7 @@ impl<'a> TestRunner<'a> {
     /// error, the callback is no longer called.
     pub fn try_execute<E, F>(&self, callback: F) -> Result<RunStats, E>
     where
-        F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
+        F: FnMut(TestEvent<'list>) -> Result<(), E> + Send,
         E: Send,
     {
         // TODO: add support for other test-running approaches, measure performance.
@@ -230,7 +230,7 @@ impl<'a> TestRunner<'a> {
     // ---
 
     /// Run an individual test in its own process.
-    fn run_test(&self, test: TestInstance<'a>) -> TestRunStatus {
+    fn run_test(&self, test: TestInstance<'list>) -> TestRunStatus {
         let start_time = Instant::now();
 
         match self.run_test_inner(test, &start_time) {
@@ -247,7 +247,7 @@ impl<'a> TestRunner<'a> {
 
     fn run_test_inner(
         &self,
-        test: TestInstance<'a>,
+        test: TestInstance<'list>,
         start_time: &Instant,
     ) -> Result<TestRunStatus> {
         let mut args = vec!["--exact", test.name, "--nocapture"];
@@ -376,9 +376,9 @@ struct CallbackContext<F, E> {
     phantom: PhantomData<E>,
 }
 
-impl<'a, F, E> CallbackContext<F, E>
+impl<'list, F, E> CallbackContext<F, E>
 where
-    F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
+    F: FnMut(TestEvent<'list>) -> Result<(), E> + Send,
 {
     fn new(callback: F, initial_run_count: usize) -> Self {
         Self {
@@ -395,11 +395,11 @@ where
         }
     }
 
-    fn run_started(&mut self, test_list: &'a TestList) -> Result<(), E> {
+    fn run_started(&mut self, test_list: &'list TestList) -> Result<(), E> {
         (self.callback)(TestEvent::RunStarted { test_list })
     }
 
-    fn handle_event(&mut self, event: InternalEvent<'a>) -> Result<(), InternalError<E>> {
+    fn handle_event(&mut self, event: InternalEvent<'list>) -> Result<(), InternalError<E>> {
         match event {
             InternalEvent::Signal(InternalSignalEvent::Handle { handle }) => {
                 self.signal_handle = Some(handle);
@@ -483,22 +483,22 @@ where
 }
 
 #[derive(Debug)]
-enum InternalEvent<'a> {
-    Test(InternalTestEvent<'a>),
+enum InternalEvent<'list> {
+    Test(InternalTestEvent<'list>),
     Signal(InternalSignalEvent),
 }
 
 #[derive(Debug)]
-enum InternalTestEvent<'a> {
+enum InternalTestEvent<'list> {
     Started {
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstance<'list>,
     },
     Finished {
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstance<'list>,
         run_status: TestRunStatus,
     },
     Skipped {
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstance<'list>,
     },
 }
 
