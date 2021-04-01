@@ -7,7 +7,7 @@ use crate::{
     test_filter::MismatchReason,
     test_list::{test_bin_spec, test_name_spec, TestInstance, TestList},
 };
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use quick_junit::{Report, Testcase, TestcaseStatus, Testsuite};
 use std::{
@@ -16,6 +16,7 @@ use std::{
     fs::File,
     io,
     io::Write,
+    str::FromStr,
     time::{Duration, Instant},
 };
 use structopt::{clap::arg_enum, StructOpt};
@@ -53,12 +54,57 @@ impl Color {
     }
 }
 
-arg_enum! {
-    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-    pub enum FailureOutput {
-        Immediate,
-        // TODO: report failures at the end of the process
-        Never,
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FailureOutput {
+    Immediate,
+    ImmediateFinal,
+    Final,
+    Never,
+}
+
+impl FailureOutput {
+    pub fn variants() -> [&'static str; 4] {
+        ["immediate", "immediate-final", "final", "never"]
+    }
+
+    fn is_immediate(self) -> bool {
+        match self {
+            FailureOutput::Immediate | FailureOutput::ImmediateFinal => true,
+            FailureOutput::Final | FailureOutput::Never => false,
+        }
+    }
+
+    fn is_final(self) -> bool {
+        match self {
+            FailureOutput::Final | FailureOutput::ImmediateFinal => true,
+            FailureOutput::Immediate | FailureOutput::Never => false,
+        }
+    }
+}
+
+impl fmt::Display for FailureOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FailureOutput::Immediate => write!(f, "immediate"),
+            FailureOutput::ImmediateFinal => write!(f, "immediate-final"),
+            FailureOutput::Final => write!(f, "final"),
+            FailureOutput::Never => write!(f, "never"),
+        }
+    }
+}
+
+impl FromStr for FailureOutput {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let val = match s {
+            "immediate" => FailureOutput::Immediate,
+            "immediate-final" => FailureOutput::ImmediateFinal,
+            "final" => FailureOutput::Final,
+            "never" => FailureOutput::Never,
+            other => bail!("unrecognized value for failure-output: {}", other),
+        };
+        Ok(val)
     }
 }
 
@@ -87,6 +133,10 @@ pub struct TestReporter<'list> {
     failure_output: FailureOutput,
     friendly_name_width: usize,
 
+    // TODO: too many concerns mixed up here. Should have a better model, probably in conjunction
+    // with factoring out the different reporters below.
+    failing_tests: Vec<(TestInstance<'list>, TestRunStatus)>,
+
     // TODO: Improve this design. A better design would be:
     // * add a ReportStore struct which receives test events and stores them
     // * provide a list of reporters to that struct, e.g. StdoutReporter and JUnitReporter
@@ -110,6 +160,7 @@ impl<'list> TestReporter<'list> {
             stdout,
             stderr,
             failure_output: opts.failure_output,
+            failing_tests: vec![],
             friendly_name_width,
             junit_reporter,
         }
@@ -195,27 +246,14 @@ impl<'list> TestReporter<'list> {
                 writeln!(writer)?;
 
                 // If the test failed to execute, print its output and error status.
-                if !run_status.status.is_success()
-                    && self.failure_output == FailureOutput::Immediate
-                {
-                    writer.set_color(&Self::fail_spec())?;
-                    write!(writer, "\n--- STDOUT: ")?;
-                    self.write_instance(*test_instance, NoColor::new(&mut writer))?;
-                    writeln!(writer, " ---")?;
+                if !run_status.status.is_success() && self.failure_output.is_immediate() {
+                    self.write_run_status(test_instance, run_status, &mut writer)?;
+                }
 
-                    writer.set_color(&Self::fail_output_spec())?;
-                    NoColor::new(&mut writer).write_all(&run_status.stdout)?;
-
-                    writer.set_color(&Self::fail_spec())?;
-                    write!(writer, "--- STDERR: ")?;
-                    self.write_instance(*test_instance, NoColor::new(&mut writer))?;
-                    writeln!(writer, " ---")?;
-
-                    writer.set_color(&Self::fail_output_spec())?;
-                    NoColor::new(&mut writer).write_all(&run_status.stderr)?;
-
-                    writer.reset()?;
-                    writeln!(writer)?;
+                if !run_status.status.is_success() && self.failure_output.is_final() {
+                    // TODO this clone can probably be avoided with a refactoring
+                    self.failing_tests
+                        .push((*test_instance, run_status.clone()));
                 }
             }
             TestEvent::TestSkipped {
@@ -324,7 +362,9 @@ impl<'list> TestReporter<'list> {
 
                 writeln!(writer)?;
 
-                // TODO: print information about failing tests
+                for (test_instance, run_status) in &self.failing_tests {
+                    self.write_run_status(test_instance, run_status, &mut writer)?;
+                }
             }
         }
 
@@ -361,6 +401,32 @@ impl<'list> TestReporter<'list> {
         writer.reset()?;
 
         Ok(())
+    }
+
+    fn write_run_status(
+        &self,
+        test_instance: &TestInstance<'list>,
+        run_status: &TestRunStatus,
+        mut writer: impl WriteColor,
+    ) -> io::Result<()> {
+        writer.set_color(&Self::fail_spec())?;
+        write!(writer, "\n--- STDOUT: ")?;
+        self.write_instance(*test_instance, NoColor::new(&mut writer))?;
+        writeln!(writer, " ---")?;
+
+        writer.set_color(&Self::fail_output_spec())?;
+        NoColor::new(&mut writer).write_all(&run_status.stdout)?;
+
+        writer.set_color(&Self::fail_spec())?;
+        write!(writer, "--- STDERR: ")?;
+        self.write_instance(*test_instance, NoColor::new(&mut writer))?;
+        writeln!(writer, " ---")?;
+
+        writer.set_color(&Self::fail_output_spec())?;
+        NoColor::new(&mut writer).write_all(&run_status.stderr)?;
+
+        writer.reset()?;
+        writeln!(writer)
     }
 
     fn friendly_name(friendly_name: Option<&'list str>, binary: &'list Utf8Path) -> &'list str {
