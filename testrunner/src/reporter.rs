@@ -583,6 +583,7 @@ impl<'list> JUnitReporter<'list> {
                 // TODO: set message/description on testcase_status?
 
                 let mut testcase = Testcase::new(test_instance.name, testcase_status);
+                testcase.set_classname(test_instance.binary_id);
                 testcase.set_time(run_status.time_taken);
 
                 // TODO: also provide stdout and stderr for passing tests?

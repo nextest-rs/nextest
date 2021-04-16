@@ -240,6 +240,12 @@ pub struct Testcase {
     /// The name of the testcase.
     pub name: String,
 
+    /// The "classname" of the testcase.
+    ///
+    /// Typically, this represents the fully qualified path to the test. In other words,
+    /// `classname` + `name` together should uniquely identify and locate a test.
+    pub classname: Option<String>,
+
     /// The number of assertions in the testcase.
     pub assertions: Option<usize>,
 
@@ -264,6 +270,7 @@ impl Testcase {
     pub fn new(name: impl Into<String>, status: TestcaseStatus) -> Self {
         Self {
             name: name.into(),
+            classname: None,
             assertions: None,
             time: None,
             status,
@@ -271,6 +278,12 @@ impl Testcase {
             system_err: None,
             extra: IndexMap::new(),
         }
+    }
+
+    /// Sets the classname of the test.
+    pub fn set_classname(&mut self, classname: impl Into<String>) -> &mut Self {
+        self.classname = Some(classname.into());
+        self
     }
 
     /// Sets the number of assertions in the testcase.

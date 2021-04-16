@@ -152,6 +152,7 @@ fn serialize_testcase(
 ) -> quick_xml::Result<()> {
     let Testcase {
         name,
+        classname,
         assertions,
         time,
         status,
@@ -162,6 +163,9 @@ fn serialize_testcase(
 
     let mut testcase_tag = BytesStart::borrowed_name(TESTCASE_TAG.as_bytes());
     testcase_tag.extend_attributes(array::IntoIter::new([("name", name.as_str())]));
+    if let Some(classname) = classname {
+        testcase_tag.push_attribute(("classname", classname.as_str()));
+    }
     if let Some(assertions) = assertions {
         testcase_tag.push_attribute(("assertions", format!("{}", assertions).as_str()));
     }
