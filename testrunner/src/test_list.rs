@@ -24,8 +24,9 @@ pub struct TestBinary {
     /// The test binary.
     pub binary: Utf8PathBuf,
 
-    /// A friendly name for this binary. If provided, this name will be used instead of the binary.
-    pub friendly_name: Option<String>,
+    /// A unique identifier for this binary, typically the package + binary name defined in
+    /// `Cargo.toml`.
+    pub binary_id: String,
 
     /// The working directory that this test should be executed in. If None, the current directory
     /// will not be changed.
@@ -48,8 +49,9 @@ pub struct TestList {
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct TestBinInfo {
-    /// A friendly name for this binary. If provided, this name will be used instead of the binary.
-    pub friendly_name: Option<String>,
+    /// A unique identifier for this binary, typically the package + binary name defined in
+    /// `Cargo.toml`.
+    pub binary_id: String,
 
     /// Test names and other information.
     pub tests: BTreeMap<String, RustTestInfo>,
@@ -185,7 +187,7 @@ impl TestList {
                 TestInstance::new(
                     name,
                     test_bin,
-                    bin_info.friendly_name.as_deref(),
+                    &bin_info.binary_id,
                     info,
                     bin_info.cwd.as_deref(),
                 )
@@ -214,7 +216,7 @@ impl TestList {
         let TestBinary {
             binary,
             cwd,
-            friendly_name,
+            binary_id,
         } = test_binary;
 
         let mut tests = BTreeMap::new();
@@ -246,7 +248,7 @@ impl TestList {
             TestBinInfo {
                 tests,
                 cwd,
-                friendly_name,
+                binary_id,
             },
         ))
     }
@@ -354,8 +356,9 @@ pub struct TestInstance<'a> {
     /// The test binary.
     pub binary: &'a Utf8Path,
 
-    /// The friendly name of the binary, if any.
-    pub friendly_name: Option<&'a str>,
+    /// A unique identifier for this binary, typically the package + binary name defined in
+    /// `Cargo.toml`.
+    pub binary_id: &'a str,
 
     /// Information about the test.
     pub info: &'a RustTestInfo,
@@ -369,14 +372,14 @@ impl<'a> TestInstance<'a> {
     pub(crate) fn new(
         name: &'a (impl AsRef<str> + ?Sized),
         binary: &'a (impl AsRef<Utf8Path> + ?Sized),
-        friendly_name: Option<&'a str>,
+        binary_id: &'a str,
         info: &'a RustTestInfo,
         cwd: Option<&'a Utf8Path>,
     ) -> Self {
         Self {
             name: name.as_ref(),
             binary: binary.as_ref(),
-            friendly_name,
+            binary_id,
             info,
             cwd,
         }
@@ -424,11 +427,11 @@ mod tests {
 
         let test_filter = TestFilter::any(RunIgnored::Default);
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
-        let fake_friendly_name = "fake-package".to_owned();
+        let fake_binary_id = "fake-package".to_owned();
         let test_binary = TestBinary {
             binary: "/fake/binary".into(),
             cwd: Some(fake_cwd.clone()),
-            friendly_name: Some(fake_friendly_name.clone()),
+            binary_id: fake_binary_id.clone(),
         };
         let test_list = TestList::new_with_outputs(
             iter::once((test_binary, &non_ignored_output, &ignored_output)),
@@ -458,7 +461,7 @@ mod tests {
                         },
                     },
                     cwd: Some(fake_cwd),
-                    friendly_name: Some(fake_friendly_name),
+                    binary_id: fake_binary_id,
                 }
             }
         );
@@ -477,7 +480,7 @@ mod tests {
               "test-count": 4,
               "test-binaries": {
                 "/fake/binary": {
-                  "friendly-name": "fake-package",
+                  "binary-id": "fake-package",
                   "tests": {
                     "tests::baz::test_ignored": {
                       "ignored": true,

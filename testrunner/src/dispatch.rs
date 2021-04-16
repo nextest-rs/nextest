@@ -77,7 +77,7 @@ impl TestBinFilter {
             self.test_bin.iter().map(|binary| TestBinary {
                 binary: binary.clone(),
                 // TODO: add support for these through the CLI interface?
-                friendly_name: None,
+                binary_id: binary.clone().into(),
                 cwd: None,
             }),
             &test_filter,

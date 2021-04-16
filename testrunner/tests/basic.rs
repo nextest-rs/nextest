@@ -115,7 +115,7 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
                     TestBinary {
                         binary,
                         cwd,
-                        friendly_name: Some("my-friendly-name".into()),
+                        binary_id: "my-binary-id".into(),
                     },
                 );
             }
@@ -153,7 +153,7 @@ fn test_list_tests() -> Result<()> {
 
 #[derive(Clone, Debug)]
 struct InstanceValue<'a> {
-    friendly_name: Option<&'a str>,
+    binary_id: &'a str,
     cwd: Option<&'a Utf8Path>,
     status: InstanceStatus,
 }
@@ -272,7 +272,7 @@ fn execute_collect<'a>(
         instance_statuses.insert(
             (test_instance.binary, test_instance.name),
             InstanceValue {
-                friendly_name: test_instance.friendly_name,
+                binary_id: test_instance.binary_id,
                 cwd: test_instance.cwd,
                 status,
             },

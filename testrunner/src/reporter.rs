@@ -8,7 +8,7 @@ use crate::{
     test_list::{test_bin_spec, test_name_spec, TestInstance, TestList},
 };
 use anyhow::{bail, Context, Result};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use quick_junit::{Report, Testcase, TestcaseStatus, Testsuite};
 use std::{
     collections::HashMap,
@@ -131,7 +131,7 @@ pub struct TestReporter<'list> {
     #[allow(dead_code)]
     stderr: BufferWriter,
     failure_output: FailureOutput,
-    friendly_name_width: usize,
+    binary_id_width: usize,
 
     // TODO: too many concerns mixed up here. Should have a better model, probably in conjunction
     // with factoring out the different reporters below.
@@ -150,9 +150,9 @@ impl<'list> TestReporter<'list> {
     pub fn new(test_list: &TestList, color: Color, opts: ReporterOpts) -> Self {
         let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
         let stderr = BufferWriter::stderr(color.color_choice(atty::Stream::Stderr));
-        let friendly_name_width = test_list
+        let binary_id_width = test_list
             .iter()
-            .map(|(path, info)| Self::friendly_name(info.friendly_name.as_deref(), path).len())
+            .map(|(_, info)| info.binary_id.len())
             .max()
             .unwrap_or_default();
         let junit_reporter = opts.junit.map(JUnitReporter::new);
@@ -161,7 +161,7 @@ impl<'list> TestReporter<'list> {
             stderr,
             failure_output: opts.failure_output,
             failing_tests: vec![],
-            friendly_name_width,
+            binary_id_width,
             junit_reporter,
         }
     }
@@ -379,13 +379,12 @@ impl<'list> TestReporter<'list> {
         instance: TestInstance<'list>,
         mut writer: impl WriteColor,
     ) -> io::Result<()> {
-        let friendly_name = Self::friendly_name(instance.friendly_name, instance.binary);
         writer.set_color(&test_bin_spec())?;
         write!(
             writer,
             "{:>width$}",
-            friendly_name,
-            width = self.friendly_name_width
+            instance.binary_id,
+            width = self.binary_id_width
         )?;
         writer.reset()?;
         write!(writer, "  ")?;
@@ -427,14 +426,6 @@ impl<'list> TestReporter<'list> {
 
         writer.reset()?;
         writeln!(writer)
-    }
-
-    fn friendly_name(friendly_name: Option<&'list str>, binary: &'list Utf8Path) -> &'list str {
-        friendly_name.unwrap_or_else(|| {
-            binary
-                .file_name()
-                .expect("test binaries always have file names")
-        })
     }
 
     fn count_spec() -> ColorSpec {
@@ -642,10 +633,8 @@ impl<'list> JUnitReporter<'list> {
     }
 
     fn testsuite_for(&mut self, test_instance: TestInstance<'list>) -> &mut Testsuite {
-        let friendly_name =
-            TestReporter::friendly_name(test_instance.friendly_name, test_instance.binary);
         self.testsuites
-            .entry(friendly_name)
-            .or_insert_with(|| Testsuite::new(friendly_name))
+            .entry(test_instance.binary_id)
+            .or_insert_with(|| Testsuite::new(test_instance.binary_id))
     }
 }
