@@ -26,6 +26,6 @@ quick-junit = { path = "../quick-junit" }
 cargo_metadata = "0.13.1"
 indoc = "1.0.3"
 maplit = "1.0.2"
-pretty_assertions = "0.7.1"
+pretty_assertions = "0.7.2"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
