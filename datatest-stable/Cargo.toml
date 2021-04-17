@@ -5,8 +5,11 @@ authors = ["Diem Association <opensource@diem.com>"]
 description = "Data-driven tests that work on stable Rust"
 repository = "https://github.com/diem/diem-devtools"
 license = "MIT OR Apache-2.0"
-publish = false
+publish = ["crates-io"]
+readme = "README.md"
 edition = "2018"
+categories = ["developer-tools::testing"]
+keywords = ["datatest", "data-driven tests"]
 
 [dependencies]
 regex = "1.4.3"
