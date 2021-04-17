@@ -102,13 +102,14 @@ impl Default for Format {
 pub fn runner(reqs: &[Requirements]) {
     let options = TestOpts::from_args();
 
-    let tests: Vec<Test> = if options.ignored {
+    let mut tests: Vec<Test> = if options.ignored {
         // Currently impossible to mark tests as ignored.
         // TODO: add support for this in the future, probably by supporting an "ignored" dir
         vec![]
     } else {
         reqs.iter().flat_map(|req| req.expand()).collect()
     };
+    tests.sort_by(|a, b| a.name.cmp(&b.name));
 
     if options.list {
         for test in &tests {
