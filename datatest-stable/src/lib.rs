@@ -40,7 +40,7 @@
 //! This is an example test. Use it with `harness = false`.
 //!
 //! ```
-//! use std::{fs::File, io::Read, path::Path};
+//! use std::path::Path;
 //!
 //! fn my_test(path: &Path) -> datatest_stable::Result<()> {
 //!     // ... write test here

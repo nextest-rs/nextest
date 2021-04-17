@@ -39,7 +39,7 @@ The three parameters can be repeated if you have multiple sets of data-driven te
 This is an example test. Use it with `harness = false`.
 
 ```rust
-use std::{fs::File, io::Read, path::Path};
+use std::path::Path;
 
 fn my_test(path: &Path) -> datatest_stable::Result<()> {
     // ... write test here
