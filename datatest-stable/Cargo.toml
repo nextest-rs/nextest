@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 publish = ["crates-io"]
 readme = "README.md"
 edition = "2018"
-categories = ["developer-tools::testing"]
+categories = ["development-tools::testing"]
 keywords = ["datatest", "data-driven-tests", "test-harness"]
 
 [dependencies]
