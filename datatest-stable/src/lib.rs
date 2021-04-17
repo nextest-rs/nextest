@@ -57,10 +57,13 @@
 //!   with a better UI and more features but targeting nightly Rust
 //! * [Data-driven testing](https://en.wikipedia.org/wiki/Data-driven_testing)
 
+#![warn(missing_docs)]
+
 mod macros;
 mod runner;
-pub mod utils;
+mod utils;
 
+/// The result type for `datatest-stable` tests.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub use self::runner::{runner, Requirements};

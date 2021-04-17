@@ -98,6 +98,7 @@ impl Default for Format {
     }
 }
 
+#[doc(hidden)]
 pub fn runner(reqs: &[Requirements]) {
     let options = TestOpts::from_args();
 
@@ -309,6 +310,7 @@ impl TestSummary {
     }
 }
 
+#[doc(hidden)]
 pub struct Requirements {
     test: fn(&Path) -> Result<()>,
     test_name: String,
@@ -317,6 +319,7 @@ pub struct Requirements {
 }
 
 impl Requirements {
+    #[doc(hidden)]
     pub fn new(
         test: fn(&Path) -> Result<()>,
         test_name: String,
