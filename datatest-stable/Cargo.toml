@@ -1,6 +1,6 @@
 [package]
 name = "datatest-stable"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Diem Association <opensource@diem.com>"]
 description = "Data-driven tests that work on stable Rust"
 repository = "https://github.com/diem/diem-devtools"
