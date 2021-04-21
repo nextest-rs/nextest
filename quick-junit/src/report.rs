@@ -4,7 +4,7 @@
 use crate::serialize::serialize_report;
 use chrono::{DateTime, FixedOffset};
 use indexmap::map::IndexMap;
-use std::{borrow::Cow, io, time::Duration};
+use std::{borrow::Cow, io, iter, time::Duration};
 
 /// The root element of a JUnit report.
 #[derive(Clone, Debug)]
@@ -186,9 +186,11 @@ impl Testsuite {
     pub fn add_testcase(&mut self, testcase: Testcase) -> &mut Self {
         self.tests += 1;
         match &testcase.status {
-            TestcaseStatus::Success => {}
-            TestcaseStatus::Failure { .. } => self.failures += 1,
-            TestcaseStatus::Error { .. } => self.errors += 1,
+            TestcaseStatus::Success { .. } => {}
+            TestcaseStatus::NonSuccess { kind, .. } => match kind {
+                NonSuccessKind::Failure => self.failures += 1,
+                NonSuccessKind::Error => self.errors += 1,
+            },
             TestcaseStatus::Skipped { .. } => self.disabled += 1,
         }
         self.testcases.push(testcase);
@@ -333,10 +335,17 @@ impl Testcase {
 #[derive(Clone, Debug)]
 pub enum TestcaseStatus {
     /// This testcase passed.
-    Success,
+    Success {
+        /// Prior runs of the test. These are represented as `flakyFailure` or `flakyError` in the
+        /// JUnit XML.
+        flaky_runs: Vec<TestRerun>,
+    },
 
-    /// This testcase failed in an expected way.
-    Failure {
+    /// This testcase did not pass.
+    NonSuccess {
+        /// Whether this testcase failed in an expected way (failure) or an unexpected way (error).
+        kind: NonSuccessKind,
+
         /// The failure message.
         message: Option<String>,
 
@@ -347,20 +356,9 @@ pub enum TestcaseStatus {
         ///
         /// This is serialized and deserialized from the text node of the element.
         description: Option<String>,
-    },
 
-    /// This testcase errored in an unexpected way.
-    Error {
-        /// The error message.
-        message: Option<String>,
-
-        /// The "type" of error that occurred.
-        ty: Option<String>,
-
-        /// The description of the failure.
-        ///
-        /// This is serialized and deserialized from the text node of the element.
-        description: Option<String>,
+        /// Test reruns. These are represented as `rerunFailure` or `rerunError` in the JUnit XML.
+        reruns: Vec<TestRerun>,
     },
 
     /// This testcase was not run.
@@ -381,24 +379,17 @@ pub enum TestcaseStatus {
 impl TestcaseStatus {
     /// Creates a new `TestcaseStatus` that represents a successful test.
     pub fn success() -> Self {
-        TestcaseStatus::Success
+        TestcaseStatus::Success { flaky_runs: vec![] }
     }
 
-    /// Creates a new `TestcaseStatus` that represents a failure.
-    pub fn failure() -> Self {
-        TestcaseStatus::Failure {
+    /// Creates a new `TestcaseStatus` that represents an unsuccessful test.
+    pub fn non_success(kind: NonSuccessKind) -> Self {
+        TestcaseStatus::NonSuccess {
+            kind,
             message: None,
             ty: None,
             description: None,
-        }
-    }
-
-    /// Creates a new `TestcaseStatus` that represents an error.
-    pub fn error() -> Self {
-        TestcaseStatus::Error {
-            message: None,
-            ty: None,
-            description: None,
+            reruns: vec![],
         }
     }
 
@@ -414,9 +405,8 @@ impl TestcaseStatus {
     /// Sets the message. No-op if this is a success case.
     pub fn set_message(&mut self, message: impl Into<String>) -> &mut Self {
         let message_mut = match self {
-            TestcaseStatus::Success => return self,
-            TestcaseStatus::Failure { message, .. } => message,
-            TestcaseStatus::Error { message, .. } => message,
+            TestcaseStatus::Success { .. } => return self,
+            TestcaseStatus::NonSuccess { message, .. } => message,
             TestcaseStatus::Skipped { message, .. } => message,
         };
         *message_mut = Some(message.into());
@@ -426,9 +416,8 @@ impl TestcaseStatus {
     /// Sets the type. No-op if this is a success case.
     pub fn set_type(&mut self, ty: impl Into<String>) -> &mut Self {
         let ty_mut = match self {
-            TestcaseStatus::Success => return self,
-            TestcaseStatus::Failure { ty, .. } => ty,
-            TestcaseStatus::Error { ty, .. } => ty,
+            TestcaseStatus::Success { .. } => return self,
+            TestcaseStatus::NonSuccess { ty, .. } => ty,
             TestcaseStatus::Skipped { ty, .. } => ty,
         };
         *ty_mut = Some(ty.into());
@@ -438,14 +427,139 @@ impl TestcaseStatus {
     /// Sets the description (text node). No-op if this is a success case.
     pub fn set_description(&mut self, description: impl Into<String>) -> &mut Self {
         let description_mut = match self {
-            TestcaseStatus::Success => return self,
-            TestcaseStatus::Failure { description, .. } => description,
-            TestcaseStatus::Error { description, .. } => description,
+            TestcaseStatus::Success { .. } => return self,
+            TestcaseStatus::NonSuccess { description, .. } => description,
             TestcaseStatus::Skipped { description, .. } => description,
         };
         *description_mut = Some(description.into());
         self
     }
+
+    /// Adds a rerun or flaky run. No-op if this test was skipped.
+    pub fn add_rerun(&mut self, rerun: TestRerun) -> &mut Self {
+        self.add_reruns(iter::once(rerun))
+    }
+
+    /// Adds reruns or flaky runs. No-op if this test was skipped.
+    pub fn add_reruns(&mut self, reruns: impl IntoIterator<Item = TestRerun>) -> &mut Self {
+        let reruns_mut = match self {
+            TestcaseStatus::Success { flaky_runs } => flaky_runs,
+            TestcaseStatus::NonSuccess { reruns, .. } => reruns,
+            TestcaseStatus::Skipped { .. } => return self,
+        };
+        reruns_mut.extend(reruns);
+        self
+    }
+}
+
+/// A rerun of a test.
+///
+/// This is serialized as `flakyFailure` or `flakyError` for successes, and as `rerunFailure` or
+/// `rerunError` for failures/errors.
+#[derive(Clone, Debug)]
+pub struct TestRerun {
+    /// The failure kind: error or failure.
+    pub kind: NonSuccessKind,
+
+    /// The failure message.
+    pub message: Option<String>,
+
+    /// The "type" of failure that occurred.
+    pub ty: Option<String>,
+
+    /// The stack trace, if any.
+    pub stack_trace: Option<String>,
+
+    /// Data written to standard output while the test rerun was executed.
+    pub system_out: Option<Output>,
+
+    /// Data written to standard error while the test rerun was executed.
+    pub system_err: Option<Output>,
+
+    /// The description of the failure.
+    ///
+    /// This is serialized and deserialized from the text node of the element.
+    pub description: Option<String>,
+}
+
+impl TestRerun {
+    /// Creates a new `TestRerun` of the given kind.
+    pub fn new(kind: NonSuccessKind) -> Self {
+        TestRerun {
+            kind,
+            message: None,
+            ty: None,
+            stack_trace: None,
+            system_out: None,
+            system_err: None,
+            description: None,
+        }
+    }
+
+    /// Sets the message.
+    pub fn set_message(&mut self, message: impl Into<String>) -> &mut Self {
+        self.message = Some(message.into());
+        self
+    }
+
+    /// Sets the type.
+    pub fn set_type(&mut self, ty: impl Into<String>) -> &mut Self {
+        self.ty = Some(ty.into());
+        self
+    }
+
+    /// Sets the stack trace.
+    pub fn set_stack_trace(&mut self, stack_trace: impl Into<String>) -> &mut Self {
+        self.stack_trace = Some(stack_trace.into());
+        self
+    }
+
+    /// Sets standard output.
+    pub fn set_system_out(&mut self, system_out: impl Into<String>) -> &mut Self {
+        self.system_out = Some(Output {
+            output: system_out.into(),
+        });
+        self
+    }
+
+    /// Sets standard output from a `Vec<u8>`.
+    ///
+    /// The output is converted to a string, lossily.
+    pub fn set_system_out_lossy(&mut self, system_out: impl Into<Vec<u8>>) -> &mut Self {
+        self.set_system_out(from_utf8_lossy(system_out.into()))
+    }
+
+    /// Sets standard error.
+    pub fn set_system_err(&mut self, system_err: impl Into<String>) -> &mut Self {
+        self.system_err = Some(Output {
+            output: system_err.into(),
+        });
+        self
+    }
+
+    /// Sets standard error from a `Vec<u8>`.
+    ///
+    /// The output is converted to a string, lossily.
+    pub fn set_system_err_lossy(&mut self, system_err: impl Into<Vec<u8>>) -> &mut Self {
+        self.set_system_err(from_utf8_lossy(system_err.into()))
+    }
+
+    /// Sets the description of the failure.
+    pub fn set_description(&mut self, description: impl Into<String>) -> &mut Self {
+        self.description = Some(description.into());
+        self
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum NonSuccessKind {
+    /// This is an expected failure. Serialized as `failure`, `flakyFailure` or `rerunFailure`
+    /// depending on the context.
+    Failure,
+
+    /// This is an unexpected error. Serialized as `error`, `flakyError` or `rerunError` depending
+    /// on the context.
+    Error,
 }
 
 /// Custom properties set during test execution, e.g. environment variables.

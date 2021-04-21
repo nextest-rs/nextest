@@ -13,11 +13,13 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use signal_hook::{iterator::Handle, low_level::emulate_default_handler};
 use std::{
     convert::Infallible,
-    fmt,
     marker::PhantomData,
     os::raw::c_int,
     path::Path,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -29,7 +31,9 @@ pub struct TestRunnerOpts {
     /// Number of tests to run simultaneously [default: physical CPU count]
     #[structopt(short, long, alias = "test-threads")]
     pub jobs: Option<usize>,
-    // TODO: more test runner options
+    /// Number of times tests are run on failure (tests that pass on retry will be considered flaky)
+    #[structopt(long, default_value = "1")]
+    pub tries: usize,
 }
 
 impl TestRunnerOpts {
@@ -51,7 +55,6 @@ impl TestRunnerOpts {
 
 /// Context for running tests.
 pub struct TestRunner<'list> {
-    #[allow(dead_code)]
     opts: TestRunnerOpts,
     test_list: &'list TestList,
     run_pool: ThreadPool,
@@ -145,11 +148,40 @@ impl<'list> TestRunner<'list> {
                     // Failure to send means the receiver was dropped.
                     let _ = this_run_sender.send(InternalTestEvent::Started { test_instance });
 
-                    let run_status = self.run_test(test_instance);
-                    // Failure to send means the receiver was dropped.
+                    let mut run_statuses = vec![];
+
+                    loop {
+                        let attempt = run_statuses.len() + 1;
+
+                        let run_status = self
+                            .run_test(test_instance, attempt)
+                            .into_external(attempt, self.opts.tries);
+
+                        if run_status.status.is_success() {
+                            // The test succeeded.
+                            run_statuses.push(run_status);
+                            break;
+                        } else if attempt < self.opts.tries {
+                            // Retry this test: send a retry event, then retry the loop.
+                            let _ = this_run_sender.send(InternalTestEvent::Retry {
+                                test_instance,
+                                run_status: run_status.clone(),
+                            });
+                            run_statuses.push(run_status);
+                        } else {
+                            // This test failed and is out of retries.
+                            run_statuses.push(run_status);
+                            break;
+                        }
+                    }
+
+                    // At this point, either:
+                    // * the test has succeeded, or
+                    // * the test has failed and we've run out of retries.
+                    // In either case, the test is finished.
                     let _ = this_run_sender.send(InternalTestEvent::Finished {
                         test_instance,
-                        run_status,
+                        run_statuses: RunStatuses::new(run_statuses),
                     });
                 })
             });
@@ -234,12 +266,12 @@ impl<'list> TestRunner<'list> {
     // ---
 
     /// Run an individual test in its own process.
-    fn run_test(&self, test: TestInstance<'list>) -> TestRunStatus {
+    fn run_test(&self, test: TestInstance<'list>, attempt: usize) -> InternalRunStatus {
         let start_time = Instant::now();
 
-        match self.run_test_inner(test, &start_time) {
+        match self.run_test_inner(test, attempt, &start_time) {
             Ok(run_status) => run_status,
-            Err(_) => TestRunStatus {
+            Err(_) => InternalRunStatus {
                 // TODO: can we return more information in stdout/stderr? investigate this
                 stdout: vec![],
                 stderr: vec![],
@@ -252,8 +284,9 @@ impl<'list> TestRunner<'list> {
     fn run_test_inner(
         &self,
         test: TestInstance<'list>,
+        attempt: usize,
         start_time: &Instant,
-    ) -> Result<TestRunStatus> {
+    ) -> Result<InternalRunStatus> {
         let mut args = vec!["--exact", test.name, "--nocapture"];
         if test.info.ignored {
             args.push("--ignored");
@@ -262,7 +295,9 @@ impl<'list> TestRunner<'list> {
             // Capture stdout and stderr.
             .stdout_capture()
             .stderr_capture()
-            .unchecked();
+            .unchecked()
+            // Debug environment variable for testing.
+            .env("__NEXTEST_ATTEMPT", format!("{}", attempt));
 
         if let Some(cwd) = test.cwd {
             cmd = cmd.dir(cwd);
@@ -280,7 +315,7 @@ impl<'list> TestRunner<'list> {
         } else {
             TestStatus::Fail
         };
-        Ok(TestRunStatus {
+        Ok(InternalRunStatus {
             stdout: output.stdout,
             stderr: output.stderr,
             status,
@@ -289,13 +324,131 @@ impl<'list> TestRunner<'list> {
     }
 }
 
-/// Information about a test that finished running.
+/// Information about executions of a test, including retries.
+#[derive(Clone, Debug)]
+pub struct RunStatuses {
+    /// This is guaranteed to be non-empty.
+    statuses: Vec<TestRunStatus>,
+}
+
+#[allow(clippy::len_without_is_empty)] // RunStatuses is never empty
+impl RunStatuses {
+    fn new(statuses: Vec<TestRunStatus>) -> Self {
+        Self { statuses }
+    }
+
+    /// Returns the last run status.
+    ///
+    /// This status is typically used as the final result.
+    pub fn last_status(&self) -> &TestRunStatus {
+        self.statuses.last().expect("run statuses is non-empty")
+    }
+
+    /// Iterates over all the statuses.
+    pub fn iter(&self) -> impl Iterator<Item = &'_ TestRunStatus> + DoubleEndedIterator + '_ {
+        self.statuses.iter()
+    }
+
+    /// Returns the number of statuses.
+    pub fn len(&self) -> usize {
+        self.statuses.len()
+    }
+
+    pub fn describe(&self) -> RunDescribe<'_> {
+        let last_status = self.last_status();
+        if last_status.status.is_success() {
+            if self.statuses.len() > 1 {
+                RunDescribe::Flaky {
+                    last_status,
+                    prior_statuses: &self.statuses[..self.statuses.len() - 1],
+                }
+            } else {
+                RunDescribe::Success {
+                    run_status: last_status,
+                }
+            }
+        } else {
+            let first_status = self.statuses.first().expect("run-statuses is non-empty");
+            let retries = &self.statuses[1..];
+            RunDescribe::Failure {
+                first_status,
+                last_status,
+                retries,
+            }
+        }
+    }
+}
+
+/// A description obtained from `RunStatuses`.
+pub enum RunDescribe<'a> {
+    /// The test was run once and was successful.
+    Success { run_status: &'a TestRunStatus },
+
+    /// The test was run more than once. The final result was successful.
+    Flaky {
+        /// The last, successful status.
+        last_status: &'a TestRunStatus,
+
+        /// Previous statuses, none of which are successes.
+        prior_statuses: &'a [TestRunStatus],
+    },
+
+    /// The test was run once, or possibly multiple times. All runs failed.
+    Failure {
+        /// The first, failing status.
+        first_status: &'a TestRunStatus,
+
+        /// The last, failing status. Same as the first status if no retries were performed.
+        last_status: &'a TestRunStatus,
+
+        /// Any retries that were performed. All of these runs failed.
+        ///
+        /// May be empty.
+        retries: &'a [TestRunStatus],
+    },
+}
+
+/// Information about a single execution of a test.
 #[derive(Clone, Debug)]
 pub struct TestRunStatus {
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
+    /// The current attempt. In the range `[1, total_attempts]`.
+    pub attempt: usize,
+    /// The total number of times this test can be run. Equal to `1 + retries`.
+    pub total_attempts: usize,
+    pub stdout_stderr: Arc<(Vec<u8>, Vec<u8>)>,
     pub status: TestStatus,
     pub time_taken: Duration,
+}
+
+impl TestRunStatus {
+    /// Returns the standard output.
+    pub fn stdout(&self) -> &[u8] {
+        &self.stdout_stderr.0
+    }
+
+    /// Returns the standard error.
+    pub fn stderr(&self) -> &[u8] {
+        &self.stdout_stderr.1
+    }
+}
+
+struct InternalRunStatus {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    status: TestStatus,
+    time_taken: Duration,
+}
+
+impl InternalRunStatus {
+    fn into_external(self, attempt: usize, total_attempts: usize) -> TestRunStatus {
+        TestRunStatus {
+            attempt,
+            total_attempts,
+            stdout_stderr: Arc::new((self.stdout, self.stderr)),
+            status: self.status,
+            time_taken: self.time_taken,
+        }
+    }
 }
 
 /// Statistics for a test run.
@@ -309,8 +462,11 @@ pub struct RunStats {
     /// The total number of tests that were actually run.
     pub final_run_count: usize,
 
-    /// The number of tests that passed.
+    /// The number of tests that passed. Includes `flaky`.
     pub passed: usize,
+
+    /// The number of tests that passed on retry.
+    pub flaky: usize,
 
     /// The number of tests that failed.
     pub failed: usize,
@@ -337,6 +493,29 @@ impl RunStats {
             return false;
         }
         true
+    }
+
+    fn on_test_finished(&mut self, run_statuses: &RunStatuses) {
+        self.final_run_count += 1;
+        // run_statuses is guaranteed to have at least one element.
+        // * If the last element is success, treat it as success (and possibly flaky).
+        // * If the last element is a failure, use it to determine fail/exec fail.
+        // Note that this is different from what Maven Surefire does (use the first failure):
+        // https://maven.apache.org/surefire/maven-surefire-plugin/examples/rerun-failing-tests.html
+        //
+        // This is not likely to matter much in practice since failures are likely to be of the
+        // same type.
+        let last_status = run_statuses.last_status();
+        match last_status.status {
+            TestStatus::Pass => {
+                self.passed += 1;
+                if run_statuses.len() > 1 {
+                    self.flaky += 1;
+                }
+            }
+            TestStatus::Fail => self.failed += 1,
+            TestStatus::ExecFail => self.exec_failed += 1,
+        }
     }
 }
 
@@ -414,21 +593,24 @@ where
                 (self.callback)(TestEvent::TestStarted { test_instance })
                     .map_err(InternalError::Error)
             }
-            InternalEvent::Test(InternalTestEvent::Finished {
+            InternalEvent::Test(InternalTestEvent::Retry {
                 test_instance,
                 run_status,
+            }) => (self.callback)(TestEvent::TestRetry {
+                test_instance,
+                run_status,
+            })
+            .map_err(InternalError::Error),
+            InternalEvent::Test(InternalTestEvent::Finished {
+                test_instance,
+                run_statuses,
             }) => {
                 self.running -= 1;
-                self.run_stats.final_run_count += 1;
-                match run_status.status {
-                    TestStatus::Pass => self.run_stats.passed += 1,
-                    TestStatus::Fail => self.run_stats.failed += 1,
-                    TestStatus::ExecFail => self.run_stats.exec_failed += 1,
-                }
+                self.run_stats.on_test_finished(&run_statuses);
 
                 (self.callback)(TestEvent::TestFinished {
                     test_instance,
-                    run_status,
+                    run_statuses,
                 })
                 .map_err(InternalError::Error)
             }
@@ -504,9 +686,13 @@ enum InternalTestEvent<'list> {
     Started {
         test_instance: TestInstance<'list>,
     },
-    Finished {
+    Retry {
         test_instance: TestInstance<'list>,
         run_status: TestRunStatus,
+    },
+    Finished {
+        test_instance: TestInstance<'list>,
+        run_statuses: RunStatuses,
     },
     Skipped {
         test_instance: TestInstance<'list>,
@@ -546,16 +732,6 @@ impl TestStatus {
         match self {
             TestStatus::Pass => true,
             TestStatus::Fail | TestStatus::ExecFail => false,
-        }
-    }
-}
-
-impl fmt::Display for TestStatus {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TestStatus::Pass => f.pad("PASS"),
-            TestStatus::Fail => f.pad("FAIL"),
-            TestStatus::ExecFail => f.pad("EXECFAIL"),
         }
     }
 }

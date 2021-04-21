@@ -17,7 +17,7 @@ use std::{
 };
 use testrunner::{
     reporter::TestEvent,
-    runner::{RunStats, TestRunStatus, TestRunner, TestRunnerOpts, TestStatus},
+    runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
     test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilter},
     test_list::{TestBinary, TestList},
 };
@@ -38,14 +38,22 @@ impl PartialEq<(&str, FilterMatch)> for TestFixture {
 enum FixtureStatus {
     Pass,
     Fail,
+    Flaky { pass_attempt: usize },
     IgnoredPass,
     IgnoredFail,
 }
 
 impl FixtureStatus {
-    fn to_test_status(self) -> TestStatus {
+    fn to_test_status(self, total_attempts: usize) -> TestStatus {
         match self {
             FixtureStatus::Pass | FixtureStatus::IgnoredPass => TestStatus::Pass,
+            FixtureStatus::Flaky { pass_attempt } => {
+                if pass_attempt <= total_attempts {
+                    TestStatus::Pass
+                } else {
+                    TestStatus::Fail
+                }
+            }
             FixtureStatus::Fail | FixtureStatus::IgnoredFail => TestStatus::Fail,
         }
     }
@@ -65,6 +73,8 @@ static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::ne
             TestFixture { name: "test_failure_assert", status: FixtureStatus::Fail },
             TestFixture { name: "test_failure_error", status: FixtureStatus::Fail },
             TestFixture { name: "test_failure_should_panic", status: FixtureStatus::Fail },
+            TestFixture { name: "test_flaky_mod_2", status: FixtureStatus::Flaky { pass_attempt: 2 } },
+            TestFixture { name: "test_flaky_mod_3", status: FixtureStatus::Flaky { pass_attempt: 3 } },
             TestFixture { name: "test_ignored", status: FixtureStatus::IgnoredPass },
             TestFixture { name: "test_ignored_fail", status: FixtureStatus::IgnoredFail },
             TestFixture { name: "test_success", status: FixtureStatus::Pass },
@@ -161,21 +171,26 @@ struct InstanceValue<'a> {
 #[derive(Clone)]
 enum InstanceStatus {
     Skipped(MismatchReason),
-    Finished(TestRunStatus),
+    Finished(RunStatuses),
 }
 
 impl fmt::Debug for InstanceStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             InstanceStatus::Skipped(reason) => write!(f, "skipped: {}", reason),
-            InstanceStatus::Finished(run_status) => {
-                write!(
-                    f,
-                    "{:?}\n---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",
-                    run_status.status,
-                    String::from_utf8_lossy(&run_status.stdout),
-                    String::from_utf8_lossy(&run_status.stderr)
-                )
+            InstanceStatus::Finished(run_statuses) => {
+                for run_status in run_statuses.iter() {
+                    write!(
+                        f,
+                        "({}/{}) {:?}\n---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",
+                        run_status.attempt,
+                        run_status.total_attempts,
+                        run_status.status,
+                        String::from_utf8_lossy(&run_status.stdout()),
+                        String::from_utf8_lossy(&run_status.stderr())
+                    )?;
+                }
+                Ok(())
             }
         }
     }
@@ -198,8 +213,16 @@ fn test_run() -> Result<()> {
             let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
             let valid = match &instance_value.status {
                 InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
-                InstanceStatus::Finished(status) => {
-                    status.status == fixture.status.to_test_status()
+                InstanceStatus::Finished(run_statuses) => {
+                    // This test should not have been retried since retries aren't configured.
+                    assert_eq!(
+                        run_statuses.len(),
+                        1,
+                        "test {} should have been run exactly once",
+                        fixture.name
+                    );
+                    let run_status = run_statuses.last_status();
+                    run_status.status == fixture.status.to_test_status(1)
                 }
             };
             if !valid {
@@ -232,8 +255,116 @@ fn test_run_ignored() -> Result<()> {
             let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
             let valid = match &instance_value.status {
                 InstanceStatus::Skipped(_) => !fixture.status.is_ignored(),
-                InstanceStatus::Finished(status) => {
-                    status.status == fixture.status.to_test_status()
+                InstanceStatus::Finished(run_statuses) => {
+                    // This test should not have been retried since retries aren't configured.
+                    assert_eq!(
+                        run_statuses.len(),
+                        1,
+                        "test {} should have been run exactly once",
+                        fixture.name
+                    );
+                    let run_status = run_statuses.last_status();
+                    run_status.status == fixture.status.to_test_status(1)
+                }
+            };
+            if !valid {
+                panic!(
+                    "for test {}, mismatch in status: expected {:?}, actual {:?}",
+                    fixture.name, fixture.status, instance_value.status
+                );
+            }
+        }
+    }
+
+    assert!(!run_stats.is_success(), "run should be marked failed");
+    Ok(())
+}
+
+#[test]
+fn test_retries() -> Result<()> {
+    let test_filter = TestFilter::any(RunIgnored::Default);
+    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
+    let test_list = TestList::new(test_bins, &test_filter)?;
+
+    let tries = 3;
+
+    let runner = TestRunnerOpts {
+        tries,
+        ..TestRunnerOpts::default()
+    }
+    .build(&test_list);
+
+    let (instance_statuses, run_stats) = execute_collect(&runner);
+
+    for (name, expected) in &*EXPECTED_TESTS {
+        let test_binary = FIXTURE_TARGETS
+            .get(*name)
+            .unwrap_or_else(|| panic!("unexpected test name {}", name));
+        for fixture in expected {
+            let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
+            let valid = match &instance_value.status {
+                InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
+                InstanceStatus::Finished(run_statuses) => {
+                    let expected_len = match fixture.status {
+                        FixtureStatus::Flaky { pass_attempt } => pass_attempt,
+                        FixtureStatus::Pass => 1,
+                        FixtureStatus::Fail => tries,
+                        FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail => {
+                            unreachable!("ignored tests should be skipped")
+                        }
+                    };
+                    assert_eq!(
+                        run_statuses.len(),
+                        expected_len,
+                        "test {} should be run {} times",
+                        fixture.name,
+                        expected_len,
+                    );
+
+                    match run_statuses.describe() {
+                        RunDescribe::Success { run_status } => {
+                            run_status.status == TestStatus::Pass
+                        }
+                        RunDescribe::Flaky {
+                            last_status,
+                            prior_statuses,
+                        } => {
+                            assert_eq!(
+                                prior_statuses.len(),
+                                expected_len - 1,
+                                "correct length for prior statuses"
+                            );
+                            for prior_status in prior_statuses {
+                                assert_eq!(
+                                    prior_status.status,
+                                    TestStatus::Fail,
+                                    "prior status {} should be fail",
+                                    prior_status.attempt
+                                );
+                            }
+                            last_status.status == TestStatus::Pass
+                        }
+                        RunDescribe::Failure {
+                            first_status,
+                            retries,
+                            ..
+                        } => {
+                            assert_eq!(
+                                retries.len(),
+                                expected_len - 1,
+                                "correct length for retries"
+                            );
+                            for retry in retries {
+                                assert_eq!(
+                                    retry.status,
+                                    TestStatus::Fail,
+                                    "retry {} should be fail",
+                                    retry.attempt
+                                );
+                            }
+                            first_status.status == TestStatus::Fail
+                        }
+                    }
                 }
             };
             if !valid {
@@ -264,8 +395,8 @@ fn execute_collect<'a>(
             } => (test_instance, InstanceStatus::Skipped(reason)),
             TestEvent::TestFinished {
                 test_instance,
-                run_status,
-            } => (test_instance, InstanceStatus::Finished(run_status)),
+                run_statuses,
+            } => (test_instance, InstanceStatus::Finished(run_statuses)),
             _ => return,
         };
 

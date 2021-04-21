@@ -3,7 +3,9 @@
 
 //! Serialize a `Report`.
 
-use crate::{Output, Property, Report, Testcase, TestcaseStatus, Testsuite};
+use crate::{
+    NonSuccessKind, Output, Property, Report, TestRerun, Testcase, TestcaseStatus, Testsuite,
+};
 use quick_xml::{
     events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event},
     Writer,
@@ -17,6 +19,11 @@ static PROPERTIES_TAG: &str = "properties";
 static PROPERTY_TAG: &str = "property";
 static FAILURE_TAG: &str = "failure";
 static ERROR_TAG: &str = "error";
+static FLAKY_FAILURE_TAG: &str = "flakyFailure";
+static FLAKY_ERROR_TAG: &str = "flakyError";
+static RERUN_FAILURE_TAG: &str = "rerunFailure";
+static RERUN_ERROR_TAG: &str = "rerunError";
+static STACK_TRACE_TAG: &str = "stackTrace";
 static SKIPPED_TAG: &str = "skipped";
 static SYSTEM_OUT_TAG: &str = "system-out";
 static SYSTEM_ERR_TAG: &str = "system-err";
@@ -178,32 +185,32 @@ fn serialize_testcase(
     writer.write_event(Event::Start(testcase_tag))?;
 
     match status {
-        TestcaseStatus::Success => {}
-        TestcaseStatus::Failure {
-            message,
-            ty,
-            description,
-        } => {
-            serialize_status(
-                message.as_deref(),
-                ty.as_deref(),
-                description.as_deref(),
-                FAILURE_TAG,
-                writer,
-            )?;
+        TestcaseStatus::Success { flaky_runs } => {
+            for rerun in flaky_runs {
+                serialize_rerun(rerun, FlakyOrRerun::Flaky, writer)?;
+            }
         }
-        TestcaseStatus::Error {
+        TestcaseStatus::NonSuccess {
+            kind,
             message,
             ty,
             description,
+            reruns,
         } => {
+            let tag_name = match kind {
+                NonSuccessKind::Failure => FAILURE_TAG,
+                NonSuccessKind::Error => ERROR_TAG,
+            };
             serialize_status(
                 message.as_deref(),
                 ty.as_deref(),
                 description.as_deref(),
-                ERROR_TAG,
+                tag_name,
                 writer,
             )?;
+            for rerun in reruns {
+                serialize_rerun(rerun, FlakyOrRerun::Rerun, writer)?;
+            }
         }
         TestcaseStatus::Skipped {
             message,
@@ -257,6 +264,82 @@ fn serialize_status(
             writer.write_event(Event::Empty(tag))?;
         }
     }
+
+    Ok(())
+}
+
+#[derive(Copy, Clone, Debug)]
+enum FlakyOrRerun {
+    Flaky,
+    Rerun,
+}
+
+fn serialize_rerun(
+    rerun: &TestRerun,
+    flaky_or_rerun: FlakyOrRerun,
+    writer: &mut Writer<impl io::Write>,
+) -> quick_xml::Result<()> {
+    let TestRerun {
+        kind,
+        message,
+        ty,
+        stack_trace,
+        system_out,
+        system_err,
+        description,
+    } = rerun;
+
+    let tag_name = match (flaky_or_rerun, *kind) {
+        (FlakyOrRerun::Flaky, NonSuccessKind::Failure) => FLAKY_FAILURE_TAG,
+        (FlakyOrRerun::Flaky, NonSuccessKind::Error) => FLAKY_ERROR_TAG,
+        (FlakyOrRerun::Rerun, NonSuccessKind::Failure) => RERUN_FAILURE_TAG,
+        (FlakyOrRerun::Rerun, NonSuccessKind::Error) => RERUN_ERROR_TAG,
+    };
+
+    let mut tag = BytesStart::borrowed_name(tag_name.as_bytes());
+    if let Some(message) = message {
+        tag.push_attribute(("message", message.as_str()));
+    }
+    if let Some(ty) = ty {
+        tag.push_attribute(("type", ty.as_str()));
+    }
+
+    writer.write_event(Event::Start(tag))?;
+
+    let mut needs_indent = false;
+    if let Some(description) = description {
+        writer.write_event(Event::Text(BytesText::from_plain_str(description)))?;
+        needs_indent = true;
+    }
+
+    // Note that the stack trace, system out and system err should occur in this order according
+    // to the reference schema.
+    if let Some(stack_trace) = stack_trace {
+        if needs_indent {
+            writer.write_indent()?;
+            needs_indent = false;
+        }
+        serialize_empty_start_tag(STACK_TRACE_TAG, writer)?;
+        writer.write_event(Event::Text(BytesText::from_plain_str(stack_trace)))?;
+        serialize_end_tag(STACK_TRACE_TAG, writer)?;
+    }
+
+    if let Some(system_out) = system_out {
+        if needs_indent {
+            writer.write_indent()?;
+            needs_indent = false;
+        }
+        serialize_output(system_out, SYSTEM_OUT_TAG, writer)?;
+    }
+    if let Some(system_err) = system_err {
+        if needs_indent {
+            writer.write_indent()?;
+            // needs_indent = false;
+        }
+        serialize_output(system_err, SYSTEM_ERR_TAG, writer)?;
+    }
+
+    serialize_end_tag(tag_name, writer)?;
 
     Ok(())
 }

@@ -3,13 +3,13 @@
 
 use crate::{
     output::OutputFormat,
-    runner::{RunStats, TestRunStatus, TestStatus},
+    runner::{RunDescribe, RunStats, RunStatuses, TestRunStatus, TestStatus},
     test_filter::MismatchReason,
     test_list::{test_bin_spec, test_name_spec, TestInstance, TestList},
 };
 use anyhow::{bail, Context, Result};
 use camino::Utf8PathBuf;
-use quick_junit::{Report, Testcase, TestcaseStatus, Testsuite};
+use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
 use std::{
     collections::HashMap,
     fmt,
@@ -217,43 +217,93 @@ impl<'list> TestReporter<'list> {
             TestEvent::TestStarted { .. } => {
                 // TODO
             }
-            TestEvent::TestFinished {
+            TestEvent::TestRetry {
                 test_instance,
                 run_status,
             } => {
-                // First, print the status.
-                match run_status.status {
-                    TestStatus::Pass => {
-                        writer.set_color(&Self::pass_spec())?;
-                    }
-                    TestStatus::Fail | TestStatus::ExecFail => {
-                        writer.set_color(&Self::fail_spec())?;
-                    }
-                }
-
-                write!(writer, "{:>12} ", run_status.status)?;
+                writer.set_color(&Self::retry_spec())?;
+                let retry_string =
+                    format!("{}/{} RETRY", run_status.attempt, run_status.total_attempts);
+                write!(writer, "{:>12} ", retry_string)?;
                 writer.reset()?;
 
                 // Next, print the time taken.
-                // * > means right-align.
-                // * 8 is the number of characters to pad to.
-                // * .3 means print two digits after the decimal point.
-                // TODO: better time printing mechanism than this
-                write!(writer, "[{:>8.3?}s] ", run_status.time_taken.as_secs_f64())?;
+                self.write_duration(run_status.time_taken, &mut writer)?;
+
+                // Print the name of the test.
+                self.write_instance(*test_instance, &mut writer)?;
+                writeln!(writer)?;
+
+                // This test is guaranteed to have failed.
+                assert!(
+                    !run_status.status.is_success(),
+                    "only failing tests are retried"
+                );
+                if self.failure_output.is_immediate() {
+                    self.write_run_status(test_instance, run_status, true, &mut writer)?;
+                }
+
+                // The final output doesn't show retries.
+            }
+            TestEvent::TestFinished {
+                test_instance,
+                run_statuses,
+            } => {
+                // First, print the status.
+                let last_status = match run_statuses.describe() {
+                    RunDescribe::Success { run_status } => {
+                        writer.set_color(&Self::pass_spec())?;
+                        write!(writer, "{:>12} ", "PASS")?;
+                        run_status
+                    }
+                    RunDescribe::Flaky { last_status, .. } => {
+                        // Use the skip color to also represent a flaky test.
+                        writer.set_color(&Self::skip_spec())?;
+                        write!(
+                            writer,
+                            "{:>12} ",
+                            format!("TRY {} PASS", last_status.attempt)
+                        )?;
+                        last_status
+                    }
+                    RunDescribe::Failure { last_status, .. } => {
+                        writer.set_color(&Self::fail_spec())?;
+                        let status_str = match last_status.status {
+                            TestStatus::Fail => "FAIL",
+                            TestStatus::ExecFail => "XFAIL",
+                            TestStatus::Pass => unreachable!("this is a failing test"),
+                        };
+                        if last_status.attempt == 1 {
+                            write!(writer, "{:>12} ", status_str)?;
+                        } else {
+                            write!(
+                                writer,
+                                "{:>12} ",
+                                format!("TRY {} {}", last_status.attempt, status_str)
+                            )?;
+                        }
+                        last_status
+                    }
+                };
+
+                writer.reset()?;
+
+                // Next, print the time taken.
+                self.write_duration(last_status.time_taken, &mut writer)?;
 
                 // Print the name of the test.
                 self.write_instance(*test_instance, &mut writer)?;
                 writeln!(writer)?;
 
                 // If the test failed to execute, print its output and error status.
-                if !run_status.status.is_success() && self.failure_output.is_immediate() {
-                    self.write_run_status(test_instance, run_status, &mut writer)?;
-                }
-
-                if !run_status.status.is_success() && self.failure_output.is_final() {
-                    // TODO this clone can probably be avoided with a refactoring
-                    self.failing_tests
-                        .push((*test_instance, run_status.clone()));
+                if !last_status.status.is_success() {
+                    if self.failure_output.is_immediate() {
+                        self.write_run_status(test_instance, last_status, false, &mut writer)?;
+                    }
+                    if self.failure_output.is_final() {
+                        self.failing_tests
+                            .push((*test_instance, last_status.clone()));
+                    }
                 }
             }
             TestEvent::TestSkipped {
@@ -298,6 +348,7 @@ impl<'list> TestReporter<'list> {
                         initial_run_count,
                         final_run_count,
                         passed,
+                        flaky,
                         failed,
                         exec_failed,
                         skipped,
@@ -334,6 +385,15 @@ impl<'list> TestReporter<'list> {
                 writer.set_color(&Self::pass_spec())?;
                 write!(writer, " passed")?;
                 writer.reset()?;
+                if *flaky > 0 {
+                    write!(writer, " (")?;
+                    writer.set_color(&count_spec)?;
+                    write!(writer, "{}", flaky)?;
+                    writer.set_color(&Self::skip_spec())?;
+                    write!(writer, " flaky")?;
+                    writer.reset()?;
+                    write!(writer, ")")?;
+                }
                 write!(writer, ", ")?;
 
                 if *failed > 0 {
@@ -363,7 +423,7 @@ impl<'list> TestReporter<'list> {
                 writeln!(writer)?;
 
                 for (test_instance, run_status) in &self.failing_tests {
-                    self.write_run_status(test_instance, run_status, &mut writer)?;
+                    self.write_run_status(test_instance, run_status, false, &mut writer)?;
                 }
             }
         }
@@ -402,30 +462,56 @@ impl<'list> TestReporter<'list> {
         Ok(())
     }
 
+    fn write_duration(&self, duration: Duration, mut writer: impl WriteColor) -> io::Result<()> {
+        // * > means right-align.
+        // * 8 is the number of characters to pad to.
+        // * .3 means print two digits after the decimal point.
+        // TODO: better time printing mechanism than this
+        write!(writer, "[{:>8.3?}s] ", duration.as_secs_f64())
+    }
+
     fn write_run_status(
         &self,
         test_instance: &TestInstance<'list>,
         run_status: &TestRunStatus,
+        is_retry: bool,
         mut writer: impl WriteColor,
     ) -> io::Result<()> {
-        writer.set_color(&Self::fail_spec())?;
-        write!(writer, "\n--- STDOUT: ")?;
+        let (header_spec, output_spec) = if is_retry {
+            (Self::retry_spec(), Self::retry_output_spec())
+        } else {
+            (Self::fail_spec(), Self::fail_output_spec())
+        };
+
+        writer.set_color(&header_spec)?;
+        write!(writer, "\n--- ")?;
+        self.write_attempt(run_status, &mut writer)?;
+        write!(writer, " STDOUT: ")?;
         self.write_instance(*test_instance, NoColor::new(&mut writer))?;
         writeln!(writer, " ---")?;
 
-        writer.set_color(&Self::fail_output_spec())?;
-        NoColor::new(&mut writer).write_all(&run_status.stdout)?;
+        writer.set_color(&output_spec)?;
+        NoColor::new(&mut writer).write_all(run_status.stdout())?;
 
-        writer.set_color(&Self::fail_spec())?;
-        write!(writer, "--- STDERR: ")?;
+        writer.set_color(&header_spec)?;
+        write!(writer, "--- ")?;
+        self.write_attempt(run_status, &mut writer)?;
+        write!(writer, " STDERR: ")?;
         self.write_instance(*test_instance, NoColor::new(&mut writer))?;
         writeln!(writer, " ---")?;
 
-        writer.set_color(&Self::fail_output_spec())?;
-        NoColor::new(&mut writer).write_all(&run_status.stderr)?;
+        writer.set_color(&output_spec)?;
+        NoColor::new(&mut writer).write_all(run_status.stderr())?;
 
         writer.reset()?;
         writeln!(writer)
+    }
+
+    fn write_attempt(&self, run_status: &TestRunStatus, mut writer: impl Write) -> io::Result<()> {
+        if run_status.total_attempts > 1 {
+            write!(writer, "TRY {}", run_status.attempt)?;
+        }
+        Ok(())
     }
 
     fn count_spec() -> ColorSpec {
@@ -442,11 +528,25 @@ impl<'list> TestReporter<'list> {
         color_spec
     }
 
+    fn retry_spec() -> ColorSpec {
+        let mut color_spec = ColorSpec::new();
+        color_spec
+            .set_fg(Some(termcolor::Color::Magenta))
+            .set_bold(true);
+        color_spec
+    }
+
     fn fail_spec() -> ColorSpec {
         let mut color_spec = ColorSpec::new();
         color_spec
             .set_fg(Some(termcolor::Color::Red))
             .set_bold(true);
+        color_spec
+    }
+
+    fn retry_output_spec() -> ColorSpec {
+        let mut color_spec = ColorSpec::new();
+        color_spec.set_fg(Some(termcolor::Color::Magenta));
         color_spec
     }
 
@@ -493,13 +593,24 @@ pub enum TestEvent<'list> {
         test_instance: TestInstance<'list>,
     },
 
+    /// A test failed and is being retried.
+    ///
+    /// This event does not occur on the final run of a failing test.
+    TestRetry {
+        /// The test instance that is being retried.
+        test_instance: TestInstance<'list>,
+
+        /// The status of this attempt to run the test. Will never be success.
+        run_status: TestRunStatus,
+    },
+
     /// A test finished running.
     TestFinished {
         /// The test instance that finished running.
         test_instance: TestInstance<'list>,
 
-        /// Information about how this test was run.
-        run_status: TestRunStatus,
+        /// Information about all the runs for this test.
+        run_statuses: RunStatuses,
     },
 
     /// A test was skipped.
@@ -561,40 +672,70 @@ impl<'list> JUnitReporter<'list> {
         match event {
             TestEvent::RunStarted { .. } => {}
             TestEvent::TestStarted { .. } => {}
+            TestEvent::TestRetry { .. } => {
+                // Retries are recorded in TestFinished.
+            }
             TestEvent::TestFinished {
                 test_instance,
-                run_status,
+                run_statuses,
             } => {
+                fn kind_ty(run_status: &TestRunStatus) -> (NonSuccessKind, &'static str) {
+                    match run_status.status {
+                        TestStatus::Fail => (NonSuccessKind::Failure, "test failure"),
+                        TestStatus::ExecFail => (NonSuccessKind::Error, "execution failure"),
+                        TestStatus::Pass => unreachable!("this is a failure status"),
+                    }
+                }
+
                 let testsuite = self.testsuite_for(test_instance);
 
-                let testcase_status = match run_status.status {
-                    TestStatus::Pass => TestcaseStatus::success(),
-                    TestStatus::Fail => {
-                        let mut status = TestcaseStatus::failure();
-                        status.set_type("test failure");
-                        status
+                let (mut testcase_status, main_status, reruns) = match run_statuses.describe() {
+                    RunDescribe::Success { run_status } => {
+                        (TestcaseStatus::success(), run_status, &[][..])
                     }
-                    TestStatus::ExecFail => {
-                        let mut status = TestcaseStatus::error();
-                        status.set_type("execution failure");
-                        status
+                    RunDescribe::Flaky {
+                        last_status,
+                        prior_statuses,
+                    } => (TestcaseStatus::success(), last_status, prior_statuses),
+                    RunDescribe::Failure {
+                        first_status,
+                        retries,
+                        ..
+                    } => {
+                        let (kind, ty) = kind_ty(first_status);
+                        let mut testcase_status = TestcaseStatus::non_success(kind);
+                        testcase_status.set_type(ty);
+                        (testcase_status, first_status, retries)
                     }
                 };
+
+                for rerun in reruns {
+                    let (kind, ty) = kind_ty(rerun);
+                    let mut test_rerun = TestRerun::new(kind);
+                    test_rerun
+                        .set_type(ty)
+                        .set_system_out_lossy(rerun.stdout())
+                        .set_system_err_lossy(rerun.stderr());
+                    // TODO: also publish time? it won't be standard JUnit (but maybe that's ok?)
+                    testcase_status.add_rerun(test_rerun);
+                }
+
                 // TODO: set message/description on testcase_status?
 
                 let mut testcase = Testcase::new(test_instance.name, testcase_status);
                 testcase.set_classname(test_instance.binary_id);
-                testcase.set_time(run_status.time_taken);
+                testcase.set_time(main_status.time_taken);
 
                 // TODO: also provide stdout and stderr for passing tests?
                 // TODO: allure seems to want the output to be in a format where text files are
                 // written out to disk:
                 // https://github.com/allure-framework/allure2/blob/master/plugins/junit-xml-plugin/src/main/java/io/qameta/allure/junitxml/JunitXmlPlugin.java#L192-L196
                 // we may have to update this format to handle that.
-                if !run_status.status.is_success() {
+                if !main_status.status.is_success() {
+                    // TODO: use the Arc wrapper, don't clone the system out and system err bytes
                     testcase
-                        .set_system_out_lossy(run_status.stdout)
-                        .set_system_err_lossy(run_status.stderr);
+                        .set_system_out_lossy(main_status.stdout())
+                        .set_system_err_lossy(main_status.stderr());
                 }
 
                 testsuite.add_testcase(testcase);

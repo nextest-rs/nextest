@@ -13,6 +13,36 @@ fn test_failure_error() -> Result<(), String> {
     return Err("this is an error".into());
 }
 
+fn nextest_attempt() -> usize {
+    static NEXTEST_ATTEMPT_ENV: &str = "__NEXTEST_ATTEMPT";
+    match env::var(NEXTEST_ATTEMPT_ENV) {
+        Ok(var) => var
+            .parse()
+            .expect("__NEXTEST_ATTEMPT should be a positive integer"),
+        Err(_) => 1,
+    }
+}
+
+#[test]
+fn test_flaky_mod_2() {
+    // Use this undocumented environment variable to figure out how many times this test has been
+    // run so far.
+    let nextest_attempt = nextest_attempt();
+    if nextest_attempt % 2 != 0 {
+        panic!("Failed because attempt {} % 2 != 0", nextest_attempt)
+    }
+}
+
+#[test]
+fn test_flaky_mod_3() {
+    // Use this undocumented environment variable to figure out how many times this test has been
+    // run so far.
+    let nextest_attempt = nextest_attempt();
+    if nextest_attempt % 3 != 0 {
+        panic!("Failed because attempt {} % 3 != 0", nextest_attempt)
+    }
+}
+
 #[test]
 #[should_panic]
 fn test_success_should_panic() {

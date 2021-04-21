@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="my-test-run" tests="4" failures="1" errors="1" time="42.235">
-    <testsuite name="testsuite0" tests="4" disabled="1" errors="1" failures="1">
+<testsuites name="my-test-run" tests="6" failures="2" errors="1" time="42.235">
+    <testsuite name="testsuite0" tests="6" disabled="1" errors="1" failures="2">
         <properties>
             <property name="env" value="FOOBAR"/>
         </properties>
@@ -18,6 +18,23 @@
             <skipped message="skipped message" type="skipped type"/>
             <system-out>testcase3 output</system-out>
             <system-err>testcase3 error</system-err>
+        </testcase>
+        <testcase name="testcase4" time="661.661">
+            <flakyFailure type="flaky failure type">this is a flaky failure description</flakyFailure>
+            <flakyError type="flaky error type">flaky error description
+                <stackTrace>flaky stack trace</stackTrace>
+                <system-out>flaky system output</system-out>
+                <system-err>flaky system error</system-err>
+            </flakyError>
+        </testcase>
+        <testcase name="testcase5" time="0.156">
+            <failure>main test failure description</failure>
+            <rerunFailure type="retry failure type">
+            </rerunFailure>
+            <rerunError type="retry error type">
+                <stackTrace>retry error stack trace</stackTrace>
+                <system-out>retry error system output</system-out>
+            </rerunError>
         </testcase>
     </testsuite>
 </testsuites>
