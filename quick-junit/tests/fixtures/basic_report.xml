@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="my-test-run" tests="6" failures="2" errors="1" time="42.235">
-    <testsuite name="testsuite0" tests="6" disabled="1" errors="1" failures="2">
+<testsuites name="my-test-run" tests="6" failures="2" errors="1" timestamp="2021-04-01T10:52:37.000-08:00" time="42.235">
+    <testsuite name="testsuite0" tests="6" disabled="1" errors="1" failures="2" timestamp="2021-04-01T10:52:39.000-08:00">
         <properties>
             <property name="env" value="FOOBAR"/>
         </properties>
@@ -14,7 +14,7 @@
         <testcase name="testcase2" time="0.000">
             <error type="error type">testcase2 error description</error>
         </testcase>
-        <testcase name="testcase3" assertions="20">
+        <testcase name="testcase3" assertions="20" timestamp="2021-04-01T11:52:41.000-07:00">
             <skipped message="skipped message" type="skipped type"/>
             <system-out>testcase3 output</system-out>
             <system-err>testcase3 error</system-err>

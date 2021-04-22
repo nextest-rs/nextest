@@ -1,6 +1,7 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use chrono::DateTime;
 use goldenfile::Mint;
 use quick_junit::{
     NonSuccessKind, Property, Report, TestRerun, Testcase, TestcaseStatus, Testsuite,
@@ -23,9 +24,17 @@ fn fixtures() {
 
 fn basic_report() -> Report {
     let mut report = Report::new("my-test-run");
+    report.set_timestamp(
+        DateTime::parse_from_rfc2822("Thu, 1 Apr 2021 10:52:37 -0800")
+            .expect("valid RFC2822 datetime"),
+    );
     report.set_time(Duration::new(42, 234_567_890));
 
     let mut testsuite = Testsuite::new("testsuite0");
+    testsuite.set_timestamp(
+        DateTime::parse_from_rfc2822("Thu, 1 Apr 2021 10:52:39 -0800")
+            .expect("valid RFC2822 datetime"),
+    );
 
     // ---
 
@@ -65,6 +74,10 @@ fn basic_report() -> Report {
     // no description to test that.
     let mut testcase = Testcase::new("testcase3", testcase_status);
     testcase
+        .set_timestamp(
+            DateTime::parse_from_rfc2822("Thu, 1 Apr 2021 11:52:41 -0700")
+                .expect("valid RFC2822 datetime"),
+        )
         .set_assertions(20)
         .set_system_out("testcase3 output")
         .set_system_err("testcase3 error");

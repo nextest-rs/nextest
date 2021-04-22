@@ -12,6 +12,11 @@ pub struct Report {
     /// The name of this test suite.
     pub name: String,
 
+    /// The time at which the first test in this report began execution.
+    ///
+    /// This is not part of the JUnit spec, but may be useful for some tools.
+    pub timestamp: Option<DateTime<FixedOffset>>,
+
     /// The overall time taken by the test suite.
     ///
     /// This is serialized as the number of seconds.
@@ -35,12 +40,19 @@ impl Report {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            timestamp: None,
             time: None,
             tests: 0,
             failures: 0,
             errors: 0,
             testsuites: vec![],
         }
+    }
+
+    /// Sets the start timestamp for the report.
+    pub fn set_timestamp(&mut self, timestamp: impl Into<DateTime<FixedOffset>>) -> &mut Self {
+        self.timestamp = Some(timestamp.into());
+        self
     }
 
     /// Sets the time taken for overall execution.
@@ -110,11 +122,11 @@ pub struct Testsuite {
     /// A "failure" is usually some sort of *expected* issue in a test.
     pub failures: usize,
 
+    /// The time at which the testsuite began execution.
+    pub timestamp: Option<DateTime<FixedOffset>>,
+
     /// The overall time taken by the testsuite.
     pub time: Option<Duration>,
-
-    /// The time at which the testsuite was executed.
-    pub timestamp: Option<DateTime<FixedOffset>>,
 
     /// The testcases that form this testsuite.
     pub testcases: Vec<Testcase>,
@@ -151,15 +163,15 @@ impl Testsuite {
         }
     }
 
-    /// Sets the time taken for the testsuite.
-    pub fn set_time(&mut self, time: Duration) -> &mut Self {
-        self.time = Some(time);
-        self
-    }
-
     /// Sets the start timestamp for the testsuite.
     pub fn set_timestamp(&mut self, timestamp: impl Into<DateTime<FixedOffset>>) -> &mut Self {
         self.timestamp = Some(timestamp.into());
+        self
+    }
+
+    /// Sets the time taken for the testsuite.
+    pub fn set_time(&mut self, time: Duration) -> &mut Self {
+        self.time = Some(time);
         self
     }
 
@@ -251,6 +263,11 @@ pub struct Testcase {
     /// The number of assertions in the testcase.
     pub assertions: Option<usize>,
 
+    /// The time at which this testcase began execution.
+    ///
+    /// This is not part of the JUnit spec, but may be useful for some tools.
+    pub timestamp: Option<DateTime<FixedOffset>>,
+
     /// The time it took to execute this testcase.
     pub time: Option<Duration>,
 
@@ -274,6 +291,7 @@ impl Testcase {
             name: name.into(),
             classname: None,
             assertions: None,
+            timestamp: None,
             time: None,
             status,
             system_out: None,
@@ -291,6 +309,12 @@ impl Testcase {
     /// Sets the number of assertions in the testcase.
     pub fn set_assertions(&mut self, assertions: usize) -> &mut Self {
         self.assertions = Some(assertions);
+        self
+    }
+
+    /// Sets the start timestamp for the testcase.
+    pub fn set_timestamp(&mut self, timestamp: impl Into<DateTime<FixedOffset>>) -> &mut Self {
+        self.timestamp = Some(timestamp.into());
         self
     }
 
@@ -461,6 +485,16 @@ pub struct TestRerun {
     /// The failure kind: error or failure.
     pub kind: NonSuccessKind,
 
+    /// The time at which this rerun began execution.
+    ///
+    /// This is not part of the JUnit spec, but may be useful for some tools.
+    pub timestamp: Option<DateTime<FixedOffset>>,
+
+    /// The time it took to execute this rerun.
+    ///
+    /// This is not part of the JUnit spec, but may be useful for some tools.
+    pub time: Option<Duration>,
+
     /// The failure message.
     pub message: Option<String>,
 
@@ -487,6 +521,8 @@ impl TestRerun {
     pub fn new(kind: NonSuccessKind) -> Self {
         TestRerun {
             kind,
+            timestamp: None,
+            time: None,
             message: None,
             ty: None,
             stack_trace: None,
@@ -494,6 +530,18 @@ impl TestRerun {
             system_err: None,
             description: None,
         }
+    }
+
+    /// Sets the start timestamp for this rerun.
+    pub fn set_timestamp(&mut self, timestamp: impl Into<DateTime<FixedOffset>>) -> &mut Self {
+        self.timestamp = Some(timestamp.into());
+        self
+    }
+
+    /// Sets the time taken for this rerun.
+    pub fn set_time(&mut self, time: Duration) -> &mut Self {
+        self.time = Some(time);
+        self
     }
 
     /// Sets the message.

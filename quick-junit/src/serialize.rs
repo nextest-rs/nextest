@@ -6,6 +6,7 @@
 use crate::{
     NonSuccessKind, Output, Property, Report, TestRerun, Testcase, TestcaseStatus, Testsuite,
 };
+use chrono::{DateTime, FixedOffset};
 use quick_xml::{
     events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event},
     Writer,
@@ -47,6 +48,7 @@ pub(crate) fn serialize_report_impl(
     // Use the destructuring syntax to ensure that all fields are handled.
     let Report {
         name,
+        timestamp,
         time,
         tests,
         failures,
@@ -61,8 +63,11 @@ pub(crate) fn serialize_report_impl(
         ("failures", failures.to_string().as_str()),
         ("errors", errors.to_string().as_str()),
     ]));
+    if let Some(timestamp) = timestamp {
+        serialize_timestamp(&mut testsuites_tag, timestamp);
+    }
     if let Some(time) = time {
-        testsuites_tag.push_attribute(("time", serialize_time(time).as_str()));
+        serialize_time(&mut testsuites_tag, time);
     }
     writer.write_event(Event::Start(testsuites_tag))?;
 
@@ -104,11 +109,12 @@ pub(crate) fn serialize_testsuite(
         ("errors", errors.to_string().as_str()),
         ("failures", failures.to_string().as_str()),
     ]));
-    if let Some(time) = time {
-        testsuite_tag.push_attribute(("time", serialize_time(time).as_str()));
-    }
+
     if let Some(timestamp) = timestamp {
-        testsuite_tag.push_attribute(("timestamp", format!("{}", timestamp.format("%+")).as_str()));
+        serialize_timestamp(&mut testsuite_tag, timestamp);
+    }
+    if let Some(time) = time {
+        serialize_time(&mut testsuite_tag, time);
     }
 
     for (k, v) in extra {
@@ -161,6 +167,7 @@ fn serialize_testcase(
         name,
         classname,
         assertions,
+        timestamp,
         time,
         status,
         system_out,
@@ -176,9 +183,14 @@ fn serialize_testcase(
     if let Some(assertions) = assertions {
         testcase_tag.push_attribute(("assertions", format!("{}", assertions).as_str()));
     }
-    if let Some(time) = time {
-        testcase_tag.push_attribute(("time", serialize_time(time).as_str()));
+
+    if let Some(timestamp) = timestamp {
+        serialize_timestamp(&mut testcase_tag, timestamp);
     }
+    if let Some(time) = time {
+        serialize_time(&mut testcase_tag, time);
+    }
+
     for (k, v) in extra {
         testcase_tag.push_attribute((k.as_str(), v.as_str()));
     }
@@ -280,6 +292,8 @@ fn serialize_rerun(
     writer: &mut Writer<impl io::Write>,
 ) -> quick_xml::Result<()> {
     let TestRerun {
+        timestamp,
+        time,
         kind,
         message,
         ty,
@@ -297,6 +311,12 @@ fn serialize_rerun(
     };
 
     let mut tag = BytesStart::borrowed_name(tag_name.as_bytes());
+    if let Some(timestamp) = timestamp {
+        serialize_timestamp(&mut tag, timestamp);
+    }
+    if let Some(time) = time {
+        serialize_time(&mut tag, time);
+    }
     if let Some(message) = message {
         tag.push_attribute(("message", message.as_str()));
     }
@@ -375,7 +395,17 @@ fn serialize_end_tag(
     writer.write_event(Event::End(end_tag))
 }
 
+fn serialize_timestamp(tag: &mut BytesStart<'_>, timestamp: &DateTime<FixedOffset>) {
+    // The format string is obtained from https://docs.rs/chrono/0.4.19/chrono/format/strftime/index.html#fn8.
+    // The only change is that this only prints timestamps up to 3 decimal places (to match times).
+    static RFC_3339_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3f%:z";
+    tag.push_attribute((
+        "timestamp",
+        format!("{}", timestamp.format(RFC_3339_FORMAT)).as_str(),
+    ));
+}
+
 // Serialize time as seconds with 3 decimal points.
-fn serialize_time(time: &Duration) -> String {
-    format!("{:.3}", time.as_secs_f64())
+fn serialize_time(tag: &mut BytesStart<'_>, time: &Duration) {
+    tag.push_attribute(("time", format!("{:.3}", time.as_secs_f64()).as_str()));
 }
