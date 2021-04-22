@@ -1,5 +1,5 @@
 [package]
-name = "testrunner-tests"
+name = "nextest-tests"
 version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
 edition = "2018"

@@ -348,6 +348,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "nextest-runner"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "anyhow",
+ "atty",
+ "camino",
+ "cargo_metadata",
+ "crossbeam-channel",
+ "duct",
+ "indoc",
+ "maplit",
+ "num_cpus",
+ "once_cell",
+ "pretty_assertions",
+ "proptest",
+ "proptest-derive",
+ "quick-junit",
+ "rayon",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "structopt",
+ "termcolor",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -844,33 +871,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "testrunner"
-version = "0.1.0"
-dependencies = [
- "aho-corasick",
- "anyhow",
- "atty",
- "camino",
- "cargo_metadata",
- "crossbeam-channel",
- "duct",
- "indoc",
- "maplit",
- "num_cpus",
- "once_cell",
- "pretty_assertions",
- "proptest",
- "proptest-derive",
- "quick-junit",
- "rayon",
- "serde",
- "serde_json",
- "signal-hook",
- "structopt",
- "termcolor",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 [package]
-name = "testrunner"
+name = "nextest-runner"
 version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
 license = "Apache-2.0 OR MIT"

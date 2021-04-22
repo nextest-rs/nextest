@@ -8,18 +8,18 @@ use camino::Utf8Path;
 use cargo_metadata::Message;
 use duct::cmd;
 use maplit::btreemap;
+use nextest_runner::{
+    reporter::TestEvent,
+    runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
+    test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilter},
+    test_list::{TestBinary, TestList},
+};
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use std::{
     collections::{BTreeMap, HashMap},
     env, fmt,
     io::Cursor,
-};
-use testrunner::{
-    reporter::TestEvent,
-    runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
-    test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilter},
-    test_list::{TestBinary, TestList},
 };
 
 #[derive(Copy, Clone, Debug)]
@@ -80,7 +80,7 @@ static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::ne
             TestFixture { name: "test_success", status: FixtureStatus::Pass },
             TestFixture { name: "test_success_should_panic", status: FixtureStatus::Pass },
         ],
-        "testrunner-tests" => vec![
+        "nextest-tests" => vec![
             TestFixture { name: "tests::unit_test_success", status: FixtureStatus::Pass },
         ],
     }
@@ -99,7 +99,7 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
     let dir_name = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
-        .join("fixtures/testrunner-tests");
+        .join("fixtures/nextest-tests");
 
     let expr = cmd!(cmd_name, "test", "--no-run", "--message-format", "json")
         .dir(&dir_name)
