@@ -3,6 +3,7 @@
 
 use crate::{
     reporter::{CancelReason, TestEvent},
+    stopwatch::{StopwatchEnd, StopwatchStart},
     test_filter::{FilterMatch, MismatchReason},
     test_list::{TestInstance, TestList},
 };
@@ -20,7 +21,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::{Duration, SystemTime},
 };
 use structopt::StructOpt;
 
@@ -267,16 +268,16 @@ impl<'list> TestRunner<'list> {
 
     /// Run an individual test in its own process.
     fn run_test(&self, test: TestInstance<'list>, attempt: usize) -> InternalRunStatus {
-        let start_time = Instant::now();
+        let stopwatch = StopwatchStart::now();
 
-        match self.run_test_inner(test, attempt, &start_time) {
+        match self.run_test_inner(test, attempt, &stopwatch) {
             Ok(run_status) => run_status,
             Err(_) => InternalRunStatus {
                 // TODO: can we return more information in stdout/stderr? investigate this
                 stdout: vec![],
                 stderr: vec![],
                 status: TestStatus::ExecFail,
-                time_taken: start_time.elapsed(),
+                stopwatch_end: stopwatch.end(),
             },
         }
     }
@@ -285,7 +286,7 @@ impl<'list> TestRunner<'list> {
         &self,
         test: TestInstance<'list>,
         attempt: usize,
-        start_time: &Instant,
+        stopwatch: &StopwatchStart,
     ) -> Result<InternalRunStatus> {
         let mut args = vec!["--exact", test.name, "--nocapture"];
         if test.info.ignored {
@@ -309,7 +310,6 @@ impl<'list> TestRunner<'list> {
 
         let output = handle.into_output()?;
 
-        let time_taken = start_time.elapsed();
         let status = if output.status.success() {
             TestStatus::Pass
         } else {
@@ -319,7 +319,7 @@ impl<'list> TestRunner<'list> {
             stdout: output.stdout,
             stderr: output.stderr,
             status,
-            time_taken,
+            stopwatch_end: stopwatch.end(),
         })
     }
 }
@@ -417,6 +417,7 @@ pub struct TestRunStatus {
     pub total_attempts: usize,
     pub stdout_stderr: Arc<(Vec<u8>, Vec<u8>)>,
     pub status: TestStatus,
+    pub start_time: SystemTime,
     pub time_taken: Duration,
 }
 
@@ -436,7 +437,7 @@ struct InternalRunStatus {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
     status: TestStatus,
-    time_taken: Duration,
+    stopwatch_end: StopwatchEnd,
 }
 
 impl InternalRunStatus {
@@ -446,7 +447,8 @@ impl InternalRunStatus {
             total_attempts,
             stdout_stderr: Arc::new((self.stdout, self.stderr)),
             status: self.status,
-            time_taken: self.time_taken,
+            start_time: self.stopwatch_end.start_time,
+            time_taken: self.stopwatch_end.duration,
         }
     }
 }
@@ -551,7 +553,7 @@ fn spawn_signal_thread(sender: Sender<InternalSignalEvent>, srp_sender: Sender<(
 
 struct CallbackContext<F, E> {
     callback: F,
-    start_time: Instant,
+    stopwatch: StopwatchStart,
     run_stats: RunStats,
     running: usize,
     signal_handle: Option<Handle>,
@@ -566,7 +568,7 @@ where
     fn new(callback: F, initial_run_count: usize) -> Self {
         Self {
             callback,
-            start_time: Instant::now(),
+            stopwatch: StopwatchStart::now(),
             run_stats: RunStats {
                 initial_run_count,
                 ..RunStats::default()
@@ -658,9 +660,10 @@ where
     }
 
     fn run_finished(&mut self) -> Result<(), E> {
+        let stopwatch_end = self.stopwatch.end();
         (self.callback)(TestEvent::RunFinished {
-            start_time: self.start_time,
-            elapsed: self.start_time.elapsed(),
+            start_time: stopwatch_end.start_time,
+            elapsed: stopwatch_end.duration,
             run_stats: self.run_stats,
         })
     }

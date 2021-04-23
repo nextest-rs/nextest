@@ -10,6 +10,7 @@ aho-corasick = "0.7.15"
 anyhow = "1.0.40"
 atty = "0.2.14"
 camino = { version = "1.0.4", features = ["serde1"] }
+chrono = "0.4.19"
 crossbeam-channel = "0.5.1"
 duct = "0.13.5"
 once_cell = "1.7.2"

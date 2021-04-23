@@ -9,6 +9,7 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use camino::Utf8PathBuf;
+use chrono::{DateTime, FixedOffset, Utc};
 use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
 use std::{
     collections::HashMap,
@@ -17,7 +18,7 @@ use std::{
     io,
     io::Write,
     str::FromStr,
-    time::{Duration, Instant},
+    time::{Duration, SystemTime},
 };
 use structopt::{clap::arg_enum, StructOpt};
 use termcolor::{BufferWriter, ColorChoice, ColorSpec, NoColor, WriteColor};
@@ -634,7 +635,7 @@ pub enum TestEvent<'list> {
     /// The test run finished.
     RunFinished {
         /// The time at which the run was started.
-        start_time: Instant,
+        start_time: SystemTime,
 
         /// The amount of time it took for the tests to run.
         elapsed: Duration,
@@ -713,6 +714,8 @@ impl<'list> JUnitReporter<'list> {
                     let (kind, ty) = kind_ty(rerun);
                     let mut test_rerun = TestRerun::new(kind);
                     test_rerun
+                        .set_timestamp(to_datetime(rerun.start_time))
+                        .set_time(rerun.time_taken)
                         .set_type(ty)
                         .set_system_out_lossy(rerun.stdout())
                         .set_system_err_lossy(rerun.stderr());
@@ -723,8 +726,10 @@ impl<'list> JUnitReporter<'list> {
                 // TODO: set message/description on testcase_status?
 
                 let mut testcase = Testcase::new(test_instance.name, testcase_status);
-                testcase.set_classname(test_instance.binary_id);
-                testcase.set_time(main_status.time_taken);
+                testcase
+                    .set_classname(test_instance.binary_id)
+                    .set_timestamp(to_datetime(main_status.start_time))
+                    .set_time(main_status.time_taken);
 
                 // TODO: also provide stdout and stderr for passing tests?
                 // TODO: allure seems to want the output to be in a format where text files are
@@ -753,12 +758,17 @@ impl<'list> JUnitReporter<'list> {
                 // testsuite.add_testcase(testcase);
             }
             TestEvent::RunBeginCancel { .. } => {}
-            TestEvent::RunFinished { elapsed, .. } => {
+            TestEvent::RunFinished {
+                start_time,
+                elapsed,
+                ..
+            } => {
                 // Write out the report to the given file.
                 // TODO: customize name
                 // TODO: write a separate report for each binary?
                 let mut report = Report::new("nextest-run");
                 report
+                    .set_timestamp(to_datetime(start_time))
                     .set_time(elapsed)
                     .add_testsuites(self.testsuites.drain().map(|(_, testsuite)| testsuite));
 
@@ -779,4 +789,10 @@ impl<'list> JUnitReporter<'list> {
             .entry(test_instance.binary_id)
             .or_insert_with(|| Testsuite::new(test_instance.binary_id))
     }
+}
+
+fn to_datetime(system_time: SystemTime) -> DateTime<FixedOffset> {
+    // Serialize using UTC.
+    let datetime = DateTime::<Utc>::from(system_time);
+    datetime.into()
 }
