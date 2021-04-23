@@ -29,7 +29,7 @@ use structopt::StructOpt;
 #[derive(Debug, Default, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub struct TestRunnerOpts {
-    /// Number of tests to run simultaneously [default: physical CPU count]
+    /// Number of tests to run simultaneously [default: logical CPU count]
     #[structopt(long, alias = "test-threads")]
     pub test_threads: Option<usize>,
     /// Number of times tests are run on failure (tests that pass on retry will be considered flaky)
