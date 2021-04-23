@@ -31,7 +31,7 @@ use structopt::StructOpt;
 pub struct TestRunnerOpts {
     /// Number of tests to run simultaneously [default: physical CPU count]
     #[structopt(short, long, alias = "test-threads")]
-    pub jobs: Option<usize>,
+    pub test_threads: Option<usize>,
     /// Number of times tests are run on failure (tests that pass on retry will be considered flaky)
     #[structopt(long, default_value = "1")]
     pub tries: usize,
@@ -40,13 +40,13 @@ pub struct TestRunnerOpts {
 impl TestRunnerOpts {
     /// Creates a new test runner.
     pub fn build(self, test_list: &TestList) -> TestRunner {
-        let jobs = self.jobs.unwrap_or_else(num_cpus::get);
+        let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
         TestRunner {
             opts: self,
             test_list,
             run_pool: ThreadPoolBuilder::new()
                 // The main run_pool closure will need its own thread.
-                .num_threads(jobs + 1)
+                .num_threads(test_threads + 1)
                 .thread_name(|idx| format!("testrunner-run-{}", idx))
                 .build()
                 .expect("run pool built"),
