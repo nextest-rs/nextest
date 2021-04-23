@@ -12,7 +12,7 @@ categories = ["development-tools::testing"]
 keywords = ["datatest", "data-driven-tests", "test-harness"]
 
 [dependencies]
-regex = "1.4.3"
+regex = "1.4.6"
 walkdir = "2.3.1"
 structopt = "0.3.21"
 termcolor = "1.1.2"
