@@ -9,6 +9,7 @@ use cargo_metadata::Message;
 use duct::cmd;
 use maplit::btreemap;
 use nextest_runner::{
+    config::NextestConfig,
     reporter::TestEvent,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
     test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilter},
@@ -201,7 +202,10 @@ fn test_run() -> Result<()> {
     let test_filter = TestFilter::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
-    let runner = TestRunnerOpts::default().build(&test_list);
+    let config = NextestConfig::default();
+    let profile = config.profile(None).expect("default config is valid");
+
+    let runner = TestRunnerOpts::default().build(&test_list, profile);
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -243,7 +247,10 @@ fn test_run_ignored() -> Result<()> {
     let test_filter = TestFilter::any(RunIgnored::IgnoredOnly);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
-    let runner = TestRunnerOpts::default().build(&test_list);
+    let config = NextestConfig::default();
+    let profile = config.profile(None).expect("default config is valid");
+
+    let runner = TestRunnerOpts::default().build(&test_list, profile);
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -285,14 +292,16 @@ fn test_retries() -> Result<()> {
     let test_filter = TestFilter::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
+    let config = NextestConfig::default();
+    let profile = config.profile(None).expect("default config is valid");
 
-    let tries = 3;
+    let retries = 2;
 
     let runner = TestRunnerOpts {
-        tries,
+        retries: Some(retries),
         ..TestRunnerOpts::default()
     }
-    .build(&test_list);
+    .build(&test_list, profile);
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -308,7 +317,7 @@ fn test_retries() -> Result<()> {
                     let expected_len = match fixture.status {
                         FixtureStatus::Flaky { pass_attempt } => pass_attempt,
                         FixtureStatus::Pass => 1,
-                        FixtureStatus::Fail => tries,
+                        FixtureStatus::Fail => retries + 1,
                         FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail => {
                             unreachable!("ignored tests should be skipped")
                         }

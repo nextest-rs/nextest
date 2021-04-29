@@ -1,0 +1,39 @@
+# This is the default config used by nextest-runner. It is embedded in the binary at build time.
+# It may be used as a template for nextest.toml in the workspace root.
+
+# This key defines the default nextest profile. It may be overridden by a repository's nextest.toml.
+# A custom profile can also be selected on the command line with the `--profile` option.
+default-profile = "default"
+
+# This section defines a nextest profile named "default". If you're defining your own profile, it should be
+# called something else.
+[profiles.default]
+# "name" is the name of the run. Used in the UI and in metadata if configured.
+name = "nextest-run"
+
+# "retries" defines the number of times a test should be retried. If set to a non-zero value, tests that
+# succeed on a subsequent attempt will be marked as non-flaky. Can be overridden through the `--retries`
+# option.
+retries = 0
+
+# "failure-output" defines when test failures are output to standard output. Accepted values are
+# * "immediate": output failures as soon as they happen
+# * "final": output failures at the end of the test run
+# * "immediate-final": output failures as soon as they happen and at the end of the test run
+# * "never": don't output failures at all
+#
+# For large test suites and CI it may be useful to use "immediate-final".
+failure-output = "immediate"
+
+# The value of "metadata-key", if specified, should refer to one of the keys under "metadata". If it isn't
+# specified, the default metadata config is used.
+metadata-key = "default"
+
+# This is the default metadata config. If you're defining your own config, it should be called something else.
+[metadata.default]
+# This directory is where metadata files are stored. This is relative to the workspace root.
+dir = "target/nextest"
+
+# Output metadata in the JUnit format into the given file inside the directory. If unspecified,
+# JUnit is not written out.
+# junit = "junit.xml"

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    config::NextestProfile,
     reporter::{CancelReason, TestEvent},
     stopwatch::{StopwatchEnd, StopwatchStart},
     test_filter::{FilterMatch, MismatchReason},
@@ -29,20 +30,27 @@ use structopt::StructOpt;
 #[derive(Debug, Default, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub struct TestRunnerOpts {
+    /// Number of retries for failing tests [default: from profile]
+    #[structopt(long)]
+    pub retries: Option<usize>,
+
     /// Number of tests to run simultaneously [default: logical CPU count]
     #[structopt(long, alias = "test-threads")]
     pub test_threads: Option<usize>,
-    /// Number of times tests are run on failure (tests that pass on retry will be considered flaky)
-    #[structopt(long, default_value = "1")]
-    pub tries: usize,
 }
 
 impl TestRunnerOpts {
     /// Creates a new test runner.
-    pub fn build(self, test_list: &TestList) -> TestRunner {
+    pub fn build<'list>(
+        &self,
+        test_list: &'list TestList,
+        profile: NextestProfile<'_>,
+    ) -> TestRunner<'list> {
         let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
+        let retries = self.retries.unwrap_or_else(|| profile.retries());
         TestRunner {
-            opts: self,
+            // The number of tries = retries + 1.
+            tries: retries + 1,
             test_list,
             run_pool: ThreadPoolBuilder::new()
                 // The main run_pool closure will need its own thread.
@@ -56,7 +64,7 @@ impl TestRunnerOpts {
 
 /// Context for running tests.
 pub struct TestRunner<'list> {
-    opts: TestRunnerOpts,
+    tries: usize,
     test_list: &'list TestList,
     run_pool: ThreadPool,
 }
@@ -156,13 +164,13 @@ impl<'list> TestRunner<'list> {
 
                         let run_status = self
                             .run_test(test_instance, attempt)
-                            .into_external(attempt, self.opts.tries);
+                            .into_external(attempt, self.tries);
 
                         if run_status.status.is_success() {
                             // The test succeeded.
                             run_statuses.push(run_status);
                             break;
-                        } else if attempt < self.opts.tries {
+                        } else if attempt < self.tries {
                             // Retry this test: send a retry event, then retry the loop.
                             let _ = this_run_sender.send(InternalTestEvent::Retry {
                                 test_instance,

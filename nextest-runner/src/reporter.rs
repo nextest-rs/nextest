@@ -2,25 +2,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    output::OutputFormat,
+    config::{MetadataConfig, NextestProfile},
     runner::{RunDescribe, RunStats, RunStatuses, TestRunStatus, TestStatus},
     test_filter::MismatchReason,
     test_list::{test_bin_spec, test_name_spec, TestInstance, TestList},
 };
-use anyhow::{bail, Context, Result};
-use camino::Utf8PathBuf;
+use anyhow::{Context, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use chrono::{DateTime, FixedOffset, Utc};
 use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
+use serde::Deserialize;
 use std::{
     collections::HashMap,
     fmt,
     fs::File,
     io,
     io::Write,
-    str::FromStr,
     time::{Duration, SystemTime},
 };
-use structopt::{clap::arg_enum, StructOpt};
+use structopt::clap::arg_enum;
 use termcolor::{BufferWriter, ColorChoice, ColorSpec, NoColor, WriteColor};
 
 arg_enum! {
@@ -55,7 +55,8 @@ impl Color {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum FailureOutput {
     Immediate,
     ImmediateFinal,
@@ -94,40 +95,14 @@ impl fmt::Display for FailureOutput {
     }
 }
 
-impl FromStr for FailureOutput {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val = match s {
-            "immediate" => FailureOutput::Immediate,
-            "immediate-final" => FailureOutput::ImmediateFinal,
-            "final" => FailureOutput::Final,
-            "never" => FailureOutput::Never,
-            other => bail!("unrecognized value for failure-output: {}", other),
-        };
-        Ok(val)
-    }
-}
-
 impl Default for FailureOutput {
     fn default() -> Self {
         FailureOutput::Immediate
     }
 }
 
-#[derive(Debug, Default, StructOpt)]
-#[structopt(rename_all = "kebab-case")]
-pub struct ReporterOpts {
-    /// Output stdout and stderr on failures
-    #[structopt(long, default_value, possible_values = &FailureOutput::variants(), case_insensitive = true)]
-    failure_output: FailureOutput,
-    /// Output JUnit/XUnit to a file
-    #[structopt(long)]
-    junit: Option<Utf8PathBuf>,
-}
-
 /// Functionality to report test results to stdout and JUnit
-pub struct TestReporter<'list> {
+pub struct TestReporter<'a> {
     stdout: BufferWriter,
     #[allow(dead_code)]
     stderr: BufferWriter,
@@ -136,19 +111,19 @@ pub struct TestReporter<'list> {
 
     // TODO: too many concerns mixed up here. Should have a better model, probably in conjunction
     // with factoring out the different reporters below.
-    failing_tests: Vec<(TestInstance<'list>, TestRunStatus)>,
+    failing_tests: Vec<(TestInstance<'a>, TestRunStatus)>,
 
-    // TODO: Improve this design. A better design would be:
-    // * add a ReportStore struct which receives test events and stores them
-    // * provide a list of reporters to that struct, e.g. StdoutReporter and JUnitReporter
-    // * that struct owns all the results (e.g. stdout and stderr) and calls the reporters
-    // * TestEvent gains a lifetime param? need to figure this out in more detail
-    junit_reporter: Option<JUnitReporter<'list>>,
+    metadata_reporter: MetadataReporter<'a>,
 }
 
-impl<'list> TestReporter<'list> {
+impl<'a> TestReporter<'a> {
     /// Creates a new instance with the given color choice.
-    pub fn new(test_list: &TestList, color: Color, opts: ReporterOpts) -> Self {
+    pub fn new(
+        workspace_root: &'a Utf8Path,
+        test_list: &TestList,
+        color: Color,
+        profile: NextestProfile<'a>,
+    ) -> Self {
         let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
         let stderr = BufferWriter::stderr(color.color_choice(atty::Stream::Stderr));
         let binary_id_width = test_list
@@ -156,26 +131,19 @@ impl<'list> TestReporter<'list> {
             .map(|(_, info)| info.binary_id.len())
             .max()
             .unwrap_or_default();
-        let junit_reporter = opts.junit.map(JUnitReporter::new);
+        let metadata_reporter = MetadataReporter::new(workspace_root, profile);
         Self {
             stdout,
             stderr,
-            failure_output: opts.failure_output,
+            failure_output: profile.failure_output(),
             failing_tests: vec![],
             binary_id_width,
-            junit_reporter,
+            metadata_reporter,
         }
     }
 
-    /// Write a list of tests in the given format.
-    pub fn write_list(&self, test_list: &TestList, output_format: OutputFormat) -> Result<()> {
-        let mut buffer = self.stdout.buffer();
-        test_list.write(output_format, &mut buffer)?;
-        self.stdout.print(&buffer).context("error writing output")
-    }
-
     /// Report a test event.
-    pub fn report_event(&mut self, event: TestEvent<'list>) -> Result<()> {
+    pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<()> {
         let mut buffer = self.stdout.buffer();
         self.write_event(event, &mut buffer)?;
         self.stdout.print(&buffer).context("error writing output")
@@ -186,7 +154,7 @@ impl<'list> TestReporter<'list> {
     // ---
 
     /// Report this test event to the given writer.
-    fn write_event(&mut self, event: TestEvent<'list>, mut writer: impl WriteColor) -> Result<()> {
+    fn write_event(&mut self, event: TestEvent<'a>, mut writer: impl WriteColor) -> Result<()> {
         match &event {
             TestEvent::RunStarted { test_list } => {
                 writer.set_color(&Self::pass_spec())?;
@@ -429,15 +397,13 @@ impl<'list> TestReporter<'list> {
             }
         }
 
-        if let Some(junit_reporter) = &mut self.junit_reporter {
-            junit_reporter.write_event(event)?;
-        }
+        self.metadata_reporter.write_event(event)?;
         Ok(())
     }
 
     fn write_instance(
         &self,
-        instance: TestInstance<'list>,
+        instance: TestInstance<'a>,
         mut writer: impl WriteColor,
     ) -> io::Result<()> {
         writer.set_color(&test_bin_spec())?;
@@ -473,7 +439,7 @@ impl<'list> TestReporter<'list> {
 
     fn write_run_status(
         &self,
-        test_instance: &TestInstance<'list>,
+        test_instance: &TestInstance<'a>,
         run_status: &TestRunStatus,
         is_retry: bool,
         mut writer: impl WriteColor,
@@ -566,7 +532,7 @@ impl<'list> TestReporter<'list> {
     }
 }
 
-impl<'list> fmt::Debug for TestReporter<'list> {
+impl<'a> fmt::Debug for TestReporter<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("TestReporter")
             .field("stdout", &"BufferWriter { .. }")
@@ -576,13 +542,13 @@ impl<'list> fmt::Debug for TestReporter<'list> {
 }
 
 #[derive(Clone, Debug)]
-pub enum TestEvent<'list> {
+pub enum TestEvent<'a> {
     /// The test run started.
     RunStarted {
         /// The list of tests that will be run.
         ///
         /// The methods on the test list indicate the number of
-        test_list: &'list TestList,
+        test_list: &'a TestList,
     },
 
     // TODO: add events for BinaryStarted and BinaryFinished? May want a slightly different way to
@@ -591,7 +557,7 @@ pub enum TestEvent<'list> {
     /// A test started running.
     TestStarted {
         /// The test instance that was started.
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
     },
 
     /// A test failed and is being retried.
@@ -599,7 +565,7 @@ pub enum TestEvent<'list> {
     /// This event does not occur on the final run of a failing test.
     TestRetry {
         /// The test instance that is being retried.
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
 
         /// The status of this attempt to run the test. Will never be success.
         run_status: TestRunStatus,
@@ -608,7 +574,7 @@ pub enum TestEvent<'list> {
     /// A test finished running.
     TestFinished {
         /// The test instance that finished running.
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
 
         /// Information about all the runs for this test.
         run_statuses: RunStatuses,
@@ -617,7 +583,7 @@ pub enum TestEvent<'list> {
     /// A test was skipped.
     TestSkipped {
         /// The test instance that was skipped.
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
 
         /// The reason this test was skipped.
         reason: MismatchReason,
@@ -656,20 +622,24 @@ pub enum CancelReason {
 }
 
 #[derive(Clone, Debug)]
-struct JUnitReporter<'list> {
-    path: Utf8PathBuf,
-    testsuites: HashMap<&'list str, Testsuite>,
+struct MetadataReporter<'a> {
+    workspace_root: &'a Utf8Path,
+    name: &'a str,
+    config: &'a MetadataConfig,
+    testsuites: HashMap<&'a str, Testsuite>,
 }
 
-impl<'list> JUnitReporter<'list> {
-    fn new(path: Utf8PathBuf) -> Self {
+impl<'a> MetadataReporter<'a> {
+    fn new(workspace_root: &'a Utf8Path, profile: NextestProfile<'a>) -> Self {
         Self {
-            path,
+            workspace_root,
+            name: profile.name(),
+            config: profile.metadata_config(),
             testsuites: HashMap::new(),
         }
     }
 
-    fn write_event(&mut self, event: TestEvent<'list>) -> Result<()> {
+    fn write_event(&mut self, event: TestEvent<'a>) -> Result<()> {
         match event {
             TestEvent::RunStarted { .. } => {}
             TestEvent::TestStarted { .. } => {}
@@ -764,27 +734,34 @@ impl<'list> JUnitReporter<'list> {
                 ..
             } => {
                 // Write out the report to the given file.
-                // TODO: customize name
-                // TODO: write a separate report for each binary?
-                let mut report = Report::new("nextest-run");
+                let mut report = Report::new(self.name);
                 report
                     .set_timestamp(to_datetime(start_time))
                     .set_time(elapsed)
                     .add_testsuites(self.testsuites.drain().map(|(_, testsuite)| testsuite));
 
-                let f = File::create(&self.path).with_context(|| {
-                    format!("failed to open junit file '{}' for writing", self.path)
-                })?;
-                report
-                    .serialize(f)
-                    .with_context(|| format!("failed to serialize junit to {}", self.path))?;
+                if let Some(junit) = &self.config.junit {
+                    let junit_path: Utf8PathBuf = [
+                        self.workspace_root,
+                        self.config.dir.as_ref(),
+                        junit.as_ref(),
+                    ]
+                    .iter()
+                    .collect();
+                    let f = File::create(&junit_path).with_context(|| {
+                        format!("failed to open junit file '{}' for writing", junit_path)
+                    })?;
+                    report
+                        .serialize(f)
+                        .with_context(|| format!("failed to serialize junit to {}", junit_path))?;
+                }
             }
         }
 
         Ok(())
     }
 
-    fn testsuite_for(&mut self, test_instance: TestInstance<'list>) -> &mut Testsuite {
+    fn testsuite_for(&mut self, test_instance: TestInstance<'a>) -> &mut Testsuite {
         self.testsuites
             .entry(test_instance.binary_id)
             .or_insert_with(|| Testsuite::new(test_instance.binary_id))

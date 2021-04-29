@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    config::{ConfigOpts, ConfigReadError, NextestConfig},
     output::OutputFormat,
-    reporter::{Color, ReporterOpts, TestReporter},
+    reporter::{Color, TestReporter},
     runner::TestRunnerOpts,
     test_filter::{RunIgnored, TestFilter},
     test_list::{TestBinary, TestList},
 };
-use anyhow::{bail, Result};
-use camino::Utf8PathBuf;
+use anyhow::{bail, Context, Result};
+use camino::{Utf8Path, Utf8PathBuf};
+use duct::cmd;
 use structopt::StructOpt;
 
 /// This test runner accepts a Rust test binary and does fancy things with it.
@@ -21,6 +23,9 @@ pub struct Opts {
     #[structopt(long, default_value)]
     /// Coloring: always, auto, never
     color: Color,
+
+    #[structopt(flatten)]
+    config_opts: ConfigOpts,
 
     #[structopt(subcommand)]
     command: Command,
@@ -39,12 +44,13 @@ pub enum Command {
     },
     /// Run tests
     Run {
+        /// nextest profile to use
+        #[structopt(long, short = "P")]
+        profile: Option<String>,
         #[structopt(flatten)]
         bin_filter: TestBinFilter,
         #[structopt(flatten)]
         runner_opts: TestRunnerOpts,
-        #[structopt(flatten)]
-        reporter_opts: ReporterOpts,
     },
 }
 
@@ -91,17 +97,22 @@ impl Opts {
         match self.command {
             Command::ListTests { bin_filter, format } => {
                 let test_list = bin_filter.compute()?;
-                let reporter = TestReporter::new(&test_list, self.color, ReporterOpts::default());
-                reporter.write_list(&test_list, format)?;
+                test_list.write_to_stdout(self.color, format)?;
             }
             Command::Run {
-                bin_filter,
-                runner_opts,
-                reporter_opts,
+                ref profile,
+                ref bin_filter,
+                ref runner_opts,
             } => {
+                let workspace_root = workspace_root()?;
+                let config = self.config(&workspace_root)?;
+                let profile = config.profile(profile.as_deref())?;
+                profile.init_metadata_dir(&workspace_root)?;
+
                 let test_list = bin_filter.compute()?;
-                let mut reporter = TestReporter::new(&test_list, self.color, reporter_opts);
-                let runner = runner_opts.build(&test_list);
+                let mut reporter =
+                    TestReporter::new(&workspace_root, &test_list, self.color, profile);
+                let runner = runner_opts.build(&test_list, profile);
                 let run_stats = runner.try_execute(|event| {
                     reporter.report_event(event)
                     // TODO: no-fail-fast logic
@@ -113,4 +124,31 @@ impl Opts {
         }
         Ok(())
     }
+
+    // ---
+    // Helper methods
+    // ---
+
+    fn config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig, ConfigReadError> {
+        NextestConfig::from_opts(&self.config_opts, workspace_root)
+    }
+}
+
+// TODO: replace with guppy
+fn workspace_root() -> Result<Utf8PathBuf> {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
+    cmd!(
+        cargo,
+        "locate-project",
+        "--workspace",
+        "--message-format",
+        "plain"
+    )
+    .read()
+    .map(|s| {
+        let mut p = Utf8PathBuf::from(s);
+        p.pop();
+        p
+    })
+    .with_context(|| "cargo locate-project failed")
 }

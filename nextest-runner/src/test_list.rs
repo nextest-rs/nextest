@@ -3,6 +3,7 @@
 
 use crate::{
     output::OutputFormat,
+    reporter::Color,
     test_filter::{FilterMatch, TestFilter},
 };
 use anyhow::{anyhow, Context, Result};
@@ -11,7 +12,7 @@ use duct::cmd;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io, path::Path};
-use termcolor::{ColorSpec, NoColor, WriteColor};
+use termcolor::{BufferWriter, ColorSpec, NoColor, WriteColor};
 
 // TODO: capture ignored and not-ignored tests
 
@@ -163,6 +164,14 @@ impl TestList {
     /// Returns the tests for a given binary, or `None` if the binary wasn't in the list.
     pub fn get(&self, test_bin: impl AsRef<Utf8Path>) -> Option<&TestBinInfo> {
         self.test_binaries.get(test_bin.as_ref())
+    }
+
+    /// Writes the list to stdout.
+    pub fn write_to_stdout(&self, color: Color, output_format: OutputFormat) -> Result<()> {
+        let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
+        let mut buffer = stdout.buffer();
+        self.write(output_format, &mut buffer)?;
+        stdout.print(&buffer).context("error writing output")
     }
 
     /// Outputs this list to the given writer.
