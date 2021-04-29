@@ -3,6 +3,7 @@
 
 pub mod config;
 pub mod dispatch;
+mod metadata;
 pub mod output;
 pub mod reporter;
 pub mod runner;
