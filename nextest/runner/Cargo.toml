@@ -22,7 +22,7 @@ signal-hook = "0.3.8"
 structopt = "0.3.21"
 termcolor = "1.1.2"
 toml = "0.5.8"
-quick-junit = { path = "../quick-junit" }
+quick-junit = { path = "../../quick-junit" }
 
 [dev-dependencies]
 cargo_metadata = "0.13.1"

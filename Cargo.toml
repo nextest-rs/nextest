@@ -2,6 +2,6 @@
 resolver = "2"
 members = [
     "datatest-stable",
-    "nextest-runner",
+    "nextest/runner",
     "quick-junit",
 ]
