@@ -4,7 +4,6 @@
 //! Metadata management.
 
 use crate::{
-    config::{MetadataConfig, NextestProfile},
     reporter::TestEvent,
     runner::{RunDescribe, TestRunStatus, TestStatus},
     test_list::TestInstance,
@@ -12,6 +11,7 @@ use crate::{
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::{DateTime, FixedOffset, Utc};
+use nextest_config::{MetadataConfig, NextestProfile};
 use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
 use std::{collections::HashMap, fs::File, time::SystemTime};
 

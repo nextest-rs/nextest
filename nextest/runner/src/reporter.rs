@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    config::NextestProfile,
     metadata::MetadataReporter,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunStatus, TestStatus},
     test_filter::MismatchReason,
@@ -10,7 +9,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use camino::Utf8Path;
-use serde::Deserialize;
+use nextest_config::{FailureOutput, NextestProfile};
 use std::{
     fmt, io,
     io::Write,
@@ -48,52 +47,6 @@ impl Color {
             }
             Color::Never => ColorChoice::Never,
         }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum FailureOutput {
-    Immediate,
-    ImmediateFinal,
-    Final,
-    Never,
-}
-
-impl FailureOutput {
-    pub fn variants() -> [&'static str; 4] {
-        ["immediate", "immediate-final", "final", "never"]
-    }
-
-    fn is_immediate(self) -> bool {
-        match self {
-            FailureOutput::Immediate | FailureOutput::ImmediateFinal => true,
-            FailureOutput::Final | FailureOutput::Never => false,
-        }
-    }
-
-    fn is_final(self) -> bool {
-        match self {
-            FailureOutput::Final | FailureOutput::ImmediateFinal => true,
-            FailureOutput::Immediate | FailureOutput::Never => false,
-        }
-    }
-}
-
-impl fmt::Display for FailureOutput {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FailureOutput::Immediate => write!(f, "immediate"),
-            FailureOutput::ImmediateFinal => write!(f, "immediate-final"),
-            FailureOutput::Final => write!(f, "final"),
-            FailureOutput::Never => write!(f, "never"),
-        }
-    }
-}
-
-impl Default for FailureOutput {
-    fn default() -> Self {
-        FailureOutput::Immediate
     }
 }
 

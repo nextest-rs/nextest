@@ -1,4 +1,4 @@
-# This is the default config used by nextest-runner. It is embedded in the binary at build time.
+# This is the default config used by nextest. It is embedded in the binary at build time.
 # It may be used as a template for nextest.toml in the workspace root.
 
 # This key defines the default nextest profile. It may be overridden by a repository's nextest.toml.

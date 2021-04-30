@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    config::{ConfigOpts, ConfigReadError, NextestConfig},
     output::OutputFormat,
     reporter::{Color, TestReporter},
     runner::TestRunnerOpts,
@@ -12,6 +11,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use duct::cmd;
+use nextest_config::{errors::ConfigReadError, NextestConfig};
 use structopt::StructOpt;
 
 /// This test runner accepts a Rust test binary and does fancy things with it.
@@ -29,6 +29,13 @@ pub struct Opts {
 
     #[structopt(subcommand)]
     command: Command,
+}
+
+#[derive(Debug, StructOpt)]
+pub(crate) struct ConfigOpts {
+    /// Config file [default: <workspace-root>/nextest.toml]
+    #[structopt(long)]
+    config_file: Option<Utf8PathBuf>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -130,7 +137,7 @@ impl Opts {
     // ---
 
     fn config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig, ConfigReadError> {
-        NextestConfig::from_opts(&self.config_opts, workspace_root)
+        NextestConfig::from_sources(self.config_opts.config_file.as_deref(), workspace_root)
     }
 }
 

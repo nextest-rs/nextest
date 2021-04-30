@@ -8,8 +8,8 @@ use camino::Utf8Path;
 use cargo_metadata::Message;
 use duct::cmd;
 use maplit::btreemap;
+use nextest_config::NextestConfig;
 use nextest_runner::{
-    config::NextestConfig,
     reporter::TestEvent,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
     test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilter},

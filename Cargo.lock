@@ -348,6 +348,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nextest-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "nextest-runner"
 version = "0.1.0"
 dependencies = [
@@ -361,6 +371,7 @@ dependencies = [
  "duct",
  "indoc",
  "maplit",
+ "nextest-config",
  "num_cpus",
  "once_cell",
  "pretty_assertions",
@@ -373,7 +384,6 @@ dependencies = [
  "signal-hook",
  "structopt",
  "termcolor",
- "toml",
 ]
 
 [[package]]

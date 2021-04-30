@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    config::NextestProfile,
     reporter::{CancelReason, TestEvent},
     stopwatch::{StopwatchEnd, StopwatchStart},
     test_filter::{FilterMatch, MismatchReason},
@@ -11,6 +10,7 @@ use crate::{
 use anyhow::Result;
 use crossbeam_channel::Sender;
 use duct::cmd;
+use nextest_config::NextestProfile;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use signal_hook::{iterator::Handle, low_level::emulate_default_handler};
 use std::{
