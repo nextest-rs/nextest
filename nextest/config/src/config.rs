@@ -40,8 +40,8 @@ macro_rules! doc_comment {
 }
 
 impl NextestConfig {
-    /// The string `nextest.toml`, used to read the config from the given directory.
-    pub const NEXTEST_TOML: &'static str = "nextest.toml";
+    /// The string `Nextest.toml`, used to read the config from the given directory.
+    pub const NEXTEST_TOML: &'static str = "Nextest.toml";
 
     doc_comment! {
         concat!("\
@@ -58,10 +58,10 @@ Custom, repository-specific configuration is layered on top of the default confi
         pub const DEFAULT_CONFIG: &'static str = include_str!("../default-config.toml");
     }
 
-    /// Reads the nextest config from the given file, or if not present from `nextest.toml` in the
+    /// Reads the nextest config from the given file, or if not present from `Nextest.toml` in the
     /// given directory.
     ///
-    /// If the file isn't specified and the directory doesn't have `nextest.toml`, uses the default
+    /// If the file isn't specified and the directory doesn't have `Nextest.toml`, uses the default
     /// config options.
     pub fn from_sources(
         config_file: Option<&Utf8Path>,
@@ -102,7 +102,7 @@ Custom, repository-specific configuration is layered on top of the default confi
                 let config = Self::read_file(file)?;
                 Some((file.to_owned(), config))
             } else {
-                // Attempt to read nextest.toml from the workspace root if it exists.
+                // Attempt to read Nextest.toml from the workspace root if it exists.
                 let default_file = workspace_root.join(Self::NEXTEST_TOML);
                 if default_file.is_file() {
                     let config = Self::read_file(&default_file)?;

@@ -33,7 +33,7 @@ pub struct Opts {
 
 #[derive(Debug, StructOpt)]
 pub(crate) struct ConfigOpts {
-    /// Config file [default: <workspace-root>/nextest.toml]
+    /// Config file [default: <workspace-root>/Nextest.toml]
     #[structopt(long)]
     config_file: Option<Utf8PathBuf>,
 }

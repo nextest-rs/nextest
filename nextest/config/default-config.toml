@@ -1,7 +1,7 @@
 # This is the default config used by nextest. It is embedded in the binary at build time.
-# It may be used as a template for nextest.toml in the workspace root.
+# It may be used as a template for Nextest.toml in the workspace root.
 
-# This key defines the default nextest profile. It may be overridden by a repository's nextest.toml.
+# This key defines the default nextest profile. It may be overridden by a repository's Nextest.toml.
 # A custom profile can also be selected on the command line with the `--profile` option.
 default-profile = "default"
 
