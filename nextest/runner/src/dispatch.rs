@@ -3,6 +3,7 @@
 
 use crate::{
     output::OutputFormat,
+    partition::BuildPartitioner,
     reporter::{Color, TestReporter},
     runner::TestRunnerOpts,
     test_filter::{RunIgnored, TestFilter},
@@ -78,6 +79,10 @@ pub struct TestBinFilter {
     #[structopt(long, possible_values = &RunIgnored::variants(), default_value, case_insensitive = true)]
     pub run_ignored: RunIgnored,
 
+    /// Test partition, e.g. hash:1/2 or count:2/3
+    #[structopt(long)]
+    pub partition: Option<BuildPartitioner>,
+
     // TODO: add regex-based filtering in the future?
     /// Test filter
     pub filter: Vec<String>,
@@ -85,7 +90,7 @@ pub struct TestBinFilter {
 
 impl TestBinFilter {
     fn compute(&self) -> Result<TestList> {
-        let test_filter = TestFilter::new(self.run_ignored, &self.filter);
+        let test_filter = TestFilter::new(self.run_ignored, self.partition.clone(), &self.filter);
         TestList::new(
             self.test_bin.iter().map(|binary| TestBinary {
                 binary: binary.clone(),

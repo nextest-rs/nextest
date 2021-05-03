@@ -222,35 +222,38 @@ impl TestList {
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
     ) -> Result<(Utf8PathBuf, TestBinInfo)> {
-        let TestBinary {
-            binary,
-            cwd,
-            binary_id,
-        } = test_binary;
-
         let mut tests = BTreeMap::new();
-        for test_name in Self::parse(non_ignored.as_ref()) {
-            let test_name = test_name?;
+
+        // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
+        // based on one doesn't affect the other.
+        let mut non_ignored_filter = filter.build_single_filter(&test_binary);
+        for test_name in Self::parse(non_ignored.as_ref())? {
             tests.insert(
                 test_name.into(),
                 RustTestInfo {
                     ignored: false,
-                    filter_match: filter.filter_match(&test_name, false),
+                    filter_match: non_ignored_filter.filter_match(&test_name, false),
                 },
             );
         }
 
-        for test_name in Self::parse(ignored.as_ref()) {
-            let test_name = test_name?;
+        let mut ignored_filter = filter.build_single_filter(&test_binary);
+        for test_name in Self::parse(ignored.as_ref())? {
             // TODO: catch dups
             tests.insert(
                 test_name.into(),
                 RustTestInfo {
                     ignored: true,
-                    filter_match: filter.filter_match(&test_name, true),
+                    filter_match: ignored_filter.filter_match(&test_name, true),
                 },
             );
         }
+
+        let TestBinary {
+            binary,
+            cwd,
+            binary_id,
+        } = test_binary;
 
         Ok((
             binary,
@@ -262,11 +265,11 @@ impl TestList {
         ))
     }
 
-    /// Parses the output of --list --format terse.
-    fn parse(
-        list_output: &(impl AsRef<str> + ?Sized),
-    ) -> impl Iterator<Item = Result<&'_ str>> + '_ {
-        Self::parse_impl(list_output.as_ref())
+    /// Parses the output of --list --format terse and returns a sorted list.
+    fn parse(list_output: &str) -> Result<Vec<&'_ str>> {
+        let mut list = Self::parse_impl(list_output).collect::<Result<Vec<_>>>()?;
+        list.sort_unstable();
+        Ok(list)
     }
 
     fn parse_impl(list_output: &str) -> impl Iterator<Item = Result<&'_ str>> + '_ {

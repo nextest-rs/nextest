@@ -1,6 +1,10 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::{
+    partition::{BuildPartitioner, Partitioner},
+    test_list::TestBinary,
+};
 use aho_corasick::AhoCorasick;
 use anyhow::bail;
 use serde::{Deserialize, Serialize};
@@ -61,6 +65,7 @@ impl FromStr for RunIgnored {
 #[derive(Clone, Debug)]
 pub struct TestFilter {
     run_ignored: RunIgnored,
+    build_partitioner: Option<BuildPartitioner>,
     name_match: NameMatch,
 }
 
@@ -74,7 +79,11 @@ impl TestFilter {
     /// Creates a new `TestFilter` from the given patterns.
     ///
     /// If an empty slice is passed, the test filter matches all possible test names.
-    pub fn new(run_ignored: RunIgnored, patterns: &[impl AsRef<[u8]>]) -> Self {
+    pub fn new(
+        run_ignored: RunIgnored,
+        build_partitioner: Option<BuildPartitioner>,
+        patterns: &[impl AsRef<[u8]>],
+    ) -> Self {
         let name_match = if patterns.is_empty() {
             NameMatch::MatchAll
         } else {
@@ -82,6 +91,7 @@ impl TestFilter {
         };
         Self {
             run_ignored,
+            build_partitioner,
             name_match,
         }
     }
@@ -90,13 +100,37 @@ impl TestFilter {
     pub fn any(run_ignored: RunIgnored) -> Self {
         Self {
             run_ignored,
+            build_partitioner: None,
             name_match: NameMatch::MatchAll,
         }
     }
 
+    /// Creates a new test filter scoped to a single binary.
+    ///
+    /// This test filter may be stateful.
+    pub fn build_single_filter(&self, test_binary: &TestBinary) -> SingleFilter<'_> {
+        let partitioner = self
+            .build_partitioner
+            .as_ref()
+            .map(|build_partitioner| build_partitioner.build_partitioner(test_binary));
+        SingleFilter {
+            test_filter: self,
+            partitioner,
+        }
+    }
+}
+
+/// Test filter scoped to a single binary.
+#[derive(Debug)]
+pub struct SingleFilter<'filter> {
+    test_filter: &'filter TestFilter,
+    partitioner: Option<Box<dyn Partitioner>>,
+}
+
+impl<'filter> SingleFilter<'filter> {
     /// Returns an enum describing the match status of this filter.
-    pub fn filter_match(&self, test_name: &str, ignored: bool) -> FilterMatch {
-        match self.run_ignored {
+    pub fn filter_match(&mut self, test_name: &str, ignored: bool) -> FilterMatch {
+        match self.test_filter.run_ignored {
             RunIgnored::IgnoredOnly => {
                 if !ignored {
                     return FilterMatch::Mismatch {
@@ -114,17 +148,27 @@ impl TestFilter {
             _ => {}
         };
 
-        let string_match = match &self.name_match {
+        let string_match = match &self.test_filter.name_match {
             NameMatch::MatchAll => true,
             NameMatch::MatchSet(set) => set.is_match(test_name),
         };
-        if string_match {
-            FilterMatch::Matches
-        } else {
-            FilterMatch::Mismatch {
+        if !string_match {
+            return FilterMatch::Mismatch {
                 reason: MismatchReason::String,
-            }
+            };
         }
+
+        let partition_match = match &mut self.partitioner {
+            Some(partitioner) => partitioner.test_matches(test_name),
+            None => true,
+        };
+        if !partition_match {
+            return FilterMatch::Mismatch {
+                reason: MismatchReason::Partition,
+            };
+        }
+
+        FilterMatch::Matches
     }
 }
 
@@ -157,6 +201,9 @@ pub enum MismatchReason {
 
     /// This test does not match the provided string filters.
     String,
+
+    /// This test is in a different partition.
+    Partition,
 }
 
 impl fmt::Display for MismatchReason {
@@ -164,6 +211,7 @@ impl fmt::Display for MismatchReason {
         match self {
             MismatchReason::Ignored => write!(f, "does not match the run-ignored option"),
             MismatchReason::String => write!(f, "does not match the provided string filters"),
+            MismatchReason::Partition => write!(f, "is in a different partition"),
         }
     }
 }
@@ -177,18 +225,20 @@ mod tests {
         #[test]
         fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
             let patterns: &[String] = &[];
-            let test_filter = TestFilter::new(RunIgnored::Default, patterns);
+            let test_filter = TestFilter::new(RunIgnored::Default, None, patterns);
+            let mut single_filter = test_filter.build_single_filter(&make_test_binary());
             for test_name in test_names {
-                prop_assert!(test_filter.filter_match(&test_name, false).is_match());
+                prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
         }
 
         // Test that exact names match.
         #[test]
         fn proptest_exact(test_names in vec(any::<String>(), 0..16)) {
-            let test_filter = TestFilter::new(RunIgnored::Default, &test_names);
+            let test_filter = TestFilter::new(RunIgnored::Default, None, &test_names);
+            let mut single_filter = test_filter.build_single_filter(&make_test_binary());
             for test_name in test_names {
-                prop_assert!(test_filter.filter_match(&test_name, false).is_match());
+                prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
         }
 
@@ -204,9 +254,10 @@ mod tests {
                 patterns.push(substring);
             }
 
-            let test_filter = TestFilter::new(RunIgnored::Default, &patterns);
+            let test_filter = TestFilter::new(RunIgnored::Default, None, &patterns);
+            let mut single_filter = test_filter.build_single_filter(&make_test_binary());
             for test_name in test_names {
-                prop_assert!(test_filter.filter_match(&test_name, false).is_match());
+                prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
         }
 
@@ -219,8 +270,18 @@ mod tests {
         ) {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilter::new(RunIgnored::Default, &[&pattern]);
-            prop_assert!(!test_filter.filter_match(&substring, false).is_match());
+            let test_filter = TestFilter::new(RunIgnored::Default, None, &[&pattern]);
+            let mut single_filter = test_filter.build_single_filter(&make_test_binary());
+            prop_assert!(!single_filter.filter_match(&substring, false).is_match());
+        }
+    }
+
+    /// Creates a fake test binary instance.
+    fn make_test_binary() -> TestBinary {
+        TestBinary {
+            binary: "/fake/path".into(),
+            binary_id: "fake-id".to_owned(),
+            cwd: None,
         }
     }
 }
