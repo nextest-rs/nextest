@@ -6,7 +6,7 @@ use crate::{
     partition::PartitionerBuilder,
     reporter::{Color, TestReporter},
     runner::TestRunnerOpts,
-    test_filter::{RunIgnored, TestFilter},
+    test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{TestBinary, TestList},
 };
 use anyhow::{bail, Context, Result};
@@ -97,7 +97,8 @@ pub struct TestBinFilter {
 
 impl TestBinFilter {
     fn compute(&self) -> Result<TestList> {
-        let test_filter = TestFilter::new(self.run_ignored, self.partition.clone(), &self.filter);
+        let test_filter =
+            TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
         TestList::new(
             self.test_bin.iter().map(|binary| TestBinary {
                 binary: binary.clone(),

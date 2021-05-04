@@ -4,7 +4,7 @@
 use crate::{
     output::OutputFormat,
     reporter::Color,
-    test_filter::{FilterMatch, TestFilter},
+    test_filter::{FilterMatch, TestFilterBuilder},
 };
 use anyhow::{anyhow, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -81,7 +81,7 @@ impl TestList {
     /// Creates a new test list by running the given command and applying the specified filter.
     pub fn new(
         test_binaries: impl IntoIterator<Item = TestBinary>,
-        filter: &TestFilter,
+        filter: &TestFilterBuilder,
     ) -> Result<Self> {
         let mut test_count = 0;
 
@@ -110,7 +110,7 @@ impl TestList {
     /// Creates a new test list with the given binary names and outputs.
     pub fn new_with_outputs(
         test_bin_outputs: impl IntoIterator<Item = (TestBinary, impl AsRef<str>, impl AsRef<str>)>,
-        filter: &TestFilter,
+        filter: &TestFilterBuilder,
     ) -> Result<Self> {
         let mut test_count = 0;
 
@@ -218,7 +218,7 @@ impl TestList {
 
     fn process_output(
         test_binary: TestBinary,
-        filter: &TestFilter,
+        filter: &TestFilterBuilder,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
     ) -> Result<(Utf8PathBuf, TestBinInfo)> {
@@ -226,7 +226,7 @@ impl TestList {
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
         // based on one doesn't affect the other.
-        let mut non_ignored_filter = filter.build_single_filter(&test_binary);
+        let mut non_ignored_filter = filter.build(&test_binary);
         for test_name in Self::parse(non_ignored.as_ref())? {
             tests.insert(
                 test_name.into(),
@@ -237,7 +237,7 @@ impl TestList {
             );
         }
 
-        let mut ignored_filter = filter.build_single_filter(&test_binary);
+        let mut ignored_filter = filter.build(&test_binary);
         for test_name in Self::parse(ignored.as_ref())? {
             // TODO: catch dups
             tests.insert(
@@ -437,7 +437,7 @@ mod tests {
             tests::baz::test_ignored: test
         "};
 
-        let test_filter = TestFilter::any(RunIgnored::Default);
+        let test_filter = TestFilterBuilder::any(RunIgnored::Default);
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
         let fake_binary_id = "fake-package".to_owned();
         let test_binary = TestBinary {

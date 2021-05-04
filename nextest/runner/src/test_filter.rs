@@ -61,9 +61,9 @@ impl FromStr for RunIgnored {
     }
 }
 
-/// A filter for tests.
+/// A builder for `TestFilter` instances.
 #[derive(Clone, Debug)]
-pub struct TestFilter {
+pub struct TestFilterBuilder {
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
     name_match: NameMatch,
@@ -75,8 +75,8 @@ enum NameMatch {
     MatchSet(Box<AhoCorasick>),
 }
 
-impl TestFilter {
-    /// Creates a new `TestFilter` from the given patterns.
+impl TestFilterBuilder {
+    /// Creates a new `TestFilterBuilder` from the given patterns.
     ///
     /// If an empty slice is passed, the test filter matches all possible test names.
     pub fn new(
@@ -96,7 +96,7 @@ impl TestFilter {
         }
     }
 
-    /// Creates a new `TestFilter` that matches any pattern by name.
+    /// Creates a new `TestFilterBuilder` that matches any pattern by name.
     pub fn any(run_ignored: RunIgnored) -> Self {
         Self {
             run_ignored,
@@ -108,29 +108,29 @@ impl TestFilter {
     /// Creates a new test filter scoped to a single binary.
     ///
     /// This test filter may be stateful.
-    pub fn build_single_filter(&self, test_binary: &TestBinary) -> SingleFilter<'_> {
+    pub fn build(&self, test_binary: &TestBinary) -> TestFilter<'_> {
         let partitioner = self
             .partitioner_builder
             .as_ref()
             .map(|partitioner_builder| partitioner_builder.build(test_binary));
-        SingleFilter {
-            test_filter: self,
+        TestFilter {
+            builder: self,
             partitioner,
         }
     }
 }
 
-/// Test filter scoped to a single binary.
+/// Test filter, scoped to a single binary.
 #[derive(Debug)]
-pub struct SingleFilter<'filter> {
-    test_filter: &'filter TestFilter,
+pub struct TestFilter<'builder> {
+    builder: &'builder TestFilterBuilder,
     partitioner: Option<Box<dyn Partitioner>>,
 }
 
-impl<'filter> SingleFilter<'filter> {
+impl<'filter> TestFilter<'filter> {
     /// Returns an enum describing the match status of this filter.
     pub fn filter_match(&mut self, test_name: &str, ignored: bool) -> FilterMatch {
-        match self.test_filter.run_ignored {
+        match self.builder.run_ignored {
             RunIgnored::IgnoredOnly => {
                 if !ignored {
                     return FilterMatch::Mismatch {
@@ -148,7 +148,7 @@ impl<'filter> SingleFilter<'filter> {
             _ => {}
         };
 
-        let string_match = match &self.test_filter.name_match {
+        let string_match = match &self.builder.name_match {
             NameMatch::MatchAll => true,
             NameMatch::MatchSet(set) => set.is_match(test_name),
         };
@@ -225,8 +225,8 @@ mod tests {
         #[test]
         fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
             let patterns: &[String] = &[];
-            let test_filter = TestFilter::new(RunIgnored::Default, None, patterns);
-            let mut single_filter = test_filter.build_single_filter(&make_test_binary());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns);
+            let mut single_filter = test_filter.build(&make_test_binary());
             for test_name in test_names {
                 prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
@@ -235,8 +235,8 @@ mod tests {
         // Test that exact names match.
         #[test]
         fn proptest_exact(test_names in vec(any::<String>(), 0..16)) {
-            let test_filter = TestFilter::new(RunIgnored::Default, None, &test_names);
-            let mut single_filter = test_filter.build_single_filter(&make_test_binary());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names);
+            let mut single_filter = test_filter.build(&make_test_binary());
             for test_name in test_names {
                 prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
@@ -254,8 +254,8 @@ mod tests {
                 patterns.push(substring);
             }
 
-            let test_filter = TestFilter::new(RunIgnored::Default, None, &patterns);
-            let mut single_filter = test_filter.build_single_filter(&make_test_binary());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns);
+            let mut single_filter = test_filter.build(&make_test_binary());
             for test_name in test_names {
                 prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
@@ -270,8 +270,8 @@ mod tests {
         ) {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilter::new(RunIgnored::Default, None, &[&pattern]);
-            let mut single_filter = test_filter.build_single_filter(&make_test_binary());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern]);
+            let mut single_filter = test_filter.build(&make_test_binary());
             prop_assert!(!single_filter.filter_match(&substring, false).is_match());
         }
     }

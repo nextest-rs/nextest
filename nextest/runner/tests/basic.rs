@@ -12,7 +12,7 @@ use nextest_config::NextestConfig;
 use nextest_runner::{
     reporter::TestEvent,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
-    test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilter},
+    test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilterBuilder},
     test_list::{TestBinary, TestList},
 };
 use once_cell::sync::Lazy;
@@ -140,7 +140,7 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
 
 #[test]
 fn test_list_tests() -> Result<()> {
-    let test_filter = TestFilter::any(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
 
@@ -199,7 +199,7 @@ impl fmt::Debug for InstanceStatus {
 
 #[test]
 fn test_run() -> Result<()> {
-    let test_filter = TestFilter::any(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
     let config = NextestConfig::default();
@@ -244,7 +244,7 @@ fn test_run() -> Result<()> {
 
 #[test]
 fn test_run_ignored() -> Result<()> {
-    let test_filter = TestFilter::any(RunIgnored::IgnoredOnly);
+    let test_filter = TestFilterBuilder::any(RunIgnored::IgnoredOnly);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
     let config = NextestConfig::default();
@@ -289,7 +289,7 @@ fn test_run_ignored() -> Result<()> {
 
 #[test]
 fn test_retries() -> Result<()> {
-    let test_filter = TestFilter::any(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
     let config = NextestConfig::default();
