@@ -142,6 +142,11 @@ impl<'a> MetadataReporter<'a> {
                     ]
                     .iter()
                     .collect();
+                    let junit_dir = junit_path.parent().expect("junit path must have a parent");
+                    std::fs::create_dir_all(junit_dir).with_context(|| {
+                        format!("failed to create junit output directory '{}'", junit_dir)
+                    })?;
+
                     let f = File::create(&junit_path).with_context(|| {
                         format!("failed to open junit file '{}' for writing", junit_path)
                     })?;

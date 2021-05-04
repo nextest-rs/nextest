@@ -33,10 +33,17 @@ pub struct Opts {
 }
 
 #[derive(Debug, StructOpt)]
-pub(crate) struct ConfigOpts {
+pub struct ConfigOpts {
     /// Config file [default: <workspace-root>/Nextest.toml]
     #[structopt(long)]
-    config_file: Option<Utf8PathBuf>,
+    pub config_file: Option<Utf8PathBuf>,
+}
+
+impl ConfigOpts {
+    /// Creates a nextest config with the given options.
+    pub fn make_config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig, ConfigReadError> {
+        NextestConfig::from_sources(self.config_file.as_deref(), workspace_root)
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -117,7 +124,7 @@ impl Opts {
                 ref runner_opts,
             } => {
                 let workspace_root = workspace_root()?;
-                let config = self.config(&workspace_root)?;
+                let config = self.config_opts.make_config(&workspace_root)?;
                 let profile = config.profile(profile.as_deref())?;
                 profile.init_metadata_dir(&workspace_root)?;
 
@@ -135,14 +142,6 @@ impl Opts {
             }
         }
         Ok(())
-    }
-
-    // ---
-    // Helper methods
-    // ---
-
-    fn config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig, ConfigReadError> {
-        NextestConfig::from_sources(self.config_opts.config_file.as_deref(), workspace_root)
     }
 }
 
