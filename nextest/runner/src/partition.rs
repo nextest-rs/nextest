@@ -18,11 +18,11 @@ use twox_hash::XxHash64;
 
 /// A builder for creating `Partitioner` instances.
 ///
-/// The relationship between `BuildPartitioner` and `Partitioner` is similar to that between
+/// The relationship between `PartitionerBuilder` and `Partitioner` is similar to that between
 /// `std`'s `BuildHasher` and `Hasher`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
-pub enum BuildPartitioner {
+pub enum PartitionerBuilder {
     /// Partition based on counting test numbers.
     Count {
         /// The shard this is in, counting up from 1.
@@ -48,16 +48,16 @@ pub trait Partitioner: fmt::Debug {
     fn test_matches(&mut self, test_name: &str) -> bool;
 }
 
-impl BuildPartitioner {
-    /// Creates a new `Partitioner` from this `BuildPartitioner`.
-    pub fn build_partitioner(&self, _test_binary: &TestBinary) -> Box<dyn Partitioner> {
+impl PartitionerBuilder {
+    /// Creates a new `Partitioner` from this `PartitionerBuilder`.
+    pub fn build(&self, _test_binary: &TestBinary) -> Box<dyn Partitioner> {
         // Note we don't use test_binary at the moment but might in the future.
         match self {
-            BuildPartitioner::Count {
+            PartitionerBuilder::Count {
                 shard,
                 total_shards,
             } => Box::new(CountPartitioner::new(*shard, *total_shards)),
-            BuildPartitioner::Hash {
+            PartitionerBuilder::Hash {
                 shard,
                 total_shards,
             } => Box::new(HashPartitioner::new(*shard, *total_shards)),
@@ -74,7 +74,7 @@ impl BuildPartitioner {
             let (shard, total_shards) =
                 parse_shards(input).context("partition must be in the format \"hash:M/N\"")?;
 
-            Ok(BuildPartitioner::Hash {
+            Ok(PartitionerBuilder::Hash {
                 shard,
                 total_shards,
             })
@@ -82,7 +82,7 @@ impl BuildPartitioner {
             let (shard, total_shards) =
                 parse_shards(input).context("partition must be in the format \"count:M/N\"")?;
 
-            Ok(BuildPartitioner::Count {
+            Ok(PartitionerBuilder::Count {
                 shard,
                 total_shards,
             })
@@ -95,7 +95,7 @@ impl BuildPartitioner {
     }
 }
 
-/// An error that occurs while parsing a `BuildPartitioner` input.
+/// An error that occurs while parsing a `PartitionerBuilder` input.
 #[derive(Debug)]
 pub struct ParseError(anyhow::Error);
 
@@ -117,7 +117,7 @@ impl fmt::Display for ParseError {
     }
 }
 
-impl FromStr for BuildPartitioner {
+impl FromStr for PartitionerBuilder {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -209,25 +209,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_partitioner_from_str() {
+    fn partitioner_builder_from_str() {
         let successes = vec![
             (
                 "hash:1/2",
-                BuildPartitioner::Hash {
+                PartitionerBuilder::Hash {
                     shard: 1,
                     total_shards: 2,
                 },
             ),
             (
                 "hash:1/1",
-                BuildPartitioner::Hash {
+                PartitionerBuilder::Hash {
                     shard: 1,
                     total_shards: 1,
                 },
             ),
             (
                 "hash:99/200",
-                BuildPartitioner::Hash {
+                PartitionerBuilder::Hash {
                     shard: 99,
                     total_shards: 200,
                 },
@@ -249,7 +249,7 @@ mod tests {
 
         for (input, output) in successes {
             assert_eq!(
-                BuildPartitioner::from_str(input).unwrap_or_else(|err| panic!(
+                PartitionerBuilder::from_str(input).unwrap_or_else(|err| panic!(
                     "expected input '{}' to succeed, failed with: {}",
                     input, err
                 )),
@@ -260,7 +260,7 @@ mod tests {
         }
 
         for input in failures {
-            BuildPartitioner::from_str(input)
+            PartitionerBuilder::from_str(input)
                 .expect_err(&format!("expected input '{}' to fail", input));
         }
     }

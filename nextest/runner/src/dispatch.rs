@@ -3,7 +3,7 @@
 
 use crate::{
     output::OutputFormat,
-    partition::BuildPartitioner,
+    partition::PartitionerBuilder,
     reporter::{Color, TestReporter},
     runner::TestRunnerOpts,
     test_filter::{RunIgnored, TestFilter},
@@ -88,7 +88,7 @@ pub struct TestBinFilter {
 
     /// Test partition, e.g. hash:1/2 or count:2/3
     #[structopt(long)]
-    pub partition: Option<BuildPartitioner>,
+    pub partition: Option<PartitionerBuilder>,
 
     // TODO: add regex-based filtering in the future?
     /// Test filter

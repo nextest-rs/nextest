@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    partition::{BuildPartitioner, Partitioner},
+    partition::{Partitioner, PartitionerBuilder},
     test_list::TestBinary,
 };
 use aho_corasick::AhoCorasick;
@@ -65,7 +65,7 @@ impl FromStr for RunIgnored {
 #[derive(Clone, Debug)]
 pub struct TestFilter {
     run_ignored: RunIgnored,
-    build_partitioner: Option<BuildPartitioner>,
+    partitioner_builder: Option<PartitionerBuilder>,
     name_match: NameMatch,
 }
 
@@ -81,7 +81,7 @@ impl TestFilter {
     /// If an empty slice is passed, the test filter matches all possible test names.
     pub fn new(
         run_ignored: RunIgnored,
-        build_partitioner: Option<BuildPartitioner>,
+        partitioner_builder: Option<PartitionerBuilder>,
         patterns: &[impl AsRef<[u8]>],
     ) -> Self {
         let name_match = if patterns.is_empty() {
@@ -91,7 +91,7 @@ impl TestFilter {
         };
         Self {
             run_ignored,
-            build_partitioner,
+            partitioner_builder,
             name_match,
         }
     }
@@ -100,7 +100,7 @@ impl TestFilter {
     pub fn any(run_ignored: RunIgnored) -> Self {
         Self {
             run_ignored,
-            build_partitioner: None,
+            partitioner_builder: None,
             name_match: NameMatch::MatchAll,
         }
     }
@@ -110,9 +110,9 @@ impl TestFilter {
     /// This test filter may be stateful.
     pub fn build_single_filter(&self, test_binary: &TestBinary) -> SingleFilter<'_> {
         let partitioner = self
-            .build_partitioner
+            .partitioner_builder
             .as_ref()
-            .map(|build_partitioner| build_partitioner.build_partitioner(test_binary));
+            .map(|partitioner_builder| partitioner_builder.build(test_binary));
         SingleFilter {
             test_filter: self,
             partitioner,
