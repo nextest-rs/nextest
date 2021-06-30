@@ -258,9 +258,9 @@ impl TestList {
         Ok((
             binary,
             TestBinInfo {
+                binary_id,
                 tests,
                 cwd,
-                binary_id,
             },
         ))
     }
