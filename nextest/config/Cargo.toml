@@ -8,5 +8,5 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.40"
 camino = "1.0.4"
-serde = { version = "1.0.125", features = ["derive"] }
+serde = { version = "1.0.126", features = ["derive"] }
 toml = "0.5.8"
