@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 aho-corasick = "0.7.18"
-anyhow = "1.0.40"
+anyhow = "1.0.41"
 atty = "0.2.14"
 camino = { version = "1.0.4", features = ["serde1"] }
 chrono = "0.4.19"
