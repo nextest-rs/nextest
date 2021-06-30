@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 chrono = { version = "0.4.19" }
-indexmap = { version = "1.6.2" }
+indexmap = { version = "1.7.0" }
 quick-xml = { version = "0.22.0" }
 
 [dev-dependencies]
