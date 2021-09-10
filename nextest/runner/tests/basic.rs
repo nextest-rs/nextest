@@ -187,8 +187,8 @@ impl fmt::Debug for InstanceStatus {
                         run_status.attempt,
                         run_status.total_attempts,
                         run_status.status,
-                        String::from_utf8_lossy(&run_status.stdout()),
-                        String::from_utf8_lossy(&run_status.stderr())
+                        String::from_utf8_lossy(run_status.stdout()),
+                        String::from_utf8_lossy(run_status.stderr())
                     )?;
                 }
                 Ok(())

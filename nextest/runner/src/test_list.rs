@@ -232,7 +232,7 @@ impl TestList {
                 test_name.into(),
                 RustTestInfo {
                     ignored: false,
-                    filter_match: non_ignored_filter.filter_match(&test_name, false),
+                    filter_match: non_ignored_filter.filter_match(test_name, false),
                 },
             );
         }
@@ -244,7 +244,7 @@ impl TestList {
                 test_name.into(),
                 RustTestInfo {
                     ignored: true,
-                    filter_match: ignored_filter.filter_match(&test_name, true),
+                    filter_match: ignored_filter.filter_match(test_name, true),
                 },
             );
         }
