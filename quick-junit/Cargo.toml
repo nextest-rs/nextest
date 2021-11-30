@@ -6,9 +6,9 @@ license = "Apache-2.0 OR MIT"
 edition = "2018"
 
 [dependencies]
-chrono = { version = "0.4.19" }
-indexmap = { version = "1.7.0" }
-quick-xml = { version = "0.22.0" }
+chrono = "0.4.19"
+indexmap = "1.7.0"
+quick-xml = "0.22.0"
 
 [dev-dependencies]
 goldenfile = "1.1.0"

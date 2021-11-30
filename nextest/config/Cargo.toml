@@ -6,7 +6,7 @@ license = "Apache-2.0 OR MIT"
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.41"
-camino = "1.0.4"
-serde = { version = "1.0.126", features = ["derive"] }
+anyhow = "1.0.44"
+camino = "1.0.5"
+serde = { version = "1.0.130", features = ["derive"] }
 toml = "0.5.8"
