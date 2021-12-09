@@ -32,8 +32,9 @@ fn default_string() -> String {
 }
 
 impl NextestConfig {
-    /// The string `Nextest.toml`, used to read the config from the given directory.
-    pub const NEXTEST_TOML: &'static str = "Nextest.toml";
+    /// The location of the default config: `.config/nextest.toml`, used to read the config from the
+    /// given directory.
+    pub const CONFIG_PATH: &'static str = ".config/nextest.toml";
 
     /// Contains the default config as a TOML file.
     ///
@@ -46,11 +47,11 @@ impl NextestConfig {
     /// Custom, repository-specific configuration is layered on top of the default config.
     pub const DEFAULT_CONFIG: &'static str = include_str!("../default-config.toml");
 
-    /// Reads the nextest config from the given file, or if not present from `Nextest.toml` in the
-    /// given directory.
+    /// Reads the nextest config from the given file, or if not present from `.config/nextest.toml`
+    /// in the given directory.
     ///
-    /// If the file isn't specified and the directory doesn't have `Nextest.toml`, uses the default
-    /// config options.
+    /// If the file isn't specified and the directory doesn't have `.config/nextest.toml`, uses the
+    /// default config options.
     pub fn from_sources(
         config_file: Option<&Utf8Path>,
         workspace_root: &Utf8Path,
@@ -90,8 +91,8 @@ impl NextestConfig {
                 let config = Self::read_file(file)?;
                 Some((file.to_owned(), config))
             } else {
-                // Attempt to read Nextest.toml from the workspace root if it exists.
-                let default_file = workspace_root.join(Self::NEXTEST_TOML);
+                // Attempt to read .config/nextest.toml from the workspace root if it exists.
+                let default_file = workspace_root.join(Self::CONFIG_PATH);
                 if default_file.is_file() {
                     let config = Self::read_file(&default_file)?;
                     Some((default_file, config))
