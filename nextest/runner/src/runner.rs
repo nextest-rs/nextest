@@ -3,20 +3,19 @@
 
 use crate::{
     reporter::{CancelReason, TestEvent},
+    signal::{SignalEvent, SignalHandler},
     stopwatch::{StopwatchEnd, StopwatchStart},
     test_filter::{FilterMatch, MismatchReason},
     test_list::{TestInstance, TestList},
 };
 use anyhow::Result;
-use crossbeam_channel::{RecvTimeoutError, Sender};
+use crossbeam_channel::RecvTimeoutError;
 use duct::cmd;
 use nextest_config::NextestProfile;
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use signal_hook::{iterator::Handle, low_level::emulate_default_handler};
 use std::{
     convert::Infallible,
     marker::PhantomData,
-    os::raw::c_int,
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -45,6 +44,7 @@ impl TestRunnerOpts {
         &self,
         test_list: &'list TestList,
         profile: NextestProfile<'_>,
+        handler: SignalHandler,
     ) -> TestRunner<'list> {
         let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
         let retries = self.retries.unwrap_or_else(|| profile.retries());
@@ -63,6 +63,7 @@ impl TestRunnerOpts {
                 .thread_name(|idx| format!("testrunner-wait-{}", idx))
                 .build()
                 .expect("run pool built"),
+            handler,
         }
     }
 }
@@ -73,6 +74,7 @@ pub struct TestRunner<'list> {
     test_list: &'list TestList,
     run_pool: ThreadPool,
     wait_pool: ThreadPool,
+    handler: SignalHandler,
 }
 
 impl<'list> TestRunner<'list> {
@@ -109,13 +111,6 @@ impl<'list> TestRunner<'list> {
         let canceled = AtomicBool::new(false);
         let canceled_ref = &canceled;
 
-        // ---
-        // Spawn the signal handler thread.
-        // ---
-        let (srp_sender, srp_receiver) = crossbeam_channel::bounded(1);
-        let (signal_sender, signal_receiver) = crossbeam_channel::unbounded();
-        spawn_signal_thread(signal_sender, srp_sender);
-
         let mut ctx = CallbackContext::new(callback, self.test_list.run_count());
 
         // Send the initial event.
@@ -135,9 +130,6 @@ impl<'list> TestRunner<'list> {
         // XXX rayon requires its scope callback to be Send, there's no good reason for it but
         // there's also no other well-maintained scoped threadpool :(
         self.run_pool.scope(move |run_scope| {
-            // Block until signals are set up.
-            let _ = srp_receiver.recv();
-
             self.test_list.iter_tests().for_each(|test_instance| {
                 if canceled_ref.load(Ordering::Acquire) {
                     // Check for test cancellation.
@@ -214,12 +206,12 @@ impl<'list> TestRunner<'list> {
                             }
                         }
                     },
-                    recv(signal_receiver) -> internal_event => {
+                    recv(self.handler.receiver) -> internal_event => {
                         match internal_event {
                             Ok(event) => InternalEvent::Signal(event),
                             Err(_) => {
-                                // Ignore the signal thread being dropped.
-                                // XXX is this correct?
+                                // Ignore the signal thread being dropped. This is done for
+                                // noop signal handlers.
                                 continue;
                             }
                         }
@@ -565,42 +557,11 @@ impl RunStats {
     }
 }
 
-fn spawn_signal_thread(sender: Sender<InternalSignalEvent>, srp_sender: Sender<()>) {
-    std::thread::spawn(move || {
-        use signal_hook::{
-            consts::*,
-            iterator::{exfiltrator::SignalOnly, SignalsInfo},
-        };
-
-        // Register the SignalsInfo.
-        let mut signals =
-            SignalsInfo::<SignalOnly>::new(TERM_SIGNALS).expect("SignalsInfo created");
-        let _ = sender.send(InternalSignalEvent::Handle {
-            handle: signals.handle(),
-        });
-        // Let the run pool know that the signal has been sent.
-        let _ = srp_sender.send(());
-
-        let mut term_once = false;
-
-        for signal in &mut signals {
-            if term_once {
-                // TODO: handle this error better?
-                let _ = emulate_default_handler(signal);
-            } else {
-                term_once = true;
-                let _ = sender.send(InternalSignalEvent::Canceled { signal });
-            }
-        }
-    });
-}
-
 struct CallbackContext<F, E> {
     callback: F,
     stopwatch: StopwatchStart,
     run_stats: RunStats,
     running: usize,
-    signal_handle: Option<Handle>,
     cancel_state: CancelState,
     phantom: PhantomData<E>,
 }
@@ -618,7 +579,6 @@ where
                 ..RunStats::default()
             },
             running: 0,
-            signal_handle: None,
             cancel_state: CancelState::None,
             phantom: PhantomData,
         }
@@ -630,10 +590,6 @@ where
 
     fn handle_event(&mut self, event: InternalEvent<'list>) -> Result<(), InternalError<E>> {
         match event {
-            InternalEvent::Signal(InternalSignalEvent::Handle { handle }) => {
-                self.signal_handle = Some(handle);
-                Ok(())
-            }
             InternalEvent::Test(InternalTestEvent::Started { test_instance }) => {
                 self.running += 1;
                 (self.callback)(TestEvent::TestStarted { test_instance })
@@ -671,17 +627,13 @@ where
                 })
                 .map_err(InternalError::Error)
             }
-            InternalEvent::Signal(InternalSignalEvent::Canceled { signal: _signal }) => {
-                debug_assert_ne!(
-                    self.cancel_state,
-                    CancelState::SignalCanceled,
-                    "can't receive signal-canceled twice"
-                );
+            InternalEvent::Signal(SignalEvent::Interrupted) => {
+                if self.cancel_state == CancelState::SignalCanceled {
+                    // Ctrl-C was pressed twice -- panic in this case.
+                    panic!("Ctrl-C pressed twice, exiting immediately");
+                }
 
                 self.cancel_state = CancelState::SignalCanceled;
-                // Don't close the signal handle because we're still interested in the second
-                // ctrl-c.
-
                 match (self.callback)(TestEvent::RunBeginCancel {
                     running: self.running,
                     reason: CancelReason::Signal,
@@ -711,21 +663,12 @@ where
             run_stats: self.run_stats,
         })
     }
-
-    // TODO: do we ever want to actually close the handle?
-    #[allow(dead_code)]
-    fn close_handle(&mut self) {
-        if let Some(handle) = &self.signal_handle {
-            handle.close();
-        }
-        self.signal_handle = None;
-    }
 }
 
 #[derive(Debug)]
 enum InternalEvent<'list> {
     Test(InternalTestEvent<'list>),
-    Signal(InternalSignalEvent),
+    Signal(SignalEvent),
 }
 
 #[derive(Debug)]
@@ -745,12 +688,6 @@ enum InternalTestEvent<'list> {
         test_instance: TestInstance<'list>,
         reason: MismatchReason,
     },
-}
-
-#[derive(Debug)]
-enum InternalSignalEvent {
-    Handle { handle: Handle },
-    Canceled { signal: c_int },
 }
 
 #[derive(Debug)]

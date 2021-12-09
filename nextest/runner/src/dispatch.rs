@@ -6,6 +6,7 @@ use crate::{
     partition::PartitionerBuilder,
     reporter::{Color, TestReporter},
     runner::TestRunnerOpts,
+    signal::SignalHandler,
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{TestBinary, TestList},
 };
@@ -132,7 +133,8 @@ impl Opts {
                 let test_list = bin_filter.compute()?;
                 let mut reporter =
                     TestReporter::new(&workspace_root, &test_list, self.color, profile);
-                let runner = runner_opts.build(&test_list, profile);
+                let handler = SignalHandler::new().context("failed to set up Ctrl-C handler")?;
+                let runner = runner_opts.build(&test_list, profile, handler);
                 let run_stats = runner.try_execute(|event| {
                     reporter.report_event(event)
                     // TODO: no-fail-fast logic

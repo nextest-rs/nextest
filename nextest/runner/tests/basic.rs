@@ -12,6 +12,7 @@ use nextest_config::NextestConfig;
 use nextest_runner::{
     reporter::TestEvent,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
+    signal::SignalHandler,
     test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilterBuilder},
     test_list::{TestBinary, TestList},
 };
@@ -206,7 +207,7 @@ fn test_run() -> Result<()> {
     let config = NextestConfig::default();
     let profile = config.profile(None).expect("default config is valid");
 
-    let runner = TestRunnerOpts::default().build(&test_list, profile);
+    let runner = TestRunnerOpts::default().build(&test_list, profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -251,7 +252,7 @@ fn test_run_ignored() -> Result<()> {
     let config = NextestConfig::default();
     let profile = config.profile(None).expect("default config is valid");
 
-    let runner = TestRunnerOpts::default().build(&test_list, profile);
+    let runner = TestRunnerOpts::default().build(&test_list, profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -302,7 +303,7 @@ fn test_retries() -> Result<()> {
         retries: Some(retries),
         ..TestRunnerOpts::default()
     }
-    .build(&test_list, profile);
+    .build(&test_list, profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
