@@ -18,6 +18,7 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Datatest-harness for running data-driven tests")]
+#[allow(dead_code)]
 struct TestOpts {
     /// The FILTER string is tested against the name of all tests, and only those tests whose names
     /// contain the filter are run.
