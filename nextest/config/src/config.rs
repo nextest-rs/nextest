@@ -31,32 +31,20 @@ fn default_string() -> String {
     "default".to_owned()
 }
 
-/// A hack that lets the contents of default-config.toml be included.
-macro_rules! doc_comment {
-    ($doc:expr, $($t:tt)*) => (
-        #[doc = $doc]
-        $($t)*
-    );
-}
-
 impl NextestConfig {
     /// The string `Nextest.toml`, used to read the config from the given directory.
     pub const NEXTEST_TOML: &'static str = "Nextest.toml";
 
-    doc_comment! {
-        concat!("\
-Contains the default config as a TOML file.
-
-The default rules included with this copy of nextest-runner are:
-
-```toml
-", include_str!("../default-config.toml"), "\
-```
-
-Custom, repository-specific configuration is layered on top of the default config.
-"),
-        pub const DEFAULT_CONFIG: &'static str = include_str!("../default-config.toml");
-    }
+    /// Contains the default config as a TOML file.
+    ///
+    /// The default rules included with this copy of nextest-runner are:
+    ///
+    /// ```toml
+    #[doc = include_str!("../default-config.toml")]
+    /// ```
+    ///
+    /// Custom, repository-specific configuration is layered on top of the default config.
+    pub const DEFAULT_CONFIG: &'static str = include_str!("../default-config.toml");
 
     /// Reads the nextest config from the given file, or if not present from `Nextest.toml` in the
     /// given directory.
