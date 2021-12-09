@@ -200,7 +200,7 @@ fn run_test(test: Test, channel: Sender<(String, TestResult)>) {
 
     let cfg = thread::Builder::new().name(name.clone());
     cfg.spawn(move || {
-        let result = match catch_unwind(AssertUnwindSafe(|| testfn())) {
+        let result = match catch_unwind(AssertUnwindSafe(testfn)) {
             Ok(Ok(())) => TestResult::Ok,
             Ok(Err(e)) => TestResult::FailedWithMsg(format!("{:?}", e)),
             Err(_) => TestResult::Failed,
