@@ -114,7 +114,7 @@ Custom, repository-specific configuration is layered on top of the default confi
         };
 
         if let Some((file, repo_config)) = repo_config {
-            config.merge(file, repo_config)?;
+            config.merge(&file, repo_config)?;
         }
 
         Ok(config)
@@ -125,10 +125,10 @@ Custom, repository-specific configuration is layered on top of the default confi
         toml::de::from_str(&data).map_err(|err| ConfigReadError::toml(file, err))
     }
 
-    fn merge(&mut self, file: Utf8PathBuf, other: NextestConfig) -> Result<(), ConfigReadError> {
+    fn merge(&mut self, file: &Utf8Path, other: NextestConfig) -> Result<(), ConfigReadError> {
         self.default_profile = other.default_profile;
 
-        let file = Self::merge_entries(file, "profile", &mut self.profiles, other.profiles)?;
+        Self::merge_entries(file, "profile", &mut self.profiles, other.profiles)?;
         Self::merge_entries(file, "metadata", &mut self.metadata, other.metadata)?;
 
         Ok(())
@@ -137,11 +137,11 @@ Custom, repository-specific configuration is layered on top of the default confi
     // Returning the path passed in is a somewhat ugly way to avoid clones. Might be worth cleaning
     // this up in the future.
     fn merge_entries<V>(
-        file: Utf8PathBuf,
+        file: &Utf8Path,
         kind: &'static str,
         self_entries: &mut HashMap<String, V>,
         other_entries: HashMap<String, V>,
-    ) -> Result<Utf8PathBuf, ConfigReadError> {
+    ) -> Result<(), ConfigReadError> {
         for (key, value) in other_entries {
             match self_entries.entry(key) {
                 Entry::Vacant(entry) => {
@@ -153,7 +153,7 @@ Custom, repository-specific configuration is layered on top of the default confi
             }
         }
 
-        Ok(file)
+        Ok(())
     }
 
     fn validate(&self) -> Result<(), ConfigReadError> {
