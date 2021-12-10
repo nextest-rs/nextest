@@ -24,7 +24,7 @@
             <flakyError type="flaky error type">flaky error description
                 <stackTrace>flaky stack trace</stackTrace>
                 <system-out>flaky system output</system-out>
-                <system-err>flaky system error</system-err>
+                <system-err>flaky system error with [34mANSI escape codes[39m</system-err>
             </flakyError>
         </testcase>
         <testcase name="testcase5" time="0.156">

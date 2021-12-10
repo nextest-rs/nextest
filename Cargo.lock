@@ -471,6 +471,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "owo-colors"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d3b1ca05e7e4171727a5dab03790a344f248eaad925dce8ba0014fd78392b88"
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -580,6 +586,7 @@ dependencies = [
  "chrono",
  "goldenfile",
  "indexmap",
+ "owo-colors",
  "quick-xml",
 ]
 

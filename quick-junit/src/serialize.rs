@@ -371,7 +371,7 @@ fn serialize_output(
 ) -> quick_xml::Result<()> {
     serialize_empty_start_tag(tag_name, writer)?;
 
-    let text = BytesText::from_plain_str(&output.output);
+    let text = BytesText::from_plain_str(output.as_str());
     writer.write_event(Event::Text(text))?;
 
     serialize_end_tag(tag_name, writer)?;

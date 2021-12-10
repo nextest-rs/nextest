@@ -4,7 +4,7 @@
 use crate::serialize::serialize_report;
 use chrono::{DateTime, FixedOffset};
 use indexmap::map::IndexMap;
-use std::{borrow::Cow, io, iter, time::Duration};
+use std::{io, iter, time::Duration};
 
 /// The root element of a JUnit report.
 #[derive(Clone, Debug)]
@@ -217,33 +217,29 @@ impl Testsuite {
     }
 
     /// Sets standard output.
-    pub fn set_system_out(&mut self, system_out: impl Into<String>) -> &mut Self {
-        self.system_out = Some(Output {
-            output: system_out.into(),
-        });
+    pub fn set_system_out(&mut self, system_out: impl AsRef<str>) -> &mut Self {
+        self.system_out = Some(Output::new(system_out.as_ref()));
         self
     }
 
     /// Sets standard output from a `Vec<u8>`.
     ///
     /// The output is converted to a string, lossily.
-    pub fn set_system_out_lossy(&mut self, system_out: impl Into<Vec<u8>>) -> &mut Self {
-        self.set_system_out(from_utf8_lossy(system_out.into()))
+    pub fn set_system_out_lossy(&mut self, system_out: impl AsRef<[u8]>) -> &mut Self {
+        self.set_system_out(String::from_utf8_lossy(system_out.as_ref()))
     }
 
     /// Sets standard error.
-    pub fn set_system_err(&mut self, system_err: impl Into<String>) -> &mut Self {
-        self.system_err = Some(Output {
-            output: system_err.into(),
-        });
+    pub fn set_system_err(&mut self, system_err: impl AsRef<str>) -> &mut Self {
+        self.system_err = Some(Output::new(system_err.as_ref()));
         self
     }
 
     /// Sets standard error from a `Vec<u8>`.
     ///
     /// The output is converted to a string, lossily.
-    pub fn set_system_err_lossy(&mut self, system_err: impl Into<Vec<u8>>) -> &mut Self {
-        self.set_system_err(from_utf8_lossy(system_err.into()))
+    pub fn set_system_err_lossy(&mut self, system_err: impl AsRef<[u8]>) -> &mut Self {
+        self.set_system_err(String::from_utf8_lossy(system_err.as_ref()))
     }
 }
 
@@ -325,33 +321,29 @@ impl Testcase {
     }
 
     /// Sets standard output.
-    pub fn set_system_out(&mut self, system_out: impl Into<String>) -> &mut Self {
-        self.system_out = Some(Output {
-            output: system_out.into(),
-        });
+    pub fn set_system_out(&mut self, system_out: impl AsRef<str>) -> &mut Self {
+        self.system_out = Some(Output::new(system_out.as_ref()));
         self
     }
 
     /// Sets standard output from a `Vec<u8>`.
     ///
-    /// The output is assumed to be UTF-8 and is converted to a string, lossily.
-    pub fn set_system_out_lossy(&mut self, system_out: impl Into<Vec<u8>>) -> &mut Self {
-        self.set_system_out(from_utf8_lossy(system_out.into()))
+    /// The output is converted to a string, lossily.
+    pub fn set_system_out_lossy(&mut self, system_out: impl AsRef<[u8]>) -> &mut Self {
+        self.set_system_out(String::from_utf8_lossy(system_out.as_ref()))
     }
 
     /// Sets standard error.
-    pub fn set_system_err(&mut self, system_err: impl Into<String>) -> &mut Self {
-        self.system_err = Some(Output {
-            output: system_err.into(),
-        });
+    pub fn set_system_err(&mut self, system_err: impl AsRef<str>) -> &mut Self {
+        self.system_err = Some(Output::new(system_err.as_ref()));
         self
     }
 
     /// Sets standard error from a `Vec<u8>`.
     ///
-    /// The output is assumed to be UTF-8 and is converted to a string, lossily.
-    pub fn set_system_err_lossy(&mut self, system_err: impl Into<Vec<u8>>) -> &mut Self {
-        self.set_system_err(from_utf8_lossy(system_err.into()))
+    /// The output is converted to a string, lossily.
+    pub fn set_system_err_lossy(&mut self, system_err: impl AsRef<[u8]>) -> &mut Self {
+        self.set_system_err(String::from_utf8_lossy(system_err.as_ref()))
     }
 }
 
@@ -563,33 +555,29 @@ impl TestRerun {
     }
 
     /// Sets standard output.
-    pub fn set_system_out(&mut self, system_out: impl Into<String>) -> &mut Self {
-        self.system_out = Some(Output {
-            output: system_out.into(),
-        });
+    pub fn set_system_out(&mut self, system_out: impl AsRef<str>) -> &mut Self {
+        self.system_out = Some(Output::new(system_out.as_ref()));
         self
     }
 
     /// Sets standard output from a `Vec<u8>`.
     ///
     /// The output is converted to a string, lossily.
-    pub fn set_system_out_lossy(&mut self, system_out: impl Into<Vec<u8>>) -> &mut Self {
-        self.set_system_out(from_utf8_lossy(system_out.into()))
+    pub fn set_system_out_lossy(&mut self, system_out: impl AsRef<[u8]>) -> &mut Self {
+        self.set_system_out(String::from_utf8_lossy(system_out.as_ref()))
     }
 
     /// Sets standard error.
-    pub fn set_system_err(&mut self, system_err: impl Into<String>) -> &mut Self {
-        self.system_err = Some(Output {
-            output: system_err.into(),
-        });
+    pub fn set_system_err(&mut self, system_err: impl AsRef<str>) -> &mut Self {
+        self.system_err = Some(Output::new(system_err.as_ref()));
         self
     }
 
     /// Sets standard error from a `Vec<u8>`.
     ///
     /// The output is converted to a string, lossily.
-    pub fn set_system_err_lossy(&mut self, system_err: impl Into<Vec<u8>>) -> &mut Self {
-        self.set_system_err(from_utf8_lossy(system_err.into()))
+    pub fn set_system_err_lossy(&mut self, system_err: impl AsRef<[u8]>) -> &mut Self {
+        self.set_system_err(String::from_utf8_lossy(system_err.as_ref()))
     }
 
     /// Sets the description of the failure.
@@ -640,27 +628,49 @@ where
 }
 
 /// Represents text that is written out to standard output or standard error during text execution.
+///
+/// # Encoding
+///
+/// On Unix platforms, standard output and standard error are typically bytestrings (`Vec<u8>`).
+/// However, XUnit assumes that the output is valid Unicode, and this type definition reflects
+/// that.
 #[derive(Clone, Debug)]
 pub struct Output {
-    /// The output.
-    ///
-    /// # Encoding
-    ///
-    /// On Unix platforms, standard output and standard error are typically bytestrings (`Vec<u8>`).
-    /// However, XUnit assumes that the output is valid Unicode, and this type definition reflects
-    /// that.
-    pub output: String,
+    output: Box<str>,
 }
 
-fn from_utf8_lossy(bytes: Vec<u8>) -> String {
-    match String::from_utf8(bytes) {
-        Ok(s) => s,
-        Err(err) => {
-            let bytes = err.into_bytes();
-            match String::from_utf8_lossy(&bytes) {
-                Cow::Owned(s) => s,
-                Cow::Borrowed(_) => unreachable!("non-utf8 => always lossy => always owned"),
-            }
-        }
+impl Output {
+    /// Creates a new output, removing any non-printable characters from it.
+    pub fn new(output: impl AsRef<str>) -> Self {
+        let output = output.as_ref();
+        let output = output
+            .replace(
+                |c| matches!(c, '\x00'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f'),
+                "",
+            )
+            .into_boxed_str();
+        Self { output }
+    }
+
+    /// Returns the output.
+    pub fn as_str(&self) -> &str {
+        &self.output
+    }
+
+    /// Converts the output into a string.
+    pub fn into_string(self) -> String {
+        self.output.into_string()
+    }
+}
+
+impl AsRef<str> for Output {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<Output> for String {
+    fn from(output: Output) -> Self {
+        output.into_string()
     }
 }

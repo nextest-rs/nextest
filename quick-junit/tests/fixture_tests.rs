@@ -3,6 +3,7 @@
 
 use chrono::DateTime;
 use goldenfile::Mint;
+use owo_colors::OwoColorize;
 use quick_junit::{
     NonSuccessKind, Property, Report, TestRerun, Testcase, TestcaseStatus, Testsuite,
 };
@@ -97,7 +98,10 @@ fn basic_report() -> Report {
     test_rerun
         .set_type("flaky error type")
         .set_system_out("flaky system output")
-        .set_system_err("flaky system error")
+        .set_system_err(format!(
+            "flaky system error with {}",
+            "ANSI escape codes".blue()
+        ))
         .set_stack_trace("flaky stack trace")
         .set_description("flaky error description");
     testcase_status.add_rerun(test_rerun);
