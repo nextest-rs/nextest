@@ -8,7 +8,6 @@ use crate::{
     test_list::{test_bin_spec, test_name_spec, TestInstance, TestList},
 };
 use anyhow::{Context, Result};
-use camino::Utf8Path;
 use nextest_config::{FailureOutput, NextestProfile};
 use std::{
     fmt, io,
@@ -67,12 +66,7 @@ pub struct TestReporter<'a> {
 
 impl<'a> TestReporter<'a> {
     /// Creates a new instance with the given color choice.
-    pub fn new(
-        workspace_root: &'a Utf8Path,
-        test_list: &TestList,
-        color: Color,
-        profile: NextestProfile<'a>,
-    ) -> Self {
+    pub fn new(test_list: &TestList, color: Color, profile: &'a NextestProfile<'a>) -> Self {
         let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
         let stderr = BufferWriter::stderr(color.color_choice(atty::Stream::Stderr));
         let binary_id_width = test_list
@@ -80,7 +74,7 @@ impl<'a> TestReporter<'a> {
             .map(|(_, info)| info.binary_id.len())
             .max()
             .unwrap_or_default();
-        let metadata_reporter = MetadataReporter::new(workspace_root, profile);
+        let metadata_reporter = MetadataReporter::new(profile);
         Self {
             stdout,
             stderr,

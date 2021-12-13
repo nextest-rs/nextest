@@ -1,39 +1,22 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Configuration for nextest.
-
-use crate::errors::*;
-use anyhow::Context;
+use crate::errors::{ConfigReadError, ProfileNotFound};
 use camino::{Utf8Path, Utf8PathBuf};
+use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    fmt,
-};
+use std::{collections::HashMap, fmt, marker::PhantomData};
 
 /// Configuration for nextest.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Debug)]
 pub struct NextestConfig {
-    /// The default profile: should be one of the profiles listed in the profiles section.
-    #[serde(default = "default_string")]
-    default_profile: String,
-
-    /// Profiles for nextest, keyed by name.
-    profiles: HashMap<String, NextestProfileImpl>,
-
-    /// Metadata configuration.
-    metadata: HashMap<String, MetadataConfig>,
-}
-
-fn default_string() -> String {
-    "default".to_owned()
+    workspace_root: Utf8PathBuf,
+    inner: NextestConfigImpl,
 }
 
 impl NextestConfig {
-    /// The location of the default config: `.config/nextest.toml`, used to read the config from the
-    /// given directory.
+    /// The default location of the config within the path: `.config/nextest.toml`, used to read the
+    /// config from the given directory.
     pub const CONFIG_PATH: &'static str = ".config/nextest.toml";
 
     /// Contains the default config as a TOML file.
@@ -41,37 +24,50 @@ impl NextestConfig {
     /// The default rules included with this copy of nextest-runner are:
     ///
     /// ```toml
-    #[doc = include_str!("../default-config.toml")]
+    #[doc = include_str ! ("../default-config.toml")]
     /// ```
     ///
-    /// Custom, repository-specific configuration is layered on top of the default config.
+    /// Repository-specific configuration is layered on top of the default config.
     pub const DEFAULT_CONFIG: &'static str = include_str!("../default-config.toml");
 
-    /// Reads the nextest config from the given file, or if not present from `.config/nextest.toml`
+    /// Environment configuration uses this prefix, plus a _.
+    pub const ENVIRONMENT_PREFIX: &'static str = "NEXTEST";
+
+    /// The name of the default profile.
+    pub const DEFAULT_PROFILE: &'static str = "default";
+
+    /// Reads the nextest config from the given file, or if not specified from `.config/nextest.toml`
     /// in the given directory.
     ///
     /// If the file isn't specified and the directory doesn't have `.config/nextest.toml`, uses the
     /// default config options.
     pub fn from_sources(
+        workspace_root: impl Into<Utf8PathBuf>,
         config_file: Option<&Utf8Path>,
-        workspace_root: &Utf8Path,
     ) -> Result<Self, ConfigReadError> {
-        let config = Self::read_from_sources(config_file, workspace_root)?;
-        config.validate()?;
-        Ok(config)
+        let workspace_root = workspace_root.into();
+        let config = Self::read_from_sources(&workspace_root, config_file)?;
+        let inner = config.try_into().map_err(ConfigReadError::new)?;
+        Ok(Self {
+            workspace_root,
+            inner,
+        })
     }
 
-    /// Returns the profile with the given name, the default profile if not specified, or an error
-    /// if a profile was specified but not found.
-    pub fn profile(&self, name: Option<&str>) -> Result<NextestProfile<'_>, ProfileNotFound> {
-        match name {
-            Some(name) => self
-                .make_profile(name)
-                .ok_or_else(|| ProfileNotFound::new(name, self.profiles.keys())),
-            None => Ok(self
-                .make_profile(&self.default_profile)
-                .expect("validate() checks for default profile")),
+    /// Returns the default nextest config.
+    pub fn default_config(workspace_root: impl Into<Utf8PathBuf>) -> Self {
+        let config = Self::make_default_config();
+        let inner = config.try_into().expect("default config is always valid");
+        Self {
+            workspace_root: workspace_root.into(),
+            inner,
         }
+    }
+
+    /// Returns the profile with the given name, or an error if a profile was specified but not
+    /// found.
+    pub fn profile(&self, name: impl AsRef<str>) -> Result<NextestProfile<'_>, ProfileNotFound> {
+        self.make_profile(name.as_ref())
     }
 
     // ---
@@ -79,177 +75,111 @@ impl NextestConfig {
     // ---
 
     fn read_from_sources(
-        file: Option<&Utf8Path>,
         workspace_root: &Utf8Path,
-    ) -> Result<Self, ConfigReadError> {
-        // First, get the default config. Other configs are layered on top of it.
-        let mut config = Self::default();
+        file: Option<&Utf8Path>,
+    ) -> Result<Config, ConfigReadError> {
+        // First, get the default config.
+        let mut config = Self::make_default_config();
 
-        let repo_config = {
-            // Read a file that's explicitly specified.
-            if let Some(file) = file {
-                let config = Self::read_file(file)?;
-                Some((file.to_owned(), config))
-            } else {
-                // Attempt to read .config/nextest.toml from the workspace root if it exists.
-                let default_file = workspace_root.join(Self::CONFIG_PATH);
-                if default_file.is_file() {
-                    let config = Self::read_file(&default_file)?;
-                    Some((default_file, config))
-                } else {
-                    None
-                }
+        // Next, merge in the config from the given file.
+        match file {
+            Some(file) => {
+                config
+                    .merge(File::new(file.as_str(), FileFormat::Toml))
+                    .map_err(ConfigReadError::new)?;
             }
-        };
-
-        if let Some((file, repo_config)) = repo_config {
-            config.merge(&file, repo_config)?;
+            None => {
+                let config_path = workspace_root.join(Self::CONFIG_PATH);
+                config
+                    .merge(File::new(config_path.as_str(), FileFormat::Toml).required(false))
+                    .map_err(ConfigReadError::new)?;
+            }
         }
+
+        // Finally, read in the environment variables.
+        config
+            .merge(Environment::with_prefix(Self::ENVIRONMENT_PREFIX).separator("_"))
+            .map_err(ConfigReadError::new)?;
 
         Ok(config)
     }
 
-    fn read_file(file: &Utf8Path) -> Result<Self, ConfigReadError> {
-        let data = std::fs::read_to_string(file).map_err(|err| ConfigReadError::read(file, err))?;
-        toml::de::from_str(&data).map_err(|err| ConfigReadError::toml(file, err))
+    fn make_default_config() -> Config {
+        Config::new()
+            .with_merged(File::from_str(Self::DEFAULT_CONFIG, FileFormat::Toml))
+            .expect("default config is valid")
     }
 
-    fn merge(&mut self, file: &Utf8Path, other: NextestConfig) -> Result<(), ConfigReadError> {
-        self.default_profile = other.default_profile;
+    fn make_profile(&self, name: &str) -> Result<NextestProfile<'_>, ProfileNotFound> {
+        let custom_profile = self.inner.profiles.get(name)?;
 
-        Self::merge_entries(file, "profile", &mut self.profiles, other.profiles)?;
-        Self::merge_entries(file, "metadata", &mut self.metadata, other.metadata)?;
+        // The profile was found: construct the NextestProfile.
+        let mut metadata_dir = self.workspace_root.join(&self.inner.metadata.dir);
+        metadata_dir.push(name);
 
-        Ok(())
-    }
+        let metadata_name = format!("{}{}", self.inner.metadata.prefix.as_str(), name);
 
-    // Returning the path passed in is a somewhat ugly way to avoid clones. Might be worth cleaning
-    // this up in the future.
-    fn merge_entries<V>(
-        file: &Utf8Path,
-        kind: &'static str,
-        self_entries: &mut HashMap<String, V>,
-        other_entries: HashMap<String, V>,
-    ) -> Result<(), ConfigReadError> {
-        for (key, value) in other_entries {
-            match self_entries.entry(key) {
-                Entry::Vacant(entry) => {
-                    entry.insert(value);
-                }
-                Entry::Occupied(entry) => {
-                    return Err(ConfigReadError::duplicate_key(file, entry.key(), kind));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn validate(&self) -> Result<(), ConfigReadError> {
-        // Check that the profile listed in default_profile is valid.
-        if !self.profiles.contains_key(&self.default_profile) {
-            return Err(ConfigReadError::default_profile_not_found(
-                &self.default_profile,
-                self.profiles.keys(),
-            ));
-        }
-
-        // Check that metadata keys listed in profiles are valid.
-        for (profile_name, profile) in &self.profiles {
-            if !self.metadata.contains_key(&profile.metadata_key) {
-                return Err(ConfigReadError::metadata_key_not_found(
-                    profile_name,
-                    &profile.metadata_key,
-                    self.metadata.keys(),
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn make_profile(&self, name: &str) -> Option<NextestProfile<'_>> {
-        let inner = self.profiles.get(name)?;
-        let metadata = self
-            .metadata
-            .get(&inner.metadata_key)
-            .expect("validate() checks for metadata keys");
-        Some(NextestProfile { inner, metadata })
+        Ok(NextestProfile {
+            metadata_dir,
+            metadata_name,
+            default_profile: &self.inner.profiles.default,
+            custom_profile,
+        })
     }
 }
 
-impl Default for NextestConfig {
-    fn default() -> Self {
-        toml::de::from_str(Self::DEFAULT_CONFIG).expect("default config should be valid")
-    }
-}
-
-/// A representation of a nextest profile.
-#[derive(Copy, Clone, Debug)]
+/// A nextest profile. Contains configuration for a specific nextest run.
+#[derive(Clone, Debug)]
 pub struct NextestProfile<'cfg> {
-    inner: &'cfg NextestProfileImpl,
-    metadata: &'cfg MetadataConfig,
+    metadata_dir: Utf8PathBuf,
+    metadata_name: String,
+    default_profile: &'cfg DefaultProfileImpl,
+    custom_profile: Option<&'cfg CustomProfileImpl>,
 }
 
 impl<'cfg> NextestProfile<'cfg> {
-    /// Initialize the metadata directory if specified.
-    pub fn init_metadata_dir(&self, workspace_root: &Utf8Path) -> anyhow::Result<()> {
-        let metadata_dir = workspace_root.join(&self.metadata.dir);
-        std::fs::create_dir_all(&metadata_dir)
-            .with_context(|| format!("failed to create metadata dir '{}'", metadata_dir))
+    /// Returns the absolute profile-specific metadata directory.
+    pub fn metadata_dir(&self) -> &Utf8Path {
+        &self.metadata_dir
     }
 
-    /// Returns the name of this test run.
-    pub fn name(&self) -> &'cfg str {
-        &self.inner.name
+    /// Returns the test run name used in the metadata.
+    pub fn metadata_name(&self) -> &str {
+        &self.metadata_name
     }
 
-    /// Returns the number of retries.
+    /// Returns the retry count for this profile.
     pub fn retries(&self) -> usize {
-        self.inner.retries
+        self.custom_profile
+            .map(|profile| profile.retries)
+            .flatten()
+            .unwrap_or(self.default_profile.retries)
     }
 
-    /// Returns the metadata configuration.
-    pub fn metadata_config(&self) -> &'cfg MetadataConfig {
-        self.metadata
-    }
-
-    /// Returns the configuration for the situations in which failure is output.
+    /// Returns the failure output config for this profile.
     pub fn failure_output(&self) -> FailureOutput {
-        self.inner.failure_output
+        self.custom_profile
+            .map(|profile| profile.failure_output)
+            .flatten()
+            .unwrap_or(self.default_profile.failure_output)
     }
-}
 
-/// A nextest profile, containing settings for how a test should be run.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct NextestProfileImpl {
-    /// A name given to this test run.
-    name: String,
+    /// Returns the JUnit configuration for this profile.
+    pub fn junit(&self) -> Option<NextestJunitConfig<'cfg>> {
+        let path = self
+            .custom_profile
+            .map(|profile| &profile.junit.path)
+            .unwrap_or(&self.default_profile.junit.path)
+            .as_deref();
 
-    /// The number of times a test is attempted to be re-run if it fails. Defaults to 0.
-    #[serde(default)]
-    retries: usize,
-
-    /// Metadata configuration: one of the keys in the metadata section.
-    #[serde(default = "default_string")]
-    metadata_key: String,
-
-    /// The situations in which a failure is output.
-    #[serde(default)]
-    failure_output: FailureOutput,
-}
-
-/// Metadata configuration for nextest.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct MetadataConfig {
-    /// The directory where metadata files are stored. This is relative to the workspace root.
-    pub dir: Utf8PathBuf,
-
-    /// Output metadata in the JUnit format in addition to the canonical format.
-    #[serde(default)]
-    pub junit: Option<Utf8PathBuf>,
+        path.map(|path| {
+            let path = self.metadata_dir.join(path);
+            NextestJunitConfig {
+                path,
+                phantom: PhantomData,
+            }
+        })
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -292,10 +222,85 @@ impl fmt::Display for FailureOutput {
     }
 }
 
-impl Default for FailureOutput {
-    fn default() -> Self {
-        FailureOutput::Immediate
+/// JUnit configuration for nextest.
+#[derive(Clone, Debug)]
+pub struct NextestJunitConfig<'cfg> {
+    path: Utf8PathBuf,
+    // Possibly will refer to other config fields in the future.
+    phantom: PhantomData<&'cfg ()>,
+}
+
+impl<'cfg> NextestJunitConfig<'cfg> {
+    /// Returns the absolute path to the metadata.
+    pub fn path(&self) -> &Utf8Path {
+        &self.path
     }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct NextestConfigImpl {
+    metadata: MetadataConfigImpl,
+    #[serde(rename = "profile")]
+    profiles: NextestProfilesImpl,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct MetadataConfigImpl {
+    dir: Utf8PathBuf,
+    prefix: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct NextestProfilesImpl {
+    default: DefaultProfileImpl,
+    #[serde(flatten)]
+    other: HashMap<String, CustomProfileImpl>,
+}
+
+impl NextestProfilesImpl {
+    fn get(&self, profile: &str) -> Result<Option<&CustomProfileImpl>, ProfileNotFound> {
+        let custom_profile = match profile {
+            NextestConfig::DEFAULT_PROFILE => None,
+            other => Some(
+                self.other
+                    .get(other)
+                    .ok_or_else(|| ProfileNotFound::new(profile, self.all_profiles()))?,
+            ),
+        };
+        Ok(custom_profile)
+    }
+
+    fn all_profiles(&self) -> impl Iterator<Item = &str> {
+        self.other
+            .keys()
+            .map(|key| key.as_str())
+            .chain(std::iter::once(NextestConfig::DEFAULT_PROFILE))
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct DefaultProfileImpl {
+    retries: usize,
+    failure_output: FailureOutput,
+    junit: JunitImpl,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct CustomProfileImpl {
+    retries: Option<usize>,
+    failure_output: Option<FailureOutput>,
+    junit: JunitImpl,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct JunitImpl {
+    path: Option<Utf8PathBuf>,
 }
 
 #[cfg(test)]
@@ -304,7 +309,9 @@ mod tests {
 
     #[test]
     fn default_config_is_valid() {
-        let default_config = NextestConfig::default();
-        default_config.validate().expect("default config is valid");
+        let default_config = NextestConfig::default_config("foo");
+        default_config
+            .profile(NextestConfig::DEFAULT_PROFILE)
+            .expect("default profile should exist");
     }
 }

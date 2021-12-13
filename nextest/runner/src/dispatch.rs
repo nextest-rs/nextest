@@ -43,7 +43,7 @@ pub struct ConfigOpts {
 impl ConfigOpts {
     /// Creates a nextest config with the given options.
     pub fn make_config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig, ConfigReadError> {
-        NextestConfig::from_sources(self.config_file.as_deref(), workspace_root)
+        NextestConfig::from_sources(workspace_root, self.config_file.as_deref())
     }
 }
 
@@ -127,14 +127,16 @@ impl Opts {
             } => {
                 let workspace_root = workspace_root()?;
                 let config = self.config_opts.make_config(&workspace_root)?;
-                let profile = config.profile(profile.as_deref())?;
-                profile.init_metadata_dir(&workspace_root)?;
+                let profile =
+                    config.profile(profile.as_deref().unwrap_or(NextestConfig::DEFAULT_PROFILE))?;
+                let metadata_dir = profile.metadata_dir();
+                std::fs::create_dir_all(&metadata_dir)
+                    .with_context(|| format!("failed to create metadata dir '{}'", metadata_dir))?;
 
                 let test_list = bin_filter.compute()?;
-                let mut reporter =
-                    TestReporter::new(&workspace_root, &test_list, self.color, profile);
+                let mut reporter = TestReporter::new(&test_list, self.color, &profile);
                 let handler = SignalHandler::new().context("failed to set up Ctrl-C handler")?;
-                let runner = runner_opts.build(&test_list, profile, handler);
+                let runner = runner_opts.build(&test_list, &profile, handler);
                 let run_stats = runner.try_execute(|event| {
                     reporter.report_event(event)
                     // TODO: no-fail-fast logic

@@ -1,16 +1,18 @@
 ## This is the default config used by nextest. It is embedded in the binary at build time.
 ## It may be used as a template for .config/nextest.toml.
 
-## This key defines the default nextest profile. It may be overridden by a repository's .config/nextest.toml.
-## A custom profile can also be selected on the command line with the `--profile` option.
-default-profile = "default"
+[metadata]
+## The directory under the workspace root at which metadata is written.
+## Profile-specific metadata is written to dir/<profile-name>.
+dir = "target/nextest"
 
-## This section defines a nextest profile named "default". If you're defining your own profile, it should be
-## called something else.
-[profiles.default]
-## "name" is the name of the run. Used in the UI and in metadata if configured.
-name = "nextest-run"
+## The prefix to use while naming the metadata. If aggregating test metadata across different
+## test runs, it may be useful to provide separate names for each run.
+prefix = "nextest-"
 
+## This section defines the default nextest profile. Custom profiles are layered on top of the
+## default profile.
+[profile.default]
 ## "retries" defines the number of times a test should be retried. If set to a non-zero value, tests that
 ## succeed on a subsequent attempt will be marked as non-flaky. Can be overridden through the `--retries`
 ## option.
@@ -25,15 +27,7 @@ retries = 0
 ## For large test suites and CI it may be useful to use "immediate-final".
 failure-output = "immediate"
 
-## The value of "metadata-key", if specified, should refer to one of the keys under "metadata". If it isn't
-## specified, the default metadata config is used.
-metadata-key = "default"
-
-## This is the default metadata config. If you're defining your own config, it should be called something else.
-[metadata.default]
-## This directory is where metadata files are stored. This is relative to the workspace root.
-dir = "target/nextest"
-
-## Output metadata in the JUnit format into the given file inside the directory. If unspecified,
-## JUnit is not written out.
-## junit = "junit.xml"
+[profile.default.junit]
+## Output metadata in the JUnit format into the given file inside 'metadata.dir/<profile-name>'. If unspecified, JUnit
+## is not written out.
+## path = "junit.xml"

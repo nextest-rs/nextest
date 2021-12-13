@@ -9,31 +9,59 @@ use crate::{
     test_list::TestInstance,
 };
 use anyhow::{Context, Result};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
-use nextest_config::{MetadataConfig, NextestProfile};
+use nextest_config::{NextestJunitConfig, NextestProfile};
 use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
 use std::{collections::HashMap, fs::File, time::SystemTime};
 
 #[derive(Clone, Debug)]
-pub(crate) struct MetadataReporter<'a> {
-    workspace_root: &'a Utf8Path,
-    name: &'a str,
-    config: &'a MetadataConfig,
-    testsuites: HashMap<&'a str, Testsuite>,
+#[allow(dead_code)]
+pub(crate) struct MetadataReporter<'cfg> {
+    metadata_dir: &'cfg Utf8Path,
+    metadata_name: &'cfg str,
+    // TODO: log information in a JSONable report (converting that to XML later) instead of directly
+    // writing it to XML
+    junit: Option<MetadataJunit<'cfg>>,
 }
 
-impl<'a> MetadataReporter<'a> {
-    pub(crate) fn new(workspace_root: &'a Utf8Path, profile: NextestProfile<'a>) -> Self {
+impl<'cfg> MetadataReporter<'cfg> {
+    pub(crate) fn new(profile: &'cfg NextestProfile<'cfg>) -> Self {
+        let metadata_name = profile.metadata_name();
         Self {
-            workspace_root,
-            name: profile.name(),
-            config: profile.metadata_config(),
+            metadata_dir: profile.metadata_dir(),
+            metadata_name,
+            junit: profile
+                .junit()
+                .map(|config| MetadataJunit::new(metadata_name, config)),
+        }
+    }
+
+    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<()> {
+        if let Some(junit) = &mut self.junit {
+            junit.write_event(event)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+struct MetadataJunit<'cfg> {
+    metadata_name: &'cfg str,
+    config: NextestJunitConfig<'cfg>,
+    testsuites: HashMap<&'cfg str, Testsuite>,
+}
+
+impl<'cfg> MetadataJunit<'cfg> {
+    fn new(metadata_name: &'cfg str, config: NextestJunitConfig<'cfg>) -> Self {
+        Self {
+            metadata_name,
+            config,
             testsuites: HashMap::new(),
         }
     }
 
-    pub(crate) fn write_event(&mut self, event: TestEvent<'a>) -> Result<()> {
+    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<()> {
         match event {
             TestEvent::RunStarted { .. } => {}
             TestEvent::TestStarted { .. } => {}
@@ -128,39 +156,31 @@ impl<'a> MetadataReporter<'a> {
                 ..
             } => {
                 // Write out the report to the given file.
-                let mut report = Report::new(self.name);
+                let mut report = Report::new(self.metadata_name);
                 report
                     .set_timestamp(to_datetime(start_time))
                     .set_time(elapsed)
                     .add_testsuites(self.testsuites.drain().map(|(_, testsuite)| testsuite));
 
-                if let Some(junit) = &self.config.junit {
-                    let junit_path: Utf8PathBuf = [
-                        self.workspace_root,
-                        self.config.dir.as_ref(),
-                        junit.as_ref(),
-                    ]
-                    .iter()
-                    .collect();
-                    let junit_dir = junit_path.parent().expect("junit path must have a parent");
-                    std::fs::create_dir_all(junit_dir).with_context(|| {
-                        format!("failed to create junit output directory '{}'", junit_dir)
-                    })?;
+                let junit_path = self.config.path();
+                let junit_dir = junit_path.parent().expect("junit path must have a parent");
+                std::fs::create_dir_all(junit_dir).with_context(|| {
+                    format!("failed to create junit output directory '{}'", junit_dir)
+                })?;
 
-                    let f = File::create(&junit_path).with_context(|| {
-                        format!("failed to open junit file '{}' for writing", junit_path)
-                    })?;
-                    report
-                        .serialize(f)
-                        .with_context(|| format!("failed to serialize junit to {}", junit_path))?;
-                }
+                let f = File::create(junit_path).with_context(|| {
+                    format!("failed to open junit file '{}' for writing", junit_path)
+                })?;
+                report
+                    .serialize(f)
+                    .with_context(|| format!("failed to serialize junit to {}", junit_path))?;
             }
         }
 
         Ok(())
     }
 
-    fn testsuite_for(&mut self, test_instance: TestInstance<'a>) -> &mut Testsuite {
+    fn testsuite_for(&mut self, test_instance: TestInstance<'cfg>) -> &mut Testsuite {
         self.testsuites
             .entry(test_instance.binary_id)
             .or_insert_with(|| Testsuite::new(test_instance.binary_id))

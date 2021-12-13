@@ -43,7 +43,7 @@ impl TestRunnerOpts {
     pub fn build<'list>(
         &self,
         test_list: &'list TestList,
-        profile: NextestProfile<'_>,
+        profile: &NextestProfile<'_>,
         handler: SignalHandler,
     ) -> TestRunner<'list> {
         let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
