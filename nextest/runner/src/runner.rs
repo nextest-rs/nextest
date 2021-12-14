@@ -48,9 +48,11 @@ impl TestRunnerOpts {
     ) -> TestRunner<'list> {
         let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
         let retries = self.retries.unwrap_or_else(|| profile.retries());
+        let slow_timeout = profile.slow_timeout();
         TestRunner {
             // The number of tries = retries + 1.
             tries: retries + 1,
+            slow_timeout,
             test_list,
             run_pool: ThreadPoolBuilder::new()
                 // The main run_pool closure will need its own thread.
@@ -71,6 +73,7 @@ impl TestRunnerOpts {
 /// Context for running tests.
 pub struct TestRunner<'list> {
     tries: usize,
+    slow_timeout: Duration,
     test_list: &'list TestList,
     run_pool: ThreadPool,
     wait_pool: ThreadPool,
@@ -330,8 +333,9 @@ impl<'list> TestRunner<'list> {
                 let _ = sender.send(());
             });
 
-            // Continue waiting for the test to finish with a timeout, logging every 60 seconds
-            while let Err(error) = receiver.recv_timeout(Duration::from_secs(60)) {
+            // Continue waiting for the test to finish with a timeout, logging at slow-timeout
+            // intervals
+            while let Err(error) = receiver.recv_timeout(self.slow_timeout) {
                 match error {
                     RecvTimeoutError::Timeout => {
                         let _ = run_sender.send(InternalTestEvent::Slow {

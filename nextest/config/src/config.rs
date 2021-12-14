@@ -5,7 +5,7 @@ use crate::errors::{ConfigReadError, ProfileNotFound};
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
-use std::{collections::HashMap, fmt, marker::PhantomData};
+use std::{collections::HashMap, fmt, marker::PhantomData, time::Duration};
 
 /// Configuration for nextest.
 #[derive(Clone, Debug)]
@@ -156,6 +156,14 @@ impl<'cfg> NextestProfile<'cfg> {
             .unwrap_or(self.default_profile.retries)
     }
 
+    /// Returns the time after which tests are treated as slow for this profile.
+    pub fn slow_timeout(&self) -> Duration {
+        self.custom_profile
+            .map(|profile| profile.slow_timeout)
+            .flatten()
+            .unwrap_or(self.default_profile.slow_timeout)
+    }
+
     /// Returns the failure output config for this profile.
     pub fn failure_output(&self) -> FailureOutput {
         self.custom_profile
@@ -286,6 +294,8 @@ impl NextestProfilesImpl {
 struct DefaultProfileImpl {
     retries: usize,
     failure_output: FailureOutput,
+    #[serde(with = "humantime_serde")]
+    slow_timeout: Duration,
     junit: JunitImpl,
 }
 
@@ -294,6 +304,8 @@ struct DefaultProfileImpl {
 struct CustomProfileImpl {
     retries: Option<usize>,
     failure_output: Option<FailureOutput>,
+    #[serde(with = "humantime_serde")]
+    slow_timeout: Option<Duration>,
     junit: JunitImpl,
 }
 

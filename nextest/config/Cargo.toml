@@ -9,4 +9,5 @@ edition = "2021"
 camino = { version = "1.0.5", features = ["serde1"] }
 config = { version = "0.11.0", default-features = false, features = ["toml"] }
 serde = { version = "1.0.130", features = ["derive"] }
+humantime-serde = "1.0.1"
 toml = "0.5.8"
