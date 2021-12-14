@@ -8,7 +8,7 @@
 //! an aim to minimize total build and test times.
 
 use crate::test_list::TestBinary;
-use anyhow::{anyhow, bail, Context};
+use color_eyre::eyre::{bail, eyre, Report, Result, WrapErr};
 use std::{
     fmt,
     hash::{Hash, Hasher},
@@ -68,11 +68,11 @@ impl PartitionerBuilder {
     // Helper methods
     // ---
 
-    fn parse_impl(s: &str) -> anyhow::Result<Self> {
+    fn parse_impl(s: &str) -> Result<Self> {
         // Parse the string: it looks like "hash:<shard>/<total_shards>".
         if let Some(input) = s.strip_prefix("hash:") {
             let (shard, total_shards) =
-                parse_shards(input).context("partition must be in the format \"hash:M/N\"")?;
+                parse_shards(input).wrap_err("partition must be in the format \"hash:M/N\"")?;
 
             Ok(PartitionerBuilder::Hash {
                 shard,
@@ -80,7 +80,7 @@ impl PartitionerBuilder {
             })
         } else if let Some(input) = s.strip_prefix("count:") {
             let (shard, total_shards) =
-                parse_shards(input).context("partition must be in the format \"count:M/N\"")?;
+                parse_shards(input).wrap_err("partition must be in the format \"count:M/N\"")?;
 
             Ok(PartitionerBuilder::Count {
                 shard,
@@ -97,7 +97,7 @@ impl PartitionerBuilder {
 
 /// An error that occurs while parsing a `PartitionerBuilder` input.
 #[derive(Debug)]
-pub struct ParseError(anyhow::Error);
+pub struct ParseError(Report);
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -125,22 +125,22 @@ impl FromStr for PartitionerBuilder {
     }
 }
 
-fn parse_shards(input: &str) -> anyhow::Result<(u64, u64)> {
+fn parse_shards(input: &str) -> Result<(u64, u64)> {
     let mut split = input.splitn(2, '/');
     // First "next" always returns a value.
     let shard_str = split.next().expect("split should have at least 1 element");
     // Second "next" may or may not return a value.
     let total_shards_str = split
         .next()
-        .ok_or_else(|| anyhow!("expected input '{}' to be in the format M/N", input))?;
+        .ok_or_else(|| eyre!("expected input '{}' to be in the format M/N", input))?;
 
     let shard: u64 = shard_str
         .parse()
-        .with_context(|| format!("failed to parse shard '{}' as u64", shard_str))?;
+        .wrap_err_with(|| format!("failed to parse shard '{}' as u64", shard_str))?;
 
     let total_shards: u64 = total_shards_str
         .parse()
-        .with_context(|| format!("failed to parse total_shards '{}' as u64", total_shards_str))?;
+        .wrap_err_with(|| format!("failed to parse total_shards '{}' as u64", total_shards_str))?;
 
     // Check that shard > 0 and <= total_shards.
     if !(1..=total_shards).contains(&shard) {

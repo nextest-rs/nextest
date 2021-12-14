@@ -3,9 +3,9 @@
 
 //! Basic tests for the test runner.
 
-use anyhow::Result;
 use camino::Utf8Path;
 use cargo_metadata::Message;
+use color_eyre::eyre::Result;
 use duct::cmd;
 use maplit::btreemap;
 use nextest_config::NextestConfig;

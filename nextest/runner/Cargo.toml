@@ -7,10 +7,10 @@ edition = "2021"
 
 [dependencies]
 aho-corasick = "0.7.18"
-anyhow = "1.0.44"
 atty = "0.2.14"
 camino = { version = "1.0.5", features = ["serde1"] }
 chrono = "0.4.19"
+color-eyre = "0.5.11"
 crossbeam-channel = "0.5.1"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 duct = "0.13.5"

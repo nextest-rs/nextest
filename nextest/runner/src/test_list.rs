@@ -6,8 +6,8 @@ use crate::{
     reporter::Color,
     test_filter::{FilterMatch, TestFilterBuilder},
 };
-use anyhow::{anyhow, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use color_eyre::eyre::{eyre, Result, WrapErr};
 use duct::cmd;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
@@ -171,13 +171,13 @@ impl TestList {
         let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
         let mut buffer = stdout.buffer();
         self.write(output_format, &mut buffer)?;
-        stdout.print(&buffer).context("error writing output")
+        stdout.print(&buffer).wrap_err("error writing output")
     }
 
     /// Outputs this list to the given writer.
     pub fn write(&self, output_format: OutputFormat, writer: impl WriteColor) -> Result<()> {
         match output_format {
-            OutputFormat::Plain => self.write_plain(writer).context("error writing test list"),
+            OutputFormat::Plain => self.write_plain(writer).wrap_err("error writing test list"),
             OutputFormat::Serializable(format) => format.to_writer(self, writer),
         }
     }
@@ -280,7 +280,7 @@ impl TestList {
 
         list_output.lines().map(move |line| {
             line.strip_suffix(": test").ok_or_else(|| {
-                anyhow!(
+                eyre!(
                     "line '{}' did not end with the string ': test', full output:\n{}",
                     line,
                     list_output
@@ -349,7 +349,7 @@ impl TestBinary {
             cmd = cmd.dir(cwd);
         };
 
-        cmd.read().with_context(|| {
+        cmd.read().wrap_err_with(|| {
             format!(
                 "running '{} --list --format --terse{}' failed",
                 self.binary,

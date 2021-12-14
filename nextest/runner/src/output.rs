@@ -4,7 +4,7 @@
 // clippy complains about the Arbitrary impl for OutputFormat
 #![allow(clippy::unit_arg)]
 
-use anyhow::{bail, Context, Result};
+use color_eyre::eyre::{bail, Report, Result, WrapErr};
 use serde::Serialize;
 use std::{fmt, io, str::FromStr};
 
@@ -32,7 +32,7 @@ impl fmt::Display for OutputFormat {
 }
 
 impl FromStr for OutputFormat {
-    type Err = anyhow::Error;
+    type Err = Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let val = match s {
@@ -63,10 +63,10 @@ impl SerializableFormat {
     pub fn to_writer(self, value: &impl Serialize, writer: impl io::Write) -> Result<()> {
         match self {
             SerializableFormat::Json => {
-                serde_json::to_writer(writer, value).context("error serializing to JSON")
+                serde_json::to_writer(writer, value).wrap_err("error serializing to JSON")
             }
             SerializableFormat::JsonPretty => {
-                serde_json::to_writer_pretty(writer, value).context("error serializing to JSON")
+                serde_json::to_writer_pretty(writer, value).wrap_err("error serializing to JSON")
             }
         }
     }

@@ -7,7 +7,7 @@ use crate::{
     test_filter::MismatchReason,
     test_list::{test_bin_spec, test_name_spec, TestInstance, TestList},
 };
-use anyhow::{Context, Result};
+use color_eyre::eyre::{Result, WrapErr};
 use nextest_config::{FailureOutput, NextestProfile};
 use std::{
     fmt, io,
@@ -89,7 +89,7 @@ impl<'a> TestReporter<'a> {
     pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<()> {
         let mut buffer = self.stdout.buffer();
         self.write_event(event, &mut buffer)?;
-        self.stdout.print(&buffer).context("error writing output")
+        self.stdout.print(&buffer).wrap_err("error writing output")
     }
 
     // ---

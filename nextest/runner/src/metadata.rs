@@ -8,9 +8,9 @@ use crate::{
     runner::{RunDescribe, TestRunStatus, TestStatus},
     test_list::TestInstance,
 };
-use anyhow::{Context, Result};
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
+use color_eyre::eyre::{Result, WrapErr};
 use nextest_config::{NextestJunitConfig, NextestProfile};
 use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
 use std::{collections::HashMap, fs::File, time::SystemTime};
@@ -164,16 +164,16 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 let junit_path = self.config.path();
                 let junit_dir = junit_path.parent().expect("junit path must have a parent");
-                std::fs::create_dir_all(junit_dir).with_context(|| {
+                std::fs::create_dir_all(junit_dir).wrap_err_with(|| {
                     format!("failed to create junit output directory '{}'", junit_dir)
                 })?;
 
-                let f = File::create(junit_path).with_context(|| {
+                let f = File::create(junit_path).wrap_err_with(|| {
                     format!("failed to open junit file '{}' for writing", junit_path)
                 })?;
                 report
                     .serialize(f)
-                    .with_context(|| format!("failed to serialize junit to {}", junit_path))?;
+                    .wrap_err_with(|| format!("failed to serialize junit to {}", junit_path))?;
             }
         }
 

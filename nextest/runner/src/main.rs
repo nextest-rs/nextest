@@ -1,10 +1,13 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use color_eyre::Result;
 use nextest_runner::dispatch::Opts;
 use structopt::StructOpt;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
+    color_eyre::install()?;
+
     let opts = Opts::from_args();
     opts.exec()
 }

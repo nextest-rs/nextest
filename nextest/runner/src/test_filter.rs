@@ -6,7 +6,7 @@ use crate::{
     test_list::TestBinary,
 };
 use aho_corasick::AhoCorasick;
-use anyhow::bail;
+use color_eyre::eyre::{bail, Report};
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 
@@ -48,7 +48,7 @@ impl fmt::Display for RunIgnored {
 }
 
 impl FromStr for RunIgnored {
-    type Err = anyhow::Error;
+    type Err = Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let val = match s {

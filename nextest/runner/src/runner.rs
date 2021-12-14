@@ -8,7 +8,7 @@ use crate::{
     test_filter::{FilterMatch, MismatchReason},
     test_list::{TestInstance, TestList},
 };
-use anyhow::Result;
+use color_eyre::eyre::Result;
 use crossbeam_channel::RecvTimeoutError;
 use duct::cmd;
 use nextest_config::NextestProfile;

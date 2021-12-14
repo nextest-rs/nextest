@@ -10,8 +10,8 @@ use crate::{
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{TestBinary, TestList},
 };
-use anyhow::{bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use color_eyre::eyre::{bail, Result, WrapErr};
 use duct::cmd;
 use nextest_config::{errors::ConfigReadError, NextestConfig};
 use structopt::StructOpt;
@@ -130,12 +130,13 @@ impl Opts {
                 let profile =
                     config.profile(profile.as_deref().unwrap_or(NextestConfig::DEFAULT_PROFILE))?;
                 let metadata_dir = profile.metadata_dir();
-                std::fs::create_dir_all(&metadata_dir)
-                    .with_context(|| format!("failed to create metadata dir '{}'", metadata_dir))?;
+                std::fs::create_dir_all(&metadata_dir).wrap_err_with(|| {
+                    format!("failed to create metadata dir '{}'", metadata_dir)
+                })?;
 
                 let test_list = bin_filter.compute()?;
                 let mut reporter = TestReporter::new(&test_list, self.color, &profile);
-                let handler = SignalHandler::new().context("failed to set up Ctrl-C handler")?;
+                let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
                 let runner = runner_opts.build(&test_list, &profile, handler);
                 let run_stats = runner.try_execute(|event| {
                     reporter.report_event(event)
@@ -166,5 +167,5 @@ fn workspace_root() -> Result<Utf8PathBuf> {
         p.pop();
         p
     })
-    .with_context(|| "cargo locate-project failed")
+    .wrap_err_with(|| "cargo locate-project failed")
 }
