@@ -7,6 +7,7 @@ use structopt::StructOpt;
 
 fn main() -> Result<()> {
     color_eyre::install()?;
+    let _ = enable_ansi_support::enable_ansi_support();
 
     let opts = Opts::from_args();
     opts.exec()

@@ -15,6 +15,7 @@ use color_eyre::eyre::{bail, Result, WrapErr};
 use duct::cmd;
 use nextest_config::{errors::ConfigReadError, NextestConfig};
 use structopt::StructOpt;
+use supports_color::Stream;
 
 /// This test runner accepts a Rust test binary and does fancy things with it.
 ///
@@ -115,10 +116,16 @@ impl TestBinFilter {
 impl Opts {
     /// Execute the command.
     pub fn exec(self) -> Result<()> {
+        let stdout = std::io::stdout();
+
         match self.command {
             Command::ListTests { bin_filter, format } => {
-                let test_list = bin_filter.compute()?;
-                test_list.write_to_stdout(self.color, format)?;
+                let mut test_list = bin_filter.compute()?;
+                if self.color.should_colorize(Stream::Stdout) {
+                    test_list.colorize();
+                }
+                let lock = stdout.lock();
+                test_list.write(format, lock)?;
             }
             Command::Run {
                 ref profile,
@@ -135,11 +142,19 @@ impl Opts {
                 })?;
 
                 let test_list = bin_filter.compute()?;
-                let mut reporter = TestReporter::new(&test_list, self.color, &profile);
+
+                let mut reporter = TestReporter::new(&test_list, &profile);
+                if self.color.should_colorize(Stream::Stdout) {
+                    reporter.colorize();
+                }
+
                 let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
                 let runner = runner_opts.build(&test_list, &profile, handler);
                 let run_stats = runner.try_execute(|event| {
-                    reporter.report_event(event)
+                    // TODO: consider turning this into a trait, to initialize and carry the lock
+                    // across callback invocations
+                    let lock = stdout.lock();
+                    reporter.report_event(event, lock)
                     // TODO: no-fail-fast logic
                 })?;
                 if !run_stats.is_success() {

@@ -5,17 +5,19 @@ use crate::{
     metadata::MetadataReporter,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunStatus, TestStatus},
     test_filter::MismatchReason,
-    test_list::{test_bin_spec, test_name_spec, TestInstance, TestList},
+    test_list::{TestInstance, TestList},
 };
-use color_eyre::eyre::{Result, WrapErr};
+use color_eyre::eyre::Result;
+use debug_ignore::DebugIgnore;
 use nextest_config::{FailureOutput, NextestProfile};
+use owo_colors::{OwoColorize, Style};
 use std::{
     fmt, io,
     io::Write,
     time::{Duration, SystemTime},
 };
 use structopt::clap::arg_enum;
-use termcolor::{BufferWriter, ColorChoice, ColorSpec, NoColor, WriteColor};
+use supports_color::Stream;
 
 arg_enum! {
     #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -33,42 +35,32 @@ impl Default for Color {
 }
 
 impl Color {
-    pub(crate) fn color_choice(self, stream: atty::Stream) -> ColorChoice {
-        // https://docs.rs/termcolor/1.1.2/termcolor/index.html#detecting-presence-of-a-terminal
+    pub(crate) fn should_colorize(self, stream: Stream) -> bool {
         match self {
-            Color::Always => ColorChoice::Always,
-            Color::Auto => {
-                if atty::is(stream) {
-                    ColorChoice::Auto
-                } else {
-                    ColorChoice::Never
-                }
-            }
-            Color::Never => ColorChoice::Never,
+            Color::Always => true,
+            Color::Auto => supports_color::on_cached(stream).is_some(),
+            Color::Never => false,
         }
     }
 }
 
 /// Functionality to report test results to stdout and JUnit
 pub struct TestReporter<'a> {
-    stdout: BufferWriter,
-    #[allow(dead_code)]
-    stderr: BufferWriter,
     failure_output: FailureOutput,
     binary_id_width: usize,
+    styles: Box<Styles>,
 
     // TODO: too many concerns mixed up here. Should have a better model, probably in conjunction
     // with factoring out the different reporters below.
-    failing_tests: Vec<(TestInstance<'a>, TestRunStatus)>,
+    failing_tests: DebugIgnore<Vec<(TestInstance<'a>, TestRunStatus)>>,
 
     metadata_reporter: MetadataReporter<'a>,
 }
 
 impl<'a> TestReporter<'a> {
     /// Creates a new instance with the given color choice.
-    pub fn new(test_list: &TestList, color: Color, profile: &'a NextestProfile<'a>) -> Self {
-        let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
-        let stderr = BufferWriter::stderr(color.color_choice(atty::Stream::Stderr));
+    pub fn new(test_list: &TestList, profile: &'a NextestProfile<'a>) -> Self {
+        let styles = Box::new(Styles::default());
         let binary_id_width = test_list
             .iter()
             .map(|(_, info)| info.binary_id.len())
@@ -76,20 +68,21 @@ impl<'a> TestReporter<'a> {
             .unwrap_or_default();
         let metadata_reporter = MetadataReporter::new(profile);
         Self {
-            stdout,
-            stderr,
             failure_output: profile.failure_output(),
-            failing_tests: vec![],
+            failing_tests: DebugIgnore(vec![]),
+            styles,
             binary_id_width,
             metadata_reporter,
         }
     }
 
+    pub fn colorize(&mut self) {
+        self.styles.colorize();
+    }
+
     /// Report a test event.
-    pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<()> {
-        let mut buffer = self.stdout.buffer();
-        self.write_event(event, &mut buffer)?;
-        self.stdout.print(&buffer).wrap_err("error writing output")
+    pub fn report_event(&mut self, event: TestEvent<'a>, writer: impl Write) -> Result<()> {
+        self.write_event(event, writer)
     }
 
     // ---
@@ -97,31 +90,23 @@ impl<'a> TestReporter<'a> {
     // ---
 
     /// Report this test event to the given writer.
-    fn write_event(&mut self, event: TestEvent<'a>, mut writer: impl WriteColor) -> Result<()> {
+    fn write_event(&mut self, event: TestEvent<'a>, mut writer: impl Write) -> Result<()> {
         match &event {
             TestEvent::RunStarted { test_list } => {
-                writer.set_color(&Self::pass_spec())?;
-                write!(writer, "{:>12} ", "Starting")?;
-                writer.reset()?;
+                write!(writer, "{:>12} ", "Starting".style(self.styles.pass))?;
 
-                let count_spec = Self::count_spec();
+                let count_style = self.styles.count;
 
-                writer.set_color(&count_spec)?;
-                write!(writer, "{}", test_list.run_count())?;
-                writer.reset()?;
-                write!(writer, " tests across ")?;
-                writer.set_color(&count_spec)?;
-                write!(writer, "{}", test_list.binary_count())?;
-                writer.reset()?;
-                write!(writer, " binaries")?;
+                write!(
+                    writer,
+                    "{} tests across {} binaries",
+                    test_list.run_count().style(count_style),
+                    test_list.binary_count().style(count_style),
+                )?;
 
                 let skip_count = test_list.skip_count();
                 if skip_count > 0 {
-                    write!(writer, " (")?;
-                    writer.set_color(&count_spec)?;
-                    write!(writer, "{}", skip_count)?;
-                    writer.reset()?;
-                    write!(writer, " skipped)")?;
+                    write!(writer, " ({} skipped)", skip_count.style(count_style))?;
                 }
 
                 writeln!(writer)?;
@@ -133,11 +118,9 @@ impl<'a> TestReporter<'a> {
                 test_instance,
                 run_status,
             } => {
-                writer.set_color(&Self::retry_spec())?;
                 let retry_string =
                     format!("{}/{} RETRY", run_status.attempt, run_status.total_attempts);
-                write!(writer, "{:>12} ", retry_string)?;
-                writer.reset()?;
+                write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
 
                 // Next, print the time taken.
                 self.write_duration(run_status.time_taken, &mut writer)?;
@@ -164,41 +147,38 @@ impl<'a> TestReporter<'a> {
                 // First, print the status.
                 let last_status = match run_statuses.describe() {
                     RunDescribe::Success { run_status } => {
-                        writer.set_color(&Self::pass_spec())?;
-                        write!(writer, "{:>12} ", "PASS")?;
+                        write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
                         run_status
                     }
                     RunDescribe::Flaky { last_status, .. } => {
                         // Use the skip color to also represent a flaky test.
-                        writer.set_color(&Self::skip_spec())?;
                         write!(
                             writer,
                             "{:>12} ",
-                            format!("TRY {} PASS", last_status.attempt)
+                            format!("TRY {} PASS", last_status.attempt).style(self.styles.skip)
                         )?;
                         last_status
                     }
                     RunDescribe::Failure { last_status, .. } => {
-                        writer.set_color(&Self::fail_spec())?;
                         let status_str = match last_status.status {
                             TestStatus::Fail => "FAIL",
                             TestStatus::ExecFail => "XFAIL",
                             TestStatus::Pass => unreachable!("this is a failing test"),
                         };
+
                         if last_status.attempt == 1 {
-                            write!(writer, "{:>12} ", status_str)?;
+                            write!(writer, "{:>12} ", status_str.style(self.styles.fail))?;
                         } else {
                             write!(
                                 writer,
                                 "{:>12} ",
                                 format!("TRY {} {}", last_status.attempt, status_str)
+                                    .style(self.styles.fail)
                             )?;
                         }
                         last_status
                     }
                 };
-
-                writer.reset()?;
 
                 // Next, print the time taken.
                 self.write_duration(last_status.time_taken, &mut writer)?;
@@ -222,9 +202,7 @@ impl<'a> TestReporter<'a> {
                 test_instance,
                 reason: _reason,
             } => {
-                writer.set_color(&Self::skip_spec())?;
-                write!(writer, "{:>12} ", "SKIP")?;
-                writer.reset()?;
+                write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
                 // same spacing [   0.034s]
                 write!(writer, "[         ] ")?;
 
@@ -232,24 +210,19 @@ impl<'a> TestReporter<'a> {
                 writeln!(writer)?;
             }
             TestEvent::RunBeginCancel { running, reason } => {
-                writer.set_color(&Self::fail_spec())?;
-                write!(writer, "{:>12} ", "Canceling")?;
-                writer.reset()?;
-                write!(writer, "due to ")?;
-
-                writer.set_color(&Self::count_spec())?;
-                match reason {
-                    CancelReason::Signal => write!(writer, "signal")?,
+                write!(writer, "{:>12} ", "Canceling".style(self.styles.fail))?;
+                let reason_str = match reason {
+                    CancelReason::Signal => "signal",
                     // TODO: differentiate between control errors (e.g. fail-fast) and report errors
-                    CancelReason::ReportError => write!(writer, "error")?,
-                }
-                writer.reset()?;
-                write!(writer, ", ")?;
+                    CancelReason::ReportError => "error",
+                };
 
-                writer.set_color(&Self::count_spec())?;
-                write!(writer, "{}", running)?;
-                writer.reset()?;
-                writeln!(writer, " tests still running")?;
+                writeln!(
+                    writer,
+                    "due to {}: {} tests still running",
+                    reason_str.style(self.styles.count),
+                    running.style(self.styles.count)
+                )?;
             }
 
             TestEvent::RunFinished {
@@ -266,14 +239,12 @@ impl<'a> TestReporter<'a> {
                         skipped,
                     },
             } => {
-                let summary_spec = if *failed > 0 || *exec_failed > 0 {
-                    Self::fail_spec()
+                let summary_style = if *failed > 0 || *exec_failed > 0 {
+                    self.styles.fail
                 } else {
-                    Self::pass_spec()
+                    self.styles.pass
                 };
-                writer.set_color(&summary_spec)?;
-                write!(writer, "{:>12} ", "Summary")?;
-                writer.reset()?;
+                write!(writer, "{:>12} ", "Summary".style(summary_style))?;
 
                 // Next, print the total time taken.
                 // * > means right-align.
@@ -282,59 +253,54 @@ impl<'a> TestReporter<'a> {
                 // TODO: better time printing mechanism than this
                 write!(writer, "[{:>8.3?}s] ", elapsed.as_secs_f64())?;
 
-                let count_spec = Self::count_spec();
-
-                writer.set_color(&count_spec)?;
-                write!(writer, "{}", final_run_count)?;
+                write!(writer, "{}", final_run_count.style(self.styles.count))?;
                 if final_run_count != initial_run_count {
-                    write!(writer, "/{}", initial_run_count)?;
+                    write!(writer, "/{}", initial_run_count.style(self.styles.count))?;
                 }
-                writer.reset()?;
-                write!(writer, " tests run: ")?;
+                write!(
+                    writer,
+                    " tests run: {} passed",
+                    passed.style(self.styles.pass)
+                )?;
 
-                writer.set_color(&count_spec)?;
-                write!(writer, "{}", passed)?;
-                writer.set_color(&Self::pass_spec())?;
-                write!(writer, " passed")?;
-                writer.reset()?;
                 if *flaky > 0 {
-                    write!(writer, " (")?;
-                    writer.set_color(&count_spec)?;
-                    write!(writer, "{}", flaky)?;
-                    writer.set_color(&Self::skip_spec())?;
-                    write!(writer, " flaky")?;
-                    writer.reset()?;
-                    write!(writer, ")")?;
+                    write!(
+                        writer,
+                        " ({} {})",
+                        flaky.style(self.styles.count),
+                        "flaky".style(self.styles.skip),
+                    )?;
                 }
                 write!(writer, ", ")?;
 
                 if *failed > 0 {
-                    writer.set_color(&count_spec)?;
-                    write!(writer, "{}", failed)?;
-                    writer.set_color(&Self::fail_spec())?;
-                    write!(writer, " failed")?;
-                    writer.reset()?;
-                    write!(writer, ", ")?;
+                    write!(
+                        writer,
+                        "{} {}, ",
+                        failed.style(self.styles.count),
+                        "failed".style(self.styles.fail),
+                    )?;
                 }
 
                 if *exec_failed > 0 {
-                    writer.set_color(&count_spec)?;
-                    write!(writer, "{}", exec_failed)?;
-                    writer.set_color(&Self::fail_spec())?;
-                    write!(writer, " exec failed")?;
-                    writer.reset()?;
-                    write!(writer, ", ")?;
+                    write!(
+                        writer,
+                        "{} {}, ",
+                        exec_failed.style(self.styles.count),
+                        "exec failed".style(self.styles.fail),
+                    )?;
                 }
 
-                writer.set_color(&count_spec)?;
-                write!(writer, "{}", skipped)?;
-                writer.set_color(&Self::skip_spec())?;
-                write!(writer, " skipped")?;
-                writer.reset()?;
+                write!(
+                    writer,
+                    "{} {}",
+                    skipped.style(self.styles.count),
+                    "skipped".style(self.styles.skip),
+                )?;
 
                 writeln!(writer)?;
 
-                for (test_instance, run_status) in &self.failing_tests {
+                for (test_instance, run_status) in &*self.failing_tests {
                     self.write_run_status(test_instance, run_status, false, &mut writer)?;
                 }
             }
@@ -344,20 +310,13 @@ impl<'a> TestReporter<'a> {
         Ok(())
     }
 
-    fn write_instance(
-        &self,
-        instance: TestInstance<'a>,
-        mut writer: impl WriteColor,
-    ) -> io::Result<()> {
-        writer.set_color(&test_bin_spec())?;
+    fn write_instance(&self, instance: TestInstance<'a>, mut writer: impl Write) -> io::Result<()> {
         write!(
             writer,
-            "{:>width$}",
-            instance.binary_id,
+            "{:>width$} ",
+            instance.binary_id.style(self.styles.test_list.test_bin),
             width = self.binary_id_width
         )?;
-        writer.reset()?;
-        write!(writer, "  ")?;
 
         // Now look for the part of the test after the last ::, if any.
         let mut splits = instance.name.rsplitn(2, "::");
@@ -365,14 +324,16 @@ impl<'a> TestReporter<'a> {
         if let Some(rest) = splits.next() {
             write!(writer, "{}::", rest)?;
         }
-        writer.set_color(&test_name_spec())?;
-        write!(writer, "{}", trailing)?;
-        writer.reset()?;
+        write!(
+            writer,
+            "{}",
+            trailing.style(self.styles.test_list.test_name)
+        )?;
 
         Ok(())
     }
 
-    fn write_duration(&self, duration: Duration, mut writer: impl WriteColor) -> io::Result<()> {
+    fn write_duration(&self, duration: Duration, mut writer: impl Write) -> io::Result<()> {
         // * > means right-align.
         // * 8 is the number of characters to pad to.
         // * .3 means print two digits after the decimal point.
@@ -385,93 +346,70 @@ impl<'a> TestReporter<'a> {
         test_instance: &TestInstance<'a>,
         run_status: &TestRunStatus,
         is_retry: bool,
-        mut writer: impl WriteColor,
+        mut writer: impl Write,
     ) -> io::Result<()> {
-        let (header_spec, output_spec) = if is_retry {
-            (Self::retry_spec(), Self::retry_output_spec())
+        let (header_style, _output_style) = if is_retry {
+            (self.styles.retry, self.styles.retry_output)
         } else {
-            (Self::fail_spec(), Self::fail_output_spec())
+            (self.styles.fail, self.styles.fail_output)
         };
 
-        writer.set_color(&header_spec)?;
-        write!(writer, "\n--- ")?;
-        self.write_attempt(run_status, &mut writer)?;
-        write!(writer, " STDOUT: ")?;
-        self.write_instance(*test_instance, NoColor::new(&mut writer))?;
-        writeln!(writer, " ---")?;
+        write!(writer, "\n{}", "--- ".style(header_style))?;
+        self.write_attempt(run_status, header_style, &mut writer)?;
+        write!(writer, "{}", " STDOUT: ".style(header_style))?;
 
-        writer.set_color(&output_spec)?;
-        NoColor::new(&mut writer).write_all(run_status.stdout())?;
+        {
+            let no_color = strip_ansi_escapes::Writer::new(&mut writer);
+            self.write_instance(*test_instance, no_color)?;
+        }
+        writeln!(writer, "{}", " ---".style(header_style))?;
 
-        writer.set_color(&header_spec)?;
-        write!(writer, "--- ")?;
-        self.write_attempt(run_status, &mut writer)?;
-        write!(writer, " STDERR: ")?;
-        self.write_instance(*test_instance, NoColor::new(&mut writer))?;
-        writeln!(writer, " ---")?;
+        {
+            // Strip ANSI escapes from the output in case some test framework doesn't check for
+            // ttys before producing color output.
+            // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
+            // fixed
+            let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
+            no_color.write_all(run_status.stdout())?;
+        }
 
-        writer.set_color(&output_spec)?;
-        NoColor::new(&mut writer).write_all(run_status.stderr())?;
+        write!(writer, "\n{}", "--- ".style(header_style))?;
+        self.write_attempt(run_status, header_style, &mut writer)?;
+        write!(writer, "{}", " STDERR: ".style(header_style))?;
 
-        writer.reset()?;
+        {
+            let no_color = strip_ansi_escapes::Writer::new(&mut writer);
+            self.write_instance(*test_instance, no_color)?;
+        }
+        writeln!(writer, "{}", " ---".style(header_style))?;
+
+        {
+            // Strip ANSI escapes from the output in case some test framework doesn't check for
+            // ttys before producing color output.
+            // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
+            // fixed
+            let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
+            no_color.write_all(run_status.stderr())?;
+        }
+
         writeln!(writer)
     }
 
-    fn write_attempt(&self, run_status: &TestRunStatus, mut writer: impl Write) -> io::Result<()> {
+    fn write_attempt(
+        &self,
+        run_status: &TestRunStatus,
+        style: Style,
+        mut writer: impl Write,
+    ) -> io::Result<()> {
         if run_status.total_attempts > 1 {
-            write!(writer, "TRY {}", run_status.attempt)?;
+            write!(
+                writer,
+                "{} {}",
+                "TRY".style(style),
+                run_status.attempt.style(style)
+            )?;
         }
         Ok(())
-    }
-
-    fn count_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec.set_bold(true);
-        color_spec
-    }
-
-    fn pass_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec
-            .set_fg(Some(termcolor::Color::Green))
-            .set_bold(true);
-        color_spec
-    }
-
-    fn retry_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec
-            .set_fg(Some(termcolor::Color::Magenta))
-            .set_bold(true);
-        color_spec
-    }
-
-    fn fail_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec
-            .set_fg(Some(termcolor::Color::Red))
-            .set_bold(true);
-        color_spec
-    }
-
-    fn retry_output_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec.set_fg(Some(termcolor::Color::Magenta));
-        color_spec
-    }
-
-    fn fail_output_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec.set_fg(Some(termcolor::Color::Red));
-        color_spec
-    }
-
-    fn skip_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec
-            .set_fg(Some(termcolor::Color::Yellow))
-            .set_bold(true);
-        color_spec
     }
 }
 
@@ -562,4 +500,29 @@ pub enum CancelReason {
 
     /// A termination signal was received.
     Signal,
+}
+
+#[derive(Debug, Default)]
+struct Styles {
+    count: Style,
+    pass: Style,
+    retry: Style,
+    fail: Style,
+    retry_output: Style,
+    fail_output: Style,
+    skip: Style,
+    test_list: crate::test_list::Styles,
+}
+
+impl Styles {
+    fn colorize(&mut self) {
+        self.count = Style::new().bold();
+        self.pass = Style::new().green().bold();
+        self.retry = Style::new().magenta().bold();
+        self.fail = Style::new().red().bold();
+        self.retry_output = Style::new().magenta();
+        self.fail_output = Style::new().magenta();
+        self.skip = Style::new().yellow().bold();
+        self.test_list.colorize();
+    }
 }

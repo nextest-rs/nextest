@@ -11,6 +11,7 @@ use crate::{
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
 use color_eyre::eyre::{Result, WrapErr};
+use debug_ignore::DebugIgnore;
 use nextest_config::{NextestJunitConfig, NextestProfile};
 use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
 use std::{collections::HashMap, fs::File, time::SystemTime};
@@ -49,7 +50,7 @@ impl<'cfg> MetadataReporter<'cfg> {
 struct MetadataJunit<'cfg> {
     metadata_name: &'cfg str,
     config: NextestJunitConfig<'cfg>,
-    testsuites: HashMap<&'cfg str, Testsuite>,
+    testsuites: DebugIgnore<HashMap<&'cfg str, Testsuite>>,
 }
 
 impl<'cfg> MetadataJunit<'cfg> {
@@ -57,7 +58,7 @@ impl<'cfg> MetadataJunit<'cfg> {
         Self {
             metadata_name,
             config,
-            testsuites: HashMap::new(),
+            testsuites: DebugIgnore(HashMap::new()),
         }
     }
 

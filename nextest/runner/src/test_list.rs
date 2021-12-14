@@ -3,16 +3,15 @@
 
 use crate::{
     output::OutputFormat,
-    reporter::Color,
     test_filter::{FilterMatch, TestFilterBuilder},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{eyre, Result, WrapErr};
 use duct::cmd;
 use once_cell::sync::OnceCell;
+use owo_colors::{OwoColorize, Style};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, io, path::Path};
-use termcolor::{BufferWriter, ColorSpec, NoColor, WriteColor};
+use std::{collections::BTreeMap, io, io::Write, path::Path};
 
 // TODO: capture ignored and not-ignored tests
 
@@ -41,6 +40,8 @@ pub struct TestList {
     /// Number of tests (including skipped and ignored) across all binaries.
     test_count: usize,
     test_binaries: BTreeMap<Utf8PathBuf, TestBinInfo>,
+    #[serde(skip)]
+    styles: Box<Styles>,
     // Values computed on first access.
     #[serde(skip)]
     skip_count: OnceCell<usize>,
@@ -103,6 +104,7 @@ impl TestList {
         Ok(Self {
             test_binaries,
             test_count,
+            styles: Box::new(Styles::default()),
             skip_count: OnceCell::new(),
         })
     }
@@ -131,8 +133,14 @@ impl TestList {
         Ok(Self {
             test_binaries,
             test_count,
+            styles: Box::new(Styles::default()),
             skip_count: OnceCell::new(),
         })
+    }
+
+    /// Colorizes output.
+    pub fn colorize(&mut self) {
+        self.styles.colorize();
     }
 
     /// Returns the total number of tests across all binaries.
@@ -166,16 +174,8 @@ impl TestList {
         self.test_binaries.get(test_bin.as_ref())
     }
 
-    /// Writes the list to stdout.
-    pub fn write_to_stdout(&self, color: Color, output_format: OutputFormat) -> Result<()> {
-        let stdout = BufferWriter::stdout(color.color_choice(atty::Stream::Stdout));
-        let mut buffer = stdout.buffer();
-        self.write(output_format, &mut buffer)?;
-        stdout.print(&buffer).wrap_err("error writing output")
-    }
-
     /// Outputs this list to the given writer.
-    pub fn write(&self, output_format: OutputFormat, writer: impl WriteColor) -> Result<()> {
+    pub fn write(&self, output_format: OutputFormat, writer: impl Write) -> Result<()> {
         match output_format {
             OutputFormat::Plain => self.write_plain(writer).wrap_err("error writing test list"),
             OutputFormat::Serializable(format) => format.to_writer(self, writer),
@@ -207,9 +207,9 @@ impl TestList {
     /// Outputs this list as a string with the given format.
     pub fn to_string(&self, output_format: OutputFormat) -> Result<String> {
         // Ugh this sucks. String really should have an io::Write impl that errors on non-UTF8 text.
-        let mut buf = NoColor::new(vec![]);
+        let mut buf = Vec::with_capacity(1024);
         self.write(output_format, &mut buf)?;
-        Ok(String::from_utf8(buf.into_inner()).expect("buffer is valid UTF-8"))
+        Ok(String::from_utf8(buf).expect("buffer is valid UTF-8"))
     }
 
     // ---
@@ -289,45 +289,23 @@ impl TestList {
         })
     }
 
-    fn write_plain(&self, mut writer: impl WriteColor) -> io::Result<()> {
-        let test_bin_spec = test_bin_spec();
-        let field_spec = Self::field_spec();
-        let test_name_spec = test_name_spec();
-
+    fn write_plain(&self, mut writer: impl Write) -> io::Result<()> {
         for (test_bin, info) in &self.test_binaries {
-            writer.set_color(&test_bin_spec)?;
-            write!(writer, "{}", test_bin)?;
-            writer.reset()?;
-            writeln!(writer, ":")?;
+            writeln!(writer, "{}:", test_bin.style(self.styles.test_bin))?;
 
             if let Some(cwd) = &info.cwd {
-                writer.set_color(&field_spec)?;
-                write!(writer, "  cwd: ")?;
-                writer.reset()?;
-                writeln!(writer, "{}", cwd)?;
+                writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), cwd)?;
             }
 
             for (name, info) in &info.tests {
-                writer.set_color(&test_name_spec)?;
-                write!(writer, "    {}", name)?;
-                writer.reset()?;
-
+                write!(writer, "    {}", name.style(self.styles.test_name))?;
                 if !info.filter_match.is_match() {
                     write!(writer, " (skipped)")?;
                 }
                 writeln!(writer)?;
             }
-            writer.reset()?;
         }
         Ok(())
-    }
-
-    fn field_spec() -> ColorSpec {
-        let mut color_spec = ColorSpec::new();
-        color_spec
-            .set_fg(Some(termcolor::Color::Yellow))
-            .set_bold(true);
-        color_spec
     }
 }
 
@@ -398,20 +376,19 @@ impl<'a> TestInstance<'a> {
     }
 }
 
-pub(super) fn test_bin_spec() -> ColorSpec {
-    let mut color_spec = ColorSpec::new();
-    color_spec
-        .set_fg(Some(termcolor::Color::Magenta))
-        .set_bold(true);
-    color_spec
+#[derive(Clone, Debug, Default)]
+pub(super) struct Styles {
+    pub(super) test_bin: Style,
+    pub(super) test_name: Style,
+    field: Style,
 }
 
-pub(super) fn test_name_spec() -> ColorSpec {
-    let mut color_spec = ColorSpec::new();
-    color_spec
-        .set_fg(Some(termcolor::Color::Blue))
-        .set_bold(true);
-    color_spec
+impl Styles {
+    pub(super) fn colorize(&mut self) {
+        self.test_bin = Style::new().magenta().bold();
+        self.test_name = Style::new().blue().bold();
+        self.field = Style::new().yellow().bold();
+    }
 }
 
 #[cfg(test)]
