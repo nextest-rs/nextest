@@ -2,7 +2,7 @@
 name = "nextest-tests"
 version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
-edition = "2018"
+edition = "2021"
 
 # Make this crate its own workspace.
 [workspace]

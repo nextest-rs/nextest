@@ -3,7 +3,7 @@ name = "quick-junit"
 version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
 license = "Apache-2.0 OR MIT"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 chrono = "0.4.19"
