@@ -114,6 +114,15 @@ impl<'a> TestReporter<'a> {
             TestEvent::TestStarted { .. } => {
                 // TODO
             }
+            TestEvent::TestSlow {
+                test_instance,
+                elapsed,
+            } => {
+                write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
+                self.write_slow_duration(*elapsed, &mut writer)?;
+                self.write_instance(*test_instance, &mut writer)?;
+                writeln!(writer)?;
+            }
             TestEvent::TestRetry {
                 test_instance,
                 run_status,
@@ -336,9 +345,18 @@ impl<'a> TestReporter<'a> {
     fn write_duration(&self, duration: Duration, mut writer: impl Write) -> io::Result<()> {
         // * > means right-align.
         // * 8 is the number of characters to pad to.
-        // * .3 means print two digits after the decimal point.
+        // * .3 means print three digits after the decimal point.
         // TODO: better time printing mechanism than this
         write!(writer, "[{:>8.3?}s] ", duration.as_secs_f64())
+    }
+
+    fn write_slow_duration(&self, duration: Duration, mut writer: impl Write) -> io::Result<()> {
+        // Inside the curly braces:
+        // * > means right-align.
+        // * 7 is the number of characters to pad to.
+        // * .3 means print three digits after the decimal point.
+        // TODO: better time printing mechanism than this
+        write!(writer, "[>{:>7.3?}s] ", duration.as_secs_f64())
     }
 
     fn write_run_status(
@@ -439,6 +457,15 @@ pub enum TestEvent<'a> {
     TestStarted {
         /// The test instance that was started.
         test_instance: TestInstance<'a>,
+    },
+
+    /// A test was slower than a configured soft timeout.
+    TestSlow {
+        /// The test instance that was slow.
+        test_instance: TestInstance<'a>,
+
+        /// The amount of time that has elapsed since the beginning of the test.
+        elapsed: Duration,
     },
 
     /// A test failed and is being retried.

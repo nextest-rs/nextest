@@ -9,7 +9,7 @@ use crate::{
     test_list::{TestInstance, TestList},
 };
 use color_eyre::eyre::Result;
-use crossbeam_channel::RecvTimeoutError;
+use crossbeam_channel::{RecvTimeoutError, Sender};
 use duct::cmd;
 use nextest_config::NextestProfile;
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -21,7 +21,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, SystemTime},
 };
 use structopt::StructOpt;
 
@@ -161,7 +161,7 @@ impl<'list> TestRunner<'list> {
                         let attempt = run_statuses.len() + 1;
 
                         let run_status = self
-                            .run_test(test_instance, attempt)
+                            .run_test(test_instance, attempt, &this_run_sender)
                             .into_external(attempt, self.tries);
 
                         if run_status.status.is_success() {
@@ -273,10 +273,15 @@ impl<'list> TestRunner<'list> {
     // ---
 
     /// Run an individual test in its own process.
-    fn run_test(&self, test: TestInstance<'list>, attempt: usize) -> InternalRunStatus {
+    fn run_test(
+        &self,
+        test: TestInstance<'list>,
+        attempt: usize,
+        run_sender: &Sender<InternalTestEvent<'list>>,
+    ) -> InternalRunStatus {
         let stopwatch = StopwatchStart::now();
 
-        match self.run_test_inner(test, attempt, &stopwatch) {
+        match self.run_test_inner(test, attempt, &stopwatch, run_sender) {
             Ok(run_status) => run_status,
             Err(_) => InternalRunStatus {
                 // TODO: can we return more information in stdout/stderr? investigate this
@@ -293,6 +298,7 @@ impl<'list> TestRunner<'list> {
         test: TestInstance<'list>,
         attempt: usize,
         stopwatch: &StopwatchStart,
+        run_sender: &Sender<InternalTestEvent<'list>>,
     ) -> Result<InternalRunStatus> {
         let mut args = vec!["--exact", test.name, "--nocapture"];
         if test.info.ignored {
@@ -312,8 +318,6 @@ impl<'list> TestRunner<'list> {
 
         let handle = cmd.start()?;
 
-        let now = Instant::now();
-
         self.wait_pool.in_place_scope(|s| {
             let (sender, receiver) = crossbeam_channel::bounded::<()>(1);
             let wait_handle = &handle;
@@ -330,12 +334,10 @@ impl<'list> TestRunner<'list> {
             while let Err(error) = receiver.recv_timeout(Duration::from_secs(60)) {
                 match error {
                     RecvTimeoutError::Timeout => {
-                        println!(
-                            "{}::{} elapsed time is {}",
-                            &test.binary,
-                            &test.name,
-                            now.elapsed().as_secs()
-                        );
+                        let _ = run_sender.send(InternalTestEvent::Slow {
+                            test_instance: test,
+                            elapsed: stopwatch.elapsed(),
+                        });
                     }
                     RecvTimeoutError::Disconnected => {
                         unreachable!("Waiting thread should never drop the sender")
@@ -595,6 +597,14 @@ where
                 (self.callback)(TestEvent::TestStarted { test_instance })
                     .map_err(InternalError::Error)
             }
+            InternalEvent::Test(InternalTestEvent::Slow {
+                test_instance,
+                elapsed,
+            }) => (self.callback)(TestEvent::TestSlow {
+                test_instance,
+                elapsed,
+            })
+            .map_err(InternalError::Error),
             InternalEvent::Test(InternalTestEvent::Retry {
                 test_instance,
                 run_status,
@@ -675,6 +685,10 @@ enum InternalEvent<'list> {
 enum InternalTestEvent<'list> {
     Started {
         test_instance: TestInstance<'list>,
+    },
+    Slow {
+        test_instance: TestInstance<'list>,
+        elapsed: Duration,
     },
     Retry {
         test_instance: TestInstance<'list>,
