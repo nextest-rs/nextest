@@ -9,7 +9,8 @@ edition = "2021"
 aho-corasick = "0.7.18"
 camino = { version = "1.0.5", features = ["serde1"] }
 chrono = "0.4.19"
-color-eyre = "0.5.11"
+# we don't use the tracing support
+color-eyre = { version = "0.5.11", default-features = false }
 crossbeam-channel = "0.5.1"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 debug-ignore = "1.0.1"
