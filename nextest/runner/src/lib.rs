@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod cargo_cli;
-mod cargo_message;
 pub mod dispatch;
 mod metadata;
 mod output;
