@@ -58,7 +58,7 @@ pub struct TestReporter<'a> {
 }
 
 impl<'a> TestReporter<'a> {
-    /// Creates a new instance with the given color choice.
+    /// Creates a new instance with the given profile.
     pub fn new(test_list: &TestList, profile: &'a NextestProfile<'a>) -> Self {
         let styles = Box::new(Styles::default());
         let binary_id_width = test_list
