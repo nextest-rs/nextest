@@ -143,6 +143,7 @@ impl Opts {
                 if output.color.should_colorize(Stream::Stdout) {
                     test_list.colorize();
                 }
+                let stdout = std::io::stdout();
                 let lock = stdout.lock();
                 test_list.write(format, lock)?;
             }
@@ -163,16 +164,17 @@ impl Opts {
                 let test_list = build_filter.compute(&graph, output)?;
 
                 let mut reporter = TestReporter::new(&test_list, &profile, reporter_opts);
-                if output.color.should_colorize(Stream::Stdout) {
+                if output.color.should_colorize(Stream::Stderr) {
                     reporter.colorize();
                 }
 
                 let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
                 let runner = runner_opts.build(&test_list, &profile, handler);
+                let stderr = std::io::stderr();
                 let run_stats = runner.try_execute(|event| {
                     // TODO: consider turning this into a trait, to initialize and carry the lock
                     // across callback invocations
-                    let lock = stdout.lock();
+                    let lock = stderr.lock();
                     reporter.report_event(event, lock)
                     // TODO: no-fail-fast logic
                 })?;

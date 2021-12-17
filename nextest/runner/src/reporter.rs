@@ -29,7 +29,7 @@ pub struct ReporterOpts {
     status_level: Option<StatusLevel>,
 }
 
-/// Functionality to report test results to stdout and JUnit
+/// Functionality to report test results to stderr and JUnit
 pub struct TestReporter<'a> {
     status_level: StatusLevel,
     failure_output: FailureOutput,

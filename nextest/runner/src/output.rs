@@ -53,7 +53,6 @@ impl Color {
 
     pub(crate) fn should_colorize(self, stream: Stream) -> bool {
         match self {
-            // Currently, all output from cargo-hakari goes to stderr.
             Color::Auto => supports_color::on_cached(stream).is_some(),
             Color::Always => true,
             Color::Never => false,
