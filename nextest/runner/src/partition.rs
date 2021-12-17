@@ -7,8 +7,7 @@
 //! be made smarter: e.g. using data to pick different sets of binaries and tests to run, with
 //! an aim to minimize total build and test times.
 
-use crate::test_list::TestBinary;
-use color_eyre::eyre::{bail, eyre, Report, Result, WrapErr};
+use crate::{errors::PartitionerBuilderParseError, test_list::TestBinary};
 use std::{
     fmt,
     hash::{Hash, Hasher},
@@ -63,92 +62,80 @@ impl PartitionerBuilder {
             } => Box::new(HashPartitioner::new(*shard, *total_shards)),
         }
     }
+}
 
-    // ---
-    // Helper methods
-    // ---
+impl FromStr for PartitionerBuilder {
+    type Err = PartitionerBuilderParseError;
 
-    fn parse_impl(s: &str) -> Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Parse the string: it looks like "hash:<shard>/<total_shards>".
         if let Some(input) = s.strip_prefix("hash:") {
-            let (shard, total_shards) =
-                parse_shards(input).wrap_err("partition must be in the format \"hash:M/N\"")?;
+            let (shard, total_shards) = parse_shards(input, "hash:M/N")?;
 
             Ok(PartitionerBuilder::Hash {
                 shard,
                 total_shards,
             })
         } else if let Some(input) = s.strip_prefix("count:") {
-            let (shard, total_shards) =
-                parse_shards(input).wrap_err("partition must be in the format \"count:M/N\"")?;
+            let (shard, total_shards) = parse_shards(input, "count:M/N")?;
 
             Ok(PartitionerBuilder::Count {
                 shard,
                 total_shards,
             })
         } else {
-            bail!(
-                "partition input '{}' must begin with \"hash:\" or \"count:\"",
-                s
-            )
+            Err(PartitionerBuilderParseError::new(
+                None,
+                format!(
+                    "partition input '{}' must begin with \"hash:\" or \"count:\"",
+                    s
+                ),
+            ))
         }
     }
 }
 
-/// An error that occurs while parsing a `PartitionerBuilder` input.
-#[derive(Debug)]
-pub struct ParseError(Report);
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let chain = self.0.chain();
-        let len = chain.len();
-        for (i, err) in chain.enumerate() {
-            if i == 0 {
-                writeln!(f, "{}", err)?;
-            } else if i < len - 1 {
-                writeln!(f, "({})", err)?;
-            } else {
-                // Skip the last newline since that's what looks best with structopt.
-                write!(f, "({})", err)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl FromStr for PartitionerBuilder {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::parse_impl(s).map_err(ParseError)
-    }
-}
-
-fn parse_shards(input: &str) -> Result<(u64, u64)> {
+fn parse_shards(
+    input: &str,
+    expected_format: &'static str,
+) -> Result<(u64, u64), PartitionerBuilderParseError> {
     let mut split = input.splitn(2, '/');
     // First "next" always returns a value.
     let shard_str = split.next().expect("split should have at least 1 element");
     // Second "next" may or may not return a value.
-    let total_shards_str = split
-        .next()
-        .ok_or_else(|| eyre!("expected input '{}' to be in the format M/N", input))?;
+    let total_shards_str = split.next().ok_or_else(|| {
+        PartitionerBuilderParseError::new(
+            Some(expected_format),
+            format!("expected input '{}' to be in the format M/N", input),
+        )
+    })?;
 
-    let shard: u64 = shard_str
-        .parse()
-        .wrap_err_with(|| format!("failed to parse shard '{}' as u64", shard_str))?;
+    let shard: u64 = shard_str.parse().map_err(|err| {
+        PartitionerBuilderParseError::new(
+            Some(expected_format),
+            format!("failed to parse shard '{}' as u64: {}", shard_str, err),
+        )
+    })?;
 
-    let total_shards: u64 = total_shards_str
-        .parse()
-        .wrap_err_with(|| format!("failed to parse total_shards '{}' as u64", total_shards_str))?;
+    let total_shards: u64 = total_shards_str.parse().map_err(|err| {
+        PartitionerBuilderParseError::new(
+            Some(expected_format),
+            format!(
+                "failed to parse total_shards '{}' as u64: {}",
+                total_shards_str, err
+            ),
+        )
+    })?;
 
     // Check that shard > 0 and <= total_shards.
     if !(1..=total_shards).contains(&shard) {
-        bail!(
-            "shard {} must be a number between 1 and total shards {}, inclusive",
-            shard,
-            total_shards
-        );
+        return Err(PartitionerBuilderParseError::new(
+            Some(expected_format),
+            format!(
+                "shard {} must be a number between 1 and total shards {}, inclusive",
+                shard, total_shards
+            ),
+        ));
     }
 
     Ok((shard, total_shards))

@@ -4,13 +4,13 @@
 //! Metadata management.
 
 use crate::{
+    errors::WriteEventError,
     reporter::TestEvent,
     runner::{RunDescribe, TestRunStatus, TestStatus},
     test_list::TestInstance,
 };
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
-use color_eyre::eyre::{Result, WrapErr};
 use debug_ignore::DebugIgnore;
 use nextest_config::{NextestJunitConfig, NextestProfile};
 use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
@@ -38,7 +38,7 @@ impl<'cfg> MetadataReporter<'cfg> {
         }
     }
 
-    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<()> {
+    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
         if let Some(junit) = &mut self.junit {
             junit.write_event(event)?;
         }
@@ -62,7 +62,7 @@ impl<'cfg> MetadataJunit<'cfg> {
         }
     }
 
-    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<()> {
+    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
         match event {
             TestEvent::RunStarted { .. } => {}
             TestEvent::TestStarted { .. } => {}
@@ -166,16 +166,21 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 let junit_path = self.config.path();
                 let junit_dir = junit_path.parent().expect("junit path must have a parent");
-                std::fs::create_dir_all(junit_dir).wrap_err_with(|| {
-                    format!("failed to create junit output directory '{}'", junit_dir)
+                std::fs::create_dir_all(junit_dir).map_err(|error| WriteEventError::Fs {
+                    file: junit_dir.to_path_buf(),
+                    error,
                 })?;
 
-                let f = File::create(junit_path).wrap_err_with(|| {
-                    format!("failed to open junit file '{}' for writing", junit_path)
+                let f = File::create(junit_path).map_err(|error| WriteEventError::Fs {
+                    file: junit_path.to_path_buf(),
+                    error,
                 })?;
                 report
                     .serialize(f)
-                    .wrap_err_with(|| format!("failed to serialize junit to {}", junit_path))?;
+                    .map_err(|error| WriteEventError::Junit {
+                        file: junit_path.to_path_buf(),
+                        error,
+                    })?;
             }
         }
 

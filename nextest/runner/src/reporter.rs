@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    errors::WriteEventError,
     metadata::MetadataReporter,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunStatus, TestStatus},
     test_filter::MismatchReason,
     test_list::{TestInstance, TestList},
 };
-use color_eyre::eyre::Result;
 use debug_ignore::DebugIgnore;
 use nextest_config::{FailureOutput, NextestProfile, StatusLevel};
 use owo_colors::{OwoColorize, Style};
@@ -70,7 +70,11 @@ impl<'a> TestReporter<'a> {
     }
 
     /// Report a test event.
-    pub fn report_event(&mut self, event: TestEvent<'a>, writer: impl Write) -> Result<()> {
+    pub fn report_event(
+        &mut self,
+        event: TestEvent<'a>,
+        writer: impl Write,
+    ) -> Result<(), WriteEventError> {
         self.write_event(event, writer)
     }
 
@@ -79,8 +83,23 @@ impl<'a> TestReporter<'a> {
     // ---
 
     /// Report this test event to the given writer.
-    fn write_event(&mut self, event: TestEvent<'a>, mut writer: impl Write) -> Result<()> {
-        match &event {
+    fn write_event(
+        &mut self,
+        event: TestEvent<'a>,
+        writer: impl Write,
+    ) -> Result<(), WriteEventError> {
+        self.write_event_impl(&event, writer)
+            .map_err(WriteEventError::Io)?;
+        self.metadata_reporter.write_event(event)?;
+        Ok(())
+    }
+
+    fn write_event_impl(
+        &mut self,
+        event: &TestEvent<'a>,
+        mut writer: impl Write,
+    ) -> io::Result<()> {
+        match event {
             TestEvent::RunStarted { test_list } => {
                 write!(writer, "{:>12} ", "Starting".style(self.styles.pass))?;
 
@@ -316,7 +335,6 @@ impl<'a> TestReporter<'a> {
             }
         }
 
-        self.metadata_reporter.write_event(event)?;
         Ok(())
     }
 

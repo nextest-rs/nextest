@@ -8,5 +8,5 @@ mod serialize;
 
 pub use report::*;
 
-// Re-export `quick_xml::Result` so it can be used by downstream consumers.
-pub use quick_xml::Result;
+// Re-export `quick_xml::Error` and `Result` so it can be used by downstream consumers.
+pub use quick_xml::{Error, Result};

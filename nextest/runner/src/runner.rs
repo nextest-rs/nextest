@@ -8,7 +8,6 @@ use crate::{
     test_filter::{FilterMatch, MismatchReason},
     test_list::{TestInstance, TestList},
 };
-use color_eyre::eyre::Result;
 use crossbeam_channel::{RecvTimeoutError, Sender};
 use duct::cmd;
 use nextest_config::{NextestProfile, StatusLevel};
@@ -302,7 +301,7 @@ impl<'list> TestRunner<'list> {
         attempt: usize,
         stopwatch: &StopwatchStart,
         run_sender: &Sender<InternalTestEvent<'list>>,
-    ) -> Result<InternalRunStatus> {
+    ) -> std::io::Result<InternalRunStatus> {
         let mut args = vec!["--exact", test.name, "--nocapture"];
         if test.info.ignored {
             args.push("--ignored");

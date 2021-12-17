@@ -119,6 +119,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-nextest"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "cfg-if",
+ "color-eyre",
+ "duct",
+ "enable-ansi-support",
+ "guppy",
+ "nextest-config",
+ "nextest-runner",
+ "owo-colors 3.1.1",
+ "structopt",
+ "supports-color",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -586,7 +603,6 @@ dependencies = [
  "ctrlc",
  "debug-ignore",
  "duct",
- "enable-ansi-support",
  "guppy",
  "indoc",
  "maplit",
@@ -603,7 +619,6 @@ dependencies = [
  "serde_json",
  "strip-ansi-escapes",
  "structopt",
- "supports-color",
  "twox-hash",
 ]
 

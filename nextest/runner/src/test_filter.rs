@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    errors::RunIgnoredParseError,
     partition::{Partitioner, PartitionerBuilder},
     test_list::TestBinary,
 };
 use aho_corasick::AhoCorasick;
-use color_eyre::eyre::{bail, Report};
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 
@@ -26,8 +26,8 @@ pub enum RunIgnored {
 }
 
 impl RunIgnored {
-    pub fn variants() -> [&'static str; 3] {
-        ["default", "ignored-only", "all"]
+    pub fn variants() -> &'static [&'static str] {
+        &["default", "ignored-only", "all"]
     }
 }
 
@@ -48,14 +48,14 @@ impl fmt::Display for RunIgnored {
 }
 
 impl FromStr for RunIgnored {
-    type Err = Report;
+    type Err = RunIgnoredParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let val = match s {
             "default" => RunIgnored::Default,
             "ignored-only" => RunIgnored::IgnoredOnly,
             "all" => RunIgnored::All,
-            other => bail!("unrecognized value for run-ignored: {}", other),
+            other => return Err(RunIgnoredParseError::new(other)),
         };
         Ok(val)
     }

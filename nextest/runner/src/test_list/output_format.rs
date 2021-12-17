@@ -4,7 +4,7 @@
 // clippy complains about the Arbitrary impl for OutputFormat
 #![allow(clippy::unit_arg)]
 
-use color_eyre::eyre::{bail, Report, Result, WrapErr};
+use crate::errors::OutputFormatParseError;
 use serde::Serialize;
 use std::{fmt, io, str::FromStr};
 
@@ -16,8 +16,8 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
-    pub fn variants() -> [&'static str; 3] {
-        ["plain", "json", "json-pretty"]
+    pub fn variants() -> &'static [&'static str] {
+        &["plain", "json", "json-pretty"]
     }
 }
 
@@ -32,14 +32,14 @@ impl fmt::Display for OutputFormat {
 }
 
 impl FromStr for OutputFormat {
-    type Err = Report;
+    type Err = OutputFormatParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let val = match s {
             "plain" => OutputFormat::Plain,
             "json" => OutputFormat::Serializable(SerializableFormat::Json),
             "json-pretty" => OutputFormat::Serializable(SerializableFormat::JsonPretty),
-            other => bail!("unrecognized format: {}", other),
+            other => return Err(OutputFormatParseError::new(other)),
         };
         Ok(val)
     }
@@ -60,14 +60,14 @@ pub enum SerializableFormat {
 
 impl SerializableFormat {
     /// Write this data in the given format to the writer.
-    pub fn to_writer(self, value: &impl Serialize, writer: impl io::Write) -> Result<()> {
+    pub fn to_writer(
+        self,
+        value: &impl Serialize,
+        writer: impl io::Write,
+    ) -> serde_json::Result<()> {
         match self {
-            SerializableFormat::Json => {
-                serde_json::to_writer(writer, value).wrap_err("error serializing to JSON")
-            }
-            SerializableFormat::JsonPretty => {
-                serde_json::to_writer_pretty(writer, value).wrap_err("error serializing to JSON")
-            }
+            SerializableFormat::Json => serde_json::to_writer(writer, value),
+            SerializableFormat::JsonPretty => serde_json::to_writer_pretty(writer, value),
         }
     }
 }
@@ -79,7 +79,7 @@ mod test {
 
     #[test]
     fn output_format_variants() {
-        for &variant in &OutputFormat::variants() {
+        for &variant in OutputFormat::variants() {
             variant.parse::<OutputFormat>().expect("variant is valid");
         }
     }

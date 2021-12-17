@@ -4,6 +4,12 @@
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, OutputOpts},
+};
+use camino::{Utf8Path, Utf8PathBuf};
+use color_eyre::eyre::{bail, Result, WrapErr};
+use guppy::{graph::PackageGraph, MetadataCommand};
+use nextest_config::{errors::ConfigReadError, NextestConfig};
+use nextest_runner::{
     partition::PartitionerBuilder,
     reporter::{ReporterOpts, TestReporter},
     runner::TestRunnerOpts,
@@ -11,10 +17,6 @@ use crate::{
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{OutputFormat, TestBinary, TestList},
 };
-use camino::{Utf8Path, Utf8PathBuf};
-use color_eyre::eyre::{bail, Result, WrapErr};
-use guppy::{graph::PackageGraph, MetadataCommand};
-use nextest_config::{errors::ConfigReadError, NextestConfig};
 use std::io::Cursor;
 use structopt::StructOpt;
 use supports_color::Stream;
@@ -58,7 +60,7 @@ pub enum Command {
     /// List tests in binary
     ListTests {
         /// Output format
-        #[structopt(short = "T", long, default_value, possible_values = &OutputFormat::variants(), case_insensitive = true)]
+        #[structopt(short = "T", long, default_value, possible_values = OutputFormat::variants(), case_insensitive = true)]
         format: OutputFormat,
 
         #[structopt(flatten)]
@@ -85,7 +87,7 @@ pub struct TestBuildFilter {
     cargo_options: CargoOptions,
 
     /// Run ignored tests
-    #[structopt(long, possible_values = &RunIgnored::variants(), default_value, case_insensitive = true)]
+    #[structopt(long, possible_values = RunIgnored::variants(), default_value, case_insensitive = true)]
     run_ignored: RunIgnored,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
@@ -116,7 +118,7 @@ impl TestBuildFilter {
 
         let test_filter =
             TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
-        TestList::new(test_binaries, &test_filter)
+        TestList::new(test_binaries, &test_filter).wrap_err("error building test list")
     }
 }
 

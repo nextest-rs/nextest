@@ -4,10 +4,12 @@
 mod output_format;
 pub use output_format::*;
 
-use crate::test_filter::{FilterMatch, TestFilterBuilder};
+use crate::{
+    errors::{FromMessagesError, ParseTestListError, WriteTestListError},
+    test_filter::{FilterMatch, TestFilterBuilder},
+};
 use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::Message;
-use color_eyre::eyre::{eyre, Result, WrapErr};
 use duct::cmd;
 use guppy::{graph::PackageGraph, PackageId};
 use once_cell::sync::OnceCell;
@@ -37,11 +39,14 @@ pub struct TestBinary {
 
 impl TestBinary {
     /// Parse Cargo messages from the given `BufRead` and return a list of test binaries.
-    pub fn from_messages(graph: &PackageGraph, reader: impl io::BufRead) -> Result<Vec<Self>> {
+    pub fn from_messages(
+        graph: &PackageGraph,
+        reader: impl io::BufRead,
+    ) -> Result<Vec<Self>, FromMessagesError> {
         let mut binaries = vec![];
 
         for message in Message::parse_stream(reader) {
-            let message = message.wrap_err("failed to read Cargo JSON message")?;
+            let message = message.map_err(FromMessagesError::ReadMessages)?;
             match message {
                 Message::CompilerArtifact(artifact) if artifact.profile.test => {
                     if let Some(binary) = artifact.executable {
@@ -49,7 +54,7 @@ impl TestBinary {
                         let package_id = PackageId::new(artifact.package_id.repr);
                         let package = graph
                             .metadata(&package_id)
-                            .wrap_err("package ID not found in package graph")?;
+                            .map_err(FromMessagesError::PackageGraph)?;
 
                         // Tests are run in the directory containing Cargo.toml
                         let cwd = package
@@ -137,7 +142,7 @@ impl TestList {
     pub fn new(
         test_binaries: impl IntoIterator<Item = TestBinary>,
         filter: &TestFilterBuilder,
-    ) -> Result<Self> {
+    ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
 
         let test_binaries = test_binaries
@@ -153,7 +158,7 @@ impl TestList {
                 test_count += info.tests.len();
                 Ok((bin, info))
             })
-            .collect::<Result<BTreeMap<_, _>>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         Ok(Self {
             test_binaries,
@@ -167,7 +172,7 @@ impl TestList {
     pub fn new_with_outputs(
         test_bin_outputs: impl IntoIterator<Item = (TestBinary, impl AsRef<str>, impl AsRef<str>)>,
         filter: &TestFilterBuilder,
-    ) -> Result<Self> {
+    ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
 
         let test_binaries = test_bin_outputs
@@ -182,7 +187,7 @@ impl TestList {
                 test_count += info.tests.len();
                 Ok((bin, info))
             })
-            .collect::<Result<BTreeMap<_, _>>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         Ok(Self {
             test_binaries,
@@ -229,10 +234,16 @@ impl TestList {
     }
 
     /// Outputs this list to the given writer.
-    pub fn write(&self, output_format: OutputFormat, writer: impl Write) -> Result<()> {
+    pub fn write(
+        &self,
+        output_format: OutputFormat,
+        writer: impl Write,
+    ) -> Result<(), WriteTestListError> {
         match output_format {
-            OutputFormat::Plain => self.write_plain(writer).wrap_err("error writing test list"),
-            OutputFormat::Serializable(format) => format.to_writer(self, writer),
+            OutputFormat::Plain => self.write_plain(writer).map_err(WriteTestListError::Io),
+            OutputFormat::Serializable(format) => format
+                .to_writer(self, writer)
+                .map_err(WriteTestListError::Json),
         }
     }
 
@@ -259,7 +270,7 @@ impl TestList {
     }
 
     /// Outputs this list as a string with the given format.
-    pub fn to_string(&self, output_format: OutputFormat) -> Result<String> {
+    pub fn to_string(&self, output_format: OutputFormat) -> Result<String, WriteTestListError> {
         // Ugh this sucks. String really should have an io::Write impl that errors on non-UTF8 text.
         let mut buf = Vec::with_capacity(1024);
         self.write(output_format, &mut buf)?;
@@ -275,7 +286,7 @@ impl TestList {
         filter: &TestFilterBuilder,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
-    ) -> Result<(Utf8PathBuf, TestBinInfo)> {
+    ) -> Result<(Utf8PathBuf, TestBinInfo), ParseTestListError> {
         let mut tests = BTreeMap::new();
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
@@ -320,13 +331,15 @@ impl TestList {
     }
 
     /// Parses the output of --list --format terse and returns a sorted list.
-    fn parse(list_output: &str) -> Result<Vec<&'_ str>> {
-        let mut list = Self::parse_impl(list_output).collect::<Result<Vec<_>>>()?;
+    fn parse(list_output: &str) -> Result<Vec<&'_ str>, ParseTestListError> {
+        let mut list = Self::parse_impl(list_output).collect::<Result<Vec<_>, _>>()?;
         list.sort_unstable();
         Ok(list)
     }
 
-    fn parse_impl(list_output: &str) -> impl Iterator<Item = Result<&'_ str>> + '_ {
+    fn parse_impl(
+        list_output: &str,
+    ) -> impl Iterator<Item = Result<&'_ str, ParseTestListError>> + '_ {
         // The output is in the form:
         // <test name>: test
         // <test name>: test
@@ -334,10 +347,9 @@ impl TestList {
 
         list_output.lines().map(move |line| {
             line.strip_suffix(": test").ok_or_else(|| {
-                eyre!(
-                    "line '{}' did not end with the string ': test', full output:\n{}",
-                    line,
-                    list_output
+                ParseTestListError::parse_line(
+                    format!("line '{}' did not end with the string ': test'", line),
+                    list_output,
                 )
             })
         })
@@ -365,13 +377,13 @@ impl TestList {
 
 impl TestBinary {
     /// Run this binary with and without --ignored and get the corresponding outputs.
-    fn exec(&self) -> Result<(String, String)> {
+    fn exec(&self) -> Result<(String, String), ParseTestListError> {
         let non_ignored = self.exec_single(false)?;
         let ignored = self.exec_single(true)?;
         Ok((non_ignored, ignored))
     }
 
-    fn exec_single(&self, ignored: bool) -> Result<String> {
+    fn exec_single(&self, ignored: bool) -> Result<String, ParseTestListError> {
         let mut argv = vec!["--list", "--format", "terse"];
         if ignored {
             argv.push("--ignored");
@@ -381,11 +393,14 @@ impl TestBinary {
             cmd = cmd.dir(cwd);
         };
 
-        cmd.read().wrap_err_with(|| {
-            format!(
-                "running '{} --list --format --terse{}' failed",
-                self.binary,
-                if ignored { " --ignored" } else { "" }
+        cmd.read().map_err(|error| {
+            ParseTestListError::command(
+                format!(
+                    "'{} --list --format --terse{}'",
+                    self.binary,
+                    if ignored { " --ignored" } else { "" }
+                ),
+                error,
             )
         })
     }
