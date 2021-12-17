@@ -13,9 +13,9 @@ use nextest_runner::{
     partition::PartitionerBuilder,
     reporter::{ReporterOpts, TestReporter},
     runner::TestRunnerOpts,
-    signal::SignalHandler,
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{OutputFormat, TestBinary, TestList},
+    SignalHandler,
 };
 use std::io::Cursor;
 use structopt::StructOpt;

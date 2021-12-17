@@ -5,7 +5,8 @@ use crossbeam_channel::Receiver;
 
 /// A receiver that generates signals if ctrl-c is pressed.
 ///
-/// A `SignalReceiver` can be passed into [`TestRunnerOpts::build`].
+/// A `SignalHandler` can be passed into
+/// [`TestRunnerOpts::build`](crate::runner::TestRunnerOpts::build).
 #[derive(Debug)]
 pub struct SignalHandler {
     pub(crate) receiver: Receiver<SignalEvent>,

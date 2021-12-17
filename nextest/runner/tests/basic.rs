@@ -12,9 +12,9 @@ use nextest_config::NextestConfig;
 use nextest_runner::{
     reporter::TestEvent,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
-    signal::SignalHandler,
     test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilterBuilder},
     test_list::{TestBinary, TestList},
+    SignalHandler,
 };
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;

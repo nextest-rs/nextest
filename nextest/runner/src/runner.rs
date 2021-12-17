@@ -3,10 +3,10 @@
 
 use crate::{
     reporter::{CancelReason, TestEvent},
-    signal::{SignalEvent, SignalHandler},
     stopwatch::{StopwatchEnd, StopwatchStart},
     test_filter::{FilterMatch, MismatchReason},
     test_list::{TestInstance, TestList},
+    SignalEvent, SignalHandler,
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
 use duct::cmd;
