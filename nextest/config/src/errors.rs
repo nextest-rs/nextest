@@ -1,9 +1,9 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::{FailureOutput, StatusLevel};
 use config::ConfigError;
 use std::{error, fmt};
-use crate::FailureOutput;
 
 /// An error that occurred while reading the config.
 #[derive(Debug)]
@@ -79,8 +79,40 @@ impl FailureOutputParseError {
 
 impl fmt::Display for FailureOutputParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "unrecognized value for failure-output: {}\n(known values: {})", self.input, FailureOutput::variants().join(", "))
+        write!(
+            f,
+            "unrecognized value for failure-output: {}\n(known values: {})",
+            self.input,
+            FailureOutput::variants().join(", ")
+        )
     }
 }
 
 impl error::Error for FailureOutputParseError {}
+
+/// Error returned while parsing a [`StatusLevel`] value from a string.
+#[derive(Clone, Debug)]
+pub struct StatusLevelParseError {
+    input: String,
+}
+
+impl StatusLevelParseError {
+    pub(crate) fn new(input: impl Into<String>) -> Self {
+        Self {
+            input: input.into(),
+        }
+    }
+}
+
+impl fmt::Display for StatusLevelParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "unrecognized value for status-level: {}\n(known values: {})",
+            self.input,
+            StatusLevel::variants().join(", ")
+        )
+    }
+}
+
+impl error::Error for StatusLevelParseError {}

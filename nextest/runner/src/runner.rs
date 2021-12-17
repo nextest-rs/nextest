@@ -11,7 +11,7 @@ use crate::{
 use color_eyre::eyre::Result;
 use crossbeam_channel::{RecvTimeoutError, Sender};
 use duct::cmd;
-use nextest_config::NextestProfile;
+use nextest_config::{NextestProfile, StatusLevel};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     convert::Infallible,
@@ -448,6 +448,17 @@ pub enum RunDescribe<'a> {
         /// May be empty.
         retries: &'a [TestRunStatus],
     },
+}
+
+impl<'a> RunDescribe<'a> {
+    /// Returns the status level for this `RunDescribe`.
+    pub fn status_level(&self) -> StatusLevel {
+        match self {
+            RunDescribe::Success { .. } => StatusLevel::Pass,
+            RunDescribe::Flaky { .. } => StatusLevel::Retry,
+            RunDescribe::Failure { .. } => StatusLevel::Fail,
+        }
+    }
 }
 
 /// Information about a single execution of a test.

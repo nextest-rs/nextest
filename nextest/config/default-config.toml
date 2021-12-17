@@ -18,6 +18,23 @@ prefix = "nextest-"
 ## option.
 retries = 0
 
+## Show these test statuses in the output.
+##
+## The possible values this can take are:
+## * none: no output
+## * fail: show failed (including exec-failed) tests
+## * retry: show flaky and retried tests
+## * slow: show slow tests
+## * pass: show passed tests
+## * skip: show skipped tests (most useful for CI)
+## * all: all of the above
+##
+## Each value includes all the values above it; for example, "slow" includes failed and retried
+## tests.
+##
+## Can be overridden through the `--status-level` flag.
+status-level = "pass"
+
 ## "failure-output" defines when test failures are output to standard output. Accepted values are
 ## * "immediate": output failures as soon as they happen
 ## * "final": output failures at the end of the test run
@@ -25,6 +42,8 @@ retries = 0
 ## * "never": don't output failures at all
 ##
 ## For large test suites and CI it is generally useful to use "immediate-final".
+##
+## Can be overridden through the `--failure-output` option.
 failure-output = "immediate"
 
 ## Treat a test that takes longer than this as slow, and print a message.

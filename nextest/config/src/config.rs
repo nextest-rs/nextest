@@ -1,7 +1,9 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::errors::{ConfigReadError, FailureOutputParseError, ProfileNotFound};
+use crate::errors::{
+    ConfigReadError, FailureOutputParseError, ProfileNotFound, StatusLevelParseError,
+};
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
@@ -165,6 +167,14 @@ impl<'cfg> NextestProfile<'cfg> {
             .unwrap_or(self.default_profile.slow_timeout)
     }
 
+    /// Returns the test status level.
+    pub fn status_level(&self) -> StatusLevel {
+        self.custom_profile
+            .map(|profile| profile.status_level)
+            .flatten()
+            .unwrap_or(self.default_profile.status_level)
+    }
+
     /// Returns the failure output config for this profile.
     pub fn failure_output(&self) -> FailureOutput {
         self.custom_profile
@@ -246,6 +256,58 @@ impl fmt::Display for FailureOutput {
     }
 }
 
+/// Status level to show in the output.
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum StatusLevel {
+    None,
+    Fail,
+    Retry,
+    Slow,
+    Pass,
+    Skip,
+    All,
+}
+
+impl StatusLevel {
+    pub fn variants() -> &'static [&'static str] {
+        &["none", "fail", "retry", "slow", "pass", "skip", "all"]
+    }
+}
+
+impl FromStr for StatusLevel {
+    type Err = StatusLevelParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let val = match s {
+            "none" => StatusLevel::None,
+            "fail" => StatusLevel::Fail,
+            "retry" => StatusLevel::Retry,
+            "slow" => StatusLevel::Slow,
+            "pass" => StatusLevel::Pass,
+            "skip" => StatusLevel::Skip,
+            "all" => StatusLevel::All,
+            other => return Err(StatusLevelParseError::new(other)),
+        };
+        Ok(val)
+    }
+}
+
+impl fmt::Display for StatusLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StatusLevel::None => write!(f, "none"),
+            StatusLevel::Fail => write!(f, "fail"),
+            StatusLevel::Retry => write!(f, "retry"),
+            StatusLevel::Slow => write!(f, "slow"),
+            StatusLevel::Pass => write!(f, "pass"),
+            StatusLevel::Skip => write!(f, "skip"),
+            StatusLevel::All => write!(f, "all"),
+        }
+    }
+}
+
 /// JUnit configuration for nextest.
 #[derive(Clone, Debug)]
 pub struct NextestJunitConfig<'cfg> {
@@ -309,6 +371,7 @@ impl NextestProfilesImpl {
 #[serde(rename_all = "kebab-case")]
 struct DefaultProfileImpl {
     retries: usize,
+    status_level: StatusLevel,
     failure_output: FailureOutput,
     #[serde(with = "humantime_serde")]
     slow_timeout: Duration,
@@ -319,6 +382,7 @@ struct DefaultProfileImpl {
 #[serde(rename_all = "kebab-case")]
 struct CustomProfileImpl {
     retries: Option<usize>,
+    status_level: Option<StatusLevel>,
     failure_output: Option<FailureOutput>,
     #[serde(with = "humantime_serde")]
     slow_timeout: Option<Duration>,

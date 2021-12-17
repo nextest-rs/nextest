@@ -9,14 +9,14 @@ use crate::{
 };
 use color_eyre::eyre::Result;
 use debug_ignore::DebugIgnore;
-use nextest_config::{FailureOutput, NextestProfile};
+use nextest_config::{FailureOutput, NextestProfile, StatusLevel};
 use owo_colors::{OwoColorize, Style};
 use std::{
     fmt, io,
     io::Write,
     time::{Duration, SystemTime},
 };
-use structopt::{StructOpt, clap::arg_enum};
+use structopt::{clap::arg_enum, StructOpt};
 use supports_color::Stream;
 
 arg_enum! {
@@ -50,10 +50,14 @@ pub struct ReporterOpts {
     /// Output stdout and stderr on failures
     #[structopt(long, possible_values = &FailureOutput::variants(), case_insensitive = true)]
     failure_output: Option<FailureOutput>,
+    /// Test statuses to output
+    #[structopt(long, possible_values = StatusLevel::variants(), case_insensitive = true)]
+    status_level: Option<StatusLevel>,
 }
 
 /// Functionality to report test results to stdout and JUnit
 pub struct TestReporter<'a> {
+    status_level: StatusLevel,
     failure_output: FailureOutput,
     binary_id_width: usize,
     styles: Box<Styles>,
@@ -76,7 +80,10 @@ impl<'a> TestReporter<'a> {
             .unwrap_or_default();
         let metadata_reporter = MetadataReporter::new(profile);
         Self {
-            failure_output: opts.failure_output.unwrap_or_else(|| profile.failure_output()),
+            status_level: opts.status_level.unwrap_or_else(|| profile.status_level()),
+            failure_output: opts
+                .failure_output
+                .unwrap_or_else(|| profile.failure_output()),
             failing_tests: DebugIgnore(vec![]),
             styles,
             binary_id_width,
@@ -126,92 +133,100 @@ impl<'a> TestReporter<'a> {
                 test_instance,
                 elapsed,
             } => {
-                write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
-                self.write_slow_duration(*elapsed, &mut writer)?;
-                self.write_instance(*test_instance, &mut writer)?;
-                writeln!(writer)?;
+                if self.status_level >= StatusLevel::Slow {
+                    write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
+                    self.write_slow_duration(*elapsed, &mut writer)?;
+                    self.write_instance(*test_instance, &mut writer)?;
+                    writeln!(writer)?;
+                }
             }
             TestEvent::TestRetry {
                 test_instance,
                 run_status,
             } => {
-                let retry_string =
-                    format!("{}/{} RETRY", run_status.attempt, run_status.total_attempts);
-                write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
+                if self.status_level >= StatusLevel::Retry {
+                    let retry_string =
+                        format!("{}/{} RETRY", run_status.attempt, run_status.total_attempts);
+                    write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
 
-                // Next, print the time taken.
-                self.write_duration(run_status.time_taken, &mut writer)?;
+                    // Next, print the time taken.
+                    self.write_duration(run_status.time_taken, &mut writer)?;
 
-                // Print the name of the test.
-                self.write_instance(*test_instance, &mut writer)?;
-                writeln!(writer)?;
+                    // Print the name of the test.
+                    self.write_instance(*test_instance, &mut writer)?;
+                    writeln!(writer)?;
 
-                // This test is guaranteed to have failed.
-                assert!(
-                    !run_status.status.is_success(),
-                    "only failing tests are retried"
-                );
-                if self.failure_output.is_immediate() {
-                    self.write_run_status(test_instance, run_status, true, &mut writer)?;
+                    // This test is guaranteed to have failed.
+                    assert!(
+                        !run_status.status.is_success(),
+                        "only failing tests are retried"
+                    );
+                    if self.failure_output.is_immediate() {
+                        self.write_run_status(test_instance, run_status, true, &mut writer)?;
+                    }
+
+                    // The final output doesn't show retries.
                 }
-
-                // The final output doesn't show retries.
             }
             TestEvent::TestFinished {
                 test_instance,
                 run_statuses,
             } => {
-                // First, print the status.
-                let last_status = match run_statuses.describe() {
-                    RunDescribe::Success { run_status } => {
-                        write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
-                        run_status
-                    }
-                    RunDescribe::Flaky { last_status, .. } => {
-                        // Use the skip color to also represent a flaky test.
-                        write!(
-                            writer,
-                            "{:>12} ",
-                            format!("TRY {} PASS", last_status.attempt).style(self.styles.skip)
-                        )?;
-                        last_status
-                    }
-                    RunDescribe::Failure { last_status, .. } => {
-                        let status_str = match last_status.status {
-                            TestStatus::Fail => "FAIL",
-                            TestStatus::ExecFail => "XFAIL",
-                            TestStatus::Pass => unreachable!("this is a failing test"),
-                        };
+                let describe = run_statuses.describe();
 
-                        if last_status.attempt == 1 {
-                            write!(writer, "{:>12} ", status_str.style(self.styles.fail))?;
-                        } else {
+                if self.status_level >= describe.status_level() {
+                    // First, print the status.
+                    let last_status = match describe {
+                        RunDescribe::Success { run_status } => {
+                            write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+                            run_status
+                        }
+                        RunDescribe::Flaky { last_status, .. } => {
+                            // Use the skip color to also represent a flaky test.
                             write!(
                                 writer,
                                 "{:>12} ",
-                                format!("TRY {} {}", last_status.attempt, status_str)
-                                    .style(self.styles.fail)
+                                format!("TRY {} PASS", last_status.attempt).style(self.styles.skip)
                             )?;
+                            last_status
                         }
-                        last_status
-                    }
-                };
+                        RunDescribe::Failure { last_status, .. } => {
+                            let status_str = match last_status.status {
+                                TestStatus::Fail => "FAIL",
+                                TestStatus::ExecFail => "XFAIL",
+                                TestStatus::Pass => unreachable!("this is a failing test"),
+                            };
 
-                // Next, print the time taken.
-                self.write_duration(last_status.time_taken, &mut writer)?;
+                            if last_status.attempt == 1 {
+                                write!(writer, "{:>12} ", status_str.style(self.styles.fail))?;
+                            } else {
+                                write!(
+                                    writer,
+                                    "{:>12} ",
+                                    format!("TRY {} {}", last_status.attempt, status_str)
+                                        .style(self.styles.fail)
+                                )?;
+                            }
+                            last_status
+                        }
+                    };
 
-                // Print the name of the test.
-                self.write_instance(*test_instance, &mut writer)?;
-                writeln!(writer)?;
+                    // Next, print the time taken.
+                    self.write_duration(last_status.time_taken, &mut writer)?;
 
-                // If the test failed to execute, print its output and error status.
-                if !last_status.status.is_success() {
-                    if self.failure_output.is_immediate() {
-                        self.write_run_status(test_instance, last_status, false, &mut writer)?;
-                    }
-                    if self.failure_output.is_final() {
-                        self.failing_tests
-                            .push((*test_instance, last_status.clone()));
+                    // Print the name of the test.
+                    self.write_instance(*test_instance, &mut writer)?;
+                    writeln!(writer)?;
+
+                    // If the test failed to execute, print its output and error status.
+                    if !last_status.status.is_success() {
+                        if self.failure_output.is_immediate() {
+                            self.write_run_status(test_instance, last_status, false, &mut writer)?;
+                        }
+                        if self.failure_output.is_final() {
+                            self.failing_tests
+                                .push((*test_instance, last_status.clone()));
+                        }
                     }
                 }
             }
@@ -219,12 +234,14 @@ impl<'a> TestReporter<'a> {
                 test_instance,
                 reason: _reason,
             } => {
-                write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
-                // same spacing [   0.034s]
-                write!(writer, "[         ] ")?;
+                if self.status_level >= StatusLevel::Skip {
+                    write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
+                    // same spacing [   0.034s]
+                    write!(writer, "[         ] ")?;
 
-                self.write_instance(*test_instance, &mut writer)?;
-                writeln!(writer)?;
+                    self.write_instance(*test_instance, &mut writer)?;
+                    writeln!(writer)?;
+                }
             }
             TestEvent::RunBeginCancel { running, reason } => {
                 write!(writer, "{:>12} ", "Canceling".style(self.styles.fail))?;
@@ -317,8 +334,10 @@ impl<'a> TestReporter<'a> {
 
                 writeln!(writer)?;
 
-                for (test_instance, run_status) in &*self.failing_tests {
-                    self.write_run_status(test_instance, run_status, false, &mut writer)?;
+                if self.status_level >= StatusLevel::Fail {
+                    for (test_instance, run_status) in &*self.failing_tests {
+                        self.write_run_status(test_instance, run_status, false, &mut writer)?;
+                    }
                 }
             }
         }
