@@ -94,6 +94,7 @@ pub struct TestBuildFilter {
 
     // TODO: add regex-based filtering in the future?
     /// Test filter
+    #[structopt(name = "FILTERS")]
     filter: Vec<String>,
 }
 
