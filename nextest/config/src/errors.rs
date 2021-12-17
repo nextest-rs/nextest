@@ -3,6 +3,7 @@
 
 use config::ConfigError;
 use std::{error, fmt};
+use crate::FailureOutput;
 
 /// An error that occurred while reading the config.
 #[derive(Debug)]
@@ -61,3 +62,25 @@ impl fmt::Display for ProfileNotFound {
 }
 
 impl error::Error for ProfileNotFound {}
+
+/// Error returned while parsing a [`FailureOutput`] value from a string.
+#[derive(Clone, Debug)]
+pub struct FailureOutputParseError {
+    input: String,
+}
+
+impl FailureOutputParseError {
+    pub(crate) fn new(input: impl Into<String>) -> Self {
+        Self {
+            input: input.into(),
+        }
+    }
+}
+
+impl fmt::Display for FailureOutputParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "unrecognized value for failure-output: {}\n(known values: {})", self.input, FailureOutput::variants().join(", "))
+    }
+}
+
+impl error::Error for FailureOutputParseError {}

@@ -16,7 +16,7 @@ use std::{
     io::Write,
     time::{Duration, SystemTime},
 };
-use structopt::clap::arg_enum;
+use structopt::{StructOpt, clap::arg_enum};
 use supports_color::Stream;
 
 arg_enum! {
@@ -44,6 +44,14 @@ impl Color {
     }
 }
 
+#[derive(Debug, Default, StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+pub struct ReporterOpts {
+    /// Output stdout and stderr on failures
+    #[structopt(long, possible_values = &FailureOutput::variants(), case_insensitive = true)]
+    failure_output: Option<FailureOutput>,
+}
+
 /// Functionality to report test results to stdout and JUnit
 pub struct TestReporter<'a> {
     failure_output: FailureOutput,
@@ -59,7 +67,7 @@ pub struct TestReporter<'a> {
 
 impl<'a> TestReporter<'a> {
     /// Creates a new instance with the given profile.
-    pub fn new(test_list: &TestList, profile: &'a NextestProfile<'a>) -> Self {
+    pub fn new(test_list: &TestList, profile: &'a NextestProfile<'a>, opts: &ReporterOpts) -> Self {
         let styles = Box::new(Styles::default());
         let binary_id_width = test_list
             .iter()
@@ -68,7 +76,7 @@ impl<'a> TestReporter<'a> {
             .unwrap_or_default();
         let metadata_reporter = MetadataReporter::new(profile);
         Self {
-            failure_output: profile.failure_output(),
+            failure_output: opts.failure_output.unwrap_or_else(|| profile.failure_output()),
             failing_tests: DebugIgnore(vec![]),
             styles,
             binary_id_width,

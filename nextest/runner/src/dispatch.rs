@@ -15,6 +15,7 @@ use duct::cmd;
 use nextest_config::{errors::ConfigReadError, NextestConfig};
 use structopt::StructOpt;
 use supports_color::Stream;
+use crate::reporter::ReporterOpts;
 
 /// This test runner accepts a Rust test binary and does fancy things with it.
 ///
@@ -60,13 +61,15 @@ pub enum Command {
     },
     /// Run tests
     Run {
-        /// nextest profile to use
+        /// Nextest profile to use
         #[structopt(long, short = "P")]
         profile: Option<String>,
         #[structopt(flatten)]
         bin_filter: TestBinFilter,
         #[structopt(flatten)]
         runner_opts: TestRunnerOpts,
+        #[structopt(flatten)]
+        reporter_opts: ReporterOpts,
     },
 }
 
@@ -130,6 +133,7 @@ impl Opts {
                 ref profile,
                 ref bin_filter,
                 ref runner_opts,
+                ref reporter_opts,
             } => {
                 let workspace_root = workspace_root()?;
                 let config = self.config_opts.make_config(&workspace_root)?;
@@ -142,7 +146,7 @@ impl Opts {
 
                 let test_list = bin_filter.compute()?;
 
-                let mut reporter = TestReporter::new(&test_list, &profile);
+                let mut reporter = TestReporter::new(&test_list, &profile, reporter_opts);
                 if self.color.should_colorize(Stream::Stdout) {
                     reporter.colorize();
                 }

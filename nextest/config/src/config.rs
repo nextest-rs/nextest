@@ -1,11 +1,12 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::errors::{ConfigReadError, ProfileNotFound};
+use crate::errors::{ConfigReadError, FailureOutputParseError, ProfileNotFound};
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
 use std::{collections::HashMap, fmt, marker::PhantomData, time::Duration};
+use std::str::FromStr;
 
 /// Configuration for nextest.
 #[derive(Clone, Debug)]
@@ -216,6 +217,21 @@ impl FailureOutput {
             FailureOutput::Final | FailureOutput::ImmediateFinal => true,
             FailureOutput::Immediate | FailureOutput::Never => false,
         }
+    }
+}
+
+impl FromStr for FailureOutput {
+    type Err = FailureOutputParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let val = match s {
+            "immediate" => FailureOutput::Immediate,
+            "immediate-final" => FailureOutput::ImmediateFinal,
+            "final" => FailureOutput::Final,
+            "never" => FailureOutput::Never,
+            other => return Err(FailureOutputParseError::new(other)),
+        };
+        Ok(val)
     }
 }
 
