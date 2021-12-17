@@ -16,33 +16,7 @@ use std::{
     io::Write,
     time::{Duration, SystemTime},
 };
-use structopt::{clap::arg_enum, StructOpt};
-use supports_color::Stream;
-
-arg_enum! {
-    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-    pub enum Color {
-        Always,
-        Auto,
-        Never,
-    }
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Color::Auto
-    }
-}
-
-impl Color {
-    pub(crate) fn should_colorize(self, stream: Stream) -> bool {
-        match self {
-            Color::Always => true,
-            Color::Auto => supports_color::on_cached(stream).is_some(),
-            Color::Never => false,
-        }
-    }
-}
+use structopt::StructOpt;
 
 #[derive(Debug, Default, StructOpt)]
 #[structopt(rename_all = "kebab-case")]

@@ -34,7 +34,7 @@ pub struct TestRunnerOpts {
     pub retries: Option<usize>,
 
     /// Number of tests to run simultaneously [default: logical CPU count]
-    #[structopt(long, alias = "test-threads")]
+    #[structopt(short = "j", long, alias = "jobs")]
     pub test_threads: Option<usize>,
 }
 

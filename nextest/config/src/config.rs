@@ -7,8 +7,7 @@ use crate::errors::{
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
-use std::{collections::HashMap, fmt, marker::PhantomData, time::Duration};
-use std::str::FromStr;
+use std::{collections::HashMap, fmt, marker::PhantomData, str::FromStr, time::Duration};
 
 /// Configuration for nextest.
 #[derive(Clone, Debug)]

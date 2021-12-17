@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 aho-corasick = "0.7.18"
 camino = { version = "1.0.5", features = ["serde1"] }
+cargo_metadata = "0.14.1"
 chrono = "0.4.19"
 # we don't use the tracing support
 color-eyre = { version = "0.5.11", default-features = false }
@@ -16,8 +17,9 @@ ctrlc = { version = "3.2.1", features = ["termination"] }
 debug-ignore = "1.0.1"
 duct = "0.13.5"
 enable-ansi-support = "0.1.1"
+guppy = "0.12.5"
 once_cell = "1.8.0"
-owo-colors = "3.1.1"
+owo-colors = { version = "3.1.1", features = ["supports-colors"] }
 num_cpus = "1.13.0"
 rayon = "1.5.1"
 serde = { version = "1.0.130", features = ["derive"] }
@@ -31,7 +33,6 @@ nextest-config = { path = "../config" }
 quick-junit = { path = "../../quick-junit" }
 
 [dev-dependencies]
-cargo_metadata = "0.14.1"
 indoc = "1.0.3"
 maplit = "1.0.2"
 pretty_assertions = "1.0.0"

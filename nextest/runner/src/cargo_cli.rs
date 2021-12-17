@@ -1,0 +1,263 @@
+// Copyright (c) The diem-devtools Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Cargo CLI support.
+
+use crate::output::OutputContext;
+use camino::Utf8PathBuf;
+use std::path::PathBuf;
+use structopt::StructOpt;
+
+/// Options passed down to cargo.
+#[derive(Debug, StructOpt)]
+pub(crate) struct CargoOptions {
+    /// Test only this package's library unit tests
+    #[structopt(long)]
+    lib: bool,
+
+    /// Test only the specified binary
+    #[structopt(long)]
+    bin: Vec<String>,
+
+    /// Test all binaries
+    #[structopt(long)]
+    bins: bool,
+
+    /// Test only the specified test target
+    #[structopt(long)]
+    test: Vec<String>,
+
+    /// Test all targets
+    #[structopt(long)]
+    tests: bool,
+
+    /// Test only the specified bench target
+    #[structopt(long)]
+    bench: Vec<String>,
+
+    /// Test all benches
+    #[structopt(long)]
+    benches: bool,
+
+    /// Test all targets
+    #[structopt(long)]
+    all_targets: bool,
+
+    //  TODO: doc?
+    // no-run is handled by test runner
+    /// Package to test
+    #[structopt(short = "p", long = "package")]
+    packages: Vec<String>,
+
+    /// Build all packages in the workspace
+    #[structopt(long)]
+    workspace: bool,
+
+    /// Exclude packages from the test
+    #[structopt(long)]
+    exclude: Vec<String>,
+
+    /// Alias for workspace (deprecated)
+    #[structopt(long)]
+    all: bool,
+
+    // jobs is handled by test runner
+    /// Build artifacts in release mode, with optimizations
+    #[structopt(long)]
+    release: bool,
+
+    /// Build artifacts with the specified Cargo profile
+    #[structopt(long)]
+    cargo_profile: Option<String>,
+
+    /// Space or comma separated list of features to activate
+    #[structopt(long)]
+    features: Vec<String>,
+
+    /// Activate all available features
+    #[structopt(long)]
+    all_features: bool,
+
+    /// Do not activate the `default` feature
+    #[structopt(long)]
+    no_default_features: bool,
+
+    /// Build for the target triple
+    #[structopt(long)]
+    target: Option<String>,
+
+    /// Directory for all generated artifacts
+    #[structopt(long)]
+    target_dir: Option<String>,
+
+    /// Ignore `rust-version` specification in packages
+    #[structopt(long)]
+    ignore_rust_version: bool,
+    // --message-format is captured by nextest
+    /// Output build graph in JSON (unstable)
+    #[structopt(long)]
+    unit_graph: bool,
+
+    /// Outputs a future incompatibility report at the end of the build (unstable)
+    #[structopt(long)]
+    future_incompat_report: bool,
+
+    // --verbose is not currently supported
+    // --color is handled by runner
+    /// Require Cargo.lock and cache are up to date
+    #[structopt(long)]
+    frozen: bool,
+
+    /// Require Cargo.lock is up to date
+    #[structopt(long)]
+    locked: bool,
+
+    /// Run without accessing the network
+    #[structopt(long)]
+    offline: bool,
+
+    /// Override a configuration value (unstable)
+    #[structopt(long)]
+    config: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CargoCli<'a> {
+    cargo_path: Utf8PathBuf,
+    output: OutputContext,
+    command: &'a str,
+    args: Vec<&'a str>,
+}
+
+impl<'a> CargoCli<'a> {
+    pub(crate) fn new(command: &'a str, output: OutputContext) -> Self {
+        let cargo_path = cargo_path();
+        Self {
+            cargo_path,
+            output,
+            command,
+            args: vec![],
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn add_arg(&mut self, arg: &'a str) -> &mut Self {
+        self.args.push(arg);
+        self
+    }
+
+    pub(crate) fn add_args(&mut self, args: impl IntoIterator<Item = &'a str>) -> &mut Self {
+        self.args.extend(args);
+        self
+    }
+
+    pub(crate) fn add_options(&mut self, options: &'a CargoOptions) -> &mut Self {
+        if options.lib {
+            self.args.push("--lib");
+        }
+        self.args
+            .extend(options.bin.iter().flat_map(|s| ["--bin", s.as_str()]));
+        if options.bins {
+            self.args.push("--bins");
+        }
+        self.args
+            .extend(options.test.iter().flat_map(|s| ["--test", s.as_str()]));
+        if options.tests {
+            self.args.push("--tests");
+        }
+        self.args
+            .extend(options.bench.iter().flat_map(|s| ["--bench", s.as_str()]));
+        if options.benches {
+            self.args.push("--benches");
+        }
+        if options.all_targets {
+            self.args.push("--all-targets");
+        }
+        self.args.extend(
+            options
+                .packages
+                .iter()
+                .flat_map(|s| ["--package", s.as_str()]),
+        );
+        if options.workspace {
+            self.args.push("--workspace");
+        }
+        self.args.extend(
+            options
+                .exclude
+                .iter()
+                .flat_map(|s| ["--exclude", s.as_str()]),
+        );
+        if options.all {
+            self.args.push("--all");
+        }
+        if options.release {
+            self.args.push("--release");
+        }
+        if let Some(profile) = &options.cargo_profile {
+            self.args.extend(["--profile", profile]);
+        }
+        self.args
+            .extend(options.features.iter().flat_map(|s| ["--features", s]));
+        if options.all_features {
+            self.args.push("--all-features");
+        }
+        if options.no_default_features {
+            self.args.push("--no-default-features");
+        }
+        if let Some(target) = &options.target {
+            self.args.extend(["--target", target]);
+        }
+        if let Some(target_dir) = &options.target_dir {
+            self.args.extend(["--target-dir", target_dir]);
+        }
+        if options.ignore_rust_version {
+            self.args.push("--ignore-rust-version");
+        }
+        if options.unit_graph {
+            self.args.push("--unit-graph");
+        }
+        if options.future_incompat_report {
+            self.args.push("--future-incompat-report");
+        }
+        if options.frozen {
+            self.args.push("--frozen");
+        }
+        if options.locked {
+            self.args.push("--locked");
+        }
+        if options.offline {
+            self.args.push("--offline");
+        }
+        self.args
+            .extend(options.config.iter().flat_map(|s| ["--config", s.as_str()]));
+
+        // TODO: other options
+
+        self
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn all_args(&self) -> Vec<&str> {
+        let mut all_args = vec![self.cargo_path.as_str(), self.command];
+        all_args.extend_from_slice(&self.args);
+        all_args
+    }
+
+    pub(crate) fn to_expression(&self) -> duct::Expression {
+        let initial_args = vec![self.output.color.to_arg(), self.command];
+        duct::cmd(
+            self.cargo_path.as_std_path(),
+            initial_args.into_iter().chain(self.args.iter().copied()),
+        )
+    }
+}
+
+fn cargo_path() -> Utf8PathBuf {
+    match std::env::var_os("CARGO") {
+        Some(cargo_path) => PathBuf::from(cargo_path)
+            .try_into()
+            .expect("CARGO env var is not valid UTF-8"),
+        None => Utf8PathBuf::from("cargo"),
+    }
+}

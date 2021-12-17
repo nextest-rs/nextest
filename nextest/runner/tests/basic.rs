@@ -4,9 +4,9 @@
 //! Basic tests for the test runner.
 
 use camino::Utf8Path;
-use cargo_metadata::Message;
 use color_eyre::eyre::Result;
 use duct::cmd;
+use guppy::MetadataCommand;
 use maplit::btreemap;
 use nextest_config::NextestConfig;
 use nextest_runner::{
@@ -70,7 +70,7 @@ impl FixtureStatus {
 
 static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::new(|| {
     btreemap! {
-        "basic" => vec![
+        "nextest-tests::basic" => vec![
             TestFixture { name: "test_cwd", status: FixtureStatus::Pass },
             TestFixture { name: "test_failure_assert", status: FixtureStatus::Fail },
             TestFixture { name: "test_failure_error", status: FixtureStatus::Fail },
@@ -112,40 +112,35 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
         .unwrap()
         .join("fixtures/nextest-tests");
 
-    let expr = cmd!(cmd_name, "test", "--no-run", "--message-format", "json")
-        .dir(&dir_name)
-        .stdout_capture();
+    let graph = {
+        let mut metadata_command = MetadataCommand::new();
+        // Construct a package graph with --no-deps since we don't need full dependency
+        // information.
+        metadata_command
+            .manifest_path(dir_name.join("Cargo.toml"))
+            .no_deps()
+            .build_graph()
+            .expect("building package graph failed")
+    };
+
+    let expr = cmd!(
+        cmd_name,
+        "test",
+        "--no-run",
+        "--message-format",
+        "json-render-diagnostics"
+    )
+    .dir(&dir_name)
+    .stdout_capture();
+
     let output = expr.run().expect("cargo test --no-run failed");
-    // stdout has the JSON messages
-    let messages = Cursor::new(output.stdout);
+    let test_binaries = TestBinary::from_messages(&graph, Cursor::new(output.stdout)).unwrap();
 
-    let mut targets = BTreeMap::new();
-    for message in Message::parse_stream(messages) {
-        let message = message.expect("parsing message off output stream should succeed");
-        if let Message::CompilerArtifact(artifact) = message {
-            println!("build artifact: {:?}", artifact);
-            if let Some(binary) = artifact.executable {
-                let mut cwd = artifact.target.src_path;
-                // Pop two levels to get the manifest dir.
-                cwd.pop();
-                cwd.pop();
-
-                let cwd = Some(cwd);
-                targets.insert(
-                    artifact.target.name,
-                    TestBinary {
-                        binary,
-                        cwd,
-                        binary_id: "my-binary-id".into(),
-                    },
-                );
-            }
-        } else if let Message::TextLine(line) = message {
-            println!("{}", line);
-        }
-    }
-
-    targets
+    test_binaries
+        .into_iter()
+        .map(|bin| (bin.binary_id.clone(), bin))
+        .inspect(|(k, _)| println!("{}", k))
+        .collect()
 }
 
 #[test]

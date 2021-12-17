@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    cargo_cli::{CargoCli, CargoOptions},
+    output::{OutputContext, OutputOpts},
     partition::PartitionerBuilder,
-    reporter::{Color, TestReporter},
+    reporter::{ReporterOpts, TestReporter},
     runner::TestRunnerOpts,
     signal::SignalHandler,
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -11,11 +13,11 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{bail, Result, WrapErr};
-use duct::cmd;
+use guppy::{graph::PackageGraph, MetadataCommand};
 use nextest_config::{errors::ConfigReadError, NextestConfig};
+use std::io::Cursor;
 use structopt::StructOpt;
 use supports_color::Stream;
-use crate::reporter::ReporterOpts;
 
 /// This test runner accepts a Rust test binary and does fancy things with it.
 ///
@@ -23,9 +25,12 @@ use crate::reporter::ReporterOpts;
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub struct Opts {
-    #[structopt(long, default_value)]
-    /// Coloring: always, auto, never
-    color: Color,
+    /// Path to Cargo.toml
+    #[structopt(long, global = true)]
+    manifest_path: Option<Utf8PathBuf>,
+
+    #[structopt(flatten)]
+    output: OutputOpts,
 
     #[structopt(flatten)]
     config_opts: ConfigOpts,
@@ -37,7 +42,7 @@ pub struct Opts {
 #[derive(Debug, StructOpt)]
 pub struct ConfigOpts {
     /// Config file [default: workspace-root/.config/nextest.toml]
-    #[structopt(long)]
+    #[structopt(long, global = true)]
     pub config_file: Option<Utf8PathBuf>,
 }
 
@@ -53,11 +58,11 @@ pub enum Command {
     /// List tests in binary
     ListTests {
         /// Output format
-        #[structopt(short = "T", long, default_value, possible_values = & OutputFormat::variants(), case_insensitive = true)]
+        #[structopt(short = "T", long, default_value, possible_values = &OutputFormat::variants(), case_insensitive = true)]
         format: OutputFormat,
 
         #[structopt(flatten)]
-        bin_filter: TestBinFilter,
+        build_filter: TestBuildFilter,
     },
     /// Run tests
     Run {
@@ -65,7 +70,7 @@ pub enum Command {
         #[structopt(long, short = "P")]
         profile: Option<String>,
         #[structopt(flatten)]
-        bin_filter: TestBinFilter,
+        build_filter: TestBuildFilter,
         #[structopt(flatten)]
         runner_opts: TestRunnerOpts,
         #[structopt(flatten)]
@@ -75,55 +80,67 @@ pub enum Command {
 
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
-pub struct TestBinFilter {
-    /// Path to test binary
-    #[structopt(
-        short = "b",
-        long,
-        required = true,
-        min_values = 1,
-        number_of_values = 1
-    )]
-    pub test_bin: Vec<Utf8PathBuf>,
+pub struct TestBuildFilter {
+    #[structopt(flatten)]
+    cargo_options: CargoOptions,
 
     /// Run ignored tests
     #[structopt(long, possible_values = &RunIgnored::variants(), default_value, case_insensitive = true)]
-    pub run_ignored: RunIgnored,
+    run_ignored: RunIgnored,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
     #[structopt(long)]
-    pub partition: Option<PartitionerBuilder>,
+    partition: Option<PartitionerBuilder>,
 
     // TODO: add regex-based filtering in the future?
     /// Test filter
-    pub filter: Vec<String>,
+    filter: Vec<String>,
 }
 
-impl TestBinFilter {
-    fn compute(&self) -> Result<TestList> {
+impl TestBuildFilter {
+    fn compute(&self, graph: &PackageGraph, output: OutputContext) -> Result<TestList> {
+        let mut cargo_cli = CargoCli::new("test", output);
+        let manifest_path = graph.workspace().root().join("Cargo.toml");
+        cargo_cli.add_args(["--manifest-path", manifest_path.as_str()]);
+        // Only build tests in the cargo test invocation, do not run them.
+        cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
+        cargo_cli.add_options(&self.cargo_options);
+
+        let expression = cargo_cli.to_expression();
+        let output = expression
+            .stdout_capture()
+            .run()
+            .wrap_err("failed to build tests")?;
+        let test_binaries = TestBinary::from_messages(graph, Cursor::new(output.stdout))?;
+
         let test_filter =
             TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
-        TestList::new(
-            self.test_bin.iter().map(|binary| TestBinary {
-                binary: binary.clone(),
-                // TODO: add support for these through the CLI interface?
-                binary_id: binary.clone().into(),
-                cwd: None,
-            }),
-            &test_filter,
-        )
+        TestList::new(test_binaries, &test_filter)
     }
 }
 
 impl Opts {
     /// Execute the command.
     pub fn exec(self) -> Result<()> {
-        let stdout = std::io::stdout();
+        let output = self.output.init();
+
+        let graph = {
+            let mut metadata_command = MetadataCommand::new();
+            if let Some(path) = &self.manifest_path {
+                metadata_command.manifest_path(path);
+            }
+            // Construct a package graph with --no-deps since we don't need full dependency
+            // information.
+            metadata_command.no_deps().build_graph()?
+        };
 
         match self.command {
-            Command::ListTests { bin_filter, format } => {
-                let mut test_list = bin_filter.compute()?;
-                if self.color.should_colorize(Stream::Stdout) {
+            Command::ListTests {
+                build_filter,
+                format,
+            } => {
+                let mut test_list = build_filter.compute(&graph, output)?;
+                if output.color.should_colorize(Stream::Stdout) {
                     test_list.colorize();
                 }
                 let lock = stdout.lock();
@@ -131,12 +148,11 @@ impl Opts {
             }
             Command::Run {
                 ref profile,
-                ref bin_filter,
+                ref build_filter,
                 ref runner_opts,
                 ref reporter_opts,
             } => {
-                let workspace_root = workspace_root()?;
-                let config = self.config_opts.make_config(&workspace_root)?;
+                let config = self.config_opts.make_config(graph.workspace().root())?;
                 let profile =
                     config.profile(profile.as_deref().unwrap_or(NextestConfig::DEFAULT_PROFILE))?;
                 let metadata_dir = profile.metadata_dir();
@@ -144,10 +160,10 @@ impl Opts {
                     format!("failed to create metadata dir '{}'", metadata_dir)
                 })?;
 
-                let test_list = bin_filter.compute()?;
+                let test_list = build_filter.compute(&graph, output)?;
 
                 let mut reporter = TestReporter::new(&test_list, &profile, reporter_opts);
-                if self.color.should_colorize(Stream::Stdout) {
+                if output.color.should_colorize(Stream::Stdout) {
                     reporter.colorize();
                 }
 
@@ -167,23 +183,4 @@ impl Opts {
         }
         Ok(())
     }
-}
-
-// TODO: replace with guppy
-fn workspace_root() -> Result<Utf8PathBuf> {
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
-    cmd!(
-        cargo,
-        "locate-project",
-        "--workspace",
-        "--message-format",
-        "plain"
-    )
-    .read()
-    .map(|s| {
-        let mut p = Utf8PathBuf::from(s);
-        p.pop();
-        p
-    })
-    .wrap_err_with(|| "cargo locate-project failed")
 }
