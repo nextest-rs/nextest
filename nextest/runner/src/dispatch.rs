@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    output::OutputFormat,
     partition::PartitionerBuilder,
     reporter::{Color, TestReporter},
     runner::TestRunnerOpts,
     signal::SignalHandler,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::{TestBinary, TestList},
+    test_list::{OutputFormat, TestBinary, TestList},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{bail, Result, WrapErr};

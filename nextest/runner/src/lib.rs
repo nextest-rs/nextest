@@ -3,7 +3,6 @@
 
 pub mod dispatch;
 mod metadata;
-pub mod output;
 pub mod partition;
 pub mod reporter;
 pub mod runner;

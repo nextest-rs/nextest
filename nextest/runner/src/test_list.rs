@@ -1,10 +1,10 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{
-    output::OutputFormat,
-    test_filter::{FilterMatch, TestFilterBuilder},
-};
+mod output_format;
+pub use output_format::*;
+
+use crate::test_filter::{FilterMatch, TestFilterBuilder};
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{eyre, Result, WrapErr};
 use duct::cmd;
@@ -394,10 +394,7 @@ impl Styles {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        output::SerializableFormat,
-        test_filter::{FilterMatch, MismatchReason, RunIgnored},
-    };
+    use crate::test_filter::{FilterMatch, MismatchReason, RunIgnored};
     use indoc::indoc;
     use maplit::btreemap;
     use pretty_assertions::assert_eq;
