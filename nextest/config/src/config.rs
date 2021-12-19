@@ -182,6 +182,14 @@ impl<'cfg> NextestProfile<'cfg> {
             .unwrap_or(self.default_profile.failure_output)
     }
 
+    /// Returns the fail-fast config for this profile.
+    pub fn fail_fast(&self) -> bool {
+        self.custom_profile
+            .map(|profile| profile.fail_fast)
+            .flatten()
+            .unwrap_or(self.default_profile.fail_fast)
+    }
+
     /// Returns the JUnit configuration for this profile.
     pub fn junit(&self) -> Option<NextestJunitConfig<'cfg>> {
         let path = self
@@ -372,6 +380,7 @@ struct DefaultProfileImpl {
     retries: usize,
     status_level: StatusLevel,
     failure_output: FailureOutput,
+    fail_fast: bool,
     #[serde(with = "humantime_serde")]
     slow_timeout: Duration,
     junit: JunitImpl,
@@ -380,17 +389,25 @@ struct DefaultProfileImpl {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct CustomProfileImpl {
+    #[serde(default)]
     retries: Option<usize>,
+    #[serde(default)]
     status_level: Option<StatusLevel>,
+    #[serde(default)]
     failure_output: Option<FailureOutput>,
+    #[serde(default)]
+    fail_fast: Option<bool>,
     #[serde(with = "humantime_serde")]
+    #[serde(default)]
     slow_timeout: Option<Duration>,
+    #[serde(default)]
     junit: JunitImpl,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct JunitImpl {
+    #[serde(default)]
     path: Option<Utf8PathBuf>,
 }
 

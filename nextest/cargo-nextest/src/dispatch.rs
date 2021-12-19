@@ -179,7 +179,6 @@ impl Opts {
                     // across callback invocations
                     let lock = stderr.lock();
                     reporter.report_event(event, lock)
-                    // TODO: no-fail-fast logic
                 })?;
                 if !run_stats.is_success() {
                     bail!("test run failed");

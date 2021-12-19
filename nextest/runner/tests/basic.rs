@@ -3,7 +3,7 @@
 
 //! Basic tests for the test runner.
 
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::Result;
 use duct::cmd;
 use guppy::MetadataCommand;
@@ -88,13 +88,12 @@ static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::ne
     }
 });
 
-fn workspace_root() -> &'static Utf8Path {
-    // two levels up from the manifest
+fn workspace_root() -> Utf8PathBuf {
+    // one level up from the manifest dir -> into fixtures/nextest-tests
     Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
-        .parent()
-        .unwrap()
+        .join("fixtures/nextest-tests")
 }
 
 static FIXTURE_TARGETS: Lazy<BTreeMap<String, TestBinary>> = Lazy::new(init_fixture_targets);
@@ -208,7 +207,8 @@ fn test_run() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
-    let config = NextestConfig::default_config(workspace_root());
+    let config =
+        NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
@@ -255,7 +255,8 @@ fn test_run_ignored() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::IgnoredOnly);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
-    let config = NextestConfig::default_config(workspace_root());
+    let config =
+        NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
@@ -302,18 +303,16 @@ fn test_retries() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
     let test_list = TestList::new(test_bins, &test_filter)?;
-    let config = NextestConfig::default_config(workspace_root());
+    let config =
+        NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
-        .profile(NextestConfig::DEFAULT_PROFILE)
-        .expect("default config is valid");
+        .profile("with-retries")
+        .expect("with-retries config is valid");
 
-    let retries = 2;
+    let retries = profile.retries();
+    assert_eq!(retries, 2, "retries set in with-retries profile");
 
-    let runner = TestRunnerOpts {
-        retries: Some(retries),
-        ..TestRunnerOpts::default()
-    }
-    .build(&test_list, &profile, SignalHandler::noop());
+    let runner = TestRunnerOpts::default().build(&test_list, &profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 

@@ -46,6 +46,9 @@ status-level = "pass"
 ## Can be overridden through the `--failure-output` option.
 failure-output = "immediate"
 
+## Cancel the test run on the first failure. For CI runs, consider setting this to false.
+fail-fast = true
+
 ## Treat a test that takes longer than this as slow, and print a message.
 slow-timeout = "60s"
 

@@ -1,0 +1,8 @@
+## nextest config for this fixture
+
+[profile.default]
+# disable fail-fast to ensure a deterministic test run
+fail-fast = false
+
+[profile.with-retries]
+retries = 2

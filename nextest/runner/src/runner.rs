@@ -30,14 +30,41 @@ use structopt::StructOpt;
 pub struct TestRunnerOpts {
     /// Number of retries for failing tests [default: from profile]
     #[structopt(long)]
-    pub retries: Option<usize>,
+    retries: Option<usize>,
+
+    /// Cancel test run on the first failure
+    #[structopt(long)]
+    fail_fast: bool,
+
+    /// Run all tests regardless of failure
+    #[structopt(long, overrides_with = "fail-fast")]
+    no_fail_fast: bool,
 
     /// Number of tests to run simultaneously [default: logical CPU count]
     #[structopt(short = "j", long, alias = "jobs")]
-    pub test_threads: Option<usize>,
+    test_threads: Option<usize>,
 }
 
 impl TestRunnerOpts {
+    /// Sets the number of retries for this test runner.
+    pub fn with_retries(mut self, retries: usize) -> Self {
+        self.retries = Some(retries);
+        self
+    }
+
+    /// Sets the fail-fast value for this test runner.
+    pub fn with_fail_fast(mut self, fail_fast: bool) -> Self {
+        self.fail_fast = fail_fast;
+        self.no_fail_fast = !fail_fast;
+        self
+    }
+
+    /// Sets the number of tests to run simultaneously.
+    pub fn with_test_threads(mut self, test_threads: usize) -> Self {
+        self.test_threads = Some(test_threads);
+        self
+    }
+
     /// Creates a new test runner.
     pub fn build<'list>(
         &self,
@@ -47,10 +74,20 @@ impl TestRunnerOpts {
     ) -> TestRunner<'list> {
         let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
         let retries = self.retries.unwrap_or_else(|| profile.retries());
+
+        let fail_fast = if self.no_fail_fast {
+            false
+        } else if self.fail_fast {
+            true
+        } else {
+            profile.fail_fast()
+        };
+
         let slow_timeout = profile.slow_timeout();
         TestRunner {
             // The number of tries = retries + 1.
             tries: retries + 1,
+            fail_fast,
             slow_timeout,
             test_list,
             run_pool: ThreadPoolBuilder::new()
@@ -72,6 +109,7 @@ impl TestRunnerOpts {
 /// Context for running tests.
 pub struct TestRunner<'list> {
     tries: usize,
+    fail_fast: bool,
     slow_timeout: Duration,
     test_list: &'list TestList,
     run_pool: ThreadPool,
@@ -113,7 +151,7 @@ impl<'list> TestRunner<'list> {
         let canceled = AtomicBool::new(false);
         let canceled_ref = &canceled;
 
-        let mut ctx = CallbackContext::new(callback, self.test_list.run_count());
+        let mut ctx = CallbackContext::new(callback, self.test_list.run_count(), self.fail_fast);
 
         // Send the initial event.
         // (Don't need to set the canceled atomic if this fails because the run hasn't started
@@ -234,18 +272,20 @@ impl<'list> TestRunner<'list> {
                                 if first_error_mut.is_none() {
                                     *first_error_mut = Some(err);
                                 }
-                                let _ = ctx_mut.error_cancel();
+                                let _ = ctx_mut.begin_cancel(CancelReason::ReportError);
                             }
-                            InternalError::SignalCanceled(Some(err)) => {
-                                // Signal-based cancellation and an error was received during
+                            InternalError::TestFailureCanceled(None)
+                            | InternalError::SignalCanceled(None) => {
+                                // Cancellation has begun and no error was returned during that.
+                                // Continue to handle events.
+                            }
+                            InternalError::TestFailureCanceled(Some(err))
+                            | InternalError::SignalCanceled(Some(err)) => {
+                                // Cancellation has begun and an error was received during
                                 // cancellation.
                                 if first_error_mut.is_none() {
                                     *first_error_mut = Some(err);
                                 }
-                            }
-                            InternalError::SignalCanceled(None) => {
-                                // Signal-based cancellation and no error was returned during
-                                // cancellation. Continue to handle events.
                             }
                         }
                     }
@@ -577,8 +617,9 @@ struct CallbackContext<F, E> {
     callback: F,
     stopwatch: StopwatchStart,
     run_stats: RunStats,
+    fail_fast: bool,
     running: usize,
-    cancel_state: CancelState,
+    cancel_state: Option<CancelReason>,
     phantom: PhantomData<E>,
 }
 
@@ -586,7 +627,7 @@ impl<'list, F, E> CallbackContext<F, E>
 where
     F: FnMut(TestEvent<'list>) -> Result<(), E> + Send,
 {
-    fn new(callback: F, initial_run_count: usize) -> Self {
+    fn new(callback: F, initial_run_count: usize, fail_fast: bool) -> Self {
         Self {
             callback,
             stopwatch: StopwatchStart::now(),
@@ -594,8 +635,9 @@ where
                 initial_run_count,
                 ..RunStats::default()
             },
+            fail_fast,
             running: 0,
-            cancel_state: CancelState::None,
+            cancel_state: None,
             phantom: PhantomData,
         }
     }
@@ -634,11 +676,23 @@ where
                 self.running -= 1;
                 self.run_stats.on_test_finished(&run_statuses);
 
+                // should this run be canceled because of a failure?
+                let fail_cancel = self.fail_fast && !run_statuses.last_status().status.is_success();
+
                 (self.callback)(TestEvent::TestFinished {
                     test_instance,
                     run_statuses,
                 })
-                .map_err(InternalError::Error)
+                .map_err(InternalError::Error)?;
+
+                if fail_cancel {
+                    // A test failed: start cancellation.
+                    Err(InternalError::TestFailureCanceled(
+                        self.begin_cancel(CancelReason::TestFailure).err(),
+                    ))
+                } else {
+                    Ok(())
+                }
             }
             InternalEvent::Test(InternalTestEvent::Skipped {
                 test_instance,
@@ -652,31 +706,29 @@ where
                 .map_err(InternalError::Error)
             }
             InternalEvent::Signal(SignalEvent::Interrupted) => {
-                if self.cancel_state == CancelState::SignalCanceled {
+                if self.cancel_state == Some(CancelReason::Signal) {
                     // Ctrl-C was pressed twice -- panic in this case.
                     panic!("Ctrl-C pressed twice, exiting immediately");
                 }
 
-                self.cancel_state = CancelState::SignalCanceled;
-                match (self.callback)(TestEvent::RunBeginCancel {
-                    running: self.running,
-                    reason: CancelReason::Signal,
-                }) {
-                    Ok(()) => Err(InternalError::SignalCanceled(None)),
-                    Err(err) => Err(InternalError::SignalCanceled(Some(err))),
-                }
+                Err(InternalError::SignalCanceled(
+                    self.begin_cancel(CancelReason::Signal).err(),
+                ))
             }
         }
     }
 
-    fn error_cancel(&mut self) -> Result<(), E> {
-        if self.cancel_state == CancelState::None {
-            self.cancel_state = CancelState::ErrorCanceled;
+    /// Begin cancellation of a test run. Report it if the current cancel state is less than
+    /// the required one.
+    fn begin_cancel(&mut self, reason: CancelReason) -> Result<(), E> {
+        if self.cancel_state < Some(reason) {
+            self.cancel_state = Some(reason);
+            (self.callback)(TestEvent::RunBeginCancel {
+                running: self.running,
+                reason,
+            })?;
         }
-        (self.callback)(TestEvent::RunBeginCancel {
-            running: self.running,
-            reason: CancelReason::ReportError,
-        })
+        Ok(())
     }
 
     fn run_finished(&mut self) -> Result<(), E> {
@@ -721,14 +773,8 @@ enum InternalTestEvent<'list> {
 #[derive(Debug)]
 enum InternalError<E> {
     Error(E),
+    TestFailureCanceled(Option<E>),
     SignalCanceled(Option<E>),
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum CancelState {
-    None,
-    ErrorCanceled,
-    SignalCanceled,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

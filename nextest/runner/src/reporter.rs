@@ -239,15 +239,15 @@ impl<'a> TestReporter<'a> {
             TestEvent::RunBeginCancel { running, reason } => {
                 write!(writer, "{:>12} ", "Canceling".style(self.styles.fail))?;
                 let reason_str = match reason {
-                    CancelReason::Signal => "signal",
-                    // TODO: differentiate between control errors (e.g. fail-fast) and report errors
+                    CancelReason::TestFailure => "test failure",
                     CancelReason::ReportError => "error",
+                    CancelReason::Signal => "signal",
                 };
 
                 writeln!(
                     writer,
                     "due to {}: {} tests still running",
-                    reason_str.style(self.styles.count),
+                    reason_str.style(self.styles.fail),
                     running.style(self.styles.count)
                 )?;
             }
@@ -538,9 +538,13 @@ pub enum TestEvent<'a> {
     },
 }
 
+// Note: the order here matters -- it indicates severity of cancellation
 /// The reason why a test run is being cancelled.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum CancelReason {
+    /// A test failed and --no-fail-fast wasn't specified.
+    TestFailure,
+
     /// An error occurred while reporting results.
     ReportError,
 
