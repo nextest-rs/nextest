@@ -281,7 +281,7 @@ mod tests {
         TestBinary {
             binary: "/fake/path".into(),
             binary_id: "fake-id".to_owned(),
-            cwd: None,
+            cwd: "/fake".into(),
         }
     }
 }

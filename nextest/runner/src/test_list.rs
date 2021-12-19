@@ -34,7 +34,7 @@ pub struct TestBinary {
 
     /// The working directory that this test should be executed in. If None, the current directory
     /// will not be changed.
-    pub cwd: Option<Utf8PathBuf>,
+    pub cwd: Utf8PathBuf,
 }
 
 impl TestBinary {
@@ -78,7 +78,7 @@ impl TestBinary {
                         binaries.push(TestBinary {
                             binary,
                             binary_id,
-                            cwd: Some(cwd),
+                            cwd,
                         })
                     }
                 }
@@ -119,7 +119,7 @@ pub struct TestBinInfo {
 
     /// The working directory that this test binary will be executed in. If None, the current directory
     /// will not be changed.
-    pub cwd: Option<Utf8PathBuf>,
+    pub cwd: Utf8PathBuf,
 }
 
 /// Information about a single Rust test.
@@ -258,13 +258,7 @@ impl TestList {
     pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
         self.test_binaries.iter().flat_map(|(test_bin, bin_info)| {
             bin_info.tests.iter().map(move |(name, info)| {
-                TestInstance::new(
-                    name,
-                    test_bin,
-                    &bin_info.binary_id,
-                    info,
-                    bin_info.cwd.as_deref(),
-                )
+                TestInstance::new(name, test_bin, &bin_info.binary_id, info, &bin_info.cwd)
             })
         })
     }
@@ -358,10 +352,7 @@ impl TestList {
     fn write_plain(&self, mut writer: impl Write) -> io::Result<()> {
         for (test_bin, info) in &self.test_binaries {
             writeln!(writer, "{}:", test_bin.style(self.styles.test_bin))?;
-
-            if let Some(cwd) = &info.cwd {
-                writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), cwd)?;
-            }
+            writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), info.cwd)?;
 
             for (name, info) in &info.tests {
                 write!(writer, "    {}", name.style(self.styles.test_name))?;
@@ -388,10 +379,9 @@ impl TestBinary {
         if ignored {
             argv.push("--ignored");
         }
-        let mut cmd = cmd(AsRef::<Path>::as_ref(&self.binary), argv).stdout_capture();
-        if let Some(cwd) = &self.cwd {
-            cmd = cmd.dir(cwd);
-        };
+        let cmd = cmd(AsRef::<Path>::as_ref(&self.binary), argv)
+            .dir(&self.cwd)
+            .stdout_capture();
 
         cmd.read().map_err(|error| {
             ParseTestListError::command(
@@ -422,8 +412,8 @@ pub struct TestInstance<'a> {
     /// Information about the test.
     pub info: &'a RustTestInfo,
 
-    /// The working directory for this test. If None, the test will not be changed.
-    pub cwd: Option<&'a Utf8Path>,
+    /// The working directory for this test.
+    pub cwd: &'a Utf8Path,
 }
 
 impl<'a> TestInstance<'a> {
@@ -433,7 +423,7 @@ impl<'a> TestInstance<'a> {
         binary: &'a (impl AsRef<Utf8Path> + ?Sized),
         binary_id: &'a str,
         info: &'a RustTestInfo,
-        cwd: Option<&'a Utf8Path>,
+        cwd: &'a Utf8Path,
     ) -> Self {
         Self {
             name: name.as_ref(),
@@ -485,7 +475,7 @@ mod tests {
         let fake_binary_id = "fake-package".to_owned();
         let test_binary = TestBinary {
             binary: "/fake/binary".into(),
-            cwd: Some(fake_cwd.clone()),
+            cwd: fake_cwd.clone(),
             binary_id: fake_binary_id.clone(),
         };
         let test_list = TestList::new_with_outputs(
@@ -515,7 +505,7 @@ mod tests {
                             filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                         },
                     },
-                    cwd: Some(fake_cwd),
+                    cwd: fake_cwd,
                     binary_id: fake_binary_id,
                 }
             }

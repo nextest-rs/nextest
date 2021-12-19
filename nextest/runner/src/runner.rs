@@ -346,17 +346,14 @@ impl<'list> TestRunner<'list> {
         if test.info.ignored {
             args.push("--ignored");
         }
-        let mut cmd = cmd(AsRef::<Path>::as_ref(test.binary), args)
+        let cmd = cmd(AsRef::<Path>::as_ref(test.binary), args)
             // Capture stdout and stderr.
             .stdout_capture()
             .stderr_capture()
             .unchecked()
+            .dir(test.cwd)
             // Debug environment variable for testing.
             .env("__NEXTEST_ATTEMPT", format!("{}", attempt));
-
-        if let Some(cwd) = test.cwd {
-            cmd = cmd.dir(cwd);
-        }
 
         let handle = cmd.start()?;
 

@@ -170,7 +170,7 @@ fn test_list_tests() -> Result<()> {
 #[allow(dead_code)]
 struct InstanceValue<'a> {
     binary_id: &'a str,
-    cwd: Option<&'a Utf8Path>,
+    cwd: &'a Utf8Path,
     status: InstanceStatus,
 }
 
