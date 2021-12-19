@@ -6,6 +6,7 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::Result;
 use duct::cmd;
+use guppy::graph::PackageGraph;
 use guppy::MetadataCommand;
 use maplit::btreemap;
 use nextest_config::NextestConfig;
@@ -71,6 +72,7 @@ impl FixtureStatus {
 static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::new(|| {
     btreemap! {
         "nextest-tests::basic" => vec![
+            TestFixture { name: "test_cargo_env_vars", status: FixtureStatus::Pass },
             TestFixture { name: "test_cwd", status: FixtureStatus::Pass },
             TestFixture { name: "test_failure_assert", status: FixtureStatus::Fail },
             TestFixture { name: "test_failure_error", status: FixtureStatus::Fail },
@@ -96,9 +98,21 @@ fn workspace_root() -> Utf8PathBuf {
         .join("fixtures/nextest-tests")
 }
 
-static FIXTURE_TARGETS: Lazy<BTreeMap<String, TestBinary>> = Lazy::new(init_fixture_targets);
+static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
+    let mut metadata_command = MetadataCommand::new();
+    // Construct a package graph with --no-deps since we don't need full dependency
+    // information.
+    metadata_command
+        .manifest_path(workspace_root().join("Cargo.toml"))
+        .no_deps()
+        .build_graph()
+        .expect("building package graph failed")
+});
 
-fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
+static FIXTURE_TARGETS: Lazy<BTreeMap<String, TestBinary<'static>>> =
+    Lazy::new(init_fixture_targets);
+
+fn init_fixture_targets() -> BTreeMap<String, TestBinary<'static>> {
     // TODO: actually productionize this, probably requires moving x into this repo
     let cmd_name = match env::var("CARGO") {
         Ok(v) => v,
@@ -106,21 +120,7 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
         Err(err) => panic!("error obtaining CARGO env var: {}", err),
     };
 
-    let dir_name = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("fixtures/nextest-tests");
-
-    let graph = {
-        let mut metadata_command = MetadataCommand::new();
-        // Construct a package graph with --no-deps since we don't need full dependency
-        // information.
-        metadata_command
-            .manifest_path(dir_name.join("Cargo.toml"))
-            .no_deps()
-            .build_graph()
-            .expect("building package graph failed")
-    };
+    let graph = &*PACKAGE_GRAPH;
 
     let expr = cmd!(
         cmd_name,
@@ -129,11 +129,11 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary> {
         "--message-format",
         "json-render-diagnostics"
     )
-    .dir(&dir_name)
+    .dir(workspace_root())
     .stdout_capture();
 
     let output = expr.run().expect("cargo test --no-run failed");
-    let test_binaries = TestBinary::from_messages(&graph, Cursor::new(output.stdout)).unwrap();
+    let test_binaries = TestBinary::from_messages(graph, Cursor::new(output.stdout)).unwrap();
 
     test_binaries
         .into_iter()
@@ -423,8 +423,8 @@ fn execute_collect<'a>(
         instance_statuses.insert(
             (test_instance.binary, test_instance.name),
             InstanceValue {
-                binary_id: test_instance.binary_id,
-                cwd: test_instance.cwd,
+                binary_id: test_instance.bin_info.binary_id.as_str(),
+                cwd: test_instance.bin_info.cwd.as_path(),
                 status,
             },
         );

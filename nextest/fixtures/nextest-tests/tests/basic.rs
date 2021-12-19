@@ -70,3 +70,48 @@ fn test_ignored() {}
 fn test_ignored_fail() {
     panic!("ignored test that fails");
 }
+
+macro_rules! assert_env {
+    ($name: expr) => {
+        let compile_time_env = env!($name);
+        let runtime_env =
+            std::env::var($name).expect(concat!("env var ", $name, " missing at runtime"));
+        println!(
+            concat!(
+                "for env var ",
+                $name,
+                ", compile time value: {}, runtime: {}"
+            ),
+            compile_time_env, runtime_env
+        );
+        assert_eq!(
+            compile_time_env, runtime_env,
+            concat!("env var ", $name, " same between compile time and runtime"),
+        );
+    };
+}
+
+/// Assert that test environment variables are correctly set.
+#[test]
+fn test_cargo_env_vars() {
+    // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
+    assert_env!("CARGO");
+    assert_env!("CARGO_MANIFEST_DIR");
+    assert_env!("CARGO_PKG_VERSION");
+    assert_env!("CARGO_PKG_VERSION_MAJOR");
+    assert_env!("CARGO_PKG_VERSION_MINOR");
+    assert_env!("CARGO_PKG_VERSION_PATCH");
+    assert_env!("CARGO_PKG_VERSION_PRE");
+    assert_env!("CARGO_PKG_AUTHORS");
+    assert_env!("CARGO_PKG_NAME");
+    assert_env!("CARGO_PKG_DESCRIPTION");
+    assert_env!("CARGO_PKG_HOMEPAGE");
+    assert_env!("CARGO_PKG_REPOSITORY");
+    assert_env!("CARGO_PKG_LICENSE");
+    assert_env!("CARGO_PKG_LICENSE_FILE");
+    // CARGO_CRATE_NAME is missing at runtime
+    // CARGO_BIN_EXE is missing at runtime
+    // CARGO_PRIMARY_PACKAGE is missing at runtime
+    // CARGO_TARGET_TMPDIR is missing at runtime
+    // TODO: dynamic library paths?
+}

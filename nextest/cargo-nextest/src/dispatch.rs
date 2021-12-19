@@ -101,7 +101,7 @@ pub struct TestBuildFilter {
 }
 
 impl TestBuildFilter {
-    fn compute(&self, graph: &PackageGraph, output: OutputContext) -> Result<TestList> {
+    fn compute<'g>(&self, graph: &'g PackageGraph, output: OutputContext) -> Result<TestList<'g>> {
         let mut cargo_cli = CargoCli::new("test", output);
         let manifest_path = graph.workspace().root().join("Cargo.toml");
         cargo_cli.add_args(["--manifest-path", manifest_path.as_str()]);

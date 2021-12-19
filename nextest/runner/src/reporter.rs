@@ -342,7 +342,10 @@ impl<'a> TestReporter<'a> {
         write!(
             writer,
             "{:>width$} ",
-            instance.binary_id.style(self.styles.test_list.test_bin),
+            instance
+                .bin_info
+                .binary_id
+                .style(self.styles.test_list.test_bin),
             width = self.binary_id_width
         )?;
 
@@ -466,7 +469,7 @@ pub enum TestEvent<'a> {
         /// The list of tests that will be run.
         ///
         /// The methods on the test list indicate the number of
-        test_list: &'a TestList,
+        test_list: &'a TestList<'a>,
     },
 
     // TODO: add events for BinaryStarted and BinaryFinished? May want a slightly different way to

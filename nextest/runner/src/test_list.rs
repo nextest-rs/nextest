@@ -10,11 +10,12 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::Message;
-use duct::cmd;
+use duct::{cmd, Expression};
+use guppy::graph::PackageMetadata;
 use guppy::{graph::PackageGraph, PackageId};
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Style};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{collections::BTreeMap, io, io::Write, path::Path};
 
 // TODO: capture ignored and not-ignored tests
@@ -22,9 +23,9 @@ use std::{collections::BTreeMap, io, io::Write, path::Path};
 /// Represents a test binary.
 ///
 /// Accepted as input to `TestList::new`.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct TestBinary {
+pub struct TestBinary<'g> {
     /// The test binary.
     pub binary: Utf8PathBuf,
 
@@ -32,15 +33,20 @@ pub struct TestBinary {
     /// `Cargo.toml`.
     pub binary_id: String,
 
+    /// Metadata for the package this binary is part of. This is used to set the correct
+    /// environment variables.
+    #[serde(skip)]
+    pub package: PackageMetadata<'g>,
+
     /// The working directory that this test should be executed in. If None, the current directory
     /// will not be changed.
     pub cwd: Utf8PathBuf,
 }
 
-impl TestBinary {
+impl<'g> TestBinary<'g> {
     /// Parse Cargo messages from the given `BufRead` and return a list of test binaries.
     pub fn from_messages(
-        graph: &PackageGraph,
+        graph: &'g PackageGraph,
         reader: impl io::BufRead,
     ) -> Result<Vec<Self>, FromMessagesError> {
         let mut binaries = vec![];
@@ -78,6 +84,7 @@ impl TestBinary {
                         binaries.push(TestBinary {
                             binary,
                             binary_id,
+                            package,
                             cwd,
                         })
                     }
@@ -93,12 +100,12 @@ impl TestBinary {
 }
 
 /// List of tests, gotten by executing a test binary with the `--list` command.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct TestList {
+pub struct TestList<'g> {
     /// Number of tests (including skipped and ignored) across all binaries.
     test_count: usize,
-    test_binaries: BTreeMap<Utf8PathBuf, TestBinInfo>,
+    test_binaries: BTreeMap<Utf8PathBuf, TestBinInfo<'g>>,
     #[serde(skip)]
     styles: Box<Styles>,
     // Values computed on first access.
@@ -107,9 +114,9 @@ pub struct TestList {
 }
 
 /// Information about a test binary.
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct TestBinInfo {
+pub struct TestBinInfo<'g> {
     /// A unique identifier for this binary, typically the package + binary name defined in
     /// `Cargo.toml`.
     pub binary_id: String,
@@ -117,13 +124,17 @@ pub struct TestBinInfo {
     /// Test names and other information.
     pub tests: BTreeMap<String, RustTestInfo>,
 
+    /// Package metadata.
+    #[serde(skip)]
+    pub package: PackageMetadata<'g>,
+
     /// The working directory that this test binary will be executed in. If None, the current directory
     /// will not be changed.
     pub cwd: Utf8PathBuf,
 }
 
 /// Information about a single Rust test.
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RustTestInfo {
     /// Returns true if this test is marked ignored.
@@ -137,10 +148,10 @@ pub struct RustTestInfo {
     pub filter_match: FilterMatch,
 }
 
-impl TestList {
+impl<'g> TestList<'g> {
     /// Creates a new test list by running the given command and applying the specified filter.
     pub fn new(
-        test_binaries: impl IntoIterator<Item = TestBinary>,
+        test_binaries: impl IntoIterator<Item = TestBinary<'g>>,
         filter: &TestFilterBuilder,
     ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
@@ -170,7 +181,7 @@ impl TestList {
 
     /// Creates a new test list with the given binary names and outputs.
     pub fn new_with_outputs(
-        test_bin_outputs: impl IntoIterator<Item = (TestBinary, impl AsRef<str>, impl AsRef<str>)>,
+        test_bin_outputs: impl IntoIterator<Item = (TestBinary<'g>, impl AsRef<str>, impl AsRef<str>)>,
         filter: &TestFilterBuilder,
     ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
@@ -211,7 +222,7 @@ impl TestList {
     pub fn skip_count(&self) -> usize {
         *self.skip_count.get_or_init(|| {
             self.iter_tests()
-                .filter(|instance| !instance.info.filter_match.is_match())
+                .filter(|instance| !instance.test_info.filter_match.is_match())
                 .count()
         })
     }
@@ -257,8 +268,8 @@ impl TestList {
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
         self.test_binaries.iter().flat_map(|(test_bin, bin_info)| {
-            bin_info.tests.iter().map(move |(name, info)| {
-                TestInstance::new(name, test_bin, &bin_info.binary_id, info, &bin_info.cwd)
+            bin_info.tests.iter().map(move |(name, test_info)| {
+                TestInstance::new(name, test_bin, bin_info, test_info)
             })
         })
     }
@@ -276,16 +287,16 @@ impl TestList {
     // ---
 
     fn process_output(
-        test_binary: TestBinary,
+        test_binary: TestBinary<'g>,
         filter: &TestFilterBuilder,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
-    ) -> Result<(Utf8PathBuf, TestBinInfo), ParseTestListError> {
+    ) -> Result<(Utf8PathBuf, TestBinInfo<'g>), ParseTestListError> {
         let mut tests = BTreeMap::new();
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
         // based on one doesn't affect the other.
-        let mut non_ignored_filter = filter.build(&test_binary);
+        let mut non_ignored_filter = filter.build();
         for test_name in Self::parse(non_ignored.as_ref())? {
             tests.insert(
                 test_name.into(),
@@ -296,7 +307,7 @@ impl TestList {
             );
         }
 
-        let mut ignored_filter = filter.build(&test_binary);
+        let mut ignored_filter = filter.build();
         for test_name in Self::parse(ignored.as_ref())? {
             // TODO: catch dups
             tests.insert(
@@ -310,6 +321,7 @@ impl TestList {
 
         let TestBinary {
             binary,
+            package,
             cwd,
             binary_id,
         } = test_binary;
@@ -319,6 +331,7 @@ impl TestList {
             TestBinInfo {
                 binary_id,
                 tests,
+                package,
                 cwd,
             },
         ))
@@ -366,7 +379,7 @@ impl TestList {
     }
 }
 
-impl TestBinary {
+impl<'g> TestBinary<'g> {
     /// Run this binary with and without --ignored and get the corresponding outputs.
     fn exec(&self) -> Result<(String, String), ParseTestListError> {
         let non_ignored = self.exec_single(false)?;
@@ -405,15 +418,11 @@ pub struct TestInstance<'a> {
     /// The test binary.
     pub binary: &'a Utf8Path,
 
-    /// A unique identifier for this binary, typically the package + binary name defined in
-    /// `Cargo.toml`.
-    pub binary_id: &'a str,
+    /// Information about the binary.
+    pub bin_info: &'a TestBinInfo<'a>,
 
     /// Information about the test.
-    pub info: &'a RustTestInfo,
-
-    /// The working directory for this test.
-    pub cwd: &'a Utf8Path,
+    pub test_info: &'a RustTestInfo,
 }
 
 impl<'a> TestInstance<'a> {
@@ -421,17 +430,70 @@ impl<'a> TestInstance<'a> {
     pub(crate) fn new(
         name: &'a (impl AsRef<str> + ?Sized),
         binary: &'a (impl AsRef<Utf8Path> + ?Sized),
-        binary_id: &'a str,
-        info: &'a RustTestInfo,
-        cwd: &'a Utf8Path,
+        bin_info: &'a TestBinInfo,
+        test_info: &'a RustTestInfo,
     ) -> Self {
         Self {
             name: name.as_ref(),
             binary: binary.as_ref(),
-            binary_id,
-            info,
-            cwd,
+            bin_info,
+            test_info,
         }
+    }
+
+    /// Creates the command expression for this test instance.
+    pub(crate) fn make_expression(&self) -> Expression {
+        // TODO: non-rust tests
+        let mut args = vec!["--exact", self.name, "--nocapture"];
+        if self.test_info.ignored {
+            args.push("--ignored");
+        }
+
+        let package = self.bin_info.package;
+
+        let cmd = cmd(AsRef::<Path>::as_ref(self.binary), args)
+            .dir(&self.bin_info.cwd)
+            // These environment variables are set at runtime by cargo test:
+            // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
+            .env(
+                "CARGO_MANIFEST_DIR",
+                package.manifest_path().parent().unwrap(),
+            )
+            .env("CARGO_PKG_VERSION", format!("{}", package.version()))
+            .env(
+                "CARGO_PKG_VERSION_MAJOR",
+                format!("{}", package.version().major),
+            )
+            .env(
+                "CARGO_PKG_VERSION_MINOR",
+                format!("{}", package.version().minor),
+            )
+            .env(
+                "CARGO_PKG_VERSION_PATCH",
+                format!("{}", package.version().patch),
+            )
+            .env(
+                "CARGO_PKG_VERSION_PRE",
+                format!("{}", package.version().pre),
+            )
+            .env("CARGO_PKG_AUTHORS", package.authors().join(":"))
+            .env("CARGO_PKG_NAME", package.name())
+            .env(
+                "CARGO_PKG_DESCRIPTION",
+                package.description().unwrap_or_default(),
+            )
+            .env("CARGO_PKG_HOMEPAGE", package.homepage().unwrap_or_default())
+            .env("CARGO_PKG_LICENSE", package.license().unwrap_or_default())
+            .env(
+                "CARGO_PKG_LICENSE_FILE",
+                package.license_file().unwrap_or_else(|| "".as_ref()),
+            )
+            .env(
+                "CARGO_PKG_REPOSITORY",
+                package.repository().unwrap_or_default(),
+            );
+
+        cmd
     }
 }
 
@@ -454,8 +516,10 @@ impl Styles {
 mod tests {
     use super::*;
     use crate::test_filter::{FilterMatch, MismatchReason, RunIgnored};
+    use guppy::CargoMetadata;
     use indoc::indoc;
     use maplit::btreemap;
+    use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use std::iter;
 
@@ -476,6 +540,7 @@ mod tests {
         let test_binary = TestBinary {
             binary: "/fake/binary".into(),
             cwd: fake_cwd.clone(),
+            package: package_metadata(),
             binary_id: fake_binary_id.clone(),
         };
         let test_list = TestList::new_with_outputs(
@@ -506,6 +571,7 @@ mod tests {
                         },
                     },
                     cwd: fake_cwd,
+                    package: package_metadata(),
                     binary_id: fake_binary_id,
                 }
             }
@@ -571,5 +637,20 @@ mod tests {
                 .expect("json-pretty succeeded"),
             EXPECTED_JSON_PRETTY
         );
+    }
+
+    static PACKAGE_GRAPH_FIXTURE: Lazy<PackageGraph> = Lazy::new(|| {
+        static FIXTURE_JSON: &str = include_str!("../../fixtures/cargo-metadata.json");
+        let metadata = CargoMetadata::parse_json(FIXTURE_JSON).expect("fixture is valid JSON");
+        metadata
+            .build_graph()
+            .expect("fixture is valid PackageGraph")
+    });
+
+    static PACKAGE_METADATA_ID: &str = "metadata-helper 0.1.0 (path+file:///Users/fakeuser/local/testcrates/metadata/metadata-helper)";
+    fn package_metadata() -> PackageMetadata<'static> {
+        PACKAGE_GRAPH_FIXTURE
+            .metadata(&PackageId::new(PACKAGE_METADATA_ID))
+            .expect("package ID is valid")
     }
 }

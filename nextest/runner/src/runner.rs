@@ -9,13 +9,11 @@ use crate::{
     SignalEvent, SignalHandler,
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
-use duct::cmd;
 use nextest_config::{NextestProfile, StatusLevel};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     convert::Infallible,
     marker::PhantomData,
-    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -66,12 +64,12 @@ impl TestRunnerOpts {
     }
 
     /// Creates a new test runner.
-    pub fn build<'list>(
+    pub fn build<'a>(
         &self,
-        test_list: &'list TestList,
+        test_list: &'a TestList,
         profile: &NextestProfile<'_>,
         handler: SignalHandler,
-    ) -> TestRunner<'list> {
+    ) -> TestRunner<'a> {
         let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
         let retries = self.retries.unwrap_or_else(|| profile.retries());
 
@@ -107,23 +105,23 @@ impl TestRunnerOpts {
 }
 
 /// Context for running tests.
-pub struct TestRunner<'list> {
+pub struct TestRunner<'a> {
     tries: usize,
     fail_fast: bool,
     slow_timeout: Duration,
-    test_list: &'list TestList,
+    test_list: &'a TestList<'a>,
     run_pool: ThreadPool,
     wait_pool: ThreadPool,
     handler: SignalHandler,
 }
 
-impl<'list> TestRunner<'list> {
+impl<'a> TestRunner<'a> {
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.
     pub fn execute<F>(&self, mut callback: F) -> RunStats
     where
-        F: FnMut(TestEvent<'list>) + Send,
+        F: FnMut(TestEvent<'a>) + Send,
     {
         self.try_execute::<Infallible, _>(|test_event| {
             callback(test_event);
@@ -138,7 +136,7 @@ impl<'list> TestRunner<'list> {
     /// error, the callback is no longer called.
     pub fn try_execute<E, F>(&self, callback: F) -> Result<RunStats, E>
     where
-        F: FnMut(TestEvent<'list>) -> Result<(), E> + Send,
+        F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
     {
         // TODO: add support for other test-running approaches, measure performance.
@@ -183,7 +181,7 @@ impl<'list> TestRunner<'list> {
                         return;
                     }
 
-                    if let FilterMatch::Mismatch { reason } = test_instance.info.filter_match {
+                    if let FilterMatch::Mismatch { reason } = test_instance.test_info.filter_match {
                         // Failure to send means the receiver was dropped.
                         let _ = this_run_sender.send(InternalTestEvent::Skipped {
                             test_instance,
@@ -317,9 +315,9 @@ impl<'list> TestRunner<'list> {
     /// Run an individual test in its own process.
     fn run_test(
         &self,
-        test: TestInstance<'list>,
+        test: TestInstance<'a>,
         attempt: usize,
-        run_sender: &Sender<InternalTestEvent<'list>>,
+        run_sender: &Sender<InternalTestEvent<'a>>,
     ) -> InternalRunStatus {
         let stopwatch = StopwatchStart::now();
 
@@ -337,21 +335,17 @@ impl<'list> TestRunner<'list> {
 
     fn run_test_inner(
         &self,
-        test: TestInstance<'list>,
+        test: TestInstance<'a>,
         attempt: usize,
         stopwatch: &StopwatchStart,
-        run_sender: &Sender<InternalTestEvent<'list>>,
+        run_sender: &Sender<InternalTestEvent<'a>>,
     ) -> std::io::Result<InternalRunStatus> {
-        let mut args = vec!["--exact", test.name, "--nocapture"];
-        if test.info.ignored {
-            args.push("--ignored");
-        }
-        let cmd = cmd(AsRef::<Path>::as_ref(test.binary), args)
+        let cmd = test
+            .make_expression()
             // Capture stdout and stderr.
             .stdout_capture()
             .stderr_capture()
             .unchecked()
-            .dir(test.cwd)
             // Debug environment variable for testing.
             .env("__NEXTEST_ATTEMPT", format!("{}", attempt));
 
@@ -620,9 +614,9 @@ struct CallbackContext<F, E> {
     phantom: PhantomData<E>,
 }
 
-impl<'list, F, E> CallbackContext<F, E>
+impl<'a, F, E> CallbackContext<F, E>
 where
-    F: FnMut(TestEvent<'list>) -> Result<(), E> + Send,
+    F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
 {
     fn new(callback: F, initial_run_count: usize, fail_fast: bool) -> Self {
         Self {
@@ -639,11 +633,11 @@ where
         }
     }
 
-    fn run_started(&mut self, test_list: &'list TestList) -> Result<(), E> {
+    fn run_started(&mut self, test_list: &'a TestList) -> Result<(), E> {
         (self.callback)(TestEvent::RunStarted { test_list })
     }
 
-    fn handle_event(&mut self, event: InternalEvent<'list>) -> Result<(), InternalError<E>> {
+    fn handle_event(&mut self, event: InternalEvent<'a>) -> Result<(), InternalError<E>> {
         match event {
             InternalEvent::Test(InternalTestEvent::Started { test_instance }) => {
                 self.running += 1;
@@ -739,30 +733,30 @@ where
 }
 
 #[derive(Debug)]
-enum InternalEvent<'list> {
-    Test(InternalTestEvent<'list>),
+enum InternalEvent<'a> {
+    Test(InternalTestEvent<'a>),
     Signal(SignalEvent),
 }
 
 #[derive(Debug)]
-enum InternalTestEvent<'list> {
+enum InternalTestEvent<'a> {
     Started {
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
     },
     Slow {
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
         elapsed: Duration,
     },
     Retry {
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
         run_status: TestRunStatus,
     },
     Finished {
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
         run_statuses: RunStatuses,
     },
     Skipped {
-        test_instance: TestInstance<'list>,
+        test_instance: TestInstance<'a>,
         reason: MismatchReason,
     },
 }

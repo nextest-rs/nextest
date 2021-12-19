@@ -4,7 +4,6 @@
 use crate::{
     errors::RunIgnoredParseError,
     partition::{Partitioner, PartitionerBuilder},
-    test_list::TestBinary,
 };
 use aho_corasick::AhoCorasick;
 use serde::{Deserialize, Serialize};
@@ -108,11 +107,11 @@ impl TestFilterBuilder {
     /// Creates a new test filter scoped to a single binary.
     ///
     /// This test filter may be stateful.
-    pub fn build(&self, test_binary: &TestBinary) -> TestFilter<'_> {
+    pub fn build(&self) -> TestFilter<'_> {
         let partitioner = self
             .partitioner_builder
             .as_ref()
-            .map(|partitioner_builder| partitioner_builder.build(test_binary));
+            .map(|partitioner_builder| partitioner_builder.build());
         TestFilter {
             builder: self,
             partitioner,
@@ -226,7 +225,7 @@ mod tests {
         fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
             let patterns: &[String] = &[];
             let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns);
-            let mut single_filter = test_filter.build(&make_test_binary());
+            let mut single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
@@ -236,7 +235,7 @@ mod tests {
         #[test]
         fn proptest_exact(test_names in vec(any::<String>(), 0..16)) {
             let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names);
-            let mut single_filter = test_filter.build(&make_test_binary());
+            let mut single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
@@ -255,7 +254,7 @@ mod tests {
             }
 
             let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns);
-            let mut single_filter = test_filter.build(&make_test_binary());
+            let mut single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_match(&test_name, false).is_match());
             }
@@ -271,17 +270,17 @@ mod tests {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
             let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern]);
-            let mut single_filter = test_filter.build(&make_test_binary());
+            let mut single_filter = test_filter.build();
             prop_assert!(!single_filter.filter_match(&substring, false).is_match());
         }
     }
 
-    /// Creates a fake test binary instance.
-    fn make_test_binary() -> TestBinary {
-        TestBinary {
-            binary: "/fake/path".into(),
-            binary_id: "fake-id".to_owned(),
-            cwd: "/fake".into(),
-        }
-    }
+    // /// Creates a fake test binary instance.
+    // fn make_test_binary() -> TestBinary {
+    //     TestBinary {
+    //         binary: "/fake/path".into(),
+    //         binary_id: "fake-id".to_owned(),
+    //         cwd: "/fake".into(),
+    //     }
+    // }
 }

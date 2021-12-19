@@ -7,7 +7,7 @@
 //! be made smarter: e.g. using data to pick different sets of binaries and tests to run, with
 //! an aim to minimize total build and test times.
 
-use crate::{errors::PartitionerBuilderParseError, test_list::TestBinary};
+use crate::errors::PartitionerBuilderParseError;
 use std::{
     fmt,
     hash::{Hash, Hasher},
@@ -49,7 +49,7 @@ pub trait Partitioner: fmt::Debug {
 
 impl PartitionerBuilder {
     /// Creates a new `Partitioner` from this `PartitionerBuilder`.
-    pub fn build(&self, _test_binary: &TestBinary) -> Box<dyn Partitioner> {
+    pub fn build(&self) -> Box<dyn Partitioner> {
         // Note we don't use test_binary at the moment but might in the future.
         match self {
             PartitionerBuilder::Count {

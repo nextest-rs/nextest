@@ -121,7 +121,7 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 let mut testcase = Testcase::new(test_instance.name, testcase_status);
                 testcase
-                    .set_classname(test_instance.binary_id)
+                    .set_classname(&test_instance.bin_info.binary_id)
                     .set_timestamp(to_datetime(main_status.start_time))
                     .set_time(main_status.time_taken);
 
@@ -189,8 +189,8 @@ impl<'cfg> MetadataJunit<'cfg> {
 
     fn testsuite_for(&mut self, test_instance: TestInstance<'cfg>) -> &mut Testsuite {
         self.testsuites
-            .entry(test_instance.binary_id)
-            .or_insert_with(|| Testsuite::new(test_instance.binary_id))
+            .entry(&test_instance.bin_info.binary_id)
+            .or_insert_with(|| Testsuite::new(&test_instance.bin_info.binary_id))
     }
 }
 
