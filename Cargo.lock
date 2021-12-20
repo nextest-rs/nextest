@@ -607,6 +607,7 @@ dependencies = [
  "indoc",
  "maplit",
  "nextest-config",
+ "nextest-summaries",
  "num_cpus",
  "once_cell",
  "owo-colors 3.1.1",
@@ -620,6 +621,14 @@ dependencies = [
  "strip-ansi-escapes",
  "structopt",
  "twox-hash",
+]
+
+[[package]]
+name = "nextest-summaries"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "serde",
 ]
 
 [[package]]

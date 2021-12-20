@@ -6,7 +6,7 @@ use crate::{
     partition::{Partitioner, PartitionerBuilder},
 };
 use aho_corasick::AhoCorasick;
-use serde::{Deserialize, Serialize};
+use nextest_summaries::{FilterMatch, MismatchReason};
 use std::{fmt, str::FromStr};
 
 /// Whether to run ignored tests.
@@ -168,50 +168,6 @@ impl<'filter> TestFilter<'filter> {
         }
 
         FilterMatch::Matches
-    }
-}
-
-/// An enum describing whether a test matches a filter.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case", tag = "status")]
-pub enum FilterMatch {
-    /// This test matches this filter.
-    Matches,
-
-    /// This test does not match this filter.
-    ///
-    /// The `MismatchReason` inside describes the reason this filter isn't matched.
-    Mismatch { reason: MismatchReason },
-}
-
-impl FilterMatch {
-    /// Returns true if the filter doesn't match.
-    pub fn is_match(&self) -> bool {
-        matches!(self, FilterMatch::Matches)
-    }
-}
-
-/// The reason for why a test doesn't match a filter.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum MismatchReason {
-    /// This test does not match the run-ignored option in the filter.
-    Ignored,
-
-    /// This test does not match the provided string filters.
-    String,
-
-    /// This test is in a different partition.
-    Partition,
-}
-
-impl fmt::Display for MismatchReason {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MismatchReason::Ignored => write!(f, "does not match the run-ignored option"),
-            MismatchReason::String => write!(f, "does not match the provided string filters"),
-            MismatchReason::Partition => write!(f, "is in a different partition"),
-        }
     }
 }
 

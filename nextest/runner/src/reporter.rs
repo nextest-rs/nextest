@@ -5,11 +5,11 @@ use crate::{
     errors::WriteEventError,
     metadata::MetadataReporter,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunStatus, TestStatus},
-    test_filter::MismatchReason,
     test_list::{TestInstance, TestList},
 };
 use debug_ignore::DebugIgnore;
 use nextest_config::{FailureOutput, NextestProfile, StatusLevel};
+use nextest_summaries::MismatchReason;
 use owo_colors::{OwoColorize, Style};
 use std::{
     fmt, io,
@@ -345,7 +345,7 @@ impl<'a> TestReporter<'a> {
             instance
                 .bin_info
                 .binary_id
-                .style(self.styles.test_list.test_bin),
+                .style(self.styles.test_list.binary_id),
             width = self.binary_id_width
         )?;
 

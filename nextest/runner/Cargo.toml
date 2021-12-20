@@ -26,6 +26,7 @@ structopt = "0.3.25"
 twox-hash = { version = "1.6.1", default-features = false }
 
 nextest-config = { path = "../config" }
+nextest-summaries = { path = "../summaries" }
 quick-junit = { path = "../../quick-junit" }
 
 [dev-dependencies]

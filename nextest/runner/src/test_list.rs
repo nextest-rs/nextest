@@ -6,16 +6,18 @@ pub use output_format::*;
 
 use crate::{
     errors::{FromMessagesError, ParseTestListError, WriteTestListError},
-    test_filter::{FilterMatch, TestFilterBuilder},
+    test_filter::TestFilterBuilder,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::Message;
 use duct::{cmd, Expression};
-use guppy::graph::PackageMetadata;
-use guppy::{graph::PackageGraph, PackageId};
+use guppy::{
+    graph::{PackageGraph, PackageMetadata},
+    PackageId,
+};
+use nextest_summaries::{RustTestcase, RustTestsuite, TestListSummary};
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Style};
-use serde::Serialize;
 use std::{collections::BTreeMap, io, io::Write, path::Path};
 
 // TODO: capture ignored and not-ignored tests
@@ -23,20 +25,20 @@ use std::{collections::BTreeMap, io, io::Write, path::Path};
 /// Represents a test binary.
 ///
 /// Accepted as input to `TestList::new`.
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Debug)]
 pub struct TestBinary<'g> {
-    /// The test binary.
-    pub binary: Utf8PathBuf,
-
-    /// A unique identifier for this binary, typically the package + binary name defined in
-    /// `Cargo.toml`.
+    /// A unique identifier for this test binary.
     pub binary_id: String,
 
     /// Metadata for the package this binary is part of. This is used to set the correct
     /// environment variables.
-    #[serde(skip)]
     pub package: PackageMetadata<'g>,
+
+    /// The test binary.
+    pub binary_path: Utf8PathBuf,
+
+    /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
+    pub binary_name: String,
 
     /// The working directory that this test should be executed in. If None, the current directory
     /// will not be changed.
@@ -82,9 +84,10 @@ impl<'g> TestBinary<'g> {
                         }
 
                         binaries.push(TestBinary {
-                            binary,
                             binary_id,
                             package,
+                            binary_path: binary,
+                            binary_name: artifact.target.name,
                             cwd,
                         })
                     }
@@ -100,52 +103,33 @@ impl<'g> TestBinary<'g> {
 }
 
 /// List of tests, gotten by executing a test binary with the `--list` command.
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Debug)]
 pub struct TestList<'g> {
-    /// Number of tests (including skipped and ignored) across all binaries.
     test_count: usize,
     test_binaries: BTreeMap<Utf8PathBuf, TestBinInfo<'g>>,
-    #[serde(skip)]
     styles: Box<Styles>,
-    // Values computed on first access.
-    #[serde(skip)]
+    // Computed on first access.
     skip_count: OnceCell<usize>,
 }
 
 /// Information about a test binary.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TestBinInfo<'g> {
-    /// A unique identifier for this binary, typically the package + binary name defined in
-    /// `Cargo.toml`.
+    /// A unique identifier for this binary.
     pub binary_id: String,
 
-    /// Test names and other information.
-    pub tests: BTreeMap<String, RustTestInfo>,
-
     /// Package metadata.
-    #[serde(skip)]
     pub package: PackageMetadata<'g>,
+
+    /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
+    pub binary_name: String,
+
+    /// Test names and other information.
+    pub tests: BTreeMap<String, RustTestcase>,
 
     /// The working directory that this test binary will be executed in. If None, the current directory
     /// will not be changed.
     pub cwd: Utf8PathBuf,
-}
-
-/// Information about a single Rust test.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct RustTestInfo {
-    /// Returns true if this test is marked ignored.
-    ///
-    /// Ignored tests, if run, are executed with the `--ignored` argument.
-    pub ignored: bool,
-
-    /// Whether the test matches the provided test filter.
-    ///
-    /// Only tests that match the filter are run.
-    pub filter_match: FilterMatch,
 }
 
 impl<'g> TestList<'g> {
@@ -244,6 +228,29 @@ impl<'g> TestList<'g> {
         self.test_binaries.get(test_bin.as_ref())
     }
 
+    /// Constructs a serializble summary for this test list.
+    pub fn to_summary(&self) -> TestListSummary {
+        let rust_testsuites = self
+            .test_binaries
+            .iter()
+            .map(|(binary_path, info)| {
+                let testsuite = RustTestsuite {
+                    package_name: info.package.name().to_owned(),
+                    binary_name: info.binary_name.clone(),
+                    package_id: info.package.id().repr().to_owned(),
+                    binary_path: binary_path.clone(),
+                    cwd: info.cwd.clone(),
+                    testcases: info.tests.clone(),
+                };
+                (info.binary_id.clone(), testsuite)
+            })
+            .collect();
+        let mut summary = TestListSummary::default();
+        summary.test_count = self.test_count;
+        summary.rust_testsuites = rust_testsuites;
+        summary
+    }
+
     /// Outputs this list to the given writer.
     pub fn write(
         &self,
@@ -253,7 +260,7 @@ impl<'g> TestList<'g> {
         match output_format {
             OutputFormat::Plain => self.write_plain(writer).map_err(WriteTestListError::Io),
             OutputFormat::Serializable(format) => format
-                .to_writer(self, writer)
+                .to_writer(&self.to_summary(), writer)
                 .map_err(WriteTestListError::Json),
         }
     }
@@ -300,7 +307,7 @@ impl<'g> TestList<'g> {
         for test_name in Self::parse(non_ignored.as_ref())? {
             tests.insert(
                 test_name.into(),
-                RustTestInfo {
+                RustTestcase {
                     ignored: false,
                     filter_match: non_ignored_filter.filter_match(test_name, false),
                 },
@@ -312,7 +319,7 @@ impl<'g> TestList<'g> {
             // TODO: catch dups
             tests.insert(
                 test_name.into(),
-                RustTestInfo {
+                RustTestcase {
                     ignored: true,
                     filter_match: ignored_filter.filter_match(test_name, true),
                 },
@@ -320,18 +327,20 @@ impl<'g> TestList<'g> {
         }
 
         let TestBinary {
-            binary,
-            package,
-            cwd,
             binary_id,
+            package,
+            binary_path,
+            binary_name,
+            cwd,
         } = test_binary;
 
         Ok((
-            binary,
+            binary_path,
             TestBinInfo {
                 binary_id,
-                tests,
                 package,
+                binary_name,
+                tests,
                 cwd,
             },
         ))
@@ -364,7 +373,8 @@ impl<'g> TestList<'g> {
 
     fn write_plain(&self, mut writer: impl Write) -> io::Result<()> {
         for (test_bin, info) in &self.test_binaries {
-            writeln!(writer, "{}:", test_bin.style(self.styles.test_bin))?;
+            writeln!(writer, "{}:", info.binary_id.style(self.styles.binary_id))?;
+            writeln!(writer, "  {} {}", "bin:".style(self.styles.field), test_bin)?;
             writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), info.cwd)?;
 
             for (name, info) in &info.tests {
@@ -392,7 +402,7 @@ impl<'g> TestBinary<'g> {
         if ignored {
             argv.push("--ignored");
         }
-        let cmd = cmd(AsRef::<Path>::as_ref(&self.binary), argv)
+        let cmd = cmd(AsRef::<Path>::as_ref(&self.binary_path), argv)
             .dir(&self.cwd)
             .stdout_capture();
 
@@ -400,7 +410,7 @@ impl<'g> TestBinary<'g> {
             ParseTestListError::command(
                 format!(
                     "'{} --list --format --terse{}'",
-                    self.binary,
+                    self.binary_path,
                     if ignored { " --ignored" } else { "" }
                 ),
                 error,
@@ -422,7 +432,7 @@ pub struct TestInstance<'a> {
     pub bin_info: &'a TestBinInfo<'a>,
 
     /// Information about the test.
-    pub test_info: &'a RustTestInfo,
+    pub test_info: &'a RustTestcase,
 }
 
 impl<'a> TestInstance<'a> {
@@ -431,7 +441,7 @@ impl<'a> TestInstance<'a> {
         name: &'a (impl AsRef<str> + ?Sized),
         binary: &'a (impl AsRef<Utf8Path> + ?Sized),
         bin_info: &'a TestBinInfo,
-        test_info: &'a RustTestInfo,
+        test_info: &'a RustTestcase,
     ) -> Self {
         Self {
             name: name.as_ref(),
@@ -499,14 +509,14 @@ impl<'a> TestInstance<'a> {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct Styles {
-    pub(super) test_bin: Style,
+    pub(super) binary_id: Style,
     pub(super) test_name: Style,
     field: Style,
 }
 
 impl Styles {
     pub(super) fn colorize(&mut self) {
-        self.test_bin = Style::new().magenta().bold();
+        self.binary_id = Style::new().magenta().bold();
         self.test_name = Style::new().blue().bold();
         self.field = Style::new().yellow().bold();
     }
@@ -515,10 +525,11 @@ impl Styles {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_filter::{FilterMatch, MismatchReason, RunIgnored};
+    use crate::test_filter::RunIgnored;
     use guppy::CargoMetadata;
     use indoc::indoc;
     use maplit::btreemap;
+    use nextest_summaries::{FilterMatch, MismatchReason};
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use std::iter;
@@ -536,11 +547,13 @@ mod tests {
 
         let test_filter = TestFilterBuilder::any(RunIgnored::Default);
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
-        let fake_binary_id = "fake-package".to_owned();
+        let fake_binary_name = "fake-binary".to_owned();
+        let fake_binary_id = "fake-package::fake-binary".to_owned();
         let test_binary = TestBinary {
-            binary: "/fake/binary".into(),
+            binary_path: "/fake/binary".into(),
             cwd: fake_cwd.clone(),
             package: package_metadata(),
+            binary_name: fake_binary_name.clone(),
             binary_id: fake_binary_id.clone(),
         };
         let test_list = TestList::new_with_outputs(
@@ -553,25 +566,26 @@ mod tests {
             btreemap! {
                 "/fake/binary".into() => TestBinInfo {
                     tests: btreemap! {
-                        "tests::foo::test_bar".to_owned() => RustTestInfo {
+                        "tests::foo::test_bar".to_owned() => RustTestcase {
                             ignored: false,
                             filter_match: FilterMatch::Matches,
                         },
-                        "tests::baz::test_quux".to_owned() => RustTestInfo {
+                        "tests::baz::test_quux".to_owned() => RustTestcase {
                             ignored: false,
                             filter_match: FilterMatch::Matches,
                         },
-                        "tests::ignored::test_bar".to_owned() => RustTestInfo {
+                        "tests::ignored::test_bar".to_owned() => RustTestcase {
                             ignored: true,
                             filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                         },
-                        "tests::baz::test_ignored".to_owned() => RustTestInfo {
+                        "tests::baz::test_ignored".to_owned() => RustTestcase {
                             ignored: true,
                             filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                         },
                     },
                     cwd: fake_cwd,
                     package: package_metadata(),
+                    binary_name: fake_binary_name,
                     binary_id: fake_binary_id,
                 }
             }
@@ -579,7 +593,8 @@ mod tests {
 
         // Check that the expected outputs are valid.
         static EXPECTED_PLAIN: &str = indoc! {"
-            /fake/binary:
+            fake-package::fake-binary:
+              bin: /fake/binary
               cwd: /fake/cwd
                 tests::baz::test_ignored (skipped)
                 tests::baz::test_quux
@@ -589,10 +604,14 @@ mod tests {
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
             {
               "test-count": 4,
-              "test-binaries": {
-                "/fake/binary": {
-                  "binary-id": "fake-package",
-                  "tests": {
+              "rust-testsuites": {
+                "fake-package::fake-binary": {
+                  "package-name": "metadata-helper",
+                  "binary-name": "fake-binary",
+                  "package-id": "metadata-helper 0.1.0 (path+file:///Users/fakeuser/local/testcrates/metadata/metadata-helper)",
+                  "binary-path": "/fake/binary",
+                  "cwd": "/fake/cwd",
+                  "testcases": {
                     "tests::baz::test_ignored": {
                       "ignored": true,
                       "filter-match": {
@@ -619,8 +638,7 @@ mod tests {
                         "reason": "ignored"
                       }
                     }
-                  },
-                  "cwd": "/fake/cwd"
+                  }
                 }
               }
             }"#};
@@ -630,6 +648,12 @@ mod tests {
                 .to_string(OutputFormat::Plain)
                 .expect("plain succeeded"),
             EXPECTED_PLAIN
+        );
+        println!(
+            "{}",
+            test_list
+                .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
+                .expect("json-pretty succeeded")
         );
         assert_eq!(
             test_list

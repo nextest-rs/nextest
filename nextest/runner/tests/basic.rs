@@ -6,17 +6,17 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::Result;
 use duct::cmd;
-use guppy::graph::PackageGraph;
-use guppy::MetadataCommand;
+use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_config::NextestConfig;
 use nextest_runner::{
     reporter::TestEvent,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
-    test_filter::{FilterMatch, MismatchReason, RunIgnored, TestFilterBuilder},
+    test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{TestBinary, TestList},
     SignalHandler,
 };
+use nextest_summaries::{FilterMatch, MismatchReason};
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use std::{
@@ -153,8 +153,8 @@ fn test_list_tests() -> Result<()> {
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         let info = test_list
-            .get(&test_binary.binary)
-            .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary));
+            .get(&test_binary.binary_path)
+            .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary_path));
         let tests: Vec<_> = info
             .tests
             .iter()
@@ -222,7 +222,8 @@ fn test_run() -> Result<()> {
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
-            let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
+            let instance_value =
+                &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
             let valid = match &instance_value.status {
                 InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
                 InstanceStatus::Finished(run_statuses) => {
@@ -270,7 +271,8 @@ fn test_run_ignored() -> Result<()> {
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
-            let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
+            let instance_value =
+                &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
             let valid = match &instance_value.status {
                 InstanceStatus::Skipped(_) => !fixture.status.is_ignored(),
                 InstanceStatus::Finished(run_statuses) => {
@@ -321,7 +323,8 @@ fn test_retries() -> Result<()> {
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
-            let instance_value = &instance_statuses[&(test_binary.binary.as_path(), fixture.name)];
+            let instance_value =
+                &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
             let valid = match &instance_value.status {
                 InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
                 InstanceStatus::Finished(run_statuses) => {

@@ -4,12 +4,12 @@
 use crate::{
     reporter::{CancelReason, TestEvent},
     stopwatch::{StopwatchEnd, StopwatchStart},
-    test_filter::{FilterMatch, MismatchReason},
     test_list::{TestInstance, TestList},
     SignalEvent, SignalHandler,
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
 use nextest_config::{NextestProfile, StatusLevel};
+use nextest_summaries::{FilterMatch, MismatchReason};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     convert::Infallible,
