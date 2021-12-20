@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::errors::{
-    ConfigReadError, FailureOutputParseError, ProfileNotFound, StatusLevelParseError,
+    ConfigReadError, ProfileNotFound, StatusLevelParseError, TestOutputDisplayParseError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{Config, Environment, File, FileFormat};
@@ -175,11 +175,19 @@ impl<'cfg> NextestProfile<'cfg> {
     }
 
     /// Returns the failure output config for this profile.
-    pub fn failure_output(&self) -> FailureOutput {
+    pub fn failure_output(&self) -> TestOutputDisplay {
         self.custom_profile
             .map(|profile| profile.failure_output)
             .flatten()
             .unwrap_or(self.default_profile.failure_output)
+    }
+
+    /// Returns the failure output config for this profile.
+    pub fn success_output(&self) -> TestOutputDisplay {
+        self.custom_profile
+            .map(|profile| profile.success_output)
+            .flatten()
+            .unwrap_or(self.default_profile.success_output)
     }
 
     /// Returns the fail-fast config for this profile.
@@ -210,55 +218,55 @@ impl<'cfg> NextestProfile<'cfg> {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum FailureOutput {
+pub enum TestOutputDisplay {
     Immediate,
     ImmediateFinal,
     Final,
     Never,
 }
 
-impl FailureOutput {
-    pub fn variants() -> [&'static str; 4] {
-        ["immediate", "immediate-final", "final", "never"]
+impl TestOutputDisplay {
+    pub fn variants() -> &'static [&'static str] {
+        &["immediate", "immediate-final", "final", "never"]
     }
 
     pub fn is_immediate(self) -> bool {
         match self {
-            FailureOutput::Immediate | FailureOutput::ImmediateFinal => true,
-            FailureOutput::Final | FailureOutput::Never => false,
+            TestOutputDisplay::Immediate | TestOutputDisplay::ImmediateFinal => true,
+            TestOutputDisplay::Final | TestOutputDisplay::Never => false,
         }
     }
 
     pub fn is_final(self) -> bool {
         match self {
-            FailureOutput::Final | FailureOutput::ImmediateFinal => true,
-            FailureOutput::Immediate | FailureOutput::Never => false,
+            TestOutputDisplay::Final | TestOutputDisplay::ImmediateFinal => true,
+            TestOutputDisplay::Immediate | TestOutputDisplay::Never => false,
         }
     }
 }
 
-impl FromStr for FailureOutput {
-    type Err = FailureOutputParseError;
+impl FromStr for TestOutputDisplay {
+    type Err = TestOutputDisplayParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let val = match s {
-            "immediate" => FailureOutput::Immediate,
-            "immediate-final" => FailureOutput::ImmediateFinal,
-            "final" => FailureOutput::Final,
-            "never" => FailureOutput::Never,
-            other => return Err(FailureOutputParseError::new(other)),
+            "immediate" => TestOutputDisplay::Immediate,
+            "immediate-final" => TestOutputDisplay::ImmediateFinal,
+            "final" => TestOutputDisplay::Final,
+            "never" => TestOutputDisplay::Never,
+            other => return Err(TestOutputDisplayParseError::new(other)),
         };
         Ok(val)
     }
 }
 
-impl fmt::Display for FailureOutput {
+impl fmt::Display for TestOutputDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FailureOutput::Immediate => write!(f, "immediate"),
-            FailureOutput::ImmediateFinal => write!(f, "immediate-final"),
-            FailureOutput::Final => write!(f, "final"),
-            FailureOutput::Never => write!(f, "never"),
+            TestOutputDisplay::Immediate => write!(f, "immediate"),
+            TestOutputDisplay::ImmediateFinal => write!(f, "immediate-final"),
+            TestOutputDisplay::Final => write!(f, "final"),
+            TestOutputDisplay::Never => write!(f, "never"),
         }
     }
 }
@@ -379,7 +387,8 @@ impl NextestProfilesImpl {
 struct DefaultProfileImpl {
     retries: usize,
     status_level: StatusLevel,
-    failure_output: FailureOutput,
+    failure_output: TestOutputDisplay,
+    success_output: TestOutputDisplay,
     fail_fast: bool,
     #[serde(with = "humantime_serde")]
     slow_timeout: Duration,
@@ -394,7 +403,9 @@ struct CustomProfileImpl {
     #[serde(default)]
     status_level: Option<StatusLevel>,
     #[serde(default)]
-    failure_output: Option<FailureOutput>,
+    failure_output: Option<TestOutputDisplay>,
+    #[serde(default)]
+    success_output: Option<TestOutputDisplay>,
     #[serde(default)]
     fail_fast: Option<bool>,
     #[serde(with = "humantime_serde")]

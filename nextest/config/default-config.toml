@@ -46,6 +46,9 @@ status-level = "pass"
 ## Can be overridden through the `--failure-output` option.
 failure-output = "immediate"
 
+## "success-output" controls output on success. This should generally be set to "never".
+success-output = "never"
+
 ## Cancel the test run on the first failure. For CI runs, consider setting this to false.
 fail-fast = true
 

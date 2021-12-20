@@ -8,7 +8,7 @@ use crate::{
     test_list::{TestInstance, TestList},
 };
 use debug_ignore::DebugIgnore;
-use nextest_config::{FailureOutput, NextestProfile, StatusLevel};
+use nextest_config::{NextestProfile, StatusLevel, TestOutputDisplay};
 use nextest_summaries::MismatchReason;
 use owo_colors::{OwoColorize, Style};
 use std::{
@@ -21,9 +21,12 @@ use structopt::StructOpt;
 #[derive(Debug, Default, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub struct ReporterOpts {
-    /// Output stdout and stderr on failures
-    #[structopt(long, possible_values = &FailureOutput::variants(), case_insensitive = true)]
-    failure_output: Option<FailureOutput>,
+    /// Output stdout and stderr on failure
+    #[structopt(long, possible_values = TestOutputDisplay::variants(), case_insensitive = true)]
+    failure_output: Option<TestOutputDisplay>,
+    /// Output stdout and stderr on success
+    #[structopt(long, possible_values = TestOutputDisplay::variants(), case_insensitive = true)]
+    success_output: Option<TestOutputDisplay>,
     /// Test statuses to output
     #[structopt(long, possible_values = StatusLevel::variants(), case_insensitive = true)]
     status_level: Option<StatusLevel>,
@@ -32,14 +35,15 @@ pub struct ReporterOpts {
 /// Functionality to report test results to stderr and JUnit
 pub struct TestReporter<'a> {
     status_level: StatusLevel,
-    failure_output: FailureOutput,
+    failure_output: TestOutputDisplay,
+    success_output: TestOutputDisplay,
     binary_id_width: usize,
     styles: Box<Styles>,
 
     // TODO: too many concerns mixed up here. Should have a better model, probably in conjunction
     // with factoring out the different reporters below.
     cancel_status: Option<CancelReason>,
-    failing_tests: DebugIgnore<Vec<(TestInstance<'a>, TestRunStatus)>>,
+    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, TestRunStatus)>>,
 
     metadata_reporter: MetadataReporter<'a>,
 }
@@ -59,8 +63,11 @@ impl<'a> TestReporter<'a> {
             failure_output: opts
                 .failure_output
                 .unwrap_or_else(|| profile.failure_output()),
+            success_output: opts
+                .success_output
+                .unwrap_or_else(|| profile.success_output()),
             cancel_status: None,
-            failing_tests: DebugIgnore(vec![]),
+            final_outputs: DebugIgnore(vec![]),
             styles,
             binary_id_width,
             metadata_reporter,
@@ -215,14 +222,16 @@ impl<'a> TestReporter<'a> {
 
                     // If the test failed to execute, print its output and error status.
                     // (don't print out test failures after Ctrl-C)
-                    if !last_status.status.is_success()
-                        && self.cancel_status < Some(CancelReason::Signal)
-                    {
-                        if self.failure_output.is_immediate() {
+                    if self.cancel_status < Some(CancelReason::Signal) {
+                        let test_output_display = match last_status.status.is_success() {
+                            true => self.success_output,
+                            false => self.failure_output,
+                        };
+                        if test_output_display.is_immediate() {
                             self.write_run_status(test_instance, last_status, false, &mut writer)?;
                         }
-                        if self.failure_output.is_final() {
-                            self.failing_tests
+                        if test_output_display.is_final() {
+                            self.final_outputs
                                 .push((*test_instance, last_status.clone()));
                         }
                     }
@@ -338,7 +347,7 @@ impl<'a> TestReporter<'a> {
                 if self.status_level >= StatusLevel::Fail
                     && self.cancel_status < Some(CancelReason::Signal)
                 {
-                    for (test_instance, run_status) in &*self.failing_tests {
+                    for (test_instance, run_status) in &*self.final_outputs {
                         self.write_run_status(test_instance, run_status, false, &mut writer)?;
                     }
                 }
@@ -400,40 +409,46 @@ impl<'a> TestReporter<'a> {
     ) -> io::Result<()> {
         let (header_style, _output_style) = if is_retry {
             (self.styles.retry, self.styles.retry_output)
+        } else if run_status.status.is_success() {
+            (self.styles.pass, self.styles.pass_output)
         } else {
             (self.styles.fail, self.styles.fail_output)
         };
 
-        write!(writer, "\n{}", "--- ".style(header_style))?;
-        self.write_attempt(run_status, header_style, &mut writer)?;
-        // The spacing is to align test instances.
-        write!(writer, "{}", " STDOUT:             ".style(header_style))?;
-        self.write_instance(*test_instance, &mut writer)?;
-        writeln!(writer, "{}", " ---".style(header_style))?;
+        if !run_status.stdout().is_empty() {
+            write!(writer, "\n{}", "--- ".style(header_style))?;
+            self.write_attempt(run_status, header_style, &mut writer)?;
+            // The spacing is to align test instances.
+            write!(writer, "{}", " STDOUT:             ".style(header_style))?;
+            self.write_instance(*test_instance, &mut writer)?;
+            writeln!(writer, "{}", " ---".style(header_style))?;
 
-        {
-            // Strip ANSI escapes from the output in case some test framework doesn't check for
-            // ttys before producing color output.
-            // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
-            // fixed
-            let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
-            no_color.write_all(run_status.stdout())?;
+            {
+                // Strip ANSI escapes from the output in case some test framework doesn't check for
+                // ttys before producing color output.
+                // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
+                // fixed
+                let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
+                no_color.write_all(run_status.stdout())?;
+            }
         }
 
-        write!(writer, "\n{}", "--- ".style(header_style))?;
-        self.write_attempt(run_status, header_style, &mut writer)?;
-        // The spacing is to align test instances.
-        write!(writer, "{}", " STDERR:             ".style(header_style))?;
-        self.write_instance(*test_instance, &mut writer)?;
-        writeln!(writer, "{}", " ---".style(header_style))?;
+        if !run_status.stderr().is_empty() {
+            write!(writer, "\n{}", "--- ".style(header_style))?;
+            self.write_attempt(run_status, header_style, &mut writer)?;
+            // The spacing is to align test instances.
+            write!(writer, "{}", " STDERR:             ".style(header_style))?;
+            self.write_instance(*test_instance, &mut writer)?;
+            writeln!(writer, "{}", " ---".style(header_style))?;
 
-        {
-            // Strip ANSI escapes from the output in case some test framework doesn't check for
-            // ttys before producing color output.
-            // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
-            // fixed
-            let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
-            no_color.write_all(run_status.stderr())?;
+            {
+                // Strip ANSI escapes from the output in case some test framework doesn't check for
+                // ttys before producing color output.
+                // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
+                // fixed
+                let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
+                no_color.write_all(run_status.stderr())?;
+            }
         }
 
         writeln!(writer)
@@ -565,6 +580,7 @@ struct Styles {
     pass: Style,
     retry: Style,
     fail: Style,
+    pass_output: Style,
     retry_output: Style,
     fail_output: Style,
     skip: Style,
@@ -577,6 +593,7 @@ impl Styles {
         self.pass = Style::new().green().bold();
         self.retry = Style::new().magenta().bold();
         self.fail = Style::new().red().bold();
+        self.pass_output = Style::new().green();
         self.retry_output = Style::new().magenta();
         self.fail_output = Style::new().magenta();
         self.skip = Style::new().yellow().bold();

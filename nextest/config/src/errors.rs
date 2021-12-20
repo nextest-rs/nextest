@@ -1,7 +1,7 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{FailureOutput, StatusLevel};
+use crate::{StatusLevel, TestOutputDisplay};
 use config::ConfigError;
 use std::{error, fmt};
 
@@ -63,13 +63,13 @@ impl fmt::Display for ProfileNotFound {
 
 impl error::Error for ProfileNotFound {}
 
-/// Error returned while parsing a [`FailureOutput`] value from a string.
+/// Error returned while parsing a [`TestOutputDisplay`] value from a string.
 #[derive(Clone, Debug)]
-pub struct FailureOutputParseError {
+pub struct TestOutputDisplayParseError {
     input: String,
 }
 
-impl FailureOutputParseError {
+impl TestOutputDisplayParseError {
     pub(crate) fn new(input: impl Into<String>) -> Self {
         Self {
             input: input.into(),
@@ -77,18 +77,18 @@ impl FailureOutputParseError {
     }
 }
 
-impl fmt::Display for FailureOutputParseError {
+impl fmt::Display for TestOutputDisplayParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "unrecognized value for failure-output: {}\n(known values: {})",
+            "unrecognized value for test output display: {}\n(known values: {})",
             self.input,
-            FailureOutput::variants().join(", ")
+            TestOutputDisplay::variants().join(", ")
         )
     }
 }
 
-impl error::Error for FailureOutputParseError {}
+impl error::Error for TestOutputDisplayParseError {}
 
 /// Error returned while parsing a [`StatusLevel`] value from a string.
 #[derive(Clone, Debug)]
