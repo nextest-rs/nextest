@@ -1,6 +1,7 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::helpers::write_test_name;
 use crate::{
     errors::WriteEventError,
     metadata::MetadataReporter,
@@ -368,19 +369,7 @@ impl<'a> TestReporter<'a> {
             width = self.binary_id_width
         )?;
 
-        // Now look for the part of the test after the last ::, if any.
-        let mut splits = instance.name.rsplitn(2, "::");
-        let trailing = splits.next().expect("test should have at least 1 element");
-        if let Some(rest) = splits.next() {
-            write!(writer, "{}::", rest)?;
-        }
-        write!(
-            writer,
-            "{}",
-            trailing.style(self.styles.test_list.test_name)
-        )?;
-
-        Ok(())
+        write_test_name(&instance.name, self.styles.test_list.test_name, writer)
     }
 
     fn write_duration(&self, duration: Duration, mut writer: impl Write) -> io::Result<()> {

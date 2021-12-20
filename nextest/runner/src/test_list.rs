@@ -4,6 +4,7 @@
 mod output_format;
 pub use output_format::*;
 
+use crate::helpers::write_test_name;
 use crate::{
     errors::{FromMessagesError, ParseTestListError, WriteTestListError},
     test_filter::TestFilterBuilder,
@@ -377,12 +378,13 @@ impl<'g> TestList<'g> {
             writeln!(writer, "  {} {}", "bin:".style(self.styles.field), test_bin)?;
             writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), info.cwd)?;
 
+            let mut indented = indent_write::io::IndentWriter::new("    ", &mut writer);
             for (name, info) in &info.tests {
-                write!(writer, "    {}", name.style(self.styles.test_name))?;
+                write_test_name(name, self.styles.test_name, &mut indented)?;
                 if !info.filter_match.is_match() {
-                    write!(writer, " (skipped)")?;
+                    write!(indented, " (skipped)")?;
                 }
-                writeln!(writer)?;
+                writeln!(indented)?;
             }
         }
         Ok(())
