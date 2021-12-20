@@ -498,9 +498,13 @@ pub struct TestRunStatus {
     pub attempt: usize,
     /// The total number of times this test can be run. Equal to `1 + retries`.
     pub total_attempts: usize,
+    /// Standard output and standard error for this test.
     pub stdout_stderr: Arc<(Vec<u8>, Vec<u8>)>,
+    /// The status of this test: pass, fail or execution error.
     pub status: TestStatus,
+    /// The time at which the test started.
     pub start_time: SystemTime,
+    /// The time it took for the test to run.
     pub time_taken: Duration,
 }
 
@@ -770,8 +774,11 @@ enum InternalError<E> {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum TestStatus {
+    /// The test passed.
     Pass,
+    /// The test failed.
     Fail,
+    /// An error occurred while executing the test.
     ExecFail,
 }
 

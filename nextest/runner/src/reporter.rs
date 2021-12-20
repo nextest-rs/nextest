@@ -38,6 +38,7 @@ pub struct TestReporter<'a> {
 
     // TODO: too many concerns mixed up here. Should have a better model, probably in conjunction
     // with factoring out the different reporters below.
+    cancel_status: Option<CancelReason>,
     failing_tests: DebugIgnore<Vec<(TestInstance<'a>, TestRunStatus)>>,
 
     metadata_reporter: MetadataReporter<'a>,
@@ -58,6 +59,7 @@ impl<'a> TestReporter<'a> {
             failure_output: opts
                 .failure_output
                 .unwrap_or_else(|| profile.failure_output()),
+            cancel_status: None,
             failing_tests: DebugIgnore(vec![]),
             styles,
             binary_id_width,
@@ -212,7 +214,10 @@ impl<'a> TestReporter<'a> {
                     writeln!(writer)?;
 
                     // If the test failed to execute, print its output and error status.
-                    if !last_status.status.is_success() {
+                    // (don't print out test failures after Ctrl-C)
+                    if !last_status.status.is_success()
+                        && self.cancel_status < Some(CancelReason::Signal)
+                    {
                         if self.failure_output.is_immediate() {
                             self.write_run_status(test_instance, last_status, false, &mut writer)?;
                         }
@@ -237,6 +242,8 @@ impl<'a> TestReporter<'a> {
                 }
             }
             TestEvent::RunBeginCancel { running, reason } => {
+                self.cancel_status = self.cancel_status.max(Some(*reason));
+
                 write!(writer, "{:>12} ", "Canceling".style(self.styles.fail))?;
                 let reason_str = match reason {
                     CancelReason::TestFailure => "test failure",
@@ -327,7 +334,10 @@ impl<'a> TestReporter<'a> {
 
                 writeln!(writer)?;
 
-                if self.status_level >= StatusLevel::Fail {
+                // Don't print out test failures if canceled due to Ctrl-C.
+                if self.status_level >= StatusLevel::Fail
+                    && self.cancel_status < Some(CancelReason::Signal)
+                {
                     for (test_instance, run_status) in &*self.failing_tests {
                         self.write_run_status(test_instance, run_status, false, &mut writer)?;
                     }
