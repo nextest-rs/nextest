@@ -406,12 +406,9 @@ impl<'a> TestReporter<'a> {
 
         write!(writer, "\n{}", "--- ".style(header_style))?;
         self.write_attempt(run_status, header_style, &mut writer)?;
-        write!(writer, "{}", " STDOUT: ".style(header_style))?;
-
-        {
-            let no_color = strip_ansi_escapes::Writer::new(&mut writer);
-            self.write_instance(*test_instance, no_color)?;
-        }
+        // The spacing is to align test instances.
+        write!(writer, "{}", " STDOUT:             ".style(header_style))?;
+        self.write_instance(*test_instance, &mut writer)?;
         writeln!(writer, "{}", " ---".style(header_style))?;
 
         {
@@ -425,12 +422,9 @@ impl<'a> TestReporter<'a> {
 
         write!(writer, "\n{}", "--- ".style(header_style))?;
         self.write_attempt(run_status, header_style, &mut writer)?;
-        write!(writer, "{}", " STDERR: ".style(header_style))?;
-
-        {
-            let no_color = strip_ansi_escapes::Writer::new(&mut writer);
-            self.write_instance(*test_instance, no_color)?;
-        }
+        // The spacing is to align test instances.
+        write!(writer, "{}", " STDERR:             ".style(header_style))?;
+        self.write_instance(*test_instance, &mut writer)?;
         writeln!(writer, "{}", " ---".style(header_style))?;
 
         {
