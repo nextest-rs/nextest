@@ -369,7 +369,7 @@ impl<'a> TestReporter<'a> {
             width = self.binary_id_width
         )?;
 
-        write_test_name(&instance.name, self.styles.test_list.test_name, writer)
+        write_test_name(instance.name, self.styles.test_list.test_name, writer)
     }
 
     fn write_duration(&self, duration: Duration, mut writer: impl Write) -> io::Result<()> {
