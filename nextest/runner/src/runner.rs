@@ -20,45 +20,30 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-use structopt::StructOpt;
 
 /// Test runner options.
-#[derive(Debug, Default, StructOpt)]
-#[structopt(rename_all = "kebab-case")]
-pub struct TestRunnerOpts {
-    /// Number of retries for failing tests [default: from profile]
-    #[structopt(long)]
+#[derive(Debug, Default)]
+pub struct TestRunnerBuilder {
     retries: Option<usize>,
-
-    /// Cancel test run on the first failure
-    #[structopt(long)]
-    fail_fast: bool,
-
-    /// Run all tests regardless of failure
-    #[structopt(long, overrides_with = "fail-fast")]
-    no_fail_fast: bool,
-
-    /// Number of tests to run simultaneously [default: logical CPU count]
-    #[structopt(short = "j", long, alias = "jobs")]
+    fail_fast: Option<bool>,
     test_threads: Option<usize>,
 }
 
-impl TestRunnerOpts {
+impl TestRunnerBuilder {
     /// Sets the number of retries for this test runner.
-    pub fn with_retries(mut self, retries: usize) -> Self {
+    pub fn set_retries(&mut self, retries: usize) -> &mut Self {
         self.retries = Some(retries);
         self
     }
 
     /// Sets the fail-fast value for this test runner.
-    pub fn with_fail_fast(mut self, fail_fast: bool) -> Self {
-        self.fail_fast = fail_fast;
-        self.no_fail_fast = !fail_fast;
+    pub fn set_fail_fast(&mut self, fail_fast: bool) -> &mut Self {
+        self.fail_fast = Some(fail_fast);
         self
     }
 
     /// Sets the number of tests to run simultaneously.
-    pub fn with_test_threads(mut self, test_threads: usize) -> Self {
+    pub fn set_test_threads(&mut self, test_threads: usize) -> &mut Self {
         self.test_threads = Some(test_threads);
         self
     }
@@ -72,15 +57,7 @@ impl TestRunnerOpts {
     ) -> TestRunner<'a> {
         let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
         let retries = self.retries.unwrap_or_else(|| profile.retries());
-
-        let fail_fast = if self.no_fail_fast {
-            false
-        } else if self.fail_fast {
-            true
-        } else {
-            profile.fail_fast()
-        };
-
+        let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
         let slow_timeout = profile.slow_timeout();
         TestRunner {
             // The number of tries = retries + 1.

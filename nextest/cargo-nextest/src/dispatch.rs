@@ -8,11 +8,11 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{bail, Result, WrapErr};
 use guppy::{graph::PackageGraph, MetadataCommand};
-use nextest_config::{errors::ConfigReadError, NextestConfig};
+use nextest_config::{errors::ConfigReadError, NextestConfig, StatusLevel, TestOutputDisplay};
 use nextest_runner::{
     partition::PartitionerBuilder,
-    reporter::{ReporterOpts, TestReporter},
-    runner::TestRunnerOpts,
+    reporter::TestReporterBuilder,
+    runner::TestRunnerBuilder,
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{OutputFormat, TestBinary, TestList},
     SignalHandler,
@@ -76,7 +76,7 @@ pub enum Command {
         #[structopt(flatten)]
         runner_opts: TestRunnerOpts,
         #[structopt(flatten)]
-        reporter_opts: ReporterOpts,
+        reporter_opts: TestReporterOpts,
     },
 }
 
@@ -119,6 +119,75 @@ impl TestBuildFilter {
         let test_filter =
             TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
         TestList::new(test_binaries, &test_filter).wrap_err("error building test list")
+    }
+}
+
+/// Test runner options.
+#[derive(Debug, Default, StructOpt)]
+pub struct TestRunnerOpts {
+    /// Number of retries for failing tests [default: from profile]
+    #[structopt(long)]
+    retries: Option<usize>,
+
+    /// Cancel test run on the first failure
+    #[structopt(long)]
+    fail_fast: bool,
+
+    /// Run all tests regardless of failure
+    #[structopt(long, overrides_with = "fail-fast")]
+    no_fail_fast: bool,
+
+    /// Number of tests to run simultaneously [default: logical CPU count]
+    #[structopt(long, short = "j", visible_alias = "jobs")]
+    test_threads: Option<usize>,
+}
+
+impl TestRunnerOpts {
+    fn to_builder(&self) -> TestRunnerBuilder {
+        let mut builder = TestRunnerBuilder::default();
+        if let Some(retries) = self.retries {
+            builder.set_retries(retries);
+        }
+        if self.no_fail_fast {
+            builder.set_fail_fast(false);
+        } else if self.fail_fast {
+            builder.set_fail_fast(true);
+        }
+        if let Some(test_threads) = self.test_threads {
+            builder.set_test_threads(test_threads);
+        }
+
+        builder
+    }
+}
+
+#[derive(Debug, Default, StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+pub struct TestReporterOpts {
+    /// Output stdout and stderr on failure
+    #[structopt(long, possible_values = TestOutputDisplay::variants(), case_insensitive = true)]
+    failure_output: Option<TestOutputDisplay>,
+    /// Output stdout and stderr on success
+    #[structopt(long, possible_values = TestOutputDisplay::variants(), case_insensitive = true)]
+    success_output: Option<TestOutputDisplay>,
+    /// Test statuses to output
+    #[structopt(long, possible_values = StatusLevel::variants(), case_insensitive = true)]
+    status_level: Option<StatusLevel>,
+}
+
+impl TestReporterOpts {
+    fn to_builder(&self) -> TestReporterBuilder {
+        let mut builder = TestReporterBuilder::default();
+        if let Some(failure_output) = self.failure_output {
+            builder.set_failure_output(failure_output);
+        }
+        if let Some(success_output) = self.success_output {
+            builder.set_success_output(success_output);
+        }
+        if let Some(status_level) = self.status_level {
+            builder.set_status_level(status_level);
+        }
+        builder
     }
 }
 
@@ -166,13 +235,15 @@ impl Opts {
 
                 let test_list = build_filter.compute(&graph, output)?;
 
-                let mut reporter = TestReporter::new(&test_list, &profile, reporter_opts);
+                let mut reporter = reporter_opts.to_builder().build(&test_list, &profile);
                 if output.color.should_colorize(Stream::Stderr) {
                     reporter.colorize();
                 }
 
                 let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
-                let runner = runner_opts.build(&test_list, &profile, handler);
+                let runner = runner_opts
+                    .to_builder()
+                    .build(&test_list, &profile, handler);
                 let stderr = std::io::stderr();
                 let run_stats = runner.try_execute(|event| {
                     // TODO: consider turning this into a trait, to initialize and carry the lock

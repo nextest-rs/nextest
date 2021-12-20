@@ -70,6 +70,10 @@ pub(crate) struct CargoOptions {
     #[structopt(long)]
     cargo_profile: Option<String>,
 
+    /// Number of build jobs to run
+    #[structopt(long)]
+    build_jobs: Option<String>,
+
     /// Space or comma separated list of features to activate
     #[structopt(long)]
     features: Vec<String>,
@@ -196,6 +200,9 @@ impl<'a> CargoCli<'a> {
         }
         if let Some(profile) = &options.cargo_profile {
             self.args.extend(["--profile", profile]);
+        }
+        if let Some(build_jobs) = &options.build_jobs {
+            self.args.extend(["--jobs", build_jobs.as_str()]);
         }
         self.args
             .extend(options.features.iter().flat_map(|s| ["--features", s]));

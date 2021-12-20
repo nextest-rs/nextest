@@ -1,9 +1,9 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::helpers::write_test_name;
 use crate::{
     errors::WriteEventError,
+    helpers::write_test_name,
     metadata::MetadataReporter,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunStatus, TestStatus},
     test_list::{TestInstance, TestList},
@@ -17,20 +17,64 @@ use std::{
     io::Write,
     time::{Duration, SystemTime},
 };
-use structopt::StructOpt;
 
-#[derive(Debug, Default, StructOpt)]
-#[structopt(rename_all = "kebab-case")]
-pub struct ReporterOpts {
-    /// Output stdout and stderr on failure
-    #[structopt(long, possible_values = TestOutputDisplay::variants(), case_insensitive = true)]
+/// Test reporter builder.
+#[derive(Debug, Default)]
+pub struct TestReporterBuilder {
     failure_output: Option<TestOutputDisplay>,
-    /// Output stdout and stderr on success
-    #[structopt(long, possible_values = TestOutputDisplay::variants(), case_insensitive = true)]
     success_output: Option<TestOutputDisplay>,
-    /// Test statuses to output
-    #[structopt(long, possible_values = StatusLevel::variants(), case_insensitive = true)]
     status_level: Option<StatusLevel>,
+}
+
+impl TestReporterBuilder {
+    /// Sets the conditions under which test failures are output.
+    pub fn set_failure_output(&mut self, failure_output: TestOutputDisplay) -> &mut Self {
+        self.failure_output = Some(failure_output);
+        self
+    }
+
+    /// Sets the conditions under which test successes are output.
+    pub fn set_success_output(&mut self, success_output: TestOutputDisplay) -> &mut Self {
+        self.success_output = Some(success_output);
+        self
+    }
+
+    /// Sets the kinds of statuses to output.
+    pub fn set_status_level(&mut self, status_level: StatusLevel) -> &mut Self {
+        self.status_level = Some(status_level);
+        self
+    }
+}
+
+impl TestReporterBuilder {
+    /// Creates a new test reporter.
+    pub fn build<'a>(
+        &self,
+        test_list: &TestList,
+        profile: &'a NextestProfile<'a>,
+    ) -> TestReporter<'a> {
+        let styles = Box::new(Styles::default());
+        let binary_id_width = test_list
+            .iter()
+            .map(|(_, info)| info.binary_id.len())
+            .max()
+            .unwrap_or_default();
+        let metadata_reporter = MetadataReporter::new(profile);
+        TestReporter {
+            status_level: self.status_level.unwrap_or_else(|| profile.status_level()),
+            failure_output: self
+                .failure_output
+                .unwrap_or_else(|| profile.failure_output()),
+            success_output: self
+                .success_output
+                .unwrap_or_else(|| profile.success_output()),
+            cancel_status: None,
+            final_outputs: DebugIgnore(vec![]),
+            styles,
+            binary_id_width,
+            metadata_reporter,
+        }
+    }
 }
 
 /// Functionality to report test results to stderr and JUnit
@@ -50,31 +94,6 @@ pub struct TestReporter<'a> {
 }
 
 impl<'a> TestReporter<'a> {
-    /// Creates a new instance with the given profile.
-    pub fn new(test_list: &TestList, profile: &'a NextestProfile<'a>, opts: &ReporterOpts) -> Self {
-        let styles = Box::new(Styles::default());
-        let binary_id_width = test_list
-            .iter()
-            .map(|(_, info)| info.binary_id.len())
-            .max()
-            .unwrap_or_default();
-        let metadata_reporter = MetadataReporter::new(profile);
-        Self {
-            status_level: opts.status_level.unwrap_or_else(|| profile.status_level()),
-            failure_output: opts
-                .failure_output
-                .unwrap_or_else(|| profile.failure_output()),
-            success_output: opts
-                .success_output
-                .unwrap_or_else(|| profile.success_output()),
-            cancel_status: None,
-            final_outputs: DebugIgnore(vec![]),
-            styles,
-            binary_id_width,
-            metadata_reporter,
-        }
-    }
-
     pub fn colorize(&mut self) {
         self.styles.colorize();
     }

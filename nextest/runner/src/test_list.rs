@@ -4,9 +4,9 @@
 mod output_format;
 pub use output_format::*;
 
-use crate::helpers::write_test_name;
 use crate::{
     errors::{FromMessagesError, ParseTestListError, WriteTestListError},
+    helpers::write_test_name,
     test_filter::TestFilterBuilder,
 };
 use camino::{Utf8Path, Utf8PathBuf};

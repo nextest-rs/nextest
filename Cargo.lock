@@ -626,7 +626,6 @@ dependencies = [
  "serde",
  "serde_json",
  "strip-ansi-escapes",
- "structopt",
  "twox-hash",
 ]
 

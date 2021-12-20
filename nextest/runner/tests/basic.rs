@@ -11,7 +11,7 @@ use maplit::btreemap;
 use nextest_config::NextestConfig;
 use nextest_runner::{
     reporter::TestEvent,
-    runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerOpts, TestStatus},
+    runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerBuilder, TestStatus},
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{TestBinary, TestList},
     SignalHandler,
@@ -213,7 +213,7 @@ fn test_run() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let runner = TestRunnerOpts::default().build(&test_list, &profile, SignalHandler::noop());
+    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -262,7 +262,7 @@ fn test_run_ignored() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let runner = TestRunnerOpts::default().build(&test_list, &profile, SignalHandler::noop());
+    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -314,7 +314,7 @@ fn test_retries() -> Result<()> {
     let retries = profile.retries();
     assert_eq!(retries, 2, "retries set in with-retries profile");
 
-    let runner = TestRunnerOpts::default().build(&test_list, &profile, SignalHandler::noop());
+    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 

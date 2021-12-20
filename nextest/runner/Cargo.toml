@@ -23,7 +23,6 @@ rayon = "1.5.1"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.68"
 strip-ansi-escapes = "0.1.1"
-structopt = "0.3.25"
 twox-hash = { version = "1.6.1", default-features = false }
 
 nextest-config = { path = "../config" }
