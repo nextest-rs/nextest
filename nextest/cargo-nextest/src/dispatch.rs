@@ -58,7 +58,7 @@ impl ConfigOpts {
 #[derive(Debug, StructOpt)]
 pub enum Command {
     /// List tests in binary
-    ListTests {
+    List {
         /// Output format
         #[structopt(short = "T", long, default_value, possible_values = OutputFormat::variants(), case_insensitive = true)]
         format: OutputFormat,
@@ -138,7 +138,7 @@ impl Opts {
         };
 
         match self.command {
-            Command::ListTests {
+            Command::List {
                 build_filter,
                 format,
             } => {
