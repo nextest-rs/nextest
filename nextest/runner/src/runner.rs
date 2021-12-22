@@ -24,12 +24,21 @@ use std::{
 /// Test runner options.
 #[derive(Debug, Default)]
 pub struct TestRunnerBuilder {
+    no_capture: bool,
     retries: Option<usize>,
     fail_fast: Option<bool>,
     test_threads: Option<usize>,
 }
 
 impl TestRunnerBuilder {
+    /// Sets no-capture mode.
+    ///
+    /// In this mode, tests will always be run serially: `test_threads` will always be 1.
+    pub fn set_no_capture(&mut self, no_capture: bool) -> &mut Self {
+        self.no_capture = no_capture;
+        self
+    }
+
     /// Sets the number of retries for this test runner.
     pub fn set_retries(&mut self, retries: usize) -> &mut Self {
         self.retries = Some(retries);
@@ -55,11 +64,15 @@ impl TestRunnerBuilder {
         profile: &NextestProfile<'_>,
         handler: SignalHandler,
     ) -> TestRunner<'a> {
-        let test_threads = self.test_threads.unwrap_or_else(num_cpus::get);
+        let test_threads = match self.no_capture {
+            true => 1,
+            false => self.test_threads.unwrap_or_else(num_cpus::get),
+        };
         let retries = self.retries.unwrap_or_else(|| profile.retries());
         let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
         let slow_timeout = profile.slow_timeout();
         TestRunner {
+            no_capture: self.no_capture,
             // The number of tries = retries + 1.
             tries: retries + 1,
             fail_fast,
@@ -83,6 +96,7 @@ impl TestRunnerBuilder {
 
 /// Context for running tests.
 pub struct TestRunner<'a> {
+    no_capture: bool,
     tries: usize,
     fail_fast: bool,
     slow_timeout: Duration,
@@ -319,12 +333,16 @@ impl<'a> TestRunner<'a> {
     ) -> std::io::Result<InternalRunStatus> {
         let cmd = test
             .make_expression()
-            // Capture stdout and stderr.
-            .stdout_capture()
-            .stderr_capture()
             .unchecked()
             // Debug environment variable for testing.
             .env("__NEXTEST_ATTEMPT", format!("{}", attempt));
+
+        let cmd = if self.no_capture {
+            cmd
+        } else {
+            // Capture stdout and stderr.
+            cmd.stdout_capture().stderr_capture()
+        };
 
         let handle = cmd.start()?;
 
@@ -772,6 +790,30 @@ impl TestStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nextest_config::NextestConfig;
+
+    #[test]
+    fn no_capture_settings() {
+        // Ensure that output settings are ignored with no-capture.
+        let mut builder = TestRunnerBuilder::default();
+        builder.set_no_capture(true).set_test_threads(20);
+        let test_list = TestList::empty();
+        let config = NextestConfig::default_config("/fake/dir");
+        let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
+        let handler = SignalHandler::noop();
+        let runner = builder.build(&test_list, &profile, handler);
+        assert!(runner.no_capture, "no_capture is true");
+        assert_eq!(
+            runner.run_pool.current_num_threads(),
+            2,
+            "tests run serially => run pool has 1 + 1 = 2 threads"
+        );
+        assert_eq!(
+            runner.wait_pool.current_num_threads(),
+            1,
+            "tests run serially => wait pool has 1 thread"
+        );
+    }
 
     #[test]
     fn test_is_success() {

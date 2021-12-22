@@ -21,12 +21,22 @@ use std::{
 /// Test reporter builder.
 #[derive(Debug, Default)]
 pub struct TestReporterBuilder {
+    no_capture: bool,
     failure_output: Option<TestOutputDisplay>,
     success_output: Option<TestOutputDisplay>,
     status_level: Option<StatusLevel>,
 }
 
 impl TestReporterBuilder {
+    /// Sets no-capture mode.
+    ///
+    /// In this mode, `failure_output` and `success_output` will be ignored, and `status_level`
+    /// will be at least [`StatusLevel::Pass`].
+    pub fn set_no_capture(&mut self, no_capture: bool) -> &mut Self {
+        self.no_capture = no_capture;
+        self
+    }
+
     /// Sets the conditions under which test failures are output.
     pub fn set_failure_output(&mut self, failure_output: TestOutputDisplay) -> &mut Self {
         self.failure_output = Some(failure_output);
@@ -60,18 +70,37 @@ impl TestReporterBuilder {
             .max()
             .unwrap_or_default();
         let metadata_reporter = MetadataReporter::new(profile);
-        TestReporter {
-            status_level: self.status_level.unwrap_or_else(|| profile.status_level()),
-            failure_output: self
+
+        let status_level = self.status_level.unwrap_or_else(|| profile.status_level());
+        let status_level = match self.no_capture {
+            // In no-capture mode, the status level is treated as at least pass.
+            true => status_level.max(StatusLevel::Pass),
+            false => status_level,
+        };
+        // failure_output and success_output are meaningless if the runner isn't capturing any
+        // output.
+        let failure_output = match self.no_capture {
+            true => TestOutputDisplay::Never,
+            false => self
                 .failure_output
                 .unwrap_or_else(|| profile.failure_output()),
-            success_output: self
+        };
+        let success_output = match self.no_capture {
+            true => TestOutputDisplay::Never,
+            false => self
                 .success_output
-                .unwrap_or_else(|| profile.success_output()),
+                .unwrap_or_else(|| profile.failure_output()),
+        };
+
+        TestReporter {
+            status_level,
+            failure_output,
+            success_output,
+            no_capture: self.no_capture,
+            binary_id_width,
+            styles,
             cancel_status: None,
             final_outputs: DebugIgnore(vec![]),
-            styles,
-            binary_id_width,
             metadata_reporter,
         }
     }
@@ -82,6 +111,7 @@ pub struct TestReporter<'a> {
     status_level: StatusLevel,
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
+    no_capture: bool,
     binary_id_width: usize,
     styles: Box<Styles>,
 
@@ -148,8 +178,18 @@ impl<'a> TestReporter<'a> {
 
                 writeln!(writer)?;
             }
-            TestEvent::TestStarted { .. } => {
-                // TODO
+            TestEvent::TestStarted { test_instance } => {
+                // In no-capture mode, print out a test start event.
+                if self.no_capture {
+                    // The spacing is to align test instances.
+                    write!(
+                        writer,
+                        "{:>12}             ",
+                        "START".style(self.styles.pass),
+                    )?;
+                    self.write_instance(*test_instance, &mut writer)?;
+                    writeln!(writer)?;
+                }
             }
             TestEvent::TestSlow {
                 test_instance,
@@ -606,5 +646,42 @@ impl Styles {
         self.fail_output = Style::new().magenta();
         self.skip = Style::new().yellow().bold();
         self.test_list.colorize();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nextest_config::NextestConfig;
+
+    #[test]
+    fn no_capture_settings() {
+        // Ensure that output settings are ignored with no-capture.
+        let mut builder = TestReporterBuilder::default();
+        builder
+            .set_no_capture(true)
+            .set_failure_output(TestOutputDisplay::Immediate)
+            .set_success_output(TestOutputDisplay::Immediate)
+            .set_status_level(StatusLevel::Fail);
+        let test_list = TestList::empty();
+        let config = NextestConfig::default_config("/fake/dir");
+        let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
+        let reporter = builder.build(&test_list, &profile);
+        assert!(reporter.no_capture, "no_capture is true");
+        assert_eq!(
+            reporter.failure_output,
+            TestOutputDisplay::Never,
+            "failure output is never, overriding other settings"
+        );
+        assert_eq!(
+            reporter.success_output,
+            TestOutputDisplay::Never,
+            "success output is never, overriding other settings"
+        );
+        assert_eq!(
+            reporter.status_level,
+            StatusLevel::Pass,
+            "status level is pass, overriding other settings"
+        );
     }
 }

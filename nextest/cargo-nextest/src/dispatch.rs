@@ -71,10 +71,17 @@ pub enum Command {
         /// Nextest profile to use
         #[structopt(long, short = "P")]
         profile: Option<String>,
+
+        /// Run tests serially and do not capture output
+        #[structopt(long, alias = "nocapture")]
+        no_capture: bool,
+
         #[structopt(flatten)]
         build_filter: TestBuildFilter,
+
         #[structopt(flatten)]
         runner_opts: TestRunnerOpts,
+
         #[structopt(flatten)]
         reporter_opts: TestReporterOpts,
     },
@@ -138,13 +145,20 @@ pub struct TestRunnerOpts {
     no_fail_fast: bool,
 
     /// Number of tests to run simultaneously [default: logical CPU count]
-    #[structopt(long, short = "j", visible_alias = "jobs")]
+    #[structopt(
+        long,
+        short = "j",
+        visible_alias = "jobs",
+        value_name = "THREADS",
+        conflicts_with = "no-capture"
+    )]
     test_threads: Option<usize>,
 }
 
 impl TestRunnerOpts {
-    fn to_builder(&self) -> TestRunnerBuilder {
+    fn to_builder(&self, no_capture: bool) -> TestRunnerBuilder {
         let mut builder = TestRunnerBuilder::default();
+        builder.set_no_capture(no_capture);
         if let Some(retries) = self.retries {
             builder.set_retries(retries);
         }
@@ -165,19 +179,33 @@ impl TestRunnerOpts {
 #[structopt(rename_all = "kebab-case")]
 pub struct TestReporterOpts {
     /// Output stdout and stderr on failure
-    #[structopt(long, possible_values = TestOutputDisplay::variants(), case_insensitive = true)]
+    #[structopt(
+        long,
+        possible_values = TestOutputDisplay::variants(),
+        case_insensitive = true,
+        conflicts_with = "no-capture"
+    )]
     failure_output: Option<TestOutputDisplay>,
     /// Output stdout and stderr on success
-    #[structopt(long, possible_values = TestOutputDisplay::variants(), case_insensitive = true)]
+
+    #[structopt(
+        long,
+        possible_values = TestOutputDisplay::variants(),
+        case_insensitive = true,
+        conflicts_with = "no-capture"
+    )]
     success_output: Option<TestOutputDisplay>,
+
+    // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output
     #[structopt(long, possible_values = StatusLevel::variants(), case_insensitive = true)]
     status_level: Option<StatusLevel>,
 }
 
 impl TestReporterOpts {
-    fn to_builder(&self) -> TestReporterBuilder {
+    fn to_builder(&self, no_capture: bool) -> TestReporterBuilder {
         let mut builder = TestReporterBuilder::default();
+        builder.set_no_capture(no_capture);
         if let Some(failure_output) = self.failure_output {
             builder.set_failure_output(failure_output);
         }
@@ -221,6 +249,7 @@ impl Opts {
             }
             Command::Run {
                 ref profile,
+                no_capture,
                 ref build_filter,
                 ref runner_opts,
                 ref reporter_opts,
@@ -235,14 +264,16 @@ impl Opts {
 
                 let test_list = build_filter.compute(&graph, output)?;
 
-                let mut reporter = reporter_opts.to_builder().build(&test_list, &profile);
+                let mut reporter = reporter_opts
+                    .to_builder(no_capture)
+                    .build(&test_list, &profile);
                 if output.color.should_colorize(Stream::Stderr) {
                     reporter.colorize();
                 }
 
                 let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
                 let runner = runner_opts
-                    .to_builder()
+                    .to_builder(no_capture)
                     .build(&test_list, &profile, handler);
                 let stderr = std::io::stderr();
                 let run_stats = runner.try_execute(|event| {

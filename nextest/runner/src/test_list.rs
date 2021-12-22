@@ -294,6 +294,17 @@ impl<'g> TestList<'g> {
     // Helper methods
     // ---
 
+    // Empty list for tests.
+    #[cfg(test)]
+    pub(crate) fn empty() -> Self {
+        Self {
+            test_count: 0,
+            test_binaries: BTreeMap::new(),
+            styles: Box::new(Styles::default()),
+            skip_count: OnceCell::new(),
+        }
+    }
+
     fn process_output(
         test_binary: TestBinary<'g>,
         filter: &TestFilterBuilder,
