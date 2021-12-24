@@ -77,7 +77,6 @@ impl TestReporterBuilder {
             true => status_level.max(StatusLevel::Pass),
             false => status_level,
         };
-        println!("status level: {:?}", status_level);
         // failure_output and success_output are meaningless if the runner isn't capturing any
         // output.
         let failure_output = match self.no_capture {
