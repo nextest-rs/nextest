@@ -8,3 +8,7 @@ members = [
     "nextest/summaries",
     "quick-junit",
 ]
+
+# make backtrace + color-eyre faster on debug builds
+[profile.dev.package.backtrace]
+opt-level = 3

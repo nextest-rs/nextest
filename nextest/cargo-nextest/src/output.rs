@@ -1,6 +1,10 @@
 // Copyright (c) The cargo-guppy Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use env_logger::fmt::Formatter;
+use log::{Level, Record};
+use owo_colors::{OwoColorize, Style};
+use std::io::Write;
 use structopt::StructOpt;
 use supports_color::Stream;
 
@@ -49,6 +53,10 @@ impl Color {
             Color::Always => owo_colors::set_override(true),
             Color::Never => owo_colors::set_override(false),
         }
+
+        env_logger::Builder::from_env("NEXTEST_LOG")
+            .format(format_fn)
+            .init();
     }
 
     pub(crate) fn should_colorize(self, stream: Stream) -> bool {
@@ -81,5 +89,35 @@ impl std::str::FromStr for Color {
                 s
             )),
         }
+    }
+}
+
+fn format_fn(f: &mut Formatter, record: &Record<'_>) -> std::io::Result<()> {
+    match record.level() {
+        Level::Error => writeln!(
+            f,
+            "{}: {}",
+            "error".if_supports_color(Stream::Stderr, |s| s.style(Style::new().bold().red())),
+            record.args()
+        ),
+        Level::Warn => writeln!(
+            f,
+            "{}: {}",
+            "warning".if_supports_color(Stream::Stderr, |s| s.style(Style::new().bold().yellow())),
+            record.args()
+        ),
+        Level::Info => writeln!(
+            f,
+            "{}: {}",
+            "info".if_supports_color(Stream::Stderr, |s| s.bold()),
+            record.args()
+        ),
+        Level::Debug => writeln!(
+            f,
+            "{}: {}",
+            "debug".if_supports_color(Stream::Stderr, |s| s.bold()),
+            record.args()
+        ),
+        _other => Ok(()),
     }
 }

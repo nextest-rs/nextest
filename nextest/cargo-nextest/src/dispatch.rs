@@ -4,9 +4,10 @@
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, OutputOpts},
+    ExpectedError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use color_eyre::eyre::{bail, Result, WrapErr};
+use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::{graph::PackageGraph, MetadataCommand};
 use nextest_config::{errors::ConfigReadError, NextestConfig, StatusLevel, TestOutputDisplay};
 use nextest_runner::{
@@ -119,8 +120,16 @@ impl TestBuildFilter {
         let expression = cargo_cli.to_expression();
         let output = expression
             .stdout_capture()
+            .unchecked()
             .run()
             .wrap_err("failed to build tests")?;
+        if !output.status.success() {
+            return Err(Report::new(ExpectedError::build_failed(
+                cargo_cli.all_args(),
+                output.status.code(),
+            )));
+        }
+
         let test_binaries = TestBinary::from_messages(graph, Cursor::new(output.stdout))?;
 
         let test_filter =
@@ -283,7 +292,7 @@ impl Opts {
                     reporter.report_event(event, lock)
                 })?;
                 if !run_stats.is_success() {
-                    bail!("test run failed");
+                    return Err(Report::new(ExpectedError::test_run_failed()));
                 }
             }
         }

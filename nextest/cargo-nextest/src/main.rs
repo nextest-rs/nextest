@@ -1,7 +1,7 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use cargo_nextest::Opts;
+use cargo_nextest::{ExpectedError, Opts};
 use color_eyre::Result;
 use structopt::StructOpt;
 
@@ -34,5 +34,12 @@ fn main() -> Result<()> {
     let _ = enable_ansi_support::enable_ansi_support();
 
     let opts = Opts::from_iter(args());
-    opts.exec()
+    match opts.exec() {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let expected_error: ExpectedError = err.downcast()?;
+            expected_error.display_to_stderr();
+            std::process::exit(expected_error.process_exit_code())
+        }
+    }
 }
