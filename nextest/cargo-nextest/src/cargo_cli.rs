@@ -124,6 +124,10 @@ pub(crate) struct CargoOptions {
     /// Override a configuration value (unstable)
     #[clap(long, value_name = "KEY=VALUE")]
     config: Vec<String>,
+
+    /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
+    #[clap(short = 'Z', value_name = "FLAG")]
+    unstable_flags: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -239,6 +243,12 @@ impl<'a> CargoCli<'a> {
         }
         self.args
             .extend(options.config.iter().flat_map(|s| ["--config", s.as_str()]));
+        self.args.extend(
+            options
+                .unstable_flags
+                .iter()
+                .flat_map(|s| ["-Z", s.as_str()]),
+        );
 
         // TODO: other options
 
