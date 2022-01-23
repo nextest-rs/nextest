@@ -22,11 +22,11 @@ use nextest_runner::{
 use std::io::Cursor;
 use supports_color::Stream;
 
-/// This test runner accepts a Rust test binary and does fancy things with it.
+/// Next-generation test runner for Rust.
 ///
 /// TODO: expand on this
 #[derive(Debug, Parser)]
-#[clap(rename_all = "kebab-case")]
+#[clap(author, version)]
 pub struct CargoNextestApp {
     /// Path to Cargo.toml
     #[clap(long, global = true, value_name = "PATH")]
@@ -94,7 +94,7 @@ pub struct TestBuildFilter {
     cargo_options: CargoOptions,
 
     /// Run ignored tests
-    #[clap(long, possible_values = RunIgnored::variants(), default_value_t)]
+    #[clap(long, possible_values = RunIgnored::variants(), default_value_t, value_name = "WHICH")]
     run_ignored: RunIgnored,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
@@ -189,7 +189,8 @@ pub struct TestReporterOpts {
     #[clap(
         long,
         possible_values = TestOutputDisplay::variants(),
-        conflicts_with = "no-capture"
+        conflicts_with = "no-capture",
+        value_name = "WHEN"
     )]
     failure_output: Option<TestOutputDisplay>,
     /// Output stdout and stderr on success
@@ -197,13 +198,14 @@ pub struct TestReporterOpts {
     #[clap(
         long,
         possible_values = TestOutputDisplay::variants(),
-        conflicts_with = "no-capture"
+        conflicts_with = "no-capture",
+        value_name = "WHEN"
     )]
     success_output: Option<TestOutputDisplay>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output
-    #[clap(long, possible_values = StatusLevel::variants())]
+    #[clap(long, possible_values = StatusLevel::variants(), value_name = "LEVEL")]
     status_level: Option<StatusLevel>,
 }
 

@@ -18,7 +18,8 @@ pub(crate) struct OutputOpts {
         arg_enum,
         default_value_t,
         hide_possible_values = true,
-        global = true
+        global = true,
+        value_name = "WHEN"
     )]
     pub(crate) color: Color,
 }

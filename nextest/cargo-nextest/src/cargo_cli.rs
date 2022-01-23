@@ -5,11 +5,12 @@
 
 use crate::output::OutputContext;
 use camino::Utf8PathBuf;
-use clap::Args;
+use clap::{AppSettings, Args};
 use std::path::PathBuf;
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
+#[clap(help_heading = "CARGO OPTIONS", setting = AppSettings::DeriveDisplayOrder)]
 pub(crate) struct CargoOptions {
     /// Test only this package's library unit tests
     #[clap(long)]
@@ -67,11 +68,11 @@ pub(crate) struct CargoOptions {
     release: bool,
 
     /// Build artifacts with the specified Cargo profile
-    #[clap(long)]
+    #[clap(long, value_name = "NAME")]
     cargo_profile: Option<String>,
 
     /// Number of build jobs to run
-    #[clap(long)]
+    #[clap(long, value_name = "JOBS")]
     build_jobs: Option<String>,
 
     /// Space or comma separated list of features to activate
@@ -87,11 +88,11 @@ pub(crate) struct CargoOptions {
     no_default_features: bool,
 
     /// Build for the target triple
-    #[clap(long)]
+    #[clap(long, value_name = "TRIPLE")]
     target: Option<String>,
 
     /// Directory for all generated artifacts
-    #[clap(long)]
+    #[clap(long, value_name = "DIR")]
     target_dir: Option<String>,
 
     /// Ignore `rust-version` specification in packages
@@ -121,7 +122,7 @@ pub(crate) struct CargoOptions {
     offline: bool,
 
     /// Override a configuration value (unstable)
-    #[clap(long)]
+    #[clap(long, value_name = "KEY=VALUE")]
     config: Vec<String>,
 }
 
