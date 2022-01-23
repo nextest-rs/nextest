@@ -1,9 +1,9 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use cargo_nextest::{ExpectedError, Opts};
+use cargo_nextest::{CargoNextestApp, ExpectedError};
+use clap::Parser;
 use color_eyre::Result;
-use structopt::StructOpt;
 
 // On Unix-like operating systems, the executable name of the Cargo subcommand usually doesn't have
 // a file extension, while on Windows, executables usually have a ".exe" extension.
@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let _ = enable_ansi_support::enable_ansi_support();
 
-    let opts = Opts::from_iter(args());
+    let opts = CargoNextestApp::parse_from(args());
     match opts.exec() {
         Ok(()) => Ok(()),
         Err(err) => {

@@ -1,23 +1,24 @@
 // Copyright (c) The cargo-guppy Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use clap::{ArgEnum, Args};
 use env_logger::fmt::Formatter;
 use log::{Level, Record};
 use owo_colors::{OwoColorize, Style};
 use std::io::Write;
-use structopt::StructOpt;
 use supports_color::Stream;
 
-#[derive(Copy, Clone, Debug, StructOpt)]
+#[derive(Copy, Clone, Debug, Args)]
 #[must_use]
 pub(crate) struct OutputOpts {
     // TODO: quiet/verbose?
-    /// Produce color output
-    #[structopt(
+    /// Produce color output: auto, always, never
+    #[clap(
         long,
-        global = true,
-        default_value = "auto",
-        possible_values = &["auto", "always", "never"],
+        arg_enum,
+        default_value_t,
+        hide_possible_values = true,
+        global = true
     )]
     pub(crate) color: Color,
 }
@@ -26,7 +27,7 @@ impl OutputOpts {
     pub(crate) fn init(self) -> OutputContext {
         let OutputOpts { color } = self;
 
-        color.init_colored();
+        color.init();
 
         OutputContext { color }
     }
@@ -38,7 +39,7 @@ pub(crate) struct OutputContext {
     pub(crate) color: Color,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, ArgEnum)]
 #[must_use]
 pub enum Color {
     Auto,
@@ -46,8 +47,14 @@ pub enum Color {
     Never,
 }
 
+impl Default for Color {
+    fn default() -> Self {
+        Color::Auto
+    }
+}
+
 impl Color {
-    fn init_colored(self) {
+    fn init(self) {
         match self {
             Color::Auto => owo_colors::unset_override(),
             Color::Always => owo_colors::set_override(true),

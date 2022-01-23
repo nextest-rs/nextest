@@ -5,123 +5,123 @@
 
 use crate::output::OutputContext;
 use camino::Utf8PathBuf;
+use clap::Args;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 /// Options passed down to cargo.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub(crate) struct CargoOptions {
     /// Test only this package's library unit tests
-    #[structopt(long)]
+    #[clap(long)]
     lib: bool,
 
     /// Test only the specified binary
-    #[structopt(long)]
+    #[clap(long)]
     bin: Vec<String>,
 
     /// Test all binaries
-    #[structopt(long)]
+    #[clap(long)]
     bins: bool,
 
     /// Test only the specified test target
-    #[structopt(long)]
+    #[clap(long)]
     test: Vec<String>,
 
     /// Test all targets
-    #[structopt(long)]
+    #[clap(long)]
     tests: bool,
 
     /// Test only the specified bench target
-    #[structopt(long)]
+    #[clap(long)]
     bench: Vec<String>,
 
     /// Test all benches
-    #[structopt(long)]
+    #[clap(long)]
     benches: bool,
 
     /// Test all targets
-    #[structopt(long)]
+    #[clap(long)]
     all_targets: bool,
 
     //  TODO: doc?
     // no-run is handled by test runner
     /// Package to test
-    #[structopt(short = "p", long = "package")]
+    #[clap(short = 'p', long = "package")]
     packages: Vec<String>,
 
     /// Build all packages in the workspace
-    #[structopt(long)]
+    #[clap(long)]
     workspace: bool,
 
     /// Exclude packages from the test
-    #[structopt(long)]
+    #[clap(long)]
     exclude: Vec<String>,
 
     /// Alias for workspace (deprecated)
-    #[structopt(long)]
+    #[clap(long)]
     all: bool,
 
     // jobs is handled by test runner
     /// Build artifacts in release mode, with optimizations
-    #[structopt(long)]
+    #[clap(long)]
     release: bool,
 
     /// Build artifacts with the specified Cargo profile
-    #[structopt(long)]
+    #[clap(long)]
     cargo_profile: Option<String>,
 
     /// Number of build jobs to run
-    #[structopt(long)]
+    #[clap(long)]
     build_jobs: Option<String>,
 
     /// Space or comma separated list of features to activate
-    #[structopt(long)]
+    #[clap(long)]
     features: Vec<String>,
 
     /// Activate all available features
-    #[structopt(long)]
+    #[clap(long)]
     all_features: bool,
 
     /// Do not activate the `default` feature
-    #[structopt(long)]
+    #[clap(long)]
     no_default_features: bool,
 
     /// Build for the target triple
-    #[structopt(long)]
+    #[clap(long)]
     target: Option<String>,
 
     /// Directory for all generated artifacts
-    #[structopt(long)]
+    #[clap(long)]
     target_dir: Option<String>,
 
     /// Ignore `rust-version` specification in packages
-    #[structopt(long)]
+    #[clap(long)]
     ignore_rust_version: bool,
     // --message-format is captured by nextest
     /// Output build graph in JSON (unstable)
-    #[structopt(long)]
+    #[clap(long)]
     unit_graph: bool,
 
     /// Outputs a future incompatibility report at the end of the build (unstable)
-    #[structopt(long)]
+    #[clap(long)]
     future_incompat_report: bool,
 
     // --verbose is not currently supported
     // --color is handled by runner
     /// Require Cargo.lock and cache are up to date
-    #[structopt(long)]
+    #[clap(long)]
     frozen: bool,
 
     /// Require Cargo.lock is up to date
-    #[structopt(long)]
+    #[clap(long)]
     locked: bool,
 
     /// Run without accessing the network
-    #[structopt(long)]
+    #[clap(long)]
     offline: bool,
 
     /// Override a configuration value (unstable)
-    #[structopt(long)]
+    #[clap(long)]
     config: Vec<String>,
 }
 

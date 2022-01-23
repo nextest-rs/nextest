@@ -7,6 +7,7 @@ use crate::{
     ExpectedError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use clap::{Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::{graph::PackageGraph, MetadataCommand};
 use nextest_config::{errors::ConfigReadError, NextestConfig, StatusLevel, TestOutputDisplay};
@@ -19,33 +20,32 @@ use nextest_runner::{
     SignalHandler,
 };
 use std::io::Cursor;
-use structopt::StructOpt;
 use supports_color::Stream;
 
 /// This test runner accepts a Rust test binary and does fancy things with it.
 ///
 /// TODO: expand on this
-#[derive(Debug, StructOpt)]
-#[structopt(rename_all = "kebab-case")]
-pub struct Opts {
+#[derive(Debug, Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct CargoNextestApp {
     /// Path to Cargo.toml
-    #[structopt(long, global = true)]
+    #[clap(long, global = true, value_name = "PATH")]
     manifest_path: Option<Utf8PathBuf>,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     output: OutputOpts,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     config_opts: ConfigOpts,
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Command,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub struct ConfigOpts {
     /// Config file [default: workspace-root/.config/nextest.toml]
-    #[structopt(long, global = true)]
+    #[clap(long, global = true, value_name = "PATH")]
     pub config_file: Option<Utf8PathBuf>,
 }
 
@@ -56,55 +56,54 @@ impl ConfigOpts {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Command {
     /// List tests in binary
     List {
         /// Output format
-        #[structopt(short = "T", long, default_value, possible_values = OutputFormat::variants(), case_insensitive = true)]
+        #[clap(short = 'T', long, default_value_t, possible_values = OutputFormat::variants())]
         format: OutputFormat,
 
-        #[structopt(flatten)]
+        #[clap(flatten)]
         build_filter: TestBuildFilter,
     },
     /// Run tests
     Run {
         /// Nextest profile to use
-        #[structopt(long, short = "P")]
+        #[clap(long, short = 'P')]
         profile: Option<String>,
 
         /// Run tests serially and do not capture output
-        #[structopt(long, alias = "nocapture")]
+        #[clap(long, alias = "nocapture")]
         no_capture: bool,
 
-        #[structopt(flatten)]
+        #[clap(flatten)]
         build_filter: TestBuildFilter,
 
-        #[structopt(flatten)]
+        #[clap(flatten)]
         runner_opts: TestRunnerOpts,
 
-        #[structopt(flatten)]
+        #[clap(flatten)]
         reporter_opts: TestReporterOpts,
     },
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Debug, Args)]
 pub struct TestBuildFilter {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     cargo_options: CargoOptions,
 
     /// Run ignored tests
-    #[structopt(long, possible_values = RunIgnored::variants(), default_value, case_insensitive = true)]
+    #[clap(long, possible_values = RunIgnored::variants(), default_value_t)]
     run_ignored: RunIgnored,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
-    #[structopt(long)]
+    #[clap(long)]
     partition: Option<PartitionerBuilder>,
 
     // TODO: add regex-based filtering in the future?
     /// Test filter
-    #[structopt(name = "FILTERS")]
+    #[clap(name = "FILTERS")]
     filter: Vec<String>,
 }
 
@@ -139,24 +138,24 @@ impl TestBuildFilter {
 }
 
 /// Test runner options.
-#[derive(Debug, Default, StructOpt)]
+#[derive(Debug, Default, Args)]
 pub struct TestRunnerOpts {
     /// Number of retries for failing tests [default: from profile]
-    #[structopt(long)]
+    #[clap(long)]
     retries: Option<usize>,
 
     /// Cancel test run on the first failure
-    #[structopt(long)]
+    #[clap(long)]
     fail_fast: bool,
 
     /// Run all tests regardless of failure
-    #[structopt(long, overrides_with = "fail-fast")]
+    #[clap(long, overrides_with = "fail-fast")]
     no_fail_fast: bool,
 
     /// Number of tests to run simultaneously [default: logical CPU count]
-    #[structopt(
+    #[clap(
         long,
-        short = "j",
+        short = 'j',
         visible_alias = "jobs",
         value_name = "THREADS",
         conflicts_with = "no-capture"
@@ -184,30 +183,27 @@ impl TestRunnerOpts {
     }
 }
 
-#[derive(Debug, Default, StructOpt)]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Debug, Default, Args)]
 pub struct TestReporterOpts {
     /// Output stdout and stderr on failure
-    #[structopt(
+    #[clap(
         long,
         possible_values = TestOutputDisplay::variants(),
-        case_insensitive = true,
         conflicts_with = "no-capture"
     )]
     failure_output: Option<TestOutputDisplay>,
     /// Output stdout and stderr on success
 
-    #[structopt(
+    #[clap(
         long,
         possible_values = TestOutputDisplay::variants(),
-        case_insensitive = true,
         conflicts_with = "no-capture"
     )]
     success_output: Option<TestOutputDisplay>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output
-    #[structopt(long, possible_values = StatusLevel::variants(), case_insensitive = true)]
+    #[clap(long, possible_values = StatusLevel::variants())]
     status_level: Option<StatusLevel>,
 }
 
@@ -228,7 +224,7 @@ impl TestReporterOpts {
     }
 }
 
-impl Opts {
+impl CargoNextestApp {
     /// Execute the command.
     pub fn exec(self) -> Result<()> {
         let output = self.output.init();
