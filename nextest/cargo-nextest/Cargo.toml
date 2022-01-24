@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-camino = "1.0.5"
+camino = "1.0.7"
 # we don't use the tracing support
 cfg-if = "1.0.0"
 clap = { version = "3.0.10", features = ["derive"] }
@@ -13,10 +13,11 @@ duct = "0.13.5"
 enable-ansi-support = "0.1.1"
 # we don't use the default formatter so we don't need default features
 env_logger = { version = "0.9.0", default-features = false }
-guppy = "0.12.5"
+guppy = "0.12.6"
 log = "0.4.14"
 nextest-config = { path = "../config" }
 nextest-runner = { path = "../runner" }
+nextest-summaries = { path = "../summaries" }
 owo-colors = { version = "3.1.1", features = ["supports-colors"] }
 shellwords = "1.1.0"
 supports-color = "1.3.0"

@@ -4,7 +4,7 @@
 //! Cargo CLI support.
 
 use crate::output::OutputContext;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::{AppSettings, Args};
 use std::path::PathBuf;
 
@@ -133,16 +133,22 @@ pub(crate) struct CargoOptions {
 #[derive(Clone, Debug)]
 pub(crate) struct CargoCli<'a> {
     cargo_path: Utf8PathBuf,
+    manifest_path: Option<&'a Utf8Path>,
     output: OutputContext,
     command: &'a str,
     args: Vec<&'a str>,
 }
 
 impl<'a> CargoCli<'a> {
-    pub(crate) fn new(command: &'a str, output: OutputContext) -> Self {
+    pub(crate) fn new(
+        command: &'a str,
+        manifest_path: Option<&'a Utf8Path>,
+        output: OutputContext,
+    ) -> Self {
         let cargo_path = cargo_path();
         Self {
             cargo_path,
+            manifest_path,
             output,
             command,
             args: vec![],
@@ -263,7 +269,10 @@ impl<'a> CargoCli<'a> {
     }
 
     pub(crate) fn to_expression(&self) -> duct::Expression {
-        let initial_args = vec![self.output.color.to_arg(), self.command];
+        let mut initial_args = vec![self.output.color.to_arg(), self.command];
+        if let Some(path) = self.manifest_path {
+            initial_args.extend(["--manifest-path", path.as_str()]);
+        }
         duct::cmd(
             self.cargo_path.as_std_path(),
             initial_args.into_iter().chain(self.args.iter().copied()),

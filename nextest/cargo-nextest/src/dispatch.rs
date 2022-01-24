@@ -9,7 +9,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
-use guppy::{graph::PackageGraph, MetadataCommand};
+use guppy::graph::PackageGraph;
 use nextest_config::{errors::ConfigReadError, NextestConfig, StatusLevel, TestOutputDisplay};
 use nextest_runner::{
     partition::PartitionerBuilder,
@@ -109,9 +109,9 @@ pub struct TestBuildFilter {
 
 impl TestBuildFilter {
     fn compute<'g>(&self, graph: &'g PackageGraph, output: OutputContext) -> Result<TestList<'g>> {
-        let mut cargo_cli = CargoCli::new("test", output);
         let manifest_path = graph.workspace().root().join("Cargo.toml");
-        cargo_cli.add_args(["--manifest-path", manifest_path.as_str()]);
+        let mut cargo_cli = CargoCli::new("test", Some(&manifest_path), output);
+
         // Only build tests in the cargo test invocation, do not run them.
         cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
         cargo_cli.add_options(&self.cargo_options);
@@ -231,15 +231,7 @@ impl CargoNextestApp {
     pub fn exec(self) -> Result<()> {
         let output = self.output.init();
 
-        let graph = {
-            let mut metadata_command = MetadataCommand::new();
-            if let Some(path) = &self.manifest_path {
-                metadata_command.manifest_path(path);
-            }
-            // Construct a package graph with --no-deps since we don't need full dependency
-            // information.
-            metadata_command.no_deps().build_graph()?
-        };
+        let graph = build_graph(self.manifest_path.as_deref(), output)?;
 
         match self.command {
             Command::List {
@@ -296,4 +288,26 @@ impl CargoNextestApp {
         }
         Ok(())
     }
+}
+
+fn build_graph(manifest_path: Option<&Utf8Path>, output: OutputContext) -> Result<PackageGraph> {
+    let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
+    // Construct a package graph with --no-deps since we don't need full dependency
+    // information.
+    cargo_cli.add_args(["--format-version=1", "--all-features", "--no-deps"]);
+
+    // Capture stdout but not stderr.
+    let output = cargo_cli
+        .to_expression()
+        .stdout_capture()
+        .unchecked()
+        .run()
+        .wrap_err("cargo metadata execution failed")?;
+    if !output.status.success() {
+        return Err(ExpectedError::cargo_metadata_failed().into());
+    }
+
+    let json =
+        String::from_utf8(output.stdout).wrap_err("cargo metadata output is invalid UTF-8")?;
+    Ok(guppy::CargoMetadata::parse_json(&json)?.build_graph()?)
 }
