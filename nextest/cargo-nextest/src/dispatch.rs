@@ -80,12 +80,12 @@ impl ConfigOpts {
 enum Command {
     /// List tests in binary
     List {
-        /// Output format
-        #[clap(short = 'T', long, default_value_t, possible_values = OutputFormat::variants())]
-        format: OutputFormat,
-
         #[clap(flatten)]
         build_filter: TestBuildFilter,
+
+        /// Output format
+        #[clap(short = 'T', long, default_value_t, possible_values = OutputFormat::variants(), help_heading = "OUTPUT OPTIONS")]
+        format: OutputFormat,
     },
     /// Run tests
     Run {
@@ -94,7 +94,12 @@ enum Command {
         profile: Option<String>,
 
         /// Run tests serially and do not capture output
-        #[clap(long, alias = "nocapture")]
+        #[clap(
+            long,
+            alias = "nocapture",
+            help_heading = "RUNNER OPTIONS",
+            display_order = 100
+        )]
         no_capture: bool,
 
         #[clap(flatten)]
@@ -109,6 +114,7 @@ enum Command {
 }
 
 #[derive(Debug, Args)]
+#[clap(help_heading = "FILTER OPTIONS")]
 struct TestBuildFilter {
     #[clap(flatten)]
     cargo_options: CargoOptions,
@@ -122,8 +128,8 @@ struct TestBuildFilter {
     partition: Option<PartitionerBuilder>,
 
     // TODO: add regex-based filtering in the future?
-    /// Test filter
-    #[clap(name = "FILTERS")]
+    /// Test name filter
+    #[clap(name = "FILTERS", help_heading = None)]
     filter: Vec<String>,
 }
 
@@ -159,7 +165,18 @@ impl TestBuildFilter {
 
 /// Test runner options.
 #[derive(Debug, Default, Args)]
+#[clap(help_heading = "RUNNER OPTIONS")]
 pub struct TestRunnerOpts {
+    /// Number of tests to run simultaneously [default: logical CPU count]
+    #[clap(
+        long,
+        short = 'j',
+        visible_alias = "jobs",
+        value_name = "THREADS",
+        conflicts_with = "no-capture"
+    )]
+    test_threads: Option<usize>,
+
     /// Number of retries for failing tests [default: from profile]
     #[clap(long)]
     retries: Option<usize>,
@@ -171,16 +188,6 @@ pub struct TestRunnerOpts {
     /// Run all tests regardless of failure
     #[clap(long, overrides_with = "fail-fast")]
     no_fail_fast: bool,
-
-    /// Number of tests to run simultaneously [default: logical CPU count]
-    #[clap(
-        long,
-        short = 'j',
-        visible_alias = "jobs",
-        value_name = "THREADS",
-        conflicts_with = "no-capture"
-    )]
-    test_threads: Option<usize>,
 }
 
 impl TestRunnerOpts {
@@ -204,6 +211,7 @@ impl TestRunnerOpts {
 }
 
 #[derive(Debug, Default, Args)]
+#[clap(help_heading = "REPORTER OPTIONS")]
 struct TestReporterOpts {
     /// Output stdout and stderr on failure
     #[clap(
