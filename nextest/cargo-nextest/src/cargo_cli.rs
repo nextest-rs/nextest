@@ -274,6 +274,8 @@ impl<'a> CargoCli<'a> {
             initial_args.extend(["--manifest-path", path.as_str()]);
         }
         duct::cmd(
+            // Ensure that cargo gets picked up from PATH if necessary, by calling as_str
+            // rather than as_std_path.
             self.cargo_path.as_std_path(),
             initial_args.into_iter().chain(self.args.iter().copied()),
         )
