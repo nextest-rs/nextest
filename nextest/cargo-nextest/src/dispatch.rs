@@ -22,12 +22,32 @@ use nextest_runner::{
 use std::io::Cursor;
 use supports_color::Stream;
 
-/// Next-generation test runner for Rust.
+/// A new test runner for Rust and Cargo.
 ///
-/// TODO: expand on this
+/// This binary should typically be invoked as `cargo nextest` (in which case
+/// this message will not be seen), not `cargo-nextest`.
 #[derive(Debug, Parser)]
-#[clap(author, version)]
+#[clap(author, version, bin_name = "cargo")]
 pub struct CargoNextestApp {
+    #[clap(subcommand)]
+    subcommand: NextestSubcommand,
+}
+
+impl CargoNextestApp {
+    pub fn exec(self) -> Result<()> {
+        let NextestSubcommand::Nextest(app) = self.subcommand;
+        app.exec()
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum NextestSubcommand {
+    /// A new test runner for Rust and Cargo.
+    Nextest(AppImpl),
+}
+
+#[derive(Debug, Args)]
+struct AppImpl {
     /// Path to Cargo.toml
     #[clap(long, global = true, value_name = "PATH")]
     manifest_path: Option<Utf8PathBuf>,
@@ -43,7 +63,7 @@ pub struct CargoNextestApp {
 }
 
 #[derive(Debug, Args)]
-pub struct ConfigOpts {
+struct ConfigOpts {
     /// Config file [default: workspace-root/.config/nextest.toml]
     #[clap(long, global = true, value_name = "PATH")]
     pub config_file: Option<Utf8PathBuf>,
@@ -57,7 +77,7 @@ impl ConfigOpts {
 }
 
 #[derive(Debug, Subcommand)]
-pub enum Command {
+enum Command {
     /// List tests in binary
     List {
         /// Output format
@@ -89,7 +109,7 @@ pub enum Command {
 }
 
 #[derive(Debug, Args)]
-pub struct TestBuildFilter {
+struct TestBuildFilter {
     #[clap(flatten)]
     cargo_options: CargoOptions,
 
@@ -184,7 +204,7 @@ impl TestRunnerOpts {
 }
 
 #[derive(Debug, Default, Args)]
-pub struct TestReporterOpts {
+struct TestReporterOpts {
     /// Output stdout and stderr on failure
     #[clap(
         long,
@@ -226,9 +246,9 @@ impl TestReporterOpts {
     }
 }
 
-impl CargoNextestApp {
+impl AppImpl {
     /// Execute the command.
-    pub fn exec(self) -> Result<()> {
+    fn exec(self) -> Result<()> {
         let output = self.output.init();
 
         let graph = build_graph(self.manifest_path.as_deref(), output)?;
