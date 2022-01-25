@@ -30,7 +30,7 @@ nextest-metadata = { path = "../metadata" }
 quick-junit = { path = "../../quick-junit" }
 
 [dev-dependencies]
-color-eyre = { version = "0.5.11", default-features = false }
+color-eyre = { version = "0.6.0", default-features = false }
 indoc = "1.0.3"
 maplit = "1.0.2"
 pretty_assertions = "1.0.0"
