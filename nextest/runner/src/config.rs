@@ -4,11 +4,11 @@
 //! Configuration support for nextest.
 
 use crate::{
-    errors::{ConfigReadError, ProfileNotFound},
+    errors::{ConfigParseError, ProfileNotFound},
     reporter::{StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use config::{Config, Environment, File, FileFormat};
+use config::{Config, File, FileFormat};
 use serde::Deserialize;
 use std::{collections::HashMap, time::Duration};
 
@@ -49,10 +49,12 @@ impl NextestConfig {
     pub fn from_sources(
         workspace_root: impl Into<Utf8PathBuf>,
         config_file: Option<&Utf8Path>,
-    ) -> Result<Self, ConfigReadError> {
+    ) -> Result<Self, ConfigParseError> {
         let workspace_root = workspace_root.into();
-        let config = Self::read_from_sources(&workspace_root, config_file)?;
-        let inner = config.try_into().map_err(ConfigReadError::new)?;
+        let (config_file, config) = Self::read_from_sources(&workspace_root, config_file)?;
+        let inner = config
+            .try_into()
+            .map_err(|err| ConfigParseError::new(config_file, err))?;
         Ok(Self {
             workspace_root,
             inner,
@@ -82,31 +84,28 @@ impl NextestConfig {
     fn read_from_sources(
         workspace_root: &Utf8Path,
         file: Option<&Utf8Path>,
-    ) -> Result<Config, ConfigReadError> {
+    ) -> Result<(Utf8PathBuf, Config), ConfigParseError> {
         // First, get the default config.
         let mut config = Self::make_default_config();
 
         // Next, merge in the config from the given file.
-        match file {
+        let config_path = match file {
             Some(file) => {
                 config
                     .merge(File::new(file.as_str(), FileFormat::Toml))
-                    .map_err(ConfigReadError::new)?;
+                    .map_err(|err| ConfigParseError::new(file, err))?;
+                file.to_owned()
             }
             None => {
                 let config_path = workspace_root.join(Self::CONFIG_PATH);
                 config
                     .merge(File::new(config_path.as_str(), FileFormat::Toml).required(false))
-                    .map_err(ConfigReadError::new)?;
+                    .map_err(|err| ConfigParseError::new(config_path.clone(), err))?;
+                config_path
             }
-        }
+        };
 
-        // Finally, read in the environment variables.
-        config
-            .merge(Environment::with_prefix(Self::ENVIRONMENT_PREFIX).separator("_"))
-            .map_err(ConfigReadError::new)?;
-
-        Ok(config)
+        Ok((config_path, config))
     }
 
     fn make_default_config() -> Config {

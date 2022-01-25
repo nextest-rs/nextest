@@ -13,4 +13,7 @@ impl NextestExitCodes {
 
     /// One or more tests failed.
     pub const TEST_RUN_FAILED: i32 = 100;
+
+    /// A user issue happened while setting up a nextest invocation.
+    pub const SETUP_ERROR: i32 = 96;
 }

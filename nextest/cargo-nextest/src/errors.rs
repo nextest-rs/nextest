@@ -2,14 +2,24 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use nextest_metadata::NextestExitCodes;
+use nextest_runner::errors::{ConfigParseError, ProfileNotFound};
 use owo_colors::{OwoColorize, Stream};
-use std::{error, fmt};
+use std::{
+    error::{self, Error},
+    fmt,
+};
 
 /// An error occurred in a program that nextest ran, not in nextest itself.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 #[doc(hidden)]
 pub enum ExpectedError {
     CargoMetadataFailed,
+    ProfileNotFound {
+        err: ProfileNotFound,
+    },
+    ConfigParseError {
+        err: ConfigParseError,
+    },
     BuildFailed {
         escaped_command: Vec<String>,
         exit_code: Option<i32>,
@@ -20,6 +30,14 @@ pub enum ExpectedError {
 impl ExpectedError {
     pub(crate) fn cargo_metadata_failed() -> Self {
         Self::CargoMetadataFailed
+    }
+
+    pub(crate) fn profile_not_found(err: ProfileNotFound) -> Self {
+        Self::ProfileNotFound { err }
+    }
+
+    pub(crate) fn config_parse_error(err: ConfigParseError) -> Self {
+        Self::ConfigParseError { err }
     }
 
     pub(crate) fn build_failed(
@@ -43,15 +61,27 @@ impl ExpectedError {
     pub fn process_exit_code(&self) -> i32 {
         match self {
             Self::CargoMetadataFailed => NextestExitCodes::CARGO_METADATA_FAILED,
+            Self::ProfileNotFound { .. } | Self::ConfigParseError { .. } => {
+                NextestExitCodes::SETUP_ERROR
+            }
             Self::BuildFailed { .. } => NextestExitCodes::BUILD_FAILED,
             Self::TestRunFailed => NextestExitCodes::TEST_RUN_FAILED,
         }
     }
 
     pub fn display_to_stderr(&self) {
-        match &self {
+        let mut next_error = match &self {
             Self::CargoMetadataFailed => {
                 // The error produced by `cargo metadata` is enough.
+                None
+            }
+            Self::ProfileNotFound { err } => {
+                log::error!("{}", err);
+                err.source()
+            }
+            Self::ConfigParseError { err } => {
+                log::error!("{}", err);
+                err.source()
             }
             Self::BuildFailed {
                 escaped_command,
@@ -74,10 +104,18 @@ impl ExpectedError {
                         .if_supports_color(Stream::Stderr, |x| x.bold()),
                     with_code_str,
                 );
+
+                None
             }
             Self::TestRunFailed => {
                 log::error!("test run failed");
+                None
             }
+        };
+
+        while let Some(err) = next_error {
+            log::error!(target: "cargo_nextest::no_heading", "\nCaused by:\n  {}", err);
+            next_error = err.source();
         }
     }
 }
@@ -87,6 +125,8 @@ impl fmt::Display for ExpectedError {
         // This should generally not be called, but provide a stub implementation it is
         match self {
             Self::CargoMetadataFailed => writeln!(f, "cargo metadata failed"),
+            Self::ProfileNotFound { .. } => writeln!(f, "profile not found"),
+            Self::ConfigParseError { .. } => writeln!(f, "config read error"),
             Self::BuildFailed { .. } => writeln!(f, "build failed"),
             Self::TestRunFailed => writeln!(f, "test run failed"),
         }

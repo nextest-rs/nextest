@@ -11,7 +11,7 @@ use clap::{Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
-    errors::ConfigReadError,
+    config::NextestConfig,
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
     runner::TestRunnerBuilder,
@@ -71,8 +71,9 @@ struct ConfigOpts {
 
 impl ConfigOpts {
     /// Creates a nextest config with the given options.
-    pub fn make_config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig, ConfigReadError> {
+    pub fn make_config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig, ExpectedError> {
         NextestConfig::from_sources(workspace_root, self.config_file.as_deref())
+            .map_err(ExpectedError::config_parse_error)
     }
 }
 
@@ -282,8 +283,9 @@ impl AppImpl {
                 ref reporter_opts,
             } => {
                 let config = self.config_opts.make_config(graph.workspace().root())?;
-                let profile =
-                    config.profile(profile.as_deref().unwrap_or(NextestConfig::DEFAULT_PROFILE))?;
+                let profile = config
+                    .profile(profile.as_deref().unwrap_or(NextestConfig::DEFAULT_PROFILE))
+                    .map_err(ExpectedError::profile_not_found)?;
                 let store_dir = profile.store_dir();
                 std::fs::create_dir_all(&store_dir)
                     .wrap_err_with(|| format!("failed to create store dir '{}'", store_dir))?;

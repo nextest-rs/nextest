@@ -101,6 +101,11 @@ impl std::str::FromStr for Color {
 }
 
 fn format_fn(f: &mut Formatter, record: &Record<'_>) -> std::io::Result<()> {
+    if record.target() == "cargo_nextest::no_heading" {
+        writeln!(f, "{}", record.args())?;
+        return Ok(());
+    }
+
     match record.level() {
         Level::Error => writeln!(
             f,

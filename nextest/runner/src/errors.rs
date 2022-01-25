@@ -10,28 +10,37 @@ use camino::Utf8PathBuf;
 use config::ConfigError;
 use std::{borrow::Cow, error, fmt};
 
-/// An error that occurred while reading the config.
+/// An error that occurred while parsing the config.
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct ConfigReadError {
-    inner: ConfigError,
+pub struct ConfigParseError {
+    config_file: Utf8PathBuf,
+    err: ConfigError,
 }
 
-impl ConfigReadError {
-    pub(crate) fn new(inner: ConfigError) -> Self {
-        Self { inner }
+impl ConfigParseError {
+    pub(crate) fn new(config_file: impl Into<Utf8PathBuf>, err: ConfigError) -> Self {
+        Self {
+            config_file: config_file.into(),
+            err,
+        }
     }
 }
 
-impl fmt::Display for ConfigReadError {
+impl fmt::Display for ConfigParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.inner)
+        write!(
+            f,
+            "failed to parse nextest config at `{}`",
+            self.config_file
+        )?;
+        Ok(())
     }
 }
 
-impl error::Error for ConfigReadError {
+impl error::Error for ConfigParseError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        Some(&self.inner)
+        Some(&self.err)
     }
 }
 
