@@ -1,14 +1,10 @@
 ## This is the default config used by nextest. It is embedded in the binary at build time.
 ## It may be used as a template for .config/nextest.toml.
 
-[metadata]
-## The directory under the workspace root at which metadata is written.
-## Profile-specific metadata is written to dir/<profile-name>.
+[store]
+## The directory under the workspace root at which nextest-related files are written.
+## Profile-specific storage is currently written to dir/<profile-name>.
 dir = "target/nextest"
-
-## The prefix to use while naming the metadata. If aggregating test metadata across different
-## test runs, it may be useful to provide separate names for each run.
-prefix = "nextest-"
 
 ## This section defines the default nextest profile. Custom profiles are layered on top of the
 ## default profile.
@@ -56,6 +52,10 @@ fail-fast = true
 slow-timeout = "60s"
 
 [profile.default.junit]
-## Output metadata in the JUnit format into the given file inside 'metadata.dir/<profile-name>'. If unspecified, JUnit
+## Output a JUnit report into the given file inside 'store.dir/<profile-name>'. If unspecified, JUnit
 ## is not written out.
 ## path = "junit.xml"
+
+## The name of the top-level "report" element in JUnit report. If aggregating reports across different
+## test runs, it may be useful to provide separate names for each report.
+report-name = "nextest-run"

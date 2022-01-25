@@ -9,7 +9,7 @@ use std::{io, iter, time::Duration};
 /// The root element of a JUnit report.
 #[derive(Clone, Debug)]
 pub struct Report {
-    /// The name of this test suite.
+    /// The name of this report.
     pub name: String,
 
     /// The time at which the first test in this report began execution.
@@ -36,7 +36,7 @@ pub struct Report {
 }
 
 impl Report {
-    /// Creates a new `Testsuites`.
+    /// Creates a new `Report` with the given name.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),

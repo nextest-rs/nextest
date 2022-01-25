@@ -19,8 +19,7 @@ use std::{collections::HashMap, fs::File, time::SystemTime};
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub(crate) struct MetadataReporter<'cfg> {
-    metadata_dir: &'cfg Utf8Path,
-    metadata_name: &'cfg str,
+    store_dir: &'cfg Utf8Path,
     // TODO: log information in a JSONable report (converting that to XML later) instead of directly
     // writing it to XML
     junit: Option<MetadataJunit<'cfg>>,
@@ -28,13 +27,9 @@ pub(crate) struct MetadataReporter<'cfg> {
 
 impl<'cfg> MetadataReporter<'cfg> {
     pub(crate) fn new(profile: &'cfg NextestProfile<'cfg>) -> Self {
-        let metadata_name = profile.metadata_name();
         Self {
-            metadata_dir: profile.metadata_dir(),
-            metadata_name,
-            junit: profile
-                .junit()
-                .map(|config| MetadataJunit::new(metadata_name, config)),
+            store_dir: profile.store_dir(),
+            junit: profile.junit().map(MetadataJunit::new),
         }
     }
 
@@ -48,15 +43,13 @@ impl<'cfg> MetadataReporter<'cfg> {
 
 #[derive(Clone, Debug)]
 struct MetadataJunit<'cfg> {
-    metadata_name: &'cfg str,
     config: NextestJunitConfig<'cfg>,
     testsuites: DebugIgnore<HashMap<&'cfg str, Testsuite>>,
 }
 
 impl<'cfg> MetadataJunit<'cfg> {
-    fn new(metadata_name: &'cfg str, config: NextestJunitConfig<'cfg>) -> Self {
+    fn new(config: NextestJunitConfig<'cfg>) -> Self {
         Self {
-            metadata_name,
             config,
             testsuites: DebugIgnore(HashMap::new()),
         }
@@ -158,7 +151,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 ..
             } => {
                 // Write out the report to the given file.
-                let mut report = Report::new(self.metadata_name);
+                let mut report = Report::new(self.config.report_name());
                 report
                     .set_timestamp(to_datetime(start_time))
                     .set_time(elapsed)

@@ -7,7 +7,7 @@ use crate::errors::{
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
-use std::{collections::HashMap, fmt, marker::PhantomData, str::FromStr, time::Duration};
+use std::{collections::HashMap, fmt, str::FromStr, time::Duration};
 
 /// Configuration for nextest.
 #[derive(Clone, Debug)]
@@ -116,14 +116,11 @@ impl NextestConfig {
         let custom_profile = self.inner.profiles.get(name)?;
 
         // The profile was found: construct the NextestProfile.
-        let mut metadata_dir = self.workspace_root.join(&self.inner.metadata.dir);
-        metadata_dir.push(name);
-
-        let metadata_name = format!("{}{}", self.inner.metadata.prefix.as_str(), name);
+        let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
+        store_dir.push(name);
 
         Ok(NextestProfile {
-            metadata_dir,
-            metadata_name,
+            store_dir,
             default_profile: &self.inner.profiles.default,
             custom_profile,
         })
@@ -133,21 +130,15 @@ impl NextestConfig {
 /// A nextest profile. Contains configuration for a specific nextest run.
 #[derive(Clone, Debug)]
 pub struct NextestProfile<'cfg> {
-    metadata_dir: Utf8PathBuf,
-    metadata_name: String,
+    store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
 }
 
 impl<'cfg> NextestProfile<'cfg> {
-    /// Returns the absolute profile-specific metadata directory.
-    pub fn metadata_dir(&self) -> &Utf8Path {
-        &self.metadata_dir
-    }
-
-    /// Returns the test run name used in the metadata.
-    pub fn metadata_name(&self) -> &str {
-        &self.metadata_name
+    /// Returns the absolute profile-specific store directory.
+    pub fn store_dir(&self) -> &Utf8Path {
+        &self.store_dir
     }
 
     /// Returns the retry count for this profile.
@@ -207,11 +198,13 @@ impl<'cfg> NextestProfile<'cfg> {
             .as_deref();
 
         path.map(|path| {
-            let path = self.metadata_dir.join(path);
-            NextestJunitConfig {
-                path,
-                phantom: PhantomData,
-            }
+            let path = self.store_dir.join(path);
+            let report_name = self
+                .custom_profile
+                .map(|profile| profile.junit.report_name.as_deref())
+                .flatten()
+                .unwrap_or(&self.default_profile.junit.report_name);
+            NextestJunitConfig { path, report_name }
         })
     }
 }
@@ -327,30 +320,33 @@ impl fmt::Display for StatusLevel {
 #[derive(Clone, Debug)]
 pub struct NextestJunitConfig<'cfg> {
     path: Utf8PathBuf,
-    // Possibly will refer to other config fields in the future.
-    phantom: PhantomData<&'cfg ()>,
+    report_name: &'cfg str,
 }
 
 impl<'cfg> NextestJunitConfig<'cfg> {
-    /// Returns the absolute path to the metadata.
+    /// Returns the absolute path to the JUnit report.
     pub fn path(&self) -> &Utf8Path {
         &self.path
+    }
+
+    /// Returns the name of the JUnit report.
+    pub fn report_name(&self) -> &'cfg str {
+        self.report_name
     }
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct NextestConfigImpl {
-    metadata: MetadataConfigImpl,
+    store: StoreConfigImpl,
     #[serde(rename = "profile")]
     profiles: NextestProfilesImpl,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-struct MetadataConfigImpl {
+struct StoreConfigImpl {
     dir: Utf8PathBuf,
-    prefix: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -392,7 +388,15 @@ struct DefaultProfileImpl {
     fail_fast: bool,
     #[serde(with = "humantime_serde")]
     slow_timeout: Duration,
-    junit: JunitImpl,
+    junit: DefaultJunitImpl,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct DefaultJunitImpl {
+    #[serde(default)]
+    path: Option<Utf8PathBuf>,
+    report_name: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -420,6 +424,7 @@ struct CustomProfileImpl {
 struct JunitImpl {
     #[serde(default)]
     path: Option<Utf8PathBuf>,
+    report_name: Option<String>,
 }
 
 #[cfg(test)]

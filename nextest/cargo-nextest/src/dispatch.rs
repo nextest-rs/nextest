@@ -256,10 +256,9 @@ impl CargoNextestApp {
                 let config = self.config_opts.make_config(graph.workspace().root())?;
                 let profile =
                     config.profile(profile.as_deref().unwrap_or(NextestConfig::DEFAULT_PROFILE))?;
-                let metadata_dir = profile.metadata_dir();
-                std::fs::create_dir_all(&metadata_dir).wrap_err_with(|| {
-                    format!("failed to create metadata dir '{}'", metadata_dir)
-                })?;
+                let store_dir = profile.store_dir();
+                std::fs::create_dir_all(&store_dir)
+                    .wrap_err_with(|| format!("failed to create store dir '{}'", store_dir))?;
 
                 let test_list = build_filter.compute(&graph, output)?;
 
