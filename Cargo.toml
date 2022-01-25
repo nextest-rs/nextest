@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "datatest-stable",
     "nextest/cargo-nextest",
-    "nextest/config",
     "nextest/runner",
     "nextest/metadata",
     "quick-junit",

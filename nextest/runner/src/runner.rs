@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    reporter::{CancelReason, TestEvent},
+    config::NextestProfile,
+    reporter::{CancelReason, StatusLevel, TestEvent},
     stopwatch::{StopwatchEnd, StopwatchStart},
     test_list::{TestInstance, TestList},
     SignalEvent, SignalHandler,
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
-use nextest_config::{NextestProfile, StatusLevel};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
@@ -790,7 +790,7 @@ impl TestStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nextest_config::NextestConfig;
+    use crate::config::NextestConfig;
 
     #[test]
     fn no_capture_settings() {

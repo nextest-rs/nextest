@@ -8,9 +8,9 @@ use color_eyre::eyre::Result;
 use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
-use nextest_config::NextestConfig;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
+    config::NextestConfig,
     reporter::TestEvent,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerBuilder, TestStatus},
     test_filter::{RunIgnored, TestFilterBuilder},

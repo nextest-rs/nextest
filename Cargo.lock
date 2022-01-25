@@ -122,7 +122,6 @@ dependencies = [
  "env_logger",
  "guppy",
  "log",
- "nextest-config",
  "nextest-metadata",
  "nextest-runner",
  "owo-colors",
@@ -653,17 +652,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 
 [[package]]
-name = "nextest-config"
-version = "0.1.0"
-dependencies = [
- "camino",
- "config",
- "humantime-serde",
- "serde",
- "toml",
-]
-
-[[package]]
 name = "nextest-metadata"
 version = "0.1.0"
 dependencies = [
@@ -680,15 +668,16 @@ dependencies = [
  "cargo_metadata",
  "chrono",
  "color-eyre",
+ "config",
  "crossbeam-channel",
  "ctrlc",
  "debug-ignore",
  "duct",
  "guppy",
+ "humantime-serde",
  "indent_write",
  "indoc",
  "maplit",
- "nextest-config",
  "nextest-metadata",
  "num_cpus",
  "once_cell",

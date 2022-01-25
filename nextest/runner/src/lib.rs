@@ -1,6 +1,7 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+pub mod config;
 pub mod errors;
 mod helpers;
 mod metadata;

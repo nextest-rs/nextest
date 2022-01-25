@@ -10,10 +10,10 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
-use nextest_config::{errors::ConfigReadError, NextestConfig, StatusLevel, TestOutputDisplay};
 use nextest_runner::{
+    errors::ConfigReadError,
     partition::PartitionerBuilder,
-    reporter::TestReporterBuilder,
+    reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
     runner::TestRunnerBuilder,
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{OutputFormat, TestBinary, TestList},

@@ -1,13 +1,16 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::errors::{
-    ConfigReadError, ProfileNotFound, StatusLevelParseError, TestOutputDisplayParseError,
+//! Configuration support for nextest.
+
+use crate::{
+    errors::{ConfigReadError, ProfileNotFound},
+    reporter::{StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{Config, Environment, File, FileFormat};
 use serde::Deserialize;
-use std::{collections::HashMap, fmt, str::FromStr, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 /// Configuration for nextest.
 #[derive(Clone, Debug)]
@@ -206,113 +209,6 @@ impl<'cfg> NextestProfile<'cfg> {
                 .unwrap_or(&self.default_profile.junit.report_name);
             NextestJunitConfig { path, report_name }
         })
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum TestOutputDisplay {
-    Immediate,
-    ImmediateFinal,
-    Final,
-    Never,
-}
-
-impl TestOutputDisplay {
-    pub fn variants() -> &'static [&'static str] {
-        &["immediate", "immediate-final", "final", "never"]
-    }
-
-    pub fn is_immediate(self) -> bool {
-        match self {
-            TestOutputDisplay::Immediate | TestOutputDisplay::ImmediateFinal => true,
-            TestOutputDisplay::Final | TestOutputDisplay::Never => false,
-        }
-    }
-
-    pub fn is_final(self) -> bool {
-        match self {
-            TestOutputDisplay::Final | TestOutputDisplay::ImmediateFinal => true,
-            TestOutputDisplay::Immediate | TestOutputDisplay::Never => false,
-        }
-    }
-}
-
-impl FromStr for TestOutputDisplay {
-    type Err = TestOutputDisplayParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val = match s {
-            "immediate" => TestOutputDisplay::Immediate,
-            "immediate-final" => TestOutputDisplay::ImmediateFinal,
-            "final" => TestOutputDisplay::Final,
-            "never" => TestOutputDisplay::Never,
-            other => return Err(TestOutputDisplayParseError::new(other)),
-        };
-        Ok(val)
-    }
-}
-
-impl fmt::Display for TestOutputDisplay {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TestOutputDisplay::Immediate => write!(f, "immediate"),
-            TestOutputDisplay::ImmediateFinal => write!(f, "immediate-final"),
-            TestOutputDisplay::Final => write!(f, "final"),
-            TestOutputDisplay::Never => write!(f, "never"),
-        }
-    }
-}
-
-/// Status level to show in the output.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[non_exhaustive]
-pub enum StatusLevel {
-    None,
-    Fail,
-    Retry,
-    Slow,
-    Pass,
-    Skip,
-    All,
-}
-
-impl StatusLevel {
-    pub fn variants() -> &'static [&'static str] {
-        &["none", "fail", "retry", "slow", "pass", "skip", "all"]
-    }
-}
-
-impl FromStr for StatusLevel {
-    type Err = StatusLevelParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val = match s {
-            "none" => StatusLevel::None,
-            "fail" => StatusLevel::Fail,
-            "retry" => StatusLevel::Retry,
-            "slow" => StatusLevel::Slow,
-            "pass" => StatusLevel::Pass,
-            "skip" => StatusLevel::Skip,
-            "all" => StatusLevel::All,
-            other => return Err(StatusLevelParseError::new(other)),
-        };
-        Ok(val)
-    }
-}
-
-impl fmt::Display for StatusLevel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StatusLevel::None => write!(f, "none"),
-            StatusLevel::Fail => write!(f, "fail"),
-            StatusLevel::Retry => write!(f, "retry"),
-            StatusLevel::Slow => write!(f, "slow"),
-            StatusLevel::Pass => write!(f, "pass"),
-            StatusLevel::Skip => write!(f, "skip"),
-            StatusLevel::All => write!(f, "all"),
-        }
     }
 }
 
