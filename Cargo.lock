@@ -123,8 +123,8 @@ dependencies = [
  "guppy",
  "log",
  "nextest-config",
+ "nextest-metadata",
  "nextest-runner",
- "nextest-summaries",
  "owo-colors 3.2.0",
  "shellwords",
  "supports-color",
@@ -646,6 +646,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nextest-metadata"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "serde",
+]
+
+[[package]]
 name = "nextest-runner"
 version = "0.1.0"
 dependencies = [
@@ -663,7 +671,7 @@ dependencies = [
  "indoc",
  "maplit",
  "nextest-config",
- "nextest-summaries",
+ "nextest-metadata",
  "num_cpus",
  "once_cell",
  "owo-colors 3.2.0",
@@ -676,14 +684,6 @@ dependencies = [
  "serde_json",
  "strip-ansi-escapes",
  "twox-hash",
-]
-
-[[package]]
-name = "nextest-summaries"
-version = "0.1.0"
-dependencies = [
- "camino",
- "serde",
 ]
 
 [[package]]

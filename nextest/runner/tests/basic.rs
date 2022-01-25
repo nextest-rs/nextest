@@ -9,6 +9,7 @@ use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_config::NextestConfig;
+use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     reporter::TestEvent,
     runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerBuilder, TestStatus},
@@ -16,7 +17,6 @@ use nextest_runner::{
     test_list::{TestBinary, TestList},
     SignalHandler,
 };
-use nextest_summaries::{FilterMatch, MismatchReason};
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use std::{

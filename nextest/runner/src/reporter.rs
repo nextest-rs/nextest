@@ -10,7 +10,7 @@ use crate::{
 };
 use debug_ignore::DebugIgnore;
 use nextest_config::{NextestProfile, StatusLevel, TestOutputDisplay};
-use nextest_summaries::MismatchReason;
+use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
 use std::{
     fmt, io,

@@ -9,7 +9,7 @@ use crate::{
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
 use nextest_config::{NextestProfile, StatusLevel};
-use nextest_summaries::{FilterMatch, MismatchReason};
+use nextest_metadata::{FilterMatch, MismatchReason};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     convert::Infallible,

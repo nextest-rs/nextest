@@ -6,7 +6,7 @@ use crate::{
     partition::{Partitioner, PartitionerBuilder},
 };
 use aho_corasick::AhoCorasick;
-use nextest_summaries::{FilterMatch, MismatchReason};
+use nextest_metadata::{FilterMatch, MismatchReason};
 use std::{fmt, str::FromStr};
 
 /// Whether to run ignored tests.

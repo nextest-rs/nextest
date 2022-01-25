@@ -1,7 +1,7 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use nextest_summaries::NextestExitCodes;
+use nextest_metadata::NextestExitCodes;
 use owo_colors::{OwoColorize, Stream};
 use std::{error, fmt};
 

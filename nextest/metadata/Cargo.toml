@@ -1,10 +1,11 @@
 [package]
-name = "nextest-summaries"
+name = "nextest-metadata"
 version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
+description = "Structured access to nextest machine-readable output."
 license = "Apache-2.0 OR MIT"
 edition = "2021"
 
 [dependencies]
-camino = { version = "1.0.5", features = ["serde1"] }
+camino = { version = "1.0.7", features = ["serde1"] }
 serde = { version = "1.0.130", features = ["derive"] }

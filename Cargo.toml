@@ -5,7 +5,7 @@ members = [
     "nextest/cargo-nextest",
     "nextest/config",
     "nextest/runner",
-    "nextest/summaries",
+    "nextest/metadata",
     "quick-junit",
 ]
 

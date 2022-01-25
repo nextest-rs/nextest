@@ -16,7 +16,7 @@ use guppy::{
     graph::{PackageGraph, PackageMetadata},
     PackageId,
 };
-use nextest_summaries::{RustTestcase, RustTestsuite, TestListSummary};
+use nextest_metadata::{RustTestcase, RustTestsuite, TestListSummary};
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Style};
 use std::{collections::BTreeMap, io, io::Write, path::Path};
@@ -542,7 +542,7 @@ mod tests {
     use guppy::CargoMetadata;
     use indoc::indoc;
     use maplit::btreemap;
-    use nextest_summaries::{FilterMatch, MismatchReason};
+    use nextest_metadata::{FilterMatch, MismatchReason};
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use std::iter;
