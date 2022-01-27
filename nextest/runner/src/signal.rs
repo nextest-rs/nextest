@@ -1,12 +1,14 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Support for handling signals in nextest.
+
 use crossbeam_channel::Receiver;
 
 /// A receiver that generates signals if ctrl-c is pressed.
 ///
 /// A `SignalHandler` can be passed into
-/// [`TestRunnerOpts::build`](crate::runner::TestRunnerOpts::build).
+/// [`TestRunnerBuilder::build`](crate::runner::TestRunnerBuilder::build).
 #[derive(Debug)]
 pub struct SignalHandler {
     pub(crate) receiver: Receiver<SignalEvent>,

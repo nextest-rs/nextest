@@ -12,7 +12,10 @@ use config::{Config, File, FileFormat};
 use serde::Deserialize;
 use std::{collections::HashMap, time::Duration};
 
-/// Configuration for nextest.
+/// Overall configuration for nextest.
+///
+/// This is the root data structure for nextest configuration. Most runner-specific configuration is managed
+/// through [profiles](NextestProfile), obtained through the [`profile`](Self::profile) method.
 #[derive(Clone, Debug)]
 pub struct NextestConfig {
     workspace_root: Utf8PathBuf,
@@ -129,7 +132,9 @@ impl NextestConfig {
     }
 }
 
-/// A nextest profile. Contains configuration for a specific nextest run.
+/// A configuration profile for nextest. Contains most configuration used by the nextest runner.
+///
+/// Returned by [`NextestConfig::profile`].
 #[derive(Clone, Debug)]
 pub struct NextestProfile<'cfg> {
     store_dir: Utf8PathBuf,
@@ -211,7 +216,7 @@ impl<'cfg> NextestProfile<'cfg> {
     }
 }
 
-/// JUnit configuration for nextest.
+/// JUnit configuration for nextest, returned by a [`NextestProfile`].
 #[derive(Clone, Debug)]
 pub struct NextestJunitConfig<'cfg> {
     path: Utf8PathBuf,

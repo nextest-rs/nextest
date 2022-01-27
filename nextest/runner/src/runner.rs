@@ -1,12 +1,16 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! The test runner.
+//!
+//! The main structure in this module is [`TestRunner`].
+
 use crate::{
     config::NextestProfile,
     reporter::{CancelReason, StatusLevel, TestEvent},
+    signal::{SignalEvent, SignalHandler},
     stopwatch::{StopwatchEnd, StopwatchStart},
     test_list::{TestInstance, TestList},
-    SignalEvent, SignalHandler,
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
 use nextest_metadata::{FilterMatch, MismatchReason};
@@ -95,6 +99,8 @@ impl TestRunnerBuilder {
 }
 
 /// Context for running tests.
+///
+/// Created using [`TestRunnerBuilder::build`].
 pub struct TestRunner<'a> {
     no_capture: bool,
     tries: usize,
@@ -124,7 +130,7 @@ impl<'a> TestRunner<'a> {
     /// Executes the listed tests, each one in its own process.
     ///
     /// Accepts a callback that is called with the results of each test. If the callback returns an
-    /// error, the callback is no longer called.
+    /// error, the test run terminates and the callback is no longer called.
     pub fn try_execute<E, F>(&self, callback: F) -> Result<RunStats, E>
     where
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
@@ -193,7 +199,7 @@ impl<'a> TestRunner<'a> {
                             .run_test(test_instance, attempt, &this_run_sender)
                             .into_external(attempt, self.tries);
 
-                        if run_status.status.is_success() {
+                        if run_status.result.is_success() {
                             // The test succeeded.
                             run_statuses.push(run_status);
                             break;
@@ -217,7 +223,7 @@ impl<'a> TestRunner<'a> {
                     // In either case, the test is finished.
                     let _ = this_run_sender.send(InternalTestEvent::Finished {
                         test_instance,
-                        run_statuses: RunStatuses::new(run_statuses),
+                        run_statuses: ExecutionStatuses::new(run_statuses),
                     });
                 })
             });
@@ -309,16 +315,16 @@ impl<'a> TestRunner<'a> {
         test: TestInstance<'a>,
         attempt: usize,
         run_sender: &Sender<InternalTestEvent<'a>>,
-    ) -> InternalRunStatus {
+    ) -> InternalExecuteStatus {
         let stopwatch = StopwatchStart::now();
 
         match self.run_test_inner(test, attempt, &stopwatch, run_sender) {
             Ok(run_status) => run_status,
-            Err(_) => InternalRunStatus {
+            Err(_) => InternalExecuteStatus {
                 // TODO: can we return more information in stdout/stderr? investigate this
                 stdout: vec![],
                 stderr: vec![],
-                status: TestStatus::ExecFail,
+                result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.end(),
             },
         }
@@ -330,7 +336,7 @@ impl<'a> TestRunner<'a> {
         attempt: usize,
         stopwatch: &StopwatchStart,
         run_sender: &Sender<InternalTestEvent<'a>>,
-    ) -> std::io::Result<InternalRunStatus> {
+    ) -> std::io::Result<InternalExecuteStatus> {
         let cmd = test
             .make_expression()
             .unchecked()
@@ -378,14 +384,14 @@ impl<'a> TestRunner<'a> {
         let output = handle.into_output()?;
 
         let status = if output.status.success() {
-            TestStatus::Pass
+            ExecutionResult::Pass
         } else {
-            TestStatus::Fail
+            ExecutionResult::Fail
         };
-        Ok(InternalRunStatus {
+        Ok(InternalExecuteStatus {
             stdout: output.stdout,
             stderr: output.stderr,
-            status,
+            result: status,
             stopwatch_end: stopwatch.end(),
         })
     }
@@ -393,51 +399,57 @@ impl<'a> TestRunner<'a> {
 
 /// Information about executions of a test, including retries.
 #[derive(Clone, Debug)]
-pub struct RunStatuses {
+pub struct ExecutionStatuses {
     /// This is guaranteed to be non-empty.
-    statuses: Vec<TestRunStatus>,
+    statuses: Vec<ExecuteStatus>,
 }
 
 #[allow(clippy::len_without_is_empty)] // RunStatuses is never empty
-impl RunStatuses {
-    fn new(statuses: Vec<TestRunStatus>) -> Self {
+impl ExecutionStatuses {
+    fn new(statuses: Vec<ExecuteStatus>) -> Self {
         Self { statuses }
     }
 
-    /// Returns the last run status.
+    /// Returns the last execution status.
     ///
     /// This status is typically used as the final result.
-    pub fn last_status(&self) -> &TestRunStatus {
-        self.statuses.last().expect("run statuses is non-empty")
+    pub fn last_status(&self) -> &ExecuteStatus {
+        self.statuses
+            .last()
+            .expect("execution statuses is non-empty")
     }
 
     /// Iterates over all the statuses.
-    pub fn iter(&self) -> impl Iterator<Item = &'_ TestRunStatus> + DoubleEndedIterator + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = &'_ ExecuteStatus> + DoubleEndedIterator + '_ {
         self.statuses.iter()
     }
 
-    /// Returns the number of statuses.
+    /// Returns the number of times the test was executed.
     pub fn len(&self) -> usize {
         self.statuses.len()
     }
 
-    pub fn describe(&self) -> RunDescribe<'_> {
+    /// Returns a description of self.
+    pub fn describe(&self) -> ExecutionDescription<'_> {
         let last_status = self.last_status();
-        if last_status.status.is_success() {
+        if last_status.result.is_success() {
             if self.statuses.len() > 1 {
-                RunDescribe::Flaky {
+                ExecutionDescription::Flaky {
                     last_status,
                     prior_statuses: &self.statuses[..self.statuses.len() - 1],
                 }
             } else {
-                RunDescribe::Success {
-                    run_status: last_status,
+                ExecutionDescription::Success {
+                    single_status: last_status,
                 }
             }
         } else {
-            let first_status = self.statuses.first().expect("run-statuses is non-empty");
+            let first_status = self
+                .statuses
+                .first()
+                .expect("execution statuses is non-empty");
             let retries = &self.statuses[1..];
-            RunDescribe::Failure {
+            ExecutionDescription::Failure {
                 first_status,
                 last_status,
                 retries,
@@ -446,64 +458,69 @@ impl RunStatuses {
     }
 }
 
-/// A description obtained from `RunStatuses`.
-pub enum RunDescribe<'a> {
+/// A description of test executions obtained from `ExecuteStatuses`.
+///
+/// This can be used to quickly determine whether a test passed, failed or was flaky.
+pub enum ExecutionDescription<'a> {
     /// The test was run once and was successful.
-    Success { run_status: &'a TestRunStatus },
+    Success {
+        /// The status of the test.
+        single_status: &'a ExecuteStatus,
+    },
 
     /// The test was run more than once. The final result was successful.
     Flaky {
         /// The last, successful status.
-        last_status: &'a TestRunStatus,
+        last_status: &'a ExecuteStatus,
 
         /// Previous statuses, none of which are successes.
-        prior_statuses: &'a [TestRunStatus],
+        prior_statuses: &'a [ExecuteStatus],
     },
 
     /// The test was run once, or possibly multiple times. All runs failed.
     Failure {
         /// The first, failing status.
-        first_status: &'a TestRunStatus,
+        first_status: &'a ExecuteStatus,
 
         /// The last, failing status. Same as the first status if no retries were performed.
-        last_status: &'a TestRunStatus,
+        last_status: &'a ExecuteStatus,
 
         /// Any retries that were performed. All of these runs failed.
         ///
         /// May be empty.
-        retries: &'a [TestRunStatus],
+        retries: &'a [ExecuteStatus],
     },
 }
 
-impl<'a> RunDescribe<'a> {
+impl<'a> ExecutionDescription<'a> {
     /// Returns the status level for this `RunDescribe`.
     pub fn status_level(&self) -> StatusLevel {
         match self {
-            RunDescribe::Success { .. } => StatusLevel::Pass,
-            RunDescribe::Flaky { .. } => StatusLevel::Retry,
-            RunDescribe::Failure { .. } => StatusLevel::Fail,
+            ExecutionDescription::Success { .. } => StatusLevel::Pass,
+            ExecutionDescription::Flaky { .. } => StatusLevel::Retry,
+            ExecutionDescription::Failure { .. } => StatusLevel::Fail,
         }
     }
 }
 
 /// Information about a single execution of a test.
 #[derive(Clone, Debug)]
-pub struct TestRunStatus {
+pub struct ExecuteStatus {
     /// The current attempt. In the range `[1, total_attempts]`.
     pub attempt: usize,
     /// The total number of times this test can be run. Equal to `1 + retries`.
     pub total_attempts: usize,
     /// Standard output and standard error for this test.
     pub stdout_stderr: Arc<(Vec<u8>, Vec<u8>)>,
-    /// The status of this test: pass, fail or execution error.
-    pub status: TestStatus,
+    /// The result of execution this test: pass, fail or execution error.
+    pub result: ExecutionResult,
     /// The time at which the test started.
     pub start_time: SystemTime,
     /// The time it took for the test to run.
     pub time_taken: Duration,
 }
 
-impl TestRunStatus {
+impl ExecuteStatus {
     /// Returns the standard output.
     pub fn stdout(&self) -> &[u8] {
         &self.stdout_stderr.0
@@ -515,20 +532,20 @@ impl TestRunStatus {
     }
 }
 
-struct InternalRunStatus {
+struct InternalExecuteStatus {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
-    status: TestStatus,
+    result: ExecutionResult,
     stopwatch_end: StopwatchEnd,
 }
 
-impl InternalRunStatus {
-    fn into_external(self, attempt: usize, total_attempts: usize) -> TestRunStatus {
-        TestRunStatus {
+impl InternalExecuteStatus {
+    fn into_external(self, attempt: usize, total_attempts: usize) -> ExecuteStatus {
+        ExecuteStatus {
             attempt,
             total_attempts,
             stdout_stderr: Arc::new((self.stdout, self.stderr)),
-            status: self.status,
+            result: self.result,
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,
         }
@@ -579,7 +596,7 @@ impl RunStats {
         true
     }
 
-    fn on_test_finished(&mut self, run_statuses: &RunStatuses) {
+    fn on_test_finished(&mut self, run_statuses: &ExecutionStatuses) {
         self.final_run_count += 1;
         // run_statuses is guaranteed to have at least one element.
         // * If the last element is success, treat it as success (and possibly flaky).
@@ -590,15 +607,15 @@ impl RunStats {
         // This is not likely to matter much in practice since failures are likely to be of the
         // same type.
         let last_status = run_statuses.last_status();
-        match last_status.status {
-            TestStatus::Pass => {
+        match last_status.result {
+            ExecutionResult::Pass => {
                 self.passed += 1;
                 if run_statuses.len() > 1 {
                     self.flaky += 1;
                 }
             }
-            TestStatus::Fail => self.failed += 1,
-            TestStatus::ExecFail => self.exec_failed += 1,
+            ExecutionResult::Fail => self.failed += 1,
+            ExecutionResult::ExecFail => self.exec_failed += 1,
         }
     }
 }
@@ -667,7 +684,7 @@ where
                 self.run_stats.on_test_finished(&run_statuses);
 
                 // should this run be canceled because of a failure?
-                let fail_cancel = self.fail_fast && !run_statuses.last_status().status.is_success();
+                let fail_cancel = self.fail_fast && !run_statuses.last_status().result.is_success();
 
                 (self.callback)(TestEvent::TestFinished {
                     test_instance,
@@ -748,11 +765,11 @@ enum InternalTestEvent<'a> {
     },
     Retry {
         test_instance: TestInstance<'a>,
-        run_status: TestRunStatus,
+        run_status: ExecuteStatus,
     },
     Finished {
         test_instance: TestInstance<'a>,
-        run_statuses: RunStatuses,
+        run_statuses: ExecutionStatuses,
     },
     Skipped {
         test_instance: TestInstance<'a>,
@@ -767,8 +784,9 @@ enum InternalError<E> {
     SignalCanceled(Option<E>),
 }
 
+/// Whether a test passed, failed or an error occurred while executing the test.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum TestStatus {
+pub enum ExecutionResult {
     /// The test passed.
     Pass,
     /// The test failed.
@@ -777,12 +795,12 @@ pub enum TestStatus {
     ExecFail,
 }
 
-impl TestStatus {
+impl ExecutionResult {
     /// Returns true if the test was successful.
     pub fn is_success(self) -> bool {
         match self {
-            TestStatus::Pass => true,
-            TestStatus::Fail | TestStatus::ExecFail => false,
+            ExecutionResult::Pass => true,
+            ExecutionResult::Fail | ExecutionResult::ExecFail => false,
         }
     }
 }

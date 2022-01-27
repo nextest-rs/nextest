@@ -15,13 +15,15 @@ pub struct TestListSummary {
 
     /// A map of Rust test suites to the test binaries within them, keyed by a unique identifier
     /// for each test suite.
-    pub rust_testsuites: BTreeMap<String, RustTestsuite>,
+    pub rust_suites: BTreeMap<String, RustTestSuiteSummary>,
 }
 
-/// A suite of tests within a Rust test binary.
+/// A serializable suite of tests within a Rust test binary.
+///
+/// Part of a [`TestListSummary`].
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct RustTestsuite {
+pub struct RustTestSuiteSummary {
     /// The name of this package in the workspace.
     pub package_name: String,
 
@@ -40,13 +42,15 @@ pub struct RustTestsuite {
     pub cwd: Utf8PathBuf,
 
     /// Test case names and other information about them.
-    pub testcases: BTreeMap<String, RustTestcase>,
+    pub testcases: BTreeMap<String, RustTestCaseSummary>,
 }
 
-/// An individual test case within a Rust test binary.
+/// Serializable information about an individual test case within a Rust test suite.
+///
+/// Part of a [`RustTestSuiteSummary`].
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct RustTestcase {
+pub struct RustTestCaseSummary {
     /// Returns true if this test is marked ignored.
     ///
     /// Ignored tests, if run, are executed with the `--ignored` argument.

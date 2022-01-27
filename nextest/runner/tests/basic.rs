@@ -12,10 +12,13 @@ use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     config::NextestConfig,
     reporter::TestEvent,
-    runner::{RunDescribe, RunStats, RunStatuses, TestRunner, TestRunnerBuilder, TestStatus},
+    runner::{
+        ExecutionDescription, ExecutionResult, ExecutionStatuses, RunStats, TestRunner,
+        TestRunnerBuilder,
+    },
+    signal::SignalHandler,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::{TestBinary, TestList},
-    SignalHandler,
+    test_list::{RustTestArtifact, TestList},
 };
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
@@ -47,17 +50,17 @@ enum FixtureStatus {
 }
 
 impl FixtureStatus {
-    fn to_test_status(self, total_attempts: usize) -> TestStatus {
+    fn to_test_status(self, total_attempts: usize) -> ExecutionResult {
         match self {
-            FixtureStatus::Pass | FixtureStatus::IgnoredPass => TestStatus::Pass,
+            FixtureStatus::Pass | FixtureStatus::IgnoredPass => ExecutionResult::Pass,
             FixtureStatus::Flaky { pass_attempt } => {
                 if pass_attempt <= total_attempts {
-                    TestStatus::Pass
+                    ExecutionResult::Pass
                 } else {
-                    TestStatus::Fail
+                    ExecutionResult::Fail
                 }
             }
-            FixtureStatus::Fail | FixtureStatus::IgnoredFail => TestStatus::Fail,
+            FixtureStatus::Fail | FixtureStatus::IgnoredFail => ExecutionResult::Fail,
         }
     }
 
@@ -109,10 +112,10 @@ static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
         .expect("building package graph failed")
 });
 
-static FIXTURE_TARGETS: Lazy<BTreeMap<String, TestBinary<'static>>> =
+static FIXTURE_TARGETS: Lazy<BTreeMap<String, RustTestArtifact<'static>>> =
     Lazy::new(init_fixture_targets);
 
-fn init_fixture_targets() -> BTreeMap<String, TestBinary<'static>> {
+fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
     // TODO: actually productionize this, probably requires moving x into this repo
     let cmd_name = match env::var("CARGO") {
         Ok(v) => v,
@@ -133,9 +136,10 @@ fn init_fixture_targets() -> BTreeMap<String, TestBinary<'static>> {
     .stdout_capture();
 
     let output = expr.run().expect("cargo test --no-run failed");
-    let test_binaries = TestBinary::from_messages(graph, Cursor::new(output.stdout)).unwrap();
+    let test_artifacts =
+        RustTestArtifact::from_messages(graph, Cursor::new(output.stdout)).unwrap();
 
-    test_binaries
+    test_artifacts
         .into_iter()
         .map(|bin| (bin.binary_id.clone(), bin))
         .inspect(|(k, _)| println!("{}", k))
@@ -156,7 +160,7 @@ fn test_list_tests() -> Result<()> {
             .get(&test_binary.binary_path)
             .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary_path));
         let tests: Vec<_> = info
-            .tests
+            .testcases
             .iter()
             .map(|(name, info)| (name.as_str(), info.filter_match))
             .collect();
@@ -177,7 +181,7 @@ struct InstanceValue<'a> {
 #[derive(Clone)]
 enum InstanceStatus {
     Skipped(MismatchReason),
-    Finished(RunStatuses),
+    Finished(ExecutionStatuses),
 }
 
 impl fmt::Debug for InstanceStatus {
@@ -191,7 +195,7 @@ impl fmt::Debug for InstanceStatus {
                         "({}/{}) {:?}\n---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",
                         run_status.attempt,
                         run_status.total_attempts,
-                        run_status.status,
+                        run_status.result,
                         String::from_utf8_lossy(run_status.stdout()),
                         String::from_utf8_lossy(run_status.stderr())
                     )?;
@@ -235,7 +239,7 @@ fn test_run() -> Result<()> {
                         fixture.name
                     );
                     let run_status = run_statuses.last_status();
-                    run_status.status == fixture.status.to_test_status(1)
+                    run_status.result == fixture.status.to_test_status(1)
                 }
             };
             if !valid {
@@ -284,7 +288,7 @@ fn test_run_ignored() -> Result<()> {
                         fixture.name
                     );
                     let run_status = run_statuses.last_status();
-                    run_status.status == fixture.status.to_test_status(1)
+                    run_status.result == fixture.status.to_test_status(1)
                 }
             };
             if !valid {
@@ -345,10 +349,10 @@ fn test_retries() -> Result<()> {
                     );
 
                     match run_statuses.describe() {
-                        RunDescribe::Success { run_status } => {
-                            run_status.status == TestStatus::Pass
+                        ExecutionDescription::Success { single_status } => {
+                            single_status.result == ExecutionResult::Pass
                         }
-                        RunDescribe::Flaky {
+                        ExecutionDescription::Flaky {
                             last_status,
                             prior_statuses,
                         } => {
@@ -359,15 +363,15 @@ fn test_retries() -> Result<()> {
                             );
                             for prior_status in prior_statuses {
                                 assert_eq!(
-                                    prior_status.status,
-                                    TestStatus::Fail,
+                                    prior_status.result,
+                                    ExecutionResult::Fail,
                                     "prior status {} should be fail",
                                     prior_status.attempt
                                 );
                             }
-                            last_status.status == TestStatus::Pass
+                            last_status.result == ExecutionResult::Pass
                         }
-                        RunDescribe::Failure {
+                        ExecutionDescription::Failure {
                             first_status,
                             retries,
                             ..
@@ -379,13 +383,13 @@ fn test_retries() -> Result<()> {
                             );
                             for retry in retries {
                                 assert_eq!(
-                                    retry.status,
-                                    TestStatus::Fail,
+                                    retry.result,
+                                    ExecutionResult::Fail,
                                     "retry {} should be fail",
                                     retry.attempt
                                 );
                             }
-                            first_status.status == TestStatus::Fail
+                            first_status.result == ExecutionResult::Fail
                         }
                     }
                 }

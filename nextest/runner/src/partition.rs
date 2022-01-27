@@ -3,9 +3,9 @@
 
 //! Support for partitioning test runs across several machines.
 //!
-//! At the moment this only supports a simple hash-based sharding. In the future it could potentially
-//! be made smarter: e.g. using data to pick different sets of binaries and tests to run, with
-//! an aim to minimize total build and test times.
+//! At the moment this only supports simple hash-based and count-based sharding. In the future it
+//! could potentially be made smarter: e.g. using data to pick different sets of binaries and tests
+//! to run, with an aim to minimize total build and test times.
 
 use crate::errors::PartitionerBuilderParseError;
 use std::{

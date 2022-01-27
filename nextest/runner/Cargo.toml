@@ -1,8 +1,10 @@
 [package]
 name = "nextest-runner"
+description = "Core runner logic for cargo nextest."
 version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
-license = "Apache-2.0 OR MIT"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [dependencies]

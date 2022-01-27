@@ -1,12 +1,18 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Prints out and aggregates test execution statuses.
+//!
+//! The main structure in this module is [`TestReporter`].
+
+mod aggregator;
+
 use crate::{
     config::NextestProfile,
     errors::{StatusLevelParseError, TestOutputDisplayParseError, WriteEventError},
     helpers::write_test_name,
-    metadata::MetadataReporter,
-    runner::{RunDescribe, RunStats, RunStatuses, TestRunStatus, TestStatus},
+    reporter::aggregator::EventAggregator,
+    runner::{ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses, RunStats},
     test_list::{TestInstance, TestList},
 };
 use debug_ignore::DebugIgnore;
@@ -20,20 +26,32 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+/// When to display test output in the reporter.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TestOutputDisplay {
+    /// Show output immediately on execution completion.
+    ///
+    /// This is the default for failing tests.
     Immediate,
+
+    /// Show output immediately, and at the end of a test run.
     ImmediateFinal,
+
+    /// Show output at the end of execution.
     Final,
+
+    /// Never show output.
     Never,
 }
 
 impl TestOutputDisplay {
+    /// String representations of all known variants.
     pub fn variants() -> &'static [&'static str] {
         &["immediate", "immediate-final", "final", "never"]
     }
 
+    /// Returns true if test output is shown immediately.
     pub fn is_immediate(self) -> bool {
         match self {
             TestOutputDisplay::Immediate | TestOutputDisplay::ImmediateFinal => true,
@@ -41,6 +59,7 @@ impl TestOutputDisplay {
         }
     }
 
+    /// Returns true if test output is shown at the end of the run.
     pub fn is_final(self) -> bool {
         match self {
             TestOutputDisplay::Final | TestOutputDisplay::ImmediateFinal => true,
@@ -75,21 +94,38 @@ impl fmt::Display for TestOutputDisplay {
     }
 }
 
-/// Status level to show in the output.
+/// Status level to show in the reporter output.
+///
+/// Status levels are incremental: each level causes all the statuses listed above it to be output. For example,
+/// [`Slow`](Self::Slow) implies [`Retry`](Self::Retry) and [`Fail`](Self::Fail).
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum StatusLevel {
+    /// No output.
     None,
+
+    /// Only output test failures.
     Fail,
+
+    /// Output retries and failures.
     Retry,
+
+    /// Output information about slow tests, and all variants above.
     Slow,
+
+    /// Output passing tests in addition to all variants above.
     Pass,
+
+    /// Output skipped tests in addition to all variants above.
     Skip,
+
+    /// Currently has the same meaning as [`Skip`](Self::Skip).
     All,
 }
 
 impl StatusLevel {
+    /// Returns string representations of all known variants.
     pub fn variants() -> &'static [&'static str] {
         &["none", "fail", "retry", "slow", "pass", "skip", "all"]
     }
@@ -178,7 +214,7 @@ impl TestReporterBuilder {
             .map(|(_, info)| info.binary_id.len())
             .max()
             .unwrap_or_default();
-        let metadata_reporter = MetadataReporter::new(profile);
+        let aggregator = EventAggregator::new(profile);
 
         let status_level = self.status_level.unwrap_or_else(|| profile.status_level());
         let status_level = match self.no_capture {
@@ -210,7 +246,7 @@ impl TestReporterBuilder {
             styles,
             cancel_status: None,
             final_outputs: DebugIgnore(vec![]),
-            metadata_reporter,
+            metadata_reporter: aggregator,
         }
     }
 }
@@ -227,12 +263,13 @@ pub struct TestReporter<'a> {
     // TODO: too many concerns mixed up here. Should have a better model, probably in conjunction
     // with factoring out the different reporters below.
     cancel_status: Option<CancelReason>,
-    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, TestRunStatus)>>,
+    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, ExecuteStatus)>>,
 
-    metadata_reporter: MetadataReporter<'a>,
+    metadata_reporter: EventAggregator<'a>,
 }
 
 impl<'a> TestReporter<'a> {
+    /// Colorizes output.
     pub fn colorize(&mut self) {
         self.styles.colorize();
     }
@@ -329,7 +366,7 @@ impl<'a> TestReporter<'a> {
 
                     // This test is guaranteed to have failed.
                     assert!(
-                        !run_status.status.is_success(),
+                        !run_status.result.is_success(),
                         "only failing tests are retried"
                     );
                     if self.failure_output.is_immediate() {
@@ -348,11 +385,13 @@ impl<'a> TestReporter<'a> {
                 if self.status_level >= describe.status_level() {
                     // First, print the status.
                     let last_status = match describe {
-                        RunDescribe::Success { run_status } => {
+                        ExecutionDescription::Success {
+                            single_status: run_status,
+                        } => {
                             write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
                             run_status
                         }
-                        RunDescribe::Flaky { last_status, .. } => {
+                        ExecutionDescription::Flaky { last_status, .. } => {
                             // Use the skip color to also represent a flaky test.
                             write!(
                                 writer,
@@ -361,11 +400,11 @@ impl<'a> TestReporter<'a> {
                             )?;
                             last_status
                         }
-                        RunDescribe::Failure { last_status, .. } => {
-                            let status_str = match last_status.status {
-                                TestStatus::Fail => "FAIL",
-                                TestStatus::ExecFail => "XFAIL",
-                                TestStatus::Pass => unreachable!("this is a failing test"),
+                        ExecutionDescription::Failure { last_status, .. } => {
+                            let status_str = match last_status.result {
+                                ExecutionResult::Fail => "FAIL",
+                                ExecutionResult::ExecFail => "XFAIL",
+                                ExecutionResult::Pass => unreachable!("this is a failing test"),
                             };
 
                             if last_status.attempt == 1 {
@@ -392,7 +431,7 @@ impl<'a> TestReporter<'a> {
                     // If the test failed to execute, print its output and error status.
                     // (don't print out test failures after Ctrl-C)
                     if self.cancel_status < Some(CancelReason::Signal) {
-                        let test_output_display = match last_status.status.is_success() {
+                        let test_output_display = match last_status.result.is_success() {
                             true => self.success_output,
                             false => self.failure_output,
                         };
@@ -560,13 +599,13 @@ impl<'a> TestReporter<'a> {
     fn write_run_status(
         &self,
         test_instance: &TestInstance<'a>,
-        run_status: &TestRunStatus,
+        run_status: &ExecuteStatus,
         is_retry: bool,
         mut writer: impl Write,
     ) -> io::Result<()> {
         let (header_style, _output_style) = if is_retry {
             (self.styles.retry, self.styles.retry_output)
-        } else if run_status.status.is_success() {
+        } else if run_status.result.is_success() {
             (self.styles.pass, self.styles.pass_output)
         } else {
             (self.styles.fail, self.styles.fail_output)
@@ -613,7 +652,7 @@ impl<'a> TestReporter<'a> {
 
     fn write_attempt(
         &self,
-        run_status: &TestRunStatus,
+        run_status: &ExecuteStatus,
         style: Style,
         mut writer: impl Write,
     ) -> io::Result<()> {
@@ -638,6 +677,9 @@ impl<'a> fmt::Debug for TestReporter<'a> {
     }
 }
 
+/// A test event.
+///
+/// Events are produced by a [`TestRunner`](crate::runner::TestRunner) and consumed by a [`TestReporter`].
 #[derive(Clone, Debug)]
 pub enum TestEvent<'a> {
     /// The test run started.
@@ -674,7 +716,7 @@ pub enum TestEvent<'a> {
         test_instance: TestInstance<'a>,
 
         /// The status of this attempt to run the test. Will never be success.
-        run_status: TestRunStatus,
+        run_status: ExecuteStatus,
     },
 
     /// A test finished running.
@@ -683,7 +725,7 @@ pub enum TestEvent<'a> {
         test_instance: TestInstance<'a>,
 
         /// Information about all the runs for this test.
-        run_statuses: RunStatuses,
+        run_statuses: ExecutionStatuses,
     },
 
     /// A test was skipped.

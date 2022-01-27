@@ -1,6 +1,10 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Filtering tests based on user-specified parameters.
+//!
+//! The main structure in this module is [`TestFilter`], which is created by a [`TestFilterBuilder`].
+
 use crate::{
     errors::RunIgnoredParseError,
     partition::{Partitioner, PartitionerBuilder},
@@ -25,6 +29,7 @@ pub enum RunIgnored {
 }
 
 impl RunIgnored {
+    /// String representations of all known variants.
     pub fn variants() -> &'static [&'static str] {
         &["default", "ignored-only", "all"]
     }

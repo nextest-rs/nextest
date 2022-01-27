@@ -5,9 +5,9 @@
 
 use crate::{
     config::{NextestJunitConfig, NextestProfile},
-    errors::WriteEventError,
+    errors::{JunitError, WriteEventError},
     reporter::TestEvent,
-    runner::{RunDescribe, TestRunStatus, TestStatus},
+    runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
     test_list::TestInstance,
 };
 use camino::Utf8Path;
@@ -18,14 +18,14 @@ use std::{collections::HashMap, fs::File, time::SystemTime};
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
-pub(crate) struct MetadataReporter<'cfg> {
+pub(crate) struct EventAggregator<'cfg> {
     store_dir: &'cfg Utf8Path,
     // TODO: log information in a JSONable report (converting that to XML later) instead of directly
     // writing it to XML
     junit: Option<MetadataJunit<'cfg>>,
 }
 
-impl<'cfg> MetadataReporter<'cfg> {
+impl<'cfg> EventAggregator<'cfg> {
     pub(crate) fn new(profile: &'cfg NextestProfile<'cfg>) -> Self {
         Self {
             store_dir: profile.store_dir(),
@@ -67,25 +67,25 @@ impl<'cfg> MetadataJunit<'cfg> {
                 test_instance,
                 run_statuses,
             } => {
-                fn kind_ty(run_status: &TestRunStatus) -> (NonSuccessKind, &'static str) {
-                    match run_status.status {
-                        TestStatus::Fail => (NonSuccessKind::Failure, "test failure"),
-                        TestStatus::ExecFail => (NonSuccessKind::Error, "execution failure"),
-                        TestStatus::Pass => unreachable!("this is a failure status"),
+                fn kind_ty(run_status: &ExecuteStatus) -> (NonSuccessKind, &'static str) {
+                    match run_status.result {
+                        ExecutionResult::Fail => (NonSuccessKind::Failure, "test failure"),
+                        ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure"),
+                        ExecutionResult::Pass => unreachable!("this is a failure status"),
                     }
                 }
 
                 let testsuite = self.testsuite_for(test_instance);
 
                 let (mut testcase_status, main_status, reruns) = match run_statuses.describe() {
-                    RunDescribe::Success { run_status } => {
-                        (TestcaseStatus::success(), run_status, &[][..])
+                    ExecutionDescription::Success { single_status } => {
+                        (TestcaseStatus::success(), single_status, &[][..])
                     }
-                    RunDescribe::Flaky {
+                    ExecutionDescription::Flaky {
                         last_status,
                         prior_statuses,
                     } => (TestcaseStatus::success(), last_status, prior_statuses),
-                    RunDescribe::Failure {
+                    ExecutionDescription::Failure {
                         first_status,
                         retries,
                         ..
@@ -123,7 +123,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 // written out to disk:
                 // https://github.com/allure-framework/allure2/blob/master/plugins/junit-xml-plugin/src/main/java/io/qameta/allure/junitxml/JunitXmlPlugin.java#L192-L196
                 // we may have to update this format to handle that.
-                if !main_status.status.is_success() {
+                if !main_status.result.is_success() {
                     // TODO: use the Arc wrapper, don't clone the system out and system err bytes
                     testcase
                         .set_system_out_lossy(main_status.stdout())
@@ -168,12 +168,10 @@ impl<'cfg> MetadataJunit<'cfg> {
                     file: junit_path.to_path_buf(),
                     error,
                 })?;
-                report
-                    .serialize(f)
-                    .map_err(|error| WriteEventError::Junit {
-                        file: junit_path.to_path_buf(),
-                        error,
-                    })?;
+                report.serialize(f).map_err(|err| WriteEventError::Junit {
+                    file: junit_path.to_path_buf(),
+                    error: JunitError::new(err),
+                })?;
             }
         }
 

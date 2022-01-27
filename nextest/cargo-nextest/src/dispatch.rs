@@ -15,9 +15,9 @@ use nextest_runner::{
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
     runner::TestRunnerBuilder,
+    signal::SignalHandler,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::{OutputFormat, TestBinary, TestList},
-    SignalHandler,
+    test_list::{OutputFormat, RustTestArtifact, TestList},
 };
 use std::io::Cursor;
 use supports_color::Stream;
@@ -156,11 +156,11 @@ impl TestBuildFilter {
             )));
         }
 
-        let test_binaries = TestBinary::from_messages(graph, Cursor::new(output.stdout))?;
+        let test_artifacts = RustTestArtifact::from_messages(graph, Cursor::new(output.stdout))?;
 
         let test_filter =
             TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
-        TestList::new(test_binaries, &test_filter).wrap_err("error building test list")
+        TestList::new(test_artifacts, &test_filter).wrap_err("error building test list")
     }
 }
 

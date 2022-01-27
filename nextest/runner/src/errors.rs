@@ -1,6 +1,8 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Errors produced by nextest.
+
 use crate::{
     reporter::{StatusLevel, TestOutputDisplay},
     test_filter::RunIgnored,
@@ -44,6 +46,7 @@ impl error::Error for ConfigParseError {
     }
 }
 
+/// An error which indicates that a profile was requested but not known to nextest.
 #[derive(Clone, Debug)]
 pub struct ProfileNotFound {
     profile: String,
@@ -222,7 +225,7 @@ impl fmt::Display for PartitionerBuilderParseError {
 
 impl error::Error for PartitionerBuilderParseError {}
 
-/// An error that occurs in [`TestBinary::from_messages`](crate::test_list::TestBinary::from_messages).
+/// An error that occurs in [`RustTestArtifact::from_messages`](crate::test_list::RustTestArtifact::from_messages).
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum FromMessagesError {
@@ -376,7 +379,8 @@ pub enum WriteEventError {
         /// The output file.
         file: Utf8PathBuf,
 
-        error: quick_junit::Error,
+        /// The underlying error.
+        error: JunitError,
     },
 }
 
@@ -403,5 +407,29 @@ impl error::Error for WriteEventError {
             WriteEventError::Fs { error, .. } => Some(error),
             WriteEventError::Junit { error, .. } => Some(error),
         }
+    }
+}
+
+/// An error that occurred while producing JUnit XML.
+#[derive(Debug)]
+pub struct JunitError {
+    err: quick_junit::Error,
+}
+
+impl JunitError {
+    pub(crate) fn new(err: quick_junit::Error) -> Self {
+        Self { err }
+    }
+}
+
+impl fmt::Display for JunitError {
+    fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
+        Ok(())
+    }
+}
+
+impl error::Error for JunitError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        Some(&self.err)
     }
 }

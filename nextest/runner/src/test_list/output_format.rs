@@ -8,14 +8,19 @@ use crate::errors::OutputFormatParseError;
 use serde::Serialize;
 use std::{fmt, io, str::FromStr};
 
+/// Output formats for nextest.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum OutputFormat {
+    /// A plain, user-readable output format.
     Plain,
+
+    /// Machine-readable output format.
     Serializable(SerializableFormat),
 }
 
 impl OutputFormat {
+    /// Returns string representations of all currently-known, valid variants.
     pub fn variants() -> &'static [&'static str] {
         &["plain", "json", "json-pretty"]
     }
@@ -51,10 +56,13 @@ impl Default for OutputFormat {
     }
 }
 
+/// A serialized, machine-readable output format.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum SerializableFormat {
+    /// JSON with no whitespace.
     Json,
+    /// JSON, prettified.
     JsonPretty,
 }
 
@@ -75,21 +83,11 @@ impl SerializableFormat {
 #[cfg(test)]
 mod test {
     use super::*;
-    use proptest::prelude::*;
 
     #[test]
     fn output_format_variants() {
         for &variant in OutputFormat::variants() {
             variant.parse::<OutputFormat>().expect("variant is valid");
-        }
-    }
-
-    proptest! {
-        #[test]
-        fn output_format_from_str_display_roundtrip(format in any::<OutputFormat>()) {
-            let displayed = format!("{}", format);
-            let format2 = displayed.parse::<OutputFormat>().expect("Display output is valid");
-            prop_assert_eq!(format, format2, "Display -> FromStr roundtrips");
         }
     }
 }
