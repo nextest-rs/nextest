@@ -6,7 +6,7 @@ authors = ["Diem Association <opensource@diem.com>"]
 readme = "README.md"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/diem/diem-devtools"
-documentation = "https://docs.rs/nextest-runner"
+documentation = "https://docs.rs/quick-junit"
 edition = "2021"
 
 [dependencies]
