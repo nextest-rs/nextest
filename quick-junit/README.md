@@ -7,8 +7,10 @@
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE-MIT)
 
-`quick-junit` is a JUnit/XUnit XML serializer for Rust. This crate is built to serve the needs
-of [cargo-nextest](docs.rs/cargo-nextest).
+`quick-junit` is a JUnit/XUnit XML data model and serializer for Rust. This crate allows users
+to create a JUnit report as an XML file. JUnit XML files are widely supported by test tooling.
+
+ This crate is built to serve the needs of [cargo-nextest](docs.rs/cargo-nextest).
 
 ## Overview
 
@@ -16,7 +18,20 @@ The root element of a JUnit report is a `Report`. A `Report` consists of one or 
 `TestSuite` instances. A `TestSuite` instance consists of one or more `TestCase`s.
 
 The status (success, failure, error, or skipped) of a `TestCase` is represented by `TestCaseStatus`.
-If a test was rerun, `TestCaseStatus` can manage `TestRerun` instances as well.
+
+## Features
+
+- x Serializing JUnit/XUnit to the [Jenkins format](https://llg.cubic.org/docs/junit/).
+- x Including test reruns using `TestRerun`
+- x Including flaky tests
+- x Including standard output and error
+  - x Filtering out [invalid XML
+    characters](https://en.wikipedia.org/wiki/Valid_characters_in_XML) (eg ANSI escape codes)
+    from the output
+- x Automatically keeping track of success, failure and error counts
+- x Arbitrary properties and extra attributes
+
+This crate does not currently support deserializing JUnit XML. (PRs are welcome!)
 
 ## Examples
 
@@ -45,8 +60,13 @@ const EXPECTED_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 assert_eq!(report.to_string().unwrap(), EXPECTED_XML);
 ```
 
-For a more comprehensive example, see
+For a more comprehensive example, including reruns and flaky tests, see
 [`fixture_tests.rs`](https://github.com/diem/diem-devtools/blob/main/quick-junit/tests/fixture_tests.rs).
+
+## Alternatives
+
+* [**junit-report**](https://crates.io/crates/junit-report): Older, more mature project. Doesn't
+  appear to support flaky tests or arbitrary properties as of version 0.7.0.
 
 ## Contributing
 
