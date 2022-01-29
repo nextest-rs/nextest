@@ -1,0 +1,29 @@
+# adapted from https://github.com/taiki-e/cargo-hack/blob/main/.github/workflows/release.yml
+
+name: Release crates
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  quick-junit-release:
+    if: github.repository_owner == 'diem-devtools' && startsWith(github.ref_name, 'quick-junit-')
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          prefix: quick-junit
+          changelog: quick-junit/CHANGELOG.md
+          title: $prefix $version
+          branch: main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
