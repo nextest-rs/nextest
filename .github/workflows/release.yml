@@ -1,6 +1,6 @@
 # adapted from https://github.com/taiki-e/cargo-hack/blob/main/.github/workflows/release.yml
 
-name: Release crates
+name: Publish releases to GitHub
 on:
   push:
     tags:
@@ -14,11 +14,6 @@ jobs:
       - uses: actions/checkout@v2
         with:
           persist-credentials: false
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
           prefix: quick-junit
