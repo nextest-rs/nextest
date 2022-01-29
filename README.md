@@ -4,8 +4,8 @@ This repository contains the source code for developer tools and libraries built
 [Diem Core](https://github.com/diem/diem/). Currently, this includes:
 
 * [**nextest**](nextest): a new, faster Cargo test runner [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://diem.github.io/diem-devtools/rustdoc/nextest-runner/)
-* [**quick-junit**](quick-junit): a data model, serializer (and in the future deserializer) for JUnit XML [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://diem.github.io/diem-devtools/rustdoc/quick_junit/)
-* [**datatest-stable**](datatest-stable): data-driven testing on stable Rust [![datatest-stable on crates.io](https://img.shields.io/crates/v/datatest-stable)](https://crates.io/crates/datatest-stable) [![Documentation (latest release)](https://docs.rs/datatest-stable/badge.svg)](https://docs.rs/datatest-stable/) [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://diem.github.io/diem-devtools/rustdoc/datatest_stable/) 
+* [**quick-junit**](quick-junit): a data model, serializer (and in the future deserializer) for JUnit/XUnit XML [![quick-junit on crates.io](https://img.shields.io/crates/v/quick-junit)](https://crates.io/crates/quick-junit) [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/quick-junit/) [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://diem.github.io/diem-devtools/rustdoc/quick_junit/)
+* [**datatest-stable**](datatest-stable): data-driven testing on stable Rust [![datatest-stable on crates.io](https://img.shields.io/crates/v/datatest-stable)](https://crates.io/crates/datatest-stable) [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/datatest-stable/) [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://diem.github.io/diem-devtools/rustdoc/datatest_stable/) 
 
 ## Minimum supported Rust version
 
