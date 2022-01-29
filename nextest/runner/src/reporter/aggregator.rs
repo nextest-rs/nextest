@@ -13,7 +13,7 @@ use crate::{
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
 use debug_ignore::DebugIgnore;
-use quick_junit::{NonSuccessKind, Report, TestRerun, Testcase, TestcaseStatus, Testsuite};
+use quick_junit::{NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite};
 use std::{collections::HashMap, fs::File, time::SystemTime};
 
 #[derive(Clone, Debug)]
@@ -44,14 +44,14 @@ impl<'cfg> EventAggregator<'cfg> {
 #[derive(Clone, Debug)]
 struct MetadataJunit<'cfg> {
     config: NextestJunitConfig<'cfg>,
-    testsuites: DebugIgnore<HashMap<&'cfg str, Testsuite>>,
+    test_suites: DebugIgnore<HashMap<&'cfg str, TestSuite>>,
 }
 
 impl<'cfg> MetadataJunit<'cfg> {
     fn new(config: NextestJunitConfig<'cfg>) -> Self {
         Self {
             config,
-            testsuites: DebugIgnore(HashMap::new()),
+            test_suites: DebugIgnore(HashMap::new()),
         }
     }
 
@@ -79,19 +79,19 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 let (mut testcase_status, main_status, reruns) = match run_statuses.describe() {
                     ExecutionDescription::Success { single_status } => {
-                        (TestcaseStatus::success(), single_status, &[][..])
+                        (TestCaseStatus::success(), single_status, &[][..])
                     }
                     ExecutionDescription::Flaky {
                         last_status,
                         prior_statuses,
-                    } => (TestcaseStatus::success(), last_status, prior_statuses),
+                    } => (TestCaseStatus::success(), last_status, prior_statuses),
                     ExecutionDescription::Failure {
                         first_status,
                         retries,
                         ..
                     } => {
                         let (kind, ty) = kind_ty(first_status);
-                        let mut testcase_status = TestcaseStatus::non_success(kind);
+                        let mut testcase_status = TestCaseStatus::non_success(kind);
                         testcase_status.set_type(ty);
                         (testcase_status, first_status, retries)
                     }
@@ -112,7 +112,7 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 // TODO: set message/description on testcase_status?
 
-                let mut testcase = Testcase::new(test_instance.name, testcase_status);
+                let mut testcase = TestCase::new(test_instance.name, testcase_status);
                 testcase
                     .set_classname(&test_instance.bin_info.binary_id)
                     .set_timestamp(to_datetime(main_status.start_time))
@@ -130,7 +130,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                         .set_system_err_lossy(main_status.stderr());
                 }
 
-                testsuite.add_testcase(testcase);
+                testsuite.add_test_case(testcase);
             }
             TestEvent::TestSkipped { .. } => {
                 // TODO: report skipped tests? causes issues if we want to aggregate runs across
@@ -155,7 +155,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 report
                     .set_timestamp(to_datetime(start_time))
                     .set_time(elapsed)
-                    .add_testsuites(self.testsuites.drain().map(|(_, testsuite)| testsuite));
+                    .add_test_suites(self.test_suites.drain().map(|(_, testsuite)| testsuite));
 
                 let junit_path = self.config.path();
                 let junit_dir = junit_path.parent().expect("junit path must have a parent");
@@ -178,10 +178,10 @@ impl<'cfg> MetadataJunit<'cfg> {
         Ok(())
     }
 
-    fn testsuite_for(&mut self, test_instance: TestInstance<'cfg>) -> &mut Testsuite {
-        self.testsuites
+    fn testsuite_for(&mut self, test_instance: TestInstance<'cfg>) -> &mut TestSuite {
+        self.test_suites
             .entry(&test_instance.bin_info.binary_id)
-            .or_insert_with(|| Testsuite::new(&test_instance.bin_info.binary_id))
+            .or_insert_with(|| TestSuite::new(&test_instance.bin_info.binary_id))
     }
 }
 

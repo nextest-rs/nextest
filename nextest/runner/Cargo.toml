@@ -5,6 +5,8 @@ version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
 readme = "README.md"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/diem/diem-devtools"
+documentation = "https://docs.rs/nextest-runner"
 edition = "2021"
 
 [dependencies]

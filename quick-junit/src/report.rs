@@ -22,17 +22,17 @@ pub struct Report {
     /// This is serialized as the number of seconds.
     pub time: Option<Duration>,
 
-    /// The total number of tests from all testsuites.
+    /// The total number of tests from all TestSuites.
     pub tests: usize,
 
-    /// The total number of failures from all testsuites.
+    /// The total number of failures from all TestSuites.
     pub failures: usize,
 
-    /// The total number of errors from all testsuites.
+    /// The total number of errors from all TestSuites.
     pub errors: usize,
 
     /// The test suites contained in this report.
-    pub testsuites: Vec<Testsuite>,
+    pub test_suites: Vec<TestSuite>,
 }
 
 impl Report {
@@ -45,7 +45,7 @@ impl Report {
             tests: 0,
             failures: 0,
             errors: 0,
-            testsuites: vec![],
+            test_suites: vec![],
         }
     }
 
@@ -61,25 +61,28 @@ impl Report {
         self
     }
 
-    /// Adds a new testsuite and updates the `tests`, `failures` and `errors` counts.
+    /// Adds a new TestSuite and updates the `tests`, `failures` and `errors` counts.
     ///
     /// When generating a new report, use of this method is recommended over adding to
-    /// `self.testsuites` directly.
-    pub fn add_testsuite(&mut self, testsuite: Testsuite) -> &mut Self {
-        self.tests += testsuite.tests;
-        self.failures += testsuite.failures;
-        self.errors += testsuite.errors;
-        self.testsuites.push(testsuite);
+    /// `self.TestSuites` directly.
+    pub fn add_test_suite(&mut self, test_suite: TestSuite) -> &mut Self {
+        self.tests += test_suite.tests;
+        self.failures += test_suite.failures;
+        self.errors += test_suite.errors;
+        self.test_suites.push(test_suite);
         self
     }
 
-    /// Adds several testsuites and updates the `tests`, `failures` and `errors` counts.
+    /// Adds several [`TestSuite`]s and updates the `tests`, `failures` and `errors` counts.
     ///
     /// When generating a new report, use of this method is recommended over adding to
-    /// `self.testsuites` directly.
-    pub fn add_testsuites(&mut self, testsuites: impl IntoIterator<Item = Testsuite>) -> &mut Self {
-        for testsuite in testsuites {
-            self.add_testsuite(testsuite);
+    /// `self.TestSuites` directly.
+    pub fn add_test_suites(
+        &mut self,
+        test_suites: impl IntoIterator<Item = TestSuite>,
+    ) -> &mut Self {
+        for test_suite in test_suites {
+            self.add_test_suite(test_suite);
         }
         self
     }
@@ -97,19 +100,19 @@ impl Report {
     }
 }
 
-/// Represents a single testsuite.
+/// Represents a single TestSuite.
 ///
-/// A `Testsuite` groups together several `Testcase` instances.
+/// A `TestSuite` groups together several `TestCase` instances.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Testsuite {
-    /// The name of this testsuite.
+pub struct TestSuite {
+    /// The name of this TestSuite.
     pub name: String,
 
-    /// The total number of tests in this testsuite.
+    /// The total number of tests in this TestSuite.
     pub tests: usize,
 
-    /// The total number of disabled tests in this testsuite.
+    /// The total number of disabled tests in this TestSuite.
     pub disabled: usize,
 
     /// The total number of tests in this suite that errored.
@@ -122,30 +125,30 @@ pub struct Testsuite {
     /// A "failure" is usually some sort of *expected* issue in a test.
     pub failures: usize,
 
-    /// The time at which the testsuite began execution.
+    /// The time at which the TestSuite began execution.
     pub timestamp: Option<DateTime<FixedOffset>>,
 
-    /// The overall time taken by the testsuite.
+    /// The overall time taken by the TestSuite.
     pub time: Option<Duration>,
 
-    /// The testcases that form this testsuite.
-    pub testcases: Vec<Testcase>,
+    /// The test cases that form this TestSuite.
+    pub test_cases: Vec<TestCase>,
 
     /// Custom properties set during test execution, e.g. environment variables.
     pub properties: Vec<Property>,
 
-    /// Data written to standard output while the testsuite was executed.
+    /// Data written to standard output while the TestSuite was executed.
     pub system_out: Option<Output>,
 
-    /// Data written to standard error while the testsuite was executed.
+    /// Data written to standard error while the TestSuite was executed.
     pub system_err: Option<Output>,
 
     /// Other fields that may be set as attributes, such as "hostname" or "package".
     pub extra: IndexMap<String, String>,
 }
 
-impl Testsuite {
-    /// Creates a new `Testsuite`.
+impl TestSuite {
+    /// Creates a new `TestSuite`.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -155,7 +158,7 @@ impl Testsuite {
             disabled: 0,
             errors: 0,
             failures: 0,
-            testcases: vec![],
+            test_cases: vec![],
             properties: vec![],
             system_out: None,
             system_err: None,
@@ -163,24 +166,25 @@ impl Testsuite {
         }
     }
 
-    /// Sets the start timestamp for the testsuite.
+    /// Sets the start timestamp for the TestSuite.
     pub fn set_timestamp(&mut self, timestamp: impl Into<DateTime<FixedOffset>>) -> &mut Self {
         self.timestamp = Some(timestamp.into());
         self
     }
 
-    /// Sets the time taken for the testsuite.
+    /// Sets the time taken for the TestSuite.
     pub fn set_time(&mut self, time: Duration) -> &mut Self {
         self.time = Some(time);
         self
     }
 
-    /// Adds a property to this testsuite.
+    /// Adds a property to this TestSuite.
     pub fn add_property(&mut self, property: impl Into<Property>) -> &mut Self {
         self.properties.push(property.into());
         self
     }
 
+    /// Adds several properties to this TestSuite.
     pub fn add_properties(
         &mut self,
         properties: impl IntoIterator<Item = impl Into<Property>>,
@@ -191,27 +195,31 @@ impl Testsuite {
         self
     }
 
-    /// Adds a testcase to this testsuite and updates the counts.
+    /// Adds a [`TestCase`] to this TestSuite and updates counts.
     ///
     /// When generating a new report, use of this method is recommended over adding to
-    /// `self.testcases` directly.
-    pub fn add_testcase(&mut self, testcase: Testcase) -> &mut Self {
+    /// `self.test_cases` directly.
+    pub fn add_test_case(&mut self, test_case: TestCase) -> &mut Self {
         self.tests += 1;
-        match &testcase.status {
-            TestcaseStatus::Success { .. } => {}
-            TestcaseStatus::NonSuccess { kind, .. } => match kind {
+        match &test_case.status {
+            TestCaseStatus::Success { .. } => {}
+            TestCaseStatus::NonSuccess { kind, .. } => match kind {
                 NonSuccessKind::Failure => self.failures += 1,
                 NonSuccessKind::Error => self.errors += 1,
             },
-            TestcaseStatus::Skipped { .. } => self.disabled += 1,
+            TestCaseStatus::Skipped { .. } => self.disabled += 1,
         }
-        self.testcases.push(testcase);
+        self.test_cases.push(test_case);
         self
     }
 
-    pub fn add_testcases(&mut self, testcases: impl IntoIterator<Item = Testcase>) -> &mut Self {
-        for testcase in testcases {
-            self.add_testcase(testcase);
+    /// Adds several [`TestCase`]s to this TestSuite and updates counts.
+    ///
+    /// When generating a new report, use of this method is recommended over adding to
+    /// `self.test_cases` directly.
+    pub fn add_test_cases(&mut self, test_cases: impl IntoIterator<Item = TestCase>) -> &mut Self {
+        for test_case in test_cases {
+            self.add_test_case(test_case);
         }
         self
     }
@@ -243,46 +251,46 @@ impl Testsuite {
     }
 }
 
-/// Represents a single testcase.
+/// Represents a single test case.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct Testcase {
-    /// The name of the testcase.
+pub struct TestCase {
+    /// The name of the test case.
     pub name: String,
 
-    /// The "classname" of the testcase.
+    /// The "classname" of the test case.
     ///
     /// Typically, this represents the fully qualified path to the test. In other words,
     /// `classname` + `name` together should uniquely identify and locate a test.
     pub classname: Option<String>,
 
-    /// The number of assertions in the testcase.
+    /// The number of assertions in the test case.
     pub assertions: Option<usize>,
 
-    /// The time at which this testcase began execution.
+    /// The time at which this test case began execution.
     ///
     /// This is not part of the JUnit spec, but may be useful for some tools.
     pub timestamp: Option<DateTime<FixedOffset>>,
 
-    /// The time it took to execute this testcase.
+    /// The time it took to execute this test case.
     pub time: Option<Duration>,
 
     /// The status of this test.
-    pub status: TestcaseStatus,
+    pub status: TestCaseStatus,
 
-    /// Data written to standard output while the testcase was executed.
+    /// Data written to standard output while the test case was executed.
     pub system_out: Option<Output>,
 
-    /// Data written to standard error while the testcase was executed.
+    /// Data written to standard error while the test case was executed.
     pub system_err: Option<Output>,
 
     /// Other fields that may be set as attributes, such as "classname".
     pub extra: IndexMap<String, String>,
 }
 
-impl Testcase {
-    /// Creates a new testcase.
-    pub fn new(name: impl Into<String>, status: TestcaseStatus) -> Self {
+impl TestCase {
+    /// Creates a new test case.
+    pub fn new(name: impl Into<String>, status: TestCaseStatus) -> Self {
         Self {
             name: name.into(),
             classname: None,
@@ -302,19 +310,19 @@ impl Testcase {
         self
     }
 
-    /// Sets the number of assertions in the testcase.
+    /// Sets the number of assertions in the test case.
     pub fn set_assertions(&mut self, assertions: usize) -> &mut Self {
         self.assertions = Some(assertions);
         self
     }
 
-    /// Sets the start timestamp for the testcase.
+    /// Sets the start timestamp for the test case.
     pub fn set_timestamp(&mut self, timestamp: impl Into<DateTime<FixedOffset>>) -> &mut Self {
         self.timestamp = Some(timestamp.into());
         self
     }
 
-    /// Sets the time taken for the testcase.
+    /// Sets the time taken for the test case.
     pub fn set_time(&mut self, time: Duration) -> &mut Self {
         self.time = Some(time);
         self
@@ -347,19 +355,19 @@ impl Testcase {
     }
 }
 
-/// Represents the success or failure of a testcase.
+/// Represents the success or failure of a test case.
 #[derive(Clone, Debug)]
-pub enum TestcaseStatus {
-    /// This testcase passed.
+pub enum TestCaseStatus {
+    /// This test case passed.
     Success {
         /// Prior runs of the test. These are represented as `flakyFailure` or `flakyError` in the
         /// JUnit XML.
         flaky_runs: Vec<TestRerun>,
     },
 
-    /// This testcase did not pass.
+    /// This test case did not pass.
     NonSuccess {
-        /// Whether this testcase failed in an expected way (failure) or an unexpected way (error).
+        /// Whether this test case failed in an expected way (failure) or an unexpected way (error).
         kind: NonSuccessKind,
 
         /// The failure message.
@@ -377,7 +385,7 @@ pub enum TestcaseStatus {
         reruns: Vec<TestRerun>,
     },
 
-    /// This testcase was not run.
+    /// This test case was not run.
     Skipped {
         /// The skip message.
         message: Option<String>,
@@ -392,15 +400,15 @@ pub enum TestcaseStatus {
     },
 }
 
-impl TestcaseStatus {
-    /// Creates a new `TestcaseStatus` that represents a successful test.
+impl TestCaseStatus {
+    /// Creates a new `TestCaseStatus` that represents a successful test.
     pub fn success() -> Self {
-        TestcaseStatus::Success { flaky_runs: vec![] }
+        TestCaseStatus::Success { flaky_runs: vec![] }
     }
 
-    /// Creates a new `TestcaseStatus` that represents an unsuccessful test.
+    /// Creates a new `TestCaseStatus` that represents an unsuccessful test.
     pub fn non_success(kind: NonSuccessKind) -> Self {
-        TestcaseStatus::NonSuccess {
+        TestCaseStatus::NonSuccess {
             kind,
             message: None,
             ty: None,
@@ -409,9 +417,9 @@ impl TestcaseStatus {
         }
     }
 
-    /// Creates a new `TestcaseStatus` that represents a skipped test.
+    /// Creates a new `TestCaseStatus` that represents a skipped test.
     pub fn skipped() -> Self {
-        TestcaseStatus::Skipped {
+        TestCaseStatus::Skipped {
             message: None,
             ty: None,
             description: None,
@@ -421,9 +429,9 @@ impl TestcaseStatus {
     /// Sets the message. No-op if this is a success case.
     pub fn set_message(&mut self, message: impl Into<String>) -> &mut Self {
         let message_mut = match self {
-            TestcaseStatus::Success { .. } => return self,
-            TestcaseStatus::NonSuccess { message, .. } => message,
-            TestcaseStatus::Skipped { message, .. } => message,
+            TestCaseStatus::Success { .. } => return self,
+            TestCaseStatus::NonSuccess { message, .. } => message,
+            TestCaseStatus::Skipped { message, .. } => message,
         };
         *message_mut = Some(message.into());
         self
@@ -432,9 +440,9 @@ impl TestcaseStatus {
     /// Sets the type. No-op if this is a success case.
     pub fn set_type(&mut self, ty: impl Into<String>) -> &mut Self {
         let ty_mut = match self {
-            TestcaseStatus::Success { .. } => return self,
-            TestcaseStatus::NonSuccess { ty, .. } => ty,
-            TestcaseStatus::Skipped { ty, .. } => ty,
+            TestCaseStatus::Success { .. } => return self,
+            TestCaseStatus::NonSuccess { ty, .. } => ty,
+            TestCaseStatus::Skipped { ty, .. } => ty,
         };
         *ty_mut = Some(ty.into());
         self
@@ -443,9 +451,9 @@ impl TestcaseStatus {
     /// Sets the description (text node). No-op if this is a success case.
     pub fn set_description(&mut self, description: impl Into<String>) -> &mut Self {
         let description_mut = match self {
-            TestcaseStatus::Success { .. } => return self,
-            TestcaseStatus::NonSuccess { description, .. } => description,
-            TestcaseStatus::Skipped { description, .. } => description,
+            TestCaseStatus::Success { .. } => return self,
+            TestCaseStatus::NonSuccess { description, .. } => description,
+            TestCaseStatus::Skipped { description, .. } => description,
         };
         *description_mut = Some(description.into());
         self
@@ -459,9 +467,9 @@ impl TestcaseStatus {
     /// Adds reruns or flaky runs. No-op if this test was skipped.
     pub fn add_reruns(&mut self, reruns: impl IntoIterator<Item = TestRerun>) -> &mut Self {
         let reruns_mut = match self {
-            TestcaseStatus::Success { flaky_runs } => flaky_runs,
-            TestcaseStatus::NonSuccess { reruns, .. } => reruns,
-            TestcaseStatus::Skipped { .. } => return self,
+            TestCaseStatus::Success { flaky_runs } => flaky_runs,
+            TestCaseStatus::NonSuccess { reruns, .. } => reruns,
+            TestCaseStatus::Skipped { .. } => return self,
         };
         reruns_mut.extend(reruns);
         self
@@ -587,6 +595,11 @@ impl TestRerun {
     }
 }
 
+/// Whether a test failure is "expected" or not.
+///
+/// An expected test failure is generally one that is anticipated by the test or the harness, while
+/// an unexpected failure might be something like an external service being down or a failure to
+/// execute the binary.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum NonSuccessKind {
     /// This is an expected failure. Serialized as `failure`, `flakyFailure` or `rerunFailure`

@@ -4,7 +4,7 @@
 //! Serialize a `Report`.
 
 use crate::{
-    NonSuccessKind, Output, Property, Report, TestRerun, Testcase, TestcaseStatus, Testsuite,
+    NonSuccessKind, Output, Property, Report, TestCase, TestCaseStatus, TestRerun, TestSuite,
 };
 use chrono::{DateTime, FixedOffset};
 use quick_xml::{
@@ -53,7 +53,7 @@ pub(crate) fn serialize_report_impl(
         tests,
         failures,
         errors,
-        testsuites,
+        test_suites,
     } = report;
 
     let mut testsuites_tag = BytesStart::borrowed_name(TESTSUITES_TAG.as_bytes());
@@ -71,8 +71,8 @@ pub(crate) fn serialize_report_impl(
     }
     writer.write_event(Event::Start(testsuites_tag))?;
 
-    for testsuite in testsuites {
-        serialize_testsuite(testsuite, writer)?;
+    for test_suite in test_suites {
+        serialize_test_suite(test_suite, writer)?;
     }
 
     serialize_end_tag(TESTSUITES_TAG, writer)?;
@@ -81,12 +81,12 @@ pub(crate) fn serialize_report_impl(
     Ok(())
 }
 
-pub(crate) fn serialize_testsuite(
-    testsuite: &Testsuite,
+pub(crate) fn serialize_test_suite(
+    test_suite: &TestSuite,
     writer: &mut Writer<impl io::Write>,
 ) -> quick_xml::Result<()> {
     // Use the destructuring syntax to ensure that all fields are handled.
-    let Testsuite {
+    let TestSuite {
         name,
         tests,
         disabled,
@@ -94,15 +94,15 @@ pub(crate) fn serialize_testsuite(
         failures,
         time,
         timestamp,
-        testcases,
+        test_cases,
         properties,
         system_out,
         system_err,
         extra,
-    } = testsuite;
+    } = test_suite;
 
-    let mut testsuite_tag = BytesStart::borrowed_name(TESTSUITE_TAG.as_bytes());
-    testsuite_tag.extend_attributes(array::IntoIter::new([
+    let mut test_suite_tag = BytesStart::borrowed_name(TESTSUITE_TAG.as_bytes());
+    test_suite_tag.extend_attributes(array::IntoIter::new([
         ("name", name.as_str()),
         ("tests", tests.to_string().as_str()),
         ("disabled", disabled.to_string().as_str()),
@@ -111,17 +111,17 @@ pub(crate) fn serialize_testsuite(
     ]));
 
     if let Some(timestamp) = timestamp {
-        serialize_timestamp(&mut testsuite_tag, timestamp);
+        serialize_timestamp(&mut test_suite_tag, timestamp);
     }
     if let Some(time) = time {
-        serialize_time(&mut testsuite_tag, time);
+        serialize_time(&mut test_suite_tag, time);
     }
 
     for (k, v) in extra {
-        testsuite_tag.push_attribute((k.as_str(), v.as_str()));
+        test_suite_tag.push_attribute((k.as_str(), v.as_str()));
     }
 
-    writer.write_event(Event::Start(testsuite_tag))?;
+    writer.write_event(Event::Start(test_suite_tag))?;
 
     if !properties.is_empty() {
         serialize_empty_start_tag(PROPERTIES_TAG, writer)?;
@@ -131,8 +131,8 @@ pub(crate) fn serialize_testsuite(
         serialize_end_tag(PROPERTIES_TAG, writer)?;
     }
 
-    for testcase in testcases {
-        serialize_testcase(testcase, writer)?;
+    for test_case in test_cases {
+        serialize_test_case(test_case, writer)?;
     }
 
     if let Some(system_out) = system_out {
@@ -159,11 +159,11 @@ fn serialize_property(
     writer.write_event(Event::Empty(property_tag))
 }
 
-fn serialize_testcase(
-    testcase: &Testcase,
+fn serialize_test_case(
+    test_case: &TestCase,
     writer: &mut Writer<impl io::Write>,
 ) -> quick_xml::Result<()> {
-    let Testcase {
+    let TestCase {
         name,
         classname,
         assertions,
@@ -173,7 +173,7 @@ fn serialize_testcase(
         system_out,
         system_err,
         extra,
-    } = testcase;
+    } = test_case;
 
     let mut testcase_tag = BytesStart::borrowed_name(TESTCASE_TAG.as_bytes());
     testcase_tag.extend_attributes(array::IntoIter::new([("name", name.as_str())]));
@@ -197,12 +197,12 @@ fn serialize_testcase(
     writer.write_event(Event::Start(testcase_tag))?;
 
     match status {
-        TestcaseStatus::Success { flaky_runs } => {
+        TestCaseStatus::Success { flaky_runs } => {
             for rerun in flaky_runs {
                 serialize_rerun(rerun, FlakyOrRerun::Flaky, writer)?;
             }
         }
-        TestcaseStatus::NonSuccess {
+        TestCaseStatus::NonSuccess {
             kind,
             message,
             ty,
@@ -224,7 +224,7 @@ fn serialize_testcase(
                 serialize_rerun(rerun, FlakyOrRerun::Rerun, writer)?;
             }
         }
-        TestcaseStatus::Skipped {
+        TestCaseStatus::Skipped {
             message,
             ty,
             description,
