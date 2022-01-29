@@ -21,15 +21,15 @@ The status (success, failure, error, or skipped) of a `TestCase` is represented 
 
 ## Features
 
-- x Serializing JUnit/XUnit to the [Jenkins format](https://llg.cubic.org/docs/junit/).
-- x Including test reruns using `TestRerun`
-- x Including flaky tests
-- x Including standard output and error
-  - x Filtering out [invalid XML
+- ✅ Serializing JUnit/XUnit to the [Jenkins format](https://llg.cubic.org/docs/junit/).
+- ✅ Including test reruns using `TestRerun`
+- ✅ Including flaky tests
+- ✅ Including standard output and error
+  - ✅ Filtering out [invalid XML
     characters](https://en.wikipedia.org/wiki/Valid_characters_in_XML) (eg ANSI escape codes)
     from the output
-- x Automatically keeping track of success, failure and error counts
-- x Arbitrary properties and extra attributes
+- ✅ Automatically keeping track of success, failure and error counts
+- ✅ Arbitrary properties and extra attributes
 
 This crate does not currently support deserializing JUnit XML. (PRs are welcome!)
 
