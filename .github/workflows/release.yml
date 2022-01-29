@@ -8,7 +8,7 @@ on:
 
 jobs:
   quick-junit-release:
-    if: github.repository_owner == 'diem-devtools' && startsWith(github.ref_name, 'quick-junit-')
+    if: github.repository_owner == 'diem' && startsWith(github.ref_name, 'quick-junit-')
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
