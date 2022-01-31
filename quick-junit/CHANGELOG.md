@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- In readme, fix link to cargo-nextest.
+
 ## [0.1.3] - 2022-01-29
 
 - In the readme, replace Markdown checkboxes with Unicode ✅ to make them render properly on

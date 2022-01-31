@@ -6,7 +6,7 @@
 //! `quick-junit` is a JUnit/XUnit XML data model and serializer for Rust. This crate allows users
 //! to create a JUnit report as an XML file. JUnit XML files are widely supported by test tooling.
 //!
-//!  This crate is built to serve the needs of [cargo-nextest](docs.rs/cargo-nextest).
+//!  This crate is built to serve the needs of [cargo-nextest](https://docs.rs/cargo-nextest).
 //!
 //! # Overview
 //!
