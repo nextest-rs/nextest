@@ -54,8 +54,7 @@ This project is available under the terms of either the [Apache 2.0 license](LIC
 license](LICENSE-MIT).
 
 <!--
-README.md is generated from README.tpl by cargo readme. To regenerate:
+README.md is generated from README.tpl by cargo readme. To regenerate, run from the repository root:
 
-cargo install cargo-readme
-cargo readme > README.md
+./scripts/regenerate-readmes.sh
 -->

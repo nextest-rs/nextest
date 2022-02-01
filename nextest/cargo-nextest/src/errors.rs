@@ -1,7 +1,7 @@
 // Copyright (c) The diem-devtools Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use nextest_metadata::NextestExitCodes;
+use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::{ConfigParseError, ProfileNotFound};
 use owo_colors::{OwoColorize, Stream};
 use std::{
@@ -60,12 +60,12 @@ impl ExpectedError {
     /// Returns the exit code for the process.
     pub fn process_exit_code(&self) -> i32 {
         match self {
-            Self::CargoMetadataFailed => NextestExitCodes::CARGO_METADATA_FAILED,
+            Self::CargoMetadataFailed => NextestExitCode::CARGO_METADATA_FAILED,
             Self::ProfileNotFound { .. } | Self::ConfigParseError { .. } => {
-                NextestExitCodes::SETUP_ERROR
+                NextestExitCode::SETUP_ERROR
             }
-            Self::BuildFailed { .. } => NextestExitCodes::BUILD_FAILED,
-            Self::TestRunFailed => NextestExitCodes::TEST_RUN_FAILED,
+            Self::BuildFailed { .. } => NextestExitCode::BUILD_FAILED,
+            Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
         }
     }
 

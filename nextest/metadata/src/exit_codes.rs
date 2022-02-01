@@ -2,9 +2,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 /// Documented exit codes for `cargo nextest` failures.
-pub enum NextestExitCodes {}
+///
+/// `cargo nextest` runs may fail for a variety of reasons. This structure documents the exit codes
+/// that may occur in case of expected failures.
+///
+/// Unknown/unexpected failures will always result in exit code 1.
+pub enum NextestExitCode {}
 
-impl NextestExitCodes {
+impl NextestExitCode {
     /// Running `cargo metadata` produced an error.
     pub const CARGO_METADATA_FAILED: i32 = 102;
 

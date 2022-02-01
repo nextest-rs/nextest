@@ -3,9 +3,15 @@ name = "nextest-metadata"
 version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
 description = "Structured access to nextest machine-readable output."
-license = "Apache-2.0 OR MIT"
+license = "MIT OR Apache-2.0"
 edition = "2021"
+readme = "README.md"
+repository = "https://github.com/diem/diem-devtools"
+documentation = "https://docs.rs/nextest-metadata"
+keywords = ["nextest"]
+categories = ["development-tools::testing"]
 
 [dependencies]
 camino = { version = "1.0.7", features = ["serde1"] }
 serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.78"
