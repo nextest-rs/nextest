@@ -30,7 +30,7 @@ let test_list = command.exec().unwrap();
 println!("{:?}", test_list);
 ```
 
-### Minimum supported Rust version (MSRV)
+## Minimum supported Rust version (MSRV)
 
 The minimum supported Rust version is **Rust 1.56.**
 
