@@ -5,12 +5,12 @@
 //! [cargo-nextest](https://docs.rs/cargo-nextest).
 //!
 //! Implemented so far:
-//! * ✅ Listing tests
+//! * ✅ Listing tests with [`TestListSummary`]
 //! * ✅ Semantic exit codes with [`NextestExitCode`]
 //!
 //! # Examples
 //!
-//! Get the list of tests in the repository.
+//! Get the list of tests in the repository:
 //!
 //! ```rust,no_run
 //! // This example requires `cargo nextest` to be installed.
