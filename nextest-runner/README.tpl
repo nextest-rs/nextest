@@ -1,8 +1,8 @@
 # {{crate}}
 
-[![quick-junit on crates.io](https://img.shields.io/crates/v/quick-junit)](https://crates.io/crates/quick-junit)
-[![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.rs/quick-junit/)
-[![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nextest-rs.github.io/nextest/rustdoc/quick_junit/)
+[![nextest-runner on crates.io](https://img.shields.io/crates/v/nextest-runner)](https://crates.io/crates/nextest-runner)
+[![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.rs/nextest-runner/)
+[![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nextest-rs.github.io/nextest/rustdoc/nextest_runner/)
 [![Changelog](https://img.shields.io/badge/changelog-latest-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE-MIT)

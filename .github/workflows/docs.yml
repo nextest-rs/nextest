@@ -20,15 +20,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          # cargo-compare currently pulls in cargo which bloats build times massively
           args: --all-features --workspace
       - name: Organize
         run: |
           mkdir target/gh-pages
           mv target/doc target/gh-pages/rustdoc
       - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@releases/v3
+        uses: JamesIves/github-pages-deploy-action@releases/v4
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh-pages
-          FOLDER: target/gh-pages
+          branch: gh-pages
+          folder: target/gh-pages
