@@ -10,6 +10,7 @@ repository = "https://github.com/diem/diem-devtools"
 documentation = "https://docs.rs/nextest-metadata"
 keywords = ["nextest"]
 categories = ["development-tools::testing"]
+rust-version = "1.56"
 
 [dependencies]
 camino = { version = "1.0.7", features = ["serde1"] }
