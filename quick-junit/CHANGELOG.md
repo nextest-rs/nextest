@@ -2,7 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
 - In readme, fix link to cargo-nextest.
+- Update repository locations.
 
 ## [0.1.3] - 2022-01-29
 

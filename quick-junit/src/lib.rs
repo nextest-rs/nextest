@@ -1,4 +1,4 @@
-// Copyright (c) The diem-devtools Contributors
+// Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![warn(missing_docs)]
@@ -57,7 +57,7 @@
 //! ```
 //!
 //! For a more comprehensive example, including reruns and flaky tests, see
-//! [`fixture_tests.rs`](https://github.com/diem/diem-devtools/blob/main/quick-junit/tests/fixture_tests.rs).
+//! [`fixture_tests.rs`](https://github.com/nextest-rs/nextest/blob/main/quick-junit/tests/fixture_tests.rs).
 //!
 //! # Alternatives
 //!

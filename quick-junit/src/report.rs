@@ -1,4 +1,4 @@
-// Copyright (c) The diem-devtools Contributors
+// Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::serialize::serialize_report;
