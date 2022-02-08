@@ -2,10 +2,15 @@
 
 ## Unreleased
 
+## [0.1.4] - 2022-02-07
+
 ### Fixed
 
 - In readme, fix link to cargo-nextest.
-- Update repository locations.
+
+### Changed
+
+- Update repository location.
 
 ## [0.1.3] - 2022-01-29
 
@@ -24,6 +29,8 @@
 ## [0.1.0] - 2022-01-28
 
 - Initial version.
+
+[0.1.4]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.1.4
 
 [0.1.3]: https://github.com/diem/diem-devtools/releases/tag/quick-junit-0.1.3
 [0.1.2]: https://github.com/diem/diem-devtools/releases/tag/quick-junit-0.1.2

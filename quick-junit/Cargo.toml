@@ -1,7 +1,7 @@
 [package]
 name = "quick-junit"
 description = "Data model and serializer for JUnit/XUnit XML"
-version = "0.1.3"
+version = "0.1.4"
 readme = "README.md"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/nextest-rs/nextest"
@@ -9,6 +9,7 @@ documentation = "https://docs.rs/quick-junit"
 keywords = ["junit", "xunit", "xml", "serializer", "flaky-tests"]
 categories = ["encoding", "development-tools"]
 edition = "2021"
+rust-version = "1.56"
 
 [dependencies]
 chrono = "0.4.19"
