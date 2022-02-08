@@ -36,11 +36,10 @@ jobs:
           command: xfmt
           args: --check
       - name: Install cargo readme
-        uses: actions-rs/install@v0.1
+        uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-readme
           version: latest
-          use-tool-cache: true
       - name: Run cargo readme
         run: ./scripts/regenerate-readmes.sh
       - name: Check for differences
