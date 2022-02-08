@@ -37,6 +37,6 @@ quick-junit = { path = "../quick-junit" }
 color-eyre = { version = "0.6.0", default-features = false }
 indoc = "1.0.3"
 maplit = "1.0.2"
-pretty_assertions = "1.0.0"
+pretty_assertions = "1.1.0"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
