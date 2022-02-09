@@ -613,9 +613,14 @@ impl<'a> TestReporter<'a> {
 
         if !run_status.stdout().is_empty() {
             write!(writer, "\n{}", "--- ".style(header_style))?;
-            self.write_attempt(run_status, header_style, &mut writer)?;
-            // The spacing is to align test instances.
-            write!(writer, "{}", " STDOUT:             ".style(header_style))?;
+            let out_len = self.write_attempt(run_status, header_style, &mut writer)?;
+            // The width is to align test instances.
+            write!(
+                writer,
+                "{:width$}",
+                "STDOUT:".style(header_style),
+                width = (21 - out_len)
+            )?;
             self.write_instance(*test_instance, &mut writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
@@ -631,9 +636,14 @@ impl<'a> TestReporter<'a> {
 
         if !run_status.stderr().is_empty() {
             write!(writer, "\n{}", "--- ".style(header_style))?;
-            self.write_attempt(run_status, header_style, &mut writer)?;
-            // The spacing is to align test instances.
-            write!(writer, "{}", " STDERR:             ".style(header_style))?;
+            let out_len = self.write_attempt(run_status, header_style, &mut writer)?;
+            // The width is to align test instances.
+            write!(
+                writer,
+                "{:width$}",
+                "STDERR:".style(header_style),
+                width = (21 - out_len)
+            )?;
             self.write_instance(*test_instance, &mut writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
@@ -650,21 +660,27 @@ impl<'a> TestReporter<'a> {
         writeln!(writer)
     }
 
+    // Returns the number of characters written out to the screen.
     fn write_attempt(
         &self,
         run_status: &ExecuteStatus,
         style: Style,
         mut writer: impl Write,
-    ) -> io::Result<()> {
+    ) -> io::Result<usize> {
         if run_status.total_attempts > 1 {
+            // 3 for 'TRY' + 1 for ' ' + length of the current attempt + 1 for following space.
+            let attempt_str = format!("{}", run_status.attempt);
+            let out_len = 3 + 1 + attempt_str.len() + 1;
             write!(
                 writer,
-                "{} {}",
+                "{} {} ",
                 "TRY".style(style),
-                run_status.attempt.style(style)
+                attempt_str.style(style)
             )?;
+            Ok(out_len)
+        } else {
+            Ok(0)
         }
-        Ok(())
     }
 }
 
