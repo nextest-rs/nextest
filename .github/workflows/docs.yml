@@ -21,10 +21,20 @@ jobs:
         with:
           command: doc
           args: --all-features --workspace
+      - name: Install mdbook
+        uses: baptiste0928/cargo-install
+        with:
+          crate: mdbook
+          version: 0.4
+      - name: Run mdbook
+        run: |
+          cd book
+          mdbook build
       - name: Organize
         run: |
           mkdir target/gh-pages
           mv target/doc target/gh-pages/rustdoc
+          mv book/book target/gh-pages
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@releases/v4
         with:

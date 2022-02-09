@@ -16,6 +16,10 @@ use std::{collections::HashMap, time::Duration};
 ///
 /// This is the root data structure for nextest configuration. Most runner-specific configuration is managed
 /// through [profiles](NextestProfile), obtained through the [`profile`](Self::profile) method.
+///
+/// For more about configuration, see
+/// [Configuration](https://nextest-rs.github.io/nextest/book/configuration.html) in the nextest
+/// book.
 #[derive(Clone, Debug)]
 pub struct NextestConfig {
     workspace_root: Utf8PathBuf,
@@ -28,12 +32,6 @@ impl NextestConfig {
     pub const CONFIG_PATH: &'static str = ".config/nextest.toml";
 
     /// Contains the default config as a TOML file.
-    ///
-    /// The default rules included with this copy of nextest-runner are:
-    ///
-    /// ```toml
-    #[doc = include_str ! ("../default-config.toml")]
-    /// ```
     ///
     /// Repository-specific configuration is layered on top of the default config.
     pub const DEFAULT_CONFIG: &'static str = include_str!("../default-config.toml");
