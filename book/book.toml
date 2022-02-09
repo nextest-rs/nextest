@@ -1,0 +1,13 @@
+[book]
+authors = ["Rain"]
+language = "en"
+multilingual = false
+src = "src"
+title = "The nextest book"
+description = "Usage and documentation for cargo-nextest."
+
+[output.html]
+default-theme = "rust"
+git-repository-url = "https://github.com/nextest-rs/nextest/tree/main/book"
+edit-url-template = "https://github.com/sunshowers-code/rust-cli-recommendations/edit/main/book/{path}"
+site-url = "https://nextest-rs.github.io/nextest/book"

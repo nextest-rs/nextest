@@ -86,7 +86,7 @@ enum Command {
 
         /// Output format
         #[clap(short = 'T', long, default_value_t, possible_values = OutputFormat::variants(), help_heading = "OUTPUT OPTIONS")]
-        format: OutputFormat,
+        message_format: OutputFormat,
     },
     /// Run tests
     Run {
@@ -265,7 +265,7 @@ impl AppImpl {
         match self.command {
             Command::List {
                 build_filter,
-                format,
+                message_format: format,
             } => {
                 let mut test_list = build_filter.compute(&graph, output)?;
                 if output.color.should_colorize(Stream::Stdout) {
