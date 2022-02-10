@@ -3,6 +3,7 @@ authors = ["Rain"]
 language = "en"
 multilingual = false
 src = "src"
+theme = "theme"
 title = "cargo-nextest"
 description = "A next-generation test runner for Rust."
 
@@ -11,6 +12,6 @@ build-dir = "output"
 
 [output.html]
 default-theme = "rust"
-git-repository-url = "https://github.com/nextest-rs/nextest/tree/main/site"
+git-repository-url = "https://github.com/nextest-rs/nextest"
 edit-url-template = "https://github.com/nextest-rs/nextest/edit/main/site/{path}"
 site-url = "https://nexte.st"
