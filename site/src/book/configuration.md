@@ -5,7 +5,7 @@ cargo-nextest supports repository-specific configuration at the location `.confi
 The default configuration shipped with cargo-nextest is:
 
 ```toml
-{{#include ../../nextest-runner/default-config.toml}}
+{{#include ../../../nextest-runner/default-config.toml}}
 ```
 
 ## Profiles
