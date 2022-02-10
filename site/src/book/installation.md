@@ -30,12 +30,13 @@ jobs:
     # ...
     steps:
       - uses: actions/checkout@v2
-      # install a Rust toolchain here
+      # Install a Rust toolchain here.
       - name: Install cargo-nextest
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
           version: 0.9
+      # At this point, cargo-nextest will be available on your PATH
 ```
 
 Also consider using the [Swatinem/rust-cache](https://github.com/marketplace/actions/rust-cache)
