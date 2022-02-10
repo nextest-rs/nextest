@@ -29,8 +29,9 @@ For more detailed installation instructions, see [Installation and usage](book/i
 ## Contributing
 
 The source code for nextest and this site are hosted on GitHub, at
-[https://github.com/nextest-rs/nextest](https://github.com/nextest-rs/nextest). Contributions are
-welcome! Please see the [CONTRIBUTING
+[https://github.com/nextest-rs/nextest](https://github.com/nextest-rs/nextest).
+
+Contributions are welcome! Please see the [CONTRIBUTING
 file](https://github.com/nextest-rs/nextest/blob/main/CONTRIBUTING.md) for how to help out.
 
 ## License
