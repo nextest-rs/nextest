@@ -38,7 +38,6 @@ jobs:
           mkdir target/gh-pages
           mv target/doc target/gh-pages/rustdoc
           mv book/book/.nojekyll target/gh-pages
-          mv book/index.html target/gh-pages
           mv book/book target/gh-pages
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@releases/v4

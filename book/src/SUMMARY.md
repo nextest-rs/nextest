@@ -1,6 +1,6 @@
 # Summary
 
-[Introduction](../README.md)
+[Introduction](README.md)
 - [Installation and usage](installation.md)
   - [Running tests](running.md)
   - [Listing tests](listing.md)
