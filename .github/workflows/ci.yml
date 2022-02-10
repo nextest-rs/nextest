@@ -65,10 +65,21 @@ jobs:
           toolchain: ${{ matrix.rust-version }}
           override: true
       - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
-      - name: Build
+      - name: Build quick-junit
         uses: actions-rs/cargo@v1
         with:
           command: build
+          args: --package quick-junit
+      - name: Build nextest-metadata
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --package nextest-metadata
+      - name: Build cargo-nextest
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --package cargo-nextest
       - name: Build all targets with all features
         uses: actions-rs/cargo@v1
         with:
