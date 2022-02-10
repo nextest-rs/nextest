@@ -397,12 +397,17 @@ impl<'g> TestList<'g> {
             writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), info.cwd)?;
 
             let mut indented = indent_write::io::IndentWriter::new("    ", &mut writer);
-            for (name, info) in &info.testcases {
-                write_test_name(name, self.styles.test_name, &mut indented)?;
-                if !info.filter_match.is_match() {
-                    write!(indented, " (skipped)")?;
+
+            if info.testcases.is_empty() {
+                writeln!(indented, "(no tests)")?;
+            } else {
+                for (name, info) in &info.testcases {
+                    write_test_name(name, self.styles.test_name, &mut indented)?;
+                    if !info.filter_match.is_match() {
+                        write!(indented, " (skipped)")?;
+                    }
+                    writeln!(indented)?;
                 }
-                writeln!(indented)?;
             }
         }
         Ok(())
