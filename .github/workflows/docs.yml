@@ -30,15 +30,13 @@ jobs:
           version: 0.4
       - name: Run mdbook
         run: |
-          cd book
+          cd site
           mdbook build
       - name: Organize
         run: |
           rm -rf target/gh-pages
-          mkdir target/gh-pages
+          mv site/output target/gh-pages
           mv target/doc target/gh-pages/rustdoc
-          mv book/book/.nojekyll target/gh-pages
-          mv book/book target/gh-pages
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@releases/v4
         with:

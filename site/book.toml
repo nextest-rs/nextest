@@ -1,0 +1,16 @@
+[book]
+authors = ["Rain"]
+language = "en"
+multilingual = false
+src = "src"
+title = "nextest"
+description = "A new, faster Rust test runner."
+
+[build]
+build-dir = "output"
+
+[output.html]
+default-theme = "rust"
+git-repository-url = "https://github.com/nextest-rs/nextest/tree/main/site"
+edit-url-template = "https://github.com/nextest-rs/nextest/edit/main/site/{path}"
+site-url = "https://nexte.st"
