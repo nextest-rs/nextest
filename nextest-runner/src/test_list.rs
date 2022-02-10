@@ -488,6 +488,8 @@ impl<'a> TestInstance<'a> {
 
         let cmd = cmd(AsRef::<Path>::as_ref(self.binary), args)
             .dir(&self.bin_info.cwd)
+            // This environment variable is set to indicate that tests are being run under nextest.
+            .env("NEXTEST", "1")
             // These environment variables are set at runtime by cargo test:
             // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
             .env(
