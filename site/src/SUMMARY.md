@@ -1,6 +1,9 @@
 # Summary
 
-[Introduction](README.md)
+[cargo-nextest](README.md)
+
+---
+
 - [Installation and usage](book/installation.md)
   - [Running tests](book/running.md)
   - [Listing tests](book/listing.md)
