@@ -3,13 +3,13 @@ name = "nextest-metadata"
 version = "0.1.0"
 description = "Structured access to nextest machine-readable output."
 license = "MIT OR Apache-2.0"
-edition = "2021"
+edition = "2018"
 readme = "README.md"
 repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://docs.rs/nextest-metadata"
 keywords = ["nextest"]
 categories = ["development-tools::testing"]
-rust-version = "1.56"
+rust-version = "1.54"
 
 [dependencies]
 camino = { version = "1.0.7", features = ["serde1"] }
