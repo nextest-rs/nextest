@@ -9,6 +9,7 @@ name: Docs
 jobs:
   docs:
     name: Build and deploy documentation
+    concurrency: ci-${{ github.ref }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -16,6 +17,7 @@ jobs:
         with:
           toolchain: stable
           override: true
+      - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
       - name: Build rustdoc
         uses: actions-rs/cargo@v1
         with:
