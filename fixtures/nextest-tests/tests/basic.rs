@@ -95,6 +95,11 @@ macro_rules! assert_env {
 /// Assert that test environment variables are correctly set.
 #[test]
 fn test_cargo_env_vars() {
+    assert_eq!(
+        std::env::var("NEXTEST").as_deref(),
+        Ok("1"),
+        "NEXTEST environment variable set to 1"
+    );
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
     assert_env!("CARGO");
     assert_env!("CARGO_MANIFEST_DIR");
