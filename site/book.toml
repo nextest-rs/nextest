@@ -3,8 +3,8 @@ authors = ["Rain"]
 language = "en"
 multilingual = false
 src = "src"
-title = "nextest"
-description = "A new, faster Rust test runner."
+title = "cargo-nextest"
+description = "A new, faster test runner for Rust."
 
 [build]
 build-dir = "output"
