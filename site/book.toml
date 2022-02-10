@@ -4,7 +4,7 @@ language = "en"
 multilingual = false
 src = "src"
 title = "cargo-nextest"
-description = "A new, faster test runner for Rust."
+description = "A next-generation test runner for Rust."
 
 [build]
 build-dir = "output"
