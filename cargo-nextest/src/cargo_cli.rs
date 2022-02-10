@@ -6,7 +6,7 @@
 use crate::output::OutputContext;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{AppSettings, Args};
-use std::path::PathBuf;
+use std::{convert::TryInto, path::PathBuf};
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
