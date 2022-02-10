@@ -22,7 +22,7 @@ jobs:
           command: doc
           args: --all-features --workspace
       - name: Install mdbook
-        uses: baptiste0928/cargo-install
+        uses: baptiste0928/cargo-install@v1
         with:
           crate: mdbook
           version: 0.4
