@@ -62,4 +62,4 @@ For more information about running tests, see [Running tests](running.md).
 
 ## Doctests
 
-Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. In CI and locally, run `cargo test --doc` to run all doctests.
+Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. Locally and in CI, after `cargo nextest run`, use `cargo test --doc` to run all doctests.
