@@ -8,7 +8,7 @@ cargo nextest run
 
 This will produce output that looks like:
 
-<img src="https://user-images.githubusercontent.com/180618/153310973-a6d8d37f-5978-4231-ae5a-ee38ed008def.png"/>
+<img src="../static/nextest-run.png"/>
 
 In the output above:
 * Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.603 seconds to execute.

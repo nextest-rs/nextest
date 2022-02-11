@@ -6,7 +6,7 @@ To understand how nextest works, it is useful to first look at the execution mod
 
 By default, cargo test uses this execution model:
 
-<img src="https://user-images.githubusercontent.com/180618/153318042-350a4fd3-4d4a-4c64-bf3d-f0763a0bd9ee.png"/>
+<img src="../static/cargo-test-model.png"/>
 
 In this model, each test binary is run serially, and binaries are responsible for running individual tests in parallel.
 
@@ -21,7 +21,7 @@ However, this model has several problems:
 
 cargo-nextest uses a very different execution model, inspired by state-of-the-art test runners used at large corporations. Here's what cargo-nextest does:
 
-<img src="https://user-images.githubusercontent.com/180618/153318044-2a1bb01b-77ff-414b-8ad3-a784934043c4.png"/>
+<img src="../static/nextest-model.png"/>
 
 A cargo-nextest run has two separate phases:
 * **The list phase.** cargo-nextest first builds all test binaries with `cargo test --no-run`, then queries those binaries to produce a list of all tests within them.
