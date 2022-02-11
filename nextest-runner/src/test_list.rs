@@ -266,7 +266,9 @@ impl<'g> TestList<'g> {
         writer: impl Write,
     ) -> Result<(), WriteTestListError> {
         match output_format {
-            OutputFormat::Plain => self.write_plain(writer).map_err(WriteTestListError::Io),
+            OutputFormat::Human { verbose } => self
+                .write_human(writer, verbose)
+                .map_err(WriteTestListError::Io),
             OutputFormat::Serializable(format) => format
                 .to_writer(&self.to_summary(), writer)
                 .map_err(WriteTestListError::Json),
@@ -390,11 +392,13 @@ impl<'g> TestList<'g> {
         })
     }
 
-    fn write_plain(&self, mut writer: impl Write) -> io::Result<()> {
+    fn write_human(&self, mut writer: impl Write, verbose: bool) -> io::Result<()> {
         for (test_bin, info) in &self.rust_suites {
             writeln!(writer, "{}:", info.binary_id.style(self.styles.binary_id))?;
-            writeln!(writer, "  {} {}", "bin:".style(self.styles.field), test_bin)?;
-            writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), info.cwd)?;
+            if verbose {
+                writeln!(writer, "  {} {}", "bin:".style(self.styles.field), test_bin)?;
+                writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), info.cwd)?;
+            }
 
             let mut indented = indent_write::io::IndentWriter::new("    ", &mut writer);
 
@@ -619,7 +623,14 @@ mod tests {
         );
 
         // Check that the expected outputs are valid.
-        static EXPECTED_PLAIN: &str = indoc! {"
+        static EXPECTED_HUMAN: &str = indoc! {"
+        fake-package::fake-binary:
+            tests::baz::test_ignored (skipped)
+            tests::baz::test_quux
+            tests::foo::test_bar
+            tests::ignored::test_bar (skipped)
+        "};
+        static EXPECTED_HUMAN_VERBOSE: &str = indoc! {"
             fake-package::fake-binary:
               bin: /fake/binary
               cwd: /fake/cwd
@@ -672,9 +683,15 @@ mod tests {
 
         assert_eq!(
             test_list
-                .to_string(OutputFormat::Plain)
-                .expect("plain succeeded"),
-            EXPECTED_PLAIN
+                .to_string(OutputFormat::Human { verbose: false })
+                .expect("human succeeded"),
+            EXPECTED_HUMAN
+        );
+        assert_eq!(
+            test_list
+                .to_string(OutputFormat::Human { verbose: true })
+                .expect("human succeeded"),
+            EXPECTED_HUMAN_VERBOSE
         );
         println!(
             "{}",

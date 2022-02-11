@@ -170,6 +170,7 @@ pub struct TestReporterBuilder {
     failure_output: Option<TestOutputDisplay>,
     success_output: Option<TestOutputDisplay>,
     status_level: Option<StatusLevel>,
+    verbose: bool,
 }
 
 impl TestReporterBuilder {
@@ -197,6 +198,12 @@ impl TestReporterBuilder {
     /// Sets the kinds of statuses to output.
     pub fn set_status_level(&mut self, status_level: StatusLevel) -> &mut Self {
         self.status_level = Some(status_level);
+        self
+    }
+
+    /// Sets verbose output.
+    pub fn set_verbose(&mut self, verbose: bool) -> &mut Self {
+        self.verbose = verbose;
         self
     }
 }
