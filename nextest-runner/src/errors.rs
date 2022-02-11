@@ -6,7 +6,6 @@
 use crate::{
     reporter::{StatusLevel, TestOutputDisplay},
     test_filter::RunIgnored,
-    test_list::OutputFormat,
 };
 use camino::Utf8PathBuf;
 use config::ConfigError;
@@ -133,33 +132,6 @@ impl fmt::Display for StatusLevelParseError {
 }
 
 impl error::Error for StatusLevelParseError {}
-
-/// An error that occurs while parsing an [`OutputFormat`] value from a string.
-#[derive(Clone, Debug)]
-pub struct OutputFormatParseError {
-    input: String,
-}
-
-impl OutputFormatParseError {
-    pub(crate) fn new(input: impl Into<String>) -> Self {
-        Self {
-            input: input.into(),
-        }
-    }
-}
-
-impl fmt::Display for OutputFormatParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "unrecognized value for output-format: {}\n(known values: {})",
-            self.input,
-            OutputFormat::variants().join(", ")
-        )
-    }
-}
-
-impl error::Error for OutputFormatParseError {}
 
 /// An error that occurs while parsing a [`RunIgnored`] value from a string.
 #[derive(Clone, Debug)]

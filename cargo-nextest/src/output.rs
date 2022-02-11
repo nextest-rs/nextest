@@ -12,7 +12,10 @@ use supports_color::Stream;
 #[derive(Copy, Clone, Debug, Args)]
 #[must_use]
 pub(crate) struct OutputOpts {
-    // TODO: quiet/verbose?
+    /// Verbose output
+    #[clap(long, short, global = true)]
+    pub(crate) verbose: bool,
+    // TODO: quiet?
     /// Produce color output: auto, always, never
     #[clap(
         long,
@@ -27,17 +30,18 @@ pub(crate) struct OutputOpts {
 
 impl OutputOpts {
     pub(crate) fn init(self) -> OutputContext {
-        let OutputOpts { color } = self;
+        let OutputOpts { verbose, color } = self;
 
         color.init();
 
-        OutputContext { color }
+        OutputContext { verbose, color }
     }
 }
 
 #[derive(Copy, Clone, Debug)]
 #[must_use]
 pub(crate) struct OutputContext {
+    pub(crate) verbose: bool,
     pub(crate) color: Color,
 }
 

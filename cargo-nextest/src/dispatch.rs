@@ -7,7 +7,7 @@ use crate::{
     ExpectedError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgEnum, Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
@@ -17,7 +17,7 @@ use nextest_runner::{
     runner::TestRunnerBuilder,
     signal::SignalHandler,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::{OutputFormat, RustTestArtifact, TestList},
+    test_list::{OutputFormat, RustTestArtifact, SerializableFormat, TestList},
 };
 use std::io::Cursor;
 use supports_color::Stream;
@@ -85,8 +85,15 @@ enum Command {
         build_filter: TestBuildFilter,
 
         /// Output format
-        #[clap(short = 'T', long, default_value_t, possible_values = OutputFormat::variants(), help_heading = "OUTPUT OPTIONS")]
-        message_format: OutputFormat,
+        #[clap(
+            short = 'T',
+            long,
+            arg_enum,
+            default_value_t,
+            help_heading = "OUTPUT OPTIONS",
+            value_name = "FMT"
+        )]
+        message_format: MessageFormatOpts,
     },
     /// Run tests
     Run {
@@ -112,6 +119,29 @@ enum Command {
         #[clap(flatten)]
         reporter_opts: TestReporterOpts,
     },
+}
+
+#[derive(Copy, Clone, Debug, ArgEnum)]
+enum MessageFormatOpts {
+    Human,
+    Json,
+    JsonPretty,
+}
+
+impl MessageFormatOpts {
+    fn to_output_format(self, verbose: bool) -> OutputFormat {
+        match self {
+            Self::Human => OutputFormat::Human { verbose },
+            Self::Json => OutputFormat::Serializable(SerializableFormat::Json),
+            Self::JsonPretty => OutputFormat::Serializable(SerializableFormat::JsonPretty),
+        }
+    }
+}
+
+impl Default for MessageFormatOpts {
+    fn default() -> Self {
+        Self::Human
+    }
 }
 
 #[derive(Debug, Args)]
@@ -265,7 +295,7 @@ impl AppImpl {
         match self.command {
             Command::List {
                 build_filter,
-                message_format: format,
+                message_format,
             } => {
                 let mut test_list = build_filter.compute(&graph, output)?;
                 if output.color.should_colorize(Stream::Stdout) {
@@ -273,7 +303,7 @@ impl AppImpl {
                 }
                 let stdout = std::io::stdout();
                 let lock = stdout.lock();
-                test_list.write(format, lock)?;
+                test_list.write(message_format.to_output_format(output.verbose), lock)?;
             }
             Command::Run {
                 ref profile,
@@ -294,6 +324,7 @@ impl AppImpl {
 
                 let mut reporter = reporter_opts
                     .to_builder(no_capture)
+                    .set_verbose(output.verbose)
                     .build(&test_list, &profile);
                 if output.color.should_colorize(Stream::Stderr) {
                     reporter.colorize();
