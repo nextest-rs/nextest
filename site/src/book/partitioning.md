@@ -4,7 +4,7 @@ For CI scenarios where test runs take too long on a single machine, nextest supp
 
 cargo-nextest supports both *hash-based* and *count-based* partitioning. Here's an example of count-based partitioning, running tests in bucket 1 of 2.
 
-<img src="../static/nextest-partition.png"/>
+![Output of cargo nextest run --partition count:1/2](../static/nextest-partition.png)
 
 Tests not in the current bucket are marked skipped.
 

@@ -8,7 +8,7 @@ cargo nextest run
 
 This will produce output that looks like:
 
-<img src="../static/nextest-run.png"/>
+![Output of cargo nextest run](../static/nextest-run.png)
 
 In the output above:
 * Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.603 seconds to execute.

@@ -1,6 +1,6 @@
 # Summary
 
-[cargo-nextest](README.md)
+[Home](README.md)
 
 ---
 
@@ -16,4 +16,5 @@
 - [Configuration](book/configuration.md)
 - [JUnit support](book/junit.md)
 - [How nextest works](book/how-it-works.md)
+  - [Benchmarks](book/benchmarks.md)
   - [Custom test harnesses](book/custom-test-harnesses.md)

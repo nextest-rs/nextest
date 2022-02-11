@@ -4,11 +4,14 @@ Welcome to the home page for cargo-nextest, a next-generation test runner for Ru
 
 ## Features
 
-* Nextest is **up to 60% faster** than cargo test! Nextest uses a [state-of-the-art execution model](book/how-it-works.md) for faster, more reliable test runs.
+<img src="static/cover.png" style="float: right; width: 250px">
+
+* **Clean, beautiful user interface.** nextest presents its results concisely so you can see which tests passed and failed at a glance.
+* **[Up to 60% faster](book/benchmarks.md) than cargo test.** Nextest uses a [state-of-the-art execution model](book/how-it-works.md) for faster, more reliable test runs.
 * **Detect flaky tests.** Nextest can [automatically retry](book/retries.md) failing tests for you, and if they pass later nextest will mark them as flaky.
 * **Partition test runs across several CI jobs.** If your tests take too long to run in CI, nextest can automatically split them up for you across several jobs.
 * **Cross-platform.** nextest works on Unix, Mac and Windows, so you get the benefits of faster test runs no matter what platform you use.
-* ... and more coming soon!
+* ... and more [coming soon](https://github.com/nextest-rs/nextest/projects/1)!
 
 ## Quick start
 

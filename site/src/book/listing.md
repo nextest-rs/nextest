@@ -8,7 +8,7 @@ cargo nextest list
 
 This will produce output that looks something like:
 
-<img src="../static/nextest-list.png" width="100%"/>
+![Output of cargo nextest list](../static/nextest-list.png)
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust.
 
