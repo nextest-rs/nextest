@@ -15,7 +15,7 @@ cargo install cargo-nextest
 `cargo nextest` must be compiled and installed with **Rust 1.54** or later, but it can build and run
 tests against any version of Rust.
 
-> TODO: Add pre-built binaries.
+> **TODO:** Add [pre-built binaries](https://github.com/nextest-rs/nextest/issues/31).
 
 ### Using a cached install in CI
 

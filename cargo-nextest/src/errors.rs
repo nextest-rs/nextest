@@ -69,6 +69,7 @@ impl ExpectedError {
         }
     }
 
+    /// Displays this error to stderr.
     pub fn display_to_stderr(&self) {
         let mut next_error = match &self {
             Self::CargoMetadataFailed => {
