@@ -2,11 +2,11 @@
 
 Nextest is a next-generation test runner for Rust. This repository contains the source code for:
 
-* [**cargo-nextest**](cargo-nextest): a new, faster Cargo test runner [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://nextest-rs.github.io/nextest/rustdoc/cargo_nextest/)
+* [**cargo-nextest**](cargo-nextest): a new, faster Cargo test runner [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://nexte.st/rustdoc/cargo_nextest/)
 * libraries used by cargo-nextest:
-  * [**nextest-runner**](nextest-runner): core logic for cargo-nextest [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://nextest-rs.github.io/nextest/rustdoc/nextest_runner/)
-  * [**nextest-metadata**](nextest-metadata): library for calling cargo-nextest over the command line [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://nextest-rs.github.io/nextest/rustdoc/nextest_metadata/)
-* [**quick-junit**](quick-junit): a data model, serializer (and in the future deserializer) for JUnit/XUnit XML [![quick-junit on crates.io](https://img.shields.io/crates/v/quick-junit)](https://crates.io/crates/quick-junit) [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/quick-junit/) [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nextest-rs.github.io/nextest/rustdoc/quick_junit/)
+  * [**nextest-runner**](nextest-runner): core logic for cargo-nextest [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://nexte.st/rustdoc/nextest_runner/)
+  * [**nextest-metadata**](nextest-metadata): library for calling cargo-nextest over the command line [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://nexte.st/rustdoc/nextest_metadata/)
+* [**quick-junit**](quick-junit): a data model, serializer (and in the future deserializer) for JUnit/XUnit XML [![quick-junit on crates.io](https://img.shields.io/crates/v/quick-junit)](https://crates.io/crates/quick-junit) [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/quick-junit/) [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/quick_junit/)
 
 ## Minimum supported Rust version
 

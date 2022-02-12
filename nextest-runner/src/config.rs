@@ -18,7 +18,7 @@ use std::{collections::HashMap, time::Duration};
 /// through [profiles](NextestProfile), obtained through the [`profile`](Self::profile) method.
 ///
 /// For more about configuration, see
-/// [Configuration](https://nextest-rs.github.io/nextest/book/configuration.html) in the nextest
+/// [Configuration](https://nexte.st/book/configuration.html) in the nextest
 /// book.
 #[derive(Clone, Debug)]
 pub struct NextestConfig {
