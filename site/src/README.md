@@ -29,18 +29,37 @@ cargo nextest run
 
 For more detailed installation instructions, see [Installation and usage](book/installation.md).
 
-## Crates
+## Crates in this project
 
-**cargo-nextest,** the main binary: [![cargo-nextest on crates.io](https://img.shields.io/crates/v/cargo-nextest)](https://crates.io/crates/cargo-nextest)
+| Crate                                                     |                    crates.io                   |             rustdoc (latest version)            |             rustdoc (main)             |
+|-----------------------------------------------------------|:----------------------------------------------:|:-----------------------------------------------:|:--------------------------------------:|
+| **cargo-nextest,** the main test binary                   | [![cargo-nextest on crates.io][cnci]][cncl]    | [![Documentation (latest release)][doci]][cndl] | [![Documentation (main)][docmi]][cnml] |
+| **nextest-runner,** core nextest logic                    | [![nextest-runner on crates.io][nrci]][nrcl]   | [![Documentation (latest release)][doci]][nrdl] | [![Documentation (main)][docmi]][nrml] |
+| **nextest-metadata,** parsers for machine-readable output | [![nextest-metadata on crates.io][nmci]][nmcl] | [![Documentation (latest release)][doci]][nmdl] | [![Documentation (main)][docmi]][nmml] |
+| **quick-junit,** JUnit XML serializer                     | [![quick-junit on crates.io][qjci]][qjcl]      | [![Documentation (latest release)][doci]][qjcl] | [![Documentation (main)][docmi]][qjml] |
 
-**nextest-runner,** core nextest logic:
-[![nextest-runner on crates.io](https://img.shields.io/crates/v/nextest-runner)](https://crates.io/crates/nextest-runner)
-[![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-runner/) [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](rustdoc/nextest_runner/)
+[cnci]: https://img.shields.io/crates/v/cargo-nextest
+[cncl]: https://crates.io/crates/cargo-nextest
+[cndl]: https://docs.rs/cargo-nextest
+[cnml]: https://nexte.st/rustdoc/cargo_nextest
 
-**nextest-metadata,** parsers for machine-readable output:
-[![nextest-metadata on crates.io](https://img.shields.io/crates/v/nextest-metadata)](https://crates.io/crates/nextest-metadata)
-[![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-metadata/)
-[![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](rustdoc/nextest_metadata/)
+[nrci]: https://img.shields.io/crates/v/nextest-runner
+[nrcl]: https://crates.io/crates/nextest-runner
+[nrdl]: https://docs.rs/nextest-runner
+[nrml]: https://nexte.st/rustdoc/nextest_runner
+
+[nmci]: https://img.shields.io/crates/v/nextest-metadata
+[nmcl]: https://crates.io/crates/nextest-metadata
+[nmdl]: https://docs.rs/nextest-metadata
+[nmml]: https://nexte.st/rustdoc/nextest_metadata
+
+[qjci]: https://img.shields.io/crates/v/quick-junit
+[qjcl]: https://crates.io/crates/quick-junit
+[qjdl]: https://docs.rs/quick-junit
+[qjml]: https://nexte.st/rustdoc/quick_junit
+
+[doci]: https://img.shields.io/badge/docs-latest-brightgreen
+[docmi]: https://img.shields.io/badge/docs-main-purple
 
 ## Contributing
 

@@ -18,3 +18,7 @@
 - [How nextest works](book/how-it-works.md)
   - [Benchmarks](book/benchmarks.md)
   - [Custom test harnesses](book/custom-test-harnesses.md)
+
+---
+
+[Changelog](CHANGELOG.md)
