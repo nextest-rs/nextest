@@ -29,6 +29,19 @@ cargo nextest run
 
 For more detailed installation instructions, see [Installation and usage](book/installation.md).
 
+## Crates
+
+**cargo-nextest,** the main binary: [![cargo-nextest on crates.io](https://img.shields.io/crates/v/cargo-nextest)](https://crates.io/crates/cargo-nextest)
+
+**nextest-runner,** core nextest logic:
+[![nextest-runner on crates.io](https://img.shields.io/crates/v/nextest-runner)](https://crates.io/crates/nextest-runner)
+[![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-runner/) [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](rustdoc/nextest_runner/)
+
+**nextest-metadata,** parsers for machine-readable output:
+[![nextest-metadata on crates.io](https://img.shields.io/crates/v/nextest-metadata)](https://crates.io/crates/nextest-metadata)
+[![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-metadata/)
+[![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](rustdoc/nextest_metadata/)
+
 ## Contributing
 
 The source code for nextest and this site are hosted on GitHub, at
