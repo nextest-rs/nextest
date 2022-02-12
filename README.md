@@ -1,6 +1,8 @@
 # nextest
 
-Nextest is a next-generation test runner for Rust. This repository contains the source code for:
+Nextest is a next-generation test runner for Rust. For more, check out [the website](https://nexte.st/).
+
+This repository contains the source code for:
 
 * [**cargo-nextest**](cargo-nextest): a new, faster Cargo test runner [![Documentation (main)](https://img.shields.io/badge/docs-main-brightgreen)](https://nexte.st/rustdoc/cargo_nextest/)
 * libraries used by cargo-nextest:
