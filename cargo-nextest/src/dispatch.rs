@@ -22,18 +22,19 @@ use nextest_runner::{
 use std::io::Cursor;
 use supports_color::Stream;
 
-/// A new test runner for Rust and Cargo.
+/// A next-generation test runner for Rust.
 ///
 /// This binary should typically be invoked as `cargo nextest` (in which case
 /// this message will not be seen), not `cargo-nextest`.
 #[derive(Debug, Parser)]
-#[clap(author, version, bin_name = "cargo")]
+#[clap(version, bin_name = "cargo")]
 pub struct CargoNextestApp {
     #[clap(subcommand)]
     subcommand: NextestSubcommand,
 }
 
 impl CargoNextestApp {
+    /// Executes the app.
     pub fn exec(self) -> Result<()> {
         let NextestSubcommand::Nextest(app) = self.subcommand;
         app.exec()
@@ -42,11 +43,12 @@ impl CargoNextestApp {
 
 #[derive(Debug, Subcommand)]
 enum NextestSubcommand {
-    /// A new test runner for Rust and Cargo.
+    /// A next-generation test runner for Rust. <https://nexte.st>
     Nextest(AppImpl),
 }
 
 #[derive(Debug, Args)]
+#[clap(version)]
 struct AppImpl {
     /// Path to Cargo.toml
     #[clap(long, global = true, value_name = "PATH")]
@@ -79,7 +81,12 @@ impl ConfigOpts {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// List tests in binary
+    /// List tests in workspace
+    ///
+    /// This command builds test binaries and queries them for the tests they contain.
+    /// Use --message-format json to get machine-readable output.
+    ///
+    /// For more information, see <https://nexte.st/book/listing>.
     List {
         #[clap(flatten)]
         build_filter: TestBuildFilter,
@@ -95,7 +102,12 @@ enum Command {
         )]
         message_format: MessageFormatOpts,
     },
-    /// Run tests
+    /// Build and run tests
+    ///
+    /// This command builds test binaries and queries them for the tests they contain,
+    /// then runs each test in parallel.
+    ///
+    /// For more information, see <https://nexte.st/book/running>.
     Run {
         /// Nextest profile to use
         #[clap(long, short = 'P')]

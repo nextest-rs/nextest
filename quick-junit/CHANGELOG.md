@@ -31,7 +31,6 @@
 - Initial version.
 
 [0.1.4]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.1.4
-
 [0.1.3]: https://github.com/diem/diem-devtools/releases/tag/quick-junit-0.1.3
 [0.1.2]: https://github.com/diem/diem-devtools/releases/tag/quick-junit-0.1.2
 [0.1.1]: https://github.com/diem/diem-devtools/releases/tag/quick-junit-0.1.1

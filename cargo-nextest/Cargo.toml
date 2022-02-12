@@ -1,14 +1,21 @@
 [package]
 name = "cargo-nextest"
-version = "0.1.0"
+description = "A next-generation test runner for Rust."
+version = "0.9.0"
+readme = "README.md"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/nextest-rs/nextest"
+documentation = "https://nexte.st"
+keywords = ["nextest", "test-runner", "flaky-tests", "junit"]
+categories = ["development-tools::cargo-plugins", "development-tools::testing"]
 edition = "2018"
 rust-version = "1.54"
 
 [dependencies]
 camino = "1.0.7"
-# we don't use the tracing support
 cfg-if = "1.0.0"
 clap = { version = "3.0.14", features = ["derive"] }
+# we don't use the tracing support
 color-eyre = { version = "0.6.0", default-features = false }
 duct = "0.13.5"
 enable-ansi-support = "0.1.2"

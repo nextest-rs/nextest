@@ -22,3 +22,52 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  nextest-metadata-release:
+    if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-metadata-')
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          prefix: nextest-metadata
+          changelog: nextest-metadata/CHANGELOG.md
+          title: $prefix $version
+          branch: main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  nextest-runner-release:
+    if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-runner-')
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          prefix: nextest-runner
+          changelog: nextest-runner/CHANGELOG.md
+          title: $prefix $version
+          branch: main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  cargo-nextest-release:
+    if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          prefix: cargo-nextest
+          # The changelog for cargo-nextest is hosted on the website
+          changelog: site/src/CHANGELOG.md
+          title: $prefix $version
+          branch: main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
