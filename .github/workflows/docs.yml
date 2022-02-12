@@ -18,6 +18,8 @@ jobs:
           toolchain: stable
           override: true
       - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
+      - name: Install static-sitemap-cli
+        run: npm install static-sitemap-cli
       - name: Build rustdoc
         uses: actions-rs/cargo@v1
         with:
@@ -32,6 +34,10 @@ jobs:
         run: |
           cd site
           mdbook build
+      - name: Generate sitemap
+        run: |
+          cd site/output
+          npx sscli --base https://nexte.st
       - name: Organize
         run: |
           rm -rf target/gh-pages
