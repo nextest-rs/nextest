@@ -85,8 +85,22 @@ jobs:
         with:
           command: build
           args: --all-targets --all-features
-      - name: Test
+      - name: Doctests
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features
+          args: --doc --all-features
+      - name: Test with locally built nextest
+        uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --package nextest -- nextest run --all-features
+      - name: Install nextest from crates.io
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: nextest
+      - name: Test with nextest from crates.io
+        uses: actions-rs/cargo@v1
+        with:
+          command: nextest
+          args: run --all-features
