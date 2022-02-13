@@ -23,8 +23,8 @@ enable-ansi-support = "0.1.2"
 env_logger = { version = "0.9.0", default-features = false }
 guppy = "0.13.0"
 log = "0.4.14"
-nextest-runner = { path = "../nextest-runner" }
-nextest-metadata = { path = "../nextest-metadata" }
+nextest-runner = { version = "0.1.0", path = "../nextest-runner" }
+nextest-metadata = { version = "0.1.0", path = "../nextest-metadata" }
 owo-colors = { version = "3.2.0", features = ["supports-colors"] }
 shellwords = "1.1.0"
 supports-color = "1.3.0"
