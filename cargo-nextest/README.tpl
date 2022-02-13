@@ -3,7 +3,7 @@
 [![cargo-nextest on crates.io](https://img.shields.io/crates/v/cargo-nextest)](https://crates.io/crates/cargo-nextest)
 [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.rs/cargo-nextest/)
 [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/cargo_nextest)
-[![Changelog](https://img.shields.io/badge/changelog-latest-blue)](https://nexte.st/CHANGELOG.md)
+[![Changelog](https://img.shields.io/badge/changelog-latest-blue)](https://nexte.st/CHANGELOG)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE-MIT)
 
