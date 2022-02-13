@@ -4,7 +4,7 @@ Welcome to the home page for cargo-nextest, a next-generation test runner for Ru
 
 ## Features
 
-<img src="static/cover.png" style="float: right; width: 250px">
+<img src="static/cover.png" id="nextest-cover">
 
 * **Clean, beautiful user interface.** nextest presents its results concisely so you can see which tests passed and failed at a glance.
 * **[Up to 60% faster](book/benchmarks.md) than cargo test.** Nextest uses a [state-of-the-art execution model](book/how-it-works.md) for faster, more reliable test runs.

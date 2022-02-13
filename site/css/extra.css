@@ -1,0 +1,15 @@
+#nextest-cover {
+    float: right;
+    width: 250px;
+}
+
+@media only screen and (max-width: 480px) {
+    #nextest-cover {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        float: none;
+        width: 80%;
+        max-width: 250px;
+    }
+}
