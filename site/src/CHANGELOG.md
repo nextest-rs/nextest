@@ -3,6 +3,12 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.1] - 2022-02-14
+
+### Changed
+
+- Updated nextest-runner to 0.1.1, fixing builds on Rust 1.54.
+
 ## [0.9.0] - 2022-02-14
 
 **Initial release.** Happy Valentine's day!
@@ -17,4 +23,5 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.1
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.0
