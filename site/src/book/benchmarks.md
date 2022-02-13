@@ -51,7 +51,7 @@ All measurements were done on:
 * **RAM:** 64GB
 * **Rust:** version 1.58.1
 
-Lines of code were measured by `loc`, while the number of tests were recorded by nextest.
+Lines of code were measured by `loc`, while the number of tests was recorded by nextest.
 
 The commands run were:
 
