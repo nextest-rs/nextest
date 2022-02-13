@@ -94,7 +94,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: run
-          args: --package nextest -- nextest run --all-features
+          args: --package cargo-nextest -- nextest run --all-features
       - name: Install nextest from crates.io
         uses: baptiste0928/cargo-install@v1
         with:
