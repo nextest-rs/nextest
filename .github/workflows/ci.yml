@@ -98,7 +98,7 @@ jobs:
       - name: Install nextest from crates.io
         uses: baptiste0928/cargo-install@v1
         with:
-          crate: nextest
+          crate: cargo-nextest
       - name: Test with nextest from crates.io
         uses: actions-rs/cargo@v1
         with:
