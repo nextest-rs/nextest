@@ -46,7 +46,7 @@ Even if nextest doesn't result in faster test builds, you may find doing occasio
 ## Specifications
 
 All measurements were done on:
-* **Processor:** AMD Ryzen 9 3900x x86_64
+* **Processor:** AMD Ryzen 9 3900x x86_64, 12 cores/24 threads
 * **Operating system:** Pop_OS! 21.04 running Linux kernel 5.15.15
 * **RAM:** 64GB
 * **Rust:** version 1.58.1
