@@ -12,6 +12,7 @@ use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
     config::NextestConfig,
+    errors::WriteEventError,
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
     runner::TestRunnerBuilder,
@@ -19,7 +20,7 @@ use nextest_runner::{
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{OutputFormat, RustTestArtifact, SerializableFormat, TestList},
 };
-use std::io::Cursor;
+use std::io::{BufWriter, Cursor, Write};
 use supports_color::Stream;
 
 /// A next-generation test runner for Rust.
@@ -322,7 +323,10 @@ impl AppImpl {
                 }
                 let stdout = std::io::stdout();
                 let lock = stdout.lock();
-                test_list.write(message_format.to_output_format(output.verbose), lock)?;
+                // Buffer the output to minimize syscalls.
+                let mut writer = BufWriter::new(lock);
+                test_list.write(message_format.to_output_format(output.verbose), &mut writer)?;
+                writer.flush()?;
             }
             Command::Run {
                 ref profile,
@@ -355,11 +359,11 @@ impl AppImpl {
                     .to_builder(no_capture)
                     .build(&test_list, &profile, handler);
                 let stderr = std::io::stderr();
+                let mut writer = BufWriter::new(stderr);
                 let run_stats = runner.try_execute(|event| {
-                    // TODO: consider turning this into a trait, to initialize and carry the lock
-                    // across callback invocations
-                    let lock = stderr.lock();
-                    reporter.report_event(event, lock)
+                    // Write and flush the event.
+                    reporter.report_event(event, &mut writer)?;
+                    writer.flush().map_err(WriteEventError::Io)
                 })?;
                 if !run_stats.is_success() {
                     return Err(Report::new(ExpectedError::test_run_failed()));
