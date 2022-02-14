@@ -1,6 +1,6 @@
 # cargo-nextest
 
-Welcome to the home page for cargo-nextest, a next-generation test runner for Rust projects.
+Welcome to the home page for **cargo-nextest**, a next-generation test runner for Rust projects.
 
 ## Features
 
