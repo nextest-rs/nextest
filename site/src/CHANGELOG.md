@@ -31,5 +31,6 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.2
 [0.9.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.1
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.0
