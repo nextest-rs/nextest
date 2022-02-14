@@ -1,0 +1,69 @@
+cargo-nextest-run 
+Build and run tests
+
+USAGE:
+    cargo nextest run [OPTIONS] [FILTERS]...
+
+ARGS:
+    <FILTERS>...    Test name filter
+
+OPTIONS:
+    -P, --profile <PROFILE>       Nextest profile to use
+        --manifest-path <PATH>    Path to Cargo.toml
+    -v, --verbose                 Verbose output
+        --color <WHEN>            Produce color output: auto, always, never [default: auto]
+        --config-file <PATH>      Config file [default: workspace-root/.config/nextest.toml]
+    -h, --help                    Print help information
+
+RUNNER OPTIONS:
+    -j, --test-threads <THREADS>    Number of tests to run simultaneously [default: logical CPU
+                                    count] [aliases: jobs]
+        --retries <RETRIES>         Number of retries for failing tests [default: from profile]
+        --fail-fast                 Cancel test run on the first failure
+        --no-fail-fast              Run all tests regardless of failure
+        --no-capture                Run tests serially and do not capture output
+
+CARGO OPTIONS:
+        --lib                       Test only this package's library unit tests
+        --bin <BIN>                 Test only the specified binary
+        --bins                      Test all binaries
+        --test <TEST>               Test only the specified test target
+        --tests                     Test all targets
+        --bench <BENCH>             Test only the specified bench target
+        --benches                   Test all benches
+        --all-targets               Test all targets
+    -p, --package <PACKAGES>        Package to test
+        --workspace                 Build all packages in the workspace
+        --exclude <EXCLUDE>         Exclude packages from the test
+        --all                       Alias for workspace (deprecated)
+        --release                   Build artifacts in release mode, with optimizations
+        --cargo-profile <NAME>      Build artifacts with the specified Cargo profile
+        --build-jobs <JOBS>         Number of build jobs to run
+        --features <FEATURES>       Space or comma separated list of features to activate
+        --all-features              Activate all available features
+        --no-default-features       Do not activate the `default` feature
+        --target <TRIPLE>           Build for the target triple
+        --target-dir <DIR>          Directory for all generated artifacts
+        --ignore-rust-version       Ignore `rust-version` specification in packages
+        --unit-graph                Output build graph in JSON (unstable)
+        --future-incompat-report    Outputs a future incompatibility report at the end of the build
+                                    (unstable)
+        --frozen                    Require Cargo.lock and cache are up to date
+        --locked                    Require Cargo.lock is up to date
+        --offline                   Run without accessing the network
+        --config <KEY=VALUE>        Override a configuration value (unstable)
+    -Z <FLAG>                       Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for
+                                    details
+
+FILTER OPTIONS:
+        --run-ignored <WHICH>      Run ignored tests [default: default] [possible values: default,
+                                   ignored-only, all]
+        --partition <PARTITION>    Test partition, e.g. hash:1/2 or count:2/3
+
+REPORTER OPTIONS:
+        --failure-output <WHEN>    Output stdout and stderr on failure [possible values: immediate,
+                                   immediate-final, final, never]
+        --success-output <WHEN>    Output stdout and stderr on success [possible values: immediate,
+                                   immediate-final, final, never]
+        --status-level <LEVEL>     Test statuses to output [possible values: none, fail, retry,
+                                   slow, pass, skip, all]

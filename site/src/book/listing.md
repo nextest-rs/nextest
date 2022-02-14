@@ -11,3 +11,9 @@ cargo nextest list
 ![Output of cargo nextest list](../static/nextest-list.png)
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust.
+
+## Options and arguments
+
+```
+{{#include ../../help-text/list-help.txt}}
+```
