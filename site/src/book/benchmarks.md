@@ -18,6 +18,7 @@ Even if nextest doesn't result in faster test builds, you may find doing occasio
 | [ring]          | [`c14c355f`] | 179        | 17.64          | 11.60       | \-34.2%    |
 | [rust-analyzer] | [`4449a336`] | 3746       | 6.76           | 5.23        | \-22.6%    |
 | [tokio]         | [`e7a0da60`] | 1014       | 27.16          | 11.72       | \-56.8%    |
+| [meilisearch]   | [`58906001`] | 235        | 49.97          | 39.96       | \-20.04%    |
 
 [cargo-guppy]: https://github.com/facebookincubator/cargo-guppy/
 [`c135447a`]: https://github.com/facebookincubator/cargo-guppy/commit/c135447af716d0f985557b40042b2b6df53fa653
@@ -40,6 +41,9 @@ Even if nextest doesn't result in faster test builds, you may find doing occasio
 
 [tokio]: https://github.com/tokio-rs/tokio
 [`e7a0da60`]: https://github.com/tokio-rs/tokio/commit/e7a0da60cd997f10b33f32c4763c8ecef01144f8
+
+[meilisearch]: https://github.com/meilisearch/meilisearch
+[`e7a0da60`]: https://github.com/meilisearch/meilisearch/commit/58906001014546d6ee33f326ddde106b7eb46328
 
 [nextest-runner]: https://crates.io/crates/nextest-runner
 
