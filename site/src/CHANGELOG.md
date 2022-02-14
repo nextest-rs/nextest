@@ -3,6 +3,14 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.2] - 2022-02-14
+
+### Fixed
+
+- Running cargo nextest from within a crate now runs tests for just that crate, similar to cargo
+  test. Thanks [Yaron Wittenstein](https://twitter.com/RealWittenstein/status/1493291441384210437)
+  for reporting this!
+
 ## [0.9.1] - 2022-02-14
 
 ### Fixed

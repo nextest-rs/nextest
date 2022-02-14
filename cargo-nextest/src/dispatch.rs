@@ -177,9 +177,15 @@ struct TestBuildFilter {
 }
 
 impl TestBuildFilter {
-    fn compute<'g>(&self, graph: &'g PackageGraph, output: OutputContext) -> Result<TestList<'g>> {
-        let manifest_path = graph.workspace().root().join("Cargo.toml");
-        let mut cargo_cli = CargoCli::new("test", Some(&manifest_path), output);
+    fn compute<'g>(
+        &self,
+        manifest_path: Option<&'g Utf8Path>,
+        graph: &'g PackageGraph,
+        output: OutputContext,
+    ) -> Result<TestList<'g>> {
+        // Don't use the manifest path from the graph to ensure that if the user cd's into a
+        // particular crate and runs cargo nextest, then it behaves identically to cargo test.
+        let mut cargo_cli = CargoCli::new("test", manifest_path, output);
 
         // Only build tests in the cargo test invocation, do not run them.
         cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
@@ -309,7 +315,8 @@ impl AppImpl {
                 build_filter,
                 message_format,
             } => {
-                let mut test_list = build_filter.compute(&graph, output)?;
+                let mut test_list =
+                    build_filter.compute(self.manifest_path.as_deref(), &graph, output)?;
                 if output.color.should_colorize(Stream::Stdout) {
                     test_list.colorize();
                 }
@@ -332,7 +339,8 @@ impl AppImpl {
                 std::fs::create_dir_all(&store_dir)
                     .wrap_err_with(|| format!("failed to create store dir '{}'", store_dir))?;
 
-                let test_list = build_filter.compute(&graph, output)?;
+                let test_list =
+                    build_filter.compute(self.manifest_path.as_deref(), &graph, output)?;
 
                 let mut reporter = reporter_opts
                     .to_builder(no_capture)
