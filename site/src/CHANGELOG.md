@@ -5,7 +5,7 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ## [0.9.1] - 2022-02-14
 
-### Changed
+### Fixed
 
 - Updated nextest-runner to 0.1.1, fixing builds on Rust 1.54.
 
