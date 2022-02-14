@@ -3,6 +3,13 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.3] - 2022-02-14
+
+### Fixed
+
+- Add a `BufWriter` around stderr for the reporter, reducing the number of syscalls and fixing
+  issues around output overlap on Windows ([#35](https://github.com/nextest-rs/nextest/issues/35)). Thanks [@fdncred](https://github.com/fdncred) for reporting this!
+
 ## [0.9.2] - 2022-02-14
 
 ### Fixed
