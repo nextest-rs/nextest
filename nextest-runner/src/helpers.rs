@@ -18,8 +18,8 @@ pub(crate) fn write_test_name(
         write!(
             writer,
             "{}{}",
-            rest.style(style.module_name),
-            "::".style(style.module_name)
+            rest.style(style.module_path),
+            "::".style(style.module_path)
         )?;
     }
     write!(writer, "{}", trailing.style(style.test_name))?;
