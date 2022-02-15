@@ -27,4 +27,4 @@ A cargo-nextest run has two separate phases:
 * **The list phase.** cargo-nextest first builds all test binaries with `cargo test --no-run`, then queries those binaries to produce a list of all tests within them.
 * **The run phase.** cargo-nextest then executes each individual test in a separate process, in parallel. It then collects, displays and aggregates results for each individual test.
 
-This model solves all the problems of cargo test's execution model, at the cost of a *significantly* thicker interface to test binaries. **This means that custom test harnesses [may need to be adapted](custom-test-harnesses.md) to work with cargo-nextest.**
+This model solves all the problems of cargo test's execution model, at the cost of a *significantly* thicker interface to test binaries. This means that **custom test harnesses [may need to be adapted](custom-test-harnesses.md) to work with cargo-nextest.**
