@@ -19,7 +19,7 @@ Some notes about the JUnit support:
 ## Post-processing
 
 Some tools that read JUnit files don't follow the Jenkins standard. You can post-process the JUnit file in such cases. Here's some recommendations for post-processing tools written by community members:
-* CircleCI: [`circleci-junit-fix`](https://github.com/conradludgate/circleci-junit-fix).
+* CircleCI: [`circleci-junit-fix`](https://github.com/conradludgate/circleci-junit-fix)
 
 ## Example
 
