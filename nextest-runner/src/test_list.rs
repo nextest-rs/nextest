@@ -382,13 +382,23 @@ impl<'g> TestList<'g> {
         // <test name>: test
         // ...
 
-        list_output.lines().map(move |line| {
-            line.strip_suffix(": test").ok_or_else(|| {
+        list_output.lines().filter_map(move |line| {
+            if line.ends_with(": benchmark") {
+                // These lines are produced by the default Rust benchmark harness (#[bench]).
+                // Ignore them.
+                return None;
+            }
+
+            let res = line.strip_suffix(": test").ok_or_else(|| {
                 ParseTestListError::parse_line(
-                    format!("line '{}' did not end with the string ': test'", line),
+                    format!(
+                        "line '{}' did not end with the string ': test' or ': benchmark'",
+                        line
+                    ),
                     list_output,
                 )
-            })
+            });
+            Some(res)
         })
     }
 
@@ -569,11 +579,14 @@ mod tests {
 
     #[test]
     fn test_parse() {
+        // Lines ending in ': benchmark' (output by the default Rust bencher) should be skipped.
         let non_ignored_output = indoc! {"
             tests::foo::test_bar: test
             tests::baz::test_quux: test
+            benches::should_be_skipped: benchmark
         "};
         let ignored_output = indoc! {"
+            benches::ignored_should_be_skipped: benchmark
             tests::ignored::test_bar: test
             tests::baz::test_ignored: test
         "};
