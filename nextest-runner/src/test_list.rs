@@ -542,7 +542,7 @@ impl<'a> TestInstance<'a> {
 pub(super) struct Styles {
     pub(super) binary_id: Style,
     pub(super) test_name: Style,
-    pub(super) module_name: Style,
+    pub(super) module_path: Style,
     field: Style,
 }
 
@@ -551,7 +551,7 @@ impl Styles {
         self.binary_id = Style::new().magenta().bold();
         self.test_name = Style::new().blue().bold();
         self.field = Style::new().yellow().bold();
-        self.module_name = Style::new().cyan().bold();
+        self.module_path = Style::new().cyan().bold();
     }
 }
 
