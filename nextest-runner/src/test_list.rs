@@ -551,7 +551,7 @@ impl Styles {
         self.binary_id = Style::new().magenta().bold();
         self.test_name = Style::new().blue().bold();
         self.field = Style::new().yellow().bold();
-        self.module_path = Style::new().cyan().bold();
+        self.module_path = Style::new().cyan();
     }
 }
 
