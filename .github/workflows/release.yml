@@ -71,3 +71,129 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get version number
+        id: get-version-number
+        # TODO: replace this step with https://github.com/taiki-e/create-gh-release-action/pull/12 once that lands
+        run: |
+          TAG_NAME=${{ github.ref_name }}
+          VERSION=${TAG_NAME#"cargo-nextest-"}
+          echo "The version number is $VERSION"
+          echo "::set-output name=version::$VERSION"
+    outputs:
+      version: ${{ steps.get-version-number.outputs.version }}
+
+  build-cargo-nextest-binaries:
+    name: Build cargo-nextest binaries for ${{ matrix.target }}
+    if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
+    needs:
+      - cargo-nextest-release
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-18.04
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: cargo-nextest
+          # The tag name contains the binary name so just use that.
+          archive: $tag-$target
+          target: ${{ matrix.target }}
+          tar: all
+          zip: windows
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_PROFILE_RELEASE_LTO: true
+      - name: Set archive output variable
+        id: archive-output
+        shell: bash
+        run: |
+          if [[ ${{ matrix.target }} == windows ]]; then
+            echo "::set-output name=${{ matrix.target }}::${{ github.ref_name }}-${{ matrix.target }}".zip
+          else
+            echo "::set-output name=${{ matrix.target }}::${{ github.ref_name }}-${{ matrix.target }}".tar.gz
+          fi
+    outputs:
+      linux-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu }}
+      windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc }}
+
+  build-cargo-nextest-binaries-mac:
+    name: Build universal cargo-nextest binary for Mac
+    if: github.repository_owner == 'nextest-rs'
+    needs:
+      - cargo-nextest-release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Build release for Mac
+        id: build-release
+        run: |
+          ./scripts/release-mac-build.sh cargo-nextest "${{ github.ref_name }}"
+      - uses: svenstaro/upload-release-action@2.2.1
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ steps.build-release.outputs.archive-name }}
+          tag: ${{ github.ref }}
+    outputs:
+      mac-tar: ${{ steps.build-release.outputs.archive-name }}
+
+  update-release-meta:
+    name: Update release-meta branch
+    if: github.repository_owner == 'nextest-rs'
+    needs:
+      - cargo-nextest-release
+      - build-cargo-nextest-binaries
+      - build-cargo-nextest-binaries-mac
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download mukti
+        run: |
+          mkdir -p ~/bin
+          curl -LsSf "https://github.com/sunshowers/mukti/releases/download/mukti-bin-0.1.0/mukti-bin-0.1.0-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xzf - -C ~/bin
+      - name: Add release metadata
+        run: |
+          ~/bin/mukti-bin add-release --version ${{ needs.cargo-nextest-release.outputs.version }} \
+            --url-prefix "https://github.com/nextest-rs/nextest/releases/download/${{ github.ref_name }}" \
+            --archive x86_64-unknown-linux-gnu=${{ needs.build-cargo-nextest-binaries.outputs.linux-tar }} \
+            --archive x86_64-pc-windows-msvc=${{ needs.build-cargo-nextest-binaries.outputs.windows-zip }} \
+            --archive universal-apple-darwin=${{ needs.build-cargo-nextest-binaries-mac.outputs.mac-tar }}
+      - name: Generate netlify redirects
+        run: |
+          mkdir out-dir
+          ~/bin/mukti-bin generate-netlify out-dir --alias linux=x86_64-unknown-linux-gnu \
+            --alias windows=x86_64-pc-windows-msvc --alias mac=universal-apple-darwin
+      - name: Update releases.json on main branch
+        uses: EndBug/add-and-commit@v8
+        with:
+          add: .releases.json
+          message: "Update release metadata for ${{ github.ref_name }}"
+          default_author: github_actions
+          # Need to specify pull and push arguments because we're checked out to a tag here (i.e. not on a branch)
+          pull: '--rebase --autostash origin main'
+          push: 'origin HEAD:main'
+      - name: Copy releases.json to output dir
+        run: |
+          cp .releases.json out-dir/releases.json
+      - name: Deploy release metadata
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: release-meta
+          folder: out-dir
