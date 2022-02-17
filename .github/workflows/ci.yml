@@ -47,10 +47,16 @@ jobs:
 
   build:
     name: Build and test
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.runs-on }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        os:
+          - runs-on: ubuntu-latest
+            nextest-platform: linux
+          - runs-on: macos-latest
+            nextest-platform: mac
+          - runs-on: windows-latest
+            nextest-platform: windows-tar
         # 1.54 is the MSRV
         rust-version: [ 1.54, stable ]
       fail-fast: false
@@ -95,11 +101,11 @@ jobs:
         with:
           command: run
           args: --package cargo-nextest -- nextest run --all-features
-      - name: Install nextest from crates.io
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-      - name: Test with nextest from crates.io
+      - name: Install latest nextest release
+        shell: bash
+        run: |
+          curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest-platform }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+      - name: Test with latest nextest release
         uses: actions-rs/cargo@v1
         with:
           command: nextest
