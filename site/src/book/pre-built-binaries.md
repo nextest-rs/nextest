@@ -68,7 +68,7 @@ The `{platform}` identifier is:
 * `x86_64-unknown-linux-gnu.tar.gz` for x86_64 Linux (tar.gz)
 * `universal-apple-darwin.tar.gz` for x86_64 and arm64 macOS (tar.gz)
 * `x86_64-pc-windows-msvc.zip` for x86_64 Windows (zip)
-* `x86_64-pc-windows-msvc.tar` for x86_64 Windows (tar.gz)
+* `x86_64-pc-windows-msvc.tar.gz` for x86_64 Windows (tar.gz)
 
 For convenience, the following shortcuts are defined:
 
