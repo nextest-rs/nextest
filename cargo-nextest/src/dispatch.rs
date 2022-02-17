@@ -10,8 +10,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgEnum, Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
+use nextest_metadata::{BinaryListSummary, Platform};
 use nextest_runner::{
-    config::NextestConfig,
+    config::{NextestConfig, NextestProfile},
     errors::{TargetRunnerError, WriteEventError},
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
@@ -19,7 +20,9 @@ use nextest_runner::{
     signal::SignalHandler,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::{OutputFormat, RustTestArtifact, SerializableFormat, TestList},
+    test_list::{
+        BinaryList, OutputFormat, PathMapper, RustTestArtifact, SerializableFormat, TestList,
+    },
 };
 use owo_colors::{OwoColorize, Style};
 use std::{
@@ -51,12 +54,12 @@ impl CargoNextestApp {
 #[derive(Debug, Subcommand)]
 enum NextestSubcommand {
     /// A next-generation test runner for Rust. <https://nexte.st>
-    Nextest(AppImpl),
+    Nextest(AppOpts),
 }
 
 #[derive(Debug, Args)]
 #[clap(version)]
-struct AppImpl {
+struct AppOpts {
     /// Path to Cargo.toml
     #[clap(long, global = true, value_name = "PATH")]
     manifest_path: Option<Utf8PathBuf>,
@@ -108,6 +111,13 @@ enum Command {
             value_name = "FMT"
         )]
         message_format: MessageFormatOpts,
+
+        /// Type of listing
+        #[clap(long, arg_enum, default_value_t, value_name = "TYPE")]
+        list_type: ListType,
+
+        #[clap(flatten)]
+        reuse_build: ReuseBuildOpts,
     },
     /// Build and run tests
     ///
@@ -137,7 +147,61 @@ enum Command {
 
         #[clap(flatten)]
         reporter_opts: TestReporterOpts,
+
+        #[clap(flatten)]
+        reuse_build: ReuseBuildOpts,
     },
+}
+
+#[derive(Debug, Args)]
+#[clap(next_help_heading = "REUSE BUILD OPTIONS")]
+struct ReuseBuildOpts {
+    /// Path to list of test binaries.
+    #[clap(long, value_name = "PATH")]
+    binaries_metadata: Option<Utf8PathBuf>,
+
+    /// Remapping for the test binaries directory
+    #[clap(long, requires("binaries-metadata"), value_name = "PATH")]
+    binaries_dir_remap: Option<Utf8PathBuf>,
+
+    /// Path to cargo metadata JSON
+    #[clap(long, conflicts_with("manifest-path"), value_name = "PATH")]
+    cargo_metadata: Option<Utf8PathBuf>,
+
+    /// Remapping for the workspace root
+    #[clap(long, requires("cargo-metadata"), value_name = "PATH")]
+    workspace_remap: Option<Utf8PathBuf>,
+
+    /// Filter binaries based on the platform they were built for
+    #[clap(long, arg_enum, value_name = "PLATFORM")]
+    platform_filter: Option<PlatformFilterOpts>,
+}
+
+#[derive(Copy, Clone, Debug, ArgEnum)]
+enum PlatformFilterOpts {
+    Host,
+    Target,
+}
+
+impl From<PlatformFilterOpts> for Platform {
+    fn from(opt: PlatformFilterOpts) -> Self {
+        match opt {
+            PlatformFilterOpts::Host => Self::Host,
+            PlatformFilterOpts::Target => Self::Target,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, ArgEnum)]
+enum ListType {
+    Full,
+    BinariesOnly,
+}
+
+impl Default for ListType {
+    fn default() -> Self {
+        Self::Full
+    }
 }
 
 #[derive(Copy, Clone, Debug, ArgEnum)]
@@ -184,13 +248,35 @@ struct TestBuildFilter {
 }
 
 impl TestBuildFilter {
-    fn compute<'g>(
+    fn compute_test_list<'g>(
         &self,
-        manifest_path: Option<&'g Utf8Path>,
         graph: &'g PackageGraph,
-        output: OutputContext,
+        binary_list: BinaryList,
         runner: Option<&TargetRunner>,
+        reuse_build: &ReuseBuildOpts,
     ) -> Result<TestList<'g>> {
+        let path_mapper = PathMapper::new(
+            graph,
+            reuse_build.workspace_remap.clone(),
+            reuse_build.binaries_dir_remap.clone(),
+        );
+        let test_artifacts = RustTestArtifact::from_binary_list(
+            graph,
+            binary_list,
+            path_mapper.as_ref(),
+            reuse_build.platform_filter.map(Into::into),
+        )?;
+        let test_filter =
+            TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
+        TestList::new(test_artifacts, &test_filter, runner).wrap_err("error building test list")
+    }
+
+    fn compute_binary_list(
+        &self,
+        graph: &PackageGraph,
+        manifest_path: Option<&Utf8Path>,
+        output: OutputContext,
+    ) -> Result<BinaryList> {
         // Don't use the manifest path from the graph to ensure that if the user cd's into a
         // particular crate and runs cargo nextest, then it behaves identically to cargo test.
         let mut cargo_cli = CargoCli::new("test", manifest_path, output);
@@ -212,11 +298,8 @@ impl TestBuildFilter {
             )));
         }
 
-        let test_artifacts = RustTestArtifact::from_messages(graph, Cursor::new(output.stdout))?;
-
-        let test_filter =
-            TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
-        TestList::new(test_artifacts, &test_filter, runner).wrap_err("error building test list")
+        let test_binaries = BinaryList::from_messages(Cursor::new(output.stdout), graph)?;
+        Ok(test_binaries)
     }
 }
 
@@ -311,92 +394,237 @@ impl TestReporterOpts {
     }
 }
 
-impl AppImpl {
+impl AppOpts {
     /// Execute the command.
     fn exec(self) -> Result<()> {
-        let output = self.output.init();
-
-        let graph = build_graph(self.manifest_path.as_deref(), output)?;
-
         match self.command {
             Command::List {
                 build_filter,
                 message_format,
+                list_type,
+                reuse_build,
             } => {
-                let target_runner = runner_for_target(build_filter.cargo_options.target.as_deref());
-
-                let mut test_list = build_filter.compute(
-                    self.manifest_path.as_deref(),
-                    &graph,
-                    output,
-                    target_runner.as_ref(),
+                let app = App::new(
+                    self.output,
+                    reuse_build,
+                    build_filter,
+                    self.config_opts,
+                    self.manifest_path,
                 )?;
-                if output.color.should_colorize(Stream::Stdout) {
-                    test_list.colorize();
-                }
-                let stdout = std::io::stdout();
-                let lock = stdout.lock();
-                // Buffer the output to minimize syscalls.
-                let mut writer = BufWriter::new(lock);
-                test_list.write(message_format.to_output_format(output.verbose), &mut writer)?;
-                writer.flush()?;
+                app.exec_list(message_format, list_type)
             }
             Command::Run {
-                ref profile,
+                profile,
                 no_capture,
-                ref build_filter,
-                ref runner_opts,
-                ref reporter_opts,
+                build_filter,
+                runner_opts,
+                reporter_opts,
+                reuse_build,
             } => {
-                let config = self.config_opts.make_config(graph.workspace().root())?;
-                let profile = config
-                    .profile(profile.as_deref().unwrap_or(NextestConfig::DEFAULT_PROFILE))
-                    .map_err(ExpectedError::profile_not_found)?;
-                let store_dir = profile.store_dir();
-                std::fs::create_dir_all(&store_dir)
-                    .wrap_err_with(|| format!("failed to create store dir '{}'", store_dir))?;
-
-                let target_runner = runner_for_target(build_filter.cargo_options.target.as_deref());
-
-                let test_list = build_filter.compute(
-                    self.manifest_path.as_deref(),
-                    &graph,
-                    output,
-                    target_runner.as_ref(),
+                let app = App::new(
+                    self.output,
+                    reuse_build,
+                    build_filter,
+                    self.config_opts,
+                    self.manifest_path,
                 )?;
-
-                let mut reporter = reporter_opts
-                    .to_builder(no_capture)
-                    .set_verbose(output.verbose)
-                    .build(&test_list, &profile);
-                if output.color.should_colorize(Stream::Stderr) {
-                    reporter.colorize();
-                }
-
-                let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
-                let mut runner_builder = runner_opts.to_builder(no_capture);
-                if let Some(target_runner) = target_runner {
-                    runner_builder.set_target_runner(target_runner);
-                }
-
-                let runner = runner_builder.build(&test_list, &profile, handler);
-                let stderr = std::io::stderr();
-                let mut writer = BufWriter::new(stderr);
-                let run_stats = runner.try_execute(|event| {
-                    // Write and flush the event.
-                    reporter.report_event(event, &mut writer)?;
-                    writer.flush().map_err(WriteEventError::Io)
-                })?;
-                if !run_stats.is_success() {
-                    return Err(Report::new(ExpectedError::test_run_failed()));
-                }
+                app.exec_run(profile.as_deref(), no_capture, &runner_opts, &reporter_opts)
             }
+        }
+    }
+}
+
+struct App {
+    output: OutputContext,
+    graph: PackageGraph,
+    workspace_root: Utf8PathBuf,
+    manifest_path: Option<Utf8PathBuf>,
+    reuse_build: ReuseBuildOpts,
+    build_filter: TestBuildFilter,
+    config_opts: ConfigOpts,
+}
+
+impl App {
+    fn new(
+        output: OutputOpts,
+        reuse_build: ReuseBuildOpts,
+        build_filter: TestBuildFilter,
+        config_opts: ConfigOpts,
+        manifest_path: Option<Utf8PathBuf>,
+    ) -> Result<Self> {
+        let output = output.init();
+
+        let graph_data = match reuse_build.cargo_metadata.as_deref() {
+            Some(path) => std::fs::read_to_string(path)?,
+            None => acquire_graph_data(manifest_path.as_deref(), output)?,
+        };
+        let graph = guppy::CargoMetadata::parse_json(&graph_data)?.build_graph()?;
+
+        let manifest_path = if reuse_build.cargo_metadata.is_some() {
+            Some(graph.workspace().root().join("Cargo.toml"))
+        } else {
+            manifest_path
+        };
+
+        let workspace_root = match &reuse_build.workspace_remap {
+            Some(path) => path.clone(),
+            _ => graph.workspace().root().to_owned(),
+        };
+
+        Ok(Self {
+            output,
+            graph,
+            reuse_build,
+            build_filter,
+            manifest_path,
+            workspace_root,
+            config_opts,
+        })
+    }
+
+    fn build_binary_list(&self) -> Result<BinaryList> {
+        let binary_list = match self.reuse_build.binaries_metadata.as_deref() {
+            Some(path) => {
+                let raw_binary_list = std::fs::read_to_string(path)?;
+                let binary_list: BinaryListSummary = serde_json::from_str(&raw_binary_list)?;
+                BinaryList::from_summary(binary_list)
+            }
+            None => self.build_filter.compute_binary_list(
+                &self.graph,
+                self.manifest_path.as_deref(),
+                self.output,
+            )?,
+        };
+        Ok(binary_list)
+    }
+
+    fn build_test_list(
+        &self,
+        binary_list: BinaryList,
+        target_runner: Option<&TargetRunner>,
+    ) -> Result<TestList> {
+        self.build_filter.compute_test_list(
+            &self.graph,
+            binary_list,
+            target_runner,
+            &self.reuse_build,
+        )
+    }
+
+    fn load_profile<'cfg>(
+        &self,
+        profile_name: Option<&str>,
+        config: &'cfg NextestConfig,
+    ) -> Result<NextestProfile<'cfg>> {
+        let profile = config
+            .profile(profile_name.unwrap_or(NextestConfig::DEFAULT_PROFILE))
+            .map_err(ExpectedError::profile_not_found)?;
+        let store_dir = profile.store_dir();
+        std::fs::create_dir_all(&store_dir)
+            .wrap_err_with(|| format!("failed to create store dir '{}'", store_dir))?;
+        Ok(profile)
+    }
+
+    fn load_runner(&self) -> Option<TargetRunner> {
+        // When cross-compiling we should not use the cross target runner
+        // for running the host tests (like proc-macro ones).
+        match self.reuse_build.platform_filter {
+            Some(PlatformFilterOpts::Host) => runner_for_target(None),
+            _ => runner_for_target(self.build_filter.cargo_options.target.as_deref()),
+        }
+    }
+
+    fn exec_list(&self, message_format: MessageFormatOpts, list_type: ListType) -> Result<()> {
+        let binary_list = self.build_binary_list()?;
+
+        match list_type {
+            ListType::BinariesOnly => {
+                write_to_stdout(|writer| {
+                    binary_list
+                        .write(
+                            message_format.to_output_format(self.output.verbose),
+                            writer,
+                            self.output.color.should_colorize(Stream::Stdout),
+                        )
+                        .map_err(Into::into)
+                })?;
+            }
+            ListType::Full => {
+                let target_runner = self.load_runner();
+                let mut test_list = self.build_test_list(binary_list, target_runner.as_ref())?;
+                if self.output.color.should_colorize(Stream::Stdout) {
+                    test_list.colorize();
+                }
+
+                write_to_stdout(|writer| {
+                    test_list
+                        .write(message_format.to_output_format(self.output.verbose), writer)
+                        .map_err(Into::into)
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    fn exec_run(
+        &self,
+        profile_name: Option<&str>,
+        no_capture: bool,
+        runner_opts: &TestRunnerOpts,
+        reporter_opts: &TestReporterOpts,
+    ) -> Result<()> {
+        let config = self
+            .config_opts
+            .make_config(self.workspace_root.as_path())?;
+        let profile = self.load_profile(profile_name, &config)?;
+
+        let target_runner = self.load_runner();
+
+        let binary_list = self.build_binary_list()?;
+        let test_list = self.build_test_list(binary_list, target_runner.as_ref())?;
+
+        let mut reporter = reporter_opts
+            .to_builder(no_capture)
+            .set_verbose(self.output.verbose)
+            .build(&test_list, &profile);
+        if self.output.color.should_colorize(Stream::Stderr) {
+            reporter.colorize();
+        }
+
+        let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
+        let mut runner_builder = runner_opts.to_builder(no_capture);
+        if let Some(target_runner) = target_runner {
+            runner_builder.set_target_runner(target_runner);
+        }
+
+        let runner = runner_builder.build(&test_list, &profile, handler);
+        let stderr = std::io::stderr();
+        let mut writer = BufWriter::new(stderr);
+        let run_stats = runner.try_execute(|event| {
+            // Write and flush the event.
+            reporter.report_event(event, &mut writer)?;
+            writer.flush().map_err(WriteEventError::Io)
+        })?;
+        if !run_stats.is_success() {
+            return Err(Report::new(ExpectedError::test_run_failed()));
         }
         Ok(())
     }
 }
 
-fn build_graph(manifest_path: Option<&Utf8Path>, output: OutputContext) -> Result<PackageGraph> {
+fn write_to_stdout<F: FnOnce(&mut BufWriter<std::io::StdoutLock>) -> Result<()>>(
+    write: F,
+) -> Result<()> {
+    let stdout = std::io::stdout();
+    let lock = stdout.lock();
+    // Buffer the output to minimize syscalls.
+    let mut writer = BufWriter::new(lock);
+    write(&mut writer)?;
+    writer.flush()?;
+    Ok(())
+}
+
+fn acquire_graph_data(manifest_path: Option<&Utf8Path>, output: OutputContext) -> Result<String> {
     let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
     // Construct a package graph with --no-deps since we don't need full dependency
     // information.
@@ -415,7 +643,7 @@ fn build_graph(manifest_path: Option<&Utf8Path>, output: OutputContext) -> Resul
 
     let json =
         String::from_utf8(output.stdout).wrap_err("cargo metadata output is invalid UTF-8")?;
-    Ok(guppy::CargoMetadata::parse_json(&json)?.build_graph()?)
+    Ok(json)
 }
 
 fn runner_for_target(triple: Option<&str>) -> Option<TargetRunner> {

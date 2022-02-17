@@ -21,7 +21,10 @@ use guppy::{
     graph::{PackageGraph, PackageMetadata},
     PackageId,
 };
-use nextest_metadata::{RustTestCaseSummary, RustTestSuiteSummary, TestListSummary};
+use nextest_metadata::{
+    BinaryListSummary, Platform, RustTestBinarySummary, RustTestCaseSummary, RustTestSuiteSummary,
+    TestListSummary,
+};
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Style};
 use std::{collections::BTreeMap, io, io::Write};
@@ -50,46 +53,58 @@ pub struct RustTestArtifact<'g> {
     pub cwd: Utf8PathBuf,
 }
 
-impl<'g> RustTestArtifact<'g> {
+/// A Rust test binary built by Cargo.
+pub struct RustTestBinary {
+    /// A unique ID.
+    pub id: String,
+    /// The path to the binary artifact.
+    pub path: Utf8PathBuf,
+    /// The package this artifact belongs to.
+    pub package_id: String,
+    /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
+    pub name: String,
+
+    /// Platform for which this binary was built.
+    /// (Proc-macro tests are built for the host.)
+    pub platform: Platform,
+}
+
+/// The list of Rust test binaries built by Cargo.
+pub struct BinaryList {
+    /// The list of test binaries.
+    pub rust_binaries: Vec<RustTestBinary>,
+}
+
+impl BinaryList {
     /// Parses Cargo messages from the given `BufRead` and returns a list of test binaries.
     pub fn from_messages(
-        graph: &'g PackageGraph,
         reader: impl io::BufRead,
-    ) -> Result<Vec<Self>, FromMessagesError> {
-        let mut binaries = vec![];
+        graph: &PackageGraph,
+    ) -> Result<Self, FromMessagesError> {
+        let mut rust_binaries = vec![];
 
         for message in Message::parse_stream(reader) {
             let message = message.map_err(FromMessagesError::ReadMessages)?;
             match message {
                 Message::CompilerArtifact(artifact) if artifact.profile.test => {
-                    if let Some(binary) = artifact.executable {
+                    if let Some(path) = artifact.executable {
+                        let package_id = artifact.package_id.repr;
+
                         // Look up the executable by package ID.
-                        let package_id = PackageId::new(artifact.package_id.repr);
                         let package = graph
-                            .metadata(&package_id)
+                            .metadata(&PackageId::new(package_id.clone()))
                             .map_err(FromMessagesError::PackageGraph)?;
-                        // Tests are run in the directory containing Cargo.toml
-                        let cwd = package
-                            .manifest_path()
-                            .parent()
-                            .unwrap_or_else(|| {
-                                panic!(
-                                    "manifest path {} doesn't have a parent",
-                                    package.manifest_path()
-                                )
-                            })
-                            .to_path_buf();
 
                         // Construct the binary ID from the package and build target.
-                        let mut binary_id = package.name().to_owned();
-                        let binary_name = artifact.target.name;
+                        let mut id = package.name().to_owned();
+                        let name = artifact.target.name;
 
                         // To ensure unique binary IDs, we use the following scheme:
                         // 1. If the target is a lib, use the package name.
                         //      There can only be one lib per package, so this
                         //      will always be unique.
                         if !artifact.target.kind.contains(&"lib".to_owned()) {
-                            binary_id.push_str("::");
+                            id.push_str("::");
 
                             match artifact.target.kind.get(0) {
                                 // 2. For integration tests, use the target name.
@@ -97,30 +112,38 @@ impl<'g> RustTestArtifact<'g> {
                                 //      kind of targets in a package, so these
                                 //      will always be unique.
                                 Some(kind) if kind == "test" => {
-                                    binary_id.push_str(&binary_name);
+                                    id.push_str(&name);
                                 }
                                 // 3. For all other target kinds, use a
                                 //      combination of the target kind and
                                 //      the target name. For the same reason
                                 //      as above, these will always be unique.
                                 Some(kind) => {
-                                    binary_id.push_str(&format!("{}/{}", kind, binary_name));
+                                    id.push_str(&format!("{}/{}", kind, name));
                                 }
                                 None => {
                                     return Err(FromMessagesError::MissingTargetKind {
                                         package_name: package.name().to_owned(),
-                                        binary_name: binary_name.clone(),
+                                        binary_name: name.clone(),
                                     });
                                 }
                             }
                         }
 
-                        binaries.push(RustTestArtifact {
-                            binary_id,
-                            package,
-                            binary_path: binary,
-                            binary_name,
-                            cwd,
+                        let platform = if artifact.target.kind.len() == 1
+                            && artifact.target.kind.get(0).map(String::as_str) == Some("proc-macro")
+                        {
+                            Platform::Host
+                        } else {
+                            Platform::Target
+                        };
+
+                        rust_binaries.push(RustTestBinary {
+                            path,
+                            package_id,
+                            name,
+                            id,
+                            platform,
                         })
                     }
                 }
@@ -128,6 +151,153 @@ impl<'g> RustTestArtifact<'g> {
                     // Ignore all other messages.
                 }
             }
+        }
+
+        rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
+
+        Ok(Self { rust_binaries })
+    }
+
+    /// Constructs the list from its summary format
+    pub fn from_summary(summary: BinaryListSummary) -> Self {
+        let rust_binaries = summary
+            .rust_binaries
+            .into_values()
+            .map(|bin| RustTestBinary {
+                name: bin.binary_name,
+                path: bin.binary_path,
+                package_id: bin.package_id,
+                id: bin.binary_id,
+                platform: bin.platform,
+            })
+            .collect();
+        Self { rust_binaries }
+    }
+
+    /// Outputs this list to the given writer.
+    pub fn write(
+        &self,
+        output_format: OutputFormat,
+        writer: impl Write,
+        colorized: bool,
+    ) -> Result<(), WriteTestListError> {
+        match output_format {
+            OutputFormat::Human { verbose } => self
+                .write_human(writer, verbose, colorized)
+                .map_err(WriteTestListError::Io),
+            OutputFormat::Serializable(format) => format
+                .to_writer(&self.to_summary(), writer)
+                .map_err(WriteTestListError::Json),
+        }
+    }
+
+    fn to_summary(&self) -> BinaryListSummary {
+        let rust_binaries = self
+            .rust_binaries
+            .iter()
+            .map(|bin| {
+                let summary = RustTestBinarySummary {
+                    binary_name: bin.name.clone(),
+                    package_id: bin.package_id.clone(),
+                    binary_path: bin.path.clone(),
+                    binary_id: bin.id.clone(),
+                    platform: bin.platform,
+                };
+                (bin.id.clone(), summary)
+            })
+            .collect();
+
+        BinaryListSummary { rust_binaries }
+    }
+
+    fn write_human(
+        &self,
+        mut writer: impl Write,
+        verbose: bool,
+        colorized: bool,
+    ) -> io::Result<()> {
+        let mut styles = Styles::default();
+        if colorized {
+            styles.colorize();
+        }
+        for bin in &self.rust_binaries {
+            if verbose {
+                writeln!(writer, "{}:", bin.id.style(styles.binary_id))?;
+                writeln!(writer, "  {} {}", "path:".style(styles.field), bin.path)?;
+                writeln!(
+                    writer,
+                    "  {} {}",
+                    "package-id:".style(styles.field),
+                    bin.package_id
+                )?;
+                writeln!(
+                    writer,
+                    "  {} {:?}",
+                    "binary-name:".style(styles.field),
+                    bin.name
+                )?;
+                writeln!(
+                    writer,
+                    "  {} {}",
+                    "platform:".style(styles.field),
+                    match bin.platform {
+                        Platform::Host => "host",
+                        Platform::Target => "target",
+                    }
+                )?;
+            } else {
+                writeln!(writer, "{}", bin.id.style(styles.binary_id))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<'g> RustTestArtifact<'g> {
+    /// Constructs a list of test binaries from the list of built binaries.
+    pub fn from_binary_list(
+        graph: &'g PackageGraph,
+        binary_list: BinaryList,
+        path_mapper: Option<&PathMapper>,
+        platform_filter: Option<Platform>,
+    ) -> Result<Vec<Self>, FromMessagesError> {
+        let mut binaries = vec![];
+
+        for binary in binary_list.rust_binaries {
+            if platform_filter.is_some() && platform_filter != Some(binary.platform) {
+                continue;
+            }
+
+            // Look up the executable by package ID.
+            let package_id = PackageId::new(binary.package_id);
+            let package = graph
+                .metadata(&package_id)
+                .map_err(FromMessagesError::PackageGraph)?;
+
+            // Tests are run in the directory containing Cargo.toml
+            let cwd = package
+                .manifest_path()
+                .parent()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "manifest path {} doesn't have a parent",
+                        package.manifest_path()
+                    )
+                })
+                .to_path_buf();
+
+            let (binary_path, cwd) = match path_mapper {
+                Some(mapper) => (mapper.map_binary(binary.path), mapper.map_cwd(cwd)),
+                None => (binary.path, cwd),
+            };
+
+            binaries.push(RustTestArtifact {
+                binary_id: binary.id,
+                package,
+                binary_path,
+                binary_name: binary.name,
+                cwd,
+            })
         }
 
         Ok(binaries)
@@ -164,6 +334,53 @@ pub struct RustTestSuite<'g> {
 
     /// Test case names and other information about them.
     pub testcases: BTreeMap<String, RustTestCaseSummary>,
+}
+
+/// A helper for path remapping.
+///
+/// This is useful when running tests in a different directory, or a different computer, from building them.
+#[derive(Default)]
+pub struct PathMapper {
+    workspace: Option<(Utf8PathBuf, Utf8PathBuf)>,
+    binaries_dir: Option<Utf8PathBuf>,
+}
+
+impl PathMapper {
+    /// Constructs the path mapper.
+    pub fn new(
+        graph: &PackageGraph,
+        workspace: Option<Utf8PathBuf>,
+        binaries_dir: Option<Utf8PathBuf>,
+    ) -> Option<Self> {
+        if workspace.is_none() && binaries_dir.is_none() {
+            return None;
+        }
+
+        Some(Self {
+            workspace: workspace.map(|w| (graph.workspace().root().to_owned(), w)),
+            binaries_dir,
+        })
+    }
+
+    fn map_cwd(&self, path: Utf8PathBuf) -> Utf8PathBuf {
+        match &self.workspace {
+            Some((from, to)) => match path.strip_prefix(from) {
+                Ok(p) => to.join(p),
+                Err(_) => path,
+            },
+            None => path,
+        }
+    }
+
+    fn map_binary(&self, path: Utf8PathBuf) -> Utf8PathBuf {
+        match &self.binaries_dir {
+            Some(dir) => match path.file_name() {
+                Some(file) => dir.join(file),
+                None => path,
+            },
+            None => path,
+        }
+    }
 }
 
 impl<'g> TestList<'g> {
@@ -271,11 +488,20 @@ impl<'g> TestList<'g> {
             .rust_suites
             .iter()
             .map(|(binary_path, info)| {
+                let platform = if info.package.is_proc_macro() {
+                    Platform::Host
+                } else {
+                    Platform::Target
+                };
                 let testsuite = RustTestSuiteSummary {
                     package_name: info.package.name().to_owned(),
-                    binary_name: info.binary_name.clone(),
-                    package_id: info.package.id().repr().to_owned(),
-                    binary_path: binary_path.clone(),
+                    binary: RustTestBinarySummary {
+                        binary_name: info.binary_name.clone(),
+                        package_id: info.package.id().repr().to_owned(),
+                        binary_path: binary_path.clone(),
+                        binary_id: info.binary_id.clone(),
+                        platform,
+                    },
                     cwd: info.cwd.clone(),
                     testcases: info.testcases.clone(),
                 };
@@ -718,9 +944,11 @@ mod tests {
               "rust-suites": {
                 "fake-package::fake-binary": {
                   "package-name": "metadata-helper",
+                  "binary-id": "fake-package::fake-binary",
                   "binary-name": "fake-binary",
                   "package-id": "metadata-helper 0.1.0 (path+file:///Users/fakeuser/local/testcrates/metadata/metadata-helper)",
                   "binary-path": "/fake/binary",
+                  "platform": "target",
                   "cwd": "/fake/cwd",
                   "testcases": {
                     "tests::baz::test_ignored": {
