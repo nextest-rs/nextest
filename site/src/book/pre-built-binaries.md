@@ -32,7 +32,7 @@ To get the latest release version of cargo-nextest on a Windows x86_64 computer,
 ```powershell
 $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
 Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows
-$outputDir = if ($Env:CARGO_HOME) { $Env:CARGO_HOME } else { "~/.cargo/bin" }
+$outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
 $tmp | Expand-Archive -DestinationPath $outputDir -Force
 $tmp | Remove-Item
 ```
