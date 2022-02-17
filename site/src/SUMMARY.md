@@ -4,7 +4,10 @@
 
 ---
 
-- [Installation and usage](book/installation.md)
+- [Installation](book/installation.md)
+  - [Pre-built binaries](book/pre-built-binaries.md)
+  - [Installing from source](book/installing-from-source.md)
+- [Usage](book/usage.md)
   - [Running tests](book/running.md)
   - [Listing tests](book/listing.md)
   - [Retries and flaky tests](book/retries.md)

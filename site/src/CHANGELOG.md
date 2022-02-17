@@ -3,9 +3,20 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.4-rc.3] - 2022-02-16
+## [0.9.4] - 2022-02-16
 
-(Temporary release note) This is an attempt to publish release binaries.
+The big new change is that release binaries are now available! Head over to [Pre-built binaries](https://nexte.st/book/pre-built-binaries) for more.
+
+### Added
+
+- In test output, module paths are now colored cyan ([#42]).
+
+### Fixed
+
+- While querying binaries to list tests, lines ending with ": benchmark" will now be ignored ([#46]).
+
+[#42]: https://github.com/nextest-rs/nextest/pull/42
+[#46]: https://github.com/nextest-rs/nextest/issues/46
 
 ## [0.9.3] - 2022-02-14
 
@@ -42,7 +53,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.4-rc.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.4-rc.3
+[0.9.4]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.4
 [0.9.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.3
 [0.9.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.2
 [0.9.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.1
