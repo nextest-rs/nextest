@@ -18,8 +18,6 @@ Here is a recommended profile for CI runs:
 
 ```toml
 [profile.ci]
-# Detect flaky tests in CI by retrying tests twice.
-retries = 2
 # Print out output for failing tests as soon as they fail, and also at the end
 # of the run (for easy scrollability).
 failure-output = "immediate-final"
