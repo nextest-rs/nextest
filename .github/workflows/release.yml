@@ -118,7 +118,7 @@ jobs:
         id: archive-output
         shell: bash
         run: |
-          if [[ ${{ matrix.target }} == windows ]]; then
+          if [[ ${{ matrix.target }} == "x86_64-pc-windows-msvc" ]]; then
             echo "::set-output name=${{ matrix.target }}::${{ github.ref_name }}-${{ matrix.target }}".zip
           else
             echo "::set-output name=${{ matrix.target }}::${{ github.ref_name }}-${{ matrix.target }}".tar.gz
