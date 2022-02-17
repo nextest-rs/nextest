@@ -39,7 +39,7 @@ $tmp | Remove-Item
 
 You can also download the zip manually and unzip it to somewhere in your PATH.
 
-> If you're a Windows expert who can come up with a better way, please [file an issue](https://github.com/nextest-rs/nextest/issues/new) with your suggestion!
+> If you're a Windows expert who can come up with a better way to do this, please [file an issue](https://github.com/nextest-rs/nextest/issues/new) with your suggestion!
 
 ## Release URLs
 
