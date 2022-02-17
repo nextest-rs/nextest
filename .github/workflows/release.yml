@@ -119,13 +119,15 @@ jobs:
         shell: bash
         run: |
           if [[ ${{ matrix.target }} == "x86_64-pc-windows-msvc" ]]; then
-            echo "::set-output name=${{ matrix.target }}::${{ github.ref_name }}-${{ matrix.target }}".zip
+            echo "::set-output name=${{ matrix.target }}-tar::${{ github.ref_name }}-${{ matrix.target }}".tar.gz
+            echo "::set-output name=${{ matrix.target }}-zip::${{ github.ref_name }}-${{ matrix.target }}".zip
           else
-            echo "::set-output name=${{ matrix.target }}::${{ github.ref_name }}-${{ matrix.target }}".tar.gz
+            echo "::set-output name=${{ matrix.target }}-tar::${{ github.ref_name }}-${{ matrix.target }}".tar.gz
           fi
     outputs:
-      linux-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu }}
-      windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc }}
+      linux-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu-tar }}
+      windows-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu-tar }}
+      windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
 
   build-cargo-nextest-binaries-mac:
     name: Build universal cargo-nextest binary for Mac
@@ -166,21 +168,25 @@ jobs:
       - name: Download mukti
         run: |
           mkdir -p ~/bin
-          curl -LsSf "https://github.com/sunshowers/mukti/releases/download/mukti-bin-0.3.0/mukti-bin-0.3.0-x86_64-unknown-linux-gnu.tar.gz" \
+          curl -LsSf "https://github.com/sunshowers/mukti/releases/download/mukti-bin-0.5.0/mukti-bin-0.5.0-x86_64-unknown-linux-gnu.tar.gz" \
             | tar xzf - -C ~/bin
       - name: Add release metadata
         run: |
           ~/bin/mukti-bin add-release --version ${{ needs.cargo-nextest-release.outputs.version }} \
             --release-url "https://github.com/nextest-rs/nextest/releases/${{ github.ref_name }}" \
             --archive-prefix "https://github.com/nextest-rs/nextest/releases/download/${{ github.ref_name }}" \
-            --archive x86_64-unknown-linux-gnu=${{ needs.build-cargo-nextest-binaries.outputs.linux-tar }} \
-            --archive x86_64-pc-windows-msvc=${{ needs.build-cargo-nextest-binaries.outputs.windows-zip }} \
-            --archive universal-apple-darwin=${{ needs.build-cargo-nextest-binaries-mac.outputs.mac-tar }}
+            --archive x86_64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.linux-tar }} \
+            --archive x86_64-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.windows-tar }} \
+            --archive x86_64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.windows-zip }} \
+            --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries-mac.outputs.mac-tar }}
       - name: Generate netlify redirects
         run: |
           mkdir out-dir
-          ~/bin/mukti-bin generate-netlify out-dir --alias linux=x86_64-unknown-linux-gnu \
-            --alias windows=x86_64-pc-windows-msvc --alias mac=universal-apple-darwin
+          ~/bin/mukti-bin generate-netlify out-dir \
+            --alias linux=x86_64-unknown-linux-gnu:tar.gz \
+            --alias windows=x86_64-pc-windows-msvc:zip \
+            --alias windows-tar=x86_64-pc-windows-msvc:tar.gz \
+            --alias mac=universal-apple-darwin:tar.gz \
       - name: Update releases.json on main branch
         uses: EndBug/add-and-commit@v8
         with:
