@@ -18,7 +18,7 @@ tests against any version of Rust.
 Most CI users of nextest will benefit from using cached binaries. Consider using the [pre-built binaries](pre-built-binaries.md) for this purpose. [See this example of how the nextest repository uses pre-built binaries.](https://github.com/nextest-rs/nextest/blob/e43ac449f53fd34e58136cd94b7a72add201fe5a/.github/workflows/ci.yml#L104-L107)
 
 If your CI is based on GitHub Actions, you may use the
-[baptiste0928/cargo-install](https://github.com/marketplace/actions/cargo-install) action to cache
+[baptiste0928/cargo-install](https://github.com/marketplace/actions/cargo-install) action to build cargo-nextest from source and cache
 the cargo-nextest binary.
 
 ```yml
