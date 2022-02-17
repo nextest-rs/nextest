@@ -199,6 +199,10 @@ jobs:
       - name: Copy releases.json to output dir
         run: |
           cp .releases.json out-dir/releases.json
+      - name: Copy static files to output dir
+        # Note trailing slash after release-meta-static is important
+        run: |
+          rsync -avH site/release-meta-static/ out-dir
       - name: Deploy release metadata
         uses: JamesIves/github-pages-deploy-action@v4
         with:
