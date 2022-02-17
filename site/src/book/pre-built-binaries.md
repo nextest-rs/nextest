@@ -55,17 +55,17 @@ The `{version}` identifier is:
 ### `{platform}` identifier
 
 The `{platform}` identifier is:
-* "x86_64-unknown-linux-gnu" for x86_64 Linux (tar.gz)
-* "universal-apple-darwin" for x86_64 and aarch64 macOS (tar.gz)
-* "x86_64-pc-windows-msvc" for x86_64 Windows (zip)
+* `x86_64-unknown-linux-gnu` for x86_64 Linux (tar.gz)
+* `universal-apple-darwin` for x86_64 and arm64 macOS (tar.gz)
+* `x86_64-pc-windows-msvc` for x86_64 Windows (zip)
 
-In addition, the following convenience shortcuts are defined:
+For convenience, the following shortcuts are defined:
 
-* "linux" for "x86_64-unknown-linux-gnu"
-* "mac" for "universal-apple-darwin"
-* "windows" for "x86_64-pc-windows-msvc"
+* `linux` points to `x86_64-unknown-linux-gnu`
+* `mac` points to `universal-apple-darwin`
+* `windows` points to `x86_64-pc-windows-msvc`
 
-In addition, each release's canonical GitHub Releases URL is available at **`https://get.nexte.st/{version}/release`**. For example, the latest GitHub release is avaiable at [get.nexte.st/latest/release](https://get.nexte.st/latest/release).
+Also, each release's canonical GitHub Releases URL is available at **`https://get.nexte.st/{version}/release`**. For example, the latest GitHub release is avaiable at [get.nexte.st/latest/release](https://get.nexte.st/latest/release).
 
 ### Examples
 
