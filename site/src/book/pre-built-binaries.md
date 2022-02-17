@@ -49,7 +49,7 @@ curl -LsSF https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-
 
 > NOTE: Windows Subsystem for Linux (WSL) users should follow the [Linux x86_64 instructions](#linux-x86_64).
 >
-> If you're a Windows expert who can come up with a better way to do this, please [add a suggestion to this issue](https://github.com/nextest-rs/nextest/issues/new)!
+> If you're a Windows expert who can come up with a better way to do this, please [add a suggestion to this issue](https://github.com/nextest-rs/nextest/issues/31)!
 
 ## Release URLs
 
