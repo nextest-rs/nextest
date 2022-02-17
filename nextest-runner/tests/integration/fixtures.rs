@@ -10,7 +10,7 @@ use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     reporter::TestEvent,
     runner::{ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
-    test_list::RustTestArtifact,
+    test_list::{BinaryList, RustTestArtifact},
 };
 use once_cell::sync::Lazy;
 use std::{
@@ -152,8 +152,9 @@ fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
     .stdout_capture();
 
     let output = expr.run().expect("cargo test --no-run failed");
+    let binary_list = BinaryList::from_messages(Cursor::new(output.stdout), graph).unwrap();
     let test_artifacts =
-        RustTestArtifact::from_messages(graph, Cursor::new(output.stdout)).unwrap();
+        RustTestArtifact::from_binary_list(graph, binary_list, None, None).unwrap();
 
     test_artifacts
         .into_iter()

@@ -125,6 +125,7 @@ dependencies = [
  "nextest-metadata",
  "nextest-runner",
  "owo-colors",
+ "serde_json",
  "shellwords",
  "supports-color",
 ]

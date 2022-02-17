@@ -117,14 +117,24 @@ impl TestListSummary {
     }
 }
 
-/// A serializable suite of tests within a Rust test binary.
-///
-/// Part of a [`TestListSummary`].
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+/// Binary platform (useful for cross-compilation)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct RustTestSuiteSummary {
-    /// The name of this package in the workspace.
-    pub package_name: String,
+pub enum Platform {
+    /// Build for the host machine (the building machine)
+    Host,
+    /// Build for the target machine
+    Target,
+}
+
+/// A serializable Rust test binary.
+///
+/// Part of a [`RustTestSuiteSummary`] and [`RustBinaryListSummary`].
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RustTestBinarySummary {
+    /// A unique binary ID.
+    pub binary_id: String,
 
     /// The name of the test binary within the package.
     pub binary_name: String,
@@ -136,6 +146,32 @@ pub struct RustTestSuiteSummary {
 
     /// The path to the test binary executable.
     pub binary_path: Utf8PathBuf,
+
+    /// Platform for which this binary was built.
+    /// (Proc-macro tests are built for the host.)
+    pub platform: Platform,
+}
+
+/// A serializable suite of test binaries.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct BinaryListSummary {
+    /// The list of Rust test binaries (indexed by binary-id).
+    pub rust_binaries: BTreeMap<String, RustTestBinarySummary>,
+}
+
+/// A serializable suite of tests within a Rust test binary.
+///
+/// Part of a [`TestListSummary`].
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RustTestSuiteSummary {
+    /// The name of this package in the workspace.
+    pub package_name: String,
+
+    /// The binary within the package.
+    #[serde(flatten)]
+    pub binary: RustTestBinarySummary,
 
     /// The working directory that tests within this package are run in.
     pub cwd: Utf8PathBuf,
