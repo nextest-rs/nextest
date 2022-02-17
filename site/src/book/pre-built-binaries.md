@@ -12,6 +12,8 @@ These archives contain a single binary called `cargo-nextest`. Add this binary t
 The instructions below are suitable for both end users and CI. These links will stay stable.
 
 > NOTE: The instructions below assume that your Rust installation is managed via rustup. You can extract the archive to a different directory in your PATH if required.
+>
+> If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](stability.md) for more), replace `latest` in the URL with `0.9`.
 
 ### Linux x86_64
 
@@ -51,6 +53,42 @@ curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-
 >
 > If you're a Windows expert who can come up with a better way to do this, please [add a suggestion to this issue](https://github.com/nextest-rs/nextest/issues/31)!
 
+### Example: using a matrix strategy for cross-platform CI on GitHub Actions
+
+Here's an example for how to use a matrix strategy to perform cross-platform testing via GitHub Actions.
+
+```yml
+jobs:
+  build:
+    name: Run tests
+    runs-on: ${{ matrix.os.runs-on }}
+    strategy:
+      matrix:
+        os:
+          - runs-on: ubuntu-latest
+            nextest-platform: linux
+          - runs-on: macos-latest
+            nextest-platform: mac
+          - runs-on: windows-latest
+            nextest-platform: windows-tar
+        rust-version: [ stable, beta ]
+    steps:
+      #
+      # ... check out your code and install Rust here
+      #
+      - name: Install latest nextest release
+        # The following line is required for Windows compatibility
+        shell: bash
+        run: |
+          curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest-platform }} | \
+            tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+      - name: Test with latest nextest release
+        run: |
+          cargo nextest run
+```
+
+[See this in practice with nextest's own CI.](https://github.com/nextest-rs/nextest/blob/e43ac449f53fd34e58136cd94b7a72add201fe5a/.github/workflows/ci.yml#L104-L107)
+
 ## Release URLs
 
 Binary releases of cargo-nextest will always be available at **`https://get.nexte.st/{version}/{platform}`**.
@@ -58,9 +96,9 @@ Binary releases of cargo-nextest will always be available at **`https://get.next
 ### `{version}` identifier
 
 The `{version}` identifier is:
-* "latest" for the latest release (not including pre-releases)
-* a version range, for example "0.9", for the latest release in the 0.9 series (not including pre-releases)
-* the exact version number, for example "0.9.4", for that specific version
+* `latest` for the latest release (not including pre-releases)
+* a version range, for example `0.9`, for the latest release in the 0.9 series (not including pre-releases)
+* the exact version number, for example `0.9.4`, for that specific version
 
 ### `{platform}` identifier
 
