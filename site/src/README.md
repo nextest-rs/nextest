@@ -15,11 +15,7 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
 ## Quick start
 
-Install cargo-nextest from crates.io (requires **Rust 1.54** or later):
-
-```
-cargo install cargo-nextest
-```
+Install cargo-nextest for your platform using the [pre-built binaries](book/pre-built-binaries.md).
 
 Run all tests in a workspace:
 
@@ -27,7 +23,7 @@ Run all tests in a workspace:
 cargo nextest run
 ```
 
-For more detailed installation instructions, see [Installation and usage](book/installation.md).
+For more detailed installation instructions, see [Installation](book/installation.md).
 
 ## Crates in this project
 
