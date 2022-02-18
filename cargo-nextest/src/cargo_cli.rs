@@ -10,7 +10,7 @@ use std::{convert::TryInto, path::PathBuf};
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
-#[clap(help_heading = "CARGO OPTIONS", setting = AppSettings::DeriveDisplayOrder)]
+#[clap(next_help_heading = "CARGO OPTIONS", setting = AppSettings::DeriveDisplayOrder)]
 pub(crate) struct CargoOptions {
     /// Test only this package's library unit tests
     #[clap(long)]

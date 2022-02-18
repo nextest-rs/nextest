@@ -158,7 +158,7 @@ impl Default for MessageFormatOpts {
 }
 
 #[derive(Debug, Args)]
-#[clap(help_heading = "FILTER OPTIONS")]
+#[clap(next_help_heading = "FILTER OPTIONS")]
 struct TestBuildFilter {
     #[clap(flatten)]
     cargo_options: CargoOptions,
@@ -215,7 +215,7 @@ impl TestBuildFilter {
 
 /// Test runner options.
 #[derive(Debug, Default, Args)]
-#[clap(help_heading = "RUNNER OPTIONS")]
+#[clap(next_help_heading = "RUNNER OPTIONS")]
 pub struct TestRunnerOpts {
     /// Number of tests to run simultaneously [default: logical CPU count]
     #[clap(
@@ -261,7 +261,7 @@ impl TestRunnerOpts {
 }
 
 #[derive(Debug, Default, Args)]
-#[clap(help_heading = "REPORTER OPTIONS")]
+#[clap(next_help_heading = "REPORTER OPTIONS")]
 struct TestReporterOpts {
     /// Output stdout and stderr on failure
     #[clap(
