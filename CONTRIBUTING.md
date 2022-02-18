@@ -8,7 +8,6 @@ contributions will be accepted.
 3. If you've changed APIs, update the documentation.
 4. Ensure the test suite passes with `cargo test --all-features`.
 5. Run `cargo xfmt` to automatically format your changes (CI will let you know if you missed this).
-6. If you haven't already, complete the Contributor License Agreement ("CLA").
 
 ## Logically Separate Commits
 
