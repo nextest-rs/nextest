@@ -405,3 +405,71 @@ impl error::Error for JunitError {
         Some(&self.err)
     }
 }
+
+/// An error occurred determining the target runner
+#[derive(Debug)]
+pub enum TargetRunnerError {
+    /// Failed to determine the host triple, which is needed to determine the
+    /// default target triple when a target is not explicitly specified
+    UnableToDetermineHostTriple,
+    /// An environment variable contained non-utf8 content
+    InvalidEnvironmentVar(String),
+    /// An environment variable or key was found that matches the target triple,
+    /// but it didn't actually contain a binary
+    BinaryNotSpecified(String, String),
+    /// Failed to retrieve a directory
+    UnableToReadDir(std::io::Error),
+    /// Failed to canonicalize a path
+    FailedPathCanonicalization(Utf8PathBuf, std::io::Error),
+    /// A path was non-utf8
+    NonUtf8Path(std::path::PathBuf),
+    /// Failed to read config file
+    FailedToReadConfig(Utf8PathBuf, std::io::Error),
+    /// Failed to deserialize config file
+    FailedToParseConfig(Utf8PathBuf, toml::de::Error),
+}
+
+impl fmt::Display for TargetRunnerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnableToDetermineHostTriple => f.write_str("unable to determine host triple"),
+            Self::InvalidEnvironmentVar(key) => {
+                write!(f, "environment variable '{}' contained non-utf8 data", key)
+            }
+            Self::BinaryNotSpecified(key, value) => {
+                write!(
+                    f,
+                    "runner '{}' = '{}' did not contain a runner binary",
+                    key, value
+                )
+            }
+            Self::UnableToReadDir(io) => {
+                write!(f, "unable to read directory: {}", io)
+            }
+            Self::FailedPathCanonicalization(path, err) => {
+                write!(f, "failed to canonicalize path '{}': {}", path, err)
+            }
+            Self::NonUtf8Path(path) => {
+                write!(f, "path '{}' is non-utf8", path.display())
+            }
+            Self::FailedToReadConfig(path, err) => {
+                write!(f, "failed to read '{}': {}", path, err)
+            }
+            Self::FailedToParseConfig(path, err) => {
+                write!(f, "failed to parse '{}': {}", path, err)
+            }
+        }
+    }
+}
+
+impl error::Error for TargetRunnerError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::UnableToReadDir(io) => Some(io),
+            Self::FailedPathCanonicalization(_, io) => Some(io),
+            Self::FailedToReadConfig(_, io) => Some(io),
+            Self::FailedToParseConfig(_, toml) => Some(toml),
+            _ => None,
+        }
+    }
+}

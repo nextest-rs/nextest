@@ -10,6 +10,7 @@ use crate::{
     reporter::{CancelReason, StatusLevel, TestEvent},
     signal::{SignalEvent, SignalHandler},
     stopwatch::{StopwatchEnd, StopwatchStart},
+    target_runner::TargetRunner,
     test_list::{TestInstance, TestList},
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
@@ -67,6 +68,7 @@ impl TestRunnerBuilder {
         test_list: &'a TestList,
         profile: &NextestProfile<'_>,
         handler: SignalHandler,
+        target_runner: Option<&'a TargetRunner>,
     ) -> TestRunner<'a> {
         let test_threads = match self.no_capture {
             true => 1,
@@ -82,6 +84,7 @@ impl TestRunnerBuilder {
             fail_fast,
             slow_timeout,
             test_list,
+            target_runner,
             run_pool: ThreadPoolBuilder::new()
                 // The main run_pool closure will need its own thread.
                 .num_threads(test_threads + 1)
@@ -107,6 +110,7 @@ pub struct TestRunner<'a> {
     fail_fast: bool,
     slow_timeout: Duration,
     test_list: &'a TestList<'a>,
+    target_runner: Option<&'a TargetRunner>,
     run_pool: ThreadPool,
     wait_pool: ThreadPool,
     handler: SignalHandler,
@@ -338,7 +342,7 @@ impl<'a> TestRunner<'a> {
         run_sender: &Sender<InternalTestEvent<'a>>,
     ) -> std::io::Result<InternalExecuteStatus> {
         let cmd = test
-            .make_expression()
+            .make_expression(self.target_runner)
             .unchecked()
             // Debug environment variable for testing.
             .env("__NEXTEST_ATTEMPT", format!("{}", attempt));
@@ -819,7 +823,7 @@ mod tests {
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
         let handler = SignalHandler::noop();
-        let runner = builder.build(&test_list, &profile, handler);
+        let runner = builder.build(&test_list, &profile, handler, None);
         assert!(runner.no_capture, "no_capture is true");
         assert_eq!(
             runner.run_pool.current_num_threads(),

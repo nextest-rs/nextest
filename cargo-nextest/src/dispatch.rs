@@ -17,6 +17,7 @@ use nextest_runner::{
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
     runner::TestRunnerBuilder,
     signal::SignalHandler,
+    target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{OutputFormat, RustTestArtifact, SerializableFormat, TestList},
 };
@@ -183,6 +184,7 @@ impl TestBuildFilter {
         manifest_path: Option<&'g Utf8Path>,
         graph: &'g PackageGraph,
         output: OutputContext,
+        runner: Option<&TargetRunner>,
     ) -> Result<TestList<'g>> {
         // Don't use the manifest path from the graph to ensure that if the user cd's into a
         // particular crate and runs cargo nextest, then it behaves identically to cargo test.
@@ -209,7 +211,7 @@ impl TestBuildFilter {
 
         let test_filter =
             TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
-        TestList::new(test_artifacts, &test_filter).wrap_err("error building test list")
+        TestList::new(test_artifacts, &test_filter, runner).wrap_err("error building test list")
     }
 }
 
@@ -316,8 +318,15 @@ impl AppImpl {
                 build_filter,
                 message_format,
             } => {
-                let mut test_list =
-                    build_filter.compute(self.manifest_path.as_deref(), &graph, output)?;
+                let target_runner =
+                    TargetRunner::for_target(build_filter.cargo_options.target.as_deref())?;
+
+                let mut test_list = build_filter.compute(
+                    self.manifest_path.as_deref(),
+                    &graph,
+                    output,
+                    target_runner.as_ref(),
+                )?;
                 if output.color.should_colorize(Stream::Stdout) {
                     test_list.colorize();
                 }
@@ -343,8 +352,15 @@ impl AppImpl {
                 std::fs::create_dir_all(&store_dir)
                     .wrap_err_with(|| format!("failed to create store dir '{}'", store_dir))?;
 
-                let test_list =
-                    build_filter.compute(self.manifest_path.as_deref(), &graph, output)?;
+                let target_runner =
+                    TargetRunner::for_target(build_filter.cargo_options.target.as_deref())?;
+
+                let test_list = build_filter.compute(
+                    self.manifest_path.as_deref(),
+                    &graph,
+                    output,
+                    target_runner.as_ref(),
+                )?;
 
                 let mut reporter = reporter_opts
                     .to_builder(no_capture)
@@ -355,9 +371,12 @@ impl AppImpl {
                 }
 
                 let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
-                let runner = runner_opts
-                    .to_builder(no_capture)
-                    .build(&test_list, &profile, handler);
+                let runner = runner_opts.to_builder(no_capture).build(
+                    &test_list,
+                    &profile,
+                    handler,
+                    target_runner.as_ref(),
+                );
                 let stderr = std::io::stderr();
                 let mut writer = BufWriter::new(stderr);
                 let run_stats = runner.try_execute(|event| {

@@ -470,6 +470,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "home"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2456aef2e6b6a9784192ae780c0f15bc57df0e918585282325e8c8ac27737654"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "humantime"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -633,6 +642,7 @@ dependencies = [
  "aho-corasick",
  "camino",
  "cargo_metadata",
+ "cfg-expr",
  "chrono",
  "color-eyre",
  "config",
@@ -641,6 +651,7 @@ dependencies = [
  "debug-ignore",
  "duct",
  "guppy",
+ "home",
  "humantime-serde",
  "indent_write",
  "indoc",
@@ -657,6 +668,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strip-ansi-escapes",
+ "toml",
  "twox-hash",
 ]
 

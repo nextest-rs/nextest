@@ -11,6 +11,7 @@ pub use output_format::*;
 use crate::{
     errors::{FromMessagesError, ParseTestListError, WriteTestListError},
     helpers::write_test_name,
+    target_runner::TargetRunner,
     test_filter::TestFilterBuilder,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -23,7 +24,7 @@ use guppy::{
 use nextest_metadata::{RustTestCaseSummary, RustTestSuiteSummary, TestListSummary};
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Style};
-use std::{collections::BTreeMap, io, io::Write, path::Path};
+use std::{collections::BTreeMap, io, io::Write};
 
 /// A Rust test binary built by Cargo. This artifact hasn't been run yet so there's no information
 /// about the tests within it.
@@ -143,13 +144,14 @@ impl<'g> TestList<'g> {
     pub fn new(
         test_artifacts: impl IntoIterator<Item = RustTestArtifact<'g>>,
         filter: &TestFilterBuilder,
+        runner: Option<&TargetRunner>,
     ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
 
         let test_artifacts = test_artifacts
             .into_iter()
             .map(|test_binary| {
-                let (non_ignored, ignored) = test_binary.exec()?;
+                let (non_ignored, ignored) = test_binary.exec(runner)?;
                 let (bin, info) = Self::process_output(
                     test_binary,
                     filter,
@@ -430,25 +432,39 @@ impl<'g> TestList<'g> {
 
 impl<'g> RustTestArtifact<'g> {
     /// Run this binary with and without --ignored and get the corresponding outputs.
-    fn exec(&self) -> Result<(String, String), ParseTestListError> {
-        let non_ignored = self.exec_single(false)?;
-        let ignored = self.exec_single(true)?;
+    fn exec(&self, runner: Option<&TargetRunner>) -> Result<(String, String), ParseTestListError> {
+        let non_ignored = self.exec_single(false, runner)?;
+        let ignored = self.exec_single(true, runner)?;
         Ok((non_ignored, ignored))
     }
 
-    fn exec_single(&self, ignored: bool) -> Result<String, ParseTestListError> {
-        let mut argv = vec!["--list", "--format", "terse"];
+    fn exec_single(
+        &self,
+        ignored: bool,
+        runner: Option<&TargetRunner>,
+    ) -> Result<String, ParseTestListError> {
+        let mut argv = Vec::new();
+
+        let program: std::ffi::OsString = if let Some(runner) = runner {
+            argv.push(self.binary_path.as_str());
+            argv.extend(runner.args());
+            runner.binary().into()
+        } else {
+            use duct::IntoExecutablePath;
+            self.binary_path.as_std_path().to_executable()
+        };
+
+        argv.extend(["--list", "--format", "terse"]);
         if ignored {
             argv.push("--ignored");
         }
-        let cmd = cmd(AsRef::<Path>::as_ref(&self.binary_path), argv)
-            .dir(&self.cwd)
-            .stdout_capture();
+
+        let cmd = cmd(program, argv).dir(&self.cwd).stdout_capture();
 
         cmd.read().map_err(|error| {
             ParseTestListError::command(
                 format!(
-                    "'{} --list --format --terse{}'",
+                    "'{} --list --format terse{}'",
                     self.binary_path,
                     if ignored { " --ignored" } else { "" }
                 ),
@@ -491,16 +507,31 @@ impl<'a> TestInstance<'a> {
     }
 
     /// Creates the command expression for this test instance.
-    pub(crate) fn make_expression(&self) -> Expression {
+    pub(crate) fn make_expression(&self, target_runner: Option<&TargetRunner>) -> Expression {
         // TODO: non-rust tests
-        let mut args = vec!["--exact", self.name, "--nocapture"];
+
+        let mut args = Vec::new();
+
+        let program: std::ffi::OsString = match target_runner {
+            Some(tr) => {
+                args.push(self.binary.as_str());
+                args.extend(tr.args());
+                tr.binary().into()
+            }
+            None => {
+                use duct::IntoExecutablePath;
+                self.binary.as_std_path().to_executable()
+            }
+        };
+
+        args.extend(["--exact", self.name, "--nocapture"]);
         if self.test_info.ignored {
             args.push("--ignored");
         }
 
         let package = self.bin_info.package;
 
-        let cmd = cmd(AsRef::<Path>::as_ref(self.binary), args)
+        let cmd = cmd(program, args)
             .dir(&self.bin_info.cwd)
             // This environment variable is set to indicate that tests are being run under nextest.
             .env("NEXTEST", "1")

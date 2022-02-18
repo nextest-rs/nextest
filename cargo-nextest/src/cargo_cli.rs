@@ -89,7 +89,7 @@ pub(crate) struct CargoOptions {
 
     /// Build for the target triple
     #[clap(long, value_name = "TRIPLE")]
-    target: Option<String>,
+    pub(crate) target: Option<String>,
 
     /// Directory for all generated artifacts
     #[clap(long, value_name = "DIR")]
