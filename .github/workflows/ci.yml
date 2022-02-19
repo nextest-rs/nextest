@@ -52,11 +52,11 @@ jobs:
       matrix:
         os:
           - runs-on: ubuntu-latest
-            nextest-platform: linux
+            nextest-url: https://get.nexte.st/latest/linux
           - runs-on: macos-latest
-            nextest-platform: mac
+            nextest-url: https://get.nexte.st/latest/mac
           - runs-on: windows-latest
-            nextest-platform: windows-tar
+            nextest-url: https://get.nexte.st/latest/windows-tar
         # 1.54 is the MSRV
         rust-version: [ 1.54, stable ]
       fail-fast: false
@@ -104,7 +104,7 @@ jobs:
       - name: Install latest nextest release
         shell: bash
         run: |
-          curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest-platform }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+          curl -LsSf ${{ matrix.os.nextest-url }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
       - name: Test with latest nextest release
         uses: actions-rs/cargo@v1
         with:
