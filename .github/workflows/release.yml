@@ -119,7 +119,7 @@ jobs:
           fi
     outputs:
       linux-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu-tar }}
-      windows-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu-tar }}
+      windows-tar: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-tar }}
       windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
 
   build-cargo-nextest-binaries-mac:
