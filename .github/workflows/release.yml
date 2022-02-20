@@ -63,6 +63,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: taiki-e/create-gh-release-action@v1
+        id: create-gh-release
         with:
           prefix: cargo-nextest
           # The changelog for cargo-nextest is hosted on the website
@@ -71,16 +72,8 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Get version number
-        id: get-version-number
-        # TODO: replace this step with https://github.com/taiki-e/create-gh-release-action/pull/12 once that lands
-        run: |
-          TAG_NAME=${{ github.ref_name }}
-          VERSION=${TAG_NAME#"cargo-nextest-"}
-          echo "The version number is $VERSION"
-          echo "::set-output name=version::$VERSION"
     outputs:
-      version: ${{ steps.get-version-number.outputs.version }}
+      version: ${{ steps.create-gh-release.outputs.version }}
 
   build-cargo-nextest-binaries:
     name: Build cargo-nextest binaries for ${{ matrix.target }}
