@@ -66,11 +66,11 @@ jobs:
       matrix:
         os:
           - runs-on: ubuntu-latest
-            nextest-platform: linux
+            nextest-url: https://get.nexte.st/latest/linux
           - runs-on: macos-latest
-            nextest-platform: mac
+            nextest-url: https://get.nexte.st/latest/mac
           - runs-on: windows-latest
-            nextest-platform: windows-tar
+            nextest-url: https://get.nexte.st/latest/windows-tar
         rust-version: [ stable, beta ]
     steps:
       #
@@ -80,8 +80,7 @@ jobs:
         # The following line is required for Windows compatibility
         shell: bash
         run: |
-          curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest-platform }} | \
-            tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+          curl -LsSf ${{ matrix.os.nextest-url }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
       - name: Test with latest nextest release
         run: |
           cargo nextest run
