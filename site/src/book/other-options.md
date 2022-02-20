@@ -13,6 +13,6 @@ Some other options accepted by `cargo nextest run`:
   * `final`: display output at the end of the test run.
   * `immediate-final`: display output as soon as the test fails, and at the end of the run. This is most useful for CI runs.
   * `never`: never display output. Default for `--success-output`.
-* `--status-level`: which test statuses (**PASS**, **FAIL** etc) to display. There are 7 status levels: `none, fail, retry, slow, pass, skip, all`. Each status level causes all earlier status levels to be displayed as well. (For example, setting `status-level` to `skip` will show failing, retried, slow and passing tests along with skipped tests.) The default is `pass`.
+* `--status-level`: which test statuses (**PASS**, **FAIL** etc) to display. There are 7 status levels: `none, fail, retry, slow, pass, skip, all`. Each status level causes all earlier status levels to be displayed as well (similar to log levels). (For example, setting `status-level` to `skip` will show failing, retried, slow and passing tests along with skipped tests.) The default is `pass`.
 
 For a full list of options, see [Options and arguments](running.md#options-and-arguments).
