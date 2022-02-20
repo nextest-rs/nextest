@@ -181,14 +181,13 @@ jobs:
             --alias windows-tar=x86_64-pc-windows-msvc:tar.gz \
             --alias mac=universal-apple-darwin:tar.gz \
       - name: Update releases.json on main branch
-        uses: EndBug/add-and-commit@v8
-        with:
-          add: .releases.json
-          message: "Update release metadata for ${{ github.ref_name }}"
-          default_author: github_actions
-          # Need to specify pull and push arguments because we're checked out to a tag here (i.e. not on a branch)
-          pull: '--rebase --autostash origin main'
-          push: 'origin HEAD:main'
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions"
+          git pull --autostash --rebase origin main
+          git add .releases.json
+          git commit -m "Update release metadata for ${{ github.ref_name }}"
+          git push origin HEAD:main
       - name: Copy releases.json to output dir
         run: |
           cp .releases.json out-dir/releases.json
