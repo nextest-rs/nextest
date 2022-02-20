@@ -6,6 +6,8 @@
 
 - In test output, module paths are now colored cyan ([#42]).
 
+[#42]: https://github.com/nextest-rs/nextest/pull/42
+
 ## [0.1.1] - 2022-02-14
 
 ### Changed
