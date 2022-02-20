@@ -7,6 +7,7 @@
 - [Installation](book/installation.md)
   - [Pre-built binaries](book/pre-built-binaries.md)
   - [Installing from source](book/installing-from-source.md)
+  - [Windows antivirus and macOS Gatekeeper](book/antivirus-gatekeeper.md)
 - [Usage](book/usage.md)
   - [Running tests](book/running.md)
   - [Listing tests](book/listing.md)
