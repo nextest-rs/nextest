@@ -13,7 +13,7 @@ rust-version = "1.54"
 aho-corasick = "0.7.18"
 camino = { version = "1.0.7", features = ["serde1"] }
 config = { version = "0.11.0", default-features = false, features = ["toml"] }
-cargo_metadata = "0.14.1"
+cargo_metadata = "0.14.2"
 chrono = "0.4.19"
 crossbeam-channel = "0.5.2"
 ctrlc = { version = "3.2.1", features = ["termination"] }
