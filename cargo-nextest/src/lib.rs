@@ -4,6 +4,12 @@
 //! A new, faster test runner for Rust.
 //!
 //! For documentation and usage, see [the nextest site](https://nexte.st).
+//!
+//! # Installation
+//!
+//! While you can install cargo-nextest from source, using the pre-built binaries is recommended.
+//! See [Pre-built binaries](https://nexte.st/book/pre-built-binaries) on the nextest site
+//! for more information.
 
 #![warn(missing_docs)]
 
