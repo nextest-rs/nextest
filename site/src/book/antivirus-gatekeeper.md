@@ -1,12 +1,12 @@
 # Windows antivirus and macOS Gatekeeper
 
-This page covers common performance issues caused by anti-malware software on Windows and macOS. These performance issues are not unique to nextest, but [its execution model](how-it-works.md) may exacerbate them.
+This page covers common performance issues caused by anti-malware protections on Windows and macOS. These performance issues are not unique to nextest, but [its execution model](how-it-works.md) may exacerbate them.
 
 > NOTE: If you'd like to contribute screenshots, they would be greatly appreciated!
 
 ## Windows
 
-Your antivirus software—usually Windows Security, also known as Microsoft Defender—might interfere with process execution, making your test runs significantly slower. For optimal performance, exclude the following directories from checks:
+Your antivirus software—typically Windows Security, also known as Microsoft Defender—might interfere with process execution, making your test runs significantly slower. For optimal performance, exclude the following directories from checks:
 * The directory with all your code in it
 * Your `.cargo\bin` directory, typically within your home directory (see [this Rust issue](https://github.com/rust-lang/cargo/issues/5028)).
 
