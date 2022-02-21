@@ -17,6 +17,7 @@ use nextest_runner::{
         TestRunnerBuilder,
     },
     signal::SignalHandler,
+    target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{RustTestArtifact, TestList},
 };
@@ -438,4 +439,135 @@ fn execute_collect<'a>(
     });
 
     (instance_statuses, run_stats)
+}
+
+mod target_runner;
+use target_runner::with_env;
+
+fn passthrough_path() -> &'static Utf8Path {
+    static PP: once_cell::sync::OnceCell<Utf8PathBuf> = once_cell::sync::OnceCell::new();
+    PP.get_or_init(|| {
+        Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("fixtures/passthrough")
+    })
+}
+
+#[cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu"))]
+#[test]
+fn test_listing_with_target_runner() -> Result<()> {
+    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
+    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
+
+    let test_list = TestList::new(test_bins.clone(), &test_filter, None)?;
+    let bin_count = test_list.binary_count();
+    let test_count = test_list.test_count();
+
+    {
+        let target_runner = with_env(
+            [(
+                "NEXTEST_X86_64_UNKNOWN_LINUX_GNU_RUNNER",
+                &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
+            )],
+            || TargetRunner::for_target(None),
+        )?
+        .unwrap();
+
+        let test_list = TestList::new(test_bins.clone(), &test_filter, Some(&target_runner))?;
+
+        assert_eq!(bin_count, test_list.binary_count());
+        assert_eq!(test_count, test_list.test_count());
+    }
+
+    {
+        let target_runner = with_env(
+            [(
+                "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER",
+                &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
+            )],
+            || TargetRunner::for_target(None),
+        )?
+        .unwrap();
+
+        let test_list = TestList::new(test_bins.clone(), &test_filter, Some(&target_runner))?;
+
+        assert_eq!(bin_count, test_list.binary_count());
+        assert_eq!(test_count, test_list.test_count());
+    }
+
+    {
+        // cargo unfortunately doesn't handle relative paths for runner binaries,
+        // it will just assume they are in PATH if they are not absolute paths,
+        // and thus makes testing it a bit annoying, so we just punt and rely
+        // on the tests for parsing the runner in the proper precedence
+    }
+
+    Ok(())
+}
+
+#[cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu"))]
+#[test]
+fn runs_tests() -> Result<()> {
+    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
+    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
+
+    let target_runner = with_env(
+        [(
+            "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER",
+            &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
+        )],
+        || TargetRunner::for_target(None),
+    )?
+    .unwrap();
+
+    assert_eq!(passthrough_path(), target_runner.binary());
+
+    let test_list = TestList::new(test_bins, &test_filter, Some(&target_runner))?;
+
+    let config =
+        NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
+    let profile = config
+        .profile(NextestConfig::DEFAULT_PROFILE)
+        .expect("default config is valid");
+
+    let mut runner = TestRunnerBuilder::default();
+    runner.set_target_runner(Some(target_runner));
+    let runner = runner.build(&test_list, &profile, SignalHandler::noop());
+
+    let (instance_statuses, run_stats) = execute_collect(&runner);
+
+    for (name, expected) in &*EXPECTED_TESTS {
+        let test_binary = FIXTURE_TARGETS
+            .get(*name)
+            .unwrap_or_else(|| panic!("unexpected test name {}", name));
+        for fixture in expected {
+            let instance_value =
+                &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
+            let valid = match &instance_value.status {
+                InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
+                InstanceStatus::Finished(run_statuses) => {
+                    // This test should not have been retried since retries aren't configured.
+                    assert_eq!(
+                        run_statuses.len(),
+                        1,
+                        "test {} should have been run exactly once",
+                        fixture.name
+                    );
+                    let run_status = run_statuses.last_status();
+                    run_status.result == fixture.status.to_test_status(1)
+                }
+            };
+            if !valid {
+                panic!(
+                    "for test {}, mismatch in status: expected {:?}, actual {:?}",
+                    fixture.name, fixture.status, instance_value.status
+                );
+            }
+        }
+    }
+
+    assert!(!run_stats.is_success(), "run should be marked failed");
+
+    Ok(())
 }
