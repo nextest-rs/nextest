@@ -33,23 +33,45 @@ impl TargetRunner {
             }
         };
 
-        // First check if have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
-        // set, and if so use that, as it takes precedence over the static config.toml
+        // Check for a nextest specific runner, this is highest precedence
+        {
+            let env_key = format!(
+                "NEXTEST_{}_RUNNER",
+                target.triple_str().to_ascii_uppercase().replace('-', "_")
+            );
+
+            if let Some(tr) = Self::from_env(env_key)? {
+                return Ok(Some(tr));
+            }
+        }
+
+        // Next check for a config in the nextest.toml config
+
+        // Next check if have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
+        // set, and if so use that, as it takes precedence over the static config(:?.toml)?
         {
             let env_key = format!(
                 "CARGO_TARGET_{}_RUNNER",
                 target.triple_str().to_ascii_uppercase().replace('-', "_")
             );
 
-            if let Some(runner_var) = std::env::var_os(&env_key) {
-                let runner = runner_var
-                    .into_string()
-                    .map_err(|_osstr| TargetRunnerError::InvalidEnvironmentVar(env_key.clone()))?;
-                return Self::parse_runner(&env_key, runner).map(Some);
+            if let Some(tr) = Self::from_env(env_key)? {
+                return Ok(Some(tr));
             }
         }
 
         Self::find_config(target)
+    }
+
+    fn from_env(env_key: String) -> Result<Option<Self>, TargetRunnerError> {
+        if let Some(runner_var) = std::env::var_os(&env_key) {
+            let runner = runner_var
+                .into_string()
+                .map_err(|_osstr| TargetRunnerError::InvalidEnvironmentVar(env_key.clone()))?;
+            Self::parse_runner(&env_key, runner).map(Some)
+        } else {
+            Ok(None)
+        }
     }
 
     fn find_config(target: target_spec::Platform) -> Result<Option<Self>, TargetRunnerError> {
