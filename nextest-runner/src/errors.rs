@@ -411,7 +411,7 @@ impl error::Error for JunitError {
 pub enum TargetRunnerError {
     /// Failed to determine the host triple, which is needed to determine the
     /// default target triple when a target is not explicitly specified
-    UnableToDetermineHostTriple,
+    UnknownHostPlatform(target_spec::Error),
     /// An environment variable contained non-utf8 content
     InvalidEnvironmentVar(String),
     /// An environment variable or config key was found that matches the target
@@ -447,12 +447,21 @@ pub enum TargetRunnerError {
         /// The error that occurred trying to deserialize the config file
         error: toml::de::Error,
     },
+    /// Failed to parse the specified target triple
+    FailedToParseTargetTriple {
+        /// The triple that failed to parse
+        triple: String,
+        /// The error that occurred parsing the triple
+        error: target_spec::errors::TripleParseError,
+    },
 }
 
 impl fmt::Display for TargetRunnerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnableToDetermineHostTriple => f.write_str("unable to determine host triple"),
+            Self::UnknownHostPlatform(error) => {
+                write!(f, "unable to determine host triple: {}", error)
+            }
             Self::InvalidEnvironmentVar(key) => {
                 write!(f, "environment variable '{}' contained non-utf8 data", key)
             }
@@ -476,7 +485,10 @@ impl fmt::Display for TargetRunnerError {
                 write!(f, "failed to read '{}': {}", path, error)
             }
             Self::FailedToParseConfig { path, error } => {
-                write!(f, "failed to parse '{}': {}", path, error)
+                write!(f, "failed to parse config '{}': {}", path, error)
+            }
+            Self::FailedToParseTargetTriple { triple, error } => {
+                write!(f, "failed to parse triple '{}': {}", triple, error)
             }
         }
     }
@@ -485,10 +497,12 @@ impl fmt::Display for TargetRunnerError {
 impl error::Error for TargetRunnerError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
+            Self::UnknownHostPlatform(error) => Some(error),
             Self::UnableToReadDir(io) => Some(io),
             Self::FailedPathCanonicalization { error, .. } => Some(error),
             Self::FailedToReadConfig { error, .. } => Some(error),
             Self::FailedToParseConfig { error, .. } => Some(error),
+            Self::FailedToParseTargetTriple { error, .. } => Some(error),
             _ => None,
         }
     }

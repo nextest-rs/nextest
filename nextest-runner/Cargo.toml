@@ -14,8 +14,6 @@ aho-corasick = "0.7.18"
 camino = { version = "1.0.7", features = ["serde1"] }
 config = { version = "0.11.0", default-features = false, features = ["toml"] }
 cargo_metadata = "0.14.1"
-# For cfg expression evaluation for [target.'cfg()'] expressions
-cfg-expr = { version = "0.10.1", features = ["targets"] }
 chrono = "0.4.19"
 crossbeam-channel = "0.5.2"
 ctrlc = { version = "3.2.1", features = ["termination"] }
@@ -34,6 +32,8 @@ rayon = "1.5.1"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 strip-ansi-escapes = "0.1.1"
+# For cfg expression evaluation for [target.'cfg()'] expressions
+target-spec = "1.0"
 # For parsing of .cargo/config.toml files
 toml = "0.5.8"
 twox-hash = { version = "1.6.2", default-features = false }

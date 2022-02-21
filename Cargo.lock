@@ -642,7 +642,6 @@ dependencies = [
  "aho-corasick",
  "camino",
  "cargo_metadata",
- "cfg-expr",
  "chrono",
  "color-eyre",
  "config",
@@ -668,6 +667,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strip-ansi-escapes",
+ "target-spec",
  "toml",
  "twox-hash",
 ]

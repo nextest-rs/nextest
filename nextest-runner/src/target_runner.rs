@@ -17,11 +17,19 @@ impl TargetRunner {
     /// which can be set in a [.cargo/config.toml](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
     /// or via a `CARGO_TARGET_{TRIPLE}_RUNNER` environment variable
     pub fn for_target(target_triple: Option<&str>) -> Result<Option<Self>, TargetRunnerError> {
-        use std::borrow::Cow;
-
-        let target_triple: Cow<'_, str> = match target_triple {
-            Some(target) => Cow::Borrowed(target),
-            None => Cow::Owned(cfg_expr::target_lexicon::HOST.to_string()),
+        let target = match target_triple {
+            Some(target) => target_spec::Platform::from_triple(
+                target_spec::Triple::new(target.to_owned()).map_err(|error| {
+                    TargetRunnerError::FailedToParseTargetTriple {
+                        triple: target.to_owned(),
+                        error,
+                    }
+                })?,
+                target_spec::TargetFeatures::Unknown,
+            ),
+            None => {
+                target_spec::Platform::current().map_err(TargetRunnerError::UnknownHostPlatform)?
+            }
         };
 
         // First check if have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
@@ -29,7 +37,7 @@ impl TargetRunner {
         {
             let env_key = format!(
                 "CARGO_TARGET_{}_RUNNER",
-                target_triple.to_ascii_uppercase().replace('-', "_")
+                target.triple_str().to_ascii_uppercase().replace('-', "_")
             );
 
             if let Some(runner_var) = std::env::var_os(&env_key) {
@@ -40,10 +48,10 @@ impl TargetRunner {
             }
         }
 
-        Self::find_config(&target_triple)
+        Self::find_config(target)
     }
 
-    fn find_config(target_triple: &str) -> Result<Option<Self>, TargetRunnerError> {
+    fn find_config(target: target_spec::Platform) -> Result<Option<Self>, TargetRunnerError> {
         // This is a bit non-intuitive, but the .cargo/config.toml hierarchy is actually
         // based on the current working directory, _not_ the manifest path, this bug
         // has existed for a while https://github.com/rust-lang/cargo/issues/2930
@@ -125,12 +133,7 @@ impl TargetRunner {
 
         let mut target_runner = None;
 
-        let triple_runner_key = format!("target.{}.runner", target_triple);
-        // Attempt to get the target info from a triple, this can fail if the
-        // target is actually a .json target spec, or is otherwise of a form
-        // that target_lexicon is unable to parse, which can happen with newer
-        // niche targets
-        let target_info: Option<cfg_expr::target_lexicon::Triple> = target_triple.parse().ok();
+        let triple_runner_key = format!("target.{}.runner", target.triple_str());
 
         // Now that we've found all of the config files that could declare
         // a runner that matches our target triple, we need to actually find
@@ -152,35 +155,30 @@ impl TargetRunner {
 
             if let Some(mut targets) = config.target {
                 // First lookup by the exact triple, as that one always takes precedence
-                if let Some(target) = targets.remove(target_triple) {
+                if let Some(target) = targets.remove(target.triple_str()) {
                     if let Some(runner) = target.runner {
                         target_runner = Some(Self::parse_runner(&triple_runner_key, runner)?);
                         continue;
                     }
                 }
 
-                if let Some(target_info) = &target_info {
-                    // Next check if there are target.'cfg(..)' expressions that match
-                    // the target. cargo states that it is not allowed for more than
-                    // 1 cfg runner to match the target, but we let cargo handle that
-                    // error itself, we just use the first one that matches
-                    for (cfg, runner) in targets.into_iter().filter_map(|(k, v)| match v.runner {
-                        Some(runner) if k.starts_with("cfg(") => Some((k, runner)),
-                        _ => None,
-                    }) {
-                        // Treat these as non-fatal, but would be good to log maybe
-                        let expr = match cfg_expr::Expression::parse(&cfg) {
-                            Ok(expr) => expr,
-                            Err(_err) => continue,
-                        };
+                // Next check if there are target.'cfg(..)' expressions that match
+                // the target. cargo states that it is not allowed for more than
+                // 1 cfg runner to match the target, but we let cargo handle that
+                // error itself, we just use the first one that matches
+                for (cfg, runner) in targets.into_iter().filter_map(|(k, v)| match v.runner {
+                    Some(runner) if k.starts_with("cfg(") => Some((k, runner)),
+                    _ => None,
+                }) {
+                    // Treat these as non-fatal, but would be good to log maybe
+                    let expr = match target_spec::TargetExpression::new(&cfg) {
+                        Ok(expr) => expr,
+                        Err(_err) => continue,
+                    };
 
-                        if expr.eval(|pred| match pred {
-                            cfg_expr::Predicate::Target(tp) => tp.matches(target_info),
-                            _ => false,
-                        }) {
-                            target_runner = Some(Self::parse_runner(&triple_runner_key, runner)?);
-                            continue 'config;
-                        }
+                    if expr.eval(&target) == Some(true) {
+                        target_runner = Some(Self::parse_runner(&triple_runner_key, runner)?);
+                        continue 'config;
                     }
                 }
             }
