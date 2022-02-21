@@ -61,26 +61,24 @@ impl TargetRunner {
                 Utf8PathBuf::from_path_buf(home).map_err(TargetRunnerError::NonUtf8Path)
             })?;
 
-        // Note versions of cargo older than 1.39 only support .cargo/config without
-        // the toml extension, but since this repo states its MSRV as 1.54 it should
-        // be ok to lose that particular piece of backwards compatibility
         let mut configs = Vec::new();
 
         fn read_config_dir(dir: &mut Utf8PathBuf) -> Option<Utf8PathBuf> {
-            dir.push("config.toml");
+            // Check for config before config.toml, same as cargo does
+            dir.push("config");
 
             if !dir.exists() {
                 dir.set_extension("toml");
             }
 
-            if dir.exists() {
-                let ret = dir.clone();
-                dir.pop();
-                Some(ret)
+            let ret = if dir.exists() {
+                Some(dir.clone())
             } else {
-                dir.pop();
                 None
-            }
+            };
+
+            dir.pop();
+            ret
         }
 
         let mut dir = root
