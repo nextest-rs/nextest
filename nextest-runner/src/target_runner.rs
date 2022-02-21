@@ -83,7 +83,7 @@ impl TargetRunner {
 
         let mut dir = root
             .canonicalize()
-            .map_err(|io| TargetRunnerError::FailedPathCanonicalization(root, io))
+            .map_err(|error| TargetRunnerError::FailedPathCanonicalization { path: root, error })
             .and_then(|canon| {
                 Utf8PathBuf::from_path_buf(canon).map_err(TargetRunnerError::NonUtf8Path)
             })?;
@@ -137,10 +137,18 @@ impl TargetRunner {
         // all the matches, but in reverse order as the closer the config is
         // to our current working directory, the higher precedence it has
         'config: for config_path in configs.into_iter().rev() {
-            let config_contents = std::fs::read_to_string(&config_path)
-                .map_err(|io| TargetRunnerError::FailedToReadConfig(config_path.clone(), io))?;
-            let config: CargoConfig = toml::from_str(&config_contents)
-                .map_err(|io| TargetRunnerError::FailedToParseConfig(config_path.clone(), io))?;
+            let config_contents = std::fs::read_to_string(&config_path).map_err(|error| {
+                TargetRunnerError::FailedToReadConfig {
+                    path: config_path.clone(),
+                    error,
+                }
+            })?;
+            let config: CargoConfig = toml::from_str(&config_contents).map_err(|error| {
+                TargetRunnerError::FailedToParseConfig {
+                    path: config_path.clone(),
+                    error,
+                }
+            })?;
 
             if let Some(mut targets) = config.target {
                 // First lookup by the exact triple, as that one always takes precedence
@@ -186,9 +194,13 @@ impl TargetRunner {
         // but I believe that cargo doesn't do that either
         let mut runner_iter = value.split_whitespace();
 
-        let runner_binary = runner_iter
-            .next()
-            .ok_or_else(|| TargetRunnerError::BinaryNotSpecified(key.to_owned(), value.clone()))?;
+        let runner_binary =
+            runner_iter
+                .next()
+                .ok_or_else(|| TargetRunnerError::BinaryNotSpecified {
+                    key: key.to_owned(),
+                    value: value.clone(),
+                })?;
         let args = runner_iter.map(String::from).collect();
 
         Ok(Self {

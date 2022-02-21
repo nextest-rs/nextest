@@ -414,19 +414,39 @@ pub enum TargetRunnerError {
     UnableToDetermineHostTriple,
     /// An environment variable contained non-utf8 content
     InvalidEnvironmentVar(String),
-    /// An environment variable or key was found that matches the target triple,
-    /// but it didn't actually contain a binary
-    BinaryNotSpecified(String, String),
+    /// An environment variable or config key was found that matches the target
+    /// triple, but it didn't actually contain a binary
+    BinaryNotSpecified {
+        /// The environment variable or config key path
+        key: String,
+        /// The value that was read from the key
+        value: String,
+    },
     /// Failed to retrieve a directory
     UnableToReadDir(std::io::Error),
     /// Failed to canonicalize a path
-    FailedPathCanonicalization(Utf8PathBuf, std::io::Error),
+    FailedPathCanonicalization {
+        /// The path that failed to canonicalize
+        path: Utf8PathBuf,
+        /// The error the occurred during canonicalization
+        error: std::io::Error,
+    },
     /// A path was non-utf8
     NonUtf8Path(std::path::PathBuf),
     /// Failed to read config file
-    FailedToReadConfig(Utf8PathBuf, std::io::Error),
+    FailedToReadConfig {
+        /// The path of the config file
+        path: Utf8PathBuf,
+        /// The error that occurred trying to read the config file
+        error: std::io::Error,
+    },
     /// Failed to deserialize config file
-    FailedToParseConfig(Utf8PathBuf, toml::de::Error),
+    FailedToParseConfig {
+        /// The path of the config file
+        path: Utf8PathBuf,
+        /// The error that occurred trying to deserialize the config file
+        error: toml::de::Error,
+    },
 }
 
 impl fmt::Display for TargetRunnerError {
@@ -436,7 +456,7 @@ impl fmt::Display for TargetRunnerError {
             Self::InvalidEnvironmentVar(key) => {
                 write!(f, "environment variable '{}' contained non-utf8 data", key)
             }
-            Self::BinaryNotSpecified(key, value) => {
+            Self::BinaryNotSpecified { key, value } => {
                 write!(
                     f,
                     "runner '{}' = '{}' did not contain a runner binary",
@@ -446,17 +466,17 @@ impl fmt::Display for TargetRunnerError {
             Self::UnableToReadDir(io) => {
                 write!(f, "unable to read directory: {}", io)
             }
-            Self::FailedPathCanonicalization(path, err) => {
-                write!(f, "failed to canonicalize path '{}': {}", path, err)
+            Self::FailedPathCanonicalization { path, error } => {
+                write!(f, "failed to canonicalize path '{}': {}", path, error)
             }
             Self::NonUtf8Path(path) => {
                 write!(f, "path '{}' is non-utf8", path.display())
             }
-            Self::FailedToReadConfig(path, err) => {
-                write!(f, "failed to read '{}': {}", path, err)
+            Self::FailedToReadConfig { path, error } => {
+                write!(f, "failed to read '{}': {}", path, error)
             }
-            Self::FailedToParseConfig(path, err) => {
-                write!(f, "failed to parse '{}': {}", path, err)
+            Self::FailedToParseConfig { path, error } => {
+                write!(f, "failed to parse '{}': {}", path, error)
             }
         }
     }
@@ -466,9 +486,9 @@ impl error::Error for TargetRunnerError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Self::UnableToReadDir(io) => Some(io),
-            Self::FailedPathCanonicalization(_, io) => Some(io),
-            Self::FailedToReadConfig(_, io) => Some(io),
-            Self::FailedToParseConfig(_, toml) => Some(toml),
+            Self::FailedPathCanonicalization { error, .. } => Some(error),
+            Self::FailedToReadConfig { error, .. } => Some(error),
+            Self::FailedToParseConfig { error, .. } => Some(error),
             _ => None,
         }
     }
