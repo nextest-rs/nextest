@@ -371,12 +371,10 @@ impl AppImpl {
                 }
 
                 let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
-                let runner = runner_opts.to_builder(no_capture).build(
-                    &test_list,
-                    &profile,
-                    handler,
-                    target_runner.as_ref(),
-                );
+                let mut runner_builder = runner_opts.to_builder(no_capture);
+                runner_builder.set_target_runner(target_runner);
+
+                let runner = runner_builder.build(&test_list, &profile, handler);
                 let stderr = std::io::stderr();
                 let mut writer = BufWriter::new(stderr);
                 let run_stats = runner.try_execute(|event| {

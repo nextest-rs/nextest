@@ -217,8 +217,7 @@ fn test_run() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let runner =
-        TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop(), None);
+    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -267,8 +266,7 @@ fn test_run_ignored() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let runner =
-        TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop(), None);
+    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -320,8 +318,7 @@ fn test_retries() -> Result<()> {
     let retries = profile.retries();
     assert_eq!(retries, 2, "retries set in with-retries profile");
 
-    let runner =
-        TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop(), None);
+    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 

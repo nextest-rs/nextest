@@ -5,6 +5,7 @@ use camino::Utf8PathBuf;
 
 /// A [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 /// used to execute a test binary rather than the default of executing natively
+#[derive(Debug)]
 pub struct TargetRunner {
     /// This is required
     runner_binary: Utf8PathBuf,
@@ -215,7 +216,7 @@ impl TargetRunner {
     /// binary found in `PATH`
     #[inline]
     pub fn binary(&self) -> &str {
-        &self.runner_binary.as_str()
+        self.runner_binary.as_str()
     }
 
     /// Gets the (optional) runner binary arguments
