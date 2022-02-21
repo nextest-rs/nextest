@@ -446,8 +446,8 @@ impl<'g> RustTestArtifact<'g> {
         let mut argv = Vec::new();
 
         let program: std::ffi::OsString = if let Some(runner) = runner {
-            argv.push(self.binary_path.as_str());
             argv.extend(runner.args());
+            argv.push(self.binary_path.as_str());
             runner.binary().into()
         } else {
             use duct::IntoExecutablePath;
@@ -514,8 +514,8 @@ impl<'a> TestInstance<'a> {
 
         let program: std::ffi::OsString = match target_runner {
             Some(tr) => {
-                args.push(self.binary.as_str());
                 args.extend(tr.args());
+                args.push(self.binary.as_str());
                 tr.binary().into()
             }
             None => {
