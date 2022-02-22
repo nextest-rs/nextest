@@ -1,7 +1,11 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Adds support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 
 use crate::errors::TargetRunnerError;
 use camino::Utf8PathBuf;
+use target_spec::Platform;
 
 /// A [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 /// used to execute a test binary rather than the default of executing natively
@@ -53,11 +57,9 @@ impl TargetRunner {
             }
         };
 
-        let triple_str = target.triple_str().to_ascii_uppercase().replace('-', "_");
-
         // Check if we have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
         // set, and if so use that, as it takes precedence over the static config(:?.toml)?
-        if let Some(tr) = Self::from_env(format!("CARGO_TARGET_{}_RUNNER", triple_str))? {
+        if let Some(tr) = Self::from_env(Self::runner_env_var(&target))? {
             return Ok(Some(tr));
         }
 
@@ -87,6 +89,13 @@ impl TargetRunner {
         } else {
             Ok(None)
         }
+    }
+
+    // Not part of the public API. Exposed for testing only.
+    #[doc(hidden)]
+    pub fn runner_env_var(target: &Platform) -> String {
+        let triple_str = target.triple_str().to_ascii_uppercase().replace('-', "_");
+        format!("CARGO_TARGET_{}_RUNNER", triple_str)
     }
 
     /// Attempts to find a target runner for the specified target from a
