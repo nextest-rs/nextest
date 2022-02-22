@@ -8,8 +8,8 @@ ARGS:
     <FILTERS>...    Test name filter
 
 OPTIONS:
-    -P, --profile <PROFILE>       Nextest profile to use
         --manifest-path <PATH>    Path to Cargo.toml
+    -P, --profile <PROFILE>       Nextest profile to use
     -v, --verbose                 Verbose output
         --color <WHEN>            Produce color output: auto, always, never [default: auto]
         --config-file <PATH>      Config file [default: workspace-root/.config/nextest.toml]

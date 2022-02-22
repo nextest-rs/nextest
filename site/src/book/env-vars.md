@@ -4,7 +4,11 @@ This section contains information about the environment variables nextest reads 
 
 ## Environment variables nextest reads
 
-Currently, cargo-nextest does not read its configuration as environment variables. [This will be supported in the future](https://github.com/nextest-rs/nextest/issues/14).
+Nextest reads the following environment variables to emulate the behavior of Cargo:
+* `CARGO` — Path to the `cargo` binary to use for builds.
+* `CARGO_TARGET_<triple>_RUNNER` — Support for [target runners](target-runners.md).
+
+Currently, cargo-nextest does not read its own configuration as environment variables. [This will be supported in the future](https://github.com/nextest-rs/nextest/issues/14).
 
 ### Cargo-related environment variables nextest reads
 

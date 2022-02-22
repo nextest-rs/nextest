@@ -13,6 +13,7 @@
   - [Listing tests](book/listing.md)
   - [Retries and flaky tests](book/retries.md)
   - [Partitioning test runs in CI](book/partitioning.md)
+  - [Target runners](book/target-runners.md)
   - [Other options](book/other-options.md)
   - [Environment variables](book/env-vars.md)
   - [Stability policy](book/stability.md)
