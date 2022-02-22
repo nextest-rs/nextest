@@ -10,6 +10,7 @@ use crate::{
     reporter::{CancelReason, StatusLevel, TestEvent},
     signal::{SignalEvent, SignalHandler},
     stopwatch::{StopwatchEnd, StopwatchStart},
+    target_runner::TargetRunner,
     test_list::{TestInstance, TestList},
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
@@ -32,6 +33,7 @@ pub struct TestRunnerBuilder {
     retries: Option<usize>,
     fail_fast: Option<bool>,
     test_threads: Option<usize>,
+    target_runner: Option<TargetRunner>,
 }
 
 impl TestRunnerBuilder {
@@ -61,9 +63,16 @@ impl TestRunnerBuilder {
         self
     }
 
+    /// Sets the target specific runner to use, instead of trying to execute
+    /// the binary natively
+    pub fn set_target_runner(&mut self, target_runner: Option<TargetRunner>) -> &mut Self {
+        self.target_runner = target_runner;
+        self
+    }
+
     /// Creates a new test runner.
     pub fn build<'a>(
-        &self,
+        self,
         test_list: &'a TestList,
         profile: &NextestProfile<'_>,
         handler: SignalHandler,
@@ -75,6 +84,8 @@ impl TestRunnerBuilder {
         let retries = self.retries.unwrap_or_else(|| profile.retries());
         let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
         let slow_timeout = profile.slow_timeout();
+        let target_runner = self.target_runner;
+
         TestRunner {
             no_capture: self.no_capture,
             // The number of tries = retries + 1.
@@ -82,6 +93,7 @@ impl TestRunnerBuilder {
             fail_fast,
             slow_timeout,
             test_list,
+            target_runner,
             run_pool: ThreadPoolBuilder::new()
                 // The main run_pool closure will need its own thread.
                 .num_threads(test_threads + 1)
@@ -107,6 +119,7 @@ pub struct TestRunner<'a> {
     fail_fast: bool,
     slow_timeout: Duration,
     test_list: &'a TestList<'a>,
+    target_runner: Option<TargetRunner>,
     run_pool: ThreadPool,
     wait_pool: ThreadPool,
     handler: SignalHandler,
@@ -338,7 +351,7 @@ impl<'a> TestRunner<'a> {
         run_sender: &Sender<InternalTestEvent<'a>>,
     ) -> std::io::Result<InternalExecuteStatus> {
         let cmd = test
-            .make_expression()
+            .make_expression(self.target_runner.as_ref())
             .unchecked()
             // Debug environment variable for testing.
             .env("__NEXTEST_ATTEMPT", format!("{}", attempt));

@@ -48,5 +48,6 @@ pub mod reporter;
 pub mod runner;
 pub mod signal;
 mod stopwatch;
+pub mod target_runner;
 pub mod test_filter;
 pub mod test_list;

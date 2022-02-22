@@ -405,3 +405,105 @@ impl error::Error for JunitError {
         Some(&self.err)
     }
 }
+
+/// An error occurred determining the target runner
+#[derive(Debug)]
+pub enum TargetRunnerError {
+    /// Failed to determine the host triple, which is needed to determine the
+    /// default target triple when a target is not explicitly specified
+    UnknownHostPlatform(target_spec::Error),
+    /// An environment variable contained non-utf8 content
+    InvalidEnvironmentVar(String),
+    /// An environment variable or config key was found that matches the target
+    /// triple, but it didn't actually contain a binary
+    BinaryNotSpecified {
+        /// The environment variable or config key path
+        key: String,
+        /// The value that was read from the key
+        value: String,
+    },
+    /// Failed to retrieve a directory
+    UnableToReadDir(std::io::Error),
+    /// Failed to canonicalize a path
+    FailedPathCanonicalization {
+        /// The path that failed to canonicalize
+        path: Utf8PathBuf,
+        /// The error the occurred during canonicalization
+        error: std::io::Error,
+    },
+    /// A path was non-utf8
+    NonUtf8Path(std::path::PathBuf),
+    /// Failed to read config file
+    FailedToReadConfig {
+        /// The path of the config file
+        path: Utf8PathBuf,
+        /// The error that occurred trying to read the config file
+        error: std::io::Error,
+    },
+    /// Failed to deserialize config file
+    FailedToParseConfig {
+        /// The path of the config file
+        path: Utf8PathBuf,
+        /// The error that occurred trying to deserialize the config file
+        error: toml::de::Error,
+    },
+    /// Failed to parse the specified target triple
+    FailedToParseTargetTriple {
+        /// The triple that failed to parse
+        triple: String,
+        /// The error that occurred parsing the triple
+        error: target_spec::errors::TripleParseError,
+    },
+}
+
+impl fmt::Display for TargetRunnerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownHostPlatform(error) => {
+                write!(f, "unable to determine host triple: {}", error)
+            }
+            Self::InvalidEnvironmentVar(key) => {
+                write!(f, "environment variable '{}' contained non-utf8 data", key)
+            }
+            Self::BinaryNotSpecified { key, value } => {
+                write!(
+                    f,
+                    "runner '{}' = '{}' did not contain a runner binary",
+                    key, value
+                )
+            }
+            Self::UnableToReadDir(io) => {
+                write!(f, "unable to read directory: {}", io)
+            }
+            Self::FailedPathCanonicalization { path, error } => {
+                write!(f, "failed to canonicalize path '{}': {}", path, error)
+            }
+            Self::NonUtf8Path(path) => {
+                write!(f, "path '{}' is non-utf8", path.display())
+            }
+            Self::FailedToReadConfig { path, error } => {
+                write!(f, "failed to read '{}': {}", path, error)
+            }
+            Self::FailedToParseConfig { path, error } => {
+                write!(f, "failed to parse config '{}': {}", path, error)
+            }
+            Self::FailedToParseTargetTriple { triple, error } => {
+                write!(f, "failed to parse triple '{}': {}", triple, error)
+            }
+        }
+    }
+}
+
+impl error::Error for TargetRunnerError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::UnknownHostPlatform(error) => Some(error),
+            Self::UnableToReadDir(io) => Some(io),
+            Self::FailedPathCanonicalization { error, .. } => Some(error),
+            Self::FailedToReadConfig { error, .. } => Some(error),
+            Self::FailedToParseConfig { error, .. } => Some(error),
+            Self::FailedToParseTargetTriple { error, .. } => Some(error),
+            _ => None,
+        }
+    }
+}
