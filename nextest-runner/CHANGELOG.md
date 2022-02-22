@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.0] - 2022-02-22
+
+### Added
+
+- Support for [target runners](https://nexte.st/book/target-runners).
+
 ## [0.1.2] - 2022-02-20
 
 ### Added
@@ -18,6 +24,7 @@
 
 - Initial version.
 
+[0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.2.0
 [0.1.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.1.2
 [0.1.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.1.1
 [0.1.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.1.0
