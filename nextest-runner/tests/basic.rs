@@ -441,9 +441,12 @@ fn execute_collect<'a>(
     (instance_statuses, run_stats)
 }
 
+#[cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu"))]
 mod target_runner;
+#[cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu"))]
 use target_runner::with_env;
 
+#[cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu"))]
 fn passthrough_path() -> &'static Utf8Path {
     static PP: once_cell::sync::OnceCell<Utf8PathBuf> = once_cell::sync::OnceCell::new();
     PP.get_or_init(|| {
