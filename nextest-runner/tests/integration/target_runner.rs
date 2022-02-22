@@ -245,7 +245,7 @@ mod run {
             .expect("default config is valid");
 
         let mut runner = TestRunnerBuilder::default();
-        runner.set_target_runner(Some(target_runner));
+        runner.set_target_runner(target_runner);
         let runner = runner.build(&test_list, &profile, SignalHandler::noop());
 
         let (instance_statuses, run_stats) = execute_collect(&runner);

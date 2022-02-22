@@ -64,9 +64,9 @@ impl TestRunnerBuilder {
     }
 
     /// Sets the target specific runner to use, instead of trying to execute
-    /// the binary natively
-    pub fn set_target_runner(&mut self, target_runner: Option<TargetRunner>) -> &mut Self {
-        self.target_runner = target_runner;
+    /// the binary natively.
+    pub fn set_target_runner(&mut self, target_runner: TargetRunner) -> &mut Self {
+        self.target_runner = Some(target_runner);
         self
     }
 
