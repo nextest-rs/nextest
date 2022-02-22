@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-if [[ "$1" != "--ensure-this-arg-is-sent" ]] ; then
+#!/bin/sh
+if [ "$1" != "--ensure-this-arg-is-sent" ] ; then
     exit 1
 fi
 
