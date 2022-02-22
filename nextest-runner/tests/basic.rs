@@ -470,22 +470,6 @@ fn test_listing_with_target_runner() -> Result<()> {
     {
         let target_runner = with_env(
             [(
-                "NEXTEST_X86_64_UNKNOWN_LINUX_GNU_RUNNER",
-                &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
-            )],
-            || TargetRunner::for_target(None),
-        )?
-        .unwrap();
-
-        let test_list = TestList::new(test_bins.clone(), &test_filter, Some(&target_runner))?;
-
-        assert_eq!(bin_count, test_list.binary_count());
-        assert_eq!(test_count, test_list.test_count());
-    }
-
-    {
-        let target_runner = with_env(
-            [(
                 "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER",
                 &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
             )],

@@ -39,44 +39,6 @@ fn default() -> &'static target_spec::Platform {
 }
 
 #[test]
-fn parses_nextest_env() {
-    let def_runner = with_env(
-        [(
-            format!(
-                "NEXTEST_{}_RUNNER",
-                default()
-                    .triple_str()
-                    .to_ascii_uppercase()
-                    .replace('-', "_")
-            ),
-            "nextest_with_default",
-        )],
-        || TargetRunner::for_target(None),
-    )
-    .unwrap()
-    .unwrap();
-
-    assert_eq!("nextest_with_default", def_runner.binary());
-    assert_eq!(0, def_runner.args().count());
-
-    let specific_runner = with_env(
-        [(
-            "NEXTEST_X86_64_PC_WINDOWS_MSVC_RUNNER",
-            "nextest_with_specific --arg1 -b",
-        )],
-        || TargetRunner::for_target(Some("x86_64-pc-windows-msvc")),
-    )
-    .unwrap()
-    .unwrap();
-
-    assert_eq!("nextest_with_specific", specific_runner.binary());
-    assert_eq!(
-        vec!["--arg1", "-b"],
-        specific_runner.args().collect::<Vec<_>>()
-    );
-}
-
-#[test]
 fn parses_cargo_env() {
     let def_runner = with_env(
         [(
@@ -173,16 +135,10 @@ fn fallsback_to_cargo_config() {
     let linux = parse_triple("x86_64-unknown-linux-musl");
 
     let runner = with_env(
-        [
-            (
-                "NEXTEST_X86_64_UNKNOWN_LINUX_GNU_RUNNER",
-                "nextest-runner-linux",
-            ),
-            (
-                "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
-                "cargo-runner-windows",
-            ),
-        ],
+        [(
+            "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
+            "cargo-runner-windows",
+        )],
         || TargetRunner::with_root(Some(linux.triple_str()), false, root_dir()),
     )
     .unwrap()

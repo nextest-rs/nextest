@@ -55,14 +55,7 @@ impl TargetRunner {
 
         let triple_str = target.triple_str().to_ascii_uppercase().replace('-', "_");
 
-        // Check for a nextest specific runner, this is highest precedence
-        if let Some(tr) = Self::from_env(format!("NEXTEST_{}_RUNNER", triple_str))? {
-            return Ok(Some(tr));
-        }
-
-        // Next check for a config in the nextest.toml config
-
-        // Next check if have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
+        // Check if we have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
         // set, and if so use that, as it takes precedence over the static config(:?.toml)?
         if let Some(tr) = Self::from_env(format!("CARGO_TARGET_{}_RUNNER", triple_str))? {
             return Ok(Some(tr));
