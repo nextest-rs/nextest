@@ -12,7 +12,7 @@ use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
     config::NextestConfig,
-    errors::WriteEventError,
+    errors::{TargetRunnerError, WriteEventError},
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
     runner::TestRunnerBuilder,
@@ -21,7 +21,12 @@ use nextest_runner::{
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{OutputFormat, RustTestArtifact, SerializableFormat, TestList},
 };
-use std::io::{BufWriter, Cursor, Write};
+use owo_colors::{OwoColorize, Style};
+use std::{
+    error::Error,
+    fmt::Write as _,
+    io::{BufWriter, Cursor, Write},
+};
 use supports_color::Stream;
 
 /// A next-generation test runner for Rust.
@@ -318,8 +323,7 @@ impl AppImpl {
                 build_filter,
                 message_format,
             } => {
-                let target_runner =
-                    TargetRunner::for_target(build_filter.cargo_options.target.as_deref())?;
+                let target_runner = runner_for_target(build_filter.cargo_options.target.as_deref());
 
                 let mut test_list = build_filter.compute(
                     self.manifest_path.as_deref(),
@@ -352,8 +356,7 @@ impl AppImpl {
                 std::fs::create_dir_all(&store_dir)
                     .wrap_err_with(|| format!("failed to create store dir '{}'", store_dir))?;
 
-                let target_runner =
-                    TargetRunner::for_target(build_filter.cargo_options.target.as_deref())?;
+                let target_runner = runner_for_target(build_filter.cargo_options.target.as_deref());
 
                 let test_list = build_filter.compute(
                     self.manifest_path.as_deref(),
@@ -413,4 +416,33 @@ fn build_graph(manifest_path: Option<&Utf8Path>, output: OutputContext) -> Resul
     let json =
         String::from_utf8(output.stdout).wrap_err("cargo metadata output is invalid UTF-8")?;
     Ok(guppy::CargoMetadata::parse_json(&json)?.build_graph()?)
+}
+
+fn runner_for_target(triple: Option<&str>) -> Option<TargetRunner> {
+    match TargetRunner::for_target(triple) {
+        Ok(runner) => runner,
+        Err(err) => {
+            warn_on_target_runner_err(&err).expect("writing to a string is infallible");
+            None
+        }
+    }
+}
+
+fn warn_on_target_runner_err(err: &TargetRunnerError) -> Result<(), std::fmt::Error> {
+    let mut s = String::with_capacity(256);
+    write!(s, "could not determine target runner: {}", err)?;
+    let mut next_error = err.source();
+    while let Some(err) = next_error {
+        write!(
+            s,
+            "\n{} {}",
+            "caused by:"
+                .if_supports_color(Stream::Stderr, |s| s.style(Style::new().bold().yellow())),
+            err
+        )?;
+        next_error = err.source();
+    }
+
+    log::warn!("{}", s);
+    Ok(())
 }

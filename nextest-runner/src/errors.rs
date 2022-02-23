@@ -459,8 +459,8 @@ pub enum TargetRunnerError {
 impl fmt::Display for TargetRunnerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnknownHostPlatform(error) => {
-                write!(f, "unable to determine host triple: {}", error)
+            Self::UnknownHostPlatform(_) => {
+                write!(f, "unable to determine host platform")
             }
             Self::InvalidEnvironmentVar(key) => {
                 write!(f, "environment variable '{}' contained non-utf8 data", key)
@@ -475,20 +475,20 @@ impl fmt::Display for TargetRunnerError {
             Self::UnableToReadDir(io) => {
                 write!(f, "unable to read directory: {}", io)
             }
-            Self::FailedPathCanonicalization { path, error } => {
-                write!(f, "failed to canonicalize path '{}': {}", path, error)
+            Self::FailedPathCanonicalization { path, .. } => {
+                write!(f, "failed to canonicalize path: {}", path)
             }
             Self::NonUtf8Path(path) => {
                 write!(f, "path '{}' is non-utf8", path.display())
             }
-            Self::FailedToReadConfig { path, error } => {
-                write!(f, "failed to read '{}': {}", path, error)
+            Self::FailedToReadConfig { path, .. } => {
+                write!(f, "failed to read config at {}", path)
             }
-            Self::FailedToParseConfig { path, error } => {
-                write!(f, "failed to parse config '{}': {}", path, error)
+            Self::FailedToParseConfig { path, .. } => {
+                write!(f, "failed to parse config at {}", path)
             }
-            Self::FailedToParseTargetTriple { triple, error } => {
-                write!(f, "failed to parse triple '{}': {}", triple, error)
+            Self::FailedToParseTargetTriple { triple, .. } => {
+                write!(f, "failed to parse triple '{}'", triple)
             }
         }
     }

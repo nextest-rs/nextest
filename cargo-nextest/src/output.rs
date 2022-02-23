@@ -4,7 +4,7 @@
 
 use clap::{ArgEnum, Args};
 use env_logger::fmt::Formatter;
-use log::{Level, Record};
+use log::{Level, LevelFilter, Record};
 use owo_colors::{OwoColorize, Style};
 use std::io::Write;
 use supports_color::Stream;
@@ -68,6 +68,7 @@ impl Color {
         }
 
         env_logger::Builder::from_env("NEXTEST_LOG")
+            .filter_level(LevelFilter::Warn)
             .format(format_fn)
             .init();
     }
