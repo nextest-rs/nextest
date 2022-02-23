@@ -7,6 +7,13 @@ use crate::errors::TargetRunnerError;
 use camino::Utf8PathBuf;
 use target_spec::Platform;
 
+#[derive(serde::Deserialize, Debug)]
+#[serde(untagged)]
+enum Runner {
+    Simple(String),
+    List(Vec<String>),
+}
+
 /// A [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 /// used to execute a test binary rather than the default of executing natively
 #[derive(Debug)]
@@ -85,7 +92,7 @@ impl TargetRunner {
             let runner = runner_var
                 .into_string()
                 .map_err(|_osstr| TargetRunnerError::InvalidEnvironmentVar(env_key.clone()))?;
-            Self::parse_runner(&env_key, runner).map(Some)
+            Self::parse_runner(&env_key, Runner::Simple(runner)).map(Some)
         } else {
             Ok(None)
         }
@@ -172,7 +179,8 @@ impl TargetRunner {
 
         #[derive(serde::Deserialize, Debug)]
         struct CargoConfigRunner {
-            runner: Option<String>,
+            #[serde(default)]
+            runner: Option<Runner>,
         }
 
         #[derive(serde::Deserialize, Debug)]
@@ -236,22 +244,38 @@ impl TargetRunner {
         Ok(target_runner)
     }
 
-    fn parse_runner(key: &str, value: String) -> Result<Self, TargetRunnerError> {
-        // We only split on whitespace, which doesn't take quoting into account,
-        // but I believe that cargo doesn't do that either
-        let mut runner_iter = value.split_whitespace();
+    fn parse_runner(key: &str, runner: Runner) -> Result<Self, TargetRunnerError> {
+        let (runner_binary, args) = match runner {
+            Runner::Simple(value) => {
+                // We only split on whitespace, which doesn't take quoting into account,
+                // but I believe that cargo doesn't do that either
+                let mut runner_iter = value.split_whitespace();
 
-        let runner_binary =
-            runner_iter
-                .next()
-                .ok_or_else(|| TargetRunnerError::BinaryNotSpecified {
-                    key: key.to_owned(),
-                    value: value.clone(),
-                })?;
-        let args = runner_iter.map(String::from).collect();
+                let runner_binary =
+                    runner_iter
+                        .next()
+                        .ok_or_else(|| TargetRunnerError::BinaryNotSpecified {
+                            key: key.to_owned(),
+                            value: value.clone(),
+                        })?;
+                let args = runner_iter.map(String::from).collect();
+                (runner_binary.into(), args)
+            }
+            Runner::List(mut values) => {
+                if values.is_empty() {
+                    return Err(TargetRunnerError::BinaryNotSpecified {
+                        key: key.to_owned(),
+                        value: String::new(),
+                    });
+                } else {
+                    let runner_binary = values.remove(0);
+                    (runner_binary.into(), values)
+                }
+            }
+        };
 
         Ok(Self {
-            runner_binary: runner_binary.into(),
+            runner_binary,
             args,
         })
     }
