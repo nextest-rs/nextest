@@ -43,7 +43,7 @@ quick-junit = { version = "0.1.5", path = "../quick-junit" }
 
 [dev-dependencies]
 color-eyre = { version = "0.6.0", default-features = false }
-indoc = "1.0.3"
+indoc = "1.0.4"
 maplit = "1.0.2"
 pretty_assertions = "1.1.0"
 proptest = "1.0.0"
