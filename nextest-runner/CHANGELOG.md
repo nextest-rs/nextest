@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.1] - 2022-02-23
+
+- Improvements to `TargetRunnerError` message display: source errors are no longer displayed directly, only in "caused by".
+
 ## [0.2.0] - 2022-02-22
 
 ### Added
@@ -24,6 +28,7 @@
 
 - Initial version.
 
+[0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.2.1
 [0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.2.0
 [0.1.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.1.2
 [0.1.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.1.1
