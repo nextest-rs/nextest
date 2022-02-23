@@ -3,6 +3,19 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.7] - 2022-02-23
+
+### Fixed
+
+- If parsing target runner configuration fails, warn and proceed without a target runner rather than erroring out.
+
+### Known issues
+
+- Parsing an array of strings for the target runner currently fails: [#73]. A fix is being worked on in [#75].
+
+[#73]: https://github.com/nextest-rs/nextest/issues/73
+[#75]: https://github.com/nextest-rs/nextest/pull/75
+
 ## [0.9.6] - 2022-02-22
 
 ### Added
@@ -67,6 +80,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.7]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.7
 [0.9.6]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.6
 [0.9.5]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.5
 [0.9.4]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.4
