@@ -6,6 +6,8 @@ use nextest_runner::{errors::TargetRunnerError, target_runner::TargetRunner};
 use once_cell::sync::OnceCell;
 use std::{env, sync::Mutex};
 
+use crate::fixtures::workspace_root;
+
 fn env_mutex() -> &'static Mutex<()> {
     static MUTEX: OnceCell<Mutex<()>> = OnceCell::new();
     MUTEX.get_or_init(|| Mutex::new(()))
@@ -43,6 +45,8 @@ fn default() -> &'static target_spec::Platform {
 
 #[test]
 fn parses_cargo_env() {
+    let workspace_root = workspace_root();
+    let terminate_search_at = Some(workspace_root.as_path());
     let def_runner = with_env(
         [(
             format!(
@@ -54,7 +58,7 @@ fn parses_cargo_env() {
             ),
             "cargo_with_default --arg --arg2",
         )],
-        || TargetRunner::for_target(None),
+        || TargetRunner::for_target(None, terminate_search_at),
     )
     .unwrap()
     .unwrap();
@@ -70,7 +74,7 @@ fn parses_cargo_env() {
             "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUNNER",
             "cargo_with_specific",
         )],
-        || TargetRunner::for_target(Some("aarch64-linux-android")),
+        || TargetRunner::for_target(Some("aarch64-linux-android"), terminate_search_at),
     )
     .unwrap()
     .unwrap();
@@ -95,7 +99,7 @@ fn parse_triple(triple: &'static str) -> target_spec::Platform {
 fn parses_cargo_config_exact() {
     let windows = parse_triple("x86_64-pc-windows-gnu");
 
-    let runner = TargetRunner::find_config(windows, false, root_dir())
+    let runner = TargetRunner::find_config(windows, root_dir(), Some(workspace_root().as_path()))
         .unwrap()
         .unwrap();
 
@@ -106,15 +110,19 @@ fn parses_cargo_config_exact() {
 #[test]
 fn disregards_non_matching() {
     let windows = parse_triple("x86_64-unknown-linux-gnu");
-    assert!(TargetRunner::find_config(windows, false, root_dir())
-        .unwrap()
-        .is_none());
+    assert!(
+        TargetRunner::find_config(windows, root_dir(), Some(workspace_root().as_path()))
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
 fn parses_cargo_config_cfg() {
+    let workspace_root = workspace_root();
+    let terminate_search_at = Some(workspace_root.as_path());
     let android = parse_triple("aarch64-linux-android");
-    let runner = TargetRunner::find_config(android, false, root_dir())
+    let runner = TargetRunner::find_config(android, root_dir(), terminate_search_at)
         .unwrap()
         .unwrap();
 
@@ -122,7 +130,7 @@ fn parses_cargo_config_cfg() {
     assert_eq!(vec!["-x"], runner.args().collect::<Vec<_>>());
 
     let linux = parse_triple("x86_64-unknown-linux-musl");
-    let runner = TargetRunner::find_config(linux, false, root_dir())
+    let runner = TargetRunner::find_config(linux, root_dir(), terminate_search_at)
         .unwrap()
         .unwrap();
 
@@ -142,7 +150,13 @@ fn fallsback_to_cargo_config() {
             "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
             "cargo-runner-windows",
         )],
-        || TargetRunner::with_root(Some(linux.triple_str()), false, root_dir()),
+        || {
+            TargetRunner::with_root(
+                Some(linux.triple_str()),
+                root_dir(),
+                Some(workspace_root().as_path()),
+            )
+        },
     )
     .unwrap()
     .unwrap();
@@ -200,7 +214,7 @@ mod run {
                     &current_runner_env_var(),
                     &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
                 )],
-                || TargetRunner::for_target(None),
+                || TargetRunner::for_target(None, Some(workspace_root().as_path())),
             )?
             .unwrap();
 
@@ -230,7 +244,7 @@ mod run {
                 &current_runner_env_var(),
                 &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
             )],
-            || TargetRunner::for_target(None),
+            || TargetRunner::for_target(None, Some(workspace_root().as_path())),
         )?
         .unwrap();
 

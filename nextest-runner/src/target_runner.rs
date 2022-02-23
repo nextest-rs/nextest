@@ -4,7 +4,7 @@
 //! Adds support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 
 use crate::errors::TargetRunnerError;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use target_spec::Platform;
 
 #[derive(serde::Deserialize, Debug)]
@@ -28,8 +28,11 @@ impl TargetRunner {
     /// Acquires the [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
     /// which can be set in a [.cargo/config.toml](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
     /// or via a `CARGO_TARGET_{TRIPLE}_RUNNER` environment variable
-    pub fn for_target(target_triple: Option<&str>) -> Result<Option<Self>, TargetRunnerError> {
-        Self::get_runner_by_precedence(target_triple, true, None)
+    pub fn for_target(
+        target_triple: Option<&str>,
+        terminate_search_at: Option<&Utf8Path>,
+    ) -> Result<Option<Self>, TargetRunnerError> {
+        Self::get_runner_by_precedence(target_triple, None, terminate_search_at)
     }
 
     /// Configures the root directory that starts the search for cargo configs.
@@ -38,16 +41,16 @@ impl TargetRunner {
     /// is made available for testing purposes.
     pub fn with_root(
         target_triple: Option<&str>,
-        use_cargo_home: bool,
         root: Utf8PathBuf,
+        terminate_search_at: Option<&Utf8Path>,
     ) -> Result<Option<Self>, TargetRunnerError> {
-        Self::get_runner_by_precedence(target_triple, use_cargo_home, Some(root))
+        Self::get_runner_by_precedence(target_triple, Some(root), terminate_search_at)
     }
 
     fn get_runner_by_precedence(
         target_triple: Option<&str>,
-        use_cargo_home: bool,
         root: Option<Utf8PathBuf>,
+        terminate_search_at: Option<&Utf8Path>,
     ) -> Result<Option<Self>, TargetRunnerError> {
         let target = match target_triple {
             Some(target) => target_spec::Platform::from_triple(
@@ -84,7 +87,7 @@ impl TargetRunner {
             }
         };
 
-        Self::find_config(target, use_cargo_home, root)
+        Self::find_config(target, root, terminate_search_at)
     }
 
     fn from_env(env_key: String) -> Result<Option<Self>, TargetRunnerError> {
@@ -109,8 +112,8 @@ impl TargetRunner {
     /// [cargo config](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
     pub fn find_config(
         target: target_spec::Platform,
-        use_cargo_home: bool,
         root: Utf8PathBuf,
+        terminate_search_at: Option<&Utf8Path>,
     ) -> Result<Option<Self>, TargetRunnerError> {
         let mut configs = Vec::new();
 
@@ -156,10 +159,13 @@ impl TargetRunner {
             }
 
             dir.pop();
+            if Some(dir.as_path()) == terminate_search_at {
+                break;
+            }
             dir.pop();
         }
 
-        if use_cargo_home {
+        if terminate_search_at.is_none() {
             // Attempt lookup the $CARGO_HOME directory from the cwd, as that can
             // contain a default config.toml
             let mut cargo_home_path = home::cargo_home_with_cwd(root.as_std_path())
