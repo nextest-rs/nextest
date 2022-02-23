@@ -68,7 +68,6 @@ impl<'g> RustTestArtifact<'g> {
                         let package = graph
                             .metadata(&package_id)
                             .map_err(FromMessagesError::PackageGraph)?;
-
                         // Tests are run in the directory containing Cargo.toml
                         let cwd = package
                             .manifest_path()
@@ -86,6 +85,11 @@ impl<'g> RustTestArtifact<'g> {
                         if artifact.target.name != package.name() {
                             binary_id.push_str("::");
                             binary_id.push_str(&artifact.target.name);
+                        } else if !artifact.target.kind.contains(&"lib".to_owned()) {
+                            if let Some(kind) = artifact.target.kind.get(0) {
+                                binary_id.push_str("::");
+                                binary_id.push_str(kind);
+                            }
                         }
 
                         binaries.push(RustTestArtifact {

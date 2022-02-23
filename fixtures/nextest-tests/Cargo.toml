@@ -13,6 +13,10 @@ license-file = "foo.md"
 repository = "https://example.com/fake/repository"
 edition = "2018"
 
+[[bin]]
+name = "nextest-tests"
+path = "src/main.rs"
+
 # Make this crate its own workspace.
 [workspace]
 

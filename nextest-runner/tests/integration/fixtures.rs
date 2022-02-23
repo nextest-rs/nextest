@@ -82,6 +82,9 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
             "nextest-tests" => vec![
                 TestFixture { name: "tests::unit_test_success", status: FixtureStatus::Pass },
             ],
+            "nextest-tests::bin" => vec![
+                TestFixture { name: "tests::bin_test_success", status: FixtureStatus::Pass },
+            ],
         }
     },
 );
