@@ -5,6 +5,10 @@
 //!
 //! The main structure in this module is [`TestFilter`], which is created by a [`TestFilterBuilder`].
 
+#![allow(clippy::nonminimal_bool)]
+// nonminimal_bool fires on one of the conditions below and appears to suggest an incorrect
+// result
+
 use crate::{
     errors::RunIgnoredParseError,
     partition::{Partitioner, PartitionerBuilder},
