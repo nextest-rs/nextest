@@ -5,4 +5,4 @@ runner = "wine"
 runner = "android-runner -x"
 
 [target.'cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "musl"))']
-runner = "passthrough --ensure-this-arg-is-sent"
+runner = ["passthrough", "--ensure-this-arg-is-sent"]
