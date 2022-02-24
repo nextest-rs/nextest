@@ -206,6 +206,14 @@ pub enum FromMessagesError {
 
     /// An error occurred while querying the package graph.
     PackageGraph(guppy::Error),
+
+    /// A target in the package graph was missing `kind` information.
+    MissingTargetKind {
+        /// The name of the malformed package.
+        package_name: String,
+        /// The name of the malformed target within the package.
+        binary_name: String,
+    },
 }
 
 impl fmt::Display for FromMessagesError {
@@ -217,6 +225,16 @@ impl fmt::Display for FromMessagesError {
             FromMessagesError::PackageGraph(_) => {
                 write!(f, "error querying package graph")
             }
+            FromMessagesError::MissingTargetKind {
+                package_name,
+                binary_name,
+            } => {
+                write!(
+                    f,
+                    "missing kind for target {} in package {}",
+                    binary_name, package_name
+                )
+            }
         }
     }
 }
@@ -226,6 +244,7 @@ impl error::Error for FromMessagesError {
         match self {
             FromMessagesError::ReadMessages(error) => Some(error),
             FromMessagesError::PackageGraph(error) => Some(error),
+            FromMessagesError::MissingTargetKind { .. } => None,
         }
     }
 }

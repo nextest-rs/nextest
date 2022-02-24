@@ -66,6 +66,7 @@ impl FixtureStatus {
 pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::new(
     || {
         btreemap! {
+            // Integration tests
             "nextest-tests::basic" => vec![
                 TestFixture { name: "test_cargo_env_vars", status: FixtureStatus::Pass },
                 TestFixture { name: "test_cwd", status: FixtureStatus::Pass },
@@ -79,11 +80,26 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
                 TestFixture { name: "test_success", status: FixtureStatus::Pass },
                 TestFixture { name: "test_success_should_panic", status: FixtureStatus::Pass },
             ],
+            "nextest-tests::other" => vec![
+                TestFixture { name: "other_test_success", status: FixtureStatus::Pass },
+            ],
+            // Unit tests
             "nextest-tests" => vec![
                 TestFixture { name: "tests::unit_test_success", status: FixtureStatus::Pass },
             ],
-            "nextest-tests::bin" => vec![
-                TestFixture { name: "tests::bin_test_success", status: FixtureStatus::Pass },
+            // Binary tests
+            "nextest-tests::bin/nextest-tests" => vec![
+                TestFixture { name: "tests::bin_success", status: FixtureStatus::Pass },
+            ],
+            "nextest-tests::bin/other" => vec![
+                TestFixture { name: "tests::other_bin_success", status: FixtureStatus::Pass },
+            ],
+            // Example tests
+            "nextest-tests::example/nextest-tests" => vec![
+                TestFixture { name: "tests::example_success", status: FixtureStatus::Pass },
+            ],
+            "nextest-tests::example/other" => vec![
+                TestFixture { name: "tests::other_example_success", status: FixtureStatus::Pass },
             ],
         }
     },
