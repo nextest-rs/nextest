@@ -11,7 +11,7 @@ use quick_xml::{
     events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event},
     Writer,
 };
-use std::{array, io, time::Duration};
+use std::{io, time::Duration};
 
 static TESTSUITES_TAG: &str = "testsuites";
 static TESTSUITE_TAG: &str = "testsuite";
@@ -57,12 +57,12 @@ pub(crate) fn serialize_report_impl(
     } = report;
 
     let mut testsuites_tag = BytesStart::borrowed_name(TESTSUITES_TAG.as_bytes());
-    testsuites_tag.extend_attributes(array::IntoIter::new([
+    testsuites_tag.extend_attributes([
         ("name", name.as_str()),
         ("tests", tests.to_string().as_str()),
         ("failures", failures.to_string().as_str()),
         ("errors", errors.to_string().as_str()),
-    ]));
+    ]);
     if let Some(timestamp) = timestamp {
         serialize_timestamp(&mut testsuites_tag, timestamp);
     }
@@ -102,13 +102,13 @@ pub(crate) fn serialize_test_suite(
     } = test_suite;
 
     let mut test_suite_tag = BytesStart::borrowed_name(TESTSUITE_TAG.as_bytes());
-    test_suite_tag.extend_attributes(array::IntoIter::new([
+    test_suite_tag.extend_attributes([
         ("name", name.as_str()),
         ("tests", tests.to_string().as_str()),
         ("disabled", disabled.to_string().as_str()),
         ("errors", errors.to_string().as_str()),
         ("failures", failures.to_string().as_str()),
-    ]));
+    ]);
 
     if let Some(timestamp) = timestamp {
         serialize_timestamp(&mut test_suite_tag, timestamp);
@@ -151,10 +151,10 @@ fn serialize_property(
     writer: &mut Writer<impl io::Write>,
 ) -> quick_xml::Result<()> {
     let mut property_tag = BytesStart::borrowed_name(PROPERTY_TAG.as_bytes());
-    property_tag.extend_attributes(array::IntoIter::new([
+    property_tag.extend_attributes([
         ("name", property.name.as_str()),
         ("value", property.value.as_str()),
-    ]));
+    ]);
 
     writer.write_event(Event::Empty(property_tag))
 }
@@ -176,7 +176,7 @@ fn serialize_test_case(
     } = test_case;
 
     let mut testcase_tag = BytesStart::borrowed_name(TESTCASE_TAG.as_bytes());
-    testcase_tag.extend_attributes(array::IntoIter::new([("name", name.as_str())]));
+    testcase_tag.extend_attributes([("name", name.as_str())]);
     if let Some(classname) = classname {
         testcase_tag.push_attribute(("classname", classname.as_str()));
     }
