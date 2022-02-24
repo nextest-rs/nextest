@@ -148,37 +148,43 @@ impl<'cfg> NextestProfile<'cfg> {
 
     /// Returns the retry count for this profile.
     pub fn retries(&self) -> usize {
-        self.custom_profile.and_then(|profile| profile.retries)
+        self.custom_profile
+            .and_then(|profile| profile.retries)
             .unwrap_or(self.default_profile.retries)
     }
 
     /// Returns the time after which tests are treated as slow for this profile.
     pub fn slow_timeout(&self) -> Duration {
-        self.custom_profile.and_then(|profile| profile.slow_timeout)
+        self.custom_profile
+            .and_then(|profile| profile.slow_timeout)
             .unwrap_or(self.default_profile.slow_timeout)
     }
 
     /// Returns the test status level.
     pub fn status_level(&self) -> StatusLevel {
-        self.custom_profile.and_then(|profile| profile.status_level)
+        self.custom_profile
+            .and_then(|profile| profile.status_level)
             .unwrap_or(self.default_profile.status_level)
     }
 
     /// Returns the failure output config for this profile.
     pub fn failure_output(&self) -> TestOutputDisplay {
-        self.custom_profile.and_then(|profile| profile.failure_output)
+        self.custom_profile
+            .and_then(|profile| profile.failure_output)
             .unwrap_or(self.default_profile.failure_output)
     }
 
     /// Returns the failure output config for this profile.
     pub fn success_output(&self) -> TestOutputDisplay {
-        self.custom_profile.and_then(|profile| profile.success_output)
+        self.custom_profile
+            .and_then(|profile| profile.success_output)
             .unwrap_or(self.default_profile.success_output)
     }
 
     /// Returns the fail-fast config for this profile.
     pub fn fail_fast(&self) -> bool {
-        self.custom_profile.and_then(|profile| profile.fail_fast)
+        self.custom_profile
+            .and_then(|profile| profile.fail_fast)
             .unwrap_or(self.default_profile.fail_fast)
     }
 
@@ -193,7 +199,8 @@ impl<'cfg> NextestProfile<'cfg> {
         path.map(|path| {
             let path = self.store_dir.join(path);
             let report_name = self
-                .custom_profile.and_then(|profile| profile.junit.report_name.as_deref())
+                .custom_profile
+                .and_then(|profile| profile.junit.report_name.as_deref())
                 .unwrap_or(&self.default_profile.junit.report_name);
             NextestJunitConfig { path, report_name }
         })
