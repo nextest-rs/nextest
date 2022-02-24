@@ -82,13 +82,36 @@ impl<'g> RustTestArtifact<'g> {
 
                         // Construct the binary ID from the package and build target.
                         let mut binary_id = package.name().to_owned();
-                        if artifact.target.name != package.name() {
+                        let binary_name = artifact.target.name;
+
+                        // To ensure unique binary IDs, we use the following scheme:
+                        // 1. If the target is a lib, use the package name.
+                        //      There can only be one lib per package, so this
+                        //      will always be unique.
+                        if !artifact.target.kind.contains(&"lib".to_owned()) {
                             binary_id.push_str("::");
-                            binary_id.push_str(&artifact.target.name);
-                        } else if !artifact.target.kind.contains(&"lib".to_owned()) {
-                            if let Some(kind) = artifact.target.kind.get(0) {
-                                binary_id.push_str("::");
-                                binary_id.push_str(kind);
+
+                            match artifact.target.kind.get(0) {
+                                // 2. For integration tests, use the target name.
+                                //      Cargo enforces unique names for the same
+                                //      kind of targets in a package, so these
+                                //      will always be unique.
+                                Some(kind) if kind == "test" => {
+                                    binary_id.push_str(&binary_name);
+                                }
+                                // 3. For all other target kinds, use a
+                                //      combination of the target kind and
+                                //      the target name. For the same reason
+                                //      as above, these will always be unique.
+                                Some(kind) => {
+                                    binary_id.push_str(&format!("{}/{}", kind, binary_name));
+                                }
+                                None => {
+                                    return Err(FromMessagesError::MissingTargetKind {
+                                        package_name: package.name().to_owned(),
+                                        binary_name: binary_name.clone(),
+                                    });
+                                }
                             }
                         }
 
@@ -96,7 +119,7 @@ impl<'g> RustTestArtifact<'g> {
                             binary_id,
                             package,
                             binary_path: binary,
-                            binary_name: artifact.target.name,
+                            binary_name,
                             cwd,
                         })
                     }
