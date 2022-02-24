@@ -668,6 +668,7 @@ dependencies = [
  "serde_json",
  "strip-ansi-escapes",
  "target-spec",
+ "tempfile",
  "toml",
  "twox-hash",
 ]

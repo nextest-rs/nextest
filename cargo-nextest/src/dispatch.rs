@@ -419,7 +419,7 @@ fn build_graph(manifest_path: Option<&Utf8Path>, output: OutputContext) -> Resul
 }
 
 fn runner_for_target(triple: Option<&str>) -> Option<TargetRunner> {
-    match TargetRunner::for_target(triple, None) {
+    match TargetRunner::for_target(triple) {
         Ok(runner) => runner,
         Err(err) => {
             warn_on_target_runner_err(&err).expect("writing to a string is infallible");

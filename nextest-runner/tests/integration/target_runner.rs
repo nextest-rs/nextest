@@ -1,12 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use camino::Utf8PathBuf;
+use crate::fixtures::workspace_root;
 use nextest_runner::{errors::TargetRunnerError, target_runner::TargetRunner};
 use once_cell::sync::OnceCell;
 use std::{env, sync::Mutex};
-
-use crate::fixtures::workspace_root;
 
 fn env_mutex() -> &'static Mutex<()> {
     static MUTEX: OnceCell<Mutex<()>> = OnceCell::new();
@@ -43,10 +41,12 @@ fn default() -> &'static target_spec::Platform {
     DEF.get_or_init(|| target_spec::Platform::current().unwrap())
 }
 
+fn runner_for_target(triple: Option<&str>) -> Result<Option<TargetRunner>, TargetRunnerError> {
+    TargetRunner::with_isolation(triple, &workspace_root(), &workspace_root())
+}
+
 #[test]
 fn parses_cargo_env() {
-    let workspace_root = workspace_root();
-    let terminate_search_at = Some(workspace_root.as_path());
     let def_runner = with_env(
         [(
             format!(
@@ -58,7 +58,7 @@ fn parses_cargo_env() {
             ),
             "cargo_with_default --arg --arg2",
         )],
-        || TargetRunner::for_target(None, terminate_search_at),
+        || runner_for_target(None),
     )
     .unwrap()
     .unwrap();
@@ -74,21 +74,13 @@ fn parses_cargo_env() {
             "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUNNER",
             "cargo_with_specific",
         )],
-        || TargetRunner::for_target(Some("aarch64-linux-android"), terminate_search_at),
+        || runner_for_target(Some("aarch64-linux-android")),
     )
     .unwrap()
     .unwrap();
 
     assert_eq!("cargo_with_specific", specific_runner.binary());
     assert_eq!(0, specific_runner.args().count());
-}
-
-/// Use fixtures/nextest-test as the root dir
-fn root_dir() -> Utf8PathBuf {
-    Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("fixtures/nextest-tests")
 }
 
 fn parse_triple(triple: &'static str) -> target_spec::Platform {
@@ -99,7 +91,7 @@ fn parse_triple(triple: &'static str) -> target_spec::Platform {
 fn parses_cargo_config_exact() {
     let windows = parse_triple("x86_64-pc-windows-gnu");
 
-    let runner = TargetRunner::find_config(windows, root_dir(), Some(workspace_root().as_path()))
+    let runner = TargetRunner::find_config(windows, &workspace_root(), Some(&workspace_root()))
         .unwrap()
         .unwrap();
 
@@ -111,7 +103,7 @@ fn parses_cargo_config_exact() {
 fn disregards_non_matching() {
     let windows = parse_triple("x86_64-unknown-linux-gnu");
     assert!(
-        TargetRunner::find_config(windows, root_dir(), Some(workspace_root().as_path()))
+        TargetRunner::find_config(windows, &workspace_root(), Some(&workspace_root()))
             .unwrap()
             .is_none()
     );
@@ -122,7 +114,7 @@ fn parses_cargo_config_cfg() {
     let workspace_root = workspace_root();
     let terminate_search_at = Some(workspace_root.as_path());
     let android = parse_triple("aarch64-linux-android");
-    let runner = TargetRunner::find_config(android, root_dir(), terminate_search_at)
+    let runner = TargetRunner::find_config(android, &workspace_root, terminate_search_at)
         .unwrap()
         .unwrap();
 
@@ -130,7 +122,7 @@ fn parses_cargo_config_cfg() {
     assert_eq!(vec!["-x"], runner.args().collect::<Vec<_>>());
 
     let linux = parse_triple("x86_64-unknown-linux-musl");
-    let runner = TargetRunner::find_config(linux, root_dir(), terminate_search_at)
+    let runner = TargetRunner::find_config(linux, &workspace_root, terminate_search_at)
         .unwrap()
         .unwrap();
 
@@ -151,10 +143,10 @@ fn fallsback_to_cargo_config() {
             "cargo-runner-windows",
         )],
         || {
-            TargetRunner::with_root(
+            TargetRunner::with_isolation(
                 Some(linux.triple_str()),
-                root_dir(),
-                Some(workspace_root().as_path()),
+                &workspace_root(),
+                &workspace_root(),
             )
         },
     )
@@ -172,7 +164,7 @@ fn fallsback_to_cargo_config() {
 mod run {
     use super::*;
     use crate::fixtures::*;
-    use camino::Utf8Path;
+    use camino::{Utf8Path, Utf8PathBuf};
     use color_eyre::Result;
     use nextest_runner::{
         config::NextestConfig,
@@ -214,7 +206,7 @@ mod run {
                     &current_runner_env_var(),
                     &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
                 )],
-                || TargetRunner::for_target(None, Some(workspace_root().as_path())),
+                || runner_for_target(None),
             )?
             .unwrap();
 
@@ -244,7 +236,7 @@ mod run {
                 &current_runner_env_var(),
                 &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
             )],
-            || TargetRunner::for_target(None, Some(workspace_root().as_path())),
+            || runner_for_target(None),
         )?
         .unwrap();
 

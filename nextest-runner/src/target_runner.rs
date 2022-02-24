@@ -1,10 +1,11 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Adds support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
+//! Support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 
 use crate::errors::TargetRunnerError;
 use camino::{Utf8Path, Utf8PathBuf};
+use std::borrow::Cow;
 use target_spec::Platform;
 
 #[derive(serde::Deserialize, Debug)]
@@ -16,7 +17,7 @@ enum Runner {
 
 /// A [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 /// used to execute a test binary rather than the default of executing natively
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct TargetRunner {
     /// This is required
     runner_binary: Utf8PathBuf,
@@ -28,28 +29,30 @@ impl TargetRunner {
     /// Acquires the [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
     /// which can be set in a [.cargo/config.toml](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
     /// or via a `CARGO_TARGET_{TRIPLE}_RUNNER` environment variable
-    pub fn for_target(
-        target_triple: Option<&str>,
-        terminate_search_at: Option<&Utf8Path>,
-    ) -> Result<Option<Self>, TargetRunnerError> {
-        Self::get_runner_by_precedence(target_triple, None, terminate_search_at)
+    pub fn for_target(target_triple: Option<&str>) -> Result<Option<Self>, TargetRunnerError> {
+        Self::get_runner_by_precedence(target_triple, None, None)
     }
 
-    /// Configures the root directory that starts the search for cargo configs.
+    /// Configures the start and terminate search the search for cargo configs.
     ///
-    /// The default is normally the current working directory, but this method
-    /// is made available for testing purposes.
-    pub fn with_root(
+    /// The default is normally the current working directory. Not part of the public API, for
+    /// testing only.
+    #[doc(hidden)]
+    pub fn with_isolation(
         target_triple: Option<&str>,
-        root: Utf8PathBuf,
-        terminate_search_at: Option<&Utf8Path>,
+        start_search_at: &Utf8Path,
+        terminate_search_at: &Utf8Path,
     ) -> Result<Option<Self>, TargetRunnerError> {
-        Self::get_runner_by_precedence(target_triple, Some(root), terminate_search_at)
+        Self::get_runner_by_precedence(
+            target_triple,
+            Some(start_search_at),
+            Some(terminate_search_at),
+        )
     }
 
     fn get_runner_by_precedence(
         target_triple: Option<&str>,
-        root: Option<Utf8PathBuf>,
+        root: Option<&Utf8Path>,
         terminate_search_at: Option<&Utf8Path>,
     ) -> Result<Option<Self>, TargetRunnerError> {
         let target = match target_triple {
@@ -73,21 +76,22 @@ impl TargetRunner {
             return Ok(Some(tr));
         }
 
-        let root = match root {
-            Some(rp) => rp,
+        let start_search_at = match root {
+            Some(rp) => Cow::Borrowed(rp),
             None => {
                 // This is a bit non-intuitive, but the .cargo/config.toml hierarchy is actually
                 // based on the current working directory, _not_ the manifest path, this bug
                 // has existed for a while https://github.com/rust-lang/cargo/issues/2930
-                std::env::current_dir()
+                let dir = std::env::current_dir()
                     .map_err(TargetRunnerError::UnableToReadDir)
                     .and_then(|cwd| {
                         Utf8PathBuf::from_path_buf(cwd).map_err(TargetRunnerError::NonUtf8Path)
-                    })?
+                    })?;
+                Cow::Owned(dir)
             }
         };
 
-        Self::find_config(target, root, terminate_search_at)
+        Self::find_config(target, &start_search_at, terminate_search_at)
     }
 
     fn from_env(env_key: String) -> Result<Option<Self>, TargetRunnerError> {
@@ -110,9 +114,12 @@ impl TargetRunner {
 
     /// Attempts to find a target runner for the specified target from a
     /// [cargo config](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
+    ///
+    /// Not part of the public API. For testing only.
+    #[doc(hidden)]
     pub fn find_config(
         target: target_spec::Platform,
-        root: Utf8PathBuf,
+        start_search_at: &Utf8Path,
         terminate_search_at: Option<&Utf8Path>,
     ) -> Result<Option<Self>, TargetRunnerError> {
         let mut configs = Vec::new();
@@ -135,10 +142,10 @@ impl TargetRunner {
             ret
         }
 
-        let mut dir = root
+        let mut dir = start_search_at
             .canonicalize()
             .map_err(|error| TargetRunnerError::FailedPathCanonicalization {
-                path: root.clone(),
+                path: start_search_at.to_owned(),
                 error,
             })
             .and_then(|canon| {
@@ -168,7 +175,7 @@ impl TargetRunner {
         if terminate_search_at.is_none() {
             // Attempt lookup the $CARGO_HOME directory from the cwd, as that can
             // contain a default config.toml
-            let mut cargo_home_path = home::cargo_home_with_cwd(root.as_std_path())
+            let mut cargo_home_path = home::cargo_home_with_cwd(start_search_at.as_std_path())
                 .map_err(TargetRunnerError::UnableToReadDir)
                 .and_then(|home| {
                     Utf8PathBuf::from_path_buf(home).map_err(TargetRunnerError::NonUtf8Path)
@@ -302,4 +309,152 @@ impl TargetRunner {
     pub fn args(&self) -> impl Iterator<Item = &str> {
         self.args.iter().map(AsRef::as_ref)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use color_eyre::eyre::{Context, Result};
+    use std::convert::TryFrom;
+    use target_spec::TargetFeatures;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_find_config() {
+        let dir = setup_temp_dir().unwrap();
+        let dir_path = <&Utf8Path>::try_from(dir.path()).unwrap();
+        let dir_foo_path = Utf8PathBuf::try_from(dir.path().join("foo")).unwrap();
+        let dir_foo_bar_path = Utf8PathBuf::try_from(dir.path().join("foo/bar")).unwrap();
+
+        // ---
+        // Searches through the full directory tree
+        // ---
+        assert_eq!(
+            TargetRunner::find_config(
+                Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &dir_foo_bar_path,
+                Some(dir_path),
+            )
+            .unwrap(),
+            Some(TargetRunner {
+                runner_binary: "wine".into(),
+                args: vec!["--test-arg".into()],
+            }),
+        );
+
+        assert_eq!(
+            TargetRunner::find_config(
+                Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
+                &dir_foo_bar_path,
+                Some(dir_path),
+            )
+            .unwrap(),
+            Some(TargetRunner {
+                runner_binary: "wine2".into(),
+                args: vec![],
+            }),
+        );
+
+        assert_eq!(
+            TargetRunner::find_config(
+                Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
+                &dir_foo_bar_path,
+                Some(dir_path),
+            )
+            .unwrap(),
+            Some(TargetRunner {
+                runner_binary: "unix-runner".into(),
+                args: vec![],
+            }),
+        );
+
+        // ---
+        // Searches starting from the "foo" directory which has no .cargo/config in it
+        // ---
+        assert_eq!(
+            TargetRunner::find_config(
+                Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &dir_foo_path,
+                Some(dir_path),
+            )
+            .unwrap(),
+            Some(TargetRunner {
+                runner_binary: "parent-wine".into(),
+                args: vec![],
+            }),
+        );
+
+        assert_eq!(
+            TargetRunner::find_config(
+                Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
+                &dir_foo_path,
+                Some(dir_path),
+            )
+            .unwrap(),
+            None,
+        );
+
+        // ---
+        // Searches starting and ending at the root directory.
+        // ---
+        assert_eq!(
+            TargetRunner::find_config(
+                Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                dir_path,
+                Some(dir_path),
+            )
+            .unwrap(),
+            Some(TargetRunner {
+                runner_binary: "parent-wine".into(),
+                args: vec![],
+            }),
+        );
+
+        assert_eq!(
+            TargetRunner::find_config(
+                Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
+                dir_path,
+                Some(dir_path),
+            )
+            .unwrap(),
+            None,
+        );
+    }
+
+    fn setup_temp_dir() -> Result<TempDir> {
+        let dir = tempfile::Builder::new()
+            .tempdir()
+            .wrap_err("error creating tempdir")?;
+
+        std::fs::create_dir_all(dir.path().join(".cargo"))
+            .wrap_err("error creating .cargo subdir")?;
+        std::fs::create_dir_all(dir.path().join("foo/bar/.cargo"))
+            .wrap_err("error creating foo/bar/.cargo subdir")?;
+
+        std::fs::write(dir.path().join(".cargo/config"), CARGO_CONFIG_CONTENTS)
+            .wrap_err("error writing .cargo/config")?;
+        std::fs::write(
+            dir.path().join("foo/bar/.cargo/config.toml"),
+            FOO_BAR_CARGO_CONFIG_CONTENTS,
+        )
+        .wrap_err("error writing foo/bar/.cargo/config.toml")?;
+
+        Ok(dir)
+    }
+
+    static CARGO_CONFIG_CONTENTS: &str = r#"
+    [target.x86_64-pc-windows-msvc]
+    runner = "parent-wine"
+
+    [target.'cfg(unix)']
+    runner = "unix-runner"
+    "#;
+
+    static FOO_BAR_CARGO_CONFIG_CONTENTS: &str = r#"
+    [target.x86_64-pc-windows-msvc]
+    runner = ["wine", "--test-arg"]
+
+    [target.'cfg(windows)']
+    runner = "wine2"
+    "#;
 }
