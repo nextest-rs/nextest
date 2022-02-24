@@ -14,7 +14,7 @@ In the output above:
 * Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.603 seconds to execute.
 * The part of the test in purple is the *test binary*. A test binary is either:
   * a *unit test binary* built from tests inline within `lib.rs`. These test binaries are shown by nextest as just the crate name, without a `::` separator inside them.
-  * an *integration test binary* built from tests in the `[[test]]` section of `Cargo.toml` (typically tests in the `tests` directory.) These tests are shown by nextest in the format `crate-name::bin-name`.
+  * an *integration test binary* built from tests in the `[[test]]` section of `Cargo.toml` (typically tests in the `tests` directory.) These tests are shown by nextest in the format `crate-name::bin-name`[^bin-example].
 
   For more about unit and integration tests, see [the documentation for `cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html).
 * The part after the test binary is the *test name*, including the module the test is in. The final part of the test name is highlighted in bold blue text.
@@ -26,6 +26,8 @@ cargo nextest run -p my-package
 ```
 
 For a full list of options accepted by `cargo nextest run`, see `cargo nextest run --help`.
+
+[^bin-example]: `bin` and `example` targets can also contain tests. Those are represented as `crate-name::bin/bin-name` and `crate-name::example/example-name`, respectively.
 
 ### Filtering tests
 

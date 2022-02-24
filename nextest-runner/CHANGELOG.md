@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0] - 2022-02-23
+
+### Fixed
+
+- Target runners of the form `runner = ["bin-name", "--arg1", ...]` are now parsed correctly ([#75]).
+- Binary IDs for `[[bin]]` and `[[example]]` tests are now unique, in the format `<crate-name>::bin/<binary-name>` and `<crate-name>::test/<binary-name>` respectively ([#76]).
+
+[#75]: https://github.com/nextest-rs/nextest/pull/75
+[#76]: https://github.com/nextest-rs/nextest/pull/76
+
 ## [0.2.1] - 2022-02-23
 
 - Improvements to `TargetRunnerError` message display: source errors are no longer displayed directly, only in "caused by".
@@ -28,6 +38,7 @@
 
 - Initial version.
 
+[0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.3.0
 [0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.2.1
 [0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.2.0
 [0.1.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.1.2

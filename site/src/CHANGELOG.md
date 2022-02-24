@@ -3,6 +3,16 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.8] - 2022-02-23
+
+### Fixed
+
+- Target runners of the form `runner = ["bin-name", "--arg1", ...]` are now parsed correctly ([#75]).
+- Binary IDs for `[[bin]]` and `[[example]]` tests are now unique, in the format `<crate-name>::bin/<binary-name>` and `<crate-name>::test/<binary-name>` respectively ([#76]).
+
+[#75]: https://github.com/nextest-rs/nextest/pull/75
+[#76]: https://github.com/nextest-rs/nextest/pull/76
+
 ## [0.9.7] - 2022-02-23
 
 ### Fixed
@@ -80,6 +90,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.8]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.8
 [0.9.7]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.7
 [0.9.6]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.6
 [0.9.5]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.5
