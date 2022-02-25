@@ -16,7 +16,7 @@ camino = "1.0.7"
 cfg-if = "1.0.0"
 clap = { version = "3.1.1", features = ["derive"] }
 # we don't use the tracing support
-color-eyre = { version = "0.6.0", default-features = false }
+color-eyre = { version = "0.6.1", default-features = false }
 duct = "0.13.5"
 enable-ansi-support = "0.1.2"
 # we don't use the default formatter so we don't need default features
