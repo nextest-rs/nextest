@@ -1,5 +1,7 @@
 # Reusing build
 
+**This is an experimental feature: set the environment variable `NEXTEST_EXPERIMENTAL_REUSE_BUILD=1` to use it.**
+
 In some cases, it can be useful to split tests building and tests running in two steps. This includes:
 
 - Cross compilation: the build machine is not the same as the target machine

@@ -154,9 +154,9 @@ enum Command {
 }
 
 #[derive(Debug, Args)]
-#[clap(next_help_heading = "REUSE BUILD OPTIONS")]
+#[clap(next_help_heading = "REUSE BUILD OPTIONS (EXPERIMENTAL)")]
 struct ReuseBuildOpts {
-    /// Path to list of test binaries.
+    /// Path to list of test binaries
     #[clap(long, value_name = "PATH")]
     binaries_metadata: Option<Utf8PathBuf>,
 
@@ -394,6 +394,26 @@ impl TestReporterOpts {
     }
 }
 
+fn check_reuse_build_enabled_if_used(reuse_build: &ReuseBuildOpts) -> Result<()> {
+    let used = reuse_build.binaries_metadata.is_some()
+        || reuse_build.binaries_dir_remap.is_some()
+        || reuse_build.cargo_metadata.is_some()
+        || reuse_build.workspace_remap.is_some()
+        || reuse_build.platform_filter.is_some();
+
+    let var_name = "NEXTEST_EXPERIMENTAL_REUSE_BUILD";
+    let enabled = std::env::var(var_name).is_ok();
+
+    if used && !enabled {
+        Err(Report::new(ExpectedError::experimental_feature_error(
+            "build reuse",
+            var_name,
+        )))
+    } else {
+        Ok(())
+    }
+}
+
 impl AppOpts {
     /// Execute the command.
     fn exec(self) -> Result<()> {
@@ -404,6 +424,8 @@ impl AppOpts {
                 list_type,
                 reuse_build,
             } => {
+                check_reuse_build_enabled_if_used(&reuse_build)?;
+
                 let app = App::new(
                     self.output,
                     reuse_build,
@@ -421,6 +443,8 @@ impl AppOpts {
                 reporter_opts,
                 reuse_build,
             } => {
+                check_reuse_build_enabled_if_used(&reuse_build)?;
+
                 let app = App::new(
                     self.output,
                     reuse_build,

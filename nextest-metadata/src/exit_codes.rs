@@ -21,4 +21,7 @@ impl NextestExitCode {
 
     /// A user issue happened while setting up a nextest invocation.
     pub const SETUP_ERROR: i32 = 96;
+
+    /// An experimental feature was used without the environment variable to enable it.
+    pub const EXPERIMENTAL_FEATURE_NOT_ENABLED: i32 = 95;
 }
