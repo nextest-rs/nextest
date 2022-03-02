@@ -25,6 +25,10 @@ pub enum ExpectedError {
         exit_code: Option<i32>,
     },
     TestRunFailed,
+    ExperimentalFeatureNotEnabled {
+        name: &'static str,
+        var_name: &'static str,
+    },
 }
 
 impl ExpectedError {
@@ -38,6 +42,10 @@ impl ExpectedError {
 
     pub(crate) fn config_parse_error(err: ConfigParseError) -> Self {
         Self::ConfigParseError { err }
+    }
+
+    pub(crate) fn experimental_feature_error(name: &'static str, var_name: &'static str) -> Self {
+        Self::ExperimentalFeatureNotEnabled { name, var_name }
     }
 
     pub(crate) fn build_failed(
@@ -66,6 +74,9 @@ impl ExpectedError {
             }
             Self::BuildFailed { .. } => NextestExitCode::BUILD_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
+            Self::ExperimentalFeatureNotEnabled { .. } => {
+                NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
+            }
         }
     }
 
@@ -112,6 +123,14 @@ impl ExpectedError {
                 log::error!("test run failed");
                 None
             }
+            Self::ExperimentalFeatureNotEnabled { name, var_name } => {
+                log::error!(
+                    "'{}' is an experimental feature and must be enabled with {}=1",
+                    name,
+                    var_name
+                );
+                None
+            }
         };
 
         while let Some(err) = next_error {
@@ -130,6 +149,9 @@ impl fmt::Display for ExpectedError {
             Self::ConfigParseError { .. } => writeln!(f, "config read error"),
             Self::BuildFailed { .. } => writeln!(f, "build failed"),
             Self::TestRunFailed => writeln!(f, "test run failed"),
+            Self::ExperimentalFeatureNotEnabled { .. } => {
+                writeln!(f, "experimental feature not enabled")
+            }
         }
     }
 }
