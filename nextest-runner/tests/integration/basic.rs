@@ -3,14 +3,38 @@
 
 use crate::fixtures::*;
 use color_eyre::eyre::Result;
+use nextest_metadata::Platform;
 use nextest_runner::{
     config::NextestConfig,
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
     signal::SignalHandler,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::TestList,
+    test_list::{BinaryList, TestList},
 };
 use pretty_assertions::assert_eq;
+use std::io::Cursor;
+
+#[test]
+fn test_list_binaries() -> Result<()> {
+    let graph = &*PACKAGE_GRAPH;
+    let binary_list =
+        BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph)?;
+
+    for (id, name, platform_is_target) in &EXPECTED_BINARY_LIST {
+        let bin = binary_list
+            .rust_binaries
+            .iter()
+            .find(|bin| bin.id.as_str() == *id)
+            .unwrap();
+        assert_eq!(*name, bin.name.as_str());
+        if *platform_is_target {
+            assert_eq!(Platform::Target, bin.platform);
+        } else {
+            assert_eq!(Platform::Host, bin.platform);
+        }
+    }
+    Ok(())
+}
 
 #[test]
 fn test_list_tests() -> Result<()> {
