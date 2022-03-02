@@ -23,5 +23,8 @@ test = true
 
 # Make this crate its own workspace.
 [workspace]
+members = [
+    "derive"
+]
 
 [dependencies]
