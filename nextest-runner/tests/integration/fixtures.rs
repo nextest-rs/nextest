@@ -101,6 +101,9 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
             "nextest-tests::example/other" => vec![
                 TestFixture { name: "tests::other_example_success", status: FixtureStatus::Pass },
             ],
+            "nextest-derive::proc-macro/nextest-derive" => vec![
+                TestFixture { name: "it_works", status: FixtureStatus::Pass },
+            ],
         }
     },
 );
@@ -141,6 +144,7 @@ fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
         cmd_name,
         "test",
         "--no-run",
+        "--workspace",
         "--message-format",
         "json-render-diagnostics"
     )
