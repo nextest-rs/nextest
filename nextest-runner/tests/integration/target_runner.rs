@@ -164,7 +164,7 @@ fn fallsback_to_cargo_config() {
 mod run {
     use super::*;
     use crate::fixtures::*;
-    use camino::{Utf8Path, Utf8PathBuf};
+    use camino::Utf8Path;
     use color_eyre::Result;
     use nextest_runner::{
         config::NextestConfig,
@@ -176,13 +176,7 @@ mod run {
     use target_spec::Platform;
 
     fn passthrough_path() -> &'static Utf8Path {
-        static PP: once_cell::sync::OnceCell<Utf8PathBuf> = once_cell::sync::OnceCell::new();
-        PP.get_or_init(|| {
-            Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap()
-                .join("fixtures/passthrough")
-        })
+        Utf8Path::new(env!("CARGO_BIN_EXE_passthrough"))
     }
 
     fn current_runner_env_var() -> String {
