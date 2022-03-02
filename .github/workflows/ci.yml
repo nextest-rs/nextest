@@ -99,8 +99,8 @@ jobs:
       - name: Test with locally built nextest
         uses: actions-rs/cargo@v1
         with:
-          command: run
-          args: --package cargo-nextest -- nextest run --all-features --profile ci
+          command: local-nt
+          args: run --all-features --profile ci
       - name: Install latest nextest release
         shell: bash
         run: |
