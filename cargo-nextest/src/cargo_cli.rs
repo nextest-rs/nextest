@@ -261,7 +261,6 @@ impl<'a> CargoCli<'a> {
         self
     }
 
-    #[allow(dead_code)]
     pub(crate) fn all_args(&self) -> Vec<&str> {
         let mut all_args = vec![self.cargo_path.as_str(), self.command];
         all_args.extend_from_slice(&self.args);
