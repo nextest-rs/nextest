@@ -108,6 +108,25 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
     },
 );
 
+pub(crate) static EXPECTED_BINARY_LIST: [(&str, &str, bool); 8] = [
+    (
+        "nextest-derive::proc-macro/nextest-derive",
+        "nextest-derive",
+        false,
+    ),
+    ("nextest-tests", "nextest-tests", true),
+    ("nextest-tests::basic", "basic", true),
+    ("nextest-tests::bin/nextest-tests", "nextest-tests", true),
+    ("nextest-tests::bin/other", "other", true),
+    (
+        "nextest-tests::example/nextest-tests",
+        "nextest-tests",
+        true,
+    ),
+    ("nextest-tests::example/other", "other", true),
+    ("nextest-tests::other", "other", true),
+];
+
 pub(crate) fn workspace_root() -> Utf8PathBuf {
     // one level up from the manifest dir -> into fixtures/nextest-tests
     Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -116,7 +135,7 @@ pub(crate) fn workspace_root() -> Utf8PathBuf {
         .join("fixtures/nextest-tests")
 }
 
-static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
+pub(crate) static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
     let mut metadata_command = MetadataCommand::new();
     // Construct a package graph with --no-deps since we don't need full dependency
     // information.
@@ -127,18 +146,16 @@ static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
         .expect("building package graph failed")
 });
 
-pub(crate) static FIXTURE_TARGETS: Lazy<BTreeMap<String, RustTestArtifact<'static>>> =
-    Lazy::new(init_fixture_targets);
+pub(crate) static FIXTURE_RAW_CARGO_TEST_OUTPUT: Lazy<Vec<u8>> =
+    Lazy::new(init_fixture_raw_cargo_test_output);
 
-fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
+fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
     // TODO: actually productionize this, probably requires moving x into this repo
     let cmd_name = match env::var("CARGO") {
         Ok(v) => v,
         Err(env::VarError::NotPresent) => "cargo".to_owned(),
         Err(err) => panic!("error obtaining CARGO env var: {}", err),
     };
-
-    let graph = &*PACKAGE_GRAPH;
 
     let expr = cmd!(
         cmd_name,
@@ -152,7 +169,16 @@ fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
     .stdout_capture();
 
     let output = expr.run().expect("cargo test --no-run failed");
-    let binary_list = BinaryList::from_messages(Cursor::new(output.stdout), graph).unwrap();
+    output.stdout
+}
+
+pub(crate) static FIXTURE_TARGETS: Lazy<BTreeMap<String, RustTestArtifact<'static>>> =
+    Lazy::new(init_fixture_targets);
+
+fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
+    let graph = &*PACKAGE_GRAPH;
+    let binary_list =
+        BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph).unwrap();
     let test_artifacts =
         RustTestArtifact::from_binary_list(graph, binary_list, None, None).unwrap();
 

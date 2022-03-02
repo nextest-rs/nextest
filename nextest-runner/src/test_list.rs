@@ -232,7 +232,7 @@ impl BinaryList {
                 )?;
                 writeln!(
                     writer,
-                    "  {} {:?}",
+                    "  {} {}",
                     "binary-name:".style(styles.field),
                     bin.name
                 )?;
@@ -250,6 +250,14 @@ impl BinaryList {
             }
         }
         Ok(())
+    }
+
+    /// Outputs this list as a string with the given format.
+    pub fn to_string(&self, output_format: OutputFormat) -> Result<String, WriteTestListError> {
+        // Ugh this sucks. String really should have an io::Write impl that errors on non-UTF8 text.
+        let mut buf = Vec::with_capacity(1024);
+        self.write(output_format, &mut buf, false)?;
+        Ok(String::from_utf8(buf).expect("buffer is valid UTF-8"))
     }
 }
 
@@ -862,7 +870,7 @@ mod tests {
     use std::iter;
 
     #[test]
-    fn test_parse() {
+    fn test_parse_test_list() {
         // Lines ending in ': benchmark' (output by the default Rust bencher) should be skipped.
         let non_ignored_output = indoc! {"
             tests::foo::test_bar: test
@@ -1021,5 +1029,85 @@ mod tests {
         PACKAGE_GRAPH_FIXTURE
             .metadata(&PackageId::new(PACKAGE_METADATA_ID))
             .expect("package ID is valid")
+    }
+
+    #[test]
+    fn test_parse_binary_list() {
+        let fake_bin_test = RustTestBinary {
+            id: "fake-package::bin/fake-binary".to_owned(),
+            path: "/fake/binary".into(),
+            package_id: "fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)"
+                .to_owned(),
+            name: "fake-binary".to_owned(),
+            platform: Platform::Target,
+        };
+        let fake_macro_test = RustTestBinary {
+            id: "fake-macro::proc-macro/fake-macro".to_owned(),
+            path: "/fake/macro".into(),
+            package_id: "fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)"
+                .to_owned(),
+            name: "fake-macro".to_owned(),
+            platform: Platform::Host,
+        };
+
+        let binary_list = BinaryList {
+            rust_binaries: vec![fake_bin_test, fake_macro_test],
+        };
+
+        // Check that the expected outputs are valid.
+        static EXPECTED_HUMAN: &str = indoc! {"
+        fake-package::bin/fake-binary
+        fake-macro::proc-macro/fake-macro
+        "};
+        static EXPECTED_HUMAN_VERBOSE: &str = indoc! {r#"
+        fake-package::bin/fake-binary:
+          path: /fake/binary
+          package-id: fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)
+          binary-name: fake-binary
+          platform: target
+        fake-macro::proc-macro/fake-macro:
+          path: /fake/macro
+          package-id: fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)
+          binary-name: fake-macro
+          platform: host
+        "#};
+        static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
+        {
+          "rust-binaries": {
+            "fake-macro::proc-macro/fake-macro": {
+              "binary-id": "fake-macro::proc-macro/fake-macro",
+              "binary-name": "fake-macro",
+              "package-id": "fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)",
+              "binary-path": "/fake/macro",
+              "platform": "host"
+            },
+            "fake-package::bin/fake-binary": {
+              "binary-id": "fake-package::bin/fake-binary",
+              "binary-name": "fake-binary",
+              "package-id": "fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)",
+              "binary-path": "/fake/binary",
+              "platform": "target"
+            }
+          }
+        }"#};
+
+        assert_eq!(
+            binary_list
+                .to_string(OutputFormat::Human { verbose: false })
+                .expect("human succeeded"),
+            EXPECTED_HUMAN
+        );
+        assert_eq!(
+            binary_list
+                .to_string(OutputFormat::Human { verbose: true })
+                .expect("human succeeded"),
+            EXPECTED_HUMAN_VERBOSE
+        );
+        assert_eq!(
+            binary_list
+                .to_string(OutputFormat::Serializable(SerializableFormat::JsonPretty))
+                .expect("json-pretty succeeded"),
+            EXPECTED_JSON_PRETTY
+        );
     }
 }
