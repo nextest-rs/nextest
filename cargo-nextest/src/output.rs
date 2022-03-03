@@ -6,7 +6,10 @@ use clap::{ArgEnum, Args};
 use env_logger::fmt::Formatter;
 use log::{Level, LevelFilter, Record};
 use owo_colors::{OwoColorize, Style};
-use std::io::Write;
+use std::{
+    io::{BufWriter, Stderr, Stdout, Write},
+    marker::PhantomData,
+};
 use supports_color::Stream;
 
 #[derive(Copy, Clone, Debug, Args)]
@@ -59,6 +62,8 @@ impl Default for Color {
     }
 }
 
+static INIT_LOGGER: std::sync::Once = std::sync::Once::new();
+
 impl Color {
     fn init(self) {
         match self {
@@ -67,10 +72,12 @@ impl Color {
             Color::Never => owo_colors::set_override(false),
         }
 
-        env_logger::Builder::from_env("NEXTEST_LOG")
-            .filter_level(LevelFilter::Warn)
-            .format(format_fn)
-            .init();
+        INIT_LOGGER.call_once(|| {
+            env_logger::Builder::from_env("NEXTEST_LOG")
+                .filter_level(LevelFilter::Warn)
+                .format(format_fn)
+                .init();
+        });
     }
 
     pub(crate) fn should_colorize(self, stream: Stream) -> bool {
@@ -138,5 +145,136 @@ fn format_fn(f: &mut Formatter, record: &Record<'_>) -> std::io::Result<()> {
             record.args()
         ),
         _other => Ok(()),
+    }
+}
+
+/// A helper for capturing output in tests
+///
+/// The test pass is gated by `#[cfg(test)]` to allow a better
+/// optimization in the binary.
+pub enum OutputWriter {
+    /// No capture
+    Normal,
+    /// Output captured
+    #[cfg(test)]
+    Test {
+        /// stdout capture
+        stdout: Vec<u8>,
+        /// stderr capture
+        stderr: Vec<u8>,
+    },
+}
+
+impl Default for OutputWriter {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
+impl OutputWriter {
+    #[cfg(test)]
+    pub(crate) fn new_test() -> Self {
+        Self::Test {
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        }
+    }
+
+    pub(crate) fn stdout_writer(&mut self) -> StdoutWriter<'_> {
+        match self {
+            Self::Normal => StdoutWriter::Normal {
+                buf: BufWriter::new(std::io::stdout()),
+                _lifetime: PhantomData::default(),
+            },
+            #[cfg(test)]
+            Self::Test { ref mut stdout, .. } => StdoutWriter::Test {
+                buf: BufWriter::new(stdout),
+            },
+        }
+    }
+
+    pub(crate) fn stderr_writer(&mut self) -> StderrWriter<'_> {
+        match self {
+            Self::Normal => StderrWriter::Normal {
+                buf: BufWriter::new(std::io::stderr()),
+                _lifetime: PhantomData::default(),
+            },
+            #[cfg(test)]
+            Self::Test { ref mut stderr, .. } => StderrWriter::Test {
+                buf: BufWriter::new(stderr),
+            },
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn stdout(&self) -> Option<&'_ [u8]> {
+        match self {
+            Self::Test { ref stdout, .. } => Some(&stdout[..]),
+            #[cfg(test)]
+            _ => None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn stderr(&self) -> Option<&'_ [u8]> {
+        match self {
+            Self::Test { ref stderr, .. } => Some(&stderr[..]),
+            #[cfg(test)]
+            _ => None,
+        }
+    }
+}
+
+pub(crate) enum StdoutWriter<'a> {
+    Normal {
+        buf: BufWriter<Stdout>,
+        _lifetime: PhantomData<&'a ()>,
+    },
+    #[cfg(test)]
+    Test { buf: BufWriter<&'a mut Vec<u8>> },
+}
+
+impl<'a> Write for StdoutWriter<'a> {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Normal { buf, .. } => buf.write(data),
+            #[cfg(test)]
+            Self::Test { buf } => buf.write(data),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Normal { buf, .. } => buf.flush(),
+            #[cfg(test)]
+            Self::Test { .. } => Ok(()),
+        }
+    }
+}
+
+pub(crate) enum StderrWriter<'a> {
+    Normal {
+        buf: BufWriter<Stderr>,
+        _lifetime: PhantomData<&'a ()>,
+    },
+    #[cfg(test)]
+    Test { buf: BufWriter<&'a mut Vec<u8>> },
+}
+
+impl<'a> Write for StderrWriter<'a> {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Normal { buf, .. } => buf.write(data),
+            #[cfg(test)]
+            Self::Test { buf } => buf.write(data),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Normal { buf, .. } => buf.flush(),
+            #[cfg(test)]
+            Self::Test { .. } => Ok(()),
+        }
     }
 }

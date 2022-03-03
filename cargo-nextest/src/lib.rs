@@ -18,7 +18,12 @@ mod dispatch;
 mod errors;
 mod output;
 
+#[cfg(test)]
+mod tests_integration;
+
 #[doc(hidden)]
 pub use dispatch::*;
 #[doc(hidden)]
 pub use errors::*;
+#[doc(hidden)]
+pub use output::OutputWriter;

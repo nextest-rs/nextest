@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use cargo_nextest::{CargoNextestApp, ExpectedError};
+use cargo_nextest::{CargoNextestApp, ExpectedError, OutputWriter};
 use clap::Parser;
 use color_eyre::Result;
 
@@ -10,7 +10,7 @@ fn main() -> Result<()> {
     let _ = enable_ansi_support::enable_ansi_support();
 
     let opts = CargoNextestApp::parse();
-    match opts.exec() {
+    match opts.exec(&mut OutputWriter::default()) {
         Ok(()) => Ok(()),
         Err(err) => {
             let expected_error: ExpectedError = err.downcast()?;

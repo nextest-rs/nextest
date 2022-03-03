@@ -3,7 +3,7 @@
 
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
-    output::{OutputContext, OutputOpts},
+    output::{OutputContext, OutputOpts, OutputWriter},
     ExpectedError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -28,7 +28,7 @@ use owo_colors::{OwoColorize, Style};
 use std::{
     error::Error,
     fmt::Write as _,
-    io::{BufWriter, Cursor, Write},
+    io::{Cursor, Write},
 };
 use supports_color::Stream;
 
@@ -45,9 +45,9 @@ pub struct CargoNextestApp {
 
 impl CargoNextestApp {
     /// Executes the app.
-    pub fn exec(self) -> Result<()> {
+    pub fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
         let NextestSubcommand::Nextest(app) = self.subcommand;
-        app.exec()
+        app.exec(output_writer)
     }
 }
 
@@ -416,7 +416,7 @@ fn check_reuse_build_enabled_if_used(reuse_build: &ReuseBuildOpts) -> Result<()>
 
 impl AppOpts {
     /// Execute the command.
-    fn exec(self) -> Result<()> {
+    fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
         match self.command {
             Command::List {
                 build_filter,
@@ -433,7 +433,7 @@ impl AppOpts {
                     self.config_opts,
                     self.manifest_path,
                 )?;
-                app.exec_list(message_format, list_type)
+                app.exec_list(message_format, list_type, output_writer)
             }
             Command::Run {
                 profile,
@@ -452,7 +452,13 @@ impl AppOpts {
                     self.config_opts,
                     self.manifest_path,
                 )?;
-                app.exec_run(profile.as_deref(), no_capture, &runner_opts, &reporter_opts)
+                app.exec_run(
+                    profile.as_deref(),
+                    no_capture,
+                    &runner_opts,
+                    &reporter_opts,
+                    output_writer,
+                )
             }
         }
     }
@@ -558,20 +564,23 @@ impl App {
         }
     }
 
-    fn exec_list(&self, message_format: MessageFormatOpts, list_type: ListType) -> Result<()> {
+    fn exec_list(
+        &self,
+        message_format: MessageFormatOpts,
+        list_type: ListType,
+        output_writer: &mut OutputWriter,
+    ) -> Result<()> {
         let binary_list = self.build_binary_list()?;
 
         match list_type {
             ListType::BinariesOnly => {
-                write_to_stdout(|writer| {
-                    binary_list
-                        .write(
-                            message_format.to_output_format(self.output.verbose),
-                            writer,
-                            self.output.color.should_colorize(Stream::Stdout),
-                        )
-                        .map_err(Into::into)
-                })?;
+                let mut writer = output_writer.stdout_writer();
+                binary_list.write(
+                    message_format.to_output_format(self.output.verbose),
+                    &mut writer,
+                    self.output.color.should_colorize(Stream::Stdout),
+                )?;
+                writer.flush()?;
             }
             ListType::Full => {
                 let target_runner = self.load_runner();
@@ -580,11 +589,12 @@ impl App {
                     test_list.colorize();
                 }
 
-                write_to_stdout(|writer| {
-                    test_list
-                        .write(message_format.to_output_format(self.output.verbose), writer)
-                        .map_err(Into::into)
-                })?;
+                let mut writer = output_writer.stdout_writer();
+                test_list.write(
+                    message_format.to_output_format(self.output.verbose),
+                    &mut writer,
+                )?;
+                writer.flush()?;
             }
         }
         Ok(())
@@ -596,6 +606,7 @@ impl App {
         no_capture: bool,
         runner_opts: &TestRunnerOpts,
         reporter_opts: &TestReporterOpts,
+        output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let config = self
             .config_opts
@@ -622,8 +633,7 @@ impl App {
         }
 
         let runner = runner_builder.build(&test_list, &profile, handler);
-        let stderr = std::io::stderr();
-        let mut writer = BufWriter::new(stderr);
+        let mut writer = output_writer.stderr_writer();
         let run_stats = runner.try_execute(|event| {
             // Write and flush the event.
             reporter.report_event(event, &mut writer)?;
@@ -634,18 +644,6 @@ impl App {
         }
         Ok(())
     }
-}
-
-fn write_to_stdout<F: FnOnce(&mut BufWriter<std::io::StdoutLock>) -> Result<()>>(
-    write: F,
-) -> Result<()> {
-    let stdout = std::io::stdout();
-    let lock = stdout.lock();
-    // Buffer the output to minimize syscalls.
-    let mut writer = BufWriter::new(lock);
-    write(&mut writer)?;
-    writer.flush()?;
-    Ok(())
 }
 
 fn acquire_graph_data(manifest_path: Option<&Utf8Path>, output: OutputContext) -> Result<String> {
