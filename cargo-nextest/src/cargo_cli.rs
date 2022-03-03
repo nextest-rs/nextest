@@ -64,7 +64,7 @@ pub(crate) struct CargoOptions {
 
     // jobs is handled by test runner
     /// Build artifacts in release mode, with optimizations
-    #[clap(long)]
+    #[clap(long, short = 'r')]
     release: bool,
 
     /// Build artifacts with the specified Cargo profile
@@ -103,7 +103,7 @@ pub(crate) struct CargoOptions {
     #[clap(long)]
     unit_graph: bool,
 
-    /// Outputs a future incompatibility report at the end of the build (unstable)
+    /// Outputs a future incompatibility report at the end of the build
     #[clap(long)]
     future_incompat_report: bool,
 
