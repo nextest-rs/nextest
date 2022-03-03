@@ -3,6 +3,18 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.9] - 2022-03-03
+
+### Added
+
+- Updates for Rust 1.59:
+  - Support abbreviating `--release` as `-r` ([Cargo #10133]).
+  - Stabilize future-incompat-report ([Cargo #10165]).
+  - Update builtin list of targets (used by the target runner) to Rust 1.59.
+
+[Cargo #10133]: https://github.com/rust-lang/cargo/pull/10133
+[Cargo #10165]: https://github.com/rust-lang/cargo/pull/10165
+
 ## [0.9.8] - 2022-02-23
 
 ### Fixed
@@ -90,6 +102,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.9]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.9
 [0.9.8]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.8
 [0.9.7]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.7
 [0.9.6]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.6
