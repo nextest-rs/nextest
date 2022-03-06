@@ -27,3 +27,9 @@ Then, running this command will cause your tests to be run as `wine <test-binary
 ```
 cargo nextest run --target x86_64-pc-windows-msvc
 ```
+
+> **Note:** If your target runner is a shell script, it might malfunction on macOS due to System Integrity Protection's environment sanitization. This is a system limitation with macOS and not a bug in nextest.
+>
+> See the discussion in [PR #84] for more.
+
+[PR #84]: https://github.com/nextest-rs/nextest/pull/84
