@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{output::OutputContext, ExpectedError, PlatformFilterOpts};
+use crate::{output::OutputContext, ExpectedError};
 use camino::Utf8PathBuf;
 use clap::Args;
 use color_eyre::eyre::{Report, Result};
@@ -26,10 +26,6 @@ pub(crate) struct ReuseBuildOpts {
     /// Remapping for the workspace root
     #[clap(long, requires("cargo-metadata"), value_name = "PATH")]
     pub(crate) workspace_remap: Option<Utf8PathBuf>,
-
-    /// Filter binaries based on the platform they were built for
-    #[clap(long, arg_enum, value_name = "PLATFORM")]
-    pub(crate) platform_filter: Option<PlatformFilterOpts>,
 }
 
 impl ReuseBuildOpts {
@@ -41,8 +37,7 @@ impl ReuseBuildOpts {
         let used = self.binaries_metadata.is_some()
             || self.binaries_dir_remap.is_some()
             || self.cargo_metadata.is_some()
-            || self.workspace_remap.is_some()
-            || self.platform_filter.is_some();
+            || self.workspace_remap.is_some();
 
         let enabled = std::env::var(Self::EXPERIMENTAL_ENV).is_ok();
 

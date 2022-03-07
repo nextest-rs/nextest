@@ -200,15 +200,23 @@ enum Command {
 
 #[derive(Copy, Clone, Debug, ArgEnum)]
 pub(crate) enum PlatformFilterOpts {
-    Host,
     Target,
+    Host,
+    Any,
 }
 
-impl From<PlatformFilterOpts> for BuildPlatform {
+impl Default for PlatformFilterOpts {
+    fn default() -> Self {
+        Self::Any
+    }
+}
+
+impl From<PlatformFilterOpts> for Option<BuildPlatform> {
     fn from(opt: PlatformFilterOpts) -> Self {
         match opt {
-            PlatformFilterOpts::Host => Self::Host,
-            PlatformFilterOpts::Target => Self::Target,
+            PlatformFilterOpts::Target => Some(BuildPlatform::Target),
+            PlatformFilterOpts::Host => Some(BuildPlatform::Host),
+            PlatformFilterOpts::Any => None,
         }
     }
 }
@@ -262,6 +270,10 @@ struct TestBuildFilter {
     #[clap(long)]
     partition: Option<PartitionerBuilder>,
 
+    /// Filter test binaries by build platform
+    #[clap(long, arg_enum, value_name = "PLATFORM", default_value_t)]
+    pub(crate) platform_filter: PlatformFilterOpts,
+
     // TODO: add regex-based filtering in the future?
     /// Test name filter
     #[clap(name = "FILTERS", help_heading = None)]
@@ -281,7 +293,7 @@ impl TestBuildFilter {
             graph,
             binary_list,
             path_mapper.as_ref(),
-            reuse_build.platform_filter.map(Into::into),
+            self.platform_filter.into(),
         )?;
         let test_filter =
             TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
