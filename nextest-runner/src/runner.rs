@@ -33,7 +33,6 @@ pub struct TestRunnerBuilder {
     retries: Option<usize>,
     fail_fast: Option<bool>,
     test_threads: Option<usize>,
-    target_runner: Option<TargetRunner>,
 }
 
 impl TestRunnerBuilder {
@@ -63,19 +62,13 @@ impl TestRunnerBuilder {
         self
     }
 
-    /// Sets the target specific runner to use, instead of trying to execute
-    /// the binary natively.
-    pub fn set_target_runner(&mut self, target_runner: TargetRunner) -> &mut Self {
-        self.target_runner = Some(target_runner);
-        self
-    }
-
     /// Creates a new test runner.
     pub fn build<'a>(
         self,
         test_list: &'a TestList,
         profile: &NextestProfile<'_>,
         handler: SignalHandler,
+        target_runner: TargetRunner,
     ) -> TestRunner<'a> {
         let test_threads = match self.no_capture {
             true => 1,
@@ -84,7 +77,6 @@ impl TestRunnerBuilder {
         let retries = self.retries.unwrap_or_else(|| profile.retries());
         let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
         let slow_timeout = profile.slow_timeout();
-        let target_runner = self.target_runner;
 
         TestRunner {
             no_capture: self.no_capture,
@@ -119,7 +111,7 @@ pub struct TestRunner<'a> {
     fail_fast: bool,
     slow_timeout: Duration,
     test_list: &'a TestList<'a>,
-    target_runner: Option<TargetRunner>,
+    target_runner: TargetRunner,
     run_pool: ThreadPool,
     wait_pool: ThreadPool,
     handler: SignalHandler,
@@ -351,7 +343,7 @@ impl<'a> TestRunner<'a> {
         run_sender: &Sender<InternalTestEvent<'a>>,
     ) -> std::io::Result<InternalExecuteStatus> {
         let cmd = test
-            .make_expression(self.target_runner.as_ref())
+            .make_expression(&self.target_runner)
             .unchecked()
             // Debug environment variable for testing.
             .env("__NEXTEST_ATTEMPT", format!("{}", attempt));
@@ -832,7 +824,7 @@ mod tests {
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
         let handler = SignalHandler::noop();
-        let runner = builder.build(&test_list, &profile, handler);
+        let runner = builder.build(&test_list, &profile, handler, TargetRunner::empty());
         assert!(runner.no_capture, "no_capture is true");
         assert_eq!(
             runner.run_pool.current_num_threads(),

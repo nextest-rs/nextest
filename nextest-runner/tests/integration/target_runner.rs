@@ -9,7 +9,7 @@ use nextest_runner::{
     errors::TargetRunnerError,
     runner::TestRunnerBuilder,
     signal::SignalHandler,
-    target_runner::TargetRunner,
+    target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::TestList,
 };
@@ -24,8 +24,8 @@ fn env_mutex() -> &'static Mutex<()> {
 
 pub fn with_env(
     vars: impl IntoIterator<Item = (impl Into<String>, impl AsRef<str>)>,
-    func: impl FnOnce() -> Result<Option<TargetRunner>, TargetRunnerError>,
-) -> Result<Option<TargetRunner>, TargetRunnerError> {
+    func: impl FnOnce() -> Result<TargetRunner, TargetRunnerError>,
+) -> Result<TargetRunner, TargetRunnerError> {
     let lock = env_mutex().lock().unwrap();
 
     let keys: Vec<_> = vars
@@ -52,7 +52,7 @@ fn default() -> &'static target_spec::Platform {
     DEF.get_or_init(|| target_spec::Platform::current().unwrap())
 }
 
-fn runner_for_target(triple: Option<&str>) -> Result<Option<TargetRunner>, TargetRunnerError> {
+fn runner_for_target(triple: Option<&str>) -> Result<TargetRunner, TargetRunnerError> {
     TargetRunner::with_isolation(triple, &workspace_root(), &workspace_root())
 }
 
@@ -71,14 +71,16 @@ fn parses_cargo_env() {
         )],
         || runner_for_target(None),
     )
-    .unwrap()
     .unwrap();
 
-    assert_eq!("cargo_with_default", def_runner.binary());
-    assert_eq!(
-        vec!["--arg", "--arg2"],
-        def_runner.args().collect::<Vec<_>>()
-    );
+    for (_, platform_runner) in def_runner.all_build_platforms() {
+        let platform_runner = platform_runner.expect("env var means runner should be defined");
+        assert_eq!("cargo_with_default", platform_runner.binary());
+        assert_eq!(
+            vec!["--arg", "--arg2"],
+            platform_runner.args().collect::<Vec<_>>()
+        );
+    }
 
     let specific_runner = with_env(
         [(
@@ -87,11 +89,11 @@ fn parses_cargo_env() {
         )],
         || runner_for_target(Some("aarch64-linux-android")),
     )
-    .unwrap()
     .unwrap();
 
-    assert_eq!("cargo_with_specific", specific_runner.binary());
-    assert_eq!(0, specific_runner.args().count());
+    let platform_runner = specific_runner.target().unwrap();
+    assert_eq!("cargo_with_specific", platform_runner.binary());
+    assert_eq!(0, platform_runner.args().count());
 }
 
 fn parse_triple(triple: &'static str) -> target_spec::Platform {
@@ -102,7 +104,7 @@ fn parse_triple(triple: &'static str) -> target_spec::Platform {
 fn parses_cargo_config_exact() {
     let windows = parse_triple("x86_64-pc-windows-gnu");
 
-    let runner = TargetRunner::find_config(windows, &workspace_root(), Some(&workspace_root()))
+    let runner = PlatformRunner::find_config(windows, &workspace_root(), Some(&workspace_root()))
         .unwrap()
         .unwrap();
 
@@ -114,7 +116,7 @@ fn parses_cargo_config_exact() {
 fn disregards_non_matching() {
     let windows = parse_triple("x86_64-unknown-linux-gnu");
     assert!(
-        TargetRunner::find_config(windows, &workspace_root(), Some(&workspace_root()))
+        PlatformRunner::find_config(windows, &workspace_root(), Some(&workspace_root()))
             .unwrap()
             .is_none()
     );
@@ -125,7 +127,7 @@ fn parses_cargo_config_cfg() {
     let workspace_root = workspace_root();
     let terminate_search_at = Some(workspace_root.as_path());
     let android = parse_triple("aarch64-linux-android");
-    let runner = TargetRunner::find_config(android, &workspace_root, terminate_search_at)
+    let runner = PlatformRunner::find_config(android, &workspace_root, terminate_search_at)
         .unwrap()
         .unwrap();
 
@@ -133,7 +135,7 @@ fn parses_cargo_config_cfg() {
     assert_eq!(vec!["-x"], runner.args().collect::<Vec<_>>());
 
     let linux = parse_triple("x86_64-unknown-linux-musl");
-    let runner = TargetRunner::find_config(linux, &workspace_root, terminate_search_at)
+    let runner = PlatformRunner::find_config(linux, &workspace_root, terminate_search_at)
         .unwrap()
         .unwrap();
 
@@ -145,10 +147,10 @@ fn parses_cargo_config_cfg() {
 }
 
 #[test]
-fn fallsback_to_cargo_config() {
+fn falls_back_to_cargo_config() {
     let linux = parse_triple("x86_64-unknown-linux-musl");
 
-    let runner = with_env(
+    let target_runner = with_env(
         [(
             "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
             "cargo-runner-windows",
@@ -161,13 +163,14 @@ fn fallsback_to_cargo_config() {
             )
         },
     )
-    .unwrap()
     .unwrap();
 
-    assert_eq!("passthrough", runner.binary());
+    let platform_runner = target_runner.target().unwrap();
+
+    assert_eq!("passthrough", platform_runner.binary());
     assert_eq!(
         vec!["--ensure-this-arg-is-sent"],
-        runner.args().collect::<Vec<_>>()
+        platform_runner.args().collect::<Vec<_>>()
     );
 }
 
@@ -176,7 +179,7 @@ fn passthrough_path() -> &'static Utf8Path {
 }
 
 fn current_runner_env_var() -> String {
-    TargetRunner::runner_env_var(
+    PlatformRunner::runner_env_var(
         &Platform::current().expect("current platform is known to target-spec"),
     )
 }
@@ -186,7 +189,7 @@ fn test_listing_with_target_runner() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
 
-    let test_list = TestList::new(test_bins.clone(), &test_filter, None)?;
+    let test_list = TestList::new(test_bins.clone(), &test_filter, &TargetRunner::empty())?;
     let bin_count = test_list.binary_count();
     let test_count = test_list.test_count();
 
@@ -197,10 +200,9 @@ fn test_listing_with_target_runner() -> Result<()> {
                 &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
             )],
             || runner_for_target(None),
-        )?
-        .unwrap();
+        )?;
 
-        let test_list = TestList::new(test_bins.clone(), &test_filter, Some(&target_runner))?;
+        let test_list = TestList::new(test_bins.clone(), &test_filter, &target_runner)?;
 
         assert_eq!(bin_count, test_list.binary_count());
         assert_eq!(test_count, test_list.test_count());
@@ -227,12 +229,14 @@ fn test_run_with_target_runner() -> Result<()> {
             &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
         )],
         || runner_for_target(None),
-    )?
-    .unwrap();
+    )?;
 
-    assert_eq!(passthrough_path(), target_runner.binary());
+    for (_, platform_runner) in target_runner.all_build_platforms() {
+        let runner = platform_runner.expect("current platform runner was set through env var");
+        assert_eq!(passthrough_path(), runner.binary());
+    }
 
-    let test_list = TestList::new(test_bins, &test_filter, Some(&target_runner))?;
+    let test_list = TestList::new(test_bins, &test_filter, &target_runner)?;
 
     let config =
         NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
@@ -240,9 +244,8 @@ fn test_run_with_target_runner() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let mut runner = TestRunnerBuilder::default();
-    runner.set_target_runner(target_runner);
-    let runner = runner.build(&test_list, &profile, SignalHandler::noop());
+    let runner = TestRunnerBuilder::default();
+    let runner = runner.build(&test_list, &profile, SignalHandler::noop(), target_runner);
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 

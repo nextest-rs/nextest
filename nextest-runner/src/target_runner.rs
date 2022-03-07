@@ -5,6 +5,7 @@
 
 use crate::errors::TargetRunnerError;
 use camino::{Utf8Path, Utf8PathBuf};
+use nextest_metadata::BuildPlatform;
 use std::borrow::Cow;
 use target_spec::Platform;
 
@@ -16,21 +17,26 @@ enum Runner {
 }
 
 /// A [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
-/// used to execute a test binary rather than the default of executing natively
+/// used to execute a test binary rather than the default of executing natively.
 #[derive(Debug, Eq, PartialEq)]
 pub struct TargetRunner {
-    /// This is required
-    runner_binary: Utf8PathBuf,
-    /// These are optional
-    args: Vec<String>,
+    host: Option<PlatformRunner>,
+    target: Option<PlatformRunner>,
 }
 
 impl TargetRunner {
     /// Acquires the [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
     /// which can be set in a [.cargo/config.toml](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
     /// or via a `CARGO_TARGET_{TRIPLE}_RUNNER` environment variable
-    pub fn for_target(target_triple: Option<&str>) -> Result<Option<Self>, TargetRunnerError> {
-        Self::get_runner_by_precedence(target_triple, None, None)
+    pub fn new(target_triple: Option<&str>) -> Result<Self, TargetRunnerError> {
+        let host = PlatformRunner::by_precedence(None, None, None)?;
+        let target = if target_triple.is_some() {
+            PlatformRunner::by_precedence(target_triple, None, None)?
+        } else {
+            host.clone()
+        };
+
+        Ok(Self { host, target })
     }
 
     /// Configures the start and terminate search the search for cargo configs.
@@ -42,21 +48,77 @@ impl TargetRunner {
         target_triple: Option<&str>,
         start_search_at: &Utf8Path,
         terminate_search_at: &Utf8Path,
-    ) -> Result<Option<Self>, TargetRunnerError> {
-        Self::get_runner_by_precedence(
-            target_triple,
-            Some(start_search_at),
-            Some(terminate_search_at),
-        )
+    ) -> Result<Self, TargetRunnerError> {
+        let host =
+            PlatformRunner::by_precedence(None, Some(start_search_at), Some(terminate_search_at))?;
+        let target = if target_triple.is_some() {
+            PlatformRunner::by_precedence(
+                target_triple,
+                Some(start_search_at),
+                Some(terminate_search_at),
+            )?
+        } else {
+            host.clone()
+        };
+        Ok(Self { host, target })
     }
 
-    fn get_runner_by_precedence(
+    /// Creates an empty target runner that does not delegate to any runner binaries.
+    pub fn empty() -> Self {
+        Self {
+            host: None,
+            target: None,
+        }
+    }
+
+    /// Returns the target [`PlatformRunner`].
+    #[inline]
+    pub fn target(&self) -> Option<&PlatformRunner> {
+        self.target.as_ref()
+    }
+
+    /// Returns the host [`PlatformRunner`].
+    #[inline]
+    pub fn host(&self) -> Option<&PlatformRunner> {
+        self.host.as_ref()
+    }
+
+    /// Returns the [`PlatformRunner`] for the given build platform (host or target).
+    #[inline]
+    pub fn for_build_platform(&self, build_platform: BuildPlatform) -> Option<&PlatformRunner> {
+        match build_platform {
+            BuildPlatform::Target => self.target(),
+            BuildPlatform::Host => self.host(),
+        }
+    }
+
+    /// Returns the platform runners for all build platforms.
+    #[inline]
+    pub fn all_build_platforms(&self) -> [(BuildPlatform, Option<&PlatformRunner>); 2] {
+        [
+            (BuildPlatform::Target, self.target()),
+            (BuildPlatform::Host, self.host()),
+        ]
+    }
+}
+
+/// A target runner scoped to a specific platform (host or target).
+///
+/// This forms part of [`TargetRunner`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlatformRunner {
+    runner_binary: Utf8PathBuf,
+    args: Vec<String>,
+}
+
+impl PlatformRunner {
+    fn by_precedence(
         target_triple: Option<&str>,
         root: Option<&Utf8Path>,
         terminate_search_at: Option<&Utf8Path>,
     ) -> Result<Option<Self>, TargetRunnerError> {
         let target = match target_triple {
-            Some(target) => target_spec::Platform::from_triple(
+            Some(target) => Platform::from_triple(
                 target_spec::Triple::new(target.to_owned()).map_err(|error| {
                     TargetRunnerError::FailedToParseTargetTriple {
                         triple: target.to_owned(),
@@ -65,9 +127,7 @@ impl TargetRunner {
                 })?,
                 target_spec::TargetFeatures::Unknown,
             ),
-            None => {
-                target_spec::Platform::current().map_err(TargetRunnerError::UnknownHostPlatform)?
-            }
+            None => Platform::current().map_err(TargetRunnerError::UnknownHostPlatform)?,
         };
 
         // Check if we have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
@@ -330,39 +390,39 @@ mod tests {
         // Searches through the full directory tree
         // ---
         assert_eq!(
-            TargetRunner::find_config(
+            PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
                 Some(dir_path),
             )
             .unwrap(),
-            Some(TargetRunner {
+            Some(PlatformRunner {
                 runner_binary: "wine".into(),
                 args: vec!["--test-arg".into()],
             }),
         );
 
         assert_eq!(
-            TargetRunner::find_config(
+            PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
                 Some(dir_path),
             )
             .unwrap(),
-            Some(TargetRunner {
+            Some(PlatformRunner {
                 runner_binary: "wine2".into(),
                 args: vec![],
             }),
         );
 
         assert_eq!(
-            TargetRunner::find_config(
+            PlatformRunner::find_config(
                 Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
                 Some(dir_path),
             )
             .unwrap(),
-            Some(TargetRunner {
+            Some(PlatformRunner {
                 runner_binary: "unix-runner".into(),
                 args: vec![],
             }),
@@ -372,20 +432,20 @@ mod tests {
         // Searches starting from the "foo" directory which has no .cargo/config in it
         // ---
         assert_eq!(
-            TargetRunner::find_config(
+            PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_path,
                 Some(dir_path),
             )
             .unwrap(),
-            Some(TargetRunner {
+            Some(PlatformRunner {
                 runner_binary: "parent-wine".into(),
                 args: vec![],
             }),
         );
 
         assert_eq!(
-            TargetRunner::find_config(
+            PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_path,
                 Some(dir_path),
@@ -398,20 +458,20 @@ mod tests {
         // Searches starting and ending at the root directory.
         // ---
         assert_eq!(
-            TargetRunner::find_config(
+            PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 dir_path,
                 Some(dir_path),
             )
             .unwrap(),
-            Some(TargetRunner {
+            Some(PlatformRunner {
                 runner_binary: "parent-wine".into(),
                 args: vec![],
             }),
         );
 
         assert_eq!(
-            TargetRunner::find_config(
+            PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
                 dir_path,
                 Some(dir_path),

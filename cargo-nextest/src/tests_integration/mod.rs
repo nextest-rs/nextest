@@ -12,7 +12,7 @@
 
 use crate::{dispatch::CargoNextestApp, OutputWriter};
 use clap::StructOpt;
-use nextest_metadata::{BinaryListSummary, Platform};
+use nextest_metadata::{BinaryListSummary, BuildPlatform};
 
 mod fixtures;
 mod temp_project;
@@ -142,7 +142,7 @@ fn test_list_host_after_build() {
     let mut output = OutputWriter::new_test();
     args.exec(&mut output).unwrap();
 
-    check_list_full_output(output.stdout().unwrap(), Some(Platform::Host));
+    check_list_full_output(output.stdout().unwrap(), Some(BuildPlatform::Host));
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn test_list_target_after_build() {
     let mut output = OutputWriter::new_test();
     args.exec(&mut output).unwrap();
 
-    check_list_full_output(output.stdout().unwrap(), Some(Platform::Target));
+    check_list_full_output(output.stdout().unwrap(), Some(BuildPlatform::Target));
 }
 
 #[test]

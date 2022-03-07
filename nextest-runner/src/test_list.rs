@@ -11,7 +11,7 @@ pub use output_format::*;
 use crate::{
     errors::{FromMessagesError, ParseTestListError, WriteTestListError},
     helpers::write_test_name,
-    target_runner::TargetRunner,
+    target_runner::{PlatformRunner, TargetRunner},
     test_filter::TestFilterBuilder,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -22,8 +22,8 @@ use guppy::{
     PackageId,
 };
 use nextest_metadata::{
-    BinaryListSummary, Platform, RustTestBinarySummary, RustTestCaseSummary, RustTestSuiteSummary,
-    TestListSummary,
+    BinaryListSummary, BuildPlatform, RustTestBinarySummary, RustTestCaseSummary,
+    RustTestSuiteSummary, TestListSummary,
 };
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Style};
@@ -51,6 +51,9 @@ pub struct RustTestArtifact<'g> {
     /// The working directory that this test should be executed in. If None, the current directory
     /// will not be changed.
     pub cwd: Utf8PathBuf,
+
+    /// The platform for which this test artifact was built.
+    pub build_platform: BuildPlatform,
 }
 
 /// A Rust test binary built by Cargo.
@@ -63,10 +66,9 @@ pub struct RustTestBinary {
     pub package_id: String,
     /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
     pub name: String,
-
     /// Platform for which this binary was built.
     /// (Proc-macro tests are built for the host.)
-    pub platform: Platform,
+    pub build_platform: BuildPlatform,
 }
 
 /// The list of Rust test binaries built by Cargo.
@@ -133,9 +135,9 @@ impl BinaryList {
                         let platform = if artifact.target.kind.len() == 1
                             && artifact.target.kind.get(0).map(String::as_str) == Some("proc-macro")
                         {
-                            Platform::Host
+                            BuildPlatform::Host
                         } else {
-                            Platform::Target
+                            BuildPlatform::Target
                         };
 
                         rust_binaries.push(RustTestBinary {
@@ -143,7 +145,7 @@ impl BinaryList {
                             package_id,
                             name,
                             id,
-                            platform,
+                            build_platform: platform,
                         })
                     }
                 }
@@ -168,7 +170,7 @@ impl BinaryList {
                 path: bin.binary_path,
                 package_id: bin.package_id,
                 id: bin.binary_id,
-                platform: bin.platform,
+                build_platform: bin.build_platform,
             })
             .collect();
         Self { rust_binaries }
@@ -201,7 +203,7 @@ impl BinaryList {
                     package_id: bin.package_id.clone(),
                     binary_path: bin.path.clone(),
                     binary_id: bin.id.clone(),
-                    platform: bin.platform,
+                    build_platform: bin.build_platform,
                 };
                 (bin.id.clone(), summary)
             })
@@ -223,27 +225,12 @@ impl BinaryList {
         for bin in &self.rust_binaries {
             if verbose {
                 writeln!(writer, "{}:", bin.id.style(styles.binary_id))?;
-                writeln!(writer, "  {} {}", "path:".style(styles.field), bin.path)?;
+                writeln!(writer, "  {} {}", "bin:".style(styles.field), bin.path)?;
                 writeln!(
                     writer,
                     "  {} {}",
-                    "package-id:".style(styles.field),
-                    bin.package_id
-                )?;
-                writeln!(
-                    writer,
-                    "  {} {}",
-                    "binary-name:".style(styles.field),
-                    bin.name
-                )?;
-                writeln!(
-                    writer,
-                    "  {} {}",
-                    "platform:".style(styles.field),
-                    match bin.platform {
-                        Platform::Host => "host",
-                        Platform::Target => "target",
-                    }
+                    "build platform:".style(styles.field),
+                    bin.build_platform,
                 )?;
             } else {
                 writeln!(writer, "{}", bin.id.style(styles.binary_id))?;
@@ -267,12 +254,12 @@ impl<'g> RustTestArtifact<'g> {
         graph: &'g PackageGraph,
         binary_list: BinaryList,
         path_mapper: Option<&PathMapper>,
-        platform_filter: Option<Platform>,
+        platform_filter: Option<BuildPlatform>,
     ) -> Result<Vec<Self>, FromMessagesError> {
         let mut binaries = vec![];
 
         for binary in binary_list.rust_binaries {
-            if platform_filter.is_some() && platform_filter != Some(binary.platform) {
+            if platform_filter.is_some() && platform_filter != Some(binary.build_platform) {
                 continue;
             }
 
@@ -305,6 +292,7 @@ impl<'g> RustTestArtifact<'g> {
                 binary_path,
                 binary_name: binary.name,
                 cwd,
+                build_platform: binary.build_platform,
             })
         }
 
@@ -339,6 +327,9 @@ pub struct RustTestSuite<'g> {
     /// The working directory that this test binary will be executed in. If None, the current directory
     /// will not be changed.
     pub cwd: Utf8PathBuf,
+
+    /// The platform the test suite is for (host or target).
+    pub build_platform: BuildPlatform,
 
     /// Test case names and other information about them.
     pub testcases: BTreeMap<String, RustTestCaseSummary>,
@@ -396,7 +387,7 @@ impl<'g> TestList<'g> {
     pub fn new(
         test_artifacts: impl IntoIterator<Item = RustTestArtifact<'g>>,
         filter: &TestFilterBuilder,
-        runner: Option<&TargetRunner>,
+        runner: &TargetRunner,
     ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
 
@@ -497,9 +488,9 @@ impl<'g> TestList<'g> {
             .iter()
             .map(|(binary_path, info)| {
                 let platform = if info.package.is_proc_macro() {
-                    Platform::Host
+                    BuildPlatform::Host
                 } else {
-                    Platform::Target
+                    BuildPlatform::Target
                 };
                 let testsuite = RustTestSuiteSummary {
                     package_name: info.package.name().to_owned(),
@@ -508,7 +499,7 @@ impl<'g> TestList<'g> {
                         package_id: info.package.id().repr().to_owned(),
                         binary_path: binary_path.clone(),
                         binary_id: info.binary_id.clone(),
-                        platform,
+                        build_platform: platform,
                     },
                     cwd: info.cwd.clone(),
                     testcases: info.testcases.clone(),
@@ -616,6 +607,7 @@ impl<'g> TestList<'g> {
             binary_path,
             binary_name,
             cwd,
+            build_platform: platform,
         } = test_binary;
 
         Ok((
@@ -626,6 +618,7 @@ impl<'g> TestList<'g> {
                 binary_name,
                 testcases: tests,
                 cwd,
+                build_platform: platform,
             },
         ))
     }
@@ -671,6 +664,12 @@ impl<'g> TestList<'g> {
             if verbose {
                 writeln!(writer, "  {} {}", "bin:".style(self.styles.field), test_bin)?;
                 writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), info.cwd)?;
+                writeln!(
+                    writer,
+                    "  {} {}",
+                    "build platform:".style(self.styles.field),
+                    info.build_platform,
+                )?;
             }
 
             let mut indented = indent_write::io::IndentWriter::new("    ", &mut writer);
@@ -693,16 +692,18 @@ impl<'g> TestList<'g> {
 
 impl<'g> RustTestArtifact<'g> {
     /// Run this binary with and without --ignored and get the corresponding outputs.
-    fn exec(&self, runner: Option<&TargetRunner>) -> Result<(String, String), ParseTestListError> {
-        let non_ignored = self.exec_single(false, runner)?;
-        let ignored = self.exec_single(true, runner)?;
+    fn exec(&self, runner: &TargetRunner) -> Result<(String, String), ParseTestListError> {
+        let platform_runner = runner.for_build_platform(self.build_platform);
+
+        let non_ignored = self.exec_single(false, platform_runner)?;
+        let ignored = self.exec_single(true, platform_runner)?;
         Ok((non_ignored, ignored))
     }
 
     fn exec_single(
         &self,
         ignored: bool,
-        runner: Option<&TargetRunner>,
+        runner: Option<&PlatformRunner>,
     ) -> Result<String, ParseTestListError> {
         let mut argv = Vec::new();
 
@@ -768,16 +769,17 @@ impl<'a> TestInstance<'a> {
     }
 
     /// Creates the command expression for this test instance.
-    pub(crate) fn make_expression(&self, target_runner: Option<&TargetRunner>) -> Expression {
+    pub(crate) fn make_expression(&self, target_runner: &TargetRunner) -> Expression {
+        let platform_runner = target_runner.for_build_platform(self.bin_info.build_platform);
         // TODO: non-rust tests
 
         let mut args = Vec::new();
 
-        let program: std::ffi::OsString = match target_runner {
-            Some(tr) => {
-                args.extend(tr.args());
+        let program: std::ffi::OsString = match platform_runner {
+            Some(runner) => {
+                args.extend(runner.args());
                 args.push(self.binary.as_str());
-                tr.binary().into()
+                runner.binary().into()
             }
             None => {
                 use duct::IntoExecutablePath;
@@ -893,6 +895,7 @@ mod tests {
             package: package_metadata(),
             binary_name: fake_binary_name.clone(),
             binary_id: fake_binary_id.clone(),
+            build_platform: BuildPlatform::Target,
         };
         let test_list = TestList::new_with_outputs(
             iter::once((test_binary, &non_ignored_output, &ignored_output)),
@@ -922,6 +925,7 @@ mod tests {
                         },
                     },
                     cwd: fake_cwd,
+                    build_platform: BuildPlatform::Target,
                     package: package_metadata(),
                     binary_name: fake_binary_name,
                     binary_id: fake_binary_id,
@@ -941,6 +945,7 @@ mod tests {
             fake-package::fake-binary:
               bin: /fake/binary
               cwd: /fake/cwd
+              build platform: target
                 tests::baz::test_ignored (skipped)
                 tests::baz::test_quux
                 tests::foo::test_bar
@@ -956,7 +961,7 @@ mod tests {
                   "binary-name": "fake-binary",
                   "package-id": "metadata-helper 0.1.0 (path+file:///Users/fakeuser/local/testcrates/metadata/metadata-helper)",
                   "binary-path": "/fake/binary",
-                  "platform": "target",
+                  "build-platform": "target",
                   "cwd": "/fake/cwd",
                   "testcases": {
                     "tests::baz::test_ignored": {
@@ -1039,7 +1044,7 @@ mod tests {
             package_id: "fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)"
                 .to_owned(),
             name: "fake-binary".to_owned(),
-            platform: Platform::Target,
+            build_platform: BuildPlatform::Target,
         };
         let fake_macro_test = RustTestBinary {
             id: "fake-macro::proc-macro/fake-macro".to_owned(),
@@ -1047,7 +1052,7 @@ mod tests {
             package_id: "fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)"
                 .to_owned(),
             name: "fake-macro".to_owned(),
-            platform: Platform::Host,
+            build_platform: BuildPlatform::Host,
         };
 
         let binary_list = BinaryList {
@@ -1061,15 +1066,11 @@ mod tests {
         "};
         static EXPECTED_HUMAN_VERBOSE: &str = indoc! {r#"
         fake-package::bin/fake-binary:
-          path: /fake/binary
-          package-id: fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)
-          binary-name: fake-binary
-          platform: target
+          bin: /fake/binary
+          build platform: target
         fake-macro::proc-macro/fake-macro:
-          path: /fake/macro
-          package-id: fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)
-          binary-name: fake-macro
-          platform: host
+          bin: /fake/macro
+          build platform: host
         "#};
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
         {
@@ -1079,14 +1080,14 @@ mod tests {
               "binary-name": "fake-macro",
               "package-id": "fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)",
               "binary-path": "/fake/macro",
-              "platform": "host"
+              "build-platform": "host"
             },
             "fake-package::bin/fake-binary": {
               "binary-id": "fake-package::bin/fake-binary",
               "binary-name": "fake-binary",
               "package-id": "fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)",
               "binary-path": "/fake/binary",
-              "platform": "target"
+              "build-platform": "target"
             }
           }
         }"#};
