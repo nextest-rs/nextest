@@ -1,19 +1,23 @@
 use super::temp_project::TempProject;
 use crate::{dispatch::CargoNextestApp, OutputWriter};
 use clap::StructOpt;
-use nextest_metadata::{BinaryListSummary, Platform, TestListSummary};
+use nextest_metadata::{BinaryListSummary, BuildPlatform, TestListSummary};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::process::Command;
 
 pub struct TestInfo {
     id: &'static str,
-    platform: Platform,
+    platform: BuildPlatform,
     test_cases: Vec<(&'static str, bool)>,
 }
 
 impl TestInfo {
-    fn new(id: &'static str, platform: Platform, test_cases: Vec<(&'static str, bool)>) -> Self {
+    fn new(
+        id: &'static str,
+        platform: BuildPlatform,
+        test_cases: Vec<(&'static str, bool)>,
+    ) -> Self {
         Self {
             id,
             platform,
@@ -26,7 +30,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
     vec![
         TestInfo::new(
             "nextest-tests::basic",
-            Platform::Target,
+            BuildPlatform::Target,
             vec![
                 ("test_cargo_env_vars", false),
                 ("test_cwd", false),
@@ -43,37 +47,37 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
         ),
         TestInfo::new(
             "nextest-derive::proc-macro/nextest-derive",
-            Platform::Host,
+            BuildPlatform::Host,
             vec![("it_works", false)],
         ),
         TestInfo::new(
             "nextest-tests::bin/nextest-tests",
-            Platform::Target,
+            BuildPlatform::Target,
             vec![("tests::bin_success", false)],
         ),
         TestInfo::new(
             "nextest-tests",
-            Platform::Target,
+            BuildPlatform::Target,
             vec![("tests::unit_test_success", false)],
         ),
         TestInfo::new(
             "nextest-tests::other",
-            Platform::Target,
+            BuildPlatform::Target,
             vec![("other_test_success", false)],
         ),
         TestInfo::new(
             "nextest-tests::bin/other",
-            Platform::Target,
+            BuildPlatform::Target,
             vec![("tests::other_bin_success", false)],
         ),
         TestInfo::new(
             "nextest-tests::example/nextest-tests",
-            Platform::Target,
+            BuildPlatform::Target,
             vec![("tests::example_success", false)],
         ),
         TestInfo::new(
             "nextest-tests::example/other",
-            Platform::Target,
+            BuildPlatform::Target,
             vec![("tests::other_example_success", false)],
         ),
     ]
@@ -133,14 +137,14 @@ pub fn build_tests(p: &TempProject) {
 }
 
 #[track_caller]
-pub fn check_list_full_output(stdout: &[u8], platform: Option<Platform>) {
+pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
     let result: TestListSummary = serde_json::from_slice(stdout).unwrap();
 
     let host_binaries_count = 1;
     let test_suite = &*EXPECTED_LIST;
     match platform {
-        Some(Platform::Host) => assert_eq!(host_binaries_count, result.rust_suites.len()),
-        Some(Platform::Target) => assert_eq!(
+        Some(BuildPlatform::Host) => assert_eq!(host_binaries_count, result.rust_suites.len()),
+        Some(BuildPlatform::Target) => assert_eq!(
             test_suite.len() - host_binaries_count,
             result.rust_suites.len()
         ),
@@ -188,7 +192,7 @@ pub fn check_list_binaries_output(stdout: &[u8]) {
             _ => panic!("Missing binary: {}", test.id),
         };
 
-        assert_eq!(test.platform, entry.1.platform);
+        assert_eq!(test.platform, entry.1.build_platform);
     }
 }
 

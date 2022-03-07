@@ -3,11 +3,12 @@
 
 use crate::fixtures::*;
 use color_eyre::eyre::Result;
-use nextest_metadata::Platform;
+use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     config::NextestConfig,
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
     signal::SignalHandler,
+    target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
     test_list::{BinaryList, TestList},
 };
@@ -28,9 +29,9 @@ fn test_list_binaries() -> Result<()> {
             .unwrap();
         assert_eq!(*name, bin.name.as_str());
         if *platform_is_target {
-            assert_eq!(Platform::Target, bin.platform);
+            assert_eq!(BuildPlatform::Target, bin.build_platform);
         } else {
-            assert_eq!(Platform::Host, bin.platform);
+            assert_eq!(BuildPlatform::Host, bin.build_platform);
         }
     }
     Ok(())
@@ -40,7 +41,7 @@ fn test_list_binaries() -> Result<()> {
 fn test_list_tests() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
-    let test_list = TestList::new(test_bins, &test_filter, None)?;
+    let test_list = TestList::new(test_bins, &test_filter, &TargetRunner::empty())?;
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
@@ -64,14 +65,19 @@ fn test_list_tests() -> Result<()> {
 fn test_run() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
-    let test_list = TestList::new(test_bins, &test_filter, None)?;
+    let test_list = TestList::new(test_bins, &test_filter, &TargetRunner::empty())?;
     let config =
         NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
+    let runner = TestRunnerBuilder::default().build(
+        &test_list,
+        &profile,
+        SignalHandler::noop(),
+        TargetRunner::empty(),
+    );
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -113,14 +119,19 @@ fn test_run() -> Result<()> {
 fn test_run_ignored() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::IgnoredOnly);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
-    let test_list = TestList::new(test_bins, &test_filter, None)?;
+    let test_list = TestList::new(test_bins, &test_filter, &TargetRunner::empty())?;
     let config =
         NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
+    let runner = TestRunnerBuilder::default().build(
+        &test_list,
+        &profile,
+        SignalHandler::noop(),
+        TargetRunner::empty(),
+    );
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 
@@ -162,7 +173,7 @@ fn test_run_ignored() -> Result<()> {
 fn test_retries() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
-    let test_list = TestList::new(test_bins, &test_filter, None)?;
+    let test_list = TestList::new(test_bins, &test_filter, &TargetRunner::empty())?;
     let config =
         NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
@@ -172,7 +183,12 @@ fn test_retries() -> Result<()> {
     let retries = profile.retries();
     assert_eq!(retries, 2, "retries set in with-retries profile");
 
-    let runner = TestRunnerBuilder::default().build(&test_list, &profile, SignalHandler::noop());
+    let runner = TestRunnerBuilder::default().build(
+        &test_list,
+        &profile,
+        SignalHandler::noop(),
+        TargetRunner::empty(),
+    );
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
 

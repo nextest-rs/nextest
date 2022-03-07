@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{ExpectedError, PlatformFilterOpts};
+use crate::{output::OutputContext, ExpectedError, PlatformFilterOpts};
 use camino::Utf8PathBuf;
 use clap::Args;
 use color_eyre::eyre::{Report, Result};
@@ -35,7 +35,9 @@ pub(crate) struct ReuseBuildOpts {
 impl ReuseBuildOpts {
     const EXPERIMENTAL_ENV: &'static str = "NEXTEST_EXPERIMENTAL_REUSE_BUILD";
 
-    pub(crate) fn check_experimental(&self) -> Result<()> {
+    // (_output is not used, but must be passed in to ensure that the output is properly initialized
+    // before calling this method)
+    pub(crate) fn check_experimental(&self, _output: OutputContext) -> Result<()> {
         let used = self.binaries_metadata.is_some()
             || self.binaries_dir_remap.is_some()
             || self.cargo_metadata.is_some()

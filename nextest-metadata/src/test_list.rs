@@ -117,14 +117,24 @@ impl TestListSummary {
     }
 }
 
-/// Binary platform (useful for cross-compilation)
+/// The platform a binary was built on (useful for cross-compilation)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Platform {
-    /// Build for the host machine (the building machine)
-    Host,
-    /// Build for the target machine
+pub enum BuildPlatform {
+    /// The target platform.
     Target,
+
+    /// The host platform: the platform the build was performed on.
+    Host,
+}
+
+impl fmt::Display for BuildPlatform {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Target => write!(f, "target"),
+            Self::Host => write!(f, "host"),
+        }
+    }
 }
 
 /// A serializable Rust test binary.
@@ -149,7 +159,7 @@ pub struct RustTestBinarySummary {
 
     /// Platform for which this binary was built.
     /// (Proc-macro tests are built for the host.)
-    pub platform: Platform,
+    pub build_platform: BuildPlatform,
 }
 
 /// A serializable suite of test binaries.

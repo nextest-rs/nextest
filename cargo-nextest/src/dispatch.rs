@@ -11,7 +11,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgEnum, Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
-use nextest_metadata::{BinaryListSummary, Platform};
+use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     config::{NextestConfig, NextestProfile},
     errors::{TargetRunnerError, WriteEventError},
@@ -83,8 +83,6 @@ impl AppOpts {
                 list_type,
                 reuse_build,
             } => {
-                reuse_build.check_experimental()?;
-
                 let app = App::new(
                     self.output,
                     reuse_build,
@@ -102,8 +100,6 @@ impl AppOpts {
                 reporter_opts,
                 reuse_build,
             } => {
-                reuse_build.check_experimental()?;
-
                 let app = App::new(
                     self.output,
                     reuse_build,
@@ -208,7 +204,7 @@ pub(crate) enum PlatformFilterOpts {
     Target,
 }
 
-impl From<PlatformFilterOpts> for Platform {
+impl From<PlatformFilterOpts> for BuildPlatform {
     fn from(opt: PlatformFilterOpts) -> Self {
         match opt {
             PlatformFilterOpts::Host => Self::Host,
@@ -277,7 +273,7 @@ impl TestBuildFilter {
         &self,
         graph: &'g PackageGraph,
         binary_list: BinaryList,
-        runner: Option<&TargetRunner>,
+        runner: &TargetRunner,
         reuse_build: &ReuseBuildOpts,
     ) -> Result<TestList<'g>> {
         let path_mapper = reuse_build.make_path_mapper(graph);
@@ -434,6 +430,7 @@ impl App {
         manifest_path: Option<Utf8PathBuf>,
     ) -> Result<Self> {
         let output = output.init();
+        reuse_build.check_experimental(output)?;
 
         let graph_data = match reuse_build.cargo_metadata.as_deref() {
             Some(path) => std::fs::read_to_string(path)?,
@@ -482,7 +479,7 @@ impl App {
     fn build_test_list(
         &self,
         binary_list: BinaryList,
-        target_runner: Option<&TargetRunner>,
+        target_runner: &TargetRunner,
     ) -> Result<TestList> {
         self.build_filter.compute_test_list(
             &self.graph,
@@ -506,13 +503,10 @@ impl App {
         Ok(profile)
     }
 
-    fn load_runner(&self) -> Option<TargetRunner> {
+    fn load_runner(&self) -> TargetRunner {
         // When cross-compiling we should not use the cross target runner
         // for running the host tests (like proc-macro ones).
-        match self.reuse_build.platform_filter {
-            Some(PlatformFilterOpts::Host) => runner_for_target(None),
-            _ => runner_for_target(self.build_filter.cargo_options.target.as_deref()),
-        }
+        runner_for_target(self.build_filter.cargo_options.target.as_deref())
     }
 
     fn exec_list(
@@ -535,7 +529,7 @@ impl App {
             }
             ListType::Full => {
                 let target_runner = self.load_runner();
-                let mut test_list = self.build_test_list(binary_list, target_runner.as_ref())?;
+                let mut test_list = self.build_test_list(binary_list, &target_runner)?;
                 if self.output.color.should_colorize(Stream::Stdout) {
                     test_list.colorize();
                 }
@@ -567,7 +561,7 @@ impl App {
         let target_runner = self.load_runner();
 
         let binary_list = self.build_binary_list()?;
-        let test_list = self.build_test_list(binary_list, target_runner.as_ref())?;
+        let test_list = self.build_test_list(binary_list, &target_runner)?;
 
         let mut reporter = reporter_opts
             .to_builder(no_capture)
@@ -578,12 +572,9 @@ impl App {
         }
 
         let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
-        let mut runner_builder = runner_opts.to_builder(no_capture);
-        if let Some(target_runner) = target_runner {
-            runner_builder.set_target_runner(target_runner);
-        }
+        let runner_builder = runner_opts.to_builder(no_capture);
+        let runner = runner_builder.build(&test_list, &profile, handler, target_runner);
 
-        let runner = runner_builder.build(&test_list, &profile, handler);
         let mut writer = output_writer.stderr_writer();
         let run_stats = runner.try_execute(|event| {
             // Write and flush the event.
@@ -619,12 +610,12 @@ fn acquire_graph_data(manifest_path: Option<&Utf8Path>, output: OutputContext) -
     Ok(json)
 }
 
-fn runner_for_target(triple: Option<&str>) -> Option<TargetRunner> {
-    match TargetRunner::for_target(triple) {
+fn runner_for_target(triple: Option<&str>) -> TargetRunner {
+    match TargetRunner::new(triple) {
         Ok(runner) => runner,
         Err(err) => {
             warn_on_target_runner_err(&err).expect("writing to a string is infallible");
-            None
+            TargetRunner::empty()
         }
     }
 }
