@@ -73,6 +73,56 @@ struct AppOpts {
     command: Command,
 }
 
+impl AppOpts {
+    /// Execute the command.
+    fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
+        match self.command {
+            Command::List {
+                build_filter,
+                message_format,
+                list_type,
+                reuse_build,
+            } => {
+                reuse_build.check_experimental()?;
+
+                let app = App::new(
+                    self.output,
+                    reuse_build,
+                    build_filter,
+                    self.config_opts,
+                    self.manifest_path,
+                )?;
+                app.exec_list(message_format, list_type, output_writer)
+            }
+            Command::Run {
+                profile,
+                no_capture,
+                build_filter,
+                runner_opts,
+                reporter_opts,
+                reuse_build,
+            } => {
+                reuse_build.check_experimental()?;
+
+                let app = App::new(
+                    self.output,
+                    reuse_build,
+                    build_filter,
+                    self.config_opts,
+                    self.manifest_path,
+                )?;
+                app.exec_run(
+                    profile.as_deref(),
+                    no_capture,
+                    &runner_opts,
+                    &reporter_opts,
+                    output_writer,
+                )
+            }
+        }
+    }
+}
+
 #[derive(Debug, Args)]
 struct ConfigOpts {
     /// Config file [default: workspace-root/.config/nextest.toml]
@@ -362,56 +412,6 @@ impl TestReporterOpts {
             builder.set_status_level(status_level);
         }
         builder
-    }
-}
-
-impl AppOpts {
-    /// Execute the command.
-    fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
-        match self.command {
-            Command::List {
-                build_filter,
-                message_format,
-                list_type,
-                reuse_build,
-            } => {
-                reuse_build.check_experimental()?;
-
-                let app = App::new(
-                    self.output,
-                    reuse_build,
-                    build_filter,
-                    self.config_opts,
-                    self.manifest_path,
-                )?;
-                app.exec_list(message_format, list_type, output_writer)
-            }
-            Command::Run {
-                profile,
-                no_capture,
-                build_filter,
-                runner_opts,
-                reporter_opts,
-                reuse_build,
-            } => {
-                reuse_build.check_experimental()?;
-
-                let app = App::new(
-                    self.output,
-                    reuse_build,
-                    build_filter,
-                    self.config_opts,
-                    self.manifest_path,
-                )?;
-                app.exec_run(
-                    profile.as_deref(),
-                    no_capture,
-                    &runner_opts,
-                    &reporter_opts,
-                    output_writer,
-                )
-            }
-        }
     }
 }
 
