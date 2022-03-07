@@ -529,15 +529,13 @@ impl App {
             }
             ListType::Full => {
                 let target_runner = self.load_runner();
-                let mut test_list = self.build_test_list(binary_list, &target_runner)?;
-                if self.output.color.should_colorize(Stream::Stdout) {
-                    test_list.colorize();
-                }
+                let test_list = self.build_test_list(binary_list, &target_runner)?;
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
                     message_format.to_output_format(self.output.verbose),
                     &mut writer,
+                    self.output.color.should_colorize(Stream::Stdout),
                 )?;
                 writer.flush()?;
             }

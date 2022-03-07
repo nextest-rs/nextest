@@ -181,11 +181,11 @@ impl BinaryList {
         &self,
         output_format: OutputFormat,
         writer: impl Write,
-        colorized: bool,
+        colorize: bool,
     ) -> Result<(), WriteTestListError> {
         match output_format {
             OutputFormat::Human { verbose } => self
-                .write_human(writer, verbose, colorized)
+                .write_human(writer, verbose, colorize)
                 .map_err(WriteTestListError::Io),
             OutputFormat::Serializable(format) => format
                 .to_writer(&self.to_summary(), writer)
@@ -212,14 +212,9 @@ impl BinaryList {
         BinaryListSummary { rust_binaries }
     }
 
-    fn write_human(
-        &self,
-        mut writer: impl Write,
-        verbose: bool,
-        colorized: bool,
-    ) -> io::Result<()> {
+    fn write_human(&self, mut writer: impl Write, verbose: bool, colorize: bool) -> io::Result<()> {
         let mut styles = Styles::default();
-        if colorized {
+        if colorize {
             styles.colorize();
         }
         for bin in &self.rust_binaries {
@@ -305,7 +300,6 @@ impl<'g> RustTestArtifact<'g> {
 pub struct TestList<'g> {
     test_count: usize,
     rust_suites: BTreeMap<Utf8PathBuf, RustTestSuite<'g>>,
-    styles: Box<Styles>,
     // Computed on first access.
     skip_count: OnceCell<usize>,
 }
@@ -409,7 +403,6 @@ impl<'g> TestList<'g> {
         Ok(Self {
             rust_suites: test_artifacts,
             test_count,
-            styles: Box::new(Styles::default()),
             skip_count: OnceCell::new(),
         })
     }
@@ -440,14 +433,8 @@ impl<'g> TestList<'g> {
         Ok(Self {
             rust_suites: test_artifacts,
             test_count,
-            styles: Box::new(Styles::default()),
             skip_count: OnceCell::new(),
         })
-    }
-
-    /// Colorizes output.
-    pub fn colorize(&mut self) {
-        self.styles.colorize();
     }
 
     /// Returns the total number of tests across all binaries.
@@ -518,10 +505,11 @@ impl<'g> TestList<'g> {
         &self,
         output_format: OutputFormat,
         writer: impl Write,
+        colorize: bool,
     ) -> Result<(), WriteTestListError> {
         match output_format {
             OutputFormat::Human { verbose } => self
-                .write_human(writer, verbose)
+                .write_human(writer, verbose, colorize)
                 .map_err(WriteTestListError::Io),
             OutputFormat::Serializable(format) => format
                 .to_writer(&self.to_summary(), writer)
@@ -549,7 +537,7 @@ impl<'g> TestList<'g> {
     pub fn to_string(&self, output_format: OutputFormat) -> Result<String, WriteTestListError> {
         // Ugh this sucks. String really should have an io::Write impl that errors on non-UTF8 text.
         let mut buf = Vec::with_capacity(1024);
-        self.write(output_format, &mut buf)?;
+        self.write(output_format, &mut buf, false)?;
         Ok(String::from_utf8(buf).expect("buffer is valid UTF-8"))
     }
 
@@ -563,7 +551,6 @@ impl<'g> TestList<'g> {
         Self {
             test_count: 0,
             rust_suites: BTreeMap::new(),
-            styles: Box::new(Styles::default()),
             skip_count: OnceCell::new(),
         }
     }
@@ -658,16 +645,21 @@ impl<'g> TestList<'g> {
         })
     }
 
-    fn write_human(&self, mut writer: impl Write, verbose: bool) -> io::Result<()> {
+    fn write_human(&self, mut writer: impl Write, verbose: bool, colorize: bool) -> io::Result<()> {
+        let mut styles = Styles::default();
+        if colorize {
+            styles.colorize();
+        }
+
         for (test_bin, info) in &self.rust_suites {
-            writeln!(writer, "{}:", info.binary_id.style(self.styles.binary_id))?;
+            writeln!(writer, "{}:", info.binary_id.style(styles.binary_id))?;
             if verbose {
-                writeln!(writer, "  {} {}", "bin:".style(self.styles.field), test_bin)?;
-                writeln!(writer, "  {} {}", "cwd:".style(self.styles.field), info.cwd)?;
+                writeln!(writer, "  {} {}", "bin:".style(styles.field), test_bin)?;
+                writeln!(writer, "  {} {}", "cwd:".style(styles.field), info.cwd)?;
                 writeln!(
                     writer,
                     "  {} {}",
-                    "build platform:".style(self.styles.field),
+                    "build platform:".style(styles.field),
                     info.build_platform,
                 )?;
             }
@@ -678,7 +670,7 @@ impl<'g> TestList<'g> {
                 writeln!(indented, "(no tests)")?;
             } else {
                 for (name, info) in &info.testcases {
-                    write_test_name(name, &self.styles, &mut indented)?;
+                    write_test_name(name, &styles, &mut indented)?;
                     if !info.filter_match.is_match() {
                         write!(indented, " (skipped)")?;
                     }
