@@ -17,6 +17,7 @@ mod cargo_cli;
 mod dispatch;
 mod errors;
 mod output;
+mod reuse_build;
 
 #[cfg(test)]
 mod tests_integration;

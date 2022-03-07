@@ -4,6 +4,7 @@
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, OutputOpts, OutputWriter},
+    reuse_build::ReuseBuildOpts,
     ExpectedError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -20,9 +21,7 @@ use nextest_runner::{
     signal::SignalHandler,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::{
-        BinaryList, OutputFormat, PathMapper, RustTestArtifact, SerializableFormat, TestList,
-    },
+    test_list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
 };
 use owo_colors::{OwoColorize, Style};
 use std::{
@@ -153,32 +152,8 @@ enum Command {
     },
 }
 
-#[derive(Debug, Args)]
-#[clap(next_help_heading = "REUSE BUILD OPTIONS (EXPERIMENTAL)")]
-struct ReuseBuildOpts {
-    /// Path to list of test binaries
-    #[clap(long, value_name = "PATH")]
-    binaries_metadata: Option<Utf8PathBuf>,
-
-    /// Remapping for the test binaries directory
-    #[clap(long, requires("binaries-metadata"), value_name = "PATH")]
-    binaries_dir_remap: Option<Utf8PathBuf>,
-
-    /// Path to cargo metadata JSON
-    #[clap(long, conflicts_with("manifest-path"), value_name = "PATH")]
-    cargo_metadata: Option<Utf8PathBuf>,
-
-    /// Remapping for the workspace root
-    #[clap(long, requires("cargo-metadata"), value_name = "PATH")]
-    workspace_remap: Option<Utf8PathBuf>,
-
-    /// Filter binaries based on the platform they were built for
-    #[clap(long, arg_enum, value_name = "PLATFORM")]
-    platform_filter: Option<PlatformFilterOpts>,
-}
-
 #[derive(Copy, Clone, Debug, ArgEnum)]
-enum PlatformFilterOpts {
+pub(crate) enum PlatformFilterOpts {
     Host,
     Target,
 }
@@ -255,11 +230,7 @@ impl TestBuildFilter {
         runner: Option<&TargetRunner>,
         reuse_build: &ReuseBuildOpts,
     ) -> Result<TestList<'g>> {
-        let path_mapper = PathMapper::new(
-            graph,
-            reuse_build.workspace_remap.clone(),
-            reuse_build.binaries_dir_remap.clone(),
-        );
+        let path_mapper = reuse_build.make_path_mapper(graph);
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,
             binary_list,
@@ -394,26 +365,6 @@ impl TestReporterOpts {
     }
 }
 
-fn check_reuse_build_enabled_if_used(reuse_build: &ReuseBuildOpts) -> Result<()> {
-    let used = reuse_build.binaries_metadata.is_some()
-        || reuse_build.binaries_dir_remap.is_some()
-        || reuse_build.cargo_metadata.is_some()
-        || reuse_build.workspace_remap.is_some()
-        || reuse_build.platform_filter.is_some();
-
-    let var_name = "NEXTEST_EXPERIMENTAL_REUSE_BUILD";
-    let enabled = std::env::var(var_name).is_ok();
-
-    if used && !enabled {
-        Err(Report::new(ExpectedError::experimental_feature_error(
-            "build reuse",
-            var_name,
-        )))
-    } else {
-        Ok(())
-    }
-}
-
 impl AppOpts {
     /// Execute the command.
     fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
@@ -424,7 +375,7 @@ impl AppOpts {
                 list_type,
                 reuse_build,
             } => {
-                check_reuse_build_enabled_if_used(&reuse_build)?;
+                reuse_build.check_experimental()?;
 
                 let app = App::new(
                     self.output,
@@ -443,7 +394,7 @@ impl AppOpts {
                 reporter_opts,
                 reuse_build,
             } => {
-                check_reuse_build_enabled_if_used(&reuse_build)?;
+                reuse_build.check_experimental()?;
 
                 let app = App::new(
                     self.output,
