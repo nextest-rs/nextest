@@ -1,3 +1,6 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Integration tests
 //!
 //! Those tests are not in "cargo-nextest/tests/integration/main.rs"

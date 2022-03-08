@@ -1,3 +1,6 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use super::temp_project::TempProject;
 use crate::{dispatch::CargoNextestApp, OutputWriter};
 use clap::StructOpt;

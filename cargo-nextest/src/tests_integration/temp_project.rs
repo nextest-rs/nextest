@@ -1,8 +1,11 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use std::{
     fs, io,
     path::{Path, PathBuf},
 };
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 /// A temporary copy of the test project
 ///
@@ -30,7 +33,9 @@ fn copy_dir_all(src: &Path, dst: &Path, root: bool) -> io::Result<()> {
 
 impl TempProject {
     pub fn new() -> std::io::Result<Self> {
-        let dir = TempDir::new("nextest-fixture")?;
+        let dir = tempfile::Builder::new()
+            .prefix("nextest-fixture")
+            .tempdir()?;
 
         let src_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
