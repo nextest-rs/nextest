@@ -158,7 +158,13 @@ enum Command {
         message_format: MessageFormatOpts,
 
         /// Type of listing
-        #[clap(long, arg_enum, default_value_t, value_name = "TYPE")]
+        #[clap(
+            long,
+            arg_enum,
+            default_value_t,
+            help_heading = "OUTPUT OPTIONS",
+            value_name = "TYPE"
+        )]
         list_type: ListType,
 
         #[clap(flatten)]
