@@ -41,12 +41,12 @@ This is different from `cargo test`, where you have to specify a `--`, for examp
 
 ### Filtering by build platform
 
-While cross-compiling code, some tests (e.g. proc-macro tests) may need to be run on the host platform. To filter tests based on the build platform they're for, nextest accepts the `--filter-platform` option with values `target`, `host` or `any` (default).
+While cross-compiling code, some tests (e.g. proc-macro tests) may need to be run on the host platform. To filter tests based on the build platform they're for, nextest accepts the `--platform-filter` option with values `target`, `host` or `any` (default).
 
 For example, to only run tests for the host platform:
 
 ```
-cargo nextest run --filter-platform host
+cargo nextest run --platform-filter host
 ```
 
 ## Displaying live test output
