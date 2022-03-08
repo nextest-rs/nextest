@@ -79,10 +79,26 @@ impl ListCommand {
     }
 
     /// Executes `cargo nextest list` and parses the output into a [`TestListSummary`].
-    ///
-    ///
     pub fn exec(&self) -> Result<TestListSummary, CommandError> {
         let mut command = self.cargo_command();
+        let output = command.output().map_err(CommandError::Exec)?;
+
+        if !output.status.success() {
+            // The process exited with a non-zero code.
+            let exit_code = output.status.code();
+            let stderr = output.stderr;
+            return Err(CommandError::CommandFailed { exit_code, stderr });
+        }
+
+        // Try parsing stdout.
+        serde_json::from_slice(&output.stdout).map_err(CommandError::Json)
+    }
+
+    /// Executes `cargo nextest list --list-type binaries-only` and parses the output into a
+    /// [`BinaryListSummary`].
+    pub fn exec_binaries_only(&self) -> Result<BinaryListSummary, CommandError> {
+        let mut command = self.cargo_command();
+        command.arg("--list-type=binaries-only");
         let output = command.output().map_err(CommandError::Exec)?;
 
         if !output.status.success() {
