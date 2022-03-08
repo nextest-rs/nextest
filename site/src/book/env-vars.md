@@ -19,6 +19,9 @@ cargo-nextest delegates to Cargo for the build, which recognizes a number of env
 cargo-nextest exposes these environment variables to your tests *at runtime only*. They are not set at build time because cargo-nextest may reuse builds done outside of the nextest environment.
 
 * `NEXTEST` — always set to `"1"`.
+* `NEXTEST_EXECUTION_MODE` — currently, always set to `process-per-test`. More options may be added in the future if nextest gains the ability to run all tests within the same process ([#27]).
+
+[#27]: https://github.com/nextest-rs/nextest/issues/27
 
 ### Cargo-related environment variables nextest sets
 
