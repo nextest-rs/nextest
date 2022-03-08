@@ -71,7 +71,7 @@ While cross-compiling code, some tests may need to be run on the host platform. 
     ```
 3. Run host-only tests:
    ```
-   cargo nextest run --platform-filter host
+   cargo nextest run --target <TARGET> --platform-filter host
    ```
 4. Archive artifacts: `target/cargo-metadata.json`, `target/binaries-metadata.json`, and test binaries.
     * With [`jq`](https://stedolan.github.io/jq/), this can be done through `cat target/binaries-metadata.json | jq '."rust-binaries" | .[] . "binary-path"`).
