@@ -17,7 +17,7 @@ In some cases, it can be useful to separate out building tests and running them.
 
 - **Cross-compilation.** The build machine has a different architecture or operating system from the target machine.
 - **Partitioned execution.** Build once on the build machine, then [partition test execution](partitioning.md) across multiple target machines.
-- **Saving execution time on more valuable machines.** For example, do not build on a GPU machine.
+- **Saving execution time on more valuable machines.** For example, build on a regular machine, then run them on a GPU machine.
 
 ## Requirements
 
