@@ -100,6 +100,11 @@ fn test_cargo_env_vars() {
         Ok("1"),
         "NEXTEST environment variable set to 1"
     );
+    assert_eq!(
+        std::env::var("NEXTEST_EXECUTION_MODE").as_deref(),
+        Ok("process-per-test"),
+        "NEXTEST_EXECUTION_MODE set to process-per-test"
+    );
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
     assert_env!("CARGO");
     assert_env!("CARGO_MANIFEST_DIR");

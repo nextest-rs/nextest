@@ -790,6 +790,8 @@ impl<'a> TestInstance<'a> {
             .dir(&self.bin_info.cwd)
             // This environment variable is set to indicate that tests are being run under nextest.
             .env("NEXTEST", "1")
+            // This environment variable is set to indicate that each test is being run in its own process.
+            .env("NEXTEST_EXECUTION_MODE", "process-per-test")
             // These environment variables are set at runtime by cargo test:
             // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
             .env(
