@@ -3,6 +3,26 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to this release!
+
+### Added
+
+- A new `--platform-filter` option filters tests by the platform they run on (target or host).
+- `cargo nextest list` has a new `--list-type` option, with values `full` (the default, same as today) and `binaries-only` (list out binaries without querying them for the tests they contain).
+- Nextest executions done as a separate process per test (currently the only supported method, though this might change in the future) set the environment variable `NEXTEST_PROCESS_MODE=process-per-test`.
+
+### New experimental features
+
+- Nextest can now reuse builds across invocations and machines. This is an experimental feature, and feedback is welcome in [#98]!
+
+[#98]: https://github.com/nextest-rs/nextest/issues/98
+
+### Changed
+
+- The target runner is now build-platform-specific; test binaries built for the host platform will be run by the target runner variable defined for the host, and similarly for the target platform.
+
 ## [0.9.9] - 2022-03-03
 
 ### Added

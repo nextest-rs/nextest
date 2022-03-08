@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to this release!
+
+### Added
+
+- Filter test binaries by the build platform they're for (target or host).
+- Experimental support for reusing build artifacts between the build and run steps.
+- Nextest executions done as a separate process per test (currently the only supported method, though this might change in the future) set the environment variable `NEXTEST_PROCESS_MODE=process-per-test`.
+
+### Changed
+
+- `TargetRunner` now has separate handling for the target and host platforms. As part of this, a new struct `PlatformRunner` represents a target runner for a single platform.
+
 ## [0.3.0] - 2022-02-23
 
 ### Fixed
