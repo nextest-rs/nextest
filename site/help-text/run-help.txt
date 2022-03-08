@@ -55,9 +55,11 @@ CARGO OPTIONS:
                                     details
 
 FILTER OPTIONS:
-        --run-ignored <WHICH>      Run ignored tests [default: default] [possible values: default,
-                                   ignored-only, all]
-        --partition <PARTITION>    Test partition, e.g. hash:1/2 or count:2/3
+        --run-ignored <WHICH>           Run ignored tests [default: default] [possible values:
+                                        default, ignored-only, all]
+        --partition <PARTITION>         Test partition, e.g. hash:1/2 or count:2/3
+        --platform-filter <PLATFORM>    Filter test binaries by build platform [default: any]
+                                        [possible values: target, host, any]
 
 REPORTER OPTIONS:
         --failure-output <WHEN>    Output stdout and stderr on failure [possible values: immediate,
@@ -66,3 +68,9 @@ REPORTER OPTIONS:
                                    immediate-final, final, never]
         --status-level <LEVEL>     Test statuses to output [possible values: none, fail, retry,
                                    slow, pass, skip, all]
+
+REUSE BUILD OPTIONS (EXPERIMENTAL):
+        --binaries-metadata <PATH>     Path to binaries-metadata JSON
+        --binaries-dir-remap <PATH>    Remapping for the test binaries directory
+        --cargo-metadata <PATH>        Path to cargo metadata JSON
+        --workspace-remap <PATH>       Remapping for the workspace root

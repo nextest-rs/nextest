@@ -29,7 +29,7 @@ For a full list of options accepted by `cargo nextest run`, see `cargo nextest r
 
 [^bin-example]: `bin` and `example` targets can also contain tests. Those are represented as `crate-name::bin/bin-name` and `crate-name::example/example-name`, respectively.
 
-### Filtering tests
+## Filtering tests
 
 To only run tests that match certain names:
 
@@ -39,7 +39,17 @@ cargo nextest run <test-name1> <test-name2>...
 
 This is different from `cargo test`, where you have to specify a `--`, for example: `cargo test -- <test-name1> <test-name2>...`.
 
-### Displaying live test output
+### Filtering by build platform
+
+While cross-compiling code, some tests (e.g. proc-macro tests) may need to be run on the host platform. To filter tests based on the build platform they're for, nextest accepts the `--filter-platform` option with values `target`, `host` or `any` (default).
+
+For example, to only run tests for the host platform:
+
+```
+cargo nextest run --filter-platform host
+```
+
+## Displaying live test output
 
 By default, `cargo nextest run` will capture test output and only display it on failure. If you do *not* want to capture test output:
 

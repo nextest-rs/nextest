@@ -11,7 +11,7 @@ use nextest_runner::test_list::PathMapper;
 #[derive(Debug, Args)]
 #[clap(next_help_heading = "REUSE BUILD OPTIONS (EXPERIMENTAL)")]
 pub(crate) struct ReuseBuildOpts {
-    /// Path to list of test binaries
+    /// Path to binaries-metadata JSON
     #[clap(long, value_name = "PATH")]
     pub(crate) binaries_metadata: Option<Utf8PathBuf>,
 

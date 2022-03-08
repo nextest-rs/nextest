@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.2.0] - 2022-03-07
 
 Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to this release!
 
@@ -19,4 +19,5 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
-[0.1.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.1.0
+[0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.2.0
+[0.1.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.1.0

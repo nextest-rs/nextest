@@ -17,6 +17,7 @@ To produce a list of tests in the JSON output format `cargo nextest list --messa
       "package-id": "tokio-util 0.7.0 (path+file:///home/me/dev/tokio/tokio-util)",
       "binary-path": "/home/me/dev/tokio/target/debug/deps/tokio_util-def0ee51cb418fe8",
       "cwd": "/home/rain/dev/tokio/tokio-util",
+      "build-platform": "target",
       "testcases": {
         "either::tests::either_is_async_read": {
           "ignored": false,

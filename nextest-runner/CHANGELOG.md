@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.4.0] - 2022-03-07
 
 Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to this release!
 
@@ -52,6 +52,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.4.0
 [0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.3.0
 [0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.2.1
 [0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.2.0

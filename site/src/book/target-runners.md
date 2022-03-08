@@ -33,3 +33,9 @@ cargo nextest run --target x86_64-pc-windows-msvc
 > See the discussion in [PR #84] for more.
 
 [PR #84]: https://github.com/nextest-rs/nextest/pull/84
+
+## Cross-compiling
+
+While cross-compiling code, some tests may need to be run on the host platform. (See the note about [Filtering by build platform](running.md#filtering-by-build-platform) for more.)
+
+For tests that run on the host platform, nextest uses the target runner defined for the host. For example, if cross-compiling from `x86_64-unknown-linux-gnu` to `x86_64-pc-windows-msvc`, nextest will use the `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER` for proc-macro and other host-only tests, and `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER` for other tests.
