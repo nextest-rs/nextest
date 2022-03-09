@@ -15,18 +15,18 @@ In some cases, it can be useful to separate out building tests and running them.
 
 ## Use cases
 
-- **Cross-compilation.** The build machine has a different architecture or operating system from the target machine.
-- **Partitioned execution.** Build once on the build machine, then [partition test execution](partitioning.md) across multiple target machines.
-- **Saving execution time on more valuable machines.** For example, build on a regular machine, then run them on a GPU machine.
+- **Cross-compilation.** The build machine has a different architecture, or runs a different operating system, from the target machine.
+- **Test partitioning.** Build once on the build machine, then [partition test execution](partitioning.md) across multiple target machines.
+- **Saving execution time on more valuable machines.** For example, build tests on a regular machine, then run them on a machine with a GPU attached to it.
 
 ## Requirements
 
-- **The project source must be checked out to the same revision on the target machine.** This might be needed for test fixtures and other assets, and nextest applies the right working directory relative to the workspace root when executing tests.
+- **The project source must be checked out to the same revision on the target machine.** This might be needed for test fixtures and other assets, and nextest sets the right working directory relative to the workspace root when executing tests.
 - **It is your responsibility to transfer over build artifacts.** Use the examples below as a template.
 
 ### Non-requirements
 
-- **Cargo does not need to be installed on the target machine.** In this case, replace `cargo nextest` with `cargo-nextest nextest` in the following examples.
+- **Cargo does not need to be installed on the target machine.** If `cargo` is unavailable, replace `cargo nextest` with `cargo-nextest nextest` in the following examples.
 
 ## New options
 
