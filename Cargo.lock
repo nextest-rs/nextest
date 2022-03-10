@@ -632,7 +632,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 
 [[package]]
 name = "nextest-metadata"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "camino",
  "serde",

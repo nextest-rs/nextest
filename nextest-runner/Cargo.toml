@@ -38,7 +38,7 @@ target-spec = "1.0"
 toml = "0.5.8"
 twox-hash = { version = "1.6.2", default-features = false }
 
-nextest-metadata = { version = "0.2.0", path = "../nextest-metadata" }
+nextest-metadata = { version = "0.2.1", path = "../nextest-metadata" }
 quick-junit = { version = "0.1.5", path = "../quick-junit" }
 
 [dev-dependencies]

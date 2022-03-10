@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.1] - 2022-03-09
+
+Add documentation about nextest-metadata's "minimum supported cargo-nextest version".
+
 ## [0.2.0] - 2022-03-07
 
 Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to this release!
