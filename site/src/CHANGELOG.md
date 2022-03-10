@@ -3,6 +3,13 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.11] - 2022-03-09
+
+### Fixed
+
+- Update `regex` to 1.5.5 to address [GHSA-m5pq-gvj9-9vr8
+  (CVE-2022-24713)](https://github.com/rust-lang/regex/security/advisories/GHSA-m5pq-gvj9-9vr8).
+
 ## [0.9.10] - 2022-03-07
 
 Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to this release!
@@ -122,6 +129,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.11]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.11
 [0.9.10]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.10
 [0.9.9]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.9
 [0.9.8]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.8
