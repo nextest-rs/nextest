@@ -8,7 +8,7 @@ use crate::{
     reporter::{StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use config::{Config, File, FileFormat};
+use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
 use serde::Deserialize;
 use std::{collections::HashMap, time::Duration};
 
@@ -54,7 +54,7 @@ impl NextestConfig {
         let workspace_root = workspace_root.into();
         let (config_file, config) = Self::read_from_sources(&workspace_root, config_file)?;
         let inner = config
-            .try_into()
+            .try_deserialize()
             .map_err(|err| ConfigParseError::new(config_file, err))?;
         Ok(Self {
             workspace_root,
@@ -64,8 +64,13 @@ impl NextestConfig {
 
     /// Returns the default nextest config.
     pub fn default_config(workspace_root: impl Into<Utf8PathBuf>) -> Self {
-        let config = Self::make_default_config();
-        let inner = config.try_into().expect("default config is always valid");
+        let config = Self::make_default_config()
+            .build()
+            .expect("default config is always valid");
+
+        let inner = config
+            .try_deserialize()
+            .expect("default config is always valid");
         Self {
             workspace_root: workspace_root.into(),
             inner,
@@ -87,32 +92,33 @@ impl NextestConfig {
         file: Option<&Utf8Path>,
     ) -> Result<(Utf8PathBuf, Config), ConfigParseError> {
         // First, get the default config.
-        let mut config = Self::make_default_config();
+        let builder = Self::make_default_config();
 
         // Next, merge in the config from the given file.
-        let config_path = match file {
-            Some(file) => {
-                config
-                    .merge(File::new(file.as_str(), FileFormat::Toml))
-                    .map_err(|err| ConfigParseError::new(file, err))?;
-                file.to_owned()
-            }
+        let (builder, config_path) = match file {
+            Some(file) => (
+                builder.add_source(File::new(file.as_str(), FileFormat::Toml)),
+                file.to_owned(),
+            ),
             None => {
                 let config_path = workspace_root.join(Self::CONFIG_PATH);
-                config
-                    .merge(File::new(config_path.as_str(), FileFormat::Toml).required(false))
-                    .map_err(|err| ConfigParseError::new(config_path.clone(), err))?;
-                config_path
+                (
+                    builder.add_source(
+                        File::new(config_path.as_str(), FileFormat::Toml).required(false),
+                    ),
+                    config_path,
+                )
             }
         };
 
+        let config = builder
+            .build()
+            .map_err(|err| ConfigParseError::new(&config_path, err))?;
         Ok((config_path, config))
     }
 
-    fn make_default_config() -> Config {
-        Config::new()
-            .with_merged(File::from_str(Self::DEFAULT_CONFIG, FileFormat::Toml))
-            .expect("default config is valid")
+    fn make_default_config() -> ConfigBuilder<DefaultState> {
+        Config::builder().add_source(File::from_str(Self::DEFAULT_CONFIG, FileFormat::Toml))
     }
 
     fn make_profile(&self, name: &str) -> Result<NextestProfile<'_>, ProfileNotFound> {
