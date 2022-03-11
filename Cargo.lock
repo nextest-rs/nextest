@@ -42,6 +42,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "assay"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b6400785ccafeab7f18a4d23d726f9090dd1195386f06026c6e59db36e11938"
+dependencies = [
+ "assay-proc-macro",
+ "pretty_assertions",
+ "rusty-fork",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "assay-proc-macro"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d94121b572ccf1d1b38a1004155e59c64f4c6ff7793070d84a8807e0550881e"
+dependencies = [
+ "quote 1.0.15",
+ "syn 1.0.86",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -113,6 +136,7 @@ dependencies = [
 name = "cargo-nextest"
 version = "0.9.11"
 dependencies = [
+ "assay",
  "camino",
  "cfg-if",
  "clap",
@@ -802,6 +826,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "pin-project-lite"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e280fbe77cc62c91527259e9442153f4688736748d24660126286329742b4c6c"
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1245,6 +1275,16 @@ dependencies = [
  "libc",
  "wasi",
  "winapi",
+]
+
+[[package]]
+name = "tokio"
+version = "1.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af73ac49756f3f7c01172e34a23e5d0216f6c32333757c2c61feb2bbff5a5ee"
+dependencies = [
+ "num_cpus",
+ "pin-project-lite",
 ]
 
 [[package]]
