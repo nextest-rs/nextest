@@ -14,7 +14,6 @@
 //! So we try to replace the binary we are currently running. This is forbidden on Windows.
 
 use crate::{dispatch::CargoNextestApp, OutputWriter};
-use assay::assay;
 use clap::StructOpt;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 
@@ -24,7 +23,7 @@ mod temp_project;
 use fixtures::*;
 use temp_project::TempProject;
 
-#[assay]
+#[test]
 fn test_list_default() {
     let p = TempProject::new().unwrap();
 
@@ -45,7 +44,7 @@ fn test_list_default() {
     check_list_full_output(output.stdout().unwrap(), None);
 }
 
-#[assay]
+#[test]
 fn test_list_full() {
     let p = TempProject::new().unwrap();
 
@@ -68,7 +67,7 @@ fn test_list_full() {
     check_list_full_output(output.stdout().unwrap(), None);
 }
 
-#[assay]
+#[test]
 fn test_list_binaries_only() {
     let p = TempProject::new().unwrap();
 
@@ -91,7 +90,7 @@ fn test_list_binaries_only() {
     check_list_binaries_output(output.stdout().unwrap());
 }
 
-#[assay]
+#[test]
 fn test_list_full_after_build() {
     let _ = &*ENABLE_EXPERIMENTAL;
 
@@ -119,7 +118,7 @@ fn test_list_full_after_build() {
     check_list_full_output(output.stdout().unwrap(), None);
 }
 
-#[assay]
+#[test]
 fn test_list_host_after_build() {
     let _ = &*ENABLE_EXPERIMENTAL;
 
@@ -149,7 +148,7 @@ fn test_list_host_after_build() {
     check_list_full_output(output.stdout().unwrap(), Some(BuildPlatform::Host));
 }
 
-#[assay]
+#[test]
 fn test_list_target_after_build() {
     let _ = &*ENABLE_EXPERIMENTAL;
 
@@ -179,7 +178,7 @@ fn test_list_target_after_build() {
     check_list_full_output(output.stdout().unwrap(), Some(BuildPlatform::Target));
 }
 
-#[assay]
+#[test]
 fn test_run() {
     let p = TempProject::new().unwrap();
 
@@ -199,7 +198,7 @@ fn test_run() {
     check_run_output(output.stderr().unwrap(), false);
 }
 
-#[assay]
+#[test]
 fn test_run_after_build() {
     let _ = &*ENABLE_EXPERIMENTAL;
 
@@ -226,7 +225,7 @@ fn test_run_after_build() {
     check_run_output(output.stderr().unwrap(), false);
 }
 
-#[assay]
+#[test]
 fn test_relocated_run() {
     let _ = &*ENABLE_EXPERIMENTAL;
 

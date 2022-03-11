@@ -110,8 +110,3 @@ jobs:
         with:
           command: nextest
           args: run --all-features --profile ci
-      - name: Run regular cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
