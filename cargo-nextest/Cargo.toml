@@ -21,7 +21,7 @@ duct = "0.13.5"
 enable-ansi-support = "0.1.2"
 # we don't use the default formatter so we don't need default features
 env_logger = { version = "0.9.0", default-features = false }
-guppy = "0.13.0"
+guppy = "0.14.0"
 log = "0.4.14"
 nextest-runner = { version = "0.4.0", path = "../nextest-runner" }
 nextest-metadata = { version = "0.2.1", path = "../nextest-metadata" }
