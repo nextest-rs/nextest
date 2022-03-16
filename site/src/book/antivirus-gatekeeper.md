@@ -14,7 +14,7 @@ Your antivirus software—typically Windows Security, also known as Microsoft De
 
 ## macOS
 
-Similar to Windows Security, macOS has a system called Gatekeeper which performs checks on binaries. This can cause nextest runs to be significantly slower. A typical sign of this happening is even the simplest of tests in `cargo nextest run` taking more than 0.2 seconds.
+Similar to Windows Security, macOS has a system called Gatekeeper which performs checks on binaries. Gatekeeper can cause nextest runs to be significantly slower. A typical sign of this happening is even the simplest of tests in `cargo nextest run` taking more than 0.2 seconds.
 
 Adding your terminal to Developer Tools will cause any processes run by it to be excluded from Gatekeeper. **For optimal performance, add your terminal to Developer Tools.** You may also need to run `cargo clean` afterwards.
 
