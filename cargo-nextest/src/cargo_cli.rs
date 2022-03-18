@@ -13,120 +13,120 @@ use std::{convert::TryInto, path::PathBuf};
 #[clap(next_help_heading = "CARGO OPTIONS", setting = AppSettings::DeriveDisplayOrder)]
 pub(crate) struct CargoOptions {
     /// Test only this package's library unit tests
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     lib: bool,
 
     /// Test only the specified binary
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     bin: Vec<String>,
 
     /// Test all binaries
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     bins: bool,
 
     /// Test only the specified test target
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     test: Vec<String>,
 
     /// Test all targets
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     tests: bool,
 
     /// Test only the specified bench target
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     bench: Vec<String>,
 
     /// Test all benches
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     benches: bool,
 
     /// Test all targets
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     all_targets: bool,
 
     //  TODO: doc?
     // no-run is handled by test runner
     /// Package to test
-    #[clap(short = 'p', long = "package")]
+    #[clap(short = 'p', long = "package", conflicts_with = "binaries-metadata")]
     packages: Vec<String>,
 
     /// Build all packages in the workspace
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     workspace: bool,
 
     /// Exclude packages from the test
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     exclude: Vec<String>,
 
     /// Alias for workspace (deprecated)
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     all: bool,
 
     // jobs is handled by test runner
     /// Build artifacts in release mode, with optimizations
-    #[clap(long, short = 'r')]
+    #[clap(long, short = 'r', conflicts_with = "binaries-metadata")]
     release: bool,
 
     /// Build artifacts with the specified Cargo profile
-    #[clap(long, value_name = "NAME")]
+    #[clap(long, value_name = "NAME", conflicts_with = "binaries-metadata")]
     cargo_profile: Option<String>,
 
     /// Number of build jobs to run
-    #[clap(long, value_name = "JOBS")]
+    #[clap(long, value_name = "JOBS", conflicts_with = "binaries-metadata")]
     build_jobs: Option<String>,
 
     /// Space or comma separated list of features to activate
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     features: Vec<String>,
 
     /// Activate all available features
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     all_features: bool,
 
     /// Do not activate the `default` feature
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     no_default_features: bool,
 
     /// Build for the target triple
-    #[clap(long, value_name = "TRIPLE")]
+    #[clap(long, value_name = "TRIPLE", conflicts_with = "binaries-metadata")]
     pub(crate) target: Option<String>,
 
     /// Directory for all generated artifacts
-    #[clap(long, value_name = "DIR")]
+    #[clap(long, value_name = "DIR", conflicts_with = "binaries-metadata")]
     target_dir: Option<String>,
 
     /// Ignore `rust-version` specification in packages
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     ignore_rust_version: bool,
     // --message-format is captured by nextest
     /// Output build graph in JSON (unstable)
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     unit_graph: bool,
 
     /// Outputs a future incompatibility report at the end of the build
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     future_incompat_report: bool,
 
     // --verbose is not currently supported
     // --color is handled by runner
     /// Require Cargo.lock and cache are up to date
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     frozen: bool,
 
     /// Require Cargo.lock is up to date
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     locked: bool,
 
     /// Run without accessing the network
-    #[clap(long)]
+    #[clap(long, conflicts_with = "binaries-metadata")]
     offline: bool,
 
     /// Override a configuration value (unstable)
-    #[clap(long, value_name = "KEY=VALUE")]
+    #[clap(long, value_name = "KEY=VALUE", conflicts_with = "binaries-metadata")]
     config: Vec<String>,
 
     /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
-    #[clap(short = 'Z', value_name = "FLAG")]
+    #[clap(short = 'Z', value_name = "FLAG", conflicts_with = "binaries-metadata")]
     unstable_flags: Vec<String>,
 }
 
