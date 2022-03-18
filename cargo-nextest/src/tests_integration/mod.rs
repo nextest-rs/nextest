@@ -14,14 +14,17 @@
 //! So we try to replace the binary we are currently running. This is forbidden on Windows.
 
 use crate::{dispatch::CargoNextestApp, OutputWriter};
+use camino::Utf8Path;
 use clap::StructOpt;
-use nextest_metadata::{BinaryListSummary, BuildPlatform};
+use fs_extra::dir::CopyOptions;
+use nextest_metadata::BuildPlatform;
 
 mod fixtures;
 mod temp_project;
 
 use fixtures::*;
 use temp_project::TempProject;
+use tempfile::TempDir;
 
 #[test]
 fn test_list_default() {
@@ -31,7 +34,7 @@ fn test_list_default() {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "list",
         "--workspace",
         "--message-format",
@@ -52,7 +55,7 @@ fn test_list_full() {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "list",
         "--workspace",
         "--message-format",
@@ -75,7 +78,7 @@ fn test_list_binaries_only() {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "list",
         "--workspace",
         "--message-format",
@@ -101,13 +104,10 @@ fn test_list_full_after_build() {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "list",
         "--binaries-metadata",
-        p.binaries_metadata_path()
-            .as_os_str()
-            .to_string_lossy()
-            .as_ref(),
+        p.binaries_metadata_path().as_str(),
         "--message-format",
         "json",
     ]);
@@ -129,13 +129,10 @@ fn test_list_host_after_build() {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "list",
         "--binaries-metadata",
-        p.binaries_metadata_path()
-            .as_os_str()
-            .to_string_lossy()
-            .as_ref(),
+        p.binaries_metadata_path().as_str(),
         "--message-format",
         "json",
         "--platform-filter",
@@ -159,13 +156,10 @@ fn test_list_target_after_build() {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "list",
         "--binaries-metadata",
-        p.binaries_metadata_path()
-            .as_os_str()
-            .to_string_lossy()
-            .as_ref(),
+        p.binaries_metadata_path().as_str(),
         "--message-format",
         "json",
         "--platform-filter",
@@ -186,7 +180,7 @@ fn test_run() {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "run",
         "--workspace",
     ]);
@@ -209,13 +203,10 @@ fn test_run_after_build() {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "run",
         "--binaries-metadata",
-        p.binaries_metadata_path()
-            .as_os_str()
-            .to_string_lossy()
-            .as_ref(),
+        p.binaries_metadata_path().as_str(),
     ]);
 
     let mut output = OutputWriter::new_test();
@@ -229,49 +220,45 @@ fn test_run_after_build() {
 fn test_relocated_run() {
     let _ = &*ENABLE_EXPERIMENTAL;
 
-    let p = TempProject::new().unwrap();
-    save_cargo_metadata(&p);
+    let custom_target_dir = TempDir::new().unwrap();
+    let custom_target_path: &Utf8Path = custom_target_dir
+        .path()
+        .try_into()
+        .expect("tempdir is valid UTF-8");
+    let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
+
     build_tests(&p);
+    save_cargo_metadata(&p);
 
-    let p2 = TempProject::new().unwrap();
-    // copy metadata files
-    std::fs::copy(p.binaries_metadata_path(), p2.binaries_metadata_path()).unwrap();
-    std::fs::copy(p.cargo_metadata_path(), p2.cargo_metadata_path()).unwrap();
+    let mut p2 = TempProject::new().unwrap();
+    // copy target directory over
+    fs_extra::copy_items(
+        &[custom_target_path],
+        p2.workspace_root(),
+        &CopyOptions::new(),
+    )
+    .unwrap();
 
-    // copy test binaries
-    let raw_binary_list = std::fs::read_to_string(p.binaries_metadata_path()).unwrap();
-    let binary_list: BinaryListSummary = serde_json::from_str(&raw_binary_list).unwrap();
-    let tests_dir = p2.workspace_root().join("build-artifacts");
-    std::fs::create_dir(&tests_dir).unwrap();
-    for bin in binary_list.rust_binaries.values() {
-        std::fs::copy(
-            &bin.binary_path,
-            tests_dir.join(bin.binary_path.file_name().unwrap()),
-        )
-        .unwrap();
-    }
+    let new_target_path = p2
+        .workspace_root()
+        .join(custom_target_path.file_name().unwrap());
+    p2.set_target_dir(new_target_path);
 
     // Run relocated tests
     let args = CargoNextestApp::parse_from([
         "cargo",
         "nextest",
         "--manifest-path",
-        p2.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p2.manifest_path().as_str(),
         "run",
         "--binaries-metadata",
-        p2.binaries_metadata_path()
-            .as_os_str()
-            .to_string_lossy()
-            .as_ref(),
+        p2.binaries_metadata_path().as_str(),
         "--cargo-metadata",
-        p2.cargo_metadata_path()
-            .as_os_str()
-            .to_string_lossy()
-            .as_ref(),
+        p2.cargo_metadata_path().as_str(),
         "--workspace-remap",
-        p2.workspace_root().as_os_str().to_string_lossy().as_ref(),
-        "--binaries-dir-remap",
-        tests_dir.as_os_str().to_string_lossy().as_ref(),
+        p2.workspace_root().as_str(),
+        "--target-dir-remap",
+        p2.target_dir().as_str(),
     ]);
 
     let mut output = OutputWriter::new_test();

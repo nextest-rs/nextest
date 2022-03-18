@@ -314,7 +314,7 @@ impl TestBuildFilter {
         runner: &TargetRunner,
         reuse_build: &ReuseBuildOpts,
     ) -> Result<TestList<'g>> {
-        let path_mapper = reuse_build.make_path_mapper(graph);
+        let path_mapper = reuse_build.make_path_mapper(graph, &binary_list.rust_target_directory);
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,
             binary_list,
@@ -353,7 +353,11 @@ impl TestBuildFilter {
             )));
         }
 
-        let test_binaries = BinaryList::from_messages(Cursor::new(output.stdout), graph)?;
+        let test_binaries = BinaryList::from_messages(
+            Cursor::new(output.stdout),
+            graph,
+            self.cargo_options.target_dir.as_deref(),
+        )?;
         Ok(test_binaries)
     }
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{output::OutputContext, ExpectedError};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Args;
 use color_eyre::eyre::{Report, Result};
 use guppy::graph::PackageGraph;
@@ -15,14 +15,14 @@ pub(crate) struct ReuseBuildOpts {
     #[clap(long, value_name = "PATH", env = "NEXTEST_BINARIES_METADATA")]
     pub(crate) binaries_metadata: Option<Utf8PathBuf>,
 
-    /// Remapping for the test binaries directory
+    /// Remapping for the target directory
     #[clap(
         long,
         requires("binaries-metadata"),
         value_name = "PATH",
-        env = "NEXTEST_BINARIES_DIR_REMAP"
+        env = "NEXTEST_TARGET_DIR_REMAP"
     )]
-    pub(crate) binaries_dir_remap: Option<Utf8PathBuf>,
+    pub(crate) target_dir_remap: Option<Utf8PathBuf>,
 
     /// Path to cargo metadata JSON
     #[clap(
@@ -50,7 +50,7 @@ impl ReuseBuildOpts {
     // before calling this method)
     pub(crate) fn check_experimental(&self, _output: OutputContext) -> Result<()> {
         let used = self.binaries_metadata.is_some()
-            || self.binaries_dir_remap.is_some()
+            || self.target_dir_remap.is_some()
             || self.cargo_metadata.is_some()
             || self.workspace_remap.is_some();
 
@@ -66,11 +66,16 @@ impl ReuseBuildOpts {
         }
     }
 
-    pub(crate) fn make_path_mapper(&self, graph: &PackageGraph) -> Option<PathMapper> {
+    pub(crate) fn make_path_mapper(
+        &self,
+        graph: &PackageGraph,
+        orig_target_dir: &Utf8Path,
+    ) -> Option<PathMapper> {
         PathMapper::new(
             graph,
             self.workspace_remap.clone(),
-            self.binaries_dir_remap.clone(),
+            orig_target_dir,
+            self.target_dir_remap.clone(),
         )
     }
 }

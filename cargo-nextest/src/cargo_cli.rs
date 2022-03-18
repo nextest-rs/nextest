@@ -93,7 +93,7 @@ pub(crate) struct CargoOptions {
 
     /// Directory for all generated artifacts
     #[clap(long, value_name = "DIR", conflicts_with = "binaries-metadata")]
-    target_dir: Option<String>,
+    pub(crate) target_dir: Option<Utf8PathBuf>,
 
     /// Ignore `rust-version` specification in packages
     #[clap(long, conflicts_with = "binaries-metadata")]
@@ -227,7 +227,7 @@ impl<'a> CargoCli<'a> {
             self.args.extend(["--target", target]);
         }
         if let Some(target_dir) = &options.target_dir {
-            self.args.extend(["--target-dir", target_dir]);
+            self.args.extend(["--target-dir", target_dir.as_str()]);
         }
         if options.ignore_rust_version {
             self.args.push("--ignore-rust-version");
