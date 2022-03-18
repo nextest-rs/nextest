@@ -7,11 +7,11 @@
 
 use crate::{
     config::NextestProfile,
+    list::{TestInstance, TestList},
     reporter::{CancelReason, StatusLevel, TestEvent},
     signal::{SignalEvent, SignalHandler},
     stopwatch::{StopwatchEnd, StopwatchStart},
     target_runner::TargetRunner,
-    test_list::{TestInstance, TestList},
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
 use nextest_metadata::{FilterMatch, MismatchReason};

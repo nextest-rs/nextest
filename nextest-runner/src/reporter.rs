@@ -11,9 +11,9 @@ use crate::{
     config::NextestProfile,
     errors::{StatusLevelParseError, TestOutputDisplayParseError, WriteEventError},
     helpers::write_test_name,
+    list::{TestInstance, TestList},
     reporter::aggregator::EventAggregator,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses, RunStats},
-    test_list::{TestInstance, TestList},
 };
 use debug_ignore::DebugIgnore;
 use nextest_metadata::MismatchReason;
@@ -579,11 +579,11 @@ impl<'a> TestReporter<'a> {
             instance
                 .bin_info
                 .binary_id
-                .style(self.styles.test_list.binary_id),
+                .style(self.styles.list_styles.binary_id),
             width = self.binary_id_width
         )?;
 
-        write_test_name(instance.name, &self.styles.test_list, writer)
+        write_test_name(instance.name, &self.styles.list_styles, writer)
     }
 
     fn write_duration(&self, duration: Duration, mut writer: impl Write) -> io::Result<()> {
@@ -806,7 +806,7 @@ struct Styles {
     retry_output: Style,
     fail_output: Style,
     skip: Style,
-    test_list: crate::test_list::Styles,
+    list_styles: crate::list::Styles,
 }
 
 impl Styles {
@@ -819,7 +819,7 @@ impl Styles {
         self.retry_output = Style::new().magenta();
         self.fail_output = Style::new().magenta();
         self.skip = Style::new().yellow().bold();
-        self.test_list.colorize();
+        self.list_styles.colorize();
     }
 }
 

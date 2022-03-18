@@ -7,11 +7,11 @@ use color_eyre::Result;
 use nextest_runner::{
     config::NextestConfig,
     errors::TargetRunnerError,
+    list::TestList,
     runner::TestRunnerBuilder,
     signal::SignalHandler,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::TestList,
 };
 use once_cell::sync::OnceCell;
 use std::{env, sync::Mutex};

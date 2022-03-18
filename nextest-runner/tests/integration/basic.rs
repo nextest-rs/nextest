@@ -6,11 +6,11 @@ use color_eyre::eyre::Result;
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     config::NextestConfig,
+    list::{BinaryList, TestList},
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
     signal::SignalHandler,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::{BinaryList, TestList},
 };
 use pretty_assertions::assert_eq;
 use std::io::Cursor;

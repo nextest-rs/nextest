@@ -8,9 +8,9 @@ use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
+    list::{BinaryList, RustTestArtifact},
     reporter::TestEvent,
     runner::{ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
-    test_list::{BinaryList, RustTestArtifact},
 };
 use once_cell::sync::Lazy;
 use std::{

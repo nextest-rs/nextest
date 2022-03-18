@@ -6,7 +6,7 @@ use camino::Utf8PathBuf;
 use clap::Args;
 use color_eyre::eyre::{Report, Result};
 use guppy::graph::PackageGraph;
-use nextest_runner::test_list::PathMapper;
+use nextest_runner::list::PathMapper;
 
 #[derive(Debug, Args)]
 #[clap(next_help_heading = "REUSE BUILD OPTIONS (EXPERIMENTAL)")]

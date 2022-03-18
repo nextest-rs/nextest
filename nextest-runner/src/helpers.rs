@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::test_list::Styles;
+use crate::list::Styles;
 use owo_colors::OwoColorize;
 use std::io::{self, Write};
 

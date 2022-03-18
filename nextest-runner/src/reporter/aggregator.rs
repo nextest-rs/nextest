@@ -6,9 +6,9 @@
 use crate::{
     config::{NextestJunitConfig, NextestProfile},
     errors::{JunitError, WriteEventError},
+    list::TestInstance,
     reporter::TestEvent,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
-    test_list::TestInstance,
 };
 use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};

@@ -15,13 +15,13 @@ use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     config::{NextestConfig, NextestProfile},
     errors::{TargetRunnerError, WriteEventError},
+    list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
     runner::TestRunnerBuilder,
     signal::SignalHandler,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
 };
 use owo_colors::{OwoColorize, Style};
 use std::{
