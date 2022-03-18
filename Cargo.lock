@@ -437,9 +437,9 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.13.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6570bfb78ea4e0c039bd212e353a3de840f5ef0fa5439356b5451f6e0df7678d"
+checksum = "cbbda4f76555041b3730035c987a24a9d41e8e0b2c7fe1d512c0cab82e753146"
 dependencies = [
  "camino",
  "cargo_metadata",
@@ -457,6 +457,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
+ "static_assertions",
  "target-spec",
 ]
 
