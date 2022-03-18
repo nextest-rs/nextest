@@ -17,10 +17,10 @@
   - [Target runners](book/target-runners.md)
   - [Other options](book/other-options.md)
   - [Environment variables](book/env-vars.md)
-  - [Coverage](book/coverage.md)
 - [Machine-readable output](book/machine-readable.md)
 - [Configuration](book/configuration.md)
 - [JUnit support](book/junit.md)
+- [Test coverage](book/test-coverage.md)
 ---
 - [Stability policy](book/stability.md)
 - [Experimental features](book/experimental-features.md)

@@ -84,6 +84,6 @@ To install a version series or specific version, use this instead:
 
 Install pre-built binaries on other CI systems by downloading and extracting the respective archives, using the commands above as a guide. See [Release URLs](release-urls.md) for more about how to specify nextest versions and platforms.
 
-> If you've made it easy to install nextest on another CI system, feel free to [submit a pull request].
+> If you've made it easy to install nextest on another CI system, feel free to [submit a pull request] with documentation.
 
 [submit a pull request]: https://github.com/nextest-rs/nextest/pulls

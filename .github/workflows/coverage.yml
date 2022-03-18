@@ -1,0 +1,39 @@
+on:
+  push:
+    branches: [ main, auto, canary ]
+  pull_request:
+    branches:
+      - main
+
+name: Test coverage
+
+jobs:
+  coverage:
+    name: Collect test coverage
+    runs-on: ubuntu-latest
+    # nightly rust might break from time to time
+    continue-on-error: true
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          # By default actions/checkout checks out a merge commit. Check out the PR head instead.
+          # https://github.com/actions/checkout#checkout-pull-request-head-commit-instead-of-merge-commit
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
+      
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      
+      - name: Collect coverage data
+        run: cargo llvm-cov nextest
+        # TODO: generate HTML report and upload it
+        # (requires https://github.com/taiki-e/cargo-llvm-cov/pull/144#issuecomment-1072736931 to be addressed)
