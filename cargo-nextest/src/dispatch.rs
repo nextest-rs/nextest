@@ -285,6 +285,10 @@ struct TestBuildFilter {
     #[clap(long, arg_enum, value_name = "PLATFORM", default_value_t)]
     pub(crate) platform_filter: PlatformFilterOpts,
 
+    /// A DSL based filter expression
+    #[clap(long, short = 'E', value_name = "EXPRESSION")]
+    expr_filter: Option<String>,
+
     // TODO: add regex-based filtering in the future?
     /// Test name filter
     #[clap(name = "FILTERS", help_heading = None)]
@@ -308,8 +312,12 @@ impl TestBuildFilter {
             &path_mapper,
             self.platform_filter.into(),
         )?;
-        let test_filter =
-            TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
+        let test_filter = TestFilterBuilder::new(
+            self.run_ignored,
+            self.partition.clone(),
+            &self.filter,
+            self.expr_filter.as_deref(),
+        );
         TestList::new(
             test_artifacts,
             &rust_build_meta,

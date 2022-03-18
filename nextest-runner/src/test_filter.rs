@@ -11,6 +11,7 @@
 
 use crate::{
     errors::RunIgnoredParseError,
+    list::RustTestArtifact,
     partition::{Partitioner, PartitionerBuilder},
 };
 use aho_corasick::AhoCorasick;
@@ -75,6 +76,7 @@ pub struct TestFilterBuilder {
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
     name_match: NameMatch,
+    _expr: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -91,16 +93,19 @@ impl TestFilterBuilder {
         run_ignored: RunIgnored,
         partitioner_builder: Option<PartitionerBuilder>,
         patterns: &[impl AsRef<[u8]>],
+        expr: Option<&str>,
     ) -> Self {
         let name_match = if patterns.is_empty() {
             NameMatch::MatchAll
         } else {
             NameMatch::MatchSet(Box::new(AhoCorasick::new_auto_configured(patterns)))
         };
+        // TODO parse and validate expr
         Self {
             run_ignored,
             partitioner_builder,
             name_match,
+            _expr: expr.map(ToOwned::to_owned),
         }
     }
 
@@ -110,6 +115,7 @@ impl TestFilterBuilder {
             run_ignored,
             partitioner_builder: None,
             name_match: NameMatch::MatchAll,
+            _expr: None,
         }
     }
 
@@ -137,46 +143,75 @@ pub struct TestFilter<'builder> {
 
 impl<'filter> TestFilter<'filter> {
     /// Returns an enum describing the match status of this filter.
-    pub fn filter_match(&mut self, test_name: &str, ignored: bool) -> FilterMatch {
+    pub fn filter_match(
+        &mut self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &str,
+        ignored: bool,
+    ) -> FilterMatch {
+        self.filter_ignored_mismatch(ignored)
+            .or_else(|| self.filter_name_mismatch(test_name))
+            .or_else(|| self.filter_expression_mismatch(test_binary, test_name))
+            .or_else(|| self.filter_partition_mismatch(test_name))
+            .unwrap_or(FilterMatch::Matches)
+    }
+
+    fn filter_ignored_mismatch(&self, ignored: bool) -> Option<FilterMatch> {
         match self.builder.run_ignored {
             RunIgnored::IgnoredOnly => {
                 if !ignored {
-                    return FilterMatch::Mismatch {
+                    return Some(FilterMatch::Mismatch {
                         reason: MismatchReason::Ignored,
-                    };
+                    });
                 }
             }
             RunIgnored::Default => {
                 if ignored {
-                    return FilterMatch::Mismatch {
+                    return Some(FilterMatch::Mismatch {
                         reason: MismatchReason::Ignored,
-                    };
+                    });
                 }
             }
             _ => {}
-        };
+        }
+        None
+    }
 
+    fn filter_name_mismatch(&self, test_name: &str) -> Option<FilterMatch> {
         let string_match = match &self.builder.name_match {
             NameMatch::MatchAll => true,
             NameMatch::MatchSet(set) => set.is_match(test_name),
         };
-        if !string_match {
-            return FilterMatch::Mismatch {
+        if string_match {
+            None
+        } else {
+            Some(FilterMatch::Mismatch {
                 reason: MismatchReason::String,
-            };
+            })
         }
+    }
 
+    fn filter_expression_mismatch(
+        &self,
+        _test_binary: &RustTestArtifact<'_>,
+        _test_name: &str,
+    ) -> Option<FilterMatch> {
+        // TODO filter using self.expr
+        None
+    }
+
+    fn filter_partition_mismatch(&mut self, test_name: &str) -> Option<FilterMatch> {
         let partition_match = match &mut self.partitioner {
             Some(partitioner) => partitioner.test_matches(test_name),
             None => true,
         };
-        if !partition_match {
-            return FilterMatch::Mismatch {
+        if partition_match {
+            None
+        } else {
+            Some(FilterMatch::Mismatch {
                 reason: MismatchReason::Partition,
-            };
+            })
         }
-
-        FilterMatch::Matches
     }
 }
 
@@ -189,20 +224,20 @@ mod tests {
         #[test]
         fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
             let patterns: &[String] = &[];
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns);
-            let mut single_filter = test_filter.build();
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, None);
+            let single_filter = test_filter.build();
             for test_name in test_names {
-                prop_assert!(single_filter.filter_match(&test_name, false).is_match());
+                prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
             }
         }
 
         // Test that exact names match.
         #[test]
         fn proptest_exact(test_names in vec(any::<String>(), 0..16)) {
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names);
-            let mut single_filter = test_filter.build();
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, None);
+            let single_filter = test_filter.build();
             for test_name in test_names {
-                prop_assert!(single_filter.filter_match(&test_name, false).is_match());
+                prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
             }
         }
 
@@ -218,10 +253,10 @@ mod tests {
                 patterns.push(substring);
             }
 
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns);
-            let mut single_filter = test_filter.build();
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, None);
+            let single_filter = test_filter.build();
             for test_name in test_names {
-                prop_assert!(single_filter.filter_match(&test_name, false).is_match());
+                prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
             }
         }
 
@@ -234,9 +269,9 @@ mod tests {
         ) {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern]);
-            let mut single_filter = test_filter.build();
-            prop_assert!(!single_filter.filter_match(&substring, false).is_match());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern], None);
+            let single_filter = test_filter.build();
+            prop_assert!(single_filter.filter_name_mismatch(&substring).is_some());
         }
     }
 
