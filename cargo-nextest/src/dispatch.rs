@@ -60,7 +60,12 @@ enum NextestSubcommand {
 #[clap(version)]
 struct AppOpts {
     /// Path to Cargo.toml
-    #[clap(long, global = true, value_name = "PATH")]
+    #[clap(
+        long,
+        global = true,
+        value_name = "PATH",
+        env = "NEXTEST_MANIFEST_PATH"
+    )]
     manifest_path: Option<Utf8PathBuf>,
 
     #[clap(flatten)]
@@ -122,7 +127,7 @@ impl AppOpts {
 #[derive(Debug, Args)]
 struct ConfigOpts {
     /// Config file [default: workspace-root/.config/nextest.toml]
-    #[clap(long, global = true, value_name = "PATH")]
+    #[clap(long, global = true, value_name = "PATH", env = "NEXTEST_CONFIG_FILE")]
     pub config_file: Option<Utf8PathBuf>,
 }
 
@@ -153,7 +158,8 @@ enum Command {
             arg_enum,
             default_value_t,
             help_heading = "OUTPUT OPTIONS",
-            value_name = "FMT"
+            value_name = "FMT",
+            env = "NEXTEST_MESSAGE_FORMAT"
         )]
         message_format: MessageFormatOpts,
 
@@ -163,7 +169,8 @@ enum Command {
             arg_enum,
             default_value_t,
             help_heading = "OUTPUT OPTIONS",
-            value_name = "TYPE"
+            value_name = "TYPE",
+            env = "NEXTEST_LIST_TYPE"
         )]
         list_type: ListType,
 
@@ -178,7 +185,7 @@ enum Command {
     /// For more information, see <https://nexte.st/book/running>.
     Run {
         /// Nextest profile to use
-        #[clap(long, short = 'P')]
+        #[clap(long, short = 'P', env = "NEXTEST_PROFILE")]
         profile: Option<String>,
 
         /// Run tests serially and do not capture output
@@ -186,7 +193,8 @@ enum Command {
             long,
             alias = "nocapture",
             help_heading = "RUNNER OPTIONS",
-            display_order = 100
+            display_order = 100,
+            env = "NEXTEST_NO_CAPTURE"
         )]
         no_capture: bool,
 
@@ -269,15 +277,27 @@ struct TestBuildFilter {
     cargo_options: CargoOptions,
 
     /// Run ignored tests
-    #[clap(long, possible_values = RunIgnored::variants(), default_value_t, value_name = "WHICH")]
+    #[clap(
+        long,
+        possible_values = RunIgnored::variants(),
+        default_value_t,
+        value_name = "WHICH",
+        env = "NEXTEST_RUN_IGNORED",
+    )]
     run_ignored: RunIgnored,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
-    #[clap(long)]
+    #[clap(long, env = "NEXTEST_PARTITION")]
     partition: Option<PartitionerBuilder>,
 
     /// Filter test binaries by build platform
-    #[clap(long, arg_enum, value_name = "PLATFORM", default_value_t)]
+    #[clap(
+        long,
+        arg_enum,
+        value_name = "PLATFORM",
+        default_value_t,
+        env = "NEXTEST_PLATFORM_FILTER"
+    )]
     pub(crate) platform_filter: PlatformFilterOpts,
 
     // TODO: add regex-based filtering in the future?
@@ -348,20 +368,21 @@ pub struct TestRunnerOpts {
         short = 'j',
         visible_alias = "jobs",
         value_name = "THREADS",
-        conflicts_with = "no-capture"
+        conflicts_with = "no-capture",
+        env = "NEXTEST_TEST_THREADS"
     )]
     test_threads: Option<usize>,
 
     /// Number of retries for failing tests [default: from profile]
-    #[clap(long)]
+    #[clap(long, env = "NEXTEST_RETRIES")]
     retries: Option<usize>,
 
     /// Cancel test run on the first failure
-    #[clap(long)]
+    #[clap(long, env = "NEXTEST_FAIL_FAST")]
     fail_fast: bool,
 
     /// Run all tests regardless of failure
-    #[clap(long, overrides_with = "fail-fast")]
+    #[clap(long, overrides_with = "fail-fast", env = "NEXTEST_NO_FAIL_FAST")]
     no_fail_fast: bool,
 }
 
@@ -393,7 +414,8 @@ struct TestReporterOpts {
         long,
         possible_values = TestOutputDisplay::variants(),
         conflicts_with = "no-capture",
-        value_name = "WHEN"
+        value_name = "WHEN",
+        env = "NEXTEST_FAILURE_OUTPUT",
     )]
     failure_output: Option<TestOutputDisplay>,
     /// Output stdout and stderr on success
@@ -402,13 +424,19 @@ struct TestReporterOpts {
         long,
         possible_values = TestOutputDisplay::variants(),
         conflicts_with = "no-capture",
-        value_name = "WHEN"
+        value_name = "WHEN",
+        env = "NEXTEST_SUCCESS_OUTPUT",
     )]
     success_output: Option<TestOutputDisplay>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output
-    #[clap(long, possible_values = StatusLevel::variants(), value_name = "LEVEL")]
+    #[clap(
+        long,
+        possible_values = StatusLevel::variants(),
+        value_name = "LEVEL",
+        env = "NEXTEST_STATUS_LEVEL",
+    )]
     status_level: Option<StatusLevel>,
 }
 

@@ -16,7 +16,7 @@ use supports_color::Stream;
 #[must_use]
 pub(crate) struct OutputOpts {
     /// Verbose output
-    #[clap(long, short, global = true)]
+    #[clap(long, short, global = true, env = "NEXTEST_VERBOSE")]
     pub(crate) verbose: bool,
     // TODO: quiet?
     /// Produce color output: auto, always, never
@@ -26,7 +26,8 @@ pub(crate) struct OutputOpts {
         default_value_t,
         hide_possible_values = true,
         global = true,
-        value_name = "WHEN"
+        value_name = "WHEN",
+        env = "NEXTEST_COLOR"
     )]
     pub(crate) color: Color,
 }
