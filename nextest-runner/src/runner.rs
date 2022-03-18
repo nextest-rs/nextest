@@ -343,7 +343,7 @@ impl<'a> TestRunner<'a> {
         run_sender: &Sender<InternalTestEvent<'a>>,
     ) -> std::io::Result<InternalExecuteStatus> {
         let cmd = test
-            .make_expression(&self.target_runner)
+            .make_expression(self.test_list, &self.target_runner)
             .unchecked()
             // Debug environment variable for testing.
             .env("__NEXTEST_ATTEMPT", format!("{}", attempt));

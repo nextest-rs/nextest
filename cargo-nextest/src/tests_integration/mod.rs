@@ -13,7 +13,7 @@
 //!         - Build `cargo-nextest`
 //! So we try to replace the binary we are currently running. This is forbidden on Windows.
 
-use crate::{dispatch::CargoNextestApp, OutputWriter};
+use crate::{dispatch::CargoNextestApp, ExpectedError, OutputWriter};
 use camino::Utf8Path;
 use clap::StructOpt;
 use nextest_metadata::{BuildPlatform, TestListSummary};
@@ -27,6 +27,7 @@ use tempfile::TempDir;
 
 #[test]
 fn test_list_default() {
+    set_rustflags();
     let p = TempProject::new().unwrap();
 
     let args = CargoNextestApp::parse_from([
@@ -48,7 +49,9 @@ fn test_list_default() {
 
 #[test]
 fn test_list_full() {
-    let p = TempProject::new().unwrap();
+    set_rustflags();
+    let mut p = TempProject::new().unwrap();
+    p.persist();
 
     let args = CargoNextestApp::parse_from([
         "cargo",
@@ -64,13 +67,24 @@ fn test_list_full() {
     ]);
 
     let mut output = OutputWriter::new_test();
-    args.exec(&mut output).unwrap();
+    //panic!("created temp project: {}", p.manifest_path());
+    args.exec(&mut output)
+        .map_err(|err| {
+            let expected_error: ExpectedError = match err.downcast() {
+                Ok(err) => err,
+                Err(err) => return err,
+            };
+            expected_error.display_to_stderr();
+            expected_error.into()
+        })
+        .unwrap();
 
     check_list_full_output(output.stdout().unwrap(), None);
 }
 
 #[test]
 fn test_list_binaries_only() {
+    set_rustflags();
     let p = TempProject::new().unwrap();
 
     let args = CargoNextestApp::parse_from([
@@ -94,6 +108,8 @@ fn test_list_binaries_only() {
 
 #[test]
 fn test_target_dir() {
+    set_rustflags();
+
     let p = TempProject::new().unwrap();
 
     std::env::set_current_dir(p.workspace_root())
@@ -158,7 +174,8 @@ fn test_target_dir() {
 
 #[test]
 fn test_list_full_after_build() {
-    let _ = &*ENABLE_EXPERIMENTAL;
+    set_rustflags();
+    enable_experimental();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -183,7 +200,8 @@ fn test_list_full_after_build() {
 
 #[test]
 fn test_list_host_after_build() {
-    let _ = &*ENABLE_EXPERIMENTAL;
+    set_rustflags();
+    enable_experimental();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -210,7 +228,8 @@ fn test_list_host_after_build() {
 
 #[test]
 fn test_list_target_after_build() {
-    let _ = &*ENABLE_EXPERIMENTAL;
+    set_rustflags();
+    enable_experimental();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -237,6 +256,8 @@ fn test_list_target_after_build() {
 
 #[test]
 fn test_run() {
+    set_rustflags();
+
     let p = TempProject::new().unwrap();
 
     let args = CargoNextestApp::parse_from([
@@ -257,7 +278,8 @@ fn test_run() {
 
 #[test]
 fn test_run_after_build() {
-    let _ = &*ENABLE_EXPERIMENTAL;
+    set_rustflags();
+    enable_experimental();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -281,14 +303,16 @@ fn test_run_after_build() {
 
 #[test]
 fn test_relocated_run() {
-    let _ = &*ENABLE_EXPERIMENTAL;
+    set_rustflags();
+    enable_experimental();
 
     let custom_target_dir = TempDir::new().unwrap();
     let custom_target_path: &Utf8Path = custom_target_dir
         .path()
         .try_into()
         .expect("tempdir is valid UTF-8");
-    let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
+    let mut p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
+    p.persist();
 
     build_tests(&p);
     save_cargo_metadata(&p);

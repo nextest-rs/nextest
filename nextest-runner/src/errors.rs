@@ -9,7 +9,7 @@ use crate::{
 };
 use camino::Utf8PathBuf;
 use config::ConfigError;
-use std::{borrow::Cow, error, fmt};
+use std::{borrow::Cow, env::JoinPathsError, error, fmt};
 
 /// An error that occurred while parsing the config.
 #[derive(Debug)]
@@ -270,6 +270,15 @@ pub enum ParseTestListError {
         /// The full output.
         full_output: String,
     },
+
+    /// An error occurred while joining paths for dynamic libraries.
+    DylibJoinPaths {
+        /// New paths attempted to be added to the dynamic library environment variable.
+        new_paths: Vec<Utf8PathBuf>,
+
+        /// The underlying error.
+        error: JoinPathsError,
+    },
 }
 
 impl ParseTestListError {
@@ -289,6 +298,10 @@ impl ParseTestListError {
             full_output: full_output.into(),
         }
     }
+
+    pub(crate) fn dylib_join_paths(new_paths: Vec<Utf8PathBuf>, error: JoinPathsError) -> Self {
+        ParseTestListError::DylibJoinPaths { new_paths, error }
+    }
 }
 
 impl fmt::Display for ParseTestListError {
@@ -303,6 +316,14 @@ impl fmt::Display for ParseTestListError {
             } => {
                 write!(f, "{}\nfull output:\n{}", message, full_output)
             }
+            ParseTestListError::DylibJoinPaths { new_paths, .. } => {
+                let new_paths_display = itertools::join(new_paths, ", ");
+                write!(
+                    f,
+                    "error adding dynamic library paths: [{}]",
+                    new_paths_display,
+                )
+            }
         }
     }
 }
@@ -311,6 +332,7 @@ impl error::Error for ParseTestListError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             ParseTestListError::Command { error, .. } => Some(error),
+            ParseTestListError::DylibJoinPaths { error, .. } => Some(error),
             ParseTestListError::ParseLine { .. } => None,
         }
     }

@@ -17,6 +17,8 @@ use std::io::Cursor;
 
 #[test]
 fn test_list_binaries() -> Result<()> {
+    set_rustflags();
+
     let graph = &*PACKAGE_GRAPH;
     let binary_list =
         BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph)?;
@@ -39,6 +41,8 @@ fn test_list_binaries() -> Result<()> {
 
 #[test]
 fn test_list_tests() -> Result<()> {
+    set_rustflags();
+
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
 
@@ -63,6 +67,8 @@ fn test_list_tests() -> Result<()> {
 
 #[test]
 fn test_run() -> Result<()> {
+    set_rustflags();
+
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config =
@@ -117,6 +123,8 @@ fn test_run() -> Result<()> {
 
 #[test]
 fn test_run_ignored() -> Result<()> {
+    set_rustflags();
+
     let test_filter = TestFilterBuilder::any(RunIgnored::IgnoredOnly);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config =
@@ -171,6 +179,8 @@ fn test_run_ignored() -> Result<()> {
 
 #[test]
 fn test_retries() -> Result<()> {
+    set_rustflags();
+
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config =

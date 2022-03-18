@@ -57,6 +57,8 @@ fn runner_for_target(triple: Option<&str>) -> Result<TargetRunner, TargetRunnerE
 
 #[test]
 fn parses_cargo_env() {
+    set_rustflags();
+
     let def_runner = with_env(
         [(
             format!(
@@ -185,6 +187,8 @@ fn current_runner_env_var() -> String {
 
 #[test]
 fn test_listing_with_target_runner() -> Result<()> {
+    set_rustflags();
+
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
 
@@ -218,6 +222,8 @@ fn test_listing_with_target_runner() -> Result<()> {
 
 #[test]
 fn test_run_with_target_runner() -> Result<()> {
+    set_rustflags();
+
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
 
     let target_runner = with_env(

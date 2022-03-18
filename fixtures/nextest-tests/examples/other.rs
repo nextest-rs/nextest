@@ -6,6 +6,5 @@ fn main() {}
 #[cfg(test)]
 mod tests {
     #[test]
-    fn other_example_success() {
-    }
+    fn other_example_success() {}
 }
