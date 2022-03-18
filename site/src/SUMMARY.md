@@ -6,6 +6,7 @@
 
 - [Installation](book/installation.md)
   - [Pre-built binaries](book/pre-built-binaries.md)
+    - [Release URLs](book/release-urls.md)
   - [Installing from source](book/installing-from-source.md)
   - [Windows antivirus and macOS Gatekeeper](book/antivirus-gatekeeper.md)
 - [Usage](book/usage.md)

@@ -53,71 +53,36 @@ curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-
 >
 > If you're a Windows expert who can come up with a better way to do this, please [add a suggestion to this issue](https://github.com/nextest-rs/nextest/issues/31)!
 
-### Example: using a matrix strategy for cross-platform CI on GitHub Actions
+## Using pre-built binaries in CI
 
-Here's an example for how to use a matrix strategy to perform cross-platform testing via GitHub Actions.
+Pre-built binaries can be used in continuous integration to speed up test runs.
+
+### Using nextest in GitHub Actions
+
+The easiest way to use nextest in GitHub Actions is to use the [Install Development Tools](https://github.com/marketplace/actions/install-development-tools) action maintained by [Taiki Endo](https://github.com/taiki-e).
+
+To install the latest version of nextest, add this to your job:
 
 ```yml
-jobs:
-  build:
-    name: Run tests
-    runs-on: ${{ matrix.os.runs-on }}
-    strategy:
-      matrix:
-        os:
-          - runs-on: ubuntu-latest
-            nextest-url: https://get.nexte.st/latest/linux
-          - runs-on: macos-latest
-            nextest-url: https://get.nexte.st/latest/mac
-          - runs-on: windows-latest
-            nextest-url: https://get.nexte.st/latest/windows-tar
-        rust-version: [ stable, beta ]
-    steps:
-      #
-      # ... check out your code and install Rust here
-      #
-      - name: Install latest nextest release
-        # The following line is required for Windows compatibility
-        shell: bash
-        run: |
-          curl -LsSf ${{ matrix.os.nextest-url }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-      - name: Test with latest nextest release
-        run: |
-          cargo nextest run
+- uses: taiki-e/install-action@nextest
 ```
 
-[See this in practice with nextest's own CI.](https://github.com/nextest-rs/nextest/blob/e43ac449f53fd34e58136cd94b7a72add201fe5a/.github/workflows/ci.yml#L104-L107)
+To install a specific version or version series, use this instead:
 
-## Release URLs
+```yml
+- uses: taiki-e/install-action@v1
+- with:
+    tool: nextest
+    # "version" (defaults to latest) can be a range like 0.9, or a specific version like 0.9.11.
+    # version: 0.9
+```
 
-Binary releases of cargo-nextest will always be available at **`https://get.nexte.st/{version}/{platform}`**.
+[See this in practice with nextest's own CI.](https://github.com/nextest-rs/nextest/blob/5b59a5c5d1a051ce651e5d632c93a849f97a9d4b/.github/workflows/ci.yml#L101-L102)
 
-### `{version}` identifier
+### Other CI systems
 
-The `{version}` identifier is:
-* `latest` for the latest release (not including pre-releases)
-* a version range, for example `0.9`, for the latest release in the 0.9 series (not including pre-releases)
-* the exact version number, for example `0.9.4`, for that specific version
+Install pre-built binaries on other CI systems by downloading and extracting the respective archives, using the commands above as a guide. See [Release URLs](release-urls.md) for more about how to specify nextest versions and platforms.
 
-### `{platform}` identifier
+> If you've made it easy to install nextest on another CI system, feel free to [submit a pull request].
 
-The `{platform}` identifier is:
-* `x86_64-unknown-linux-gnu.tar.gz` for x86_64 Linux (tar.gz)
-* `universal-apple-darwin.tar.gz` for x86_64 and arm64 macOS (tar.gz)
-* `x86_64-pc-windows-msvc.zip` for x86_64 Windows (zip)
-* `x86_64-pc-windows-msvc.tar.gz` for x86_64 Windows (tar.gz)
-
-For convenience, the following shortcuts are defined:
-
-* `linux` points to `x86_64-unknown-linux-gnu.tar.gz`
-* `mac` points to `universal-apple-darwin.tar.gz`
-* `windows` points to `x86_64-pc-windows-msvc.zip`
-* `windows-tar` points to `x86_64-pc-windows-msvc.tar.gz`
-
-Also, each release's canonical GitHub Releases URL is available at **`https://get.nexte.st/{version}/release`**. For example, the latest GitHub release is avaiable at [get.nexte.st/latest/release](https://get.nexte.st/latest/release).
-
-### Examples
-
-The latest release in the 0.9 series for macOS is available as a tar.gz file at [get.nexte.st/0.9/mac](https://get.nexte.st/0.9/mac).
-
-Version 0.9.4 for Windows is available as a zip file at [get.nexte.st/0.9.4/windows](https://get.nexte.st/0.9.4/windows), and as a tar.gz file at [get.nexte.st/0.9.4/windows-tar](https://get.nexte.st/0.9.4/windows-tar).
+[submit a pull request]: https://github.com/nextest-rs/nextest/pulls
