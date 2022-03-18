@@ -13,6 +13,7 @@ use owo_colors::OwoColorize;
 use std::{io, io::Write};
 
 /// A Rust test binary built by Cargo.
+#[derive(Clone, Debug)]
 pub struct RustTestBinary {
     /// A unique ID.
     pub id: String,
@@ -28,6 +29,7 @@ pub struct RustTestBinary {
 }
 
 /// The list of Rust test binaries built by Cargo.
+#[derive(Clone, Debug)]
 pub struct BinaryList {
     /// The list of test binaries.
     pub rust_binaries: Vec<RustTestBinary>,
@@ -39,81 +41,14 @@ impl BinaryList {
         reader: impl io::BufRead,
         graph: &PackageGraph,
     ) -> Result<Self, FromMessagesError> {
-        let mut rust_binaries = vec![];
+        let mut state = BinaryListBuildState::new(graph);
 
         for message in Message::parse_stream(reader) {
             let message = message.map_err(FromMessagesError::ReadMessages)?;
-            match message {
-                Message::CompilerArtifact(artifact) if artifact.profile.test => {
-                    if let Some(path) = artifact.executable {
-                        let package_id = artifact.package_id.repr;
-
-                        // Look up the executable by package ID.
-                        let package = graph
-                            .metadata(&PackageId::new(package_id.clone()))
-                            .map_err(FromMessagesError::PackageGraph)?;
-
-                        // Construct the binary ID from the package and build target.
-                        let mut id = package.name().to_owned();
-                        let name = artifact.target.name;
-
-                        // To ensure unique binary IDs, we use the following scheme:
-                        // 1. If the target is a lib, use the package name.
-                        //      There can only be one lib per package, so this
-                        //      will always be unique.
-                        if !artifact.target.kind.contains(&"lib".to_owned()) {
-                            id.push_str("::");
-
-                            match artifact.target.kind.get(0) {
-                                // 2. For integration tests, use the target name.
-                                //      Cargo enforces unique names for the same
-                                //      kind of targets in a package, so these
-                                //      will always be unique.
-                                Some(kind) if kind == "test" => {
-                                    id.push_str(&name);
-                                }
-                                // 3. For all other target kinds, use a
-                                //      combination of the target kind and
-                                //      the target name. For the same reason
-                                //      as above, these will always be unique.
-                                Some(kind) => {
-                                    id.push_str(&format!("{}/{}", kind, name));
-                                }
-                                None => {
-                                    return Err(FromMessagesError::MissingTargetKind {
-                                        package_name: package.name().to_owned(),
-                                        binary_name: name.clone(),
-                                    });
-                                }
-                            }
-                        }
-
-                        let platform = if artifact.target.kind.len() == 1
-                            && artifact.target.kind.get(0).map(String::as_str) == Some("proc-macro")
-                        {
-                            BuildPlatform::Host
-                        } else {
-                            BuildPlatform::Target
-                        };
-
-                        rust_binaries.push(RustTestBinary {
-                            path,
-                            package_id,
-                            name,
-                            id,
-                            build_platform: platform,
-                        })
-                    }
-                }
-                _ => {
-                    // Ignore all other messages.
-                }
-            }
+            state.process_message(message)?;
         }
 
-        rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
-
-        Ok(Self { rust_binaries })
+        Ok(state.finish())
     }
 
     /// Constructs the list from its summary format
@@ -196,6 +131,100 @@ impl BinaryList {
         let mut buf = Vec::with_capacity(1024);
         self.write(output_format, &mut buf, false)?;
         Ok(String::from_utf8(buf).expect("buffer is valid UTF-8"))
+    }
+}
+
+#[derive(Debug)]
+struct BinaryListBuildState<'g> {
+    graph: &'g PackageGraph,
+    rust_binaries: Vec<RustTestBinary>,
+}
+
+impl<'g> BinaryListBuildState<'g> {
+    fn new(graph: &'g PackageGraph) -> Self {
+        Self {
+            graph,
+            rust_binaries: vec![],
+        }
+    }
+
+    fn process_message(&mut self, message: Message) -> Result<(), FromMessagesError> {
+        match message {
+            Message::CompilerArtifact(artifact) if artifact.profile.test => {
+                if let Some(path) = artifact.executable {
+                    let package_id = artifact.package_id.repr;
+
+                    // Look up the executable by package ID.
+                    let package = self
+                        .graph
+                        .metadata(&PackageId::new(package_id.clone()))
+                        .map_err(FromMessagesError::PackageGraph)?;
+
+                    // Construct the binary ID from the package and build target.
+                    let mut id = package.name().to_owned();
+                    let name = artifact.target.name;
+
+                    // To ensure unique binary IDs, we use the following scheme:
+                    // 1. If the target is a lib, use the package name.
+                    //      There can only be one lib per package, so this
+                    //      will always be unique.
+                    if !artifact.target.kind.contains(&"lib".to_owned()) {
+                        id.push_str("::");
+
+                        match artifact.target.kind.get(0) {
+                            // 2. For integration tests, use the target name.
+                            //      Cargo enforces unique names for the same
+                            //      kind of targets in a package, so these
+                            //      will always be unique.
+                            Some(kind) if kind == "test" => {
+                                id.push_str(&name);
+                            }
+                            // 3. For all other target kinds, use a
+                            //      combination of the target kind and
+                            //      the target name. For the same reason
+                            //      as above, these will always be unique.
+                            Some(kind) => {
+                                id.push_str(&format!("{}/{}", kind, name));
+                            }
+                            None => {
+                                return Err(FromMessagesError::MissingTargetKind {
+                                    package_name: package.name().to_owned(),
+                                    binary_name: name.clone(),
+                                });
+                            }
+                        }
+                    }
+
+                    let platform = if artifact.target.kind.len() == 1
+                        && artifact.target.kind.get(0).map(String::as_str) == Some("proc-macro")
+                    {
+                        BuildPlatform::Host
+                    } else {
+                        BuildPlatform::Target
+                    };
+
+                    self.rust_binaries.push(RustTestBinary {
+                        path,
+                        package_id,
+                        name,
+                        id,
+                        build_platform: platform,
+                    })
+                }
+            }
+            _ => {
+                // Ignore all other messages.
+            }
+        }
+
+        Ok(())
+    }
+
+    fn finish(mut self) -> BinaryList {
+        self.rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
+        BinaryList {
+            rust_binaries: self.rust_binaries,
+        }
     }
 }
 
