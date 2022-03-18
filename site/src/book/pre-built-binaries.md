@@ -68,13 +68,13 @@ To install the latest version of nextest, add this to your job:
 ```
 [See this in practice with nextest's own CI.](https://github.com/nextest-rs/nextest/blob/5b59a5c5d1a051ce651e5d632c93a849f97a9d4b/.github/workflows/ci.yml#L101-L102)
 
-To install a specific version or version series, use this instead:
+To install a version series or specific version, use this instead:
 
 ```yml
 - uses: taiki-e/install-action@v1
 - with:
     tool: nextest
-    ## version (defaults to latest) can be a range like 0.9:
+    ## version (defaults to latest) can be a series like 0.9:
     # version: 0.9
     ## version can also be a specific version like 0.9.11:
     # version: 0.9.11
