@@ -47,16 +47,13 @@ jobs:
 
   build:
     name: Build and test
-    runs-on: ${{ matrix.os.runs-on }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os:
-          - runs-on: ubuntu-latest
-            nextest-url: https://get.nexte.st/latest/linux
-          - runs-on: macos-latest
-            nextest-url: https://get.nexte.st/latest/mac
-          - runs-on: windows-latest
-            nextest-url: https://get.nexte.st/latest/windows-tar
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
         # 1.54 is the MSRV
         rust-version: [ 1.54, stable ]
       fail-fast: false
@@ -102,9 +99,7 @@ jobs:
           command: local-nt
           args: run --all-features --profile ci
       - name: Install latest nextest release
-        shell: bash
-        run: |
-          curl -LsSf ${{ matrix.os.nextest-url }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        uses: taiki-e/install-action@nextest
       - name: Test with latest nextest release
         uses: actions-rs/cargo@v1
         with:
