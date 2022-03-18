@@ -6,6 +6,5 @@ fn main() {}
 #[cfg(test)]
 mod tests {
     #[test]
-    fn other_bin_success() {
-    }
+    fn other_bin_success() {}
 }

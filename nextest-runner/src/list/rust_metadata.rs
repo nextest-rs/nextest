@@ -4,13 +4,18 @@
 use crate::list::{BinaryListState, PathMapper, TestListState};
 use camino::Utf8PathBuf;
 use nextest_metadata::RustMetadataSummary;
-use std::marker::PhantomData;
+use std::{collections::BTreeSet, marker::PhantomData};
 
 /// Rust-related metadata used for builds and test runs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustMetadata<State> {
     /// The target directory for build artifacts.
     pub target_directory: Utf8PathBuf,
+
+    /// A list of base output directories, relative to the target directory. These directories
+    /// and their "deps" subdirectories are added to the dynamic library path.
+    pub base_output_directories: BTreeSet<Utf8PathBuf>,
+
     state: PhantomData<State>,
 }
 
@@ -19,6 +24,7 @@ impl RustMetadata<BinaryListState> {
     pub fn new(target_directory: impl Into<Utf8PathBuf>) -> Self {
         Self {
             target_directory: target_directory.into(),
+            base_output_directories: BTreeSet::new(),
             state: PhantomData,
         }
     }
@@ -30,6 +36,9 @@ impl RustMetadata<BinaryListState> {
                 .new_target_dir()
                 .unwrap_or(&self.target_directory)
                 .to_path_buf(),
+            // Since base_output_directories are relative paths, they don't need to be
+            // mapped.
+            base_output_directories: self.base_output_directories.clone(),
             state: PhantomData,
         }
     }
@@ -41,8 +50,29 @@ impl RustMetadata<TestListState> {
     pub(crate) fn empty() -> Self {
         Self {
             target_directory: Utf8PathBuf::new(),
+            base_output_directories: BTreeSet::new(),
             state: PhantomData,
         }
+    }
+
+    /// Returns the dynamic library paths corresponding to this metadata.
+    ///
+    /// [See this Cargo documentation for more.](https://doc.rust-lang.org/cargo/reference/environment-variables.html#dynamic-library-paths)
+    ///
+    /// These paths are prepended to the dynamic library environment variable for the current
+    /// platform (e.g. `LD_LIBRARY_PATH` on non-Apple Unix platforms).
+    pub fn dylib_paths(&self) -> Vec<Utf8PathBuf> {
+        // TODO: rustc sysroot library path? is this even possible to get?
+
+        self.base_output_directories
+            .iter()
+            .flat_map(|base_output| {
+                let abs_base = self.target_directory.join(base_output);
+                let with_deps = abs_base.join("deps");
+                // This is the order paths are added in by Cargo.
+                [with_deps, abs_base]
+            })
+            .collect()
     }
 }
 
@@ -51,6 +81,7 @@ impl<State> RustMetadata<State> {
     pub fn from_summary(summary: RustMetadataSummary) -> Self {
         Self {
             target_directory: summary.target_directory,
+            base_output_directories: summary.base_output_directories,
             state: PhantomData,
         }
     }
@@ -59,6 +90,7 @@ impl<State> RustMetadata<State> {
     pub fn to_summary(&self) -> RustMetadataSummary {
         RustMetadataSummary {
             target_directory: self.target_directory.clone(),
+            base_output_directories: self.base_output_directories.clone(),
         }
     }
 }

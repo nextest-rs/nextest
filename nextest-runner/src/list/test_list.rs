@@ -3,13 +3,13 @@
 
 use crate::{
     errors::{FromMessagesError, ParseTestListError, WriteTestListError},
-    helpers::write_test_name,
+    helpers::{dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, BinaryListState, OutputFormat, RustMetadata, Styles, TestListState},
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::TestFilterBuilder,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use duct::{cmd, Expression};
+use duct::Expression;
 use guppy::{
     graph::{PackageGraph, PackageMetadata},
     PackageId,
@@ -20,7 +20,13 @@ use nextest_metadata::{
 };
 use once_cell::sync::OnceCell;
 use owo_colors::OwoColorize;
-use std::{collections::BTreeMap, io, io::Write};
+use std::{
+    collections::BTreeMap,
+    ffi::{OsStr, OsString},
+    io,
+    io::Write,
+    path::PathBuf,
+};
 
 /// A Rust test binary built by Cargo. This artifact hasn't been run yet so there's no information
 /// about the tests within it.
@@ -105,6 +111,7 @@ pub struct TestList<'g> {
     test_count: usize,
     rust_metadata: RustMetadata<TestListState>,
     rust_suites: BTreeMap<Utf8PathBuf, RustTestSuite<'g>>,
+    updated_dylib_path: OsString,
     // Computed on first access.
     skip_count: OnceCell<usize>,
 }
@@ -200,11 +207,13 @@ impl<'g> TestList<'g> {
         runner: &TargetRunner,
     ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
+        let rust_metadata = rust_metadata.map_paths(path_mapper);
+        let updated_dylib_path = Self::create_dylib_path(&rust_metadata)?;
 
         let test_artifacts = test_artifacts
             .into_iter()
             .map(|test_binary| {
-                let (non_ignored, ignored) = test_binary.exec(runner)?;
+                let (non_ignored, ignored) = test_binary.exec(&updated_dylib_path, runner)?;
                 let (bin, info) = Self::process_output(
                     test_binary,
                     filter,
@@ -218,7 +227,8 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites: test_artifacts,
-            rust_metadata: rust_metadata.map_paths(path_mapper),
+            rust_metadata,
+            updated_dylib_path,
             test_count,
             skip_count: OnceCell::new(),
         })
@@ -249,9 +259,13 @@ impl<'g> TestList<'g> {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
+        let rust_metadata = rust_metadata.map_paths(path_mapper);
+        let updated_dylib_path = Self::create_dylib_path(&rust_metadata)?;
+
         Ok(Self {
             rust_suites: test_artifacts,
-            rust_metadata: rust_metadata.map_paths(path_mapper),
+            rust_metadata,
+            updated_dylib_path,
             test_count,
             skip_count: OnceCell::new(),
         })
@@ -260,6 +274,11 @@ impl<'g> TestList<'g> {
     /// Returns the total number of tests across all binaries.
     pub fn test_count(&self) -> usize {
         self.test_count
+    }
+
+    /// Returns the Rust-related metadata for this test list.
+    pub fn rust_metadata(&self) -> &RustMetadata<TestListState> {
+        &self.rust_metadata
     }
 
     /// Returns the total number of skipped tests.
@@ -286,6 +305,11 @@ impl<'g> TestList<'g> {
     /// Returns the tests for a given binary, or `None` if the binary wasn't in the list.
     pub fn get(&self, test_bin: impl AsRef<Utf8Path>) -> Option<&RustTestSuite> {
         self.rust_suites.get(test_bin.as_ref())
+    }
+
+    /// Returns the updated dynamic library path used for tests.
+    pub fn updated_dylib_path(&self) -> &OsStr {
+        &self.updated_dylib_path
     }
 
     /// Constructs a serializble summary for this test list.
@@ -371,9 +395,29 @@ impl<'g> TestList<'g> {
         Self {
             test_count: 0,
             rust_metadata: RustMetadata::empty(),
+            updated_dylib_path: OsString::new(),
             rust_suites: BTreeMap::new(),
             skip_count: OnceCell::new(),
         }
+    }
+
+    pub(crate) fn create_dylib_path(
+        rust_metadata: &RustMetadata<TestListState>,
+    ) -> Result<OsString, ParseTestListError> {
+        let dylib_path = dylib_path();
+        let new_paths = rust_metadata.dylib_paths();
+
+        let mut updated_dylib_path: Vec<PathBuf> =
+            Vec::with_capacity(dylib_path.len() + new_paths.len());
+        updated_dylib_path.extend(
+            new_paths
+                .iter()
+                .map(|path| path.clone().into_std_path_buf()),
+        );
+        updated_dylib_path.extend(dylib_path);
+
+        std::env::join_paths(updated_dylib_path)
+            .map_err(move |error| ParseTestListError::dylib_join_paths(new_paths, error))
     }
 
     fn process_output(
@@ -505,17 +549,22 @@ impl<'g> TestList<'g> {
 
 impl<'g> RustTestArtifact<'g> {
     /// Run this binary with and without --ignored and get the corresponding outputs.
-    fn exec(&self, runner: &TargetRunner) -> Result<(String, String), ParseTestListError> {
+    fn exec(
+        &self,
+        dylib_path: &OsStr,
+        runner: &TargetRunner,
+    ) -> Result<(String, String), ParseTestListError> {
         let platform_runner = runner.for_build_platform(self.build_platform);
 
-        let non_ignored = self.exec_single(false, platform_runner)?;
-        let ignored = self.exec_single(true, platform_runner)?;
+        let non_ignored = self.exec_single(false, dylib_path, platform_runner)?;
+        let ignored = self.exec_single(true, dylib_path, platform_runner)?;
         Ok((non_ignored, ignored))
     }
 
     fn exec_single(
         &self,
         ignored: bool,
+        dylib_path: &OsStr,
         runner: Option<&PlatformRunner>,
     ) -> Result<String, ParseTestListError> {
         let mut argv = Vec::new();
@@ -534,7 +583,8 @@ impl<'g> RustTestArtifact<'g> {
             argv.push("--ignored");
         }
 
-        let cmd = cmd(program, argv).dir(&self.cwd).stdout_capture();
+        let cmd = make_test_expression(program, argv, &self.cwd, &self.package, dylib_path)
+            .stdout_capture();
 
         cmd.read().map_err(|error| {
             ParseTestListError::command(
@@ -582,7 +632,11 @@ impl<'a> TestInstance<'a> {
     }
 
     /// Creates the command expression for this test instance.
-    pub(crate) fn make_expression(&self, target_runner: &TargetRunner) -> Expression {
+    pub(crate) fn make_expression(
+        &self,
+        test_list: &TestList<'_>,
+        target_runner: &TargetRunner,
+    ) -> Expression {
         let platform_runner = target_runner.for_build_platform(self.bin_info.build_platform);
         // TODO: non-rust tests
 
@@ -605,56 +659,72 @@ impl<'a> TestInstance<'a> {
             args.push("--ignored");
         }
 
-        let package = self.bin_info.package;
-
-        let cmd = cmd(program, args)
-            .dir(&self.bin_info.cwd)
-            // This environment variable is set to indicate that tests are being run under nextest.
-            .env("NEXTEST", "1")
-            // This environment variable is set to indicate that each test is being run in its own process.
-            .env("NEXTEST_EXECUTION_MODE", "process-per-test")
-            // These environment variables are set at runtime by cargo test:
-            // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
-            .env(
-                "CARGO_MANIFEST_DIR",
-                package.manifest_path().parent().unwrap(),
-            )
-            .env("CARGO_PKG_VERSION", format!("{}", package.version()))
-            .env(
-                "CARGO_PKG_VERSION_MAJOR",
-                format!("{}", package.version().major),
-            )
-            .env(
-                "CARGO_PKG_VERSION_MINOR",
-                format!("{}", package.version().minor),
-            )
-            .env(
-                "CARGO_PKG_VERSION_PATCH",
-                format!("{}", package.version().patch),
-            )
-            .env(
-                "CARGO_PKG_VERSION_PRE",
-                format!("{}", package.version().pre),
-            )
-            .env("CARGO_PKG_AUTHORS", package.authors().join(":"))
-            .env("CARGO_PKG_NAME", package.name())
-            .env(
-                "CARGO_PKG_DESCRIPTION",
-                package.description().unwrap_or_default(),
-            )
-            .env("CARGO_PKG_HOMEPAGE", package.homepage().unwrap_or_default())
-            .env("CARGO_PKG_LICENSE", package.license().unwrap_or_default())
-            .env(
-                "CARGO_PKG_LICENSE_FILE",
-                package.license_file().unwrap_or_else(|| "".as_ref()),
-            )
-            .env(
-                "CARGO_PKG_REPOSITORY",
-                package.repository().unwrap_or_default(),
-            );
-
-        cmd
+        make_test_expression(
+            program,
+            args,
+            &self.bin_info.cwd,
+            &self.bin_info.package,
+            test_list.updated_dylib_path(),
+        )
     }
+}
+
+/// Create a duct Expression for a test binary with the given arguments, using the specified [`PackageMetadata`].
+pub(crate) fn make_test_expression(
+    program: OsString,
+    args: impl IntoIterator<Item = impl Into<OsString>>,
+    cwd: impl Into<PathBuf>,
+    package: &PackageMetadata<'_>,
+    dylib_path: &OsStr,
+) -> duct::Expression {
+    let cmd = duct::cmd(program, args)
+        .dir(cwd)
+        // This environment variable is set to indicate that tests are being run under nextest.
+        .env("NEXTEST", "1")
+        // This environment variable is set to indicate that each test is being run in its own process.
+        .env("NEXTEST_EXECUTION_MODE", "process-per-test")
+        // These environment variables are set at runtime by cargo test:
+        // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
+        .env(
+            "CARGO_MANIFEST_DIR",
+            package.manifest_path().parent().unwrap(),
+        )
+        .env("CARGO_PKG_VERSION", format!("{}", package.version()))
+        .env(
+            "CARGO_PKG_VERSION_MAJOR",
+            format!("{}", package.version().major),
+        )
+        .env(
+            "CARGO_PKG_VERSION_MINOR",
+            format!("{}", package.version().minor),
+        )
+        .env(
+            "CARGO_PKG_VERSION_PATCH",
+            format!("{}", package.version().patch),
+        )
+        .env(
+            "CARGO_PKG_VERSION_PRE",
+            format!("{}", package.version().pre),
+        )
+        .env("CARGO_PKG_AUTHORS", package.authors().join(":"))
+        .env("CARGO_PKG_NAME", package.name())
+        .env(
+            "CARGO_PKG_DESCRIPTION",
+            package.description().unwrap_or_default(),
+        )
+        .env("CARGO_PKG_HOMEPAGE", package.homepage().unwrap_or_default())
+        .env("CARGO_PKG_LICENSE", package.license().unwrap_or_default())
+        .env(
+            "CARGO_PKG_LICENSE_FILE",
+            package.license_file().unwrap_or_else(|| "".as_ref()),
+        )
+        .env(
+            "CARGO_PKG_REPOSITORY",
+            package.repository().unwrap_or_default(),
+        )
+        .env(dylib_path_envvar(), dylib_path);
+
+    cmd
 }
 
 #[cfg(test)]
@@ -755,7 +825,8 @@ mod tests {
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
             {
               "rust-metadata": {
-                "target-directory": "/fake"
+                "target-directory": "/fake",
+                "base-output-directories": []
               },
               "test-count": 4,
               "rust-suites": {

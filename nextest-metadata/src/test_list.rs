@@ -1,11 +1,15 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::CommandError;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fmt, path::PathBuf, process::Command};
-
-use crate::CommandError;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    path::PathBuf,
+    process::Command,
+};
 
 /// Command builder for `cargo nextest list`.
 #[derive(Clone, Debug, Default)]
@@ -206,6 +210,9 @@ pub struct BinaryListSummary {
 pub struct RustMetadataSummary {
     /// The target directory for Rust artifacts.
     pub target_directory: Utf8PathBuf,
+
+    /// Base output directories, relative to the target directory.
+    pub base_output_directories: BTreeSet<Utf8PathBuf>,
 }
 
 /// A serializable suite of tests within a Rust test binary.

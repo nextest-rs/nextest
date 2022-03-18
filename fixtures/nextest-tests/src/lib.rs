@@ -16,4 +16,9 @@ mod tests {
     fn unit_test_success() {
         assert_eq!(2 + 2, 4, "this test should succeed");
     }
+
+    #[test]
+    fn call_dylib_add_two() {
+        assert_eq!(dylib_test::add(2, 2), 4);
+    }
 }

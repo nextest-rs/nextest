@@ -3,14 +3,15 @@
 
 use crate::{
     errors::{FromMessagesError, WriteTestListError},
+    helpers::convert_rel_path_to_forward_slash,
     list::{BinaryListState, OutputFormat, RustMetadata, Styles},
 };
-use camino::Utf8PathBuf;
-use cargo_metadata::Message;
+use camino::{Utf8Path, Utf8PathBuf};
+use cargo_metadata::{Artifact, Message};
 use guppy::{graph::PackageGraph, PackageId};
 use nextest_metadata::{BinaryListSummary, BuildPlatform, RustTestBinarySummary};
 use owo_colors::OwoColorize;
-use std::{io, io::Write};
+use std::{collections::BTreeSet, io, io::Write};
 
 /// A Rust test binary built by Cargo.
 #[derive(Clone, Debug)]
@@ -148,6 +149,8 @@ struct BinaryListBuildState<'g> {
     graph: &'g PackageGraph,
     rust_target_dir: Utf8PathBuf,
     rust_binaries: Vec<RustTestBinary>,
+    // Base output dirs, e.g. target-dir/debug or target-dir/x86_64-unknown-linux-gnu/debug
+    rust_base_output_dirs: BTreeSet<Utf8PathBuf>,
 }
 
 impl<'g> BinaryListBuildState<'g> {
@@ -158,72 +161,14 @@ impl<'g> BinaryListBuildState<'g> {
             graph,
             rust_target_dir,
             rust_binaries: vec![],
+            rust_base_output_dirs: BTreeSet::new(),
         }
     }
 
     fn process_message(&mut self, message: Message) -> Result<(), FromMessagesError> {
         match message {
-            Message::CompilerArtifact(artifact) if artifact.profile.test => {
-                if let Some(path) = artifact.executable {
-                    let package_id = artifact.package_id.repr;
-
-                    // Look up the executable by package ID.
-                    let package = self
-                        .graph
-                        .metadata(&PackageId::new(package_id.clone()))
-                        .map_err(FromMessagesError::PackageGraph)?;
-
-                    // Construct the binary ID from the package and build target.
-                    let mut id = package.name().to_owned();
-                    let name = artifact.target.name;
-
-                    // To ensure unique binary IDs, we use the following scheme:
-                    // 1. If the target is a lib, use the package name.
-                    //      There can only be one lib per package, so this
-                    //      will always be unique.
-                    if !artifact.target.kind.contains(&"lib".to_owned()) {
-                        id.push_str("::");
-
-                        match artifact.target.kind.get(0) {
-                            // 2. For integration tests, use the target name.
-                            //      Cargo enforces unique names for the same
-                            //      kind of targets in a package, so these
-                            //      will always be unique.
-                            Some(kind) if kind == "test" => {
-                                id.push_str(&name);
-                            }
-                            // 3. For all other target kinds, use a
-                            //      combination of the target kind and
-                            //      the target name. For the same reason
-                            //      as above, these will always be unique.
-                            Some(kind) => {
-                                id.push_str(&format!("{}/{}", kind, name));
-                            }
-                            None => {
-                                return Err(FromMessagesError::MissingTargetKind {
-                                    package_name: package.name().to_owned(),
-                                    binary_name: name.clone(),
-                                });
-                            }
-                        }
-                    }
-
-                    let platform = if artifact.target.kind.len() == 1
-                        && artifact.target.kind.get(0).map(String::as_str) == Some("proc-macro")
-                    {
-                        BuildPlatform::Host
-                    } else {
-                        BuildPlatform::Target
-                    };
-
-                    self.rust_binaries.push(RustTestBinary {
-                        path,
-                        package_id,
-                        name,
-                        id,
-                        build_platform: platform,
-                    })
-                }
+            Message::CompilerArtifact(artifact) => {
+                self.process_artifact(artifact)?;
             }
             _ => {
                 // Ignore all other messages.
@@ -233,10 +178,106 @@ impl<'g> BinaryListBuildState<'g> {
         Ok(())
     }
 
+    fn process_artifact(&mut self, artifact: Artifact) -> Result<(), FromMessagesError> {
+        if let Some(path) = artifact.executable {
+            self.detect_base_output_dir(&path);
+
+            if artifact.profile.test {
+                let package_id = artifact.package_id.repr;
+
+                // Look up the executable by package ID.
+                let package = self
+                    .graph
+                    .metadata(&PackageId::new(package_id.clone()))
+                    .map_err(FromMessagesError::PackageGraph)?;
+
+                // Construct the binary ID from the package and build target.
+                let mut id = package.name().to_owned();
+                let name = artifact.target.name;
+
+                // To ensure unique binary IDs, we use the following scheme:
+                // 1. If the target is a lib, use the package name.
+                //      There can only be one lib per package, so this
+                //      will always be unique.
+                if !artifact.target.kind.contains(&"lib".to_owned()) {
+                    id.push_str("::");
+
+                    match artifact.target.kind.get(0) {
+                        // 2. For integration tests, use the target name.
+                        //      Cargo enforces unique names for the same
+                        //      kind of targets in a package, so these
+                        //      will always be unique.
+                        Some(kind) if kind == "test" => {
+                            id.push_str(&name);
+                        }
+                        // 3. For all other target kinds, use a
+                        //      combination of the target kind and
+                        //      the target name. For the same reason
+                        //      as above, these will always be unique.
+                        Some(kind) => {
+                            id.push_str(&format!("{}/{}", kind, name));
+                        }
+                        None => {
+                            return Err(FromMessagesError::MissingTargetKind {
+                                package_name: package.name().to_owned(),
+                                binary_name: name.clone(),
+                            });
+                        }
+                    }
+                }
+
+                let platform = if artifact.target.kind.len() == 1
+                    && artifact.target.kind.get(0).map(String::as_str) == Some("proc-macro")
+                {
+                    BuildPlatform::Host
+                } else {
+                    BuildPlatform::Target
+                };
+
+                self.rust_binaries.push(RustTestBinary {
+                    path,
+                    package_id,
+                    name,
+                    id,
+                    build_platform: platform,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Look for paths that contain "deps" in their second-to-last component,
+    /// and are descendants of the target directory.
+    /// The paths without "deps" are base output directories.
+    ///
+    /// e.g. path/to/repo/target/debug/deps/test-binary => add "debug"
+    /// to base output dirs.
+    ///
+    /// Note that test binaries are always present in "deps", so we should always
+    /// have a match.
+    ///
+    /// The `Option` in the return value is to let ? work.
+    fn detect_base_output_dir(&mut self, artifact_path: &Utf8Path) -> Option<()> {
+        // Artifact paths must be relative to the target directory.
+        let rel_path = artifact_path.strip_prefix(&self.rust_target_dir).ok()?;
+        let parent = rel_path.parent()?;
+        if parent.file_name() == Some("deps") {
+            let base = parent.parent()?;
+            if !self.rust_base_output_dirs.contains(base) {
+                self.rust_base_output_dirs
+                    .insert(convert_rel_path_to_forward_slash(base));
+            }
+        }
+        Some(())
+    }
+
     fn finish(mut self) -> BinaryList {
         self.rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
+        let mut rust_metadata = RustMetadata::new(self.rust_target_dir);
+        rust_metadata.base_output_directories = self.rust_base_output_dirs;
         BinaryList {
-            rust_metadata: RustMetadata::new(self.rust_target_dir),
+            rust_metadata,
             rust_binaries: self.rust_binaries,
         }
     }
@@ -288,7 +329,8 @@ mod tests {
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
         {
           "rust-metadata": {
-            "target-directory": "/fake"
+            "target-directory": "/fake",
+            "base-output-directories": []
           },
           "rust-binaries": {
             "fake-macro::proc-macro/fake-macro": {

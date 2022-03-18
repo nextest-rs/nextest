@@ -95,6 +95,9 @@ macro_rules! assert_env {
 /// Assert that test environment variables are correctly set.
 #[test]
 fn test_cargo_env_vars() {
+    for (k, v) in std::env::vars() {
+        println!("{} = {}", k, v);
+    }
     assert_eq!(
         std::env::var("NEXTEST").as_deref(),
         Ok("1"),

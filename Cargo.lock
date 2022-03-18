@@ -666,6 +666,8 @@ dependencies = [
  "humantime-serde",
  "indent_write",
  "indoc",
+ "itertools",
+ "log",
  "maplit",
  "nextest-metadata",
  "num_cpus",

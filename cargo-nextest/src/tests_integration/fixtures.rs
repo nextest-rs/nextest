@@ -32,6 +32,11 @@ impl TestInfo {
 pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
     vec![
         TestInfo::new(
+            "dylib-test::dylib/dylib-test",
+            BuildPlatform::Target,
+            vec![],
+        ),
+        TestInfo::new(
             "nextest-tests::basic",
             BuildPlatform::Target,
             vec![
@@ -61,7 +66,10 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
         TestInfo::new(
             "nextest-tests",
             BuildPlatform::Target,
-            vec![("tests::unit_test_success", false)],
+            vec![
+                ("tests::call_dylib_add_two", false),
+                ("tests::unit_test_success", false),
+            ],
         ),
         TestInfo::new(
             "nextest-tests::other",
@@ -94,10 +102,14 @@ pub fn cargo_bin() -> String {
     }
 }
 
-pub static ENABLE_EXPERIMENTAL: Lazy<()> = Lazy::new(enable_experimental);
+#[track_caller]
+pub(super) fn set_rustflags() {
+    // The dynamic library tests require this flag.
+    std::env::set_var("RUSTFLAGS", "-C prefer-dynamic");
+}
 
 #[track_caller]
-fn enable_experimental() {
+pub(super) fn enable_experimental() {
     std::env::set_var("NEXTEST_EXPERIMENTAL_REUSE_BUILD", "1");
 }
 
@@ -153,7 +165,11 @@ pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
             test_suite.len() - host_binaries_count,
             result.rust_suites.len()
         ),
-        None => assert_eq!(test_suite.len(), result.rust_suites.len()),
+        None => assert_eq!(
+            test_suite.len(),
+            result.rust_suites.len(),
+            "test suite counts match"
+        ),
     }
 
     for test in test_suite {
@@ -254,9 +270,9 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *16 tests run: 10 passed, 6 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *17 tests run: 11 passed, 6 failed, 2 skipped").unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *16 tests run: 11 passed, 5 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *17 tests run: 12 passed, 5 failed, 2 skipped").unwrap()
     };
     assert!(summary_reg.is_match(&output), "summary didn't match");
 }

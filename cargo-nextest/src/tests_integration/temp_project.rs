@@ -34,9 +34,9 @@ pub(super) fn copy_dir_all(
 /// A temporary copy of the test project
 ///
 /// This avoid concurrent accesses to the `target` folder.
+#[derive(Debug)]
 pub struct TempProject {
-    #[allow(dead_code)]
-    temp_dir: TempDir,
+    temp_dir: Option<TempDir>,
     workspace_root: Utf8PathBuf,
     target_dir: Utf8PathBuf,
 }
@@ -73,10 +73,17 @@ impl TempProject {
         };
 
         Ok(Self {
-            temp_dir,
+            temp_dir: Some(temp_dir),
             workspace_root,
             target_dir,
         })
+    }
+
+    #[allow(dead_code)]
+    pub fn persist(&mut self) {
+        if let Some(dir) = self.temp_dir.take() {
+            dir.into_path();
+        }
     }
 
     pub fn workspace_root(&self) -> &Utf8Path {

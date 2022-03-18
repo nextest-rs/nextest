@@ -87,6 +87,7 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
             ],
             // Unit tests
             "nextest-tests" => vec![
+                TestFixture { name: "tests::call_dylib_add_two", status: FixtureStatus::Pass },
                 TestFixture { name: "tests::unit_test_success", status: FixtureStatus::Pass },
             ],
             // Binary tests
@@ -128,6 +129,12 @@ pub(crate) static EXPECTED_BINARY_LIST: [(&str, &str, bool); 8] = [
     ("nextest-tests::example/other", "other", true),
     ("nextest-tests::other", "other", true),
 ];
+
+#[track_caller]
+pub(crate) fn set_rustflags() {
+    // The dynamic library tests require this flag.
+    std::env::set_var("RUSTFLAGS", "-C prefer-dynamic");
+}
 
 pub(crate) fn workspace_root() -> Utf8PathBuf {
     // one level up from the manifest dir -> into fixtures/nextest-tests
