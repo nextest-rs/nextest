@@ -13,12 +13,22 @@ cargo llvm-cov nextest
 
 ### Using llvm-cov in GitHub Actions
 
-Install both nextest and llvm-cov in GitHub Actions, then run `cargo llvm-cov nextest`.
+Install nightly Rust with the `llvm-tools-preview` component, nextest, and llvm-cov in GitHub Actions. Then, run `cargo llvm-cov nextest`.
 
 ```yaml
+- uses: actions-rs/toolchain@v1
+  with:
+    toolchain: nightly
+    override: true
+    components: llvm-tools-preview
 - uses: taiki-e/install-action@cargo-llvm-cov
 - uses: taiki-e/install-action@nextest
+
+- name: Collect coverage data
+  run: cargo llvm-cov nextest
 ```
+
+> TODO: provide instructions for other report forms like HTML, and for reporting to an external code coverage service
 
 ## Integrating nextest into coverage tools
 
