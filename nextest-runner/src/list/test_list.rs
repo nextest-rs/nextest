@@ -436,7 +436,7 @@ impl<'g> TestList<'g> {
                 test_name.into(),
                 RustTestCaseSummary {
                     ignored: false,
-                    filter_match: non_ignored_filter.filter_match(test_name, false),
+                    filter_match: non_ignored_filter.filter_match(&test_binary, test_name, false),
                 },
             );
         }
@@ -451,7 +451,7 @@ impl<'g> TestList<'g> {
                 test_name.into(),
                 RustTestCaseSummary {
                     ignored: true,
-                    filter_match: ignored_filter.filter_match(test_name, true),
+                    filter_match: ignored_filter.filter_match(&test_binary, test_name, true),
                 },
             );
         }
