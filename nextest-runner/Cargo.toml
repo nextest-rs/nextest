@@ -19,7 +19,7 @@ crossbeam-channel = "0.5.3"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 debug-ignore = "1.0.2"
 duct = "0.13.5"
-guppy = "0.13.0"
+guppy = "0.14.1"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home = "0.5.3"
