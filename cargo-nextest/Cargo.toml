@@ -8,8 +8,8 @@ repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://nexte.st"
 keywords = ["nextest", "test-runner", "flaky-tests", "junit"]
 categories = ["development-tools::cargo-plugins", "development-tools::testing"]
-edition = "2018"
-rust-version = "1.54"
+edition = "2021"
+rust-version = "1.56"
 
 [dependencies]
 camino = "1.0.7"

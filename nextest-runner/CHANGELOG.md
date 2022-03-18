@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- MSRV bumped to Rust 1.56.
+
 ## [0.4.0] - 2022-03-07
 
 Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to this release!
