@@ -66,6 +66,7 @@ To install the latest version of nextest, add this to your job:
 ```yml
 - uses: taiki-e/install-action@nextest
 ```
+[See this in practice with nextest's own CI.](https://github.com/nextest-rs/nextest/blob/5b59a5c5d1a051ce651e5d632c93a849f97a9d4b/.github/workflows/ci.yml#L101-L102)
 
 To install a specific version or version series, use this instead:
 
@@ -76,8 +77,6 @@ To install a specific version or version series, use this instead:
     # "version" (defaults to latest) can be a range like 0.9, or a specific version like 0.9.11.
     # version: 0.9
 ```
-
-[See this in practice with nextest's own CI.](https://github.com/nextest-rs/nextest/blob/5b59a5c5d1a051ce651e5d632c93a849f97a9d4b/.github/workflows/ci.yml#L101-L102)
 
 ### Other CI systems
 
