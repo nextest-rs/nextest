@@ -28,7 +28,9 @@ Install nightly Rust with the `llvm-tools-preview` component, nextest, and llvm-
   run: cargo llvm-cov nextest
 ```
 
-> TODO: provide instructions for other report forms like HTML, and for reporting to an external code coverage service
+[See this in practice with nextest's own CI.](https://github.com/nextest-rs/nextest/blob/main/.github/workflows/coverage.yml)
+
+> TODO: provide instructions for other report forms like HTML, and for reporting to an external code coverage service.
 
 ## Integrating nextest into coverage tools
 
