@@ -61,7 +61,7 @@ Pre-built binaries can be used in continuous integration to speed up test runs.
 
 The easiest way to use nextest in GitHub Actions is to use the [Install Development Tools](https://github.com/marketplace/actions/install-development-tools) action maintained by [Taiki Endo](https://github.com/taiki-e).
 
-To install the latest version of nextest, add this to your job:
+To install the latest version of nextest, add this to your job after installing Rust and Cargo:
 
 ```yml
 - uses: taiki-e/install-action@nextest
