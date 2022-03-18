@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- MSRV bumped to Rust 1.56.
+
 ## [0.1.5] - 2022-02-14
 
 ### Changed

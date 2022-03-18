@@ -375,7 +375,6 @@ impl PlatformRunner {
 mod tests {
     use super::*;
     use color_eyre::eyre::{Context, Result};
-    use std::convert::TryFrom;
     use target_spec::TargetFeatures;
     use tempfile::TempDir;
 

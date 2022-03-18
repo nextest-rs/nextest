@@ -8,8 +8,8 @@ repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://docs.rs/quick-junit"
 keywords = ["junit", "xunit", "xml", "serializer", "flaky-tests"]
 categories = ["encoding", "development-tools"]
-edition = "2018"
-rust-version = "1.54"
+edition = "2021"
+rust-version = "1.56"
 
 [dependencies]
 chrono = "0.4.19"
