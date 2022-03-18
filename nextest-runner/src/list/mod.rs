@@ -8,9 +8,9 @@
 //! * [`BinaryList`] for test binaries
 
 mod binary_list;
-mod test_list;
 mod output_format;
+mod test_list;
 
 pub use binary_list::*;
-pub use test_list::*;
 pub use output_format::*;
+pub use test_list::*;
