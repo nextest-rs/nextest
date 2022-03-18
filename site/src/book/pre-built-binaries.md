@@ -74,8 +74,10 @@ To install a specific version or version series, use this instead:
 - uses: taiki-e/install-action@v1
 - with:
     tool: nextest
-    # "version" (defaults to latest) can be a range like 0.9, or a specific version like 0.9.11.
+    ## version (defaults to latest) can be a range like 0.9:
     # version: 0.9
+    ## version can also be a specific version like 0.9.11:
+    # version: 0.9.11
 ```
 
 ### Other CI systems
