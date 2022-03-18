@@ -141,7 +141,7 @@ pub struct RustTestSuite<'g> {
 #[derive(Default)]
 pub struct PathMapper {
     workspace: Option<(Utf8PathBuf, Utf8PathBuf)>,
-    binaries_dir: Option<Utf8PathBuf>,
+    target_dir: Option<(Utf8PathBuf, Utf8PathBuf)>,
 }
 
 impl PathMapper {
@@ -149,15 +149,16 @@ impl PathMapper {
     pub fn new(
         graph: &PackageGraph,
         workspace: Option<Utf8PathBuf>,
-        binaries_dir: Option<Utf8PathBuf>,
+        orig_target_dir: &Utf8Path,
+        target_dir: Option<Utf8PathBuf>,
     ) -> Option<Self> {
-        if workspace.is_none() && binaries_dir.is_none() {
+        if workspace.is_none() && target_dir.is_none() {
             return None;
         }
 
         Some(Self {
             workspace: workspace.map(|w| (graph.workspace().root().to_owned(), w)),
-            binaries_dir,
+            target_dir: target_dir.map(|d| (orig_target_dir.to_owned(), d)),
         })
     }
 
@@ -172,10 +173,10 @@ impl PathMapper {
     }
 
     fn map_binary(&self, path: Utf8PathBuf) -> Utf8PathBuf {
-        match &self.binaries_dir {
-            Some(dir) => match path.file_name() {
-                Some(file) => dir.join(file),
-                None => path,
+        match &self.target_dir {
+            Some((from, to)) => match path.strip_prefix(from) {
+                Ok(p) => to.join(p),
+                Err(_) => path,
             },
             None => path,
         }

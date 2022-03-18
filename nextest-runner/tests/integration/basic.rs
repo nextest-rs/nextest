@@ -19,7 +19,7 @@ use std::io::Cursor;
 fn test_list_binaries() -> Result<()> {
     let graph = &*PACKAGE_GRAPH;
     let binary_list =
-        BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph)?;
+        BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)?;
 
     for (id, name, platform_is_target) in &EXPECTED_BINARY_LIST {
         let bin = binary_list

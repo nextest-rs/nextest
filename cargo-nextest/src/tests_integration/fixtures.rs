@@ -124,13 +124,15 @@ pub fn build_tests(p: &TempProject) {
         "cargo",
         "nextest",
         "--manifest-path",
-        p.manifest_path().as_os_str().to_string_lossy().as_ref(),
+        p.manifest_path().as_str(),
         "list",
         "--workspace",
         "--message-format",
         "json",
         "--list-type",
         "binaries-only",
+        "--target-dir",
+        p.target_dir().as_str(),
     ]);
 
     let mut output = OutputWriter::new_test();

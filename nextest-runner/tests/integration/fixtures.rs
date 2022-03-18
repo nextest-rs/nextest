@@ -178,7 +178,8 @@ pub(crate) static FIXTURE_TARGETS: Lazy<BTreeMap<String, RustTestArtifact<'stati
 fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
     let graph = &*PACKAGE_GRAPH;
     let binary_list =
-        BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph).unwrap();
+        BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
+            .unwrap();
     let test_artifacts =
         RustTestArtifact::from_binary_list(graph, binary_list, None, None).unwrap();
 

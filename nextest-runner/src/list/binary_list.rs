@@ -5,7 +5,7 @@ use crate::{
     errors::{FromMessagesError, WriteTestListError},
     list::{OutputFormat, Styles},
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::Message;
 use guppy::{graph::PackageGraph, PackageId};
 use nextest_metadata::{BinaryListSummary, BuildPlatform, RustTestBinarySummary};
@@ -31,6 +31,9 @@ pub struct RustTestBinary {
 /// The list of Rust test binaries built by Cargo.
 #[derive(Clone, Debug)]
 pub struct BinaryList {
+    /// The target directory artifacts were built in.
+    pub rust_target_directory: Utf8PathBuf,
+
     /// The list of test binaries.
     pub rust_binaries: Vec<RustTestBinary>,
 }
@@ -40,8 +43,9 @@ impl BinaryList {
     pub fn from_messages(
         reader: impl io::BufRead,
         graph: &PackageGraph,
+        target_dir: Option<&Utf8Path>,
     ) -> Result<Self, FromMessagesError> {
-        let mut state = BinaryListBuildState::new(graph);
+        let mut state = BinaryListBuildState::new(graph, target_dir);
 
         for message in Message::parse_stream(reader) {
             let message = message.map_err(FromMessagesError::ReadMessages)?;
@@ -64,7 +68,10 @@ impl BinaryList {
                 build_platform: bin.build_platform,
             })
             .collect();
-        Self { rust_binaries }
+        Self {
+            rust_binaries,
+            rust_target_directory: summary.rust_target_directory,
+        }
     }
 
     /// Outputs this list to the given writer.
@@ -100,7 +107,10 @@ impl BinaryList {
             })
             .collect();
 
-        BinaryListSummary { rust_binaries }
+        BinaryListSummary {
+            rust_binaries,
+            rust_target_directory: self.rust_target_directory.clone(),
+        }
     }
 
     fn write_human(&self, mut writer: impl Write, verbose: bool, colorize: bool) -> io::Result<()> {
@@ -137,13 +147,19 @@ impl BinaryList {
 #[derive(Debug)]
 struct BinaryListBuildState<'g> {
     graph: &'g PackageGraph,
+    rust_target_dir: Utf8PathBuf,
     rust_binaries: Vec<RustTestBinary>,
 }
 
 impl<'g> BinaryListBuildState<'g> {
-    fn new(graph: &'g PackageGraph) -> Self {
+    fn new(graph: &'g PackageGraph, rust_target_dir: Option<&Utf8Path>) -> Self {
+        let rust_target_dir = rust_target_dir
+            .unwrap_or_else(|| graph.workspace().target_directory())
+            .to_path_buf();
+
         Self {
             graph,
+            rust_target_dir,
             rust_binaries: vec![],
         }
     }
@@ -223,6 +239,7 @@ impl<'g> BinaryListBuildState<'g> {
     fn finish(mut self) -> BinaryList {
         self.rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
         BinaryList {
+            rust_target_directory: self.rust_target_dir,
             rust_binaries: self.rust_binaries,
         }
     }
@@ -254,6 +271,7 @@ mod tests {
         };
 
         let binary_list = BinaryList {
+            rust_target_directory: "/fake".into(),
             rust_binaries: vec![fake_bin_test, fake_macro_test],
         };
 
@@ -272,6 +290,7 @@ mod tests {
         "#};
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
         {
+          "rust-target-directory": "/fake",
           "rust-binaries": {
             "fake-macro::proc-macro/fake-macro": {
               "binary-id": "fake-macro::proc-macro/fake-macro",

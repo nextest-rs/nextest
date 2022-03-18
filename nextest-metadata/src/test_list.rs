@@ -182,6 +182,9 @@ pub struct RustTestBinarySummary {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BinaryListSummary {
+    /// The target directory for Rust artifacts.
+    pub rust_target_directory: Utf8PathBuf,
+
     /// The list of Rust test binaries (indexed by binary-id).
     pub rust_binaries: BTreeMap<String, RustTestBinarySummary>,
 }
