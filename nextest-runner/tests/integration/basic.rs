@@ -6,7 +6,7 @@ use color_eyre::eyre::Result;
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     config::NextestConfig,
-    list::{BinaryList, TestList},
+    list::BinaryList,
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
     signal::SignalHandler,
     target_runner::TargetRunner,
@@ -40,11 +40,11 @@ fn test_list_binaries() -> Result<()> {
 #[test]
 fn test_list_tests() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
-    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
-    let test_list = TestList::new(test_bins, &test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
+            .test_artifacts
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         let info = test_list
@@ -64,8 +64,7 @@ fn test_list_tests() -> Result<()> {
 #[test]
 fn test_run() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
-    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
-    let test_list = TestList::new(test_bins, &test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config =
         NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
@@ -83,6 +82,7 @@ fn test_run() -> Result<()> {
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
+            .test_artifacts
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
@@ -118,8 +118,7 @@ fn test_run() -> Result<()> {
 #[test]
 fn test_run_ignored() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::IgnoredOnly);
-    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
-    let test_list = TestList::new(test_bins, &test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config =
         NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
@@ -137,6 +136,7 @@ fn test_run_ignored() -> Result<()> {
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
+            .test_artifacts
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
@@ -172,8 +172,7 @@ fn test_run_ignored() -> Result<()> {
 #[test]
 fn test_retries() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
-    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
-    let test_list = TestList::new(test_bins, &test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config =
         NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
     let profile = config
@@ -194,6 +193,7 @@ fn test_retries() -> Result<()> {
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
+            .test_artifacts
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {

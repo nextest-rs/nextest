@@ -8,9 +8,11 @@ use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
-    list::{BinaryList, PathMapper, RustTestArtifact},
+    list::{BinaryList, BinaryListState, PathMapper, RustMetadata, RustTestArtifact, TestList},
     reporter::TestEvent,
     runner::{ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
+    target_runner::TargetRunner,
+    test_filter::TestFilterBuilder,
 };
 use once_cell::sync::Lazy;
 use std::{
@@ -172,22 +174,53 @@ fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
     output.stdout
 }
 
-pub(crate) static FIXTURE_TARGETS: Lazy<BTreeMap<String, RustTestArtifact<'static>>> =
-    Lazy::new(init_fixture_targets);
+pub(crate) static FIXTURE_TARGETS: Lazy<FixtureTargets> = Lazy::new(FixtureTargets::new);
 
-fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
-    let graph = &*PACKAGE_GRAPH;
-    let binary_list =
-        BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
-            .unwrap();
-    let test_artifacts =
-        RustTestArtifact::from_binary_list(graph, binary_list, &PathMapper::noop(), None).unwrap();
+#[derive(Debug)]
+pub(crate) struct FixtureTargets {
+    pub(crate) rust_metadata: RustMetadata<BinaryListState>,
+    pub(crate) test_artifacts: BTreeMap<String, RustTestArtifact<'static>>,
+}
 
-    test_artifacts
-        .into_iter()
-        .map(|bin| (bin.binary_id.clone(), bin))
-        .inspect(|(k, _)| println!("{}", k))
-        .collect()
+impl FixtureTargets {
+    fn new() -> Self {
+        let graph = &*PACKAGE_GRAPH;
+        let binary_list =
+            BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
+                .unwrap();
+        let rust_metadata = binary_list.rust_metadata.clone();
+
+        let path_mapper = PathMapper::noop();
+
+        let test_artifacts =
+            RustTestArtifact::from_binary_list(graph, binary_list, &path_mapper, None).unwrap();
+
+        let test_artifacts = test_artifacts
+            .into_iter()
+            .map(|bin| (bin.binary_id.clone(), bin))
+            .collect();
+        Self {
+            rust_metadata,
+            test_artifacts,
+        }
+    }
+
+    pub(crate) fn make_test_list(
+        &self,
+        test_filter: &TestFilterBuilder,
+        target_runner: &TargetRunner,
+    ) -> TestList<'_> {
+        let test_bins: Vec<_> = self.test_artifacts.values().cloned().collect();
+        let path_mapper = PathMapper::noop();
+        TestList::new(
+            test_bins,
+            &self.rust_metadata,
+            &path_mapper,
+            test_filter,
+            target_runner,
+        )
+        .expect("test list successfully created")
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -4,7 +4,7 @@
 use crate::{
     errors::{FromMessagesError, ParseTestListError, WriteTestListError},
     helpers::write_test_name,
-    list::{BinaryList, OutputFormat, Styles},
+    list::{BinaryList, BinaryListState, OutputFormat, RustMetadata, Styles, TestListState},
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::TestFilterBuilder,
 };
@@ -103,6 +103,7 @@ impl<'g> RustTestArtifact<'g> {
 #[derive(Clone, Debug)]
 pub struct TestList<'g> {
     test_count: usize,
+    rust_metadata: RustMetadata<TestListState>,
     rust_suites: BTreeMap<Utf8PathBuf, RustTestSuite<'g>>,
     // Computed on first access.
     skip_count: OnceCell<usize>,
@@ -164,6 +165,10 @@ impl PathMapper {
         }
     }
 
+    pub(super) fn new_target_dir(&self) -> Option<&Utf8Path> {
+        self.target_dir.as_ref().map(|(_, new)| new.as_path())
+    }
+
     fn map_cwd(&self, path: Utf8PathBuf) -> Utf8PathBuf {
         match &self.workspace {
             Some((from, to)) => match path.strip_prefix(from) {
@@ -189,6 +194,8 @@ impl<'g> TestList<'g> {
     /// Creates a new test list by running the given command and applying the specified filter.
     pub fn new(
         test_artifacts: impl IntoIterator<Item = RustTestArtifact<'g>>,
+        rust_metadata: &RustMetadata<BinaryListState>,
+        path_mapper: &PathMapper,
         filter: &TestFilterBuilder,
         runner: &TargetRunner,
     ) -> Result<Self, ParseTestListError> {
@@ -211,6 +218,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites: test_artifacts,
+            rust_metadata: rust_metadata.map_paths(path_mapper),
             test_count,
             skip_count: OnceCell::new(),
         })
@@ -221,6 +229,8 @@ impl<'g> TestList<'g> {
         test_bin_outputs: impl IntoIterator<
             Item = (RustTestArtifact<'g>, impl AsRef<str>, impl AsRef<str>),
         >,
+        rust_metadata: &RustMetadata<BinaryListState>,
+        path_mapper: &PathMapper,
         filter: &TestFilterBuilder,
     ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
@@ -241,6 +251,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites: test_artifacts,
+            rust_metadata: rust_metadata.map_paths(path_mapper),
             test_count,
             skip_count: OnceCell::new(),
         })
@@ -303,7 +314,7 @@ impl<'g> TestList<'g> {
                 (info.binary_id.clone(), testsuite)
             })
             .collect();
-        let mut summary = TestListSummary::default();
+        let mut summary = TestListSummary::new(self.rust_metadata.to_summary());
         summary.test_count = self.test_count;
         summary.rust_suites = rust_suites;
         summary
@@ -359,6 +370,7 @@ impl<'g> TestList<'g> {
     pub(crate) fn empty() -> Self {
         Self {
             test_count: 0,
+            rust_metadata: RustMetadata::empty(),
             rust_suites: BTreeMap::new(),
             skip_count: OnceCell::new(),
         }
@@ -683,8 +695,11 @@ mod tests {
             binary_id: fake_binary_id.clone(),
             build_platform: BuildPlatform::Target,
         };
+        let rust_metadata = RustMetadata::new("/fake");
         let test_list = TestList::new_with_outputs(
             iter::once((test_binary, &non_ignored_output, &ignored_output)),
+            &rust_metadata,
+            &PathMapper::noop(),
             &test_filter,
         )
         .expect("valid output");
@@ -739,6 +754,9 @@ mod tests {
         "};
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
             {
+              "rust-metadata": {
+                "target-directory": "/fake"
+              },
               "test-count": 4,
               "rust-suites": {
                 "fake-package::fake-binary": {
