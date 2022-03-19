@@ -314,7 +314,9 @@ impl TestBuildFilter {
         runner: &TargetRunner,
         reuse_build: &ReuseBuildOpts,
     ) -> Result<TestList<'g>> {
-        let path_mapper = reuse_build.make_path_mapper(graph, &binary_list.rust_target_directory);
+        let path_mapper =
+            reuse_build.make_path_mapper(graph, &binary_list.rust_metadata.target_directory);
+        let rust_metadata = binary_list.rust_metadata.clone();
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,
             binary_list,
@@ -323,7 +325,14 @@ impl TestBuildFilter {
         )?;
         let test_filter =
             TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
-        TestList::new(test_artifacts, &test_filter, runner).wrap_err("error building test list")
+        TestList::new(
+            test_artifacts,
+            &rust_metadata,
+            &path_mapper,
+            &test_filter,
+            runner,
+        )
+        .wrap_err("error building test list")
     }
 
     fn compute_binary_list(

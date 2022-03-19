@@ -2,9 +2,34 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Path, Utf8PathBuf};
-use fs_extra::dir::CopyOptions;
-use std::convert::TryInto;
+use std::{convert::TryInto, fs, io, path::Path};
 use tempfile::TempDir;
+
+// This isn't general purpose -- it specifically excludes certain directories at the root and is
+// generally not race-free.
+pub(super) fn copy_dir_all(
+    src: impl AsRef<Path>,
+    dst: impl AsRef<Path>,
+    root: bool,
+) -> io::Result<()> {
+    let src = src.as_ref();
+    let dst = dst.as_ref();
+
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            if root && entry.path().file_name() == Some(std::ffi::OsStr::new("target")) {
+                continue;
+            }
+            copy_dir_all(&entry.path(), &dst.join(entry.file_name()), false)?;
+        } else {
+            fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
 
 /// A temporary copy of the test project
 ///
@@ -40,19 +65,10 @@ impl TempProject {
             .unwrap()
             .join("fixtures/nextest-tests");
 
-        fs_extra::copy_items(&[&src_dir], &utf8_path, &CopyOptions::new())?;
-
-        let workspace_root = utf8_path.join("nextest-tests");
+        copy_dir_all(&src_dir, &utf8_path, true)?;
+        let workspace_root = utf8_path;
 
         let target_dir = custom_target_dir.unwrap_or_else(|| workspace_root.join("target"));
-        match std::fs::remove_dir_all(&target_dir) {
-            Ok(()) => {}
-            Err(err) => {
-                if err.kind() != std::io::ErrorKind::NotFound {
-                    color_eyre::eyre::bail!(err);
-                }
-            }
-        }
 
         Ok(Self {
             temp_dir,

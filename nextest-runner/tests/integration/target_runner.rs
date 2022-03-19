@@ -7,7 +7,6 @@ use color_eyre::Result;
 use nextest_runner::{
     config::NextestConfig,
     errors::TargetRunnerError,
-    list::TestList,
     runner::TestRunnerBuilder,
     signal::SignalHandler,
     target_runner::{PlatformRunner, TargetRunner},
@@ -187,9 +186,8 @@ fn current_runner_env_var() -> String {
 #[test]
 fn test_listing_with_target_runner() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
-    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
 
-    let test_list = TestList::new(test_bins.clone(), &test_filter, &TargetRunner::empty())?;
     let bin_count = test_list.binary_count();
     let test_count = test_list.test_count();
 
@@ -202,7 +200,7 @@ fn test_listing_with_target_runner() -> Result<()> {
             || runner_for_target(None),
         )?;
 
-        let test_list = TestList::new(test_bins.clone(), &test_filter, &target_runner)?;
+        let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &target_runner);
 
         assert_eq!(bin_count, test_list.binary_count());
         assert_eq!(test_count, test_list.test_count());
@@ -221,7 +219,6 @@ fn test_listing_with_target_runner() -> Result<()> {
 #[test]
 fn test_run_with_target_runner() -> Result<()> {
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
-    let test_bins: Vec<_> = FIXTURE_TARGETS.values().cloned().collect();
 
     let target_runner = with_env(
         [(
@@ -236,7 +233,7 @@ fn test_run_with_target_runner() -> Result<()> {
         assert_eq!(passthrough_path(), runner.binary());
     }
 
-    let test_list = TestList::new(test_bins, &test_filter, &target_runner)?;
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &target_runner);
 
     let config =
         NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
@@ -251,6 +248,7 @@ fn test_run_with_target_runner() -> Result<()> {
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
+            .test_artifacts
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {

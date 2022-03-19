@@ -16,7 +16,6 @@
 use crate::{dispatch::CargoNextestApp, OutputWriter};
 use camino::Utf8Path;
 use clap::StructOpt;
-use fs_extra::dir::CopyOptions;
 use nextest_metadata::BuildPlatform;
 
 mod fixtures;
@@ -231,17 +230,11 @@ fn test_relocated_run() {
     save_cargo_metadata(&p);
 
     let mut p2 = TempProject::new().unwrap();
-    // copy target directory over
-    fs_extra::copy_items(
-        &[custom_target_path],
-        p2.workspace_root(),
-        &CopyOptions::new(),
-    )
-    .unwrap();
+    let new_target_path = p2.workspace_root().join("test-subdir");
 
-    let new_target_path = p2
-        .workspace_root()
-        .join(custom_target_path.file_name().unwrap());
+    // copy target directory over
+    std::fs::create_dir_all(&new_target_path).unwrap();
+    temp_project::copy_dir_all(custom_target_path, &new_target_path, true).unwrap();
     p2.set_target_dir(new_target_path);
 
     // Run relocated tests

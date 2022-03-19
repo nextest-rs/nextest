@@ -3,7 +3,7 @@
 
 use crate::{
     errors::{FromMessagesError, WriteTestListError},
-    list::{OutputFormat, Styles},
+    list::{BinaryListState, OutputFormat, RustMetadata, Styles},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::Message;
@@ -31,8 +31,8 @@ pub struct RustTestBinary {
 /// The list of Rust test binaries built by Cargo.
 #[derive(Clone, Debug)]
 pub struct BinaryList {
-    /// The target directory artifacts were built in.
-    pub rust_target_directory: Utf8PathBuf,
+    /// Rust-related metadata.
+    pub rust_metadata: RustMetadata<BinaryListState>,
 
     /// The list of test binaries.
     pub rust_binaries: Vec<RustTestBinary>,
@@ -69,8 +69,8 @@ impl BinaryList {
             })
             .collect();
         Self {
+            rust_metadata: RustMetadata::from_summary(summary.rust_metadata),
             rust_binaries,
-            rust_target_directory: summary.rust_target_directory,
         }
     }
 
@@ -108,8 +108,8 @@ impl BinaryList {
             .collect();
 
         BinaryListSummary {
+            rust_metadata: self.rust_metadata.to_summary(),
             rust_binaries,
-            rust_target_directory: self.rust_target_directory.clone(),
         }
     }
 
@@ -239,7 +239,7 @@ impl<'g> BinaryListBuildState<'g> {
     fn finish(mut self) -> BinaryList {
         self.rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
         BinaryList {
-            rust_target_directory: self.rust_target_dir,
+            rust_metadata: RustMetadata::new(self.rust_target_dir),
             rust_binaries: self.rust_binaries,
         }
     }
@@ -271,7 +271,7 @@ mod tests {
         };
 
         let binary_list = BinaryList {
-            rust_target_directory: "/fake".into(),
+            rust_metadata: RustMetadata::new("/fake"),
             rust_binaries: vec![fake_bin_test, fake_macro_test],
         };
 
@@ -290,7 +290,9 @@ mod tests {
         "#};
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
         {
-          "rust-target-directory": "/fake",
+          "rust-metadata": {
+            "target-directory": "/fake"
+          },
           "rust-binaries": {
             "fake-macro::proc-macro/fake-macro": {
               "binary-id": "fake-macro::proc-macro/fake-macro",
