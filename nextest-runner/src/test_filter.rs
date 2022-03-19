@@ -18,6 +18,8 @@ use aho_corasick::AhoCorasick;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use std::{fmt, str::FromStr};
 
+mod expression;
+
 /// Whether to run ignored tests.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum RunIgnored {
@@ -197,6 +199,16 @@ impl<'filter> TestFilter<'filter> {
         _test_name: &str,
     ) -> Option<FilterMatch> {
         // TODO filter using self.expr
+
+        // DSL ?
+        // - package(name)
+        // - deps(package_name)
+        // - rdeps(package_name)
+        // - test(partial_name)
+        // - not(expr)
+        // - && / and
+        // - || / or
+        // - ()
         None
     }
 
