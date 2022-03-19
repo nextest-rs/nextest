@@ -8,7 +8,7 @@ use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
-    list::{BinaryList, RustTestArtifact},
+    list::{BinaryList, PathMapper, RustTestArtifact},
     reporter::TestEvent,
     runner::{ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
 };
@@ -181,7 +181,7 @@ fn init_fixture_targets() -> BTreeMap<String, RustTestArtifact<'static>> {
         BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
             .unwrap();
     let test_artifacts =
-        RustTestArtifact::from_binary_list(graph, binary_list, None, None).unwrap();
+        RustTestArtifact::from_binary_list(graph, binary_list, &PathMapper::noop(), None).unwrap();
 
     test_artifacts
         .into_iter()

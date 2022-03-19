@@ -318,7 +318,7 @@ impl TestBuildFilter {
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,
             binary_list,
-            path_mapper.as_ref(),
+            &path_mapper,
             self.platform_filter.into(),
         )?;
         let test_filter =

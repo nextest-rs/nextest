@@ -70,7 +70,7 @@ impl ReuseBuildOpts {
         &self,
         graph: &PackageGraph,
         orig_target_dir: &Utf8Path,
-    ) -> Option<PathMapper> {
+    ) -> PathMapper {
         PathMapper::new(
             graph,
             self.workspace_remap.clone(),

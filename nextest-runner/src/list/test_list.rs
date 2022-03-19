@@ -54,7 +54,7 @@ impl<'g> RustTestArtifact<'g> {
     pub fn from_binary_list(
         graph: &'g PackageGraph,
         binary_list: BinaryList,
-        path_mapper: Option<&PathMapper>,
+        path_mapper: &PathMapper,
         platform_filter: Option<BuildPlatform>,
     ) -> Result<Vec<Self>, FromMessagesError> {
         let mut binaries = vec![];
@@ -82,10 +82,8 @@ impl<'g> RustTestArtifact<'g> {
                 })
                 .to_path_buf();
 
-            let (binary_path, cwd) = match path_mapper {
-                Some(mapper) => (mapper.map_binary(binary.path), mapper.map_cwd(cwd)),
-                None => (binary.path, cwd),
-            };
+            let binary_path = path_mapper.map_binary(binary.path);
+            let cwd = path_mapper.map_cwd(cwd);
 
             binaries.push(RustTestArtifact {
                 binary_id: binary.id,
@@ -151,15 +149,19 @@ impl PathMapper {
         workspace: Option<Utf8PathBuf>,
         orig_target_dir: &Utf8Path,
         target_dir: Option<Utf8PathBuf>,
-    ) -> Option<Self> {
-        if workspace.is_none() && target_dir.is_none() {
-            return None;
-        }
-
-        Some(Self {
+    ) -> Self {
+        Self {
             workspace: workspace.map(|w| (graph.workspace().root().to_owned(), w)),
             target_dir: target_dir.map(|d| (orig_target_dir.to_owned(), d)),
-        })
+        }
+    }
+
+    /// Constructs a no-op path mapper.
+    pub fn noop() -> Self {
+        Self {
+            workspace: None,
+            target_dir: None,
+        }
     }
 
     fn map_cwd(&self, path: Utf8PathBuf) -> Utf8PathBuf {
