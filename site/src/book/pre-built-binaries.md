@@ -59,14 +59,17 @@ Pre-built binaries can be used in continuous integration to speed up test runs.
 
 ### Using nextest in GitHub Actions
 
-The easiest way to use nextest in GitHub Actions is to use the [Install Development Tools](https://github.com/marketplace/actions/install-development-tools) action maintained by [Taiki Endo](https://github.com/taiki-e).
+The easiest way to install nextest in GitHub Actions is to use the [Install Development Tools](https://github.com/marketplace/actions/install-development-tools) action maintained by [Taiki Endo](https://github.com/taiki-e).
 
 To install the latest version of nextest, add this to your job after installing Rust and Cargo:
 
 ```yml
 - uses: taiki-e/install-action@nextest
 ```
+
 [See this in practice with nextest's own CI.](https://github.com/nextest-rs/nextest/blob/5b59a5c5d1a051ce651e5d632c93a849f97a9d4b/.github/workflows/ci.yml#L101-L102)
+
+The action will download pre-built binaries from the URL above and add them to `.cargo/bin`.
 
 To install a version series or specific version, use this instead:
 
@@ -74,7 +77,7 @@ To install a version series or specific version, use this instead:
 - uses: taiki-e/install-action@v1
 - with:
     tool: nextest
-    ## version (defaults to latest) can be a series like 0.9:
+    ## version (defaults to "latest") can be a series like 0.9:
     # version: 0.9
     ## version can also be a specific version like 0.9.11:
     # version: 0.9.11
