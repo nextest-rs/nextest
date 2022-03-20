@@ -27,7 +27,7 @@ pub(crate) struct OutputOpts {
         hide_possible_values = true,
         global = true,
         value_name = "WHEN",
-        env = "NEXTEST_COLOR"
+        env = "CARGO_TERM_COLOR"
     )]
     pub(crate) color: Color,
 }
