@@ -186,8 +186,7 @@ impl FixtureTargets {
     fn new() -> Self {
         let graph = &*PACKAGE_GRAPH;
         let binary_list =
-            BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
-                .unwrap();
+            BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph).unwrap();
         let rust_metadata = binary_list.rust_metadata.clone();
 
         let path_mapper = PathMapper::noop();

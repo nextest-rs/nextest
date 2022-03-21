@@ -362,11 +362,7 @@ impl TestBuildFilter {
             )));
         }
 
-        let test_binaries = BinaryList::from_messages(
-            Cursor::new(output.stdout),
-            graph,
-            self.cargo_options.target_dir.as_deref(),
-        )?;
+        let test_binaries = BinaryList::from_messages(Cursor::new(output.stdout), graph)?;
         Ok(test_binaries)
     }
 }
@@ -493,7 +489,11 @@ impl App {
 
         let graph_data = match reuse_build.cargo_metadata.as_deref() {
             Some(path) => std::fs::read_to_string(path)?,
-            None => acquire_graph_data(manifest_path.as_deref(), output)?,
+            None => acquire_graph_data(
+                manifest_path.as_deref(),
+                build_filter.cargo_options.target_dir.as_deref(),
+                output,
+            )?,
         };
         let graph = guppy::CargoMetadata::parse_json(&graph_data)?.build_graph()?;
 
@@ -645,17 +645,24 @@ impl App {
     }
 }
 
-fn acquire_graph_data(manifest_path: Option<&Utf8Path>, output: OutputContext) -> Result<String> {
+fn acquire_graph_data(
+    manifest_path: Option<&Utf8Path>,
+    target_dir: Option<&Utf8Path>,
+    output: OutputContext,
+) -> Result<String> {
     let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
     // Construct a package graph with --no-deps since we don't need full dependency
     // information.
     cargo_cli.add_args(["--format-version=1", "--all-features", "--no-deps"]);
 
+    let mut expression = cargo_cli.to_expression().stdout_capture().unchecked();
+    // cargo metadata doesn't support "--target-dir" but setting the environment
+    // variable works.
+    if let Some(target_dir) = target_dir {
+        expression = expression.env("CARGO_TARGET_DIR", target_dir);
+    }
     // Capture stdout but not stderr.
-    let output = cargo_cli
-        .to_expression()
-        .stdout_capture()
-        .unchecked()
+    let output = expression
         .run()
         .wrap_err("cargo metadata execution failed")?;
     if !output.status.success() {
