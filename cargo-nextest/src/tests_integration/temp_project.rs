@@ -54,9 +54,8 @@ impl TempProject {
         let temp_dir = tempfile::Builder::new()
             .prefix("nextest-fixture")
             .tempdir()?;
-        let utf8_path: Utf8PathBuf = temp_dir
+        let utf8_path: &Utf8Path = temp_dir
             .path()
-            .to_path_buf()
             .try_into()
             .expect("tempdir should be valid UTF-8");
 
@@ -66,9 +65,12 @@ impl TempProject {
             .join("fixtures/nextest-tests");
 
         copy_dir_all(&src_dir, &utf8_path, true)?;
-        let workspace_root = utf8_path;
+        let workspace_root = fixup_macos_path(utf8_path);
 
-        let target_dir = custom_target_dir.unwrap_or_else(|| workspace_root.join("target"));
+        let target_dir = match custom_target_dir {
+            Some(dir) => fixup_macos_path(&dir),
+            None => workspace_root.join("target"),
+        };
 
         Ok(Self {
             temp_dir,
@@ -100,4 +102,21 @@ impl TempProject {
     pub fn manifest_path(&self) -> Utf8PathBuf {
         self.workspace_root.join("Cargo.toml")
     }
+}
+
+#[cfg(target_os = "macos")]
+fn fixup_macos_path(path: &Utf8Path) -> Utf8PathBuf {
+    // Prepend "/private" to the workspace path since macOS creates temp dirs there.
+    if path.starts_with("/var/folders") {
+        let mut s = String::from("/private");
+        s.push_str(path.as_str());
+        Utf8PathBuf::from(s)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn fixup_macos_path(path: &Utf8Path) -> Utf8PathBuf {
+    path.to_path_buf()
 }
