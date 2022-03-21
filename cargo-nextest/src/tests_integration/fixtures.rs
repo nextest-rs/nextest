@@ -219,16 +219,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
 
     println!("{}", output);
 
-    // Weirdly on macos test_cwd doesn't pass:
-    //   left: `"/private/var/folders/24/8k48jl6d249_n_qfxwsl6xvm0000gn/T/nextest-fixture.Dy8Zva13W5UR"`
-    //  right: `"/var/folders/24/8k48jl6d249_n_qfxwsl6xvm0000gn/T/nextest-fixture.Dy8Zva13W5UR"`
-
-    #[cfg(not(target_os = "macos"))]
     let cwd_pass = !relocated;
-    #[cfg(target_os = "macos")]
-    let cwd_pass = false;
-    #[cfg(target_os = "macos")]
-    let _ = relocated;
 
     let expected = &[
         (true, "nextest-tests::basic test_cargo_env_vars"),
@@ -262,14 +253,10 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
         assert!(reg.is_match(&output), "{}: result didn't match", name);
     }
 
-    #[cfg(not(target_os = "macos"))]
     let summary_reg = if relocated {
         Regex::new(r"Summary \[.*\] *16 tests run: 10 passed, 6 failed, 2 skipped").unwrap()
     } else {
         Regex::new(r"Summary \[.*\] *16 tests run: 11 passed, 5 failed, 2 skipped").unwrap()
     };
-    #[cfg(target_os = "macos")]
-    let summary_reg =
-        Regex::new(r"Summary \[.*\] *16 tests run: 10 passed, 6 failed, 2 skipped").unwrap();
     assert!(summary_reg.is_match(&output), "summary didn't match");
 }
