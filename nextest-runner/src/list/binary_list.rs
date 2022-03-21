@@ -5,7 +5,7 @@ use crate::{
     errors::{FromMessagesError, WriteTestListError},
     list::{BinaryListState, OutputFormat, RustMetadata, Styles},
 };
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use cargo_metadata::Message;
 use guppy::{graph::PackageGraph, PackageId};
 use nextest_metadata::{BinaryListSummary, BuildPlatform, RustTestBinarySummary};
@@ -43,9 +43,8 @@ impl BinaryList {
     pub fn from_messages(
         reader: impl io::BufRead,
         graph: &PackageGraph,
-        target_dir: Option<&Utf8Path>,
     ) -> Result<Self, FromMessagesError> {
-        let mut state = BinaryListBuildState::new(graph, target_dir);
+        let mut state = BinaryListBuildState::new(graph);
 
         for message in Message::parse_stream(reader) {
             let message = message.map_err(FromMessagesError::ReadMessages)?;
@@ -152,10 +151,8 @@ struct BinaryListBuildState<'g> {
 }
 
 impl<'g> BinaryListBuildState<'g> {
-    fn new(graph: &'g PackageGraph, rust_target_dir: Option<&Utf8Path>) -> Self {
-        let rust_target_dir = rust_target_dir
-            .unwrap_or_else(|| graph.workspace().target_directory())
-            .to_path_buf();
+    fn new(graph: &'g PackageGraph) -> Self {
+        let rust_target_dir = graph.workspace().target_directory().to_path_buf();
 
         Self {
             graph,

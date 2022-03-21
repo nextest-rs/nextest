@@ -16,7 +16,7 @@
 use crate::{dispatch::CargoNextestApp, OutputWriter};
 use camino::Utf8Path;
 use clap::StructOpt;
-use nextest_metadata::BuildPlatform;
+use nextest_metadata::{BuildPlatform, TestListSummary};
 
 mod fixtures;
 mod temp_project;
@@ -90,6 +90,70 @@ fn test_list_binaries_only() {
     args.exec(&mut output).unwrap();
 
     check_list_binaries_output(output.stdout().unwrap());
+}
+
+#[test]
+fn test_target_dir() {
+    let p = TempProject::new().unwrap();
+
+    std::env::set_current_dir(p.workspace_root())
+        .expect("changed current directory to workspace root");
+
+    let run_check = |target_dir: &str, extra_args: Vec<&str>| {
+        let mut args = vec![
+            "cargo",
+            "nextest",
+            "list",
+            "--workspace",
+            "--message-format",
+            "json",
+        ];
+        args.extend(extra_args);
+        let args = CargoNextestApp::parse_from(args);
+
+        let mut output = OutputWriter::new_test();
+        args.exec(&mut output).unwrap();
+
+        let summary: TestListSummary = serde_json::from_slice(output.stdout().unwrap()).unwrap();
+        assert_eq!(
+            summary.rust_metadata.target_directory,
+            p.workspace_root().join(target_dir),
+            "target directory matches"
+        );
+    };
+
+    // Absolute target direcctory
+    {
+        let abs_target_dir = p.workspace_root().join("test-target-dir-abs");
+        run_check(
+            "test-target-dir-abs",
+            vec!["--target-dir", abs_target_dir.as_str()],
+        );
+    }
+
+    // Relative target directory
+    run_check("test-target-dir", vec!["--target-dir", "test-target-dir"]);
+
+    // CARGO_TARGET_DIR env var
+    {
+        std::env::set_var("CARGO_TARGET_DIR", "test-target-dir-2");
+        run_check("test-target-dir-2", vec![]);
+    }
+
+    // CARGO_TARGET_DIR env var + --target-dir
+    run_check(
+        "test-target-dir-3",
+        vec!["--target-dir", "test-target-dir-3"],
+    );
+
+    cfg_if::cfg_if! {
+        if #[cfg(unix)] {
+            // Symlink (should not be dereferenced, same as cargo)
+            std::fs::create_dir("symlink-target").unwrap();
+            std::os::unix::fs::symlink("symlink-target", "symlink-link").unwrap();
+            run_check("symlink-link", vec!["--target-dir", "symlink-link"]);
+        }
+    }
 }
 
 #[test]
