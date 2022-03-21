@@ -6,8 +6,11 @@ contributions will be accepted.
 1. Fork the repo and create your branch from `main`.
 2. If you've added code that should be tested, add tests.
 3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes with `cargo test --all-features`.
-5. Run `cargo xfmt` to automatically format your changes (CI will let you know if you missed this).
+4. Ensure the test suite passes with `cargo nextest run --all-features`.
+   
+    > NOTE: Nextest's own tests do not work with `cargo test`. You must [install nextest](https://nexte.st/book/pre-built-binaries) to run its own test suite.
+
+6. Run `cargo xfmt` to automatically format your changes (CI will let you know if you missed this).
 
 ## Logically Separate Commits
 
