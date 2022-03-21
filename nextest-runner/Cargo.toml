@@ -15,7 +15,7 @@ camino = { version = "1.0.7", features = ["serde1"] }
 config = { version = "0.12.0", default-features = false, features = ["toml"] }
 cargo_metadata = "0.14.2"
 chrono = "0.4.19"
-crossbeam-channel = "0.5.3"
+crossbeam-channel = "0.5.4"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 debug-ignore = "1.0.2"
 duct = "0.13.5"
