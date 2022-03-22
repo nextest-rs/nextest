@@ -213,6 +213,9 @@ pub struct RustMetadataSummary {
 
     /// Base output directories, relative to the target directory.
     pub base_output_directories: BTreeSet<Utf8PathBuf>,
+
+    /// Linked paths, relative to the target directory.
+    pub linked_paths: BTreeSet<Utf8PathBuf>,
 }
 
 /// A serializable suite of tests within a Rust test binary.

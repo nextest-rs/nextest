@@ -16,6 +16,10 @@ pub struct RustMetadata<State> {
     /// and their "deps" subdirectories are added to the dynamic library path.
     pub base_output_directories: BTreeSet<Utf8PathBuf>,
 
+    /// A list of linked paths, relative to the target directory. These directories are
+    /// added to the dynamic library path.
+    pub linked_paths: BTreeSet<Utf8PathBuf>,
+
     state: PhantomData<State>,
 }
 
@@ -25,6 +29,7 @@ impl RustMetadata<BinaryListState> {
         Self {
             target_directory: target_directory.into(),
             base_output_directories: BTreeSet::new(),
+            linked_paths: BTreeSet::new(),
             state: PhantomData,
         }
     }
@@ -36,9 +41,9 @@ impl RustMetadata<BinaryListState> {
                 .new_target_dir()
                 .unwrap_or(&self.target_directory)
                 .to_path_buf(),
-            // Since base_output_directories are relative paths, they don't need to be
-            // mapped.
+            // Since these are relative paths, they don't need to be mapped.
             base_output_directories: self.base_output_directories.clone(),
+            linked_paths: self.linked_paths.clone(),
             state: PhantomData,
         }
     }
@@ -51,6 +56,7 @@ impl RustMetadata<TestListState> {
         Self {
             target_directory: Utf8PathBuf::new(),
             base_output_directories: BTreeSet::new(),
+            linked_paths: BTreeSet::new(),
             state: PhantomData,
         }
     }
@@ -64,14 +70,16 @@ impl RustMetadata<TestListState> {
     pub fn dylib_paths(&self) -> Vec<Utf8PathBuf> {
         // TODO: rustc sysroot library path? is this even possible to get?
 
-        self.base_output_directories
+        // Cargo puts linked paths before base output directories.
+        self.linked_paths
             .iter()
-            .flat_map(|base_output| {
+            .map(|rel_path| self.target_directory.join(rel_path))
+            .chain(self.base_output_directories.iter().flat_map(|base_output| {
                 let abs_base = self.target_directory.join(base_output);
                 let with_deps = abs_base.join("deps");
                 // This is the order paths are added in by Cargo.
                 [with_deps, abs_base]
-            })
+            }))
             .collect()
     }
 }
@@ -82,6 +90,7 @@ impl<State> RustMetadata<State> {
         Self {
             target_directory: summary.target_directory,
             base_output_directories: summary.base_output_directories,
+            linked_paths: summary.linked_paths,
             state: PhantomData,
         }
     }
@@ -91,6 +100,7 @@ impl<State> RustMetadata<State> {
         RustMetadataSummary {
             target_directory: self.target_directory.clone(),
             base_output_directories: self.base_output_directories.clone(),
+            linked_paths: self.linked_paths.clone(),
         }
     }
 }

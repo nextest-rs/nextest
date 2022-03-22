@@ -104,8 +104,13 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
             "nextest-tests::example/other" => vec![
                 TestFixture { name: "tests::other_example_success", status: FixtureStatus::Pass },
             ],
+            // Proc-macro tests
             "nextest-derive::proc-macro/nextest-derive" => vec![
                 TestFixture { name: "it_works", status: FixtureStatus::Pass },
+            ],
+            // Dynamic library tests
+            "cdylib-link" => vec![
+                TestFixture { name: "test_multiply_two", status: FixtureStatus::Pass },
             ],
         }
     },

@@ -23,7 +23,12 @@ test = true
 
 # Make this crate its own workspace.
 [workspace]
-members = ["derive", "dylib-test"]
+members = [
+    "cdylib/cdylib-example",
+    "cdylib/cdylib-link",
+    "derive",
+    "dylib-test",
+]
 
 [dependencies]
 dylib-test = { path = "dylib-test" }
