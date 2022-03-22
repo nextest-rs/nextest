@@ -7,9 +7,16 @@ cargo-nextest can be configured to produce machine-readable JSON output, readabl
 To produce a list of tests in the JSON output format `cargo nextest list --message-format json` (or `json-pretty` for nicely formatted output). Here's some example output for the [tokio repository](https://github.com/tokio-rs/tokio):
 
 ```json
-% cargo nextest list -p tokio-util --features full --lib --format json-pretty
+% cargo nextest list -p tokio-util --features full --lib --message-format json-pretty
 {
   "test-count": 4,
+  "rust-build-meta": {
+    "target-directory": "/home/rain/dev/tokio/target",
+    "base-output-directories": [
+      "debug"
+    ],
+    "linked-paths": []
+  },
   "rust-suites": {
     "tokio-util": {
       "package-name": "tokio-util",

@@ -4,7 +4,11 @@
 
 ### Added
 
-- `TestListSummary` and `BinaryListSummary` have a new member called `rust_build_meta`
+- `TestListSummary` and `BinaryListSummary` have a new member called `rust_build_meta` key. This key currently contains the target directory, the base output directories, and paths to [search for dynamic libraries in](https://nexte.st/book/env-vars#dynamic-library-paths) relative to the target directory.
+
+### Changed
+
+- MSRV bumped to Rust 1.56.
 
 ## [0.2.1] - 2022-03-09
 
@@ -29,5 +33,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.3.0
+[0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.2.1
 [0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.2.0
 [0.1.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.1.0

@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## [0.5.0] - 2022-03-22
+
+### Added
+
+- `BinaryList` and `TestList` have a new member called `rust_build_meta`, which returns Rust build-related metadata for a binary list or test list. This currently contains the target directory, the base output directories, and paths to [search for dynamic libraries in](https://nexte.st/book/env-vars#dynamic-library-paths) relative to the target directory.
 
 ### Changed
 
@@ -58,6 +62,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.5.0
 [0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.4.0
 [0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.3.0
 [0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.2.1

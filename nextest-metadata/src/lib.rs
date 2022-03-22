@@ -33,7 +33,7 @@
 //!
 //! # Minimum supported cargo-nextest version
 //!
-//! The "minimum supported cargo-nextest version" is **cargo-nextest 0.9.10**.
+//! The "minimum supported cargo-nextest version" is **cargo-nextest 0.9.12**.
 //!
 //! For more about nextest-metadata's stability policy, see the [Stability
 //! page](https://nexte.st/book/stability#nextest-metadata) on the nextest site.
