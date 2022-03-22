@@ -67,7 +67,6 @@ fn test_list_full() {
     ]);
 
     let mut output = OutputWriter::new_test();
-    //panic!("created temp project: {}", p.manifest_path());
     args.exec(&mut output)
         .map_err(|err| {
             let expected_error: ExpectedError = match err.downcast() {

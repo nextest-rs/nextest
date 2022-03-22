@@ -7,7 +7,7 @@ use crate::{
     list::{BinaryListState, OutputFormat, RustMetadata, Styles},
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use cargo_metadata::{Artifact, Message};
+use cargo_metadata::{Artifact, BuildScript, Message};
 use guppy::{graph::PackageGraph, PackageId};
 use nextest_metadata::{BinaryListSummary, BuildPlatform, RustTestBinarySummary};
 use owo_colors::OwoColorize;
@@ -151,6 +151,8 @@ struct BinaryListBuildState<'g> {
     rust_binaries: Vec<RustTestBinary>,
     // Base output dirs, e.g. target-dir/debug or target-dir/x86_64-unknown-linux-gnu/debug
     rust_base_output_dirs: BTreeSet<Utf8PathBuf>,
+    // Linked paths returned by build scripts.
+    rust_linked_paths: BTreeSet<Utf8PathBuf>,
 }
 
 impl<'g> BinaryListBuildState<'g> {
@@ -162,6 +164,7 @@ impl<'g> BinaryListBuildState<'g> {
             rust_target_dir,
             rust_binaries: vec![],
             rust_base_output_dirs: BTreeSet::new(),
+            rust_linked_paths: BTreeSet::new(),
         }
     }
 
@@ -169,6 +172,9 @@ impl<'g> BinaryListBuildState<'g> {
         match message {
             Message::CompilerArtifact(artifact) => {
                 self.process_artifact(artifact)?;
+            }
+            Message::BuildScriptExecuted(build_script) => {
+                self.process_build_script(build_script)?;
             }
             _ => {
                 // Ignore all other messages.
@@ -272,10 +278,34 @@ impl<'g> BinaryListBuildState<'g> {
         Some(())
     }
 
+    fn process_build_script(&mut self, build_script: BuildScript) -> Result<(), FromMessagesError> {
+        for path in build_script.linked_paths {
+            self.detect_linked_path(&path);
+        }
+        Ok(())
+    }
+
+    /// The `Option` in the return value is to let ? work.
+    fn detect_linked_path(&mut self, path: &Utf8Path) -> Option<()> {
+        // Remove anything up to the first "=" (e.g. "native=").
+        let actual_path = match path.as_str().split_once('=') {
+            Some((_, p)) => p.into(),
+            None => path,
+        };
+        let rel_path = actual_path.strip_prefix(&self.rust_target_dir).ok()?;
+        if !self.rust_linked_paths.contains(rel_path) {
+            self.rust_linked_paths
+                .insert(convert_rel_path_to_forward_slash(rel_path));
+        }
+
+        Some(())
+    }
+
     fn finish(mut self) -> BinaryList {
         self.rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
         let mut rust_metadata = RustMetadata::new(self.rust_target_dir);
         rust_metadata.base_output_directories = self.rust_base_output_dirs;
+        rust_metadata.linked_paths = self.rust_linked_paths;
         BinaryList {
             rust_metadata,
             rust_binaries: self.rust_binaries,
@@ -330,7 +360,8 @@ mod tests {
         {
           "rust-metadata": {
             "target-directory": "/fake",
-            "base-output-directories": []
+            "base-output-directories": [],
+            "linked-paths": []
           },
           "rust-binaries": {
             "fake-macro::proc-macro/fake-macro": {

@@ -32,6 +32,11 @@ impl TestInfo {
 pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
     vec![
         TestInfo::new(
+            "cdylib-link",
+            BuildPlatform::Target,
+            vec![("test_multiply_two", false)],
+        ),
+        TestInfo::new(
             "dylib-test::dylib/dylib-test",
             BuildPlatform::Target,
             vec![],
@@ -160,10 +165,15 @@ pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
     let host_binaries_count = 1;
     let test_suite = &*EXPECTED_LIST;
     match platform {
-        Some(BuildPlatform::Host) => assert_eq!(host_binaries_count, result.rust_suites.len()),
+        Some(BuildPlatform::Host) => assert_eq!(
+            host_binaries_count,
+            result.rust_suites.len(),
+            "host suite counts match"
+        ),
         Some(BuildPlatform::Target) => assert_eq!(
             test_suite.len() - host_binaries_count,
-            result.rust_suites.len()
+            result.rust_suites.len(),
+            "target suite counts match",
         ),
         None => assert_eq!(
             test_suite.len(),
@@ -184,7 +194,12 @@ pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
             _ => panic!("Missing binary: {}", test.id),
         };
 
-        assert_eq!(test.test_cases.len(), entry.testcases.len());
+        assert_eq!(
+            test.test_cases.len(),
+            entry.testcases.len(),
+            "testcase lengths match for {}",
+            test.id
+        );
         for case in &test.test_cases {
             let e = entry.testcases.get(case.0);
             let e = match e {
@@ -238,6 +253,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     let cwd_pass = !relocated;
 
     let expected = &[
+        (true, "cdylib-link test_multiply_two"),
         (true, "nextest-tests::basic test_cargo_env_vars"),
         (false, "nextest-tests::basic test_failure_error"),
         (false, "nextest-tests::basic test_flaky_mod_2"),
@@ -270,9 +286,9 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *17 tests run: 11 passed, 6 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *18 tests run: 12 passed, 6 failed, 2 skipped").unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *17 tests run: 12 passed, 5 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *18 tests run: 13 passed, 5 failed, 2 skipped").unwrap()
     };
     assert!(summary_reg.is_match(&output), "summary didn't match");
 }

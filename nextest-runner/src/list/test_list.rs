@@ -826,7 +826,8 @@ mod tests {
             {
               "rust-metadata": {
                 "target-directory": "/fake",
-                "base-output-directories": []
+                "base-output-directories": [],
+                "linked-paths": []
               },
               "test-count": 4,
               "rust-suites": {
