@@ -61,8 +61,7 @@ While cross-compiling code, some tests may need to be run on the host platform. 
 
 1. Save the project's cargo metadata:
     ```
-    cargo metadata --format-version=1 --all-features --no-deps \
-      > target/cargo-metadata.json
+    cargo metadata --format-version=1 --all-features > target/cargo-metadata.json
     ```
 2. Build the tests and save the binaries metadata:
     ```
@@ -73,26 +72,25 @@ While cross-compiling code, some tests may need to be run on the host platform. 
    ```
    cargo nextest run --target <TARGET> --platform-filter host
    ```
-4. Archive artifacts: `target/cargo-metadata.json`, `target/binaries-metadata.json`, and test binaries.
-    * With [`jq`](https://stedolan.github.io/jq/), this can be done through `cat target/binaries-metadata.json | jq '."rust-binaries" | .[] . "binary-path"`).
+4. Archive the `target/` directory.
 
 ### On the target machine
 
-1. Check out the project repository to the same revision as the build machine.
-2. Extract the artifacts archived on the build machine.
+1. Check out the project repository to a path `<REPO-PATH>`, to the same revision as the build machine.
+2. Extract the archive of the `target/` directory created on the build machine to, for example, `<REPO-PATH>/target/`. (This doesn't have to be located here. It can be any directory on the filesystem).
 3. List target-only tests:
     ```
     cargo nextest list --platform-filter target \
-        --binaries-metadata <PATH>/binaries-metadata.json \
-        --cargo-metadata <PATH>/cargo-metadata.json \
+        --binaries-metadata <REPO-PATH>/target/binaries-metadata.json \
+        --cargo-metadata <REPO-PATH>/target/cargo-metadata.json \
         --workspace-remap <REPO-PATH> \
-        --binaries-dir-remap <TESTS-FOLDER-PATH>
+        --target-dir-remap <REPO-PATH>/target
     ```
 4. Run target-only tests:
     ```
     cargo nextest run --platform-filter target \
-        --binaries-metadata <PATH>/binaries-metadata.json \
-        --cargo-metadata <PATH>/cargo-metadata.json \
+        --binaries-metadata <REPO-PATH>/target/binaries-metadata.json \
+        --cargo-metadata <REPO-PATH>/target/cargo-metadata.json \
         --workspace-remap <REPO-PATH> \
-        --binaries-dir-remap <TESTS-FOLDER-PATH>
+        --target-dir-remap <REPO-PATH>/target
     ```
