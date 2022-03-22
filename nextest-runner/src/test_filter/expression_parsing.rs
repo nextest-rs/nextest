@@ -17,6 +17,41 @@ use nom_tracable::tracable_parser;
 pub type Span<'a> = nom_locate::LocatedSpan<&'a str, nom_tracable::TracableInfo>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
 
+/// Define a set of tests
+#[cfg_attr(test, derive(PartialEq, Eq))]
+#[derive(Debug)]
+pub enum SetDef {
+    /// All tests in a package
+    Package(NameMatcher),
+    /// All tests in a package dependencies
+    Deps(NameMatcher),
+    /// All tests in a package reverse dependencies
+    Rdeps(NameMatcher),
+    /// All tests matching a name
+    Test(NameMatcher),
+    /// All tests
+    All,
+    /// No tests
+    None,
+    // Possible addition: Binary(NameMatcher)
+}
+
+/// Filtering expression
+///
+/// Used to filter tests to run.
+#[cfg_attr(test, derive(PartialEq, Eq))]
+#[derive(Debug)]
+pub enum Expr {
+    /// Accepts every tests not in the given expression
+    Not(Box<Expr>),
+    /// Accepts every tests in either given expression
+    Union(Box<Expr>, Box<Expr>),
+    /// Accepts every tests in both given expression
+    Intersection(Box<Expr>, Box<Expr>),
+    /// Accepts every tests in a set
+    Set(SetDef),
+}
+
 impl Expr {
     fn boxed(self) -> Box<Self> {
         Box::new(self)

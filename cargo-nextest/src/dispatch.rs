@@ -21,7 +21,7 @@ use nextest_runner::{
     runner::TestRunnerBuilder,
     signal::SignalHandler,
     target_runner::TargetRunner,
-    test_filter::{RunIgnored, TestFilterBuilder},
+    test_filter::{FilteringExpr, RunIgnored, TestFilterBuilder},
 };
 use owo_colors::{OwoColorize, Style};
 use std::{
@@ -312,12 +312,13 @@ impl TestBuildFilter {
             &path_mapper,
             self.platform_filter.into(),
         )?;
-        let test_filter = TestFilterBuilder::new(
-            self.run_ignored,
-            self.partition.clone(),
-            &self.filter,
-            self.expr_filter.as_deref(),
-        )?;
+        let expr = self
+            .expr_filter
+            .as_deref()
+            .map(|input| FilteringExpr::parse(input, graph))
+            .transpose()?;
+        let test_filter =
+            TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter, expr);
         TestList::new(
             test_artifacts,
             &rust_build_meta,
@@ -644,9 +645,7 @@ fn acquire_graph_data(
     output: OutputContext,
 ) -> Result<String> {
     let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
-    // Construct a package graph with --no-deps since we don't need full dependency
-    // information.
-    cargo_cli.add_args(["--format-version=1", "--all-features", "--no-deps"]);
+    cargo_cli.add_args(["--format-version=1", "--all-features"]);
 
     let mut expression = cargo_cli.to_expression().stdout_capture().unchecked();
     // cargo metadata doesn't support "--target-dir" but setting the environment
