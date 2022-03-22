@@ -287,6 +287,9 @@ pub enum MismatchReason {
     /// This test does not match the provided string filters.
     String,
 
+    /// This test does not match the provided expression filters.
+    Expression,
+
     /// This test is in a different partition.
     Partition,
 }
@@ -296,6 +299,9 @@ impl fmt::Display for MismatchReason {
         match self {
             MismatchReason::Ignored => write!(f, "does not match the run-ignored option"),
             MismatchReason::String => write!(f, "does not match the provided string filters"),
+            MismatchReason::Expression => {
+                write!(f, "does not match the provided expression filters")
+            }
             MismatchReason::Partition => write!(f, "is in a different partition"),
         }
     }

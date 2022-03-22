@@ -14,7 +14,7 @@ use nom::{
 
 use nom_tracable::tracable_parser;
 
-type Span<'a> = nom_locate::LocatedSpan<&'a str, nom_tracable::TracableInfo>;
+pub type Span<'a> = nom_locate::LocatedSpan<&'a str, nom_tracable::TracableInfo>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
 
 impl Expr {
@@ -182,7 +182,6 @@ fn parse_expr(input: Span) -> IResult<Expr> {
     Ok((input, expr))
 }
 
-#[allow(unused)]
 pub fn parse_expression(input: Span) -> Result<Expr, nom::Err<nom::error::Error<Span>>> {
     let (_, expr) = terminated(parse_expr, ws(eof))(input)?;
     Ok(expr)
