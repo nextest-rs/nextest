@@ -548,3 +548,21 @@ impl error::Error for TargetRunnerError {
         }
     }
 }
+
+/// An error occurred while parsing a filtering expression
+#[derive(Debug)]
+pub enum ParseFilterExprError {
+    // TODO
+    /// The parsing failed
+    Failed(String),
+}
+
+impl fmt::Display for ParseFilterExprError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Failed(input) => write!(f, "invalid filter expression: {}", input),
+        }
+    }
+}
+
+impl error::Error for ParseFilterExprError {}

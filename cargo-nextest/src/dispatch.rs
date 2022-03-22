@@ -317,7 +317,7 @@ impl TestBuildFilter {
             self.partition.clone(),
             &self.filter,
             self.expr_filter.as_deref(),
-        );
+        )?;
         TestList::new(
             test_artifacts,
             &rust_build_meta,

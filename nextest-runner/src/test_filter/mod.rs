@@ -10,13 +10,15 @@
 // result
 
 use crate::{
-    errors::RunIgnoredParseError,
+    errors::{ParseFilterExprError, RunIgnoredParseError},
     list::RustTestArtifact,
     partition::{Partitioner, PartitionerBuilder},
 };
 use aho_corasick::AhoCorasick;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use std::{fmt, str::FromStr};
+
+use self::expression::Expr;
 
 mod expression;
 mod expression_parsing;
@@ -79,7 +81,7 @@ pub struct TestFilterBuilder {
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
     name_match: NameMatch,
-    _expr: Option<String>,
+    expr: Option<Expr>,
 }
 
 #[derive(Clone, Debug)]
@@ -97,19 +99,22 @@ impl TestFilterBuilder {
         partitioner_builder: Option<PartitionerBuilder>,
         patterns: &[impl AsRef<[u8]>],
         expr: Option<&str>,
-    ) -> Self {
+    ) -> Result<Self, ParseFilterExprError> {
         let name_match = if patterns.is_empty() {
             NameMatch::MatchAll
         } else {
             NameMatch::MatchSet(Box::new(AhoCorasick::new_auto_configured(patterns)))
         };
+
+        let expr = expr.map(Expr::parse).transpose()?;
+
         // TODO parse and validate expr
-        Self {
+        Ok(Self {
             run_ignored,
             partitioner_builder,
             name_match,
-            _expr: expr.map(ToOwned::to_owned),
-        }
+            expr,
+        })
     }
 
     /// Creates a new `TestFilterBuilder` that matches any pattern by name.
@@ -118,7 +123,7 @@ impl TestFilterBuilder {
             run_ignored,
             partitioner_builder: None,
             name_match: NameMatch::MatchAll,
-            _expr: None,
+            expr: None,
         }
     }
 
@@ -196,21 +201,18 @@ impl<'filter> TestFilter<'filter> {
 
     fn filter_expression_mismatch(
         &self,
-        _test_binary: &RustTestArtifact<'_>,
-        _test_name: &str,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &str,
     ) -> Option<FilterMatch> {
-        // TODO filter using self.expr
-
-        // DSL ?
-        // - package(name)
-        // - deps(package_name)
-        // - rdeps(package_name)
-        // - test(partial_name)
-        // - not(expr)
-        // - && / and
-        // - || / or
-        // - ()
-        None
+        self.builder
+            .expr
+            .as_ref()
+            .and_then(|expr| match expr.includes(test_binary, test_name) {
+                false => Some(FilterMatch::Mismatch {
+                    reason: MismatchReason::Expression,
+                }),
+                true => None,
+            })
     }
 
     fn filter_partition_mismatch(&mut self, test_name: &str) -> Option<FilterMatch> {
@@ -237,7 +239,7 @@ mod tests {
         #[test]
         fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
             let patterns: &[String] = &[];
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, None);
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, None).unwrap();
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
@@ -247,7 +249,7 @@ mod tests {
         // Test that exact names match.
         #[test]
         fn proptest_exact(test_names in vec(any::<String>(), 0..16)) {
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, None);
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, None).unwrap();
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
@@ -266,7 +268,7 @@ mod tests {
                 patterns.push(substring);
             }
 
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, None);
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, None).unwrap();
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
@@ -282,7 +284,7 @@ mod tests {
         ) {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern], None);
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern], None).unwrap();
             let single_filter = test_filter.build();
             prop_assert!(single_filter.filter_name_mismatch(&substring).is_some());
         }
