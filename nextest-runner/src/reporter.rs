@@ -218,7 +218,7 @@ impl TestReporterBuilder {
         let styles = Box::new(Styles::default());
         let binary_id_width = test_list
             .iter()
-            .map(|(_, info)| info.binary_id.len())
+            .filter_map(|(_, info)| (info.testcases.len() > 0).then(|| info.binary_id.len()))
             .max()
             .unwrap_or_default();
         let aggregator = EventAggregator::new(profile);
