@@ -12,34 +12,19 @@ use nextest_runner::list::PathMapper;
 #[clap(next_help_heading = "REUSE BUILD OPTIONS (EXPERIMENTAL)")]
 pub(crate) struct ReuseBuildOpts {
     /// Path to binaries-metadata JSON
-    #[clap(long, value_name = "PATH", env = "NEXTEST_BINARIES_METADATA")]
+    #[clap(long, value_name = "PATH")]
     pub(crate) binaries_metadata: Option<Utf8PathBuf>,
 
     /// Remapping for the target directory
-    #[clap(
-        long,
-        requires("binaries-metadata"),
-        value_name = "PATH",
-        env = "NEXTEST_TARGET_DIR_REMAP"
-    )]
+    #[clap(long, requires("binaries-metadata"), value_name = "PATH")]
     pub(crate) target_dir_remap: Option<Utf8PathBuf>,
 
     /// Path to cargo metadata JSON
-    #[clap(
-        long,
-        conflicts_with("manifest-path"),
-        value_name = "PATH",
-        env = "NEXTEST_CARGO_METADATA"
-    )]
+    #[clap(long, conflicts_with("manifest-path"), value_name = "PATH")]
     pub(crate) cargo_metadata: Option<Utf8PathBuf>,
 
     /// Remapping for the workspace root
-    #[clap(
-        long,
-        requires("cargo-metadata"),
-        value_name = "PATH",
-        env = "NEXTEST_WORKSPACE_REMAP"
-    )]
+    #[clap(long, requires("cargo-metadata"), value_name = "PATH")]
     pub(crate) workspace_remap: Option<Utf8PathBuf>,
 }
 

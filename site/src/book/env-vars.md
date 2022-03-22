@@ -4,11 +4,20 @@ This section contains information about the environment variables nextest reads 
 
 ## Environment variables nextest reads
 
-Nextest reads the following environment variables to emulate the behavior of Cargo:
-* `CARGO` — Path to the `cargo` binary to use for builds.
-* `CARGO_TARGET_<triple>_RUNNER` — Support for [target runners](target-runners.md).
+Nextest reads some of its command-line options as environment variables. In all cases, passing in a command-line option overrides the respective environment variable.
 
-Currently, cargo-nextest does not read its own configuration as environment variables. [This will be supported in the future](https://github.com/nextest-rs/nextest/issues/14).
+* `NEXTEST_PROFILE` — [Nextest profile](configuration.md#profiles) to use while running tests.
+* `NEXTEST_TEST_THREADS` — Number of tests to run simultaneously.
+* `NEXTEST_FAILURE_OUTPUT` and `NEXTEST_SUCCESS_OUTPUT` — When standard output and standard error are displayed for failing and passing tests, respectively. See [Reporter options](other-options.md#reporter-options) for possible values.
+* `NEXTEST_STATUS_LEVEL` — Which test statuses (**PASS**, **FAIL** etc) to display. See [Reporter options](other-options.md#reporter-options) for possible values.
+* `NEXTEST_VERBOSE` — Verbose output.
+
+Nextest also reads the following environment variables to emulate Cargo's behavior.
+
+* `CARGO` — Path to the `cargo` binary to use for builds.
+* `CARGO_TARGET_DIR` — Location of where to place all generated artifacts, relative to the current working directory.
+* `CARGO_TARGET_<triple>_RUNNER` — Support for [target runners](target-runners.md).
+* `CARGO_TERM_COLOR` — The default color mode: `always`, `auto` or `never`.
 
 ### Cargo-related environment variables nextest reads
 
@@ -43,3 +52,20 @@ cargo-nextest also sets these environment variables at runtime, matching the beh
 * `CARGO_PKG_REPOSITORY` — The repository from the manifest of your package.
 * `CARGO_PKG_LICENSE` — The license from the manifest of your package.
 * `CARGO_PKG_LICENSE_FILE` — The license file from the manifest of your package.
+
+### Dynamic library paths
+
+Nextest sets the dynamic library path at runtime, similar to [what Cargo does](https://doc.rust-lang.org/cargo/reference/environment-variables.html#dynamic-library-paths). This helps with locating shared libraries that are part of the build process. The variable name depends on the platform:
+
+* Windows: `PATH`
+* macOS: `DYLD_FALLBACK_LIBRARY_PATH`
+* Unix: `LD_LIBRARY_PATH`
+
+Nextest includes the following paths:
+
+* Search paths included from any build script with the [`rustc-link-search` instruction]. Paths outside of the target directory are removed. It is the responsibility of the user running nextest to properly set the environment if additional libraries on the system are needed in the search path.
+* The base output directory, such as `target/debug`, and the "deps" directory. This enables support for `dylib` dependencies and rustc compiler plugins.
+
+Nextest currently relies on being invoked as a Cargo subcommand to set the rustc sysroot library path.
+
+[`rustc-link-search` instruction]: https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-link-search

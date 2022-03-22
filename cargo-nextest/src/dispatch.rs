@@ -60,12 +60,7 @@ enum NextestSubcommand {
 #[clap(version)]
 struct AppOpts {
     /// Path to Cargo.toml
-    #[clap(
-        long,
-        global = true,
-        value_name = "PATH",
-        env = "NEXTEST_MANIFEST_PATH"
-    )]
+    #[clap(long, global = true, value_name = "PATH")]
     manifest_path: Option<Utf8PathBuf>,
 
     #[clap(flatten)]
@@ -127,7 +122,7 @@ impl AppOpts {
 #[derive(Debug, Args)]
 struct ConfigOpts {
     /// Config file [default: workspace-root/.config/nextest.toml]
-    #[clap(long, global = true, value_name = "PATH", env = "NEXTEST_CONFIG_FILE")]
+    #[clap(long, global = true, value_name = "PATH")]
     pub config_file: Option<Utf8PathBuf>,
 }
 
@@ -158,8 +153,7 @@ enum Command {
             arg_enum,
             default_value_t,
             help_heading = "OUTPUT OPTIONS",
-            value_name = "FMT",
-            env = "NEXTEST_MESSAGE_FORMAT"
+            value_name = "FMT"
         )]
         message_format: MessageFormatOpts,
 
@@ -169,8 +163,7 @@ enum Command {
             arg_enum,
             default_value_t,
             help_heading = "OUTPUT OPTIONS",
-            value_name = "TYPE",
-            env = "NEXTEST_LIST_TYPE"
+            value_name = "TYPE"
         )]
         list_type: ListType,
 
@@ -193,8 +186,7 @@ enum Command {
             long,
             alias = "nocapture",
             help_heading = "RUNNER OPTIONS",
-            display_order = 100,
-            env = "NEXTEST_NO_CAPTURE"
+            display_order = 100
         )]
         no_capture: bool,
 
@@ -282,22 +274,15 @@ struct TestBuildFilter {
         possible_values = RunIgnored::variants(),
         default_value_t,
         value_name = "WHICH",
-        env = "NEXTEST_RUN_IGNORED",
     )]
     run_ignored: RunIgnored,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
-    #[clap(long, env = "NEXTEST_PARTITION")]
+    #[clap(long)]
     partition: Option<PartitionerBuilder>,
 
     /// Filter test binaries by build platform
-    #[clap(
-        long,
-        arg_enum,
-        value_name = "PLATFORM",
-        default_value_t,
-        env = "NEXTEST_PLATFORM_FILTER"
-    )]
+    #[clap(long, arg_enum, value_name = "PLATFORM", default_value_t)]
     pub(crate) platform_filter: PlatformFilterOpts,
 
     // TODO: add regex-based filtering in the future?
@@ -383,15 +368,15 @@ pub struct TestRunnerOpts {
     test_threads: Option<usize>,
 
     /// Number of retries for failing tests [default: from profile]
-    #[clap(long, env = "NEXTEST_RETRIES")]
+    #[clap(long)]
     retries: Option<usize>,
 
     /// Cancel test run on the first failure
-    #[clap(long, env = "NEXTEST_FAIL_FAST")]
+    #[clap(long)]
     fail_fast: bool,
 
     /// Run all tests regardless of failure
-    #[clap(long, overrides_with = "fail-fast", env = "NEXTEST_NO_FAIL_FAST")]
+    #[clap(long, overrides_with = "fail-fast")]
     no_fail_fast: bool,
 }
 
