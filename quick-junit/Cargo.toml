@@ -18,4 +18,4 @@ quick-xml = "0.22.0"
 
 [dev-dependencies]
 goldenfile = "1.1.0"
-owo-colors = "3.2.0"
+owo-colors = "3.3.0"
