@@ -19,6 +19,7 @@ use nextest_metadata::{FilterMatch, MismatchReason};
 use std::{fmt, str::FromStr};
 
 mod expression;
+mod expression_parsing;
 
 /// Whether to run ignored tests.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
