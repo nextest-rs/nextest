@@ -4,7 +4,7 @@
 use crate::{
     errors::{FromMessagesError, WriteTestListError},
     helpers::convert_rel_path_to_forward_slash,
-    list::{BinaryListState, OutputFormat, RustMetadata, Styles},
+    list::{BinaryListState, OutputFormat, RustBuildMeta, Styles},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::{Artifact, BuildScript, Message};
@@ -33,7 +33,7 @@ pub struct RustTestBinary {
 #[derive(Clone, Debug)]
 pub struct BinaryList {
     /// Rust-related metadata.
-    pub rust_metadata: RustMetadata<BinaryListState>,
+    pub rust_build_meta: RustBuildMeta<BinaryListState>,
 
     /// The list of test binaries.
     pub rust_binaries: Vec<RustTestBinary>,
@@ -69,7 +69,7 @@ impl BinaryList {
             })
             .collect();
         Self {
-            rust_metadata: RustMetadata::from_summary(summary.rust_metadata),
+            rust_build_meta: RustBuildMeta::from_summary(summary.rust_build_meta),
             rust_binaries,
         }
     }
@@ -108,7 +108,7 @@ impl BinaryList {
             .collect();
 
         BinaryListSummary {
-            rust_metadata: self.rust_metadata.to_summary(),
+            rust_build_meta: self.rust_build_meta.to_summary(),
             rust_binaries,
         }
     }
@@ -303,11 +303,11 @@ impl<'g> BinaryListBuildState<'g> {
 
     fn finish(mut self) -> BinaryList {
         self.rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
-        let mut rust_metadata = RustMetadata::new(self.rust_target_dir);
-        rust_metadata.base_output_directories = self.rust_base_output_dirs;
-        rust_metadata.linked_paths = self.rust_linked_paths;
+        let mut rust_build_meta = RustBuildMeta::new(self.rust_target_dir);
+        rust_build_meta.base_output_directories = self.rust_base_output_dirs;
+        rust_build_meta.linked_paths = self.rust_linked_paths;
         BinaryList {
-            rust_metadata,
+            rust_build_meta,
             rust_binaries: self.rust_binaries,
         }
     }
@@ -339,7 +339,7 @@ mod tests {
         };
 
         let binary_list = BinaryList {
-            rust_metadata: RustMetadata::new("/fake"),
+            rust_build_meta: RustBuildMeta::new("/fake"),
             rust_binaries: vec![fake_bin_test, fake_macro_test],
         };
 
@@ -358,7 +358,7 @@ mod tests {
         "#};
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
         {
-          "rust-metadata": {
+          "rust-build-meta": {
             "target-directory": "/fake",
             "base-output-directories": [],
             "linked-paths": []

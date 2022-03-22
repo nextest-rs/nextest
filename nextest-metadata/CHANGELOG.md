@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0] - 2022-03-22
+
+### Added
+
+- `TestListSummary` and `BinaryListSummary` have a new member called `rust_build_meta`
+
 ## [0.2.1] - 2022-03-09
 
 Add documentation about nextest-metadata's "minimum supported cargo-nextest version".

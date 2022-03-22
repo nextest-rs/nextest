@@ -131,7 +131,7 @@ fn test_target_dir() {
 
         let summary: TestListSummary = serde_json::from_slice(output.stdout().unwrap()).unwrap();
         assert_eq!(
-            summary.rust_metadata.target_directory,
+            summary.rust_build_meta.target_directory,
             p.workspace_root().join(target_dir),
             "target directory matches"
         );

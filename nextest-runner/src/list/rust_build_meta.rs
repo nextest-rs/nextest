@@ -3,12 +3,12 @@
 
 use crate::list::{BinaryListState, PathMapper, TestListState};
 use camino::Utf8PathBuf;
-use nextest_metadata::RustMetadataSummary;
+use nextest_metadata::RustBuildMetaSummary;
 use std::{collections::BTreeSet, marker::PhantomData};
 
 /// Rust-related metadata used for builds and test runs.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RustMetadata<State> {
+pub struct RustBuildMeta<State> {
     /// The target directory for build artifacts.
     pub target_directory: Utf8PathBuf,
 
@@ -23,8 +23,8 @@ pub struct RustMetadata<State> {
     state: PhantomData<State>,
 }
 
-impl RustMetadata<BinaryListState> {
-    /// Creates a new [`RustMetadata`].
+impl RustBuildMeta<BinaryListState> {
+    /// Creates a new [`RustBuildMeta`].
     pub fn new(target_directory: impl Into<Utf8PathBuf>) -> Self {
         Self {
             target_directory: target_directory.into(),
@@ -35,8 +35,8 @@ impl RustMetadata<BinaryListState> {
     }
 
     /// Maps paths using a [`PathMapper`] to convert this to [`TestListState`].
-    pub fn map_paths(&self, path_mapper: &PathMapper) -> RustMetadata<TestListState> {
-        RustMetadata {
+    pub fn map_paths(&self, path_mapper: &PathMapper) -> RustBuildMeta<TestListState> {
+        RustBuildMeta {
             target_directory: path_mapper
                 .new_target_dir()
                 .unwrap_or(&self.target_directory)
@@ -49,7 +49,7 @@ impl RustMetadata<BinaryListState> {
     }
 }
 
-impl RustMetadata<TestListState> {
+impl RustBuildMeta<TestListState> {
     /// Empty metadata for tests.
     #[cfg(test)]
     pub(crate) fn empty() -> Self {
@@ -84,9 +84,9 @@ impl RustMetadata<TestListState> {
     }
 }
 
-impl<State> RustMetadata<State> {
-    /// Creates a `RustMetadata` from a serializable summary.
-    pub fn from_summary(summary: RustMetadataSummary) -> Self {
+impl<State> RustBuildMeta<State> {
+    /// Creates a `RustBuildMeta` from a serializable summary.
+    pub fn from_summary(summary: RustBuildMetaSummary) -> Self {
         Self {
             target_directory: summary.target_directory,
             base_output_directories: summary.base_output_directories,
@@ -96,8 +96,8 @@ impl<State> RustMetadata<State> {
     }
 
     /// Converts self to a serializable form.
-    pub fn to_summary(&self) -> RustMetadataSummary {
-        RustMetadataSummary {
+    pub fn to_summary(&self) -> RustBuildMetaSummary {
+        RustBuildMetaSummary {
             target_directory: self.target_directory.clone(),
             base_output_directories: self.base_output_directories.clone(),
             linked_paths: self.linked_paths.clone(),

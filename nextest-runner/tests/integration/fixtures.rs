@@ -8,7 +8,7 @@ use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
-    list::{BinaryList, BinaryListState, PathMapper, RustMetadata, RustTestArtifact, TestList},
+    list::{BinaryList, BinaryListState, PathMapper, RustBuildMeta, RustTestArtifact, TestList},
     reporter::TestEvent,
     runner::{ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
     target_runner::TargetRunner,
@@ -190,7 +190,7 @@ pub(crate) static FIXTURE_TARGETS: Lazy<FixtureTargets> = Lazy::new(FixtureTarge
 
 #[derive(Debug)]
 pub(crate) struct FixtureTargets {
-    pub(crate) rust_metadata: RustMetadata<BinaryListState>,
+    pub(crate) rust_build_meta: RustBuildMeta<BinaryListState>,
     pub(crate) test_artifacts: BTreeMap<String, RustTestArtifact<'static>>,
 }
 
@@ -199,7 +199,7 @@ impl FixtureTargets {
         let graph = &*PACKAGE_GRAPH;
         let binary_list =
             BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph).unwrap();
-        let rust_metadata = binary_list.rust_metadata.clone();
+        let rust_build_meta = binary_list.rust_build_meta.clone();
 
         let path_mapper = PathMapper::noop();
 
@@ -211,7 +211,7 @@ impl FixtureTargets {
             .map(|bin| (bin.binary_id.clone(), bin))
             .collect();
         Self {
-            rust_metadata,
+            rust_build_meta,
             test_artifacts,
         }
     }
@@ -225,7 +225,7 @@ impl FixtureTargets {
         let path_mapper = PathMapper::noop();
         TestList::new(
             test_bins,
-            &self.rust_metadata,
+            &self.rust_build_meta,
             &path_mapper,
             test_filter,
             target_runner,
