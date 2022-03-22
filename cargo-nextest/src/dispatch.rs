@@ -315,8 +315,8 @@ impl TestBuildFilter {
         reuse_build: &ReuseBuildOpts,
     ) -> Result<TestList<'g>> {
         let path_mapper =
-            reuse_build.make_path_mapper(graph, &binary_list.rust_metadata.target_directory);
-        let rust_metadata = binary_list.rust_metadata.clone();
+            reuse_build.make_path_mapper(graph, &binary_list.rust_build_meta.target_directory);
+        let rust_build_meta = binary_list.rust_build_meta.clone();
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,
             binary_list,
@@ -327,7 +327,7 @@ impl TestBuildFilter {
             TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter);
         TestList::new(
             test_artifacts,
-            &rust_metadata,
+            &rust_build_meta,
             &path_mapper,
             &test_filter,
             runner,

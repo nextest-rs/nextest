@@ -9,12 +9,12 @@
 
 mod binary_list;
 mod output_format;
-mod rust_metadata;
+mod rust_build_meta;
 mod test_list;
 
 pub use binary_list::*;
 pub use output_format::*;
-pub use rust_metadata::*;
+pub use rust_build_meta::*;
 pub use test_list::*;
 
 /// Typestate for [`BinaryList`].

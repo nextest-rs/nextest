@@ -123,7 +123,7 @@ impl ListCommand {
 #[non_exhaustive]
 pub struct TestListSummary {
     /// Rust metadata used for builds and test runs.
-    pub rust_metadata: RustMetadataSummary,
+    pub rust_build_meta: RustBuildMetaSummary,
 
     /// Number of tests (including skipped and ignored) across all binaries.
     pub test_count: usize,
@@ -135,9 +135,9 @@ pub struct TestListSummary {
 
 impl TestListSummary {
     /// Creates a new `TestListSummary` with the given Rust metadata.
-    pub fn new(rust_metadata: RustMetadataSummary) -> Self {
+    pub fn new(rust_build_meta: RustBuildMetaSummary) -> Self {
         Self {
-            rust_metadata,
+            rust_build_meta,
             test_count: 0,
             rust_suites: BTreeMap::new(),
         }
@@ -198,7 +198,7 @@ pub struct RustTestBinarySummary {
 #[serde(rename_all = "kebab-case")]
 pub struct BinaryListSummary {
     /// Rust metadata used for builds and test runs.
-    pub rust_metadata: RustMetadataSummary,
+    pub rust_build_meta: RustBuildMetaSummary,
 
     /// The list of Rust test binaries (indexed by binary-id).
     pub rust_binaries: BTreeMap<String, RustTestBinarySummary>,
@@ -207,7 +207,7 @@ pub struct BinaryListSummary {
 /// Rust metadata used for builds and test runs.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct RustMetadataSummary {
+pub struct RustBuildMetaSummary {
     /// The target directory for Rust artifacts.
     pub target_directory: Utf8PathBuf,
 
