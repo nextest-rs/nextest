@@ -3,6 +3,31 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.12] - 2022-03-22
+
+### Added
+
+- Support for reading some configuration as [environment variables](https://nexte.st/book/env-vars#environment-variables-nextest-reads). (Thanks [ymgyt] and [iskyzh] for their pull requests!)
+- [Machine-readable output] for `cargo nextest list` now contains a `rust-build-meta` key. This key currently contains the target directory, the base output directories, and paths to [search for dynamic libraries in](https://nexte.st/book/env-vars#dynamic-library-paths) relative to the target directory.
+
+### Fixed
+
+- Test binaries that link to dynamic libraries built by Cargo now work correctly ([#82]).
+- Crates with no tests are now skipped while computing padding widths in the reporter ([#125]).
+
+### Changed
+
+- MSRV updated to Rust 1.56.
+- For experimental feature [reusing builds](https://nexte.st/book/reusing-builds):
+  - Change `--binaries-dir-remap` to `--target-dir-remap` and expect that the entire target directory is archived.
+  - Support linking to dynamic libraries ([#82]).
+
+[#82]: https://github.com/nextest-rs/nextest/issues/82
+[#125]: https://github.com/nextest-rs/nextest/issues/125
+[ymgyt]: https://github.com/ymgyt
+[iskyzh]: https://github.com/iskyzh
+[Machine-readable output]: https://nexte.st/book/machine-readable
+
 ## [0.9.11] - 2022-03-09
 
 ### Fixed
@@ -129,6 +154,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.12]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.12
 [0.9.11]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.11
 [0.9.10]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.10
 [0.9.9]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.9

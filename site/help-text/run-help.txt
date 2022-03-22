@@ -9,15 +9,16 @@ ARGS:
 
 OPTIONS:
         --manifest-path <PATH>    Path to Cargo.toml
-    -P, --profile <PROFILE>       Nextest profile to use
-    -v, --verbose                 Verbose output
-        --color <WHEN>            Produce color output: auto, always, never [default: auto]
+    -P, --profile <PROFILE>       Nextest profile to use [env: NEXTEST_PROFILE=]
+    -v, --verbose                 Verbose output [env: NEXTEST_VERBOSE=]
+        --color <WHEN>            Produce color output: auto, always, never [env: CARGO_TERM_COLOR=]
+                                  [default: auto]
         --config-file <PATH>      Config file [default: workspace-root/.config/nextest.toml]
     -h, --help                    Print help information
 
 RUNNER OPTIONS:
     -j, --test-threads <THREADS>    Number of tests to run simultaneously [default: logical CPU
-                                    count] [aliases: jobs]
+                                    count] [env: NEXTEST_TEST_THREADS=] [aliases: jobs]
         --retries <RETRIES>         Number of retries for failing tests [default: from profile]
         --fail-fast                 Cancel test run on the first failure
         --no-fail-fast              Run all tests regardless of failure
@@ -62,15 +63,17 @@ FILTER OPTIONS:
                                         [possible values: target, host, any]
 
 REPORTER OPTIONS:
-        --failure-output <WHEN>    Output stdout and stderr on failure [possible values: immediate,
-                                   immediate-final, final, never]
-        --success-output <WHEN>    Output stdout and stderr on success [possible values: immediate,
-                                   immediate-final, final, never]
-        --status-level <LEVEL>     Test statuses to output [possible values: none, fail, retry,
-                                   slow, pass, skip, all]
+        --failure-output <WHEN>    Output stdout and stderr on failure [env:
+                                   NEXTEST_FAILURE_OUTPUT=] [possible values: immediate, immediate-
+                                   final, final, never]
+        --success-output <WHEN>    Output stdout and stderr on success [env:
+                                   NEXTEST_SUCCESS_OUTPUT=] [possible values: immediate, immediate-
+                                   final, final, never]
+        --status-level <LEVEL>     Test statuses to output [env: NEXTEST_STATUS_LEVEL=] [possible
+                                   values: none, fail, retry, slow, pass, skip, all]
 
 REUSE BUILD OPTIONS (EXPERIMENTAL):
-        --binaries-metadata <PATH>     Path to binaries-metadata JSON
-        --binaries-dir-remap <PATH>    Remapping for the test binaries directory
-        --cargo-metadata <PATH>        Path to cargo metadata JSON
-        --workspace-remap <PATH>       Remapping for the workspace root
+        --binaries-metadata <PATH>    Path to binaries-metadata JSON
+        --target-dir-remap <PATH>     Remapping for the target directory
+        --cargo-metadata <PATH>       Path to cargo metadata JSON
+        --workspace-remap <PATH>      Remapping for the workspace root

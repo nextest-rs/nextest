@@ -276,7 +276,7 @@ impl<'g> TestList<'g> {
         self.test_count
     }
 
-    /// Returns the Rust-related metadata for this test list.
+    /// Returns the Rust build-related metadata for this test list.
     pub fn rust_build_meta(&self) -> &RustBuildMeta<TestListState> {
         &self.rust_build_meta
     }

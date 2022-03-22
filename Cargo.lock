@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-nextest"
-version = "0.9.11"
+version = "0.9.12"
 dependencies = [
  "camino",
  "cfg-if",
@@ -640,7 +640,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 
 [[package]]
 name = "nextest-metadata"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "camino",
  "serde",
@@ -649,7 +649,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-runner"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "aho-corasick",
  "camino",
