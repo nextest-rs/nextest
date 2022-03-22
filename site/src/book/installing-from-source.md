@@ -10,7 +10,7 @@ Run the following command:
 cargo install cargo-nextest
 ```
 
-`cargo nextest` must be compiled and installed with **Rust 1.54** or later (see [Stability policy] for more), but it can build and run
+`cargo nextest` must be compiled and installed with **Rust 1.56** or later (see [Stability policy] for more), but it can build and run
 tests against any version of Rust.
 
 [Stability policy]: stability.md#minimum-supported-rust-version-msrv
