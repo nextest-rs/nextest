@@ -5,14 +5,14 @@ use super::expression::*;
 
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_until1},
+    bytes::complete::{tag, take_until1, take_while1},
     character::complete::char,
     combinator::{eof, map, map_res, recognize, success},
     multi::{fold_many0, many0},
     sequence::{delimited, pair, preceded, terminated},
 };
-
 use nom_tracable::tracable_parser;
+use unicode_xid::UnicodeXID;
 
 pub type Span<'a> = nom_locate::LocatedSpan<&'a str, nom_tracable::TracableInfo>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
@@ -97,17 +97,27 @@ fn parentheses<'a, T, P: FnMut(Span<'a>) -> IResult<'a, T>>(
 }
 
 #[tracable_parser]
+fn parse_identifier_part(input: Span) -> IResult<String> {
+    // This is use for NameMatcher::Contains(_) and NameMatcher::Equal(_)
+    // The output should be valid part of a test-name or a package name.
+    map(
+        recognize(take_while1(|c: char| c == ':' || c.is_xid_continue())),
+        |res: Span| res.fragment().to_string(),
+    )(input)
+}
+
+#[tracable_parser]
 fn parse_contains_matcher(input: Span) -> IResult<NameMatcher> {
-    ws(map(recognize(take_until1(")")), |res: Span| {
-        NameMatcher::Contains(res.fragment().to_string())
+    ws(map(parse_identifier_part, |res: String| {
+        NameMatcher::Contains(res)
     }))(input)
 }
 
 #[tracable_parser]
 fn parse_equal_matcher(input: Span) -> IResult<NameMatcher> {
     ws(map(
-        preceded(char('='), recognize(take_until1(")"))),
-        |res: Span| NameMatcher::Equal(res.fragment().to_string()),
+        preceded(char('='), parse_identifier_part),
+        |res: String| NameMatcher::Equal(res),
     ))(input)
 }
 

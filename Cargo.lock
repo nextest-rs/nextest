@@ -738,6 +738,7 @@ dependencies = [
  "tempfile",
  "toml",
  "twox-hash",
+ "unicode-xid 0.2.2",
 ]
 
 [[package]]
