@@ -49,6 +49,7 @@ target-spec = "1.0"
 # For parsing of .cargo/config.toml files
 toml = "0.5.8"
 twox-hash = { version = "1.6.2", default-features = false }
+unicode-xid = "0.2.2"
 
 nextest-metadata = { version = "0.3.0", path = "../nextest-metadata" }
 quick-junit = { version = "0.1.5", path = "../quick-junit" }
