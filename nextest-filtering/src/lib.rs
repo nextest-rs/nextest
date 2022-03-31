@@ -8,12 +8,10 @@ use guppy::{
     PackageId,
 };
 
-use crate::{
-    errors::ParseFilterExprError, list::RustTestArtifact,
-    test_filter::expression_parsing::parse_expression,
-};
+pub mod error;
+mod parsing;
 
-use super::expression_parsing::{Expr, SetDef};
+use parsing::{Expr, SetDef};
 
 /// Matcher for name
 ///
@@ -28,7 +26,6 @@ pub enum NameMatcher {
     Regex(regex::Regex),
 }
 
-#[cfg(test)]
 impl PartialEq for NameMatcher {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -40,12 +37,10 @@ impl PartialEq for NameMatcher {
     }
 }
 
-#[cfg(test)]
 impl Eq for NameMatcher {}
 
 /// Define a set of tests
-#[cfg_attr(test, derive(PartialEq, Eq))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilteringSet {
     /// All tests in packages
     Packages(HashSet<PackageId>),
@@ -61,16 +56,15 @@ pub enum FilteringSet {
 /// Filtering expression
 ///
 /// Used to filter tests to run.
-#[cfg_attr(test, derive(PartialEq, Eq))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilteringExpr {
-    /// Accepts every tests not in the given expression
+    /// Accepts every test not in the given expression
     Not(Box<FilteringExpr>),
-    /// Accepts every tests in either given expression
+    /// Accepts every test in either given expression
     Union(Box<FilteringExpr>, Box<FilteringExpr>),
-    /// Accepts every tests in both given expression
+    /// Accepts every test in both given expressions
     Intersection(Box<FilteringExpr>, Box<FilteringExpr>),
-    /// Accepts every tests in a set
+    /// Accepts every test in a set
     Set(FilteringSet),
 }
 
@@ -85,12 +79,12 @@ impl NameMatcher {
 }
 
 impl FilteringSet {
-    fn includes(&self, artifact: &RustTestArtifact<'_>, name: &str) -> bool {
+    fn includes(&self, package_id: &PackageId, name: &str) -> bool {
         match self {
             Self::All => true,
             Self::None => false,
             Self::Test(matcher) => matcher.is_match(name),
-            Self::Packages(packages) => packages.contains(artifact.package.id()),
+            Self::Packages(packages) => packages.contains(package_id),
         }
     }
 }
@@ -194,29 +188,29 @@ fn compile_expr(
 
 impl FilteringExpr {
     /// Parse a filtering expression
-    pub fn parse(input: &str, graph: &PackageGraph) -> Result<FilteringExpr, ParseFilterExprError> {
+    pub fn parse(input: &str, graph: &PackageGraph) -> Result<FilteringExpr, error::Error> {
         let info = nom_tracable::TracableInfo::new();
-        match parse_expression(super::expression_parsing::Span::new_extra(input, info)) {
+        match parsing::parse_expression(parsing::Span::new_extra(input, info)) {
             Ok(expr) => {
                 let in_workspace_packages: Vec<_> =
                     graph.packages().filter(|p| p.in_workspace()).collect();
                 let mut cache = graph.new_depends_cache();
                 Ok(compile_expr(&expr, &in_workspace_packages, &mut cache))
             }
-            Err(_) => Err(ParseFilterExprError::Failed(input.to_string())),
+            Err(_) => Err(error::Error::Failed(input.to_string())),
         }
     }
 
     /// Returns true if the given test is accepted by this filter
-    pub fn includes(&self, artifact: &RustTestArtifact<'_>, name: &str) -> bool {
+    pub fn includes(&self, package_id: &PackageId, name: &str) -> bool {
         match self {
-            Self::Set(set) => set.includes(artifact, name),
-            Self::Not(expr) => !expr.includes(artifact, name),
+            Self::Set(set) => set.includes(package_id, name),
+            Self::Not(expr) => !expr.includes(package_id, name),
             Self::Union(expr_1, expr_2) => {
-                expr_1.includes(artifact, name) || expr_2.includes(artifact, name)
+                expr_1.includes(package_id, name) || expr_2.includes(package_id, name)
             }
             Self::Intersection(expr_1, expr_2) => {
-                expr_1.includes(artifact, name) && expr_2.includes(artifact, name)
+                expr_1.includes(package_id, name) && expr_2.includes(package_id, name)
             }
         }
     }

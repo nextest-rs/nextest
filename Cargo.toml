@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["cargo-nextest", "nextest-metadata", "nextest-runner", "quick-junit"]
+members = [
+  "cargo-nextest",
+  "nextest-metadata",
+  "nextest-runner",
+  "nextest-filtering",
+  "quick-junit"
+]
 
 # make backtrace + color-eyre faster on debug builds
 [profile.dev.package.backtrace]

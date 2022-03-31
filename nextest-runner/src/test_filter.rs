@@ -15,13 +15,9 @@ use crate::{
     partition::{Partitioner, PartitionerBuilder},
 };
 use aho_corasick::AhoCorasick;
+use nextest_filtering::FilteringExpr;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use std::{fmt, str::FromStr};
-
-pub use expression::FilteringExpr;
-
-mod expression;
-mod expression_parsing;
 
 /// Whether to run ignored tests.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -201,15 +197,14 @@ impl<'filter> TestFilter<'filter> {
         test_binary: &RustTestArtifact<'_>,
         test_name: &str,
     ) -> Option<FilterMatch> {
-        self.builder
-            .expr
-            .as_ref()
-            .and_then(|expr| match expr.includes(test_binary, test_name) {
+        self.builder.expr.as_ref().and_then(|expr| {
+            match expr.includes(test_binary.package.id(), test_name) {
                 false => Some(FilterMatch::Mismatch {
                     reason: MismatchReason::Expression,
                 }),
                 true => None,
-            })
+            }
+        })
     }
 
     fn filter_partition_mismatch(&mut self, test_name: &str) -> Option<FilterMatch> {
