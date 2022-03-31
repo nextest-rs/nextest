@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashSet;
+use std::{cell::RefCell, collections::HashSet};
 
 use guppy::{
     graph::{DependsCache, PackageGraph, PackageMetadata},
@@ -11,7 +11,7 @@ use guppy::{
 pub mod error;
 mod parsing;
 
-use parsing::{Expr, SetDef};
+use parsing::{Expr, RawNameMatcher, SetDef};
 
 /// Matcher for name
 ///
@@ -148,22 +148,39 @@ fn rdependencies_packages(
     set
 }
 
+fn to_name_matcher(matcher: &RawNameMatcher) -> Option<NameMatcher> {
+    match matcher {
+        RawNameMatcher::Contains(t) => Some(NameMatcher::Contains(t.clone())),
+        RawNameMatcher::Equal(t) => Some(NameMatcher::Equal(t.clone())),
+        RawNameMatcher::Regex(r) => Some(NameMatcher::Regex(r.clone())),
+        RawNameMatcher::Error => None,
+    }
+}
+
 fn compile_set_def(
     set: &SetDef,
     packages: &[PackageMetadata],
     cache: &mut DependsCache,
-) -> FilteringSet {
+) -> Option<FilteringSet> {
     match set {
-        SetDef::Package(matcher) => FilteringSet::Packages(matching_packages(matcher, packages)),
-        SetDef::Deps(matcher) => {
-            FilteringSet::Packages(dependencies_packages(matcher, packages, cache))
-        }
-        SetDef::Rdeps(matcher) => {
-            FilteringSet::Packages(rdependencies_packages(matcher, packages, cache))
-        }
-        SetDef::Test(matcher) => FilteringSet::Test(matcher.clone()),
-        SetDef::All => FilteringSet::All,
-        SetDef::None => FilteringSet::None,
+        SetDef::Package(matcher) => Some(FilteringSet::Packages(matching_packages(
+            &to_name_matcher(matcher)?,
+            packages,
+        ))),
+        SetDef::Deps(matcher) => Some(FilteringSet::Packages(dependencies_packages(
+            &to_name_matcher(matcher)?,
+            packages,
+            cache,
+        ))),
+        SetDef::Rdeps(matcher) => Some(FilteringSet::Packages(rdependencies_packages(
+            &to_name_matcher(matcher)?,
+            packages,
+            cache,
+        ))),
+        SetDef::Test(matcher) => Some(FilteringSet::Test(to_name_matcher(matcher)?)),
+        SetDef::All => Some(FilteringSet::All),
+        SetDef::None => Some(FilteringSet::None),
+        SetDef::Error => None,
     }
 }
 
@@ -171,33 +188,72 @@ fn compile_expr(
     expr: &Expr,
     packages: &[PackageMetadata],
     cache: &mut DependsCache,
-) -> FilteringExpr {
+) -> Option<FilteringExpr> {
     match expr {
-        Expr::Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache)),
-        Expr::Not(expr) => FilteringExpr::Not(Box::new(compile_expr(expr, packages, cache))),
-        Expr::Union(expr_1, expr_2) => FilteringExpr::Union(
-            Box::new(compile_expr(expr_1, packages, cache)),
-            Box::new(compile_expr(expr_2, packages, cache)),
-        ),
-        Expr::Intersection(expr_1, expr_2) => FilteringExpr::Intersection(
-            Box::new(compile_expr(expr_1, packages, cache)),
-            Box::new(compile_expr(expr_2, packages, cache)),
-        ),
+        Expr::Set(set) => Some(FilteringExpr::Set(compile_set_def(set, packages, cache)?)),
+        Expr::Not(expr) => Some(FilteringExpr::Not(Box::new(compile_expr(
+            expr, packages, cache,
+        )?))),
+        Expr::Union(expr_1, expr_2) => Some(FilteringExpr::Union(
+            Box::new(compile_expr(expr_1, packages, cache)?),
+            Box::new(compile_expr(expr_2, packages, cache)?),
+        )),
+        Expr::Intersection(expr_1, expr_2) => Some(FilteringExpr::Intersection(
+            Box::new(compile_expr(expr_1, packages, cache)?),
+            Box::new(compile_expr(expr_2, packages, cache)?),
+        )),
+        Expr::Error => None,
     }
 }
 
 impl FilteringExpr {
     /// Parse a filtering expression
-    pub fn parse(input: &str, graph: &PackageGraph) -> Result<FilteringExpr, error::Error> {
-        let info = nom_tracable::TracableInfo::new();
-        match parsing::parse_expression(parsing::Span::new_extra(input, info)) {
+    pub fn parse(
+        input: &str,
+        graph: &PackageGraph,
+    ) -> Result<FilteringExpr, error::FilteringExprParsingError> {
+        let errors = RefCell::new(Vec::new());
+        match parsing::parse(parsing::Span::new_extra(input, error::State::new(&errors))) {
             Ok(expr) => {
+                let errors = errors.into_inner();
+
+                if !errors.is_empty() {
+                    for err in errors {
+                        let report = miette::Report::new(err).with_source_code(input.to_string());
+                        eprintln!("{:?}", report);
+                    }
+                    return Err(error::FilteringExprParsingError(input.to_string()));
+                }
+
                 let in_workspace_packages: Vec<_> =
                     graph.packages().filter(|p| p.in_workspace()).collect();
                 let mut cache = graph.new_depends_cache();
-                Ok(compile_expr(&expr, &in_workspace_packages, &mut cache))
+                match compile_expr(&expr, &in_workspace_packages, &mut cache) {
+                    Some(expr) => Ok(expr),
+                    None => {
+                        // should not happen
+                        // This would only happen if the parse expression contains an Error variant,
+                        // in which case an error should had been push to the errors vec and we should already
+                        // have bail.
+                        // IMPROVE this is an internal error => add log to suggest opening an bug ?
+
+                        let err = error::Error::Unknown;
+                        let report = miette::Report::new(err).with_source_code(input.to_string());
+                        eprintln!("{:?}", report);
+                        Err(error::FilteringExprParsingError(input.to_string()))
+                    }
+                }
             }
-            Err(_) => Err(error::Error::Failed(input.to_string())),
+            Err(_) => {
+                // should not happen
+                // According to our parsing strategy we should never produce an Err(_)
+                // IMPROVE this is an internal error => add log to suggest opening an bug ?
+
+                let err = error::Error::Unknown;
+                let report = miette::Report::new(err).with_source_code(input.to_string());
+                eprintln!("{:?}", report);
+                Err(error::FilteringExprParsingError(input.to_string()))
+            }
         }
     }
 
