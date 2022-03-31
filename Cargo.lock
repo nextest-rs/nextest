@@ -145,6 +145,7 @@ dependencies = [
  "env_logger",
  "guppy",
  "log",
+ "nextest-filtering",
  "nextest-metadata",
  "nextest-runner",
  "once_cell",
@@ -687,6 +688,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 
 [[package]]
+name = "nextest-filtering"
+version = "0.1.0"
+dependencies = [
+ "guppy",
+ "miette",
+ "nom 7.1.1",
+ "nom-tracable",
+ "nom_locate 4.0.0",
+ "regex",
+ "unicode-xid 0.2.2",
+]
+
+[[package]]
 name = "nextest-metadata"
 version = "0.3.0"
 dependencies = [
@@ -717,11 +731,8 @@ dependencies = [
  "itertools",
  "log",
  "maplit",
- "miette",
+ "nextest-filtering",
  "nextest-metadata",
- "nom 7.1.1",
- "nom-tracable",
- "nom_locate 4.0.0",
  "num_cpus",
  "once_cell",
  "owo-colors",
@@ -730,7 +741,6 @@ dependencies = [
  "proptest-derive",
  "quick-junit",
  "rayon",
- "regex",
  "serde",
  "serde_json",
  "strip-ansi-escapes",
@@ -738,7 +748,6 @@ dependencies = [
  "tempfile",
  "toml",
  "twox-hash",
- "unicode-xid 0.2.2",
 ]
 
 [[package]]

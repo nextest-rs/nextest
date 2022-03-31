@@ -11,6 +11,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgEnum, Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
+use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     config::{NextestConfig, NextestProfile},
@@ -21,7 +22,7 @@ use nextest_runner::{
     runner::TestRunnerBuilder,
     signal::SignalHandler,
     target_runner::TargetRunner,
-    test_filter::{FilteringExpr, RunIgnored, TestFilterBuilder},
+    test_filter::{RunIgnored, TestFilterBuilder},
 };
 use owo_colors::{OwoColorize, Style};
 use std::{
