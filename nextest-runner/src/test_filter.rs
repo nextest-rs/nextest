@@ -77,7 +77,7 @@ pub struct TestFilterBuilder {
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
     name_match: NameMatch,
-    expr: Option<FilteringExpr>,
+    exprs: Vec<FilteringExpr>,
 }
 
 #[derive(Clone, Debug)]
@@ -94,7 +94,7 @@ impl TestFilterBuilder {
         run_ignored: RunIgnored,
         partitioner_builder: Option<PartitionerBuilder>,
         patterns: &[impl AsRef<[u8]>],
-        expr: Option<FilteringExpr>,
+        exprs: Vec<FilteringExpr>,
     ) -> Self {
         let name_match = if patterns.is_empty() {
             NameMatch::MatchAll
@@ -106,7 +106,7 @@ impl TestFilterBuilder {
             run_ignored,
             partitioner_builder,
             name_match,
-            expr,
+            exprs,
         }
     }
 
@@ -116,7 +116,7 @@ impl TestFilterBuilder {
             run_ignored,
             partitioner_builder: None,
             name_match: NameMatch::MatchAll,
-            expr: None,
+            exprs: Vec::new(),
         }
     }
 
@@ -197,14 +197,19 @@ impl<'filter> TestFilter<'filter> {
         test_binary: &RustTestArtifact<'_>,
         test_name: &str,
     ) -> Option<FilterMatch> {
-        self.builder.expr.as_ref().and_then(|expr| {
-            match expr.includes(test_binary.package.id(), test_name) {
-                false => Some(FilterMatch::Mismatch {
-                    reason: MismatchReason::Expression,
-                }),
-                true => None,
-            }
-        })
+        let accepted = self.builder.exprs.is_empty()
+            || self
+                .builder
+                .exprs
+                .iter()
+                .any(|expr| expr.includes(test_binary.package.id(), test_name));
+
+        match accepted {
+            false => Some(FilterMatch::Mismatch {
+                reason: MismatchReason::Expression,
+            }),
+            true => None,
+        }
     }
 
     fn filter_partition_mismatch(&mut self, test_name: &str) -> Option<FilterMatch> {
@@ -231,7 +236,7 @@ mod tests {
         #[test]
         fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
             let patterns: &[String] = &[];
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, None);
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new());
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
@@ -241,7 +246,7 @@ mod tests {
         // Test that exact names match.
         #[test]
         fn proptest_exact(test_names in vec(any::<String>(), 0..16)) {
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, None);
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, Vec::new());
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
@@ -260,7 +265,7 @@ mod tests {
                 patterns.push(substring);
             }
 
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, None);
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, Vec::new());
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
@@ -276,7 +281,7 @@ mod tests {
         ) {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern], None);
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern], Vec::new());
             let single_filter = test_filter.build();
             prop_assert!(single_filter.filter_name_mismatch(&substring).is_some());
         }
