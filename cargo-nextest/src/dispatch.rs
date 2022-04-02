@@ -287,8 +287,13 @@ struct TestBuildFilter {
     pub(crate) platform_filter: PlatformFilterOpts,
 
     /// A DSL based filter expression
-    #[clap(long, short = 'E', value_name = "EXPRESSION")]
-    expr_filter: Option<String>,
+    #[clap(
+        long,
+        short = 'E',
+        value_name = "EXPRESSION",
+        multiple_occurrences(true)
+    )]
+    expr_filter: Vec<String>,
 
     // TODO: add regex-based filtering in the future?
     /// Test name filter
@@ -313,13 +318,17 @@ impl TestBuildFilter {
             &path_mapper,
             self.platform_filter.into(),
         )?;
-        let expr = self
+        let exprs = self
             .expr_filter
-            .as_deref()
+            .iter()
             .map(|input| FilteringExpr::parse(input, graph))
-            .transpose()?;
-        let test_filter =
-            TestFilterBuilder::new(self.run_ignored, self.partition.clone(), &self.filter, expr);
+            .collect::<Result<Vec<_>, _>>()?;
+        let test_filter = TestFilterBuilder::new(
+            self.run_ignored,
+            self.partition.clone(),
+            &self.filter,
+            exprs,
+        );
         TestList::new(
             test_artifacts,
             &rust_build_meta,
