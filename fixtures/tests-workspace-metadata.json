@@ -1,0 +1,510 @@
+{
+  "packages": [
+    {
+      "name": "crate_a",
+      "version": "0.1.0",
+      "id": "crate_a 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-a)",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [],
+      "targets": [
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "crate_a",
+          "src_path": "/home/fakeuser/tests-workspace/crate-a/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        }
+      ],
+      "features": {},
+      "manifest_path": "/home/fakeuser/tests-workspace/crate-a/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2021",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    },
+    {
+      "name": "crate_b",
+      "version": "0.1.0",
+      "id": "crate_b 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-b)",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [
+        {
+          "name": "crate_a",
+          "source": null,
+          "req": "*",
+          "kind": null,
+          "rename": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [],
+          "target": null,
+          "registry": null,
+          "path": "/home/fakeuser/tests-workspace/crate-a"
+        }
+      ],
+      "targets": [
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "crate_b",
+          "src_path": "/home/fakeuser/tests-workspace/crate-b/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        }
+      ],
+      "features": {},
+      "manifest_path": "/home/fakeuser/tests-workspace/crate-b/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2021",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    },
+    {
+      "name": "crate_c",
+      "version": "0.1.0",
+      "id": "crate_c 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-c)",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [],
+      "targets": [
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "crate_c",
+          "src_path": "/home/fakeuser/tests-workspace/crate-c/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        }
+      ],
+      "features": {},
+      "manifest_path": "/home/fakeuser/tests-workspace/crate-c/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2021",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    },
+    {
+      "name": "crate_d",
+      "version": "0.1.0",
+      "id": "crate_d 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-d)",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [
+        {
+          "name": "crate_b",
+          "source": null,
+          "req": "*",
+          "kind": null,
+          "rename": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [],
+          "target": null,
+          "registry": null,
+          "path": "/home/fakeuser/tests-workspace/crate-b"
+        },
+        {
+          "name": "crate_c",
+          "source": null,
+          "req": "*",
+          "kind": null,
+          "rename": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [],
+          "target": null,
+          "registry": null,
+          "path": "/home/fakeuser/tests-workspace/crate-c"
+        }
+      ],
+      "targets": [
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "crate_d",
+          "src_path": "/home/fakeuser/tests-workspace/crate-d/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        }
+      ],
+      "features": {},
+      "manifest_path": "/home/fakeuser/tests-workspace/crate-d/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2021",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    },
+    {
+      "name": "crate_e",
+      "version": "0.1.0",
+      "id": "crate_e 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-e)",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [
+        {
+          "name": "crate_d",
+          "source": null,
+          "req": "*",
+          "kind": null,
+          "rename": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [],
+          "target": null,
+          "registry": null,
+          "path": "/home/fakeuser/tests-workspace/crate-d"
+        }
+      ],
+      "targets": [
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "crate_e",
+          "src_path": "/home/fakeuser/tests-workspace/crate-e/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        }
+      ],
+      "features": {},
+      "manifest_path": "/home/fakeuser/tests-workspace/crate-e/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2021",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    },
+    {
+      "name": "crate_f",
+      "version": "0.1.0",
+      "id": "crate_f 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-f)",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [
+        {
+          "name": "crate_d",
+          "source": null,
+          "req": "*",
+          "kind": null,
+          "rename": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [],
+          "target": null,
+          "registry": null,
+          "path": "/home/fakeuser/tests-workspace/crate-d"
+        }
+      ],
+      "targets": [
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "crate_f",
+          "src_path": "/home/fakeuser/tests-workspace/crate-f/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        }
+      ],
+      "features": {},
+      "manifest_path": "/home/fakeuser/tests-workspace/crate-f/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2021",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    },
+    {
+      "name": "crate_g",
+      "version": "0.1.0",
+      "id": "crate_g 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-g)",
+      "license": null,
+      "license_file": null,
+      "description": null,
+      "source": null,
+      "dependencies": [
+        {
+          "name": "crate_f",
+          "source": null,
+          "req": "*",
+          "kind": null,
+          "rename": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [],
+          "target": null,
+          "registry": null,
+          "path": "/home/fakeuser/tests-workspace/crate-f"
+        }
+      ],
+      "targets": [
+        {
+          "kind": [
+            "lib"
+          ],
+          "crate_types": [
+            "lib"
+          ],
+          "name": "crate_g",
+          "src_path": "/home/fakeuser/tests-workspace/crate-g/src/lib.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": true,
+          "test": true
+        }
+      ],
+      "features": {},
+      "manifest_path": "/home/fakeuser/tests-workspace/crate-g/Cargo.toml",
+      "metadata": null,
+      "publish": null,
+      "authors": [],
+      "categories": [],
+      "keywords": [],
+      "readme": null,
+      "repository": null,
+      "homepage": null,
+      "documentation": null,
+      "edition": "2021",
+      "links": null,
+      "default_run": null,
+      "rust_version": null
+    }
+  ],
+  "workspace_members": [
+    "crate_a 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-a)",
+    "crate_b 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-b)",
+    "crate_c 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-c)",
+    "crate_d 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-d)",
+    "crate_e 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-e)",
+    "crate_f 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-f)",
+    "crate_g 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-g)"
+  ],
+  "resolve": {
+    "nodes": [
+      {
+        "id": "crate_a 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-a)",
+        "dependencies": [],
+        "deps": [],
+        "features": []
+      },
+      {
+        "id": "crate_b 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-b)",
+        "dependencies": [
+          "crate_a 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-a)"
+        ],
+        "deps": [
+          {
+            "name": "crate_a",
+            "pkg": "crate_a 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-a)",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      },
+      {
+        "id": "crate_c 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-c)",
+        "dependencies": [],
+        "deps": [],
+        "features": []
+      },
+      {
+        "id": "crate_d 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-d)",
+        "dependencies": [
+          "crate_b 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-b)",
+          "crate_c 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-c)"
+        ],
+        "deps": [
+          {
+            "name": "crate_b",
+            "pkg": "crate_b 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-b)",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          },
+          {
+            "name": "crate_c",
+            "pkg": "crate_c 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-c)",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      },
+      {
+        "id": "crate_e 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-e)",
+        "dependencies": [
+          "crate_d 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-d)"
+        ],
+        "deps": [
+          {
+            "name": "crate_d",
+            "pkg": "crate_d 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-d)",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      },
+      {
+        "id": "crate_f 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-f)",
+        "dependencies": [
+          "crate_d 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-d)"
+        ],
+        "deps": [
+          {
+            "name": "crate_d",
+            "pkg": "crate_d 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-d)",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      },
+      {
+        "id": "crate_g 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-g)",
+        "dependencies": [
+          "crate_f 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-f)"
+        ],
+        "deps": [
+          {
+            "name": "crate_f",
+            "pkg": "crate_f 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-f)",
+            "dep_kinds": [
+              {
+                "kind": null,
+                "target": null
+              }
+            ]
+          }
+        ],
+        "features": []
+      }
+    ],
+    "root": null
+  },
+  "target_directory": "/home/fakeuser/tests-workspace/target",
+  "version": 1,
+  "workspace_root": "/home/fakeuser/tests-workspace",
+  "metadata": null
+}
