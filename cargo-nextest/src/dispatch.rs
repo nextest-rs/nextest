@@ -493,11 +493,18 @@ impl App {
 
         let graph_data = match reuse_build.cargo_metadata.as_deref() {
             Some(path) => std::fs::read_to_string(path)?,
-            None => acquire_graph_data(
-                manifest_path.as_deref(),
-                build_filter.cargo_options.target_dir.as_deref(),
-                output,
-            )?,
+            None => {
+                let with_deps = build_filter
+                    .expr_filter
+                    .iter()
+                    .any(|expr| FilteringExpr::needs_deps(expr));
+                acquire_graph_data(
+                    manifest_path.as_deref(),
+                    build_filter.cargo_options.target_dir.as_deref(),
+                    output,
+                    with_deps,
+                )?
+            }
         };
         let graph = guppy::CargoMetadata::parse_json(&graph_data)?.build_graph()?;
 
@@ -653,9 +660,14 @@ fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
     target_dir: Option<&Utf8Path>,
     output: OutputContext,
+    with_deps: bool,
 ) -> Result<String> {
     let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
     cargo_cli.add_args(["--format-version=1", "--all-features"]);
+
+    if !with_deps {
+        cargo_cli.add_arg("--no-deps");
+    }
 
     let mut expression = cargo_cli.to_expression().stdout_capture().unchecked();
     // cargo metadata doesn't support "--target-dir" but setting the environment

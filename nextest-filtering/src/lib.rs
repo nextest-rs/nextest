@@ -270,4 +270,10 @@ impl FilteringExpr {
             }
         }
     }
+
+    /// Returns true if the given expression needs dependencies information to work
+    pub fn needs_deps(raw_expr: &str) -> bool {
+        // the expression needs dependencies expression if it uses deps(..) or rdeps(..)
+        raw_expr.contains("deps")
+    }
 }
