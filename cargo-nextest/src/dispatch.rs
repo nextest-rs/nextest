@@ -480,6 +480,19 @@ struct App {
     config_opts: ConfigOpts,
 }
 
+fn check_experimental_filtering(build_filter: &TestBuildFilter) -> Result<()> {
+    const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_EXPR_FILTER";
+    let enabled = std::env::var(EXPERIMENTAL_ENV).is_ok();
+    if !build_filter.expr_filter.is_empty() && !enabled {
+        Err(Report::new(ExpectedError::experimental_feature_error(
+            "expression filtering",
+            EXPERIMENTAL_ENV,
+        )))
+    } else {
+        Ok(())
+    }
+}
+
 impl App {
     fn new(
         output: OutputOpts,
@@ -490,6 +503,7 @@ impl App {
     ) -> Result<Self> {
         let output = output.init();
         reuse_build.check_experimental(output)?;
+        check_experimental_filtering(&build_filter)?;
 
         let graph_data = match reuse_build.cargo_metadata.as_deref() {
             Some(path) => std::fs::read_to_string(path)?,
