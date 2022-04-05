@@ -19,9 +19,13 @@ Basic sets:
 - `none()`: include nothing
 
 Name matcher:
-- `text`: match anything containing `text`
-- `=text`: match anything equal to `text`
+- `unicode_text`: match anything containing `unicode_text`
+- `=unicode_text`: match anything equal to `unicode_text`
 - `/reg/`: match anything matching the regex `reg`
+
+Unicode string:
+- can contains escaped closing parenthesis: `\)`
+- can contains unicode sequence: `\u{xxx}` (where `xxx` is an 1 to 6 digits hexadecimal number)
 
 Operations:
 - `set_1 & set_2` , `set_1 and set_2`: the intersection of `set_1` and `set_2`

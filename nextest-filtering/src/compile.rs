@@ -7,8 +7,10 @@ use guppy::{
 };
 use std::collections::HashSet;
 
-use crate::expression::*;
-use crate::parsing::{Expr, SetDef};
+use crate::{
+    expression::*,
+    parsing::{Expr, SetDef},
+};
 
 pub(crate) fn compile(expr: &Expr, graph: &PackageGraph) -> FilteringExpr {
     let in_workspace_packages: Vec<_> = graph

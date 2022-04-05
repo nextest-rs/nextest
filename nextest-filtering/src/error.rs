@@ -16,14 +16,12 @@ pub enum Error {
     InvalidRegex(#[label("Invalid regex")] SourceSpan),
     #[error("Expected close regex")]
     ExpectedCloseRegex(#[label("Missing '/'")] SourceSpan),
-    #[error("Invalid identifier")]
-    InvalidIdentifier(
-        #[label("Identifier can only contain xid_continue characters and ':'")] SourceSpan,
-    ),
-    #[error("Expected identifier")]
-    ExpectedIdentifier(#[label("Missing identifier")] SourceSpan),
+    #[error("Expected matcher input")]
+    ExpectedMatcherInput(#[label("Missing matcher content")] SourceSpan),
     #[error("Unexpected name matcher")]
     UnexpectedNameMatcher(#[label("This set doesn't take en argument")] SourceSpan),
+    #[error("Invalid unicode string")]
+    InvalidUnicodeString(#[label("This is not a valid unicode string")] SourceSpan),
     #[error("Expected open parentheses")]
     ExpectedOpenParenthesis(#[label("Missing '('")] SourceSpan),
     #[error("Expected close parentheses")]

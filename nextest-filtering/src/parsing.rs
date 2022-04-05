@@ -16,17 +16,18 @@
 use miette::SourceSpan;
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_till, take_until, take_while1},
+    bytes::complete::{tag, take_till, take_until},
     character::complete::char,
     combinator::{eof, map, recognize},
     multi::{fold_many0, many0},
     sequence::{delimited, pair, preceded, terminated},
+    Slice,
 };
 use nom_tracable::tracable_parser;
-use unicode_xid::UnicodeXID;
 
-use crate::error::*;
-use crate::NameMatcher;
+mod unicode_string;
+
+use crate::{error::*, NameMatcher};
 
 pub type Span<'a> = nom_locate::LocatedSpan<&'a str, State<'a>>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
@@ -190,89 +191,50 @@ fn ws<'a, T, P: FnMut(Span<'a>) -> IResult<'a, T>>(
     }
 }
 
-fn is_identifier_char(c: char) -> bool {
-    // This is use for NameMatcher::Contains(_) and NameMatcher::Equal(_)
-    // The output should be valid part of a test-name or a package name.
-    c == ':' || c.is_xid_continue()
-}
-
+// This parse will never fail
 #[tracable_parser]
-fn parse_identifier_part(input: Span) -> IResult<Option<String>> {
-    let start = input.location_offset();
-    match map(
-        recognize::<_, _, nom::error::Error<Span>, _>(take_while1(is_identifier_char)),
-        |res: Span| res.fragment().to_string(),
-    )(input.clone())
-    {
-        Ok((i1, res1)) => {
-            match recognize::<_, _, nom::error::Error<Span>, _>(take_till(|c| c == ')'))(i1.clone())
-            {
-                Ok((i, res)) => {
-                    if res.fragment().trim().is_empty() {
-                        Ok((i1, Some(res1)))
-                    } else {
-                        let end = i.location_offset() - start;
-                        let err = Error::InvalidIdentifier((start, end).into());
-                        i.extra.report_error(err);
-                        Ok((i, None))
-                    }
-                }
-                Err(_) => unreachable!(),
-            }
+fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
+    match expect(unicode_string::parse_string, Error::InvalidUnicodeString)(input.clone()) {
+        Ok((i, res)) => Ok((i, res)),
+        Err(nom::Err::Incomplete(_)) => {
+            let i = input.slice(input.fragment().len()..);
+            // No need for error reporting, missing closing ')' will be detected after
+            Ok((i, None))
         }
-        Err(_) => {
-            match recognize::<_, _, nom::error::Error<Span>, _>(take_till(|c| c == ')'))(input) {
-                Ok((i, res)) => {
-                    let end = i.location_offset() - start;
-                    let err = if res.fragment().trim().is_empty() {
-                        Error::ExpectedIdentifier((start, end).into())
-                    } else {
-                        Error::InvalidIdentifier((start, end).into())
-                    };
-                    i.extra.report_error(err);
-                    Ok((i, None))
-                }
-                Err(_) => unreachable!(),
-            }
-        }
+        Err(_) => unreachable!(),
     }
 }
 
 // This parse will never fail
 #[tracable_parser]
 fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
-    ws(map(parse_identifier_part, |res: Option<String>| {
+    map(parse_matcher_text, |res: Option<String>| {
         res.map(NameMatcher::Contains)
-    }))(input)
+    })(input)
 }
 
 #[tracable_parser]
 fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ws(map(
-        preceded(char('='), ws(parse_identifier_part)),
+        preceded(char('='), parse_matcher_text),
         |res: Option<String>| res.map(NameMatcher::Equal),
     ))(input)
 }
 
 #[tracable_parser]
 fn parse_regex_(input: Span) -> IResult<Option<NameMatcher>> {
-    let (i, res) =
-        match recognize::<_, _, nom::error::Error<Span>, _>(take_until("/"))(input.clone()) {
-            Ok((i, res)) => (i, res),
-            Err(_) => {
-                match recognize::<_, _, nom::error::Error<Span>, _>(take_till(|c| c == ')'))(
-                    input.clone(),
-                ) {
-                    Ok((i, res)) => {
-                        let start = i.location_offset();
-                        let err = Error::ExpectedCloseRegex((start, 0).into());
-                        i.extra.report_error(err);
-                        (i, res)
-                    }
-                    Err(_) => return Ok((input, None)),
-                }
+    let (i, res) = match take_until::<_, _, nom::error::Error<Span>>("/")(input.clone()) {
+        Ok((i, res)) => (i, res),
+        Err(_) => match take_till::<_, _, nom::error::Error<Span>>(|c| c == ')')(input.clone()) {
+            Ok((i, _)) => {
+                let start = i.location_offset();
+                let err = Error::ExpectedCloseRegex((start, 0).into());
+                i.extra.report_error(err);
+                return Ok((i, None));
             }
-        };
+            Err(_) => unreachable!(),
+        },
+    };
     match regex::Regex::new(res.fragment()).map(NameMatcher::Regex) {
         Ok(res) => Ok((i, Some(res))),
         _ => {
@@ -463,6 +425,22 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_name_matcher_quote() {
+        assert_eq!(
+            SetDef::Test(NameMatcher::Contains(r"some'thing".to_string())),
+            parse_set(r"test(some'thing)")
+        );
+        assert_eq!(
+            SetDef::Test(NameMatcher::Contains(r"some(thing)".to_string())),
+            parse_set(r"test(some(thing\))")
+        );
+        assert_eq!(
+            SetDef::Test(NameMatcher::Contains(r"some U".to_string())),
+            parse_set(r"test(some \u{55})")
+        );
+    }
+
+    #[test]
     fn test_parse_set_def() {
         assert_eq!(SetDef::All, parse_set("all()"));
         assert_eq!(SetDef::All, parse_set(" all ( ) "));
@@ -626,15 +604,6 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_identifier() {
-        let src = "package(a aa)";
-        let mut errors = parse_err(src);
-        assert_eq!(1, errors.len());
-        let error = errors.remove(0);
-        assert_error!(error, InvalidIdentifier, 8, 4);
-    }
-
-    #[test]
     fn test_unexpected_argument() {
         let src = "all(aaa)";
         let mut errors = parse_err(src);
@@ -665,12 +634,10 @@ mod tests {
     fn test_complex_error() {
         let src = "all) + package(/not) - deps(expr none)";
         let mut errors = parse_err(src);
-        assert_eq!(3, errors.len(), "{:?}", errors);
+        assert_eq!(2, errors.len(), "{:?}", errors);
         let error = errors.remove(0);
         assert_error!(error, ExpectedOpenParenthesis, 3, 0);
         let error = errors.remove(0);
         assert_error!(error, ExpectedCloseRegex, 19, 0);
-        let error = errors.remove(0);
-        assert_error!(error, InvalidIdentifier, 28, 9);
     }
 }
