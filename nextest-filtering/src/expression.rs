@@ -5,7 +5,7 @@ use guppy::{graph::PackageGraph, PackageId};
 use std::{cell::RefCell, collections::HashSet};
 
 use crate::error::{Error, FilteringExprParsingError, State};
-use crate::parsing::{parse, Span};
+use crate::parsing::{parse, ParsedExpr, Span};
 
 /// Matcher for name
 ///
@@ -102,7 +102,20 @@ impl FilteringExpr {
                     return Err(FilteringExprParsingError(input.to_string()));
                 }
 
-                crate::compile::compile(input, &parsed_expr, graph)
+                match parsed_expr {
+                    ParsedExpr::Valid(expr) => Ok(crate::compile::compile(&expr, graph)),
+                    _ => {
+                        // should not happen
+                        // If an ParsedExpr::Error is produced, we should also have an error inside
+                        // errors and we should already have returned
+                        // IMPROVE this is an internal error => add log to suggest opening an bug ?
+
+                        let err = Error::Unknown;
+                        let report = miette::Report::new(err).with_source_code(input.to_string());
+                        eprintln!("{:?}", report);
+                        Err(FilteringExprParsingError(input.to_string()))
+                    }
+                }
             }
             Err(_) => {
                 // should not happen

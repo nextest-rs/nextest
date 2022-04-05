@@ -10,7 +10,7 @@
 //! - always return Ok(_)
 //! - on error:
 //!     - consume as much input as it makes sense so that we can try to resume parsing
-//!     - return an error variant of the expected result type
+//!     - return an error/none variant of the expected result type
 //!     - push an error in the parsing state (in span.extra)
 
 use miette::SourceSpan;
@@ -26,6 +26,7 @@ use nom_tracable::tracable_parser;
 use unicode_xid::UnicodeXID;
 
 use crate::error::*;
+use crate::NameMatcher;
 
 pub type Span<'a> = nom_locate::LocatedSpan<&'a str, State<'a>>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
@@ -36,38 +37,14 @@ impl<'a> ToSourceSpane for Span<'a> {
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum RawNameMatcher {
-    Equal(String),
-    Contains(String),
-    Regex(regex::Regex),
-
-    Error,
-}
-
-impl PartialEq for RawNameMatcher {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Contains(s1), Self::Contains(s2)) => s1 == s2,
-            (Self::Equal(s1), Self::Equal(s2)) => s1 == s2,
-            (Self::Regex(r1), Self::Regex(r2)) => r1.as_str() == r2.as_str(),
-            _ => false,
-        }
-    }
-}
-
-impl Eq for RawNameMatcher {}
-
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum SetDef {
-    Package(RawNameMatcher),
-    Deps(RawNameMatcher),
-    Rdeps(RawNameMatcher),
-    Test(RawNameMatcher),
+    Package(NameMatcher),
+    Deps(NameMatcher),
+    Rdeps(NameMatcher),
+    Test(NameMatcher),
     All,
     None,
-
-    Error,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -76,8 +53,6 @@ pub(crate) enum Expr {
     Union(Box<Expr>, Box<Expr>),
     Intersection(Box<Expr>, Box<Expr>),
     Set(SetDef),
-
-    Error,
 }
 
 impl Expr {
@@ -109,6 +84,27 @@ impl Expr {
     #[cfg(test)]
     fn none() -> Expr {
         Expr::Set(SetDef::None)
+    }
+}
+
+pub(crate) enum ParsedExpr {
+    Valid(Expr),
+    Error,
+}
+
+impl ParsedExpr {
+    fn combine(self, op: fn(Expr, Expr) -> Expr, other: Self) -> Self {
+        match (self, other) {
+            (Self::Valid(expr_1), Self::Valid(expr_2)) => Self::Valid(op(expr_1, expr_2)),
+            _ => Self::Error,
+        }
+    }
+
+    fn negate(self) -> Self {
+        match self {
+            Self::Valid(expr) => Self::Valid(expr.not()),
+            _ => Self::Error,
+        }
     }
 }
 
@@ -244,26 +240,22 @@ fn parse_identifier_part(input: Span) -> IResult<Option<String>> {
 
 // This parse will never fail
 #[tracable_parser]
-fn parse_contains_matcher(input: Span) -> IResult<RawNameMatcher> {
+fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ws(map(parse_identifier_part, |res: Option<String>| {
-        res.map(RawNameMatcher::Contains)
-            .unwrap_or(RawNameMatcher::Error)
+        res.map(NameMatcher::Contains)
     }))(input)
 }
 
 #[tracable_parser]
-fn parse_equal_matcher(input: Span) -> IResult<RawNameMatcher> {
+fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ws(map(
         preceded(char('='), ws(parse_identifier_part)),
-        |res: Option<String>| {
-            res.map(RawNameMatcher::Equal)
-                .unwrap_or(RawNameMatcher::Error)
-        },
+        |res: Option<String>| res.map(NameMatcher::Equal),
     ))(input)
 }
 
 #[tracable_parser]
-fn parse_regex_(input: Span) -> IResult<RawNameMatcher> {
+fn parse_regex_(input: Span) -> IResult<Option<NameMatcher>> {
     let (i, res) =
         match recognize::<_, _, nom::error::Error<Span>, _>(take_until("/"))(input.clone()) {
             Ok((i, res)) => (i, res),
@@ -277,22 +269,22 @@ fn parse_regex_(input: Span) -> IResult<RawNameMatcher> {
                         i.extra.report_error(err);
                         (i, res)
                     }
-                    Err(_) => return Ok((input, RawNameMatcher::Error)),
+                    Err(_) => return Ok((input, None)),
                 }
             }
         };
-    let res = regex::Regex::new(res.fragment())
-        .map(RawNameMatcher::Regex)
-        .unwrap_or_else(|_| {
+    match regex::Regex::new(res.fragment()).map(NameMatcher::Regex) {
+        Ok(res) => Ok((i, Some(res))),
+        _ => {
             let err = Error::InvalidRegex(res.to_span());
             i.extra.report_error(err);
-            RawNameMatcher::Error
-        });
-    Ok((i, res))
+            Ok((i, None))
+        }
+    }
 }
 
 #[tracable_parser]
-fn parse_regex_matcher(input: Span) -> IResult<RawNameMatcher> {
+fn parse_regex_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ws(delimited(
         char('/'),
         parse_regex_,
@@ -302,7 +294,7 @@ fn parse_regex_matcher(input: Span) -> IResult<RawNameMatcher> {
 
 // This parse will never fail (because parse_contains_matcher won't)
 #[tracable_parser]
-fn parse_set_matcher(input: Span) -> IResult<RawNameMatcher> {
+fn parse_set_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ws(alt((
         parse_regex_matcher,
         parse_equal_matcher,
@@ -334,53 +326,50 @@ fn nullary_set_def(
 
 fn unary_set_def(
     name: &'static str,
-    make_set: fn(RawNameMatcher) -> SetDef,
+    make_set: fn(NameMatcher) -> SetDef,
 ) -> impl FnMut(Span) -> IResult<Option<SetDef>> {
     move |i| {
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', Error::ExpectedOpenParenthesis)(i)?;
         let (i, res) = parse_set_matcher(i)?;
         let (i, _) = expect_char(')', Error::ExpectedCloseParenthesis)(i)?;
-        Ok((i, Some(make_set(res))))
+        Ok((i, res.map(make_set)))
     }
 }
 
 #[tracable_parser]
-fn parse_set_def(input: Span) -> IResult<SetDef> {
-    map(
-        ws(alt((
-            unary_set_def("package", SetDef::Package),
-            unary_set_def("deps", SetDef::Deps),
-            unary_set_def("rdeps", SetDef::Rdeps),
-            unary_set_def("test", SetDef::Test),
-            nullary_set_def("all", || SetDef::All),
-            nullary_set_def("none", || SetDef::None),
-        ))),
-        |res| res.unwrap_or(SetDef::Error),
-    )(input)
+fn parse_set_def(input: Span) -> IResult<Option<SetDef>> {
+    ws(alt((
+        unary_set_def("package", SetDef::Package),
+        unary_set_def("deps", SetDef::Deps),
+        unary_set_def("rdeps", SetDef::Rdeps),
+        unary_set_def("test", SetDef::Test),
+        nullary_set_def("all", || SetDef::All),
+        nullary_set_def("none", || SetDef::None),
+    )))(input)
 }
 
-fn expect_expr<'a, P: FnMut(Span<'a>) -> IResult<'a, Expr>>(
+fn expect_expr<'a, P: FnMut(Span<'a>) -> IResult<'a, ParsedExpr>>(
     inner: P,
-) -> impl FnMut(Span<'a>) -> IResult<'a, Expr> {
+) -> impl FnMut(Span<'a>) -> IResult<'a, ParsedExpr> {
     map(expect(inner, Error::ExpectedExpr), |res| {
-        res.unwrap_or(Expr::Error)
+        res.unwrap_or(ParsedExpr::Error)
     })
 }
 
 #[tracable_parser]
-fn parse_expr_not(input: Span) -> IResult<Expr> {
+fn parse_expr_not(input: Span) -> IResult<ParsedExpr> {
     map(
         preceded(
             alt((tag("not "), tag("!"))),
             expect_expr(ws(parse_basic_expr)),
         ),
-        |e| Expr::Not(Box::new(e)),
+        ParsedExpr::negate,
     )(input)
 }
 
 #[tracable_parser]
-fn parse_parentheses_expr(input: Span) -> IResult<Expr> {
+fn parse_parentheses_expr(input: Span) -> IResult<ParsedExpr> {
     delimited(
         char('('),
         expect_expr(parse_expr),
@@ -389,9 +378,12 @@ fn parse_parentheses_expr(input: Span) -> IResult<Expr> {
 }
 
 #[tracable_parser]
-fn parse_basic_expr(input: Span) -> IResult<Expr> {
+fn parse_basic_expr(input: Span) -> IResult<ParsedExpr> {
     ws(alt((
-        map(parse_set_def, Expr::Set),
+        map(parse_set_def, |set| {
+            set.map(|set| ParsedExpr::Valid(Expr::Set(set)))
+                .unwrap_or(ParsedExpr::Error)
+        }),
         parse_expr_not,
         parse_parentheses_expr,
     )))(input)
@@ -413,7 +405,7 @@ fn parse_operator(input: Span) -> IResult<Operator> {
 }
 
 #[tracable_parser]
-fn parse_expr(input: Span) -> IResult<Expr> {
+fn parse_expr(input: Span) -> IResult<ParsedExpr> {
     let (input, expr) = expect_expr(parse_basic_expr)(input)?;
 
     let (input, ops) = fold_many0(
@@ -426,15 +418,15 @@ fn parse_expr(input: Span) -> IResult<Expr> {
     )(input)?;
 
     let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| match op {
-        Operator::Union => Expr::union(expr_1, expr_2),
-        Operator::Intersection => Expr::intersection(expr_1, expr_2),
-        Operator::Difference => Expr::difference(expr_1, expr_2),
+        Operator::Union => expr_1.combine(Expr::union, expr_2),
+        Operator::Intersection => expr_1.combine(Expr::intersection, expr_2),
+        Operator::Difference => expr_1.combine(Expr::difference, expr_2),
     });
 
     Ok((input, expr))
 }
 
-pub(crate) fn parse(input: Span) -> Result<Expr, nom::Err<nom::error::Error<Span>>> {
+pub(crate) fn parse(input: Span) -> Result<ParsedExpr, nom::Err<nom::error::Error<Span>>> {
     let (_, expr) = terminated(parse_expr, expect(ws(eof), Error::ExpectedEndOfExpression))(input)?;
     Ok(expr)
 }
@@ -451,20 +443,21 @@ mod tests {
         parse_set_def(Span::new_extra(input, State::new(&errors)))
             .unwrap()
             .1
+            .unwrap()
     }
 
     #[test]
     fn test_parse_name_matcher() {
         assert_eq!(
-            SetDef::Test(RawNameMatcher::Contains("something".to_string())),
+            SetDef::Test(NameMatcher::Contains("something".to_string())),
             parse_set("test(something)")
         );
         assert_eq!(
-            SetDef::Test(RawNameMatcher::Equal("something".to_string())),
+            SetDef::Test(NameMatcher::Equal("something".to_string())),
             parse_set("test(=something)")
         );
         assert_eq!(
-            SetDef::Test(RawNameMatcher::Regex(regex::Regex::new("some.*").unwrap())),
+            SetDef::Test(NameMatcher::Regex(regex::Regex::new("some.*").unwrap())),
             parse_set("test(/some.*/)")
         );
     }
@@ -477,19 +470,19 @@ mod tests {
         assert_eq!(SetDef::None, parse_set("none()"));
 
         assert_eq!(
-            SetDef::Package(RawNameMatcher::Contains("something".to_string())),
+            SetDef::Package(NameMatcher::Contains("something".to_string())),
             parse_set("package(something)")
         );
         assert_eq!(
-            SetDef::Deps(RawNameMatcher::Contains("something".to_string())),
+            SetDef::Deps(NameMatcher::Contains("something".to_string())),
             parse_set("deps(something)")
         );
         assert_eq!(
-            SetDef::Rdeps(RawNameMatcher::Contains("something".to_string())),
+            SetDef::Rdeps(NameMatcher::Contains("something".to_string())),
             parse_set("rdeps(something)")
         );
         assert_eq!(
-            SetDef::Test(RawNameMatcher::Contains("something".to_string())),
+            SetDef::Test(NameMatcher::Contains("something".to_string())),
             parse_set("test(something)")
         );
     }
@@ -497,7 +490,10 @@ mod tests {
     #[track_caller]
     fn parse(input: &str) -> Expr {
         let errors = RefCell::new(Vec::new());
-        super::parse(Span::new_extra(input, State::new(&errors))).unwrap()
+        match super::parse(Span::new_extra(input, State::new(&errors))).unwrap() {
+            ParsedExpr::Valid(expr) => expr,
+            _ => panic!("Not a  valid expression"),
+        }
     }
 
     #[test]

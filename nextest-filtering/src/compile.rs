@@ -7,35 +7,16 @@ use guppy::{
 };
 use std::collections::HashSet;
 
-use crate::error::{Error, FilteringExprParsingError};
 use crate::expression::*;
-use crate::parsing::{Expr, RawNameMatcher, SetDef};
+use crate::parsing::{Expr, SetDef};
 
-pub(crate) fn compile(
-    input: &str,
-    raw_expr: &Expr,
-    graph: &PackageGraph,
-) -> Result<FilteringExpr, FilteringExprParsingError> {
+pub(crate) fn compile(expr: &Expr, graph: &PackageGraph) -> FilteringExpr {
     let in_workspace_packages: Vec<_> = graph
         .resolve_workspace()
         .packages(guppy::graph::DependencyDirection::Forward)
         .collect();
     let mut cache = graph.new_depends_cache();
-    match compile_expr(raw_expr, &in_workspace_packages, &mut cache) {
-        Some(expr) => Ok(expr),
-        None => {
-            // should not happen
-            // This would only happen if the parse expression contains an Error variant,
-            // in which case an error should had been push to the errors vec and we should already
-            // have bail.
-            // IMPROVE this is an internal error => add log to suggest opening an bug ?
-
-            let err = Error::Unknown;
-            let report = miette::Report::new(err).with_source_code(input.to_string());
-            eprintln!("{:?}", report);
-            Err(FilteringExprParsingError(input.to_string()))
-        }
-    }
+    compile_expr(expr, &in_workspace_packages, &mut cache)
 }
 
 fn matching_packages(
@@ -97,39 +78,22 @@ fn rdependencies_packages(
     set
 }
 
-fn to_name_matcher(matcher: &RawNameMatcher) -> Option<NameMatcher> {
-    match matcher {
-        RawNameMatcher::Contains(t) => Some(NameMatcher::Contains(t.clone())),
-        RawNameMatcher::Equal(t) => Some(NameMatcher::Equal(t.clone())),
-        RawNameMatcher::Regex(r) => Some(NameMatcher::Regex(r.clone())),
-        RawNameMatcher::Error => None,
-    }
-}
-
 fn compile_set_def(
     set: &SetDef,
     packages: &[PackageMetadata],
     cache: &mut DependsCache,
-) -> Option<FilteringSet> {
+) -> FilteringSet {
     match set {
-        SetDef::Package(matcher) => Some(FilteringSet::Packages(matching_packages(
-            &to_name_matcher(matcher)?,
-            packages,
-        ))),
-        SetDef::Deps(matcher) => Some(FilteringSet::Packages(dependencies_packages(
-            &to_name_matcher(matcher)?,
-            packages,
-            cache,
-        ))),
-        SetDef::Rdeps(matcher) => Some(FilteringSet::Packages(rdependencies_packages(
-            &to_name_matcher(matcher)?,
-            packages,
-            cache,
-        ))),
-        SetDef::Test(matcher) => Some(FilteringSet::Test(to_name_matcher(matcher)?)),
-        SetDef::All => Some(FilteringSet::All),
-        SetDef::None => Some(FilteringSet::None),
-        SetDef::Error => None,
+        SetDef::Package(matcher) => FilteringSet::Packages(matching_packages(matcher, packages)),
+        SetDef::Deps(matcher) => {
+            FilteringSet::Packages(dependencies_packages(matcher, packages, cache))
+        }
+        SetDef::Rdeps(matcher) => {
+            FilteringSet::Packages(rdependencies_packages(matcher, packages, cache))
+        }
+        SetDef::Test(matcher) => FilteringSet::Test(matcher.clone()),
+        SetDef::All => FilteringSet::All,
+        SetDef::None => FilteringSet::None,
     }
 }
 
@@ -137,20 +101,17 @@ fn compile_expr(
     expr: &Expr,
     packages: &[PackageMetadata],
     cache: &mut DependsCache,
-) -> Option<FilteringExpr> {
+) -> FilteringExpr {
     match expr {
-        Expr::Set(set) => Some(FilteringExpr::Set(compile_set_def(set, packages, cache)?)),
-        Expr::Not(expr) => Some(FilteringExpr::Not(Box::new(compile_expr(
-            expr, packages, cache,
-        )?))),
-        Expr::Union(expr_1, expr_2) => Some(FilteringExpr::Union(
-            Box::new(compile_expr(expr_1, packages, cache)?),
-            Box::new(compile_expr(expr_2, packages, cache)?),
-        )),
-        Expr::Intersection(expr_1, expr_2) => Some(FilteringExpr::Intersection(
-            Box::new(compile_expr(expr_1, packages, cache)?),
-            Box::new(compile_expr(expr_2, packages, cache)?),
-        )),
-        Expr::Error => None,
+        Expr::Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache)),
+        Expr::Not(expr) => FilteringExpr::Not(Box::new(compile_expr(expr, packages, cache))),
+        Expr::Union(expr_1, expr_2) => FilteringExpr::Union(
+            Box::new(compile_expr(expr_1, packages, cache)),
+            Box::new(compile_expr(expr_2, packages, cache)),
+        ),
+        Expr::Intersection(expr_1, expr_2) => FilteringExpr::Intersection(
+            Box::new(compile_expr(expr_1, packages, cache)),
+            Box::new(compile_expr(expr_2, packages, cache)),
+        ),
     }
 }
