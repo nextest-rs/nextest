@@ -308,6 +308,7 @@ impl TestBuildFilter {
         binary_list: BinaryList,
         runner: &TargetRunner,
         reuse_build: &ReuseBuildOpts,
+        filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList<'g>> {
         let path_mapper =
             reuse_build.make_path_mapper(graph, &binary_list.rust_build_meta.target_directory);
@@ -318,16 +319,11 @@ impl TestBuildFilter {
             &path_mapper,
             self.platform_filter.into(),
         )?;
-        let exprs = self
-            .expr_filter
-            .iter()
-            .map(|input| FilteringExpr::parse(input, graph))
-            .collect::<Result<Vec<_>, _>>()?;
         let test_filter = TestFilterBuilder::new(
             self.run_ignored,
             self.partition.clone(),
             &self.filter,
-            exprs,
+            filter_exprs,
         );
         TestList::new(
             test_artifacts,
@@ -560,16 +556,27 @@ impl App {
         Ok(binary_list)
     }
 
+    fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
+        self.build_filter
+            .expr_filter
+            .iter()
+            .map(|input| FilteringExpr::parse(input, &self.graph))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
     fn build_test_list(
         &self,
         binary_list: BinaryList,
         target_runner: &TargetRunner,
+        filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList> {
         self.build_filter.compute_test_list(
             &self.graph,
             binary_list,
             target_runner,
             &self.reuse_build,
+            filter_exprs,
         )
     }
 
@@ -599,6 +606,7 @@ impl App {
         list_type: ListType,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
+        let filter_exprs = self.build_filtering_expressions()?;
         let binary_list = self.build_binary_list()?;
 
         match list_type {
@@ -613,7 +621,7 @@ impl App {
             }
             ListType::Full => {
                 let target_runner = self.load_runner();
-                let test_list = self.build_test_list(binary_list, &target_runner)?;
+                let test_list = self.build_test_list(binary_list, &target_runner, filter_exprs)?;
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
@@ -642,8 +650,9 @@ impl App {
 
         let target_runner = self.load_runner();
 
+        let filter_exprs = self.build_filtering_expressions()?;
         let binary_list = self.build_binary_list()?;
-        let test_list = self.build_test_list(binary_list, &target_runner)?;
+        let test_list = self.build_test_list(binary_list, &target_runner, filter_exprs)?;
 
         let mut reporter = reporter_opts
             .to_builder(no_capture)
