@@ -24,4 +24,7 @@ impl NextestExitCode {
 
     /// An experimental feature was used without the environment variable to enable it.
     pub const EXPERIMENTAL_FEATURE_NOT_ENABLED: i32 = 95;
+
+    /// An filtering expression failed to parse.
+    pub const INVALID_FILTER_EXPRESSION: i32 = 94;
 }
