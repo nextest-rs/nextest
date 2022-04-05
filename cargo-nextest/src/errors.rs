@@ -29,6 +29,7 @@ pub enum ExpectedError {
         name: &'static str,
         var_name: &'static str,
     },
+    FilterExpressionParseError,
 }
 
 impl ExpectedError {
@@ -61,6 +62,10 @@ impl ExpectedError {
         }
     }
 
+    pub(crate) fn filter_expression_parse_error() -> Self {
+        Self::FilterExpressionParseError
+    }
+
     pub(crate) fn test_run_failed() -> Self {
         Self::TestRunFailed
     }
@@ -77,6 +82,7 @@ impl ExpectedError {
             Self::ExperimentalFeatureNotEnabled { .. } => {
                 NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
             }
+            Self::FilterExpressionParseError { .. } => NextestExitCode::INVALID_FILTER_EXPRESSION,
         }
     }
 
@@ -131,6 +137,10 @@ impl ExpectedError {
                 );
                 None
             }
+            Self::FilterExpressionParseError => {
+                log::error!("Failed to parse filter expression");
+                None
+            }
         };
 
         while let Some(err) = next_error {
@@ -151,6 +161,9 @@ impl fmt::Display for ExpectedError {
             Self::TestRunFailed => writeln!(f, "test run failed"),
             Self::ExperimentalFeatureNotEnabled { .. } => {
                 writeln!(f, "experimental feature not enabled")
+            }
+            Self::FilterExpressionParseError => {
+                writeln!(f, "Failed to parse some filter expressions")
             }
         }
     }

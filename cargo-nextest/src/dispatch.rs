@@ -557,12 +557,26 @@ impl App {
     }
 
     fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
-        self.build_filter
+        let mut exprs = Vec::new();
+        let mut failed = false;
+        for res in self
+            .build_filter
             .expr_filter
             .iter()
             .map(|input| FilteringExpr::parse(input, &self.graph))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
+        {
+            match res {
+                Ok(expr) => exprs.push(expr),
+                Err(nextest_filtering::error::FilteringExprParsingError(_)) => {
+                    failed = true;
+                }
+            }
+        }
+        if failed {
+            Err(ExpectedError::filter_expression_parse_error().into())
+        } else {
+            Ok(exprs)
+        }
     }
 
     fn build_test_list(
