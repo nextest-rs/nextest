@@ -74,7 +74,7 @@ fn test_expr_deps() {
     assert!(expr.includes(&mk_pid('a'), "test_something"));
     assert!(expr.includes(&mk_pid('b'), "test_something"));
     assert!(expr.includes(&mk_pid('c'), "test_something"));
-    assert!(!expr.includes(&mk_pid('d'), "test_something"));
+    assert!(expr.includes(&mk_pid('d'), "test_something"));
     assert!(!expr.includes(&mk_pid('e'), "test_something"));
     assert!(!expr.includes(&mk_pid('f'), "test_something"));
     assert!(!expr.includes(&mk_pid('g'), "test_something"));
@@ -89,7 +89,7 @@ fn test_expr_rdeps() {
     assert!(!expr.includes(&mk_pid('a'), "test_something"));
     assert!(!expr.includes(&mk_pid('b'), "test_something"));
     assert!(!expr.includes(&mk_pid('c'), "test_something"));
-    assert!(!expr.includes(&mk_pid('d'), "test_something"));
+    assert!(expr.includes(&mk_pid('d'), "test_something"));
     assert!(expr.includes(&mk_pid('e'), "test_something"));
     assert!(expr.includes(&mk_pid('f'), "test_something"));
     assert!(expr.includes(&mk_pid('g'), "test_something"));
