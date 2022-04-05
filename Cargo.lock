@@ -706,7 +706,6 @@ dependencies = [
  "nom_locate 4.0.0",
  "regex",
  "thiserror",
- "unicode-xid 0.2.2",
 ]
 
 [[package]]

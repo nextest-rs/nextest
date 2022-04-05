@@ -4,8 +4,10 @@
 use guppy::{graph::PackageGraph, PackageId};
 use std::{cell::RefCell, collections::HashSet};
 
-use crate::error::{Error, FilteringExprParsingError, State};
-use crate::parsing::{parse, ParsedExpr, Span};
+use crate::{
+    error::{Error, FilteringExprParsingError, State},
+    parsing::{parse, ParsedExpr, Span},
+};
 
 /// Matcher for name
 ///
