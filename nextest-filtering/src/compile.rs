@@ -43,9 +43,6 @@ fn dependencies_packages(
     for id1 in packages {
         for p2 in all_packages {
             let id2 = p2.id();
-            if id1 == id2 {
-                continue;
-            }
             if cache.depends_on(id1, id2).unwrap_or(false) {
                 set.insert(id2.clone());
             }
@@ -67,9 +64,6 @@ fn rdependencies_packages(
     for id1 in packages {
         for p2 in all_packages {
             let id2 = p2.id();
-            if id1 == id2 {
-                continue;
-            }
             if cache.depends_on(id2, id1).unwrap_or(false) {
                 set.insert(id2.clone());
             }

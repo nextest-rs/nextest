@@ -14,8 +14,8 @@ Basic sets:
 - `all()`: include everything
 - `test(name-matcher)`: include all tests matching `name-matcher`
 - `package(name-matcher)`: include all tests in packages matching `name-matcher`
-- `deps(name-matcher)`: include all tests in packages depended on by packages matching `name-matcher`
-- `rdeps(name-matcher)`: include all tests in packages depending on packages matching `name-matcher`
+- `deps(name-matcher)`: include all tests in packages depended on by packages matching `name-matcher` and include all tests in packages matching `name-matcher`
+- `rdeps(name-matcher)`: include all tests in packages depending on packages matching `name-matcher` and include all tests in packages matching `name-matcher`
 - `none()`: include nothing
 
 Name matcher:
