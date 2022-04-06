@@ -246,9 +246,9 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54ad70579325f1a38ea4c13412b82241c5900700a69785d73e2736bd65a33f86"
+checksum = "a623a46970097d353e2c8154fa527d8ce45cd0e02cc1812969b889c49b3728e8"
 dependencies = [
  "async-trait",
  "lazy_static",
