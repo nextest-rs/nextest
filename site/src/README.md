@@ -6,11 +6,17 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
 <img src="static/cover.png" id="nextest-cover">
 
-* **Clean, beautiful user interface.** nextest presents its results concisely so you can see which tests passed and failed at a glance.
+* **Clean, beautiful user interface.** Nextest presents its results concisely so you can see which tests passed and failed at a glance.
 * **[Up to 60% faster](book/benchmarks.md) than cargo test.** Nextest uses a [state-of-the-art execution model](book/how-it-works.md) for faster, more reliable test runs.
+* **Designed for CI.** Nextest thoughtfully addresses pain points in continuous integration scenarios.
+  * Use **[pre-built binaries](book/pre-built-binaries.md)** for quick installation.
+  * Set up CI-specific **[configuration profiles](book/configuration.md)**.
+  * Print failing output **[at the end of test runs](book/other-options.md#reporter-options)**.
+  * **[Partition test runs](book/partitioning.md)** across multiple CI jobs.
+  * Output information about test runs as **[JUnit XML](book/junit.md)**.
+* **Identify slow tests.** Use nextest to detect tests that take a long time to run, and identify bottlenecks during test execution.
 * **Detect flaky tests.** Nextest can [automatically retry](book/retries.md) failing tests for you, and if they pass later nextest will mark them as flaky.
-* **Partition test runs across several CI jobs.** If your tests take too long to run in CI, nextest can automatically split them up for you across several jobs.
-* **Cross-platform.** nextest works on Unix, Mac and Windows, so you get the benefits of faster test runs no matter what platform you use.
+* **Cross-platform.** Nextest works on Unix, Mac and Windows, so you get the benefits of faster test runs no matter what platform you use.
 * ... and more [coming soon](https://github.com/nextest-rs/nextest/projects/1)!
 
 ## Quick start
