@@ -443,7 +443,10 @@ impl<'g> TestList<'g> {
 
         let mut ignored_filter = filter.build();
         for test_name in Self::parse(ignored.as_ref())? {
-            // TODO: catch dups
+            // Note that libtest prints out:
+            // * just ignored tests if --ignored is passed in
+            // * all tests, both ignored and non-ignored, if --ignored is not passed in
+            // Adding ignored tests after non-ignored ones makes everything resolve correctly.
             tests.insert(
                 test_name.into(),
                 RustTestCaseSummary {
