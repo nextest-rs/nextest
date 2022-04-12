@@ -12,10 +12,10 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 * **Designed for CI.** Nextest addresses real-world pain points with continuous integration scenarios.
   * Use **[pre-built binaries](book/pre-built-binaries.md)** for quick installation.
   * Set up CI-specific **[configuration profiles](book/configuration.md)**.
-  * Print failing output **[at the end of test runs](book/other-options.md#reporter-options)**.
   * **[Partition test runs](book/partitioning.md)** across multiple CI jobs.
-  * Output information about test runs as **[JUnit XML](book/junit.md)**.
   * [**Automatically retry**](book/retries.md) failing tests, and mark them as flaky if they pass later.
+  * Print failing output **[at the end of test runs](book/other-options.md#reporter-options)**.
+  * Output information about test runs as **[JUnit XML](book/junit.md)**.
 * **Cross-platform.** Nextest works on Unix, Mac and Windows, so you get the benefits of faster test runs no matter what platform you use.
 * ... and more [coming soon](https://github.com/nextest-rs/nextest/projects/1)!
 
