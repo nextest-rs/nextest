@@ -208,9 +208,13 @@ fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
 // This parse will never fail
 #[tracable_parser]
 fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
-    map(parse_matcher_text, |res: Option<String>| {
-        res.map(NameMatcher::Contains)
-    })(input)
+    map(
+        alt((
+            preceded(tag("contains:"), parse_matcher_text),
+            parse_matcher_text,
+        )),
+        |res: Option<String>| res.map(NameMatcher::Contains),
+    )(input)
 }
 
 #[tracable_parser]
@@ -456,6 +460,20 @@ mod tests {
         assert_eq!(
             SetDef::Test(NameMatcher::Regex(regex::Regex::new("some.*").unwrap())),
             parse_set("test(/some.*/)")
+        );
+
+        // 'contains:' is an escape hatch to enable literal matches.
+        assert_eq!(
+            SetDef::Test(NameMatcher::Contains("something".to_string())),
+            parse_set("test(contains:something)")
+        );
+        assert_eq!(
+            SetDef::Test(NameMatcher::Contains("=something".to_string())),
+            parse_set("test(contains:=something)")
+        );
+        assert_eq!(
+            SetDef::Test(NameMatcher::Contains("/something/".to_string())),
+            parse_set("test(contains:/something/)")
         );
     }
 

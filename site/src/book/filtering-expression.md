@@ -19,11 +19,13 @@ Basic sets:
 - `none()`: include nothing
 
 Name matcher:
-- `unicode_text`: match anything containing `unicode_text`
-- `=unicode_text`: match anything equal to `unicode_text`
-- `/reg/`: match anything matching the regex `reg`
+- `string`, or `contains:string`: match a package or test name containing `string`
+- `=string`: match a package or test name that's equal to `string`
+- `/regex/`: match anything matching the regex `regex`
 
-Unicode string:
+To match a string beginning with `=` or `/`, or if you're constructing an expression string in a programmatic context, use the `contains:` prefix.
+
+Strings:
 - can contains escaped closing parenthesis: `\)`
 - can contains unicode sequence: `\u{xxx}` (where `xxx` is an 1 to 6 digits hexadecimal number)
 
