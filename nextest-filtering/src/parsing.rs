@@ -351,27 +351,19 @@ fn parse_basic_expr(input: Span) -> IResult<ParsedExpr> {
     )))(input)
 }
 
-enum Operator {
-    Union,
-    Intersection,
-    Difference,
-}
+// ---
 
-#[tracable_parser]
-fn parse_operator(input: Span) -> IResult<Operator> {
-    ws(alt((
-        map(alt((tag("or "), tag("|"), tag("+"))), |_| Operator::Union),
-        map(alt((tag("and "), tag("&"))), |_| Operator::Intersection),
-        map(char('-'), |_| Operator::Difference),
-    )))(input)
+enum OrOperator {
+    Union,
 }
 
 #[tracable_parser]
 fn parse_expr(input: Span) -> IResult<ParsedExpr> {
-    let (input, expr) = expect_expr(parse_basic_expr)(input)?;
+    // "or" binds less tightly than "and", so parse and within or.
+    let (input, expr) = expect_expr(parse_and_expr)(input)?;
 
     let (input, ops) = fold_many0(
-        pair(parse_operator, expect_expr(parse_basic_expr)),
+        pair(parse_or_operator, expect_expr(parse_and_expr)),
         Vec::new,
         |mut ops, (op, expr)| {
             ops.push((op, expr));
@@ -380,13 +372,56 @@ fn parse_expr(input: Span) -> IResult<ParsedExpr> {
     )(input)?;
 
     let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| match op {
-        Operator::Union => expr_1.combine(Expr::union, expr_2),
-        Operator::Intersection => expr_1.combine(Expr::intersection, expr_2),
-        Operator::Difference => expr_1.combine(Expr::difference, expr_2),
+        OrOperator::Union => expr_1.combine(Expr::union, expr_2),
     });
 
     Ok((input, expr))
 }
+
+#[tracable_parser]
+fn parse_or_operator(input: Span) -> IResult<OrOperator> {
+    ws(map(alt((tag("or "), tag("|"), tag("+"))), |_| {
+        OrOperator::Union
+    }))(input)
+}
+
+// ---
+
+enum AndOperator {
+    Intersection,
+    Difference,
+}
+
+#[tracable_parser]
+fn parse_and_expr(input: Span) -> IResult<ParsedExpr> {
+    let (input, expr) = expect_expr(parse_basic_expr)(input)?;
+
+    let (input, ops) = fold_many0(
+        pair(parse_and_operator, expect_expr(parse_basic_expr)),
+        Vec::new,
+        |mut ops, (op, expr)| {
+            ops.push((op, expr));
+            ops
+        },
+    )(input)?;
+
+    let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| match op {
+        AndOperator::Intersection => expr_1.combine(Expr::intersection, expr_2),
+        AndOperator::Difference => expr_1.combine(Expr::difference, expr_2),
+    });
+
+    Ok((input, expr))
+}
+
+#[tracable_parser]
+fn parse_and_operator(input: Span) -> IResult<AndOperator> {
+    ws(alt((
+        map(alt((tag("and "), tag("&"))), |_| AndOperator::Intersection),
+        map(char('-'), |_| AndOperator::Difference),
+    )))(input)
+}
+
+// ---
 
 pub(crate) fn parse(input: Span) -> Result<ParsedExpr, nom::Err<nom::error::Error<Span>>> {
     let (_, expr) = terminated(parse_expr, expect(ws(eof), Error::ExpectedEndOfExpression))(input)?;
@@ -526,18 +561,32 @@ mod tests {
         let expr = Expr::intersection(Expr::all().not(), Expr::none());
         assert_eq!(expr, parse("not all() and none()"));
 
+        let expr = Expr::intersection(Expr::all(), Expr::none().not());
+        assert_eq!(expr, parse("all() and not none()"));
+
         let expr = Expr::intersection(Expr::all(), Expr::none());
         let expr = Expr::union(expr, Expr::all());
         assert_eq!(expr, parse("all() & none() | all()"));
 
+        let expr = Expr::intersection(Expr::none(), Expr::all());
+        let expr = Expr::union(Expr::all(), expr);
+        assert_eq!(expr, parse("all() | none() & all()"));
+
         let expr = Expr::union(Expr::all(), Expr::none());
         let expr = Expr::intersection(expr, Expr::all());
-        assert_eq!(expr, parse("all() | none() & all()"));
         assert_eq!(expr, parse("(all() | none()) & all()"));
 
         let expr = Expr::intersection(Expr::none(), Expr::all());
         let expr = Expr::union(Expr::all(), expr);
         assert_eq!(expr, parse("all() | (none() & all())"));
+
+        let expr = Expr::difference(Expr::all(), Expr::none());
+        let expr = Expr::intersection(expr, Expr::all());
+        assert_eq!(expr, parse("all() - none() & all()"));
+
+        let expr = Expr::intersection(Expr::all(), Expr::none());
+        let expr = Expr::difference(expr, Expr::all());
+        assert_eq!(expr, parse("all() & none() - all()"));
 
         let expr = Expr::intersection(Expr::none(), Expr::all()).not();
         assert_eq!(expr, parse("not (none() & all())"));

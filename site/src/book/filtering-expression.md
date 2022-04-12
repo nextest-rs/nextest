@@ -1,6 +1,6 @@
 # Filtering expression
 
-* **Introduced in:** cargo-nextest 0.9.13
+* **Introduced in:** cargo-nextest 0.9.13 (not released yet)
 * **Environment variable**: `NEXTEST_EXPERIMENTAL_EXPR_FILTER=1`
 * **Tracking issue**: []
 
@@ -34,16 +34,24 @@ Operations:
 - `set_1 - set_2`: equivalent to `set_1 and not set_2`
 - `(set)`: include everything in `set`
 
-Precedences from lowest to highest:
-- `not`, `()`
-- `&`, `|`, `-`
+### Operator precedence
+
+In order from highest to lowest, or in other words from tightest to loosest binding:
+
+1. `()`
+2. `not`, `!`
+3. `and`, `&`, `-`
+4. `or`, `|`
+
+Within a precedence group, operators bind from left to right.
 
 Examples:
-- `package(=serde) and test(deserialize)`: every tests containing `deserialize` in the package `serde`
+- `package(=serde) and test(deserialize)`: every test containing the string `deserialize` in the package `serde`
 - `not (test(parse) | test(run))`: every test not containing `parse` or `run`
-- `test(a) & test(b) | test(c)` is equivalent to `( test(a) & test(b) ) | test(c)`
-- `test(a) | test(b) & test(c)` is equivalent to `( test(a) | test(b) ) & test(c)`
-- `not test(a) | test(b)` is equivalent to `( not test(a) ) | test(b)`
+- `test(a) & test(b) | test(c)` is equivalent to `(test(a) & test(b)) | test(c)`
+- `test(a) | test(b) & test(c)` is equivalent to `test(a) | (test(b) & test(c))`
+- `test(a) & test(b) - test(c)` is equivalent to `(test(a) & test(b)) - test(c)`
+- `not test(a) | test(b)` is equivalent to `(not test(a)) | test(b)`
 
 ## Usage
 
