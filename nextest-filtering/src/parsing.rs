@@ -16,9 +16,9 @@
 use miette::SourceSpan;
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_till, take_until},
+    bytes::complete::{is_not, tag, take_till},
     character::complete::char,
-    combinator::{eof, map, recognize},
+    combinator::{eof, map, peek, recognize, verify},
     multi::{fold_many0, many0},
     sequence::{delimited, pair, preceded, terminated},
     Slice,
@@ -226,8 +226,35 @@ fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
 }
 
 #[tracable_parser]
-fn parse_regex_(input: Span) -> IResult<Option<NameMatcher>> {
-    let (i, res) = match take_until::<_, _, nom::error::Error<Span>>("/")(input.clone()) {
+fn parse_regex_inner(input: Span) -> IResult<String> {
+    enum Frag<'a> {
+        Litteral(&'a str),
+        Escape(char),
+    }
+
+    let parse_escape = map(alt((map(tag(r"\/"), |_| '/'), char('\\'))), Frag::Escape);
+    let parse_litteral = map(
+        verify(is_not("\\/"), |s: &Span| !s.fragment().is_empty()),
+        |s: Span| Frag::Litteral(s.fragment()),
+    );
+    let parse_frag = alt((parse_escape, parse_litteral));
+
+    let (i, res) = fold_many0(parse_frag, String::new, |mut string, frag| {
+        match frag {
+            Frag::Escape(c) => string.push(c),
+            Frag::Litteral(s) => string.push_str(s),
+        }
+        string
+    })(input)?;
+
+    let (i, _) = peek(char('/'))(i)?;
+
+    Ok((i, res))
+}
+
+#[tracable_parser]
+fn parse_regex(input: Span) -> IResult<Option<NameMatcher>> {
+    let (i, res) = match parse_regex_inner(input.clone()) {
         Ok((i, res)) => (i, res),
         Err(_) => match take_till::<_, _, nom::error::Error<Span>>(|c| c == ')')(input.clone()) {
             Ok((i, _)) => {
@@ -239,10 +266,12 @@ fn parse_regex_(input: Span) -> IResult<Option<NameMatcher>> {
             Err(_) => unreachable!(),
         },
     };
-    match regex::Regex::new(res.fragment()).map(NameMatcher::Regex) {
+    match regex::Regex::new(&res).map(NameMatcher::Regex) {
         Ok(res) => Ok((i, Some(res))),
         _ => {
-            let err = Error::InvalidRegex(res.to_span());
+            let start = input.location_offset();
+            let end = i.location_offset();
+            let err = Error::InvalidRegex((start, end - start).into());
             i.extra.report_error(err);
             Ok((i, None))
         }
@@ -253,7 +282,7 @@ fn parse_regex_(input: Span) -> IResult<Option<NameMatcher>> {
 fn parse_regex_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ws(delimited(
         char('/'),
-        parse_regex_,
+        parse_regex,
         silent_expect(ws(char('/'))),
     ))(input)
 }
@@ -437,6 +466,38 @@ mod tests {
     use std::cell::RefCell;
 
     use super::*;
+
+    #[track_caller]
+    fn parse_regex(input: &str) -> NameMatcher {
+        let errors = RefCell::new(Vec::new());
+        parse_regex_matcher(Span::new_extra(input, State::new(&errors)))
+            .unwrap()
+            .1
+            .unwrap()
+    }
+
+    #[test]
+    fn test_parse_regex() {
+        assert_eq!(
+            NameMatcher::Regex(regex::Regex::new(r"some.*").unwrap()),
+            parse_regex(r"/some.*/")
+        );
+
+        assert_eq!(
+            NameMatcher::Regex(regex::Regex::new(r"a/a").unwrap()),
+            parse_regex(r"/a\/a/")
+        );
+
+        assert_eq!(
+            NameMatcher::Regex(regex::Regex::new(r"\w/a").unwrap()),
+            parse_regex(r"/\w\/a/")
+        );
+
+        assert_eq!(
+            NameMatcher::Regex(regex::Regex::new(r"\w\\/a").unwrap()),
+            parse_regex(r"/\w\\\/a/")
+        );
+    }
 
     #[track_caller]
     fn parse_set(input: &str) -> SetDef {
