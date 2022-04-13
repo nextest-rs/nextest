@@ -32,28 +32,35 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone)]
-pub struct State<'a>(&'a RefCell<Vec<Error>>, nom_tracable::TracableInfo);
+pub struct State<'a> {
+    // A `RefCell` is required here because the state must implement `Clone` to work with nom.
+    errors: &'a RefCell<Vec<Error>>,
+    tracable_info: TracableInfo,
+}
 
 impl<'a> State<'a> {
-    pub fn new(vec: &'a RefCell<Vec<Error>>) -> Self {
-        let info = nom_tracable::TracableInfo::new()
+    pub fn new(errors: &'a RefCell<Vec<Error>>) -> Self {
+        let tracable_info = nom_tracable::TracableInfo::new()
             .forward(true)
             .backward(true);
-        Self(vec, info)
+        Self {
+            errors,
+            tracable_info,
+        }
     }
 
     pub fn report_error(&self, error: Error) {
-        self.0.borrow_mut().push(error);
+        self.errors.borrow_mut().push(error);
     }
 }
 
 impl<'a> nom_tracable::HasTracableInfo for State<'a> {
     fn get_tracable_info(&self) -> TracableInfo {
-        self.1.get_tracable_info()
+        self.tracable_info.get_tracable_info()
     }
 
     fn set_tracable_info(mut self, info: TracableInfo) -> Self {
-        self.1 = self.1.set_tracable_info(info);
+        self.tracable_info = self.tracable_info.set_tracable_info(info);
         self
     }
 }
