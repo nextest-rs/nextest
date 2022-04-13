@@ -56,7 +56,7 @@ This section contains the full set of operators supported by the DSL.
 - `=string`: match a package or test name that's equal to `string`
 - `/regex/`: match a package or test name if any part of it matches the regular expression `regex`. To match the entire string against a regular expression, use `/^regex$/`. The implementation uses the regex crate.
 
-To match a string beginning with `=` or `/`, or if you're constructing an expression string in a programmatic context, use the `contains:` prefix.
+To match a string beginning with `=` or `/`, or if you're constructing a filter expression in a programmatic context, use the `contains:` prefix.
 
 #### Escape sequences
 
@@ -72,12 +72,12 @@ The *contains* and *equality* name matchers can contain escape sequences, preced
 
 All other escape sequences are invalid.
 
-The *regular expression* matcher supports the same escape sequences that [the regex crate does](https://docs.rs/regex/latest/regex/#escape-sequences), additionally `\/` is read as an escaped `/`.
+The *regular expression* matcher supports the same escape sequences that [the regex crate does](https://docs.rs/regex/latest/regex/#escape-sequences). This includes character classes like `\d`. Additionally, `\/` is interpreted as an escaped `/`.
 
 ### Operators
 
-- `set_1 & set_2` , `set_1 and set_2`: the intersection of `set_1` and `set_2`
-- `set_1 | set_2`, `set_1 or set_2`, `set_1 + set_2`: the union of `set_1` or `set_2`
+- `set_1 & set_2`, `set_1 and set_2`: the intersection of `set_1` and `set_2`
+- `set_1 | set_2`, `set_1 + set_2`, `set_1 or set_2`: the union of `set_1` or `set_2`
 - `not set`, `!set`: include everything not included in `set`
 - `set_1 - set_2`: equivalent to `set_1 and not set_2`
 - `(set)`: include everything in `set`

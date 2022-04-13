@@ -228,21 +228,21 @@ fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
 #[tracable_parser]
 fn parse_regex_inner(input: Span) -> IResult<String> {
     enum Frag<'a> {
-        Litteral(&'a str),
+        Literal(&'a str),
         Escape(char),
     }
 
     let parse_escape = map(alt((map(tag(r"\/"), |_| '/'), char('\\'))), Frag::Escape);
-    let parse_litteral = map(
+    let parse_literal = map(
         verify(is_not("\\/"), |s: &Span| !s.fragment().is_empty()),
-        |s: Span| Frag::Litteral(s.fragment()),
+        |s: Span| Frag::Literal(s.fragment()),
     );
-    let parse_frag = alt((parse_escape, parse_litteral));
+    let parse_frag = alt((parse_escape, parse_literal));
 
     let (i, res) = fold_many0(parse_frag, String::new, |mut string, frag| {
         match frag {
             Frag::Escape(c) => string.push(c),
-            Frag::Litteral(s) => string.push_str(s),
+            Frag::Literal(s) => string.push_str(s),
         }
         string
     })(input)?;
@@ -496,6 +496,11 @@ mod tests {
         assert_eq!(
             NameMatcher::Regex(regex::Regex::new(r"\w\\/a").unwrap()),
             parse_regex(r"/\w\\\/a/")
+        );
+
+        assert_eq!(
+            NameMatcher::Regex(regex::Regex::new(r"\p{Greek}\\/a").unwrap()),
+            parse_regex(r"/\p{Greek}\\\/a/")
         );
     }
 
