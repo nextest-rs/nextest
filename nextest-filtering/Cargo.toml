@@ -24,3 +24,7 @@ nom-tracable = "0.8.0"
 nom_locate = "4.0.0"
 regex = "1.5.5"
 thiserror = "1.0.30"
+
+[dev-dependencies]
+clap = { version = "3.1.8", features = ["derive"] }
+camino = "1.0.7"
