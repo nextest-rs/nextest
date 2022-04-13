@@ -72,9 +72,7 @@ The *contains* and *equality* name matchers can contain escape sequences, preced
 
 All other escape sequences are invalid.
 
-The *regular expression* matcher supports the same escape sequences that [the regex crate does](https://docs.rs/regex/latest/regex/#escape-sequences).
-
-TODO: add a way to escape `/` in regexes.
+The *regular expression* matcher supports the same escape sequences that [the regex crate does](https://docs.rs/regex/latest/regex/#escape-sequences), additionally `\/` is read as an escaped `/`.
 
 ### Operators
 
