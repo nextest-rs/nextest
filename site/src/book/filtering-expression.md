@@ -35,7 +35,7 @@ cargo nextest run -E 'test(my_test) + package(=my-crate)'
 ### Examples
 
 - `package(=serde) and test(deserialize)`: every test containing the string `deserialize` in the package `serde`
-- `not (test(/parse[0-9]*/) | test(run))`: every test containing `parse` or `run`
+- `not (test(/parse[0-9]*/) | test(run))`: every test not containing `parse` or `run`
 
 ## DSL reference
 
@@ -91,7 +91,7 @@ In order from highest to lowest, or in other words from tightest to loosest bind
 1. `()`
 2. `not`, `!`
 3. `and`, `&`, `-`
-4. `or`, `|`
+4. `or`, `|`, `+`
 
 Within a precedence group, operators bind from left to right.
 
