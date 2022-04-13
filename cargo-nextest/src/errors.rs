@@ -1,6 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::{ConfigParseError, ProfileNotFound};
 use owo_colors::{OwoColorize, Stream};
@@ -29,7 +30,9 @@ pub enum ExpectedError {
         name: &'static str,
         var_name: &'static str,
     },
-    FilterExpressionParseError,
+    FilterExpressionParseError {
+        all_errors: Vec<FilterExpressionParseErrors>,
+    },
 }
 
 impl ExpectedError {
@@ -62,8 +65,10 @@ impl ExpectedError {
         }
     }
 
-    pub(crate) fn filter_expression_parse_error() -> Self {
-        Self::FilterExpressionParseError
+    pub(crate) fn filter_expression_parse_error(
+        all_errors: Vec<FilterExpressionParseErrors>,
+    ) -> Self {
+        Self::FilterExpressionParseError { all_errors }
     }
 
     pub(crate) fn test_run_failed() -> Self {
@@ -137,8 +142,16 @@ impl ExpectedError {
                 );
                 None
             }
-            Self::FilterExpressionParseError => {
-                log::error!("Failed to parse filter expression");
+            Self::FilterExpressionParseError { all_errors } => {
+                for errors in all_errors {
+                    for single_error in &errors.errors {
+                        let report = miette::Report::new(single_error.clone())
+                            .with_source_code(errors.input.to_owned());
+                        log::error!(target: "cargo_nextest::no_heading", "{:?}", report);
+                    }
+                }
+
+                log::error!("failed to parse filter expression");
                 None
             }
         };
@@ -162,7 +175,7 @@ impl fmt::Display for ExpectedError {
             Self::ExperimentalFeatureNotEnabled { .. } => {
                 writeln!(f, "experimental feature not enabled")
             }
-            Self::FilterExpressionParseError => {
+            Self::FilterExpressionParseError { .. } => {
                 writeln!(f, "Failed to parse some filter expressions")
             }
         }

@@ -29,7 +29,7 @@ mod unicode_string;
 
 use crate::{errors::*, NameMatcher};
 
-pub type Span<'a> = nom_locate::LocatedSpan<&'a str, State<'a>>;
+pub(crate) type Span<'a> = nom_locate::LocatedSpan<&'a str, State<'a>>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
 
 impl<'a> ToSourceSpan for Span<'a> {
@@ -116,7 +116,7 @@ enum SpanLength {
 
 fn expect_inner<'a, F, T>(
     mut parser: F,
-    make_err: fn(SourceSpan) -> Error,
+    make_err: fn(SourceSpan) -> ParseSingleError,
     limit: SpanLength,
 ) -> impl FnMut(Span<'a>) -> IResult<'a, Option<T>>
 where
@@ -142,7 +142,7 @@ where
 
 fn expect<'a, F, T>(
     parser: F,
-    make_err: fn(SourceSpan) -> Error,
+    make_err: fn(SourceSpan) -> ParseSingleError,
 ) -> impl FnMut(Span<'a>) -> IResult<'a, Option<T>>
 where
     F: FnMut(Span<'a>) -> IResult<T>,
@@ -152,7 +152,7 @@ where
 
 fn expect_char<'a>(
     c: char,
-    make_err: fn(SourceSpan) -> Error,
+    make_err: fn(SourceSpan) -> ParseSingleError,
 ) -> impl FnMut(Span<'a>) -> IResult<'a, Option<char>> {
     expect_inner(ws(char(c)), make_err, SpanLength::Exact(0))
 }
@@ -194,7 +194,11 @@ fn ws<'a, T, P: FnMut(Span<'a>) -> IResult<'a, T>>(
 // This parse will never fail
 #[tracable_parser]
 fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
-    match expect(unicode_string::parse_string, Error::InvalidUnicodeString)(input.clone()) {
+    match expect(
+        unicode_string::parse_string,
+        ParseSingleError::InvalidUnicodeString,
+    )(input.clone())
+    {
         Ok((i, res)) => Ok((i, res)),
         Err(nom::Err::Incomplete(_)) => {
             let i = input.slice(input.fragment().len()..);
@@ -259,7 +263,7 @@ fn parse_regex(input: Span) -> IResult<Option<NameMatcher>> {
         Err(_) => match take_till::<_, _, nom::error::Error<Span>>(|c| c == ')')(input.clone()) {
             Ok((i, _)) => {
                 let start = i.location_offset();
-                let err = Error::ExpectedCloseRegex((start, 0).into());
+                let err = ParseSingleError::ExpectedCloseRegex((start, 0).into());
                 i.extra.report_error(err);
                 return Ok((i, None));
             }
@@ -271,7 +275,7 @@ fn parse_regex(input: Span) -> IResult<Option<NameMatcher>> {
         _ => {
             let start = input.location_offset();
             let end = i.location_offset();
-            let err = Error::InvalidRegex((start, end - start).into());
+            let err = ParseSingleError::InvalidRegex((start, end - start).into());
             i.extra.report_error(err);
             Ok((i, None))
         }
@@ -303,18 +307,18 @@ fn nullary_set_def(
 ) -> impl FnMut(Span) -> IResult<Option<SetDef>> {
     move |i| {
         let (i, _) = tag(name)(i)?;
-        let (i, _) = expect_char('(', Error::ExpectedOpenParenthesis)(i)?;
+        let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
         let i = match recognize::<_, _, nom::error::Error<Span>, _>(take_till(|c| c == ')'))(i) {
             Ok((i, res)) => {
                 if !res.fragment().trim().is_empty() {
-                    let err = Error::UnexpectedNameMatcher(res.to_span());
+                    let err = ParseSingleError::UnexpectedNameMatcher(res.to_span());
                     i.extra.report_error(err);
                 }
                 i
             }
             Err(_) => unreachable!(),
         };
-        let (i, _) = expect_char(')', Error::ExpectedCloseParenthesis)(i)?;
+        let (i, _) = expect_char(')', ParseSingleError::ExpectedCloseParenthesis)(i)?;
         Ok((i, Some(make_set())))
     }
 }
@@ -325,9 +329,9 @@ fn unary_set_def(
 ) -> impl FnMut(Span) -> IResult<Option<SetDef>> {
     move |i| {
         let (i, _) = tag(name)(i)?;
-        let (i, _) = expect_char('(', Error::ExpectedOpenParenthesis)(i)?;
+        let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
         let (i, res) = parse_set_matcher(i)?;
-        let (i, _) = expect_char(')', Error::ExpectedCloseParenthesis)(i)?;
+        let (i, _) = expect_char(')', ParseSingleError::ExpectedCloseParenthesis)(i)?;
         Ok((i, res.map(make_set)))
     }
 }
@@ -347,7 +351,7 @@ fn parse_set_def(input: Span) -> IResult<Option<SetDef>> {
 fn expect_expr<'a, P: FnMut(Span<'a>) -> IResult<'a, ParsedExpr>>(
     inner: P,
 ) -> impl FnMut(Span<'a>) -> IResult<'a, ParsedExpr> {
-    map(expect(inner, Error::ExpectedExpr), |res| {
+    map(expect(inner, ParseSingleError::ExpectedExpr), |res| {
         res.unwrap_or(ParsedExpr::Error)
     })
 }
@@ -368,7 +372,7 @@ fn parse_parentheses_expr(input: Span) -> IResult<ParsedExpr> {
     delimited(
         char('('),
         expect_expr(parse_expr),
-        expect_char(')', Error::ExpectedCloseParenthesis),
+        expect_char(')', ParseSingleError::ExpectedCloseParenthesis),
     )(input)
 }
 
@@ -457,7 +461,10 @@ fn parse_and_operator(input: Span) -> IResult<AndOperator> {
 // ---
 
 pub(crate) fn parse(input: Span) -> Result<ParsedExpr, nom::Err<nom::error::Error<Span>>> {
-    let (_, expr) = terminated(parse_expr, expect(ws(eof), Error::ExpectedEndOfExpression))(input)?;
+    let (_, expr) = terminated(
+        parse_expr,
+        expect(ws(eof), ParseSingleError::ExpectedEndOfExpression),
+    )(input)?;
     Ok(expr)
 }
 
@@ -677,7 +684,7 @@ mod tests {
     }
 
     #[track_caller]
-    fn parse_err(input: &str) -> Vec<Error> {
+    fn parse_err(input: &str) -> Vec<ParseSingleError> {
         let errors = RefCell::new(Vec::new());
         super::parse(Span::new_extra(input, State::new(&errors))).unwrap();
         errors.into_inner()
@@ -685,7 +692,7 @@ mod tests {
 
     macro_rules! assert_error {
         ($error:ident, $name:ident, $start:literal, $end:literal) => {
-            assert_eq!(Error::$name(($start, $end).into()), $error);
+            assert_eq!(ParseSingleError::$name(($start, $end).into()), $error);
         };
     }
 
