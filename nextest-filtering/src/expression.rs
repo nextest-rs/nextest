@@ -5,7 +5,7 @@ use guppy::{graph::PackageGraph, PackageId};
 use std::{cell::RefCell, collections::HashSet};
 
 use crate::{
-    error::{Error, FilteringExprParsingError, State},
+    errors::{Error, FilteringExprParsingError, State},
     parsing::{parse, ParsedExpr, Span},
 };
 

@@ -6,10 +6,6 @@ use nom_tracable::TracableInfo;
 use std::cell::RefCell;
 use thiserror::Error;
 
-pub trait ToSourceSpane {
-    fn to_span(&self) -> SourceSpan;
-}
-
 #[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
 pub enum Error {
     #[error("Invalid regex")]
@@ -72,3 +68,7 @@ impl std::fmt::Display for FilteringExprParsingError {
 }
 
 impl std::error::Error for FilteringExprParsingError {}
+
+pub(crate) trait ToSourceSpan {
+    fn to_span(&self) -> SourceSpan;
+}

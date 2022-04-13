@@ -567,7 +567,7 @@ impl App {
         {
             match res {
                 Ok(expr) => exprs.push(expr),
-                Err(nextest_filtering::error::FilteringExprParsingError(_)) => {
+                Err(nextest_filtering::errors::FilteringExprParsingError(_)) => {
                     failed = true;
                 }
             }
