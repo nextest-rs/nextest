@@ -18,7 +18,7 @@ trace = ["nom-tracable/trace"]
 
 [dependencies]
 guppy = "0.14.1"
-miette = { version = "4.2.1", features = ["fancy"] }
+miette = { version = "4.4.0", features = ["fancy"] }
 nom = "7.1.1"
 nom-tracable = "0.8.0"
 nom_locate = "4.0.0"
