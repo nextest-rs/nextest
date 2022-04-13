@@ -11,6 +11,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgEnum, Args, Parser, Subcommand};
 use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
+use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
@@ -557,23 +558,15 @@ impl App {
     }
 
     fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
-        let mut exprs = Vec::new();
-        let mut failed = false;
-        for res in self
+        let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
             .expr_filter
             .iter()
             .map(|input| FilteringExpr::parse(input, &self.graph))
-        {
-            match res {
-                Ok(expr) => exprs.push(expr),
-                Err(nextest_filtering::errors::FilteringExprParsingError(_)) => {
-                    failed = true;
-                }
-            }
-        }
-        if failed {
-            Err(ExpectedError::filter_expression_parse_error().into())
+            .partition_result();
+
+        if !all_errors.is_empty() {
+            Err(ExpectedError::filter_expression_parse_error(all_errors).into())
         } else {
             Ok(exprs)
         }

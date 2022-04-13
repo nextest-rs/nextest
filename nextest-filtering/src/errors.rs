@@ -6,40 +6,60 @@ use nom_tracable::TracableInfo;
 use std::cell::RefCell;
 use thiserror::Error;
 
-#[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
-pub enum Error {
-    #[error("Invalid regex")]
-    InvalidRegex(#[label("Invalid regex")] SourceSpan),
-    #[error("Expected close regex")]
-    ExpectedCloseRegex(#[label("Missing '/'")] SourceSpan),
-    #[error("Expected matcher input")]
-    ExpectedMatcherInput(#[label("Missing matcher content")] SourceSpan),
-    #[error("Unexpected name matcher")]
-    UnexpectedNameMatcher(#[label("This set doesn't take en argument")] SourceSpan),
-    #[error("Invalid unicode string")]
-    InvalidUnicodeString(#[label("This is not a valid unicode string")] SourceSpan),
-    #[error("Expected open parentheses")]
-    ExpectedOpenParenthesis(#[label("Missing '('")] SourceSpan),
-    #[error("Expected close parentheses")]
-    ExpectedCloseParenthesis(#[label("Missing ')'")] SourceSpan),
-    #[error("Expected filtering expression")]
-    ExpectedExpr(#[label("Missing expression")] SourceSpan),
-    #[error("Expected end of expression")]
-    ExpectedEndOfExpression(#[label("Unparsed input")] SourceSpan),
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct FilterExpressionParseErrors {
+    /// The input string.
+    pub input: String,
 
-    #[error("Unknown parsing error")]
+    /// The parse errors returned.
+    pub errors: Vec<ParseSingleError>,
+}
+
+impl FilterExpressionParseErrors {
+    pub(crate) fn new(input: impl Into<String>, errors: Vec<ParseSingleError>) -> Self {
+        Self {
+            input: input.into(),
+            errors,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Error, Diagnostic, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ParseSingleError {
+    #[error("invalid regex")]
+    InvalidRegex(#[label("invalid regex")] SourceSpan),
+    #[error("expected close regex")]
+    ExpectedCloseRegex(#[label("missing '/'")] SourceSpan),
+    #[error("expected matcher input")]
+    ExpectedMatcherInput(#[label("missing matcher content")] SourceSpan),
+    #[error("unexpected name matcher")]
+    UnexpectedNameMatcher(#[label("this set doesn't take an argument")] SourceSpan),
+    #[error("invalid unicode string")]
+    InvalidUnicodeString(#[label("invalid unicode string")] SourceSpan),
+    #[error("expected open parenthesis")]
+    ExpectedOpenParenthesis(#[label("missing '('")] SourceSpan),
+    #[error("expected close parenthesis")]
+    ExpectedCloseParenthesis(#[label("missing ')'")] SourceSpan),
+    #[error("expected filtering expression")]
+    ExpectedExpr(#[label("missing expression")] SourceSpan),
+    #[error("expected end of expression")]
+    ExpectedEndOfExpression(#[label("unparsed input")] SourceSpan),
+
+    #[error("unknown parsing error")]
     Unknown,
 }
 
 #[derive(Debug, Clone)]
-pub struct State<'a> {
+pub(crate) struct State<'a> {
     // A `RefCell` is required here because the state must implement `Clone` to work with nom.
-    errors: &'a RefCell<Vec<Error>>,
+    errors: &'a RefCell<Vec<ParseSingleError>>,
     tracable_info: TracableInfo,
 }
 
 impl<'a> State<'a> {
-    pub fn new(errors: &'a RefCell<Vec<Error>>) -> Self {
+    pub fn new(errors: &'a RefCell<Vec<ParseSingleError>>) -> Self {
         let tracable_info = nom_tracable::TracableInfo::new()
             .forward(true)
             .backward(true);
@@ -49,7 +69,7 @@ impl<'a> State<'a> {
         }
     }
 
-    pub fn report_error(&self, error: Error) {
+    pub fn report_error(&self, error: ParseSingleError) {
         self.errors.borrow_mut().push(error);
     }
 }
@@ -64,17 +84,6 @@ impl<'a> nom_tracable::HasTracableInfo for State<'a> {
         self
     }
 }
-
-#[derive(Debug)]
-pub struct FilteringExprParsingError(pub String);
-
-impl std::fmt::Display for FilteringExprParsingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to parse the filtering expression \"{}\"", self.0)
-    }
-}
-
-impl std::error::Error for FilteringExprParsingError {}
 
 pub(crate) trait ToSourceSpan {
     fn to_span(&self) -> SourceSpan;

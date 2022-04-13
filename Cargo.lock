@@ -144,7 +144,9 @@ dependencies = [
  "enable-ansi-support",
  "env_logger",
  "guppy",
+ "itertools",
  "log",
+ "miette",
  "nextest-filtering",
  "nextest-metadata",
  "nextest-runner",
@@ -154,6 +156,7 @@ dependencies = [
  "serde_json",
  "shellwords",
  "supports-color",
+ "supports-unicode",
  "tempfile",
 ]
 

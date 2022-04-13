@@ -5,7 +5,8 @@
 use clap::{ArgEnum, Args};
 use env_logger::fmt::Formatter;
 use log::{Level, LevelFilter, Record};
-use owo_colors::{OwoColorize, Style};
+use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
+use owo_colors::{style, OwoColorize, Style};
 use std::{
     io::{BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,
@@ -78,6 +79,37 @@ impl Color {
                 .filter_level(LevelFilter::Warn)
                 .format(format_fn)
                 .init();
+
+            miette::set_hook(Box::new(move |_| {
+                let theme_styles = if self.should_colorize(Stream::Stderr) {
+                    ThemeStyles {
+                        error: style().bright_red(),
+                        warning: style().bright_yellow(),
+                        advice: style().bright_cyan(),
+                        help: style().cyan(),
+                        link: style().cyan().underline().bold(),
+                        linum: style().dimmed(),
+                        highlights: vec![
+                            style().bright_red(),
+                            style().bright_yellow(),
+                            style().bright_cyan(),
+                        ],
+                    }
+                } else {
+                    ThemeStyles::none()
+                };
+                let mut graphical_theme = if supports_unicode::on(Stream::Stderr) {
+                    GraphicalTheme::unicode()
+                } else {
+                    GraphicalTheme::ascii()
+                };
+                graphical_theme.characters.error = "error:".into();
+                graphical_theme.styles = theme_styles;
+
+                let handler = MietteHandlerOpts::new().graphical_theme(graphical_theme);
+                Box::new(handler.build())
+            }))
+            .expect("miette::set_hook should only be called once");
         });
     }
 

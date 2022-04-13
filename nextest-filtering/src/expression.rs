@@ -1,13 +1,12 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use guppy::{graph::PackageGraph, PackageId};
-use std::{cell::RefCell, collections::HashSet};
-
 use crate::{
-    errors::{Error, FilteringExprParsingError, State},
+    errors::{FilterExpressionParseErrors, ParseSingleError, State},
     parsing::{parse, ParsedExpr, Span},
 };
+use guppy::{graph::PackageGraph, PackageId};
+use std::{cell::RefCell, collections::HashSet};
 
 /// Matcher for name
 ///
@@ -90,18 +89,14 @@ impl FilteringExpr {
     pub fn parse(
         input: &str,
         graph: &PackageGraph,
-    ) -> Result<FilteringExpr, FilteringExprParsingError> {
+    ) -> Result<FilteringExpr, FilterExpressionParseErrors> {
         let errors = RefCell::new(Vec::new());
         match parse(Span::new_extra(input, State::new(&errors))) {
             Ok(parsed_expr) => {
                 let errors = errors.into_inner();
 
                 if !errors.is_empty() {
-                    for err in errors {
-                        let report = miette::Report::new(err).with_source_code(input.to_string());
-                        eprintln!("{:?}", report);
-                    }
-                    return Err(FilteringExprParsingError(input.to_string()));
+                    return Err(FilterExpressionParseErrors::new(input, errors));
                 }
 
                 match parsed_expr {
@@ -111,11 +106,10 @@ impl FilteringExpr {
                         // If an ParsedExpr::Error is produced, we should also have an error inside
                         // errors and we should already have returned
                         // IMPROVE this is an internal error => add log to suggest opening an bug ?
-
-                        let err = Error::Unknown;
-                        let report = miette::Report::new(err).with_source_code(input.to_string());
-                        eprintln!("{:?}", report);
-                        Err(FilteringExprParsingError(input.to_string()))
+                        Err(FilterExpressionParseErrors::new(
+                            input,
+                            vec![ParseSingleError::Unknown],
+                        ))
                     }
                 }
             }
@@ -123,11 +117,10 @@ impl FilteringExpr {
                 // should not happen
                 // According to our parsing strategy we should never produce an Err(_)
                 // IMPROVE this is an internal error => add log to suggest opening an bug ?
-
-                let err = Error::Unknown;
-                let report = miette::Report::new(err).with_source_code(input.to_string());
-                eprintln!("{:?}", report);
-                Err(FilteringExprParsingError(input.to_string()))
+                Err(FilterExpressionParseErrors::new(
+                    input,
+                    vec![ParseSingleError::Unknown],
+                ))
             }
         }
     }
