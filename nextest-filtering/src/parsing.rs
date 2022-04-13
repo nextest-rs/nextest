@@ -27,12 +27,12 @@ use nom_tracable::tracable_parser;
 
 mod unicode_string;
 
-use crate::{error::*, NameMatcher};
+use crate::{errors::*, NameMatcher};
 
 pub type Span<'a> = nom_locate::LocatedSpan<&'a str, State<'a>>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
 
-impl<'a> ToSourceSpane for Span<'a> {
+impl<'a> ToSourceSpan for Span<'a> {
     fn to_span(&self) -> SourceSpan {
         (self.location_offset(), self.fragment().len()).into()
     }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod compile;
-pub mod error;
+pub mod errors;
 mod expression;
 mod parsing;
 
