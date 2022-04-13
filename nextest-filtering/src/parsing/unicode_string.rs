@@ -6,7 +6,7 @@
 use nom::{
     branch::alt,
     bytes::streaming::{is_not, take_while_m_n},
-    character::streaming::{char, multispace1},
+    character::streaming::char,
     combinator::{map, map_opt, map_res, value, verify},
     multi::fold_many0,
     sequence::{delimited, preceded},
@@ -74,11 +74,6 @@ fn parse_escaped_char(input: Span) -> IResult<char> {
 }
 
 #[tracable_parser]
-fn parse_escaped_whitespace(input: Span) -> IResult<Span> {
-    preceded(char('\\'), multispace1)(input)
-}
-
-#[tracable_parser]
 fn parse_literal(input: Span) -> IResult<Span> {
     let not_quote_slash = is_not(")\\");
     verify(not_quote_slash, |s: &Span| !s.fragment().is_empty())(input)
@@ -88,7 +83,6 @@ fn parse_literal(input: Span) -> IResult<Span> {
 enum StringFragment<'a> {
     Literal(&'a str),
     EscapedChar(char),
-    EscapedWS,
 }
 
 #[tracable_parser]
@@ -98,7 +92,6 @@ fn parse_fragment(input: Span) -> IResult<StringFragment<'_>> {
             StringFragment::Literal(span.fragment())
         }),
         map(parse_escaped_char, StringFragment::EscapedChar),
-        value(StringFragment::EscapedWS, parse_escaped_whitespace),
     ))(input)
 }
 
@@ -111,7 +104,6 @@ pub(super) fn parse_string(input: Span) -> IResult<String> {
         match fragment {
             StringFragment::Literal(s) => string.push_str(s),
             StringFragment::EscapedChar(c) => string.push(c),
-            StringFragment::EscapedWS => {}
         }
         string
     })(input)
