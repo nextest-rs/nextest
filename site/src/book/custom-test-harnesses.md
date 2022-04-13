@@ -8,7 +8,7 @@ name = "my-test"
 harness = false
 ```
 
-As mentioned in [How nextest works](how-it-works.md), cargo-nextest has a much thicker interface with the test harness than cargo test does. If you don't use any custom harnesses, cargo-nextest will run out of the box. However, users of custom test harnesses may need to be changed to work with cargo nextest. In general, the changes make the test harness look more like the default Rust test harness, and are pretty small overall.
+As mentioned in [*How nextest works*](how-it-works.md), cargo-nextest has a much thicker interface with the test harness than cargo test does. If you don't use any custom harnesses, cargo-nextest will run out of the box. However, users of custom test harnesses may need to be changed to work with cargo nextest. In general, the changes make the test harness look more like the default Rust test harness, and are pretty small overall.
 
 * **Custom test harnesses MUST support being run with `--list --format terse`.** This command MUST print to stdout all tests in *exactly* the format
 
