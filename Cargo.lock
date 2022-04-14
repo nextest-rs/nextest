@@ -710,6 +710,7 @@ dependencies = [
  "nom-tracable",
  "nom_locate 4.0.0",
  "regex",
+ "regex-syntax",
  "thiserror",
 ]
 

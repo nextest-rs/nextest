@@ -272,10 +272,10 @@ fn parse_regex(input: Span) -> IResult<Option<NameMatcher>> {
     };
     match regex::Regex::new(&res).map(NameMatcher::Regex) {
         Ok(res) => Ok((i, Some(res))),
-        _ => {
+        Err(_) => {
             let start = input.location_offset();
             let end = i.location_offset();
-            let err = ParseSingleError::InvalidRegex((start, end - start).into());
+            let err = ParseSingleError::invalid_regex(&res, start, end);
             i.extra.report_error(err);
             Ok((i, None))
         }
@@ -692,7 +692,7 @@ mod tests {
 
     macro_rules! assert_error {
         ($error:ident, $name:ident, $start:literal, $end:literal) => {
-            assert_eq!(ParseSingleError::$name(($start, $end).into()), $error);
+            assert!(matches!($error, ParseSingleError::$name(span) if span == ($start, $end).into()));
         };
     }
 
@@ -731,7 +731,21 @@ mod tests {
         let mut errors = parse_err(src);
         assert_eq!(1, errors.len());
         let error = errors.remove(0);
-        assert_error!(error, InvalidRegex, 9, 1);
+        assert!(
+            matches!(error, ParseSingleError::InvalidRegex { span, .. } if span == (9, 1).into())
+        );
+
+        // Ensure more detailed error messages if possible.
+        let src = "package(/foo(ab/)";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        let (span, message) = match error {
+            ParseSingleError::InvalidRegex { span, message } => (span, message),
+            other => panic!("expected invalid regex with details, found {}", other),
+        };
+        assert_eq!(span, (12, 1).into(), "span matches");
+        assert_eq!(message, "unclosed group");
     }
 
     #[test]

@@ -25,11 +25,18 @@ impl FilterExpressionParseErrors {
     }
 }
 
-#[derive(Clone, Debug, Error, Diagnostic, PartialEq, Eq)]
+#[derive(Clone, Debug, Error, Diagnostic, PartialEq)]
 #[non_exhaustive]
 pub enum ParseSingleError {
     #[error("invalid regex")]
-    InvalidRegex(#[label("invalid regex")] SourceSpan),
+    InvalidRegex {
+        #[label("{}", message)]
+        span: SourceSpan,
+        message: String,
+    },
+    /// An invalid regex was encountered but we couldn't determine a better error message.
+    #[error("invalid regex")]
+    InvalidRegexWithoutMessage(#[label("invalid regex")] SourceSpan),
     #[error("expected close regex")]
     ExpectedCloseRegex(#[label("missing '/'")] SourceSpan),
     #[error("expected matcher input")]
@@ -49,6 +56,35 @@ pub enum ParseSingleError {
 
     #[error("unknown parsing error")]
     Unknown,
+}
+
+impl ParseSingleError {
+    pub(crate) fn invalid_regex(input: &str, start: usize, end: usize) -> Self {
+        // Use regex-syntax to parse the input so that we get better error messages.
+        match regex_syntax::Parser::new().parse(input) {
+            Ok(_) => {
+                // It is weird that a regex failed to parse with regex but succeeded with
+                // regex-syntax, but we can't do better.
+                Self::InvalidRegexWithoutMessage((start, end - start).into())
+            }
+            Err(err) => {
+                let (message, span) = match &err {
+                    regex_syntax::Error::Parse(err) => (format!("{}", err.kind()), err.span()),
+                    regex_syntax::Error::Translate(err) => (format!("{}", err.kind()), err.span()),
+                    _ => return Self::InvalidRegexWithoutMessage((start, end - start).into()),
+                };
+
+                // This isn't perfect because it doesn't account for "\/", but it'll do for now.
+                let err_start = start + span.start.offset;
+                let err_end = start + span.end.offset;
+
+                Self::InvalidRegex {
+                    span: (err_start, err_end - err_start).into(),
+                    message,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
