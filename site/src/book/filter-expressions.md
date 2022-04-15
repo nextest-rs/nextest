@@ -52,18 +52,18 @@ This section contains the full set of operators supported by the DSL.
 
 ### Name matchers
 
-- `~string` or `contains:string`: match a package or test name containing `string`
+- `~string`: match a package or test name containing `string`
 - `=string`: match a package or test name that's equal to `string`
-- `/regex/`: match a package or test name if any part of it matches the regular expression `regex`. To match the entire string against a regular expression, use `/^regex$/`. The implementation uses the regex crate.
-- `string`: default matching strategy
-    - for tests (`test()`) this is a `contain`
-    - for packages (`package()`, `deps()` and `rdeps()`) this is an `equal`
+- `/regex/`: match a package or test name if any part of it matches the regular expression `regex`. To match the entire string against a regular expression, use `/^regex$/`. The implementation uses the [regex](https://github.com/rust-lang/regex) crate.
+- `string`: default matching strategy.
+    - For tests (`test()`), this is equivalent to `~string`.
+    - For packages (`package()`, `deps()` and `rdeps()`), this is equivalent to `=string`.
 
-To match a string beginning with `=`, `~` or `/`, or if you're constructing a filter expression in a programmatic context, use the `contains:` prefix.
+If you're constructing an expression string programmatically, it is recommended that you always use a prefix to avoid ambiguity.
 
 #### Escape sequences
 
-The *contains* and *equality* name matchers can contain escape sequences, preceded by a backslash (`\`).
+The `~string` and `=string` name matchers can contain escape sequences, preceded by a backslash (`\`).
 
 * `\n`: line feed
 * `\r`: carriage return

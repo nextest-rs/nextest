@@ -219,10 +219,7 @@ fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
 #[tracable_parser]
 fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     map(
-        alt((
-            preceded(char('~'), parse_matcher_text),
-            preceded(tag("contains:"), parse_matcher_text),
-        )),
+        preceded(char('~'), parse_matcher_text),
         |res: Option<String>| res.map(NameMatcher::Contains),
     )(input)
 }
@@ -581,22 +578,40 @@ mod tests {
             parse_set("package(something)")
         );
 
-        // 'contains:' is an escape hatch to enable literal matches.
+        // Explicit contains matching
         assert_eq!(
             SetDef::Test(NameMatcher::Contains("something".to_string())),
-            parse_set("test(contains:something)")
+            parse_set("test(~something)")
         );
         assert_eq!(
             SetDef::Test(NameMatcher::Contains("~something".to_string())),
-            parse_set("test(contains:~something)")
+            parse_set("test(~~something)")
         );
         assert_eq!(
             SetDef::Test(NameMatcher::Contains("=something".to_string())),
-            parse_set("test(contains:=something)")
+            parse_set("test(~=something)")
         );
         assert_eq!(
             SetDef::Test(NameMatcher::Contains("/something/".to_string())),
-            parse_set("test(contains:/something/)")
+            parse_set("test(~/something/)")
+        );
+
+        // Explicit equals matching.
+        assert_eq!(
+            SetDef::Test(NameMatcher::Equal("something".to_string())),
+            parse_set("test(=something)")
+        );
+        assert_eq!(
+            SetDef::Test(NameMatcher::Equal("~something".to_string())),
+            parse_set("test(=~something)")
+        );
+        assert_eq!(
+            SetDef::Test(NameMatcher::Equal("=something".to_string())),
+            parse_set("test(==something)")
+        );
+        assert_eq!(
+            SetDef::Test(NameMatcher::Equal("/something/".to_string())),
+            parse_set("test(=/something/)")
         );
     }
 
