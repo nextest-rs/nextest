@@ -6,6 +6,7 @@ use nom_tracable::TracableInfo;
 use std::cell::RefCell;
 use thiserror::Error;
 
+/// A set of errors that occurred while parsing a filter expression.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct FilterExpressionParseErrors {
@@ -25,35 +26,54 @@ impl FilterExpressionParseErrors {
     }
 }
 
+/// An individual error that occurred while parsing a filter expression.
 #[derive(Clone, Debug, Error, Diagnostic, PartialEq)]
 #[non_exhaustive]
 pub enum ParseSingleError {
+    /// An invalid regex was encountered.
     #[error("invalid regex")]
     InvalidRegex {
+        /// The part of the input that failed.
         #[label("{}", message)]
         span: SourceSpan,
+
+        /// A message indicating the failure.
         message: String,
     },
+
     /// An invalid regex was encountered but we couldn't determine a better error message.
     #[error("invalid regex")]
     InvalidRegexWithoutMessage(#[label("invalid regex")] SourceSpan),
+
+    /// A regex string was not closed.
     #[error("expected close regex")]
-    ExpectedCloseRegex(#[label("missing '/'")] SourceSpan),
-    #[error("expected matcher input")]
-    ExpectedMatcherInput(#[label("missing matcher content")] SourceSpan),
-    #[error("unexpected name matcher")]
-    UnexpectedNameMatcher(#[label("this set doesn't take an argument")] SourceSpan),
-    #[error("invalid unicode string")]
-    InvalidUnicodeString(#[label("invalid unicode string")] SourceSpan),
+    ExpectedCloseRegex(#[label("missing `/`")] SourceSpan),
+
+    /// An unexpected argument was found.
+    #[error("unexpected argument")]
+    UnexpectedArgument(#[label("this set doesn't take an argument")] SourceSpan),
+
+    /// An invalid string was found.
+    #[error("invalid string")]
+    InvalidString(#[label("invalid string")] SourceSpan),
+
+    /// An open parenthesis `(` was expected but not found.
     #[error("expected open parenthesis")]
-    ExpectedOpenParenthesis(#[label("missing '('")] SourceSpan),
+    ExpectedOpenParenthesis(#[label("missing `(`")] SourceSpan),
+
+    /// A close parenthesis `)` was expected but not found.
     #[error("expected close parenthesis")]
-    ExpectedCloseParenthesis(#[label("missing ')'")] SourceSpan),
-    #[error("expected filtering expression")]
+    ExpectedCloseParenthesis(#[label("missing `)`")] SourceSpan),
+
+    /// An expression was expected in this position but not found.
+    #[error("expected expression")]
     ExpectedExpr(#[label("missing expression")] SourceSpan),
+
+    /// The expression was expected to end here but some extra text was found.
     #[error("expected end of expression")]
     ExpectedEndOfExpression(#[label("unparsed input")] SourceSpan),
 
+    /// An unknown parsing error occurred.
     #[error("unknown parsing error")]
     Unknown,
 }

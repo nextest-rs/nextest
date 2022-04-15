@@ -1,7 +1,7 @@
-# Filter expression DSL
+# Filter expressions
 
 * **Introduced in:** cargo-nextest 0.9.13 (not released yet)
-* **Environment variable**: `NEXTEST_EXPERIMENTAL_EXPR_FILTER=1`
+* **Environment variable**: `NEXTEST_EXPERIMENTAL_FILTER_EXPR=1`
 * **Tracking issue**: []
 
 Nextest supports a domain-specific language (DSL) for filtering tests. The DSL is inspired by, and is similar to, [Bazel query](https://bazel.build/docs/query-how-to) and [Mercurial revsets](https://www.mercurial-scm.org/repo/hg/help/revsets).

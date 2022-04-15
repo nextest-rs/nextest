@@ -25,7 +25,7 @@
 - [Stability policy](book/stability.md)
 - [Experimental features](book/experimental-features.md)
   - [Reusing builds](book/reusing-builds.md)
-  - [Filtering expression](book/filtering-expression.md)
+  - [Filter expressions](book/filter-expressions.md)
 ---
 - [How nextest works](book/how-it-works.md)
   - [Benchmarks](book/benchmarks.md)

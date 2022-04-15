@@ -64,7 +64,7 @@ pub enum FilteringExpr {
 }
 
 impl NameMatcher {
-    pub fn is_match(&self, input: &str) -> bool {
+    pub(crate) fn is_match(&self, input: &str) -> bool {
         match self {
             Self::Equal(text) => text == input,
             Self::Contains(text) => input.contains(text),

@@ -196,7 +196,7 @@ fn ws<'a, T, P: FnMut(Span<'a>) -> IResult<'a, T>>(
 fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
     match expect(
         unicode_string::parse_string,
-        ParseSingleError::InvalidUnicodeString,
+        ParseSingleError::InvalidString,
     )(input.clone())
     {
         Ok((i, res)) => Ok((i, res)),
@@ -311,7 +311,7 @@ fn nullary_set_def(
         let i = match recognize::<_, _, nom::error::Error<Span>, _>(take_till(|c| c == ')'))(i) {
             Ok((i, res)) => {
                 if !res.fragment().trim().is_empty() {
-                    let err = ParseSingleError::UnexpectedNameMatcher(res.to_span());
+                    let err = ParseSingleError::UnexpectedArgument(res.to_span());
                     i.extra.report_error(err);
                 }
                 i
@@ -763,7 +763,7 @@ mod tests {
         let mut errors = parse_err(src);
         assert_eq!(1, errors.len());
         let error = errors.remove(0);
-        assert_error!(error, UnexpectedNameMatcher, 4, 3);
+        assert_error!(error, UnexpectedArgument, 4, 3);
     }
 
     #[test]

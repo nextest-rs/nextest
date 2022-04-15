@@ -478,7 +478,7 @@ struct App {
 }
 
 fn check_experimental_filtering(build_filter: &TestBuildFilter) -> Result<()> {
-    const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_EXPR_FILTER";
+    const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
     let enabled = std::env::var(EXPERIMENTAL_ENV).is_ok();
     if !build_filter.expr_filter.is_empty() && !enabled {
         Err(Report::new(ExpectedError::experimental_feature_error(
