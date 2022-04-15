@@ -69,13 +69,14 @@ fn parse_escaped_char(input: Span) -> IResult<char> {
             value('\\', char('\\')),
             value('/', char('/')),
             value(')', char(')')),
+            value(',', char(',')),
         )),
     )(input)
 }
 
 #[tracable_parser]
 fn parse_literal(input: Span) -> IResult<Span> {
-    let not_quote_slash = is_not(")\\");
+    let not_quote_slash = is_not(",)\\");
     verify(not_quote_slash, |s: &Span| !s.fragment().is_empty())(input)
 }
 

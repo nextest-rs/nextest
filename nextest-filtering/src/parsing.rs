@@ -308,6 +308,22 @@ fn parse_set_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     )))(input)
 }
 
+#[tracable_parser]
+fn recover_unexpected_comma(input: Span) -> IResult<()> {
+    match peek(ws(char(',')))(input.clone()) {
+        Ok((i, _)) => {
+            let pos = i.location_offset();
+            i.extra
+                .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
+            match take_till::<_, _, nom::error::Error<Span>>(|c| c == ')')(i) {
+                Ok((i, _)) => Ok((i, ())),
+                Err(_) => unreachable!(),
+            }
+        }
+        Err(_) => Ok((input, ())),
+    }
+}
+
 fn nullary_set_def(
     name: &'static str,
     make_set: fn() -> SetDef,
@@ -338,6 +354,7 @@ fn unary_set_def(
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
         let (i, res) = parse_set_matcher(i)?;
+        let (i, _) = recover_unexpected_comma(i)?;
         let (i, _) = expect_char(')', ParseSingleError::ExpectedCloseParenthesis)(i)?;
         Ok((i, res.map(make_set)))
     }
@@ -690,6 +707,29 @@ mod tests {
         assert_eq!(expr, parse("not (none() & all())"));
     }
 
+    #[test]
+    fn test_parse_comma() {
+        // accept escaped comma
+        let expr = Expr::Set(SetDef::Test(NameMatcher::Contains("a,".to_string())));
+        assert_eq!(expr, parse(r"test(a\,)"));
+
+        // string parsing is compatible with possible future syntax
+        fn parse_future_syntax(input: Span) -> IResult<(Option<NameMatcher>, Option<NameMatcher>)> {
+            let (i, _) = tag("something")(input)?;
+            let (i, _) = char('(')(i)?;
+            let (i, n1) = parse_set_matcher(i)?;
+            let (i, _) = ws(char(','))(i)?;
+            let (i, n2) = parse_set_matcher(i)?;
+            let (i, _) = char(')')(i)?;
+            Ok((i, (n1, n2)))
+        }
+
+        let errors = RefCell::new(Vec::new());
+        if parse_future_syntax(Span::new_extra("something(aa, bb)", State::new(&errors))).is_err() {
+            panic!("Failed to parse comma separated matchers");
+        }
+    }
+
     #[track_caller]
     fn parse_err(input: &str) -> Vec<ParseSingleError> {
         let errors = RefCell::new(Vec::new());
@@ -798,6 +838,15 @@ mod tests {
         assert_eq!(1, errors.len());
         let error = errors.remove(0);
         assert_error!(error, InvalidString, 5, 0);
+    }
+
+    #[test]
+    fn test_unexpected_comma() {
+        let src = "test(aa, )";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, UnexpectedComma, 7, 0);
     }
 
     #[test]
