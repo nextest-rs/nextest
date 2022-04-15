@@ -194,19 +194,26 @@ fn ws<'a, T, P: FnMut(Span<'a>) -> IResult<'a, T>>(
 // This parse will never fail
 #[tracable_parser]
 fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
-    match expect(
+    let (i, res) = match expect(
         unicode_string::parse_string,
         ParseSingleError::InvalidString,
     )(input.clone())
     {
-        Ok((i, res)) => Ok((i, res)),
+        Ok((i, res)) => (i, res),
         Err(nom::Err::Incomplete(_)) => {
             let i = input.slice(input.fragment().len()..);
             // No need for error reporting, missing closing ')' will be detected after
-            Ok((i, None))
+            (i, None)
         }
         Err(_) => unreachable!(),
+    };
+
+    if res.as_ref().map(|s| s.is_empty()).unwrap_or(false) {
+        let start = i.location_offset();
+        i.extra
+            .report_error(ParseSingleError::InvalidString((start..0).into()));
     }
+    Ok((i, res))
 }
 
 // This parse will never fail
@@ -782,6 +789,15 @@ mod tests {
         assert_eq!(1, errors.len());
         let error = errors.remove(0);
         assert_error!(error, ExpectedEndOfExpression, 5, 7);
+    }
+
+    #[test]
+    fn test_missing_argument() {
+        let src = "test()";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidString, 5, 0);
     }
 
     #[test]
