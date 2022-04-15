@@ -53,6 +53,10 @@ pub enum ParseSingleError {
     #[error("unexpected argument")]
     UnexpectedArgument(#[label("this set doesn't take an argument")] SourceSpan),
 
+    /// An unexpected comma was found.
+    #[error("unexpected comma")]
+    UnexpectedComma(#[label("this set doesn't take multiple arguments")] SourceSpan),
+
     /// An invalid string was found.
     #[error("invalid string")]
     InvalidString(#[label("invalid string")] SourceSpan),

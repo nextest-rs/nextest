@@ -68,6 +68,7 @@ The *contains* and *equality* name matchers can contain escape sequences, preced
 * `\\`: backslash
 * `\/`: forward slash
 * `\)`: closing parenthesis
+* `\,`: comma
 * `\u{7FFF}`: 24-bit Unicode character code (up to 6 hex digits)
 
 All other escape sequences are invalid.
