@@ -8,6 +8,7 @@
 use camino::Utf8PathBuf;
 use clap::Parser;
 use guppy::graph::PackageGraph;
+use nextest_filtering::errors::FilterExpressionParseErrors;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -54,6 +55,12 @@ fn main() {
     let graph = load_graph(args.cargo_metadata);
     match nextest_filtering::FilteringExpr::parse(&args.expr, &graph) {
         Ok(expr) => println!("{:?}", expr),
-        Err(_) => std::process::exit(1),
+        Err(FilterExpressionParseErrors { input, errors, .. }) => {
+            for error in errors {
+                let report = miette::Report::new(error).with_source_code(input.clone());
+                eprintln!("{:?}", report);
+            }
+            std::process::exit(1);
+        }
     }
 }
