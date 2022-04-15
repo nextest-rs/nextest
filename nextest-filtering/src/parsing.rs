@@ -216,14 +216,10 @@ fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
     Ok((i, res))
 }
 
-// This parse will never fail
 #[tracable_parser]
 fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     map(
-        alt((
-            preceded(tag("contains:"), parse_matcher_text),
-            parse_matcher_text,
-        )),
+        preceded(tag("contains:"), parse_matcher_text),
         |res: Option<String>| res.map(NameMatcher::Contains),
     )(input)
 }
@@ -234,6 +230,13 @@ fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
         preceded(char('='), parse_matcher_text),
         |res: Option<String>| res.map(NameMatcher::Equal),
     ))(input)
+}
+
+// This parse will never fail
+fn default_matcher(
+    make: fn(String) -> NameMatcher,
+) -> impl FnMut(Span) -> IResult<Option<NameMatcher>> {
+    move |input: Span| map(parse_matcher_text, |res: Option<String>| res.map(make))(input)
 }
 
 #[tracable_parser]
@@ -298,14 +301,18 @@ fn parse_regex_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ))(input)
 }
 
-// This parse will never fail (because parse_contains_matcher won't)
-#[tracable_parser]
-fn parse_set_matcher(input: Span) -> IResult<Option<NameMatcher>> {
-    ws(alt((
-        parse_regex_matcher,
-        parse_equal_matcher,
-        parse_contains_matcher,
-    )))(input)
+// This parse will never fail (because default_matcher won't)
+fn set_matcher(
+    make: fn(String) -> NameMatcher,
+) -> impl FnMut(Span) -> IResult<Option<NameMatcher>> {
+    move |input: Span| {
+        ws(alt((
+            parse_regex_matcher,
+            parse_equal_matcher,
+            parse_contains_matcher,
+            default_matcher(make),
+        )))(input)
+    }
 }
 
 #[tracable_parser]
@@ -348,12 +355,13 @@ fn nullary_set_def(
 
 fn unary_set_def(
     name: &'static str,
+    make_default_matcher: fn(String) -> NameMatcher,
     make_set: fn(NameMatcher) -> SetDef,
 ) -> impl FnMut(Span) -> IResult<Option<SetDef>> {
     move |i| {
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
-        let (i, res) = parse_set_matcher(i)?;
+        let (i, res) = set_matcher(make_default_matcher)(i)?;
         let (i, _) = recover_unexpected_comma(i)?;
         let (i, _) = expect_char(')', ParseSingleError::ExpectedCloseParenthesis)(i)?;
         Ok((i, res.map(make_set)))
@@ -363,10 +371,10 @@ fn unary_set_def(
 #[tracable_parser]
 fn parse_set_def(input: Span) -> IResult<Option<SetDef>> {
     ws(alt((
-        unary_set_def("package", SetDef::Package),
-        unary_set_def("deps", SetDef::Deps),
-        unary_set_def("rdeps", SetDef::Rdeps),
-        unary_set_def("test", SetDef::Test),
+        unary_set_def("package", NameMatcher::Equal, SetDef::Package),
+        unary_set_def("deps", NameMatcher::Equal, SetDef::Deps),
+        unary_set_def("rdeps", NameMatcher::Equal, SetDef::Rdeps),
+        unary_set_def("test", NameMatcher::Contains, SetDef::Test),
         nullary_set_def("all", || SetDef::All),
         nullary_set_def("none", || SetDef::None),
     )))(input)
@@ -598,15 +606,15 @@ mod tests {
         assert_eq!(SetDef::None, parse_set("none()"));
 
         assert_eq!(
-            SetDef::Package(NameMatcher::Contains("something".to_string())),
+            SetDef::Package(NameMatcher::Equal("something".to_string())),
             parse_set("package(something)")
         );
         assert_eq!(
-            SetDef::Deps(NameMatcher::Contains("something".to_string())),
+            SetDef::Deps(NameMatcher::Equal("something".to_string())),
             parse_set("deps(something)")
         );
         assert_eq!(
-            SetDef::Rdeps(NameMatcher::Contains("something".to_string())),
+            SetDef::Rdeps(NameMatcher::Equal("something".to_string())),
             parse_set("rdeps(something)")
         );
         assert_eq!(
@@ -717,9 +725,9 @@ mod tests {
         fn parse_future_syntax(input: Span) -> IResult<(Option<NameMatcher>, Option<NameMatcher>)> {
             let (i, _) = tag("something")(input)?;
             let (i, _) = char('(')(i)?;
-            let (i, n1) = parse_set_matcher(i)?;
+            let (i, n1) = set_matcher(NameMatcher::Contains)(i)?;
             let (i, _) = ws(char(','))(i)?;
-            let (i, n2) = parse_set_matcher(i)?;
+            let (i, n2) = set_matcher(NameMatcher::Contains)(i)?;
             let (i, _) = char(')')(i)?;
             Ok((i, (n1, n2)))
         }
