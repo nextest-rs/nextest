@@ -37,7 +37,7 @@ strip-ansi-escapes = "0.1.1"
 # For cfg expression evaluation for [target.'cfg()'] expressions
 target-spec = "1.0"
 # For parsing of .cargo/config.toml files
-toml = "0.5.8"
+toml = "0.5.9"
 twox-hash = { version = "1.6.2", default-features = false }
 
 nextest-filtering = { version = "0.1.0", path = "../nextest-filtering" }
