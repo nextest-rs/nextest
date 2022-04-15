@@ -52,14 +52,14 @@ This section contains the full set of operators supported by the DSL.
 
 ### Name matchers
 
-- `contains:string`: match a package or test name containing `string`
+- `~string` or `contains:string`: match a package or test name containing `string`
 - `=string`: match a package or test name that's equal to `string`
 - `/regex/`: match a package or test name if any part of it matches the regular expression `regex`. To match the entire string against a regular expression, use `/^regex$/`. The implementation uses the regex crate.
 - `string`: default matching strategy
     - for tests (`test()`) this is a `contain`
     - for packages (`package()`, `deps()` and `rdeps()`) this is an `equal`
 
-To match a string beginning with `=` or `/`, or if you're constructing a filter expression in a programmatic context, use the `contains:` prefix.
+To match a string beginning with `=`, `~` or `/`, or if you're constructing a filter expression in a programmatic context, use the `contains:` prefix.
 
 #### Escape sequences
 

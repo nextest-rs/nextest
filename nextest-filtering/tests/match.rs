@@ -23,7 +23,7 @@ fn mk_pid(c: char) -> PackageId {
 #[test]
 fn test_expr_package_contains() {
     let graph = load_graph();
-    let expr = FilteringExpr::parse("package(contains:_a)", &graph).unwrap();
+    let expr = FilteringExpr::parse("package(~_a)", &graph).unwrap();
     println!("{:?}", expr);
 
     assert!(expr.includes(&mk_pid('a'), "test_something"));
