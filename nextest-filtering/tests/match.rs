@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use guppy::PackageId;
-use nextest_filtering::FilteringExpr;
+use nextest_filtering::{
+    errors::{FilterExpressionParseErrors, ParseSingleError},
+    FilteringExpr,
+};
 
 #[track_caller]
 fn load_graph() -> guppy::graph::PackageGraph {
@@ -93,6 +96,31 @@ fn test_expr_rdeps() {
     assert!(expr.includes(&mk_pid('e'), "test_something"));
     assert!(expr.includes(&mk_pid('f'), "test_something"));
     assert!(expr.includes(&mk_pid('g'), "test_something"));
+}
+
+#[test]
+fn test_expr_with_no_matching_packages() {
+    #[track_caller]
+    fn assert_error(errors: &FilterExpressionParseErrors) {
+        assert_eq!(errors.errors.len(), 1);
+        assert!(matches!(
+            errors.errors[0],
+            ParseSingleError::NoPackageMatch(_)
+        ));
+    }
+
+    let graph = load_graph();
+    let errors = FilteringExpr::parse("deps(does-not-exist)", &graph).unwrap_err();
+    assert_error(&errors);
+
+    let errors = FilteringExpr::parse("deps(=does-not-exist)", &graph).unwrap_err();
+    assert_error(&errors);
+
+    let errors = FilteringExpr::parse("deps(~does-not-exist)", &graph).unwrap_err();
+    assert_error(&errors);
+
+    let errors = FilteringExpr::parse("deps(/does-not/)", &graph).unwrap_err();
+    assert_error(&errors);
 }
 
 #[test]

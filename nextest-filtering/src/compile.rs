@@ -1,24 +1,35 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::{
+    errors::ParseSingleError,
+    expression::*,
+    parsing::{Expr, SetDef},
+};
 use guppy::{
     graph::{DependsCache, PackageGraph, PackageMetadata},
     PackageId,
 };
+use miette::SourceSpan;
 use std::collections::HashSet;
 
-use crate::{
-    expression::*,
-    parsing::{Expr, SetDef},
-};
-
-pub(crate) fn compile(expr: &Expr, graph: &PackageGraph) -> FilteringExpr {
+pub(crate) fn compile(
+    expr: &Expr,
+    graph: &PackageGraph,
+) -> Result<FilteringExpr, Vec<ParseSingleError>> {
     let in_workspace_packages: Vec<_> = graph
         .resolve_workspace()
         .packages(guppy::graph::DependencyDirection::Forward)
         .collect();
     let mut cache = graph.new_depends_cache();
-    compile_expr(expr, &in_workspace_packages, &mut cache)
+    let mut errors = vec![];
+    let expr = compile_expr(expr, &in_workspace_packages, &mut cache, &mut errors);
+
+    if errors.is_empty() {
+        Ok(expr)
+    } else {
+        Err(errors)
+    }
 }
 
 fn matching_packages(
@@ -78,36 +89,59 @@ fn compile_set_def(
     set: &SetDef,
     packages: &[PackageMetadata],
     cache: &mut DependsCache,
+    errors: &mut Vec<ParseSingleError>,
 ) -> FilteringSet {
     match set {
-        SetDef::Package(matcher) => FilteringSet::Packages(matching_packages(matcher, packages)),
-        SetDef::Deps(matcher) => {
-            FilteringSet::Packages(dependencies_packages(matcher, packages, cache))
-        }
-        SetDef::Rdeps(matcher) => {
-            FilteringSet::Packages(rdependencies_packages(matcher, packages, cache))
-        }
-        SetDef::Test(matcher) => FilteringSet::Test(matcher.clone()),
+        SetDef::Package(matcher, span) => FilteringSet::Packages(expect_non_empty(
+            matching_packages(matcher, packages),
+            span.clone(),
+            errors,
+        )),
+        SetDef::Deps(matcher, span) => FilteringSet::Packages(expect_non_empty(
+            dependencies_packages(matcher, packages, cache),
+            span.clone(),
+            errors,
+        )),
+        SetDef::Rdeps(matcher, span) => FilteringSet::Packages(expect_non_empty(
+            rdependencies_packages(matcher, packages, cache),
+            span.clone(),
+            errors,
+        )),
+        SetDef::Test(matcher, span) => FilteringSet::Test(matcher.clone(), span.clone()),
         SetDef::All => FilteringSet::All,
         SetDef::None => FilteringSet::None,
     }
+}
+
+fn expect_non_empty(
+    packages: HashSet<PackageId>,
+    span: SourceSpan,
+    errors: &mut Vec<ParseSingleError>,
+) -> HashSet<PackageId> {
+    if packages.is_empty() {
+        errors.push(ParseSingleError::NoPackageMatch(span));
+    }
+    packages
 }
 
 fn compile_expr(
     expr: &Expr,
     packages: &[PackageMetadata],
     cache: &mut DependsCache,
+    errors: &mut Vec<ParseSingleError>,
 ) -> FilteringExpr {
     match expr {
-        Expr::Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache)),
-        Expr::Not(expr) => FilteringExpr::Not(Box::new(compile_expr(expr, packages, cache))),
+        Expr::Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache, errors)),
+        Expr::Not(expr) => {
+            FilteringExpr::Not(Box::new(compile_expr(expr, packages, cache, errors)))
+        }
         Expr::Union(expr_1, expr_2) => FilteringExpr::Union(
-            Box::new(compile_expr(expr_1, packages, cache)),
-            Box::new(compile_expr(expr_2, packages, cache)),
+            Box::new(compile_expr(expr_1, packages, cache, errors)),
+            Box::new(compile_expr(expr_2, packages, cache, errors)),
         ),
         Expr::Intersection(expr_1, expr_2) => FilteringExpr::Intersection(
-            Box::new(compile_expr(expr_1, packages, cache)),
-            Box::new(compile_expr(expr_2, packages, cache)),
+            Box::new(compile_expr(expr_1, packages, cache, errors)),
+            Box::new(compile_expr(expr_2, packages, cache, errors)),
         ),
     }
 }

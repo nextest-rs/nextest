@@ -6,6 +6,7 @@ use crate::{
     parsing::{parse, ParsedExpr, Span},
 };
 use guppy::{graph::PackageGraph, PackageId};
+use miette::SourceSpan;
 use std::{cell::RefCell, collections::HashSet};
 
 /// Matcher for name
@@ -40,7 +41,7 @@ pub enum FilteringSet {
     /// All tests in packages
     Packages(HashSet<PackageId>),
     /// All tests matching a name
-    Test(NameMatcher),
+    Test(NameMatcher, SourceSpan),
     /// All tests
     All,
     /// No tests
@@ -78,7 +79,7 @@ impl FilteringSet {
         match self {
             Self::All => true,
             Self::None => false,
-            Self::Test(matcher) => matcher.is_match(name),
+            Self::Test(matcher, _) => matcher.is_match(name),
             Self::Packages(packages) => packages.contains(package_id),
         }
     }
@@ -100,7 +101,8 @@ impl FilteringExpr {
                 }
 
                 match parsed_expr {
-                    ParsedExpr::Valid(expr) => Ok(crate::compile::compile(&expr, graph)),
+                    ParsedExpr::Valid(expr) => crate::compile::compile(&expr, graph)
+                        .map_err(|errors| FilterExpressionParseErrors::new(input, errors)),
                     _ => {
                         // should not happen
                         // If an ParsedExpr::Error is produced, we should also have an error inside

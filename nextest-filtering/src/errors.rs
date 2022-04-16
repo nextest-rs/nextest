@@ -77,6 +77,10 @@ pub enum ParseSingleError {
     #[error("expected end of expression")]
     ExpectedEndOfExpression(#[label("unparsed input")] SourceSpan),
 
+    /// This matcher didn't match any packages.
+    #[error("operator didn't match any packages")]
+    NoPackageMatch(#[label("no packages matched this")] SourceSpan),
+
     /// An unknown parsing error occurred.
     #[error("unknown parsing error")]
     Unknown,
