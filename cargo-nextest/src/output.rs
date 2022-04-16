@@ -83,9 +83,9 @@ impl Color {
             miette::set_hook(Box::new(move |_| {
                 let theme_styles = if self.should_colorize(Stream::Stderr) {
                     ThemeStyles {
-                        error: style().bright_red(),
-                        warning: style().bright_yellow(),
-                        advice: style().bright_cyan(),
+                        error: style().bright_red().bold(),
+                        warning: style().bright_yellow().bold(),
+                        advice: style().bright_cyan().bold(),
                         help: style().cyan(),
                         link: style().cyan().underline().bold(),
                         linum: style().dimmed(),
@@ -156,13 +156,15 @@ fn format_fn(f: &mut Formatter, record: &Record<'_>) -> std::io::Result<()> {
         Level::Error => writeln!(
             f,
             "{}: {}",
-            "error".if_supports_color(Stream::Stderr, |s| s.style(Style::new().bold().red())),
+            "error".if_supports_color(Stream::Stderr, |s| s
+                .style(Style::new().bright_red().bold())),
             record.args()
         ),
         Level::Warn => writeln!(
             f,
             "{}: {}",
-            "warning".if_supports_color(Stream::Stderr, |s| s.style(Style::new().bold().yellow())),
+            "warning".if_supports_color(Stream::Stderr, |s| s
+                .style(Style::new().bright_yellow().bold())),
             record.args()
         ),
         Level::Info => writeln!(
