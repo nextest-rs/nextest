@@ -503,7 +503,9 @@ impl App {
         check_experimental_filtering(&build_filter)?;
 
         let graph_data = match reuse_build.cargo_metadata.as_deref() {
-            Some(path) => std::fs::read_to_string(path)?,
+            Some(path) => std::fs::read_to_string(path).map_err(|err| {
+                ExpectedError::argument_file_read_error("cargo-metadata", path, err)
+            })?,
             None => {
                 let with_deps = build_filter
                     .expr_filter
@@ -517,7 +519,9 @@ impl App {
                 )?
             }
         };
-        let graph = guppy::CargoMetadata::parse_json(&graph_data)?.build_graph()?;
+        let graph = PackageGraph::from_json(&graph_data).map_err(|err| {
+            ExpectedError::cargo_metadata_parse_error(reuse_build.cargo_metadata.clone(), err)
+        })?;
 
         let manifest_path = if reuse_build.cargo_metadata.is_some() {
             Some(graph.workspace().root().join("Cargo.toml"))
@@ -544,8 +548,13 @@ impl App {
     fn build_binary_list(&self) -> Result<BinaryList> {
         let binary_list = match self.reuse_build.binaries_metadata.as_deref() {
             Some(path) => {
-                let raw_binary_list = std::fs::read_to_string(path)?;
-                let binary_list: BinaryListSummary = serde_json::from_str(&raw_binary_list)?;
+                let raw_binary_list = std::fs::read_to_string(path).map_err(|err| {
+                    ExpectedError::argument_file_read_error("binaries-metadata", path, err)
+                })?;
+                let binary_list: BinaryListSummary = serde_json::from_str(&raw_binary_list)
+                    .map_err(|err| {
+                        ExpectedError::argument_json_parse_error("binaries-metadata", path, err)
+                    })?;
                 BinaryList::from_summary(binary_list)
             }
             None => self.build_filter.compute_binary_list(

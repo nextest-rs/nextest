@@ -1,6 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use camino::Utf8PathBuf;
 use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::{ConfigParseError, ProfileNotFound};
@@ -20,6 +21,20 @@ pub enum ExpectedError {
     },
     ConfigParseError {
         err: ConfigParseError,
+    },
+    ArgumentFileReadError {
+        arg_name: &'static str,
+        file_name: Utf8PathBuf,
+        err: std::io::Error,
+    },
+    ArgumentJsonParseError {
+        arg_name: &'static str,
+        file_name: Utf8PathBuf,
+        err: serde_json::Error,
+    },
+    CargoMetadataParseError {
+        file_name: Option<Utf8PathBuf>,
+        err: guppy::Error,
     },
     BuildFailed {
         escaped_command: Vec<String>,
@@ -46,6 +61,40 @@ impl ExpectedError {
 
     pub(crate) fn config_parse_error(err: ConfigParseError) -> Self {
         Self::ConfigParseError { err }
+    }
+
+    pub(crate) fn argument_file_read_error(
+        arg_name: &'static str,
+        file_name: impl Into<Utf8PathBuf>,
+        err: std::io::Error,
+    ) -> Self {
+        Self::ArgumentFileReadError {
+            arg_name,
+            file_name: file_name.into(),
+            err,
+        }
+    }
+
+    pub(crate) fn argument_json_parse_error(
+        arg_name: &'static str,
+        file_name: impl Into<Utf8PathBuf>,
+        err: serde_json::Error,
+    ) -> Self {
+        Self::ArgumentJsonParseError {
+            arg_name,
+            file_name: file_name.into(),
+            err,
+        }
+    }
+
+    pub(crate) fn cargo_metadata_parse_error(
+        file_name: impl Into<Option<Utf8PathBuf>>,
+        err: guppy::Error,
+    ) -> Self {
+        Self::CargoMetadataParseError {
+            file_name: file_name.into(),
+            err,
+        }
     }
 
     pub(crate) fn experimental_feature_error(name: &'static str, var_name: &'static str) -> Self {
@@ -79,9 +128,11 @@ impl ExpectedError {
     pub fn process_exit_code(&self) -> i32 {
         match self {
             Self::CargoMetadataFailed => NextestExitCode::CARGO_METADATA_FAILED,
-            Self::ProfileNotFound { .. } | Self::ConfigParseError { .. } => {
-                NextestExitCode::SETUP_ERROR
-            }
+            Self::ProfileNotFound { .. }
+            | Self::ConfigParseError { .. }
+            | Self::ArgumentFileReadError { .. }
+            | Self::ArgumentJsonParseError { .. }
+            | Self::CargoMetadataParseError { .. } => NextestExitCode::SETUP_ERROR,
             Self::BuildFailed { .. } => NextestExitCode::BUILD_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
             Self::ExperimentalFeatureNotEnabled { .. } => {
@@ -105,6 +156,41 @@ impl ExpectedError {
             Self::ConfigParseError { err } => {
                 log::error!("{}", err);
                 err.source()
+            }
+            Self::ArgumentFileReadError {
+                arg_name,
+                file_name,
+                err,
+            } => {
+                log::error!(
+                    "argument {} specified file `{}` that couldn't be read",
+                    format!("--{}", arg_name).if_supports_color(Stream::Stderr, |x| x.bold()),
+                    file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                );
+                Some(err as &dyn Error)
+            }
+            Self::ArgumentJsonParseError {
+                arg_name,
+                file_name,
+                err,
+            } => {
+                log::error!(
+                    "argument {} specified JSON file `{}` that couldn't be deserialized",
+                    format!("--{}", arg_name).if_supports_color(Stream::Stderr, |x| x.bold()),
+                    file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                );
+                Some(err as &dyn Error)
+            }
+            Self::CargoMetadataParseError { file_name, err } => {
+                let metadata_source = match file_name {
+                    Some(path) => format!(
+                        " from file `{}`",
+                        path.if_supports_color(Stream::Stderr, |x| x.bold())
+                    ),
+                    None => "".to_owned(),
+                };
+                log::error!("error parsing Cargo metadata{}", metadata_source);
+                Some(err as &dyn Error)
             }
             Self::BuildFailed {
                 escaped_command,
@@ -170,6 +256,9 @@ impl fmt::Display for ExpectedError {
             Self::CargoMetadataFailed => writeln!(f, "cargo metadata failed"),
             Self::ProfileNotFound { .. } => writeln!(f, "profile not found"),
             Self::ConfigParseError { .. } => writeln!(f, "config read error"),
+            Self::ArgumentFileReadError { .. } => writeln!(f, "argument file error"),
+            Self::ArgumentJsonParseError { .. } => writeln!(f, "argument json decode error"),
+            Self::CargoMetadataParseError { .. } => writeln!(f, "cargo metadata parse error"),
             Self::BuildFailed { .. } => writeln!(f, "build failed"),
             Self::TestRunFailed => writeln!(f, "test run failed"),
             Self::ExperimentalFeatureNotEnabled { .. } => {
