@@ -43,8 +43,8 @@ CARGO OPTIONS:
         --locked                    Require Cargo.lock is up to date
         --offline                   Run without accessing the network
         --config <KEY=VALUE>        Override a configuration value (unstable)
-    -Z <FLAG>                       Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for
-                                    details
+    -Z <FLAG>                       Unstable (nightly-only) flags to Cargo, see 'cargo -Z help'
+                                    for details
 
 FILTER OPTIONS:
         --run-ignored <WHICH>           Run ignored tests [default: default] [possible values:
@@ -52,6 +52,7 @@ FILTER OPTIONS:
         --partition <PARTITION>         Test partition, e.g. hash:1/2 or count:2/3
         --platform-filter <PLATFORM>    Filter test binaries by build platform [default: any]
                                         [possible values: target, host, any]
+    -E, --expr-filter <EXPRESSION>      A DSL based filter expression
 
 OUTPUT OPTIONS:
     -T, --message-format <FMT>    Output format [default: human] [possible values: human, json,
@@ -59,7 +60,7 @@ OUTPUT OPTIONS:
         --list-type <TYPE>        Type of listing [default: full] [possible values: full, binaries-
                                   only]
 
-REUSE BUILD OPTIONS (EXPERIMENTAL):
+REUSE BUILD OPTIONS:
         --binaries-metadata <PATH>    Path to binaries-metadata JSON
         --target-dir-remap <PATH>     Remapping for the target directory
         --cargo-metadata <PATH>       Path to cargo metadata JSON

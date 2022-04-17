@@ -3,6 +3,18 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.13] - 2022-04-16
+
+### Added
+
+- Support for [reusing builds](https://nexte.st/book/reusing-builds) is now production-ready. Build on one machine and run tests on another, including cross-compiling and test partitioning.
+
+    To see how builds can be reused in GitHub Actions, see [this example](https://github.com/nextest-rs/reuse-build-partition-example/blob/main/.github/workflows/ci.yml).
+
+- Experimental support for [filter expressions](https://nexte.st/book/filter-expressions.html), allowing fine-grained specifications for which tests to run.
+
+Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their fantastic work implementing both of these.
+
 ## [0.9.12] - 2022-03-22
 
 ### Added
@@ -154,6 +166,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.13]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.13
 [0.9.12]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.12
 [0.9.11]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.11
 [0.9.10]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.10

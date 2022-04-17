@@ -287,14 +287,14 @@ struct TestBuildFilter {
     #[clap(long, arg_enum, value_name = "PLATFORM", default_value_t)]
     pub(crate) platform_filter: PlatformFilterOpts,
 
-    /// A DSL based filter expression
+    /// Test filter expression (see {n}<https://nexte.st/book/filter-expressions>)
     #[clap(
         long,
         short = 'E',
         value_name = "EXPRESSION",
         multiple_occurrences(true)
     )]
-    expr_filter: Vec<String>,
+    filter_expr: Vec<String>,
 
     // TODO: add regex-based filtering in the future?
     /// Test name filter
@@ -480,7 +480,7 @@ struct App {
 fn check_experimental_filtering(build_filter: &TestBuildFilter) -> Result<()> {
     const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
     let enabled = std::env::var(EXPERIMENTAL_ENV).is_ok();
-    if !build_filter.expr_filter.is_empty() && !enabled {
+    if !build_filter.filter_expr.is_empty() && !enabled {
         Err(Report::new(ExpectedError::experimental_feature_error(
             "expression filtering",
             EXPERIMENTAL_ENV,
@@ -499,7 +499,7 @@ impl App {
         manifest_path: Option<Utf8PathBuf>,
     ) -> Result<Self> {
         let output = output.init();
-        reuse_build.check_experimental(output)?;
+        reuse_build.check_experimental(output);
         check_experimental_filtering(&build_filter)?;
 
         let graph_data = match reuse_build.cargo_metadata.as_deref() {
@@ -508,7 +508,7 @@ impl App {
             })?,
             None => {
                 let with_deps = build_filter
-                    .expr_filter
+                    .filter_expr
                     .iter()
                     .any(|expr| FilteringExpr::needs_deps(expr));
                 acquire_graph_data(
@@ -569,7 +569,7 @@ impl App {
     fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
         let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
-            .expr_filter
+            .filter_expr
             .iter()
             .map(|input| FilteringExpr::parse(input, &self.graph))
             .partition_result();

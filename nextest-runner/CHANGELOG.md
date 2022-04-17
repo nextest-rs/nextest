@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.0] - 2022-04-16
+
+### Added
+
+- Experimental support for [filter expressions](https://nexte.st/book/filter-expressions).
+
 ## [0.5.0] - 2022-03-22
 
 ### Added
@@ -62,6 +68,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.6.0
 [0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.5.0
 [0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.4.0
 [0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.3.0

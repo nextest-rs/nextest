@@ -1,7 +1,7 @@
 [package]
 name = "cargo-nextest"
 description = "A next-generation test runner for Rust."
-version = "0.9.12"
+version = "0.9.13"
 readme = "README.md"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/nextest-rs/nextest"
@@ -26,8 +26,8 @@ log = "0.4.16"
 itertools = "0.10.2"
 miette = { version = "4.4.0", features = ["fancy"] }
 nextest-filtering = { version = "0.1.0", path = "../nextest-filtering" }
-nextest-runner = { version = "0.5.0", path = "../nextest-runner" }
-nextest-metadata = { version = "0.3.0", path = "../nextest-metadata" }
+nextest-runner = { version = "0.6.0", path = "../nextest-runner" }
+nextest-metadata = { version = "0.3.1", path = "../nextest-metadata" }
 owo-colors = { version = "3.3.0", features = ["supports-colors"] }
 shellwords = "1.1.0"
 supports-color = "1.3.0"

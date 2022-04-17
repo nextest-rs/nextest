@@ -1,7 +1,7 @@
 [package]
 name = "nextest-runner"
 description = "Core runner logic for cargo nextest."
-version = "0.5.0"
+version = "0.6.0"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nextest-rs/nextest"
@@ -41,7 +41,7 @@ toml = "0.5.9"
 twox-hash = { version = "1.6.2", default-features = false }
 
 nextest-filtering = { version = "0.1.0", path = "../nextest-filtering" }
-nextest-metadata = { version = "0.3.0", path = "../nextest-metadata" }
+nextest-metadata = { version = "0.3.1", path = "../nextest-metadata" }
 quick-junit = { version = "0.1.5", path = "../quick-junit" }
 
 [dev-dependencies]

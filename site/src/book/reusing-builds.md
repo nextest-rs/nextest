@@ -53,6 +53,10 @@ Both `cargo nextest list` and `cargo nextest run` accept the following options:
     cargo nextest run --binaries-metadata target/binaries-metadata.json
     ```
 
+## Example: Use in GitHub Actions
+
+See [this working example](https://github.com/nextest-rs/reuse-build-partition-example/blob/main/.github/workflows/ci.yml) for how to reuse builds and [partition test runs](partitioning.md) on GitHub Actions.
+
 ## Example: Cross-compilation
 
 While cross-compiling code, some tests may need to be run on the host platform. (See the note about [Filtering by build platform](running.md#filtering-by-build-platform) for more.)
