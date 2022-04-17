@@ -61,7 +61,8 @@ FILTER OPTIONS:
         --partition <PARTITION>         Test partition, e.g. hash:1/2 or count:2/3
         --platform-filter <PLATFORM>    Filter test binaries by build platform [default: any]
                                         [possible values: target, host, any]
-    -E, --expr-filter <EXPRESSION>      A DSL based filter expression
+    -E, --filter-expr <EXPRESSION>      Test filter expression (see
+                                        <https://nexte.st/book/filter-expressions>)
 
 REPORTER OPTIONS:
         --failure-output <WHEN>    Output stdout and stderr on failure [env:
