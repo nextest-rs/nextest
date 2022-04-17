@@ -1,6 +1,6 @@
 # Reusing builds
 
-In some cases, it can be useful to separate out building tests and running them. Nextest has experimental support for serializing metadata on one machine, and then using that to run tests on another machine.
+In some cases, it can be useful to separate out building tests from running them. Nextest supports serializing test metadata on one machine, and then using that to run tests on another machine.
 
 ## Terms
 
