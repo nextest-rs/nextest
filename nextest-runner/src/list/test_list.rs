@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    errors::{FromMessagesError, ParseTestListError, WriteTestListError},
+    errors::{
+        FromMessagesError, ParseTestListError, PathMapperConstructError, PathMapperConstructKind,
+        WriteTestListError,
+    },
     helpers::{dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, BinaryListState, OutputFormat, RustBuildMeta, Styles, TestListState},
     target_runner::{PlatformRunner, TargetRunner},
@@ -153,15 +156,22 @@ pub struct PathMapper {
 impl PathMapper {
     /// Constructs the path mapper.
     pub fn new(
-        graph: &PackageGraph,
-        workspace: Option<Utf8PathBuf>,
-        orig_target_dir: &Utf8Path,
-        target_dir: Option<Utf8PathBuf>,
-    ) -> Self {
-        Self {
-            workspace: workspace.map(|w| (graph.workspace().root().to_owned(), w)),
-            target_dir: target_dir.map(|d| (orig_target_dir.to_owned(), d)),
-        }
+        orig_workspace_root: impl Into<Utf8PathBuf>,
+        workspace_root: Option<&Utf8Path>,
+        orig_target_dir: impl Into<Utf8PathBuf>,
+        target_dir: Option<&Utf8Path>,
+    ) -> Result<Self, PathMapperConstructError> {
+        let workspace_root = workspace_root
+            .map(|root| Self::canonicalize_dir(root, PathMapperConstructKind::WorkspaceRoot))
+            .transpose()?;
+        let target_dir = target_dir
+            .map(|dir| Self::canonicalize_dir(dir, PathMapperConstructKind::WorkspaceRoot))
+            .transpose()?;
+
+        Ok(Self {
+            workspace: workspace_root.map(|w| (orig_workspace_root.into(), w)),
+            target_dir: target_dir.map(|d| (orig_target_dir.into(), d)),
+        })
     }
 
     /// Constructs a no-op path mapper.
@@ -170,6 +180,37 @@ impl PathMapper {
             workspace: None,
             target_dir: None,
         }
+    }
+
+    fn canonicalize_dir(
+        input: &Utf8Path,
+        kind: PathMapperConstructKind,
+    ) -> Result<Utf8PathBuf, PathMapperConstructError> {
+        let canonicalized_path =
+            input
+                .canonicalize()
+                .map_err(|err| PathMapperConstructError::Canonicalization {
+                    kind,
+                    input: input.into(),
+                    err,
+                })?;
+        let canonicalized_path: Utf8PathBuf =
+            canonicalized_path
+                .try_into()
+                .map_err(|err| PathMapperConstructError::NonUtf8Path {
+                    kind,
+                    input: input.into(),
+                    err,
+                })?;
+        if !canonicalized_path.is_dir() {
+            return Err(PathMapperConstructError::NotADirectory {
+                kind,
+                input: input.into(),
+                canonicalized_path,
+            });
+        }
+
+        Ok(canonicalized_path)
     }
 
     pub(super) fn new_target_dir(&self) -> Option<&Utf8Path> {
@@ -694,8 +735,9 @@ pub(crate) fn make_test_expression(
             cwd,
         )
         .env(
-            "NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR",
-            // NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR is set to the *old* cwd.
+            "__NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR",
+            // This is a test-only environment variable set to the *old* cwd. Not part of the
+            // public API.
             package.manifest_path().parent().unwrap(),
         )
         .env("CARGO_PKG_VERSION", format!("{}", package.version()))
@@ -747,6 +789,58 @@ mod tests {
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use std::iter;
+    use tempfile::TempDir;
+
+    /// Ensure that PathMapper turns relative paths into absolute ones.
+    #[test]
+    fn test_path_mapper_relative() {
+        let current_dir: Utf8PathBuf = std::env::current_dir()
+            .expect("current dir obtained")
+            .try_into()
+            .expect("current dir is valid UTF-8");
+
+        let temp_workspace_root = TempDir::new().expect("new temp dir created");
+        let workspace_root_path: Utf8PathBuf = temp_workspace_root
+            .path()
+            // On Mac, the temp dir is a symlink, so canonicalize it.
+            .canonicalize()
+            .expect("workspace root canonicalized correctly")
+            .try_into()
+            .expect("workspace root is valid UTF-8");
+        let rel_workspace_root = pathdiff::diff_utf8_paths(&workspace_root_path, &current_dir)
+            .expect("abs to abs diff is non-None");
+
+        let temp_target_dir = TempDir::new().expect("new temp dir created");
+        let target_dir_path: Utf8PathBuf = temp_target_dir
+            .path()
+            .canonicalize()
+            .expect("target dir canonicalized correctly")
+            .try_into()
+            .expect("target dir is valid UTF-8");
+        let rel_target_dir = pathdiff::diff_utf8_paths(&target_dir_path, &current_dir)
+            .expect("abs to abs diff is non-None");
+
+        // These aren't really used other than to do mapping against.
+        let orig_workspace_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
+        let orig_target_dir = orig_workspace_root.join("target");
+
+        let path_mapper = PathMapper::new(
+            orig_workspace_root,
+            Some(&rel_workspace_root),
+            &orig_target_dir,
+            Some(&rel_target_dir),
+        )
+        .expect("remapped paths exist");
+
+        assert_eq!(
+            path_mapper.map_cwd(orig_workspace_root.join("foobar")),
+            workspace_root_path.join("foobar")
+        );
+        assert_eq!(
+            path_mapper.map_binary(orig_target_dir.join("foobar")),
+            target_dir_path.join("foobar")
+        );
+    }
 
     #[test]
     fn test_parse_test_list() {

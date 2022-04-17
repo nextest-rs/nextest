@@ -48,6 +48,7 @@ quick-junit = { version = "0.1.5", path = "../quick-junit" }
 color-eyre = { version = "0.6.1", default-features = false }
 indoc = "1.0.4"
 maplit = "1.0.2"
+pathdiff = { version = "0.2.1", features = ["camino"] }
 pretty_assertions = "1.2.1"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"

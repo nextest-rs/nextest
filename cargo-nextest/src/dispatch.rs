@@ -312,7 +312,7 @@ impl TestBuildFilter {
         filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList<'g>> {
         let path_mapper =
-            reuse_build.make_path_mapper(graph, &binary_list.rust_build_meta.target_directory);
+            reuse_build.make_path_mapper(graph, &binary_list.rust_build_meta.target_directory)?;
         let rust_build_meta = binary_list.rust_build_meta.clone();
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,

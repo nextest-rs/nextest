@@ -124,7 +124,10 @@ fn test_cargo_env_vars() {
     );
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
     assert_env!("CARGO");
-    assert_env!("CARGO_MANIFEST_DIR", "NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR");
+    assert_env!(
+        "CARGO_MANIFEST_DIR",
+        "__NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR"
+    );
     assert_env!("CARGO_PKG_VERSION");
     assert_env!("CARGO_PKG_VERSION_MAJOR");
     assert_env!("CARGO_PKG_VERSION_MINOR");
