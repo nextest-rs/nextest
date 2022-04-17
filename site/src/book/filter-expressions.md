@@ -2,7 +2,7 @@
 
 * **Introduced in:** cargo-nextest 0.9.13 (not released yet)
 * **Environment variable**: `NEXTEST_EXPERIMENTAL_FILTER_EXPR=1`
-* **Tracking issue**: []
+* **Tracking issue**: [#158](https://github.com/nextest-rs/nextest/issues/158)
 
 Nextest supports a domain-specific language (DSL) for filtering tests. The DSL is inspired by, and is similar to, [Bazel query](https://bazel.build/docs/query-how-to) and [Mercurial revsets](https://www.mercurial-scm.org/repo/hg/help/revsets).
 
