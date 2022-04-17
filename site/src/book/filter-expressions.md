@@ -11,7 +11,7 @@ Nextest supports a domain-specific language (DSL) for filtering tests. The DSL i
 To run all tests in `my-crate` and its dependencies, run:
 
 ```
-cargo nextest run -E 'deps(=my-crate)'
+cargo nextest run -E 'deps(my-crate)'
 ```
 
 The argument passed into the `-E` command-line option is called a *filter expression*. The rest of this page describes the full syntax for the expression DSL.
