@@ -1,11 +1,5 @@
 # Reusing builds
 
-* **Introduced in:** cargo-nextest 0.9.10
-* **Environment variable**: `NEXTEST_EXPERIMENTAL_REUSE_BUILD=1`
-* **Tracking issue**: [#98]
-
-[#98]: https://github.com/nextest-rs/nextest/issues/98
-
 In some cases, it can be useful to separate out building tests and running them. Nextest has experimental support for serializing metadata on one machine, and then using that to run tests on another machine.
 
 ## Terms
