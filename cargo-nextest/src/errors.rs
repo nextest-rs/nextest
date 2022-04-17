@@ -4,7 +4,7 @@
 use camino::Utf8PathBuf;
 use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::errors::{ConfigParseError, ProfileNotFound};
+use nextest_runner::errors::{ConfigParseError, PathMapperConstructError, ProfileNotFound};
 use owo_colors::{OwoColorize, Stream};
 use std::{
     error::{self, Error},
@@ -26,6 +26,10 @@ pub enum ExpectedError {
         arg_name: &'static str,
         file_name: Utf8PathBuf,
         err: std::io::Error,
+    },
+    PathMapperConstructError {
+        arg_name: &'static str,
+        err: PathMapperConstructError,
     },
     ArgumentJsonParseError {
         arg_name: &'static str,
@@ -131,6 +135,7 @@ impl ExpectedError {
             Self::ProfileNotFound { .. }
             | Self::ConfigParseError { .. }
             | Self::ArgumentFileReadError { .. }
+            | Self::PathMapperConstructError { .. }
             | Self::ArgumentJsonParseError { .. }
             | Self::CargoMetadataParseError { .. } => NextestExitCode::SETUP_ERROR,
             Self::BuildFailed { .. } => NextestExitCode::BUILD_FAILED,
@@ -178,6 +183,14 @@ impl ExpectedError {
                     "argument {} specified JSON file `{}` that couldn't be deserialized",
                     format!("--{}", arg_name).if_supports_color(Stream::Stderr, |x| x.bold()),
                     file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                );
+                Some(err as &dyn Error)
+            }
+            Self::PathMapperConstructError { arg_name, err } => {
+                log::error!(
+                    "argument {} specified `{}` that couldn't be read",
+                    format!("--{}", arg_name).if_supports_color(Stream::Stderr, |x| x.bold()),
+                    err.input().if_supports_color(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -257,6 +270,7 @@ impl fmt::Display for ExpectedError {
             Self::ProfileNotFound { .. } => writeln!(f, "profile not found"),
             Self::ConfigParseError { .. } => writeln!(f, "config read error"),
             Self::ArgumentFileReadError { .. } => writeln!(f, "argument file error"),
+            Self::PathMapperConstructError { .. } => writeln!(f, "path mapper construct error"),
             Self::ArgumentJsonParseError { .. } => writeln!(f, "argument json decode error"),
             Self::CargoMetadataParseError { .. } => writeln!(f, "cargo metadata parse error"),
             Self::BuildFailed { .. } => writeln!(f, "build failed"),

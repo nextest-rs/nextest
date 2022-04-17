@@ -7,7 +7,7 @@ use crate::{
     reporter::{StatusLevel, TestOutputDisplay},
     test_filter::RunIgnored,
 };
-use camino::Utf8PathBuf;
+use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use std::{borrow::Cow, env::JoinPathsError, error, fmt};
 
@@ -196,6 +196,117 @@ impl fmt::Display for PartitionerBuilderParseError {
 }
 
 impl error::Error for PartitionerBuilderParseError {}
+
+/// An error occurred in [`PathMapper::new`](crate::test_list::PathMapper::new).
+#[derive(Debug)]
+pub enum PathMapperConstructError {
+    /// An error occurred while canonicalizing a directory.
+    Canonicalization {
+        /// The directory that failed to be canonicalized.
+        kind: PathMapperConstructKind,
+
+        /// The input provided.
+        input: Utf8PathBuf,
+
+        /// The error that occurred.
+        err: std::io::Error,
+    },
+    /// The canonicalized path isn't valid UTF-8.
+    NonUtf8Path {
+        /// The directory that failed to be canonicalized.
+        kind: PathMapperConstructKind,
+
+        /// The input provided.
+        input: Utf8PathBuf,
+
+        /// The underlying error.
+        err: FromPathBufError,
+    },
+
+    /// A provided input is not a directory.
+    NotADirectory {
+        /// The directory that failed to be canonicalized.
+        kind: PathMapperConstructKind,
+
+        /// The input provided.
+        input: Utf8PathBuf,
+
+        /// The canonicalized path that wasn't a directory.
+        canonicalized_path: Utf8PathBuf,
+    },
+}
+
+impl PathMapperConstructError {
+    /// The kind of directory.
+    pub fn kind(&self) -> PathMapperConstructKind {
+        match self {
+            Self::Canonicalization { kind, .. }
+            | Self::NonUtf8Path { kind, .. }
+            | Self::NotADirectory { kind, .. } => *kind,
+        }
+    }
+
+    /// The input path that failed.
+    pub fn input(&self) -> &Utf8Path {
+        match self {
+            Self::Canonicalization { input, .. }
+            | Self::NonUtf8Path { input, .. }
+            | Self::NotADirectory { input, .. } => input,
+        }
+    }
+}
+
+impl fmt::Display for PathMapperConstructError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Canonicalization { kind, input, .. } => {
+                write!(f, "{} `{}` failed to canonicalize", kind, input)
+            }
+            Self::NonUtf8Path { kind, input, .. } => {
+                write!(f, "{} `{}` canonicalized to a non-UTF-8 path", kind, input)
+            }
+            Self::NotADirectory {
+                kind,
+                canonicalized_path,
+                ..
+            } => {
+                write!(f, "{} `{}` is not a directory", kind, canonicalized_path)
+            }
+        }
+    }
+}
+
+impl error::Error for PathMapperConstructError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::Canonicalization { err, .. } => Some(err),
+            Self::NonUtf8Path { err, .. } => Some(err),
+            Self::NotADirectory { .. } => None,
+        }
+    }
+}
+
+/// The kind of directory that failed to be read in
+/// [`PathMapper::new`](crate::test_list::PathMapper::new).
+///
+/// Returned as part of [`PathMapperConstructError`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum PathMapperConstructKind {
+    /// The workspace root.
+    WorkspaceRoot,
+
+    /// The target directory.
+    TargetDir,
+}
+
+impl fmt::Display for PathMapperConstructKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::WorkspaceRoot => write!(f, "remapped workspace root"),
+            Self::TargetDir => write!(f, "remapped target directory"),
+        }
+    }
+}
 
 /// An error that occurs in [`RustTestArtifact::from_messages`](crate::test_list::RustTestArtifact::from_messages).
 #[derive(Debug)]

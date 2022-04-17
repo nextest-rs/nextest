@@ -14,7 +14,7 @@
 //! So we try to replace the binary we are currently running. This is forbidden on Windows.
 
 use crate::{dispatch::CargoNextestApp, ExpectedError, OutputWriter};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::StructOpt;
 use nextest_metadata::{BuildPlatform, TestListSummary};
 
@@ -174,7 +174,6 @@ fn test_target_dir() {
 #[test]
 fn test_list_full_after_build() {
     set_rustflags();
-    enable_experimental();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -200,7 +199,6 @@ fn test_list_full_after_build() {
 #[test]
 fn test_list_host_after_build() {
     set_rustflags();
-    enable_experimental();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -228,7 +226,6 @@ fn test_list_host_after_build() {
 #[test]
 fn test_list_target_after_build() {
     set_rustflags();
-    enable_experimental();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -278,7 +275,6 @@ fn test_run() {
 #[test]
 fn test_run_after_build() {
     set_rustflags();
-    enable_experimental();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -303,7 +299,6 @@ fn test_run_after_build() {
 #[test]
 fn test_relocated_run() {
     set_rustflags();
-    enable_experimental();
 
     let custom_target_dir = TempDir::new().unwrap();
     let custom_target_path: &Utf8Path = custom_target_dir
@@ -324,7 +319,18 @@ fn test_relocated_run() {
     temp_project::copy_dir_all(custom_target_path, &new_target_path, true).unwrap();
     p2.set_target_dir(new_target_path);
 
+    // Use relative paths to the workspace root and target directory to do testing in.
+    let current_dir: Utf8PathBuf = std::env::current_dir()
+        .expect("able to get current directory")
+        .try_into()
+        .expect("current directory is valid UTF-8");
+    let rel_workspace_root = pathdiff::diff_utf8_paths(p2.workspace_root(), &current_dir)
+        .expect("diff of two absolute paths should work");
+    let rel_target_dir = pathdiff::diff_utf8_paths(p2.target_dir(), &current_dir)
+        .expect("diff of two absolute paths should work");
+
     // Run relocated tests
+
     let args = CargoNextestApp::parse_from([
         "cargo",
         "nextest",
@@ -336,9 +342,9 @@ fn test_relocated_run() {
         "--cargo-metadata",
         p2.cargo_metadata_path().as_str(),
         "--workspace-remap",
-        p2.workspace_root().as_str(),
+        rel_workspace_root.as_str(),
         "--target-dir-remap",
-        p2.target_dir().as_str(),
+        rel_target_dir.as_str(),
     ]);
 
     let mut output = OutputWriter::new_test();

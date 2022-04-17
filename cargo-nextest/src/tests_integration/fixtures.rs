@@ -114,11 +114,6 @@ pub(super) fn set_rustflags() {
 }
 
 #[track_caller]
-pub(super) fn enable_experimental() {
-    std::env::set_var("NEXTEST_EXPERIMENTAL_REUSE_BUILD", "1");
-}
-
-#[track_caller]
 pub fn save_cargo_metadata(p: &TempProject) {
     let mut cmd = Command::new(cargo_bin());
     cmd.args([
