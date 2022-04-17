@@ -23,7 +23,7 @@ A *filter expression* defines a set of tests. A test will be run if it matches a
 On the command line, multiple filter expressions can be passed in. A test will be run if it matches any of these expressions. For example, to run tests whose names contain the string `my_test` as well as all tests in package `my-crate`, run:
 
 ```
-cargo nextest run -E 'test(my_test)' -E 'package(=my-crate)'
+cargo nextest run -E 'test(my_test)' -E 'package(my-crate)'
 ```
 
 This is equivalent to:
@@ -34,7 +34,7 @@ cargo nextest run -E 'test(my_test) + package(=my-crate)'
 
 ### Examples
 
-- `package(=serde) and test(deserialize)`: every test containing the string `deserialize` in the package `serde`
+- `package(serde) and test(deserialize)`: every test containing the string `deserialize` in the package `serde`
 - `not (test(/parse[0-9]*/) | test(run))`: every test not containing `parse` or `run`
 
 ## DSL reference
