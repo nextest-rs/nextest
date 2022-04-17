@@ -676,7 +676,7 @@ impl<'a> TestInstance<'a> {
 pub(crate) fn make_test_expression(
     program: OsString,
     args: impl IntoIterator<Item = impl Into<OsString>>,
-    cwd: impl Into<PathBuf>,
+    cwd: &Utf8PathBuf,
     package: &PackageMetadata<'_>,
     dylib_path: &OsStr,
 ) -> duct::Expression {
@@ -690,6 +690,12 @@ pub(crate) fn make_test_expression(
         // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
         .env(
             "CARGO_MANIFEST_DIR",
+            // CARGO_MANIFEST_DIR is set to the *new* cwd after path mapping.
+            cwd,
+        )
+        .env(
+            "NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR",
+            // NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR is set to the *old* cwd.
             package.manifest_path().parent().unwrap(),
         )
         .env("CARGO_PKG_VERSION", format!("{}", package.version()))

@@ -74,20 +74,34 @@ fn test_ignored_fail() {
 
 macro_rules! assert_env {
     ($name: expr) => {
-        let compile_time_env = env!($name);
-        let runtime_env =
-            std::env::var($name).expect(concat!("env var ", $name, " missing at runtime"));
+        assert_env!($name, $name);
+    };
+    ($compile_time_name: expr, $runtime_name: expr) => {
+        let compile_time_env = env!($compile_time_name);
+        let runtime_env = std::env::var($runtime_name).expect(concat!(
+            "env var ",
+            $runtime_name,
+            " missing at runtime"
+        ));
         println!(
             concat!(
                 "for env var ",
-                $name,
-                ", compile time value: {}, runtime: {}"
+                $compile_time_name,
+                " (runtime ",
+                $runtime_name,
+                "), compile time value: {}, runtime: {}",
             ),
             compile_time_env, runtime_env
         );
         assert_eq!(
             compile_time_env, runtime_env,
-            concat!("env var ", $name, " same between compile time and runtime"),
+            concat!(
+                "env var ",
+                $compile_time_name,
+                " (runtime ",
+                $runtime_name,
+                ") same between compile time and runtime",
+            ),
         );
     };
 }
@@ -110,7 +124,7 @@ fn test_cargo_env_vars() {
     );
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
     assert_env!("CARGO");
-    assert_env!("CARGO_MANIFEST_DIR");
+    assert_env!("CARGO_MANIFEST_DIR", "NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR");
     assert_env!("CARGO_PKG_VERSION");
     assert_env!("CARGO_PKG_VERSION_MAJOR");
     assert_env!("CARGO_PKG_VERSION_MINOR");
