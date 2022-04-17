@@ -14,6 +14,7 @@ Even if nextest doesn't result in faster test builds, you may find doing occasio
 | --------------- | ------------ | ---------: | -------------: | ----------: | ---------: |
 | [cargo-guppy]   | [`c135447a`] | 252        | 34.70          | 22.14       | \-36.2%    |
 | [diem][^diem1]  | [`6025888b`] | 1476       | 1058.46        | 400.53      | \-62.1%    |
+| [meilisearch]   | [`f67167fa`] | 240        | 41.04          | 20.62       | \-49.8%    |
 | [penumbra]      | [`44ab43f6`] | 32         | 54.66          | 24.90       | \-54.4%    |
 | [ring]          | [`c14c355f`] | 179        | 17.64          | 11.60       | \-34.2%    |
 | [rust-analyzer] | [`4449a336`] | 3746       | 6.76           | 5.23        | \-22.6%    |
@@ -28,6 +29,9 @@ Even if nextest doesn't result in faster test builds, you may find doing occasio
 [^diem1]: Diem ships its own in-tree tool on top of [nextest-runner], so the commands were slightly different:
 * the command for cargo test is `cargo xtest --unit`
 * the command for running nextest is `cargo nextest --unit`
+
+[meilisearch]: https://github.com/meilisearch/meilisearch
+[`f67167fa`]: https://github.com/meilisearch/meilisearch/commit/f67167fa9f473c1dba5d9485093a4768fc70a32d
 
 [penumbra]: https://github.com/penumbra-zone/penumbra
 [`44ab43f6`]: https://github.com/penumbra-zone/penumbra/commit/44ab43f62bafa861608ac3f2e6deabb456c43983
