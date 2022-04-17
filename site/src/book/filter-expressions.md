@@ -1,6 +1,6 @@
 # Filter expressions
 
-* **Introduced in:** cargo-nextest 0.9.13 (not released yet)
+* **Introduced in:** cargo-nextest 0.9.13
 * **Environment variable**: `NEXTEST_EXPERIMENTAL_FILTER_EXPR=1`
 * **Tracking issue**: [#158](https://github.com/nextest-rs/nextest/issues/158)
 
