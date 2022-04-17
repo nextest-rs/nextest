@@ -35,10 +35,11 @@ For more detailed installation instructions, see [Installation](book/installatio
 
 | Crate                                                     |                    crates.io                   |             rustdoc (latest version)            |             rustdoc (main)             |
 |-----------------------------------------------------------|:----------------------------------------------:|:-----------------------------------------------:|:--------------------------------------:|
-| **cargo-nextest,** the main test binary                   | [![cargo-nextest on crates.io][cnci]][cncl]    | [![Documentation (latest release)][doci]][cndl] | [![Documentation (main)][docmi]][cnml] |
-| **nextest-runner,** core nextest logic                    | [![nextest-runner on crates.io][nrci]][nrcl]   | [![Documentation (latest release)][doci]][nrdl] | [![Documentation (main)][docmi]][nrml] |
-| **nextest-metadata,** parsers for machine-readable output | [![nextest-metadata on crates.io][nmci]][nmcl] | [![Documentation (latest release)][doci]][nmdl] | [![Documentation (main)][docmi]][nmml] |
-| **quick-junit,** JUnit XML serializer                     | [![quick-junit on crates.io][qjci]][qjcl]      | [![Documentation (latest release)][doci]][qjcl] | [![Documentation (main)][docmi]][qjml] |
+| **cargo-nextest,** the main test binary                              | [![cargo-nextest on crates.io][cnci]][cncl]     | [![Documentation (latest release)][doci]][cndl] | [![Documentation (main)][docmi]][cnml] |
+| **nextest-runner,** core nextest logic                               | [![nextest-runner on crates.io][nrci]][nrcl]    | [![Documentation (latest release)][doci]][nrdl] | [![Documentation (main)][docmi]][nrml] |
+| **nextest-metadata,** parsers for machine-readable output            | [![nextest-metadata on crates.io][nmci]][nmcl]  | [![Documentation (latest release)][doci]][nmdl] | [![Documentation (main)][docmi]][nmml] |
+| **nextest-filtering,** parser and evaluator for [filter expressions] | [![nextest-filtering on crates.io][nfci]][nfcl] | [![Documentation (latest release)][doci]][nfdl] | [![Documentation (main)][docmi]][nfml] |
+| **quick-junit,** JUnit XML serializer                                | [![quick-junit on crates.io][qjci]][qjcl]       | [![Documentation (latest release)][doci]][qjcl] | [![Documentation (main)][docmi]][qjml] |
 
 [cnci]: https://img.shields.io/crates/v/cargo-nextest
 [cncl]: https://crates.io/crates/cargo-nextest
@@ -54,6 +55,12 @@ For more detailed installation instructions, see [Installation](book/installatio
 [nmcl]: https://crates.io/crates/nextest-metadata
 [nmdl]: https://docs.rs/nextest-metadata
 [nmml]: https://nexte.st/rustdoc/nextest_metadata
+
+[nfci]: https://img.shields.io/crates/v/nextest-filtering
+[nfcl]: https://crates.io/crates/nextest-filtering
+[nfdl]: https://docs.rs/nextest-filtering
+[nfml]: https://nexte.st/rustdoc/nextest_filtering
+[filter expressions]: book/filter-expressions.md
 
 [qjci]: https://img.shields.io/crates/v/quick-junit
 [qjcl]: https://crates.io/crates/quick-junit

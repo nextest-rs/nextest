@@ -16,6 +16,10 @@ This repository contains the source code for:
     [![nextest-metadata on crates.io](https://img.shields.io/crates/v/nextest-metadata)](https://crates.io/crates/nextest-metadata)
     [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-metadata)
     [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/nextest_metadata)
+  * [**nextest-filtering**](nextest-filtering): parser and logic for [filter expressions](https://nexte.st/book/filter-expressions)
+    [![nextest-filtering on crates.io](https://img.shields.io/crates/v/nextest-metadata)](https://crates.io/crates/nextest-filtering)
+    [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-filtering)
+    [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/nextest_filtering)
 * [**quick-junit**](quick-junit): a data model, serializer (and in the future deserializer) for JUnit/XUnit XML
   [![quick-junit on crates.io](https://img.shields.io/crates/v/quick-junit)](https://crates.io/crates/quick-junit)
   [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/quick-junit/)
