@@ -153,6 +153,9 @@ impl<'filter> TestFilter<'filter> {
         self.filter_ignored_mismatch(ignored)
             .or_else(|| self.filter_name_mismatch(test_name))
             .or_else(|| self.filter_expression_mismatch(test_binary, test_name))
+            // Note that partition-based filtering MUST come after all other kinds of filtering,
+            // so that count-based bucketing applies after ignored, name and expression matching.
+            // This also means that mutable count state must be maintained by the partitioner.
             .or_else(|| self.filter_partition_mismatch(test_name))
             .unwrap_or(FilterMatch::Matches)
     }
