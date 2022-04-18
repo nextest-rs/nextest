@@ -6,7 +6,7 @@ use crate::{
     helpers::{dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, BinaryListState, OutputFormat, RustBuildMeta, Styles, TestListState},
     target_runner::{PlatformRunner, TargetRunner},
-    test_filter::TestFilterBuilder,
+    test_filter::{FilterInstance, TestFilterBuilder},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use duct::Expression;
@@ -421,7 +421,7 @@ impl<'g> TestList<'g> {
     }
 
     fn process_output(
-        test_binary: RustTestArtifact<'g>,
+        artifact: RustTestArtifact<'g>,
         filter: &TestFilterBuilder,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
@@ -430,28 +430,45 @@ impl<'g> TestList<'g> {
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
         // based on one doesn't affect the other.
-        let mut non_ignored_filter = filter.build();
-        for test_name in Self::parse(non_ignored.as_ref())? {
+        //
+        // TODO: now that the filter doesn't have mutable state, the indirection provided by
+        // TestFilterBuilder isn't required, nor is having a separate filter for non-ignored and
+        // ignored -- clean this up.
+        let non_ignored_filter = filter.build();
+        for (index, test_name) in Self::parse(non_ignored.as_ref())?.into_iter().enumerate() {
+            let instance = FilterInstance {
+                artifact: &artifact,
+                test_name,
+                ignored: false,
+                index,
+            };
             tests.insert(
                 test_name.into(),
                 RustTestCaseSummary {
                     ignored: false,
-                    filter_match: non_ignored_filter.filter_match(&test_binary, test_name, false),
+                    filter_match: non_ignored_filter.filter_match(instance),
                 },
             );
         }
 
-        let mut ignored_filter = filter.build();
-        for test_name in Self::parse(ignored.as_ref())? {
+        let ignored_filter = filter.build();
+        for (index, test_name) in Self::parse(ignored.as_ref())?.into_iter().enumerate() {
             // Note that libtest prints out:
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
             // Adding ignored tests after non-ignored ones makes everything resolve correctly.
+
+            let instance = FilterInstance {
+                artifact: &artifact,
+                test_name,
+                ignored: true,
+                index,
+            };
             tests.insert(
                 test_name.into(),
                 RustTestCaseSummary {
                     ignored: true,
-                    filter_match: ignored_filter.filter_match(&test_binary, test_name, true),
+                    filter_match: ignored_filter.filter_match(instance),
                 },
             );
         }
@@ -463,7 +480,7 @@ impl<'g> TestList<'g> {
             binary_name,
             cwd,
             build_platform: platform,
-        } = test_binary;
+        } = artifact;
 
         Ok((
             binary_path,
