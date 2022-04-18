@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0] - 2022-04-18
+
+### Fixed
+
+- `PathMapper` now canonicalizes the remapped workspace and target directories (and returns an error if that was unsuccessful).
+- If the workspace directory is remapped, `CARGO_MANIFEST_DIR` in tests' runtime environment is set to the new directory.
+
 ## [0.6.0] - 2022-04-16
 
 ### Added
@@ -68,6 +75,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.7.0
 [0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.6.0
 [0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.5.0
 [0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.4.0

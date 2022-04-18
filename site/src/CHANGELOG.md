@@ -3,6 +3,15 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.14] - 2022-04-18
+
+### Fixed
+
+Fixes related to path remapping:
+
+- Directories passed into `--workspace-remap` and `--target-dir-remap` are now canonicalized.
+- If the workspace directory is remapped, `CARGO_MANIFEST_DIR` in tests' runtime environment is set to the new directory.
+
 ## [0.9.13] - 2022-04-16
 
 ### Added
@@ -166,6 +175,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.14]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.14
 [0.9.13]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.13
 [0.9.12]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.12
 [0.9.11]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.11
