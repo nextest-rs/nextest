@@ -94,20 +94,20 @@ fn compile_set_def(
     match set {
         SetDef::Package(matcher, span) => FilteringSet::Packages(expect_non_empty(
             matching_packages(matcher, packages),
-            span.clone(),
+            *span,
             errors,
         )),
         SetDef::Deps(matcher, span) => FilteringSet::Packages(expect_non_empty(
             dependencies_packages(matcher, packages, cache),
-            span.clone(),
+            *span,
             errors,
         )),
         SetDef::Rdeps(matcher, span) => FilteringSet::Packages(expect_non_empty(
             rdependencies_packages(matcher, packages, cache),
-            span.clone(),
+            *span,
             errors,
         )),
-        SetDef::Test(matcher, span) => FilteringSet::Test(matcher.clone(), span.clone()),
+        SetDef::Test(matcher, span) => FilteringSet::Test(matcher.clone(), *span),
         SetDef::All => FilteringSet::All,
         SetDef::None => FilteringSet::None,
     }
