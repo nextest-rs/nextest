@@ -92,8 +92,6 @@ impl TestFilterBuilder {
     /// If an empty slice is passed, the test filter matches all possible test names.
     pub fn new(
         run_ignored: RunIgnored,
-        // TODO: PartitionerBuilder was required back when the partitioner had mutable state.
-        // It is no longer required so this can be simplified.
         partitioner_builder: Option<PartitionerBuilder>,
         patterns: &[impl AsRef<[u8]>],
         exprs: Vec<FilteringExpr>,
@@ -137,22 +135,6 @@ impl TestFilterBuilder {
     }
 }
 
-/// Instance of a test to which a filter is being applied.
-#[derive(Copy, Clone, Debug)]
-pub struct FilterInstance<'a> {
-    /// The test binary artifact.
-    pub artifact: &'a RustTestArtifact<'a>,
-
-    /// The name of the test.
-    pub test_name: &'a str,
-
-    /// Whether this test is ignored.
-    pub ignored: bool,
-
-    /// An increasing numeric index for this test, used for partitioning.
-    pub index: usize,
-}
-
 /// Test filter, scoped to a single binary.
 #[derive(Debug)]
 pub struct TestFilter<'builder> {
@@ -162,25 +144,30 @@ pub struct TestFilter<'builder> {
 
 impl<'filter> TestFilter<'filter> {
     /// Returns an enum describing the match status of this filter.
-    pub fn filter_match(&self, instance: FilterInstance<'_>) -> FilterMatch {
-        self.filter_ignored_mismatch(instance)
-            .or_else(|| self.filter_name_mismatch(instance.test_name))
-            .or_else(|| self.filter_expression_mismatch(instance))
-            .or_else(|| self.filter_partition_mismatch(instance))
+    pub fn filter_match(
+        &mut self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &str,
+        ignored: bool,
+    ) -> FilterMatch {
+        self.filter_ignored_mismatch(ignored)
+            .or_else(|| self.filter_name_mismatch(test_name))
+            .or_else(|| self.filter_expression_mismatch(test_binary, test_name))
+            .or_else(|| self.filter_partition_mismatch(test_name))
             .unwrap_or(FilterMatch::Matches)
     }
 
-    fn filter_ignored_mismatch(&self, instance: FilterInstance<'_>) -> Option<FilterMatch> {
+    fn filter_ignored_mismatch(&self, ignored: bool) -> Option<FilterMatch> {
         match self.builder.run_ignored {
             RunIgnored::IgnoredOnly => {
-                if !instance.ignored {
+                if !ignored {
                     return Some(FilterMatch::Mismatch {
                         reason: MismatchReason::Ignored,
                     });
                 }
             }
             RunIgnored::Default => {
-                if instance.ignored {
+                if ignored {
                     return Some(FilterMatch::Mismatch {
                         reason: MismatchReason::Ignored,
                     });
@@ -205,13 +192,17 @@ impl<'filter> TestFilter<'filter> {
         }
     }
 
-    fn filter_expression_mismatch(&self, instance: FilterInstance<'_>) -> Option<FilterMatch> {
+    fn filter_expression_mismatch(
+        &self,
+        test_binary: &RustTestArtifact<'_>,
+        test_name: &str,
+    ) -> Option<FilterMatch> {
         let accepted = self.builder.exprs.is_empty()
             || self
                 .builder
                 .exprs
                 .iter()
-                .any(|expr| expr.includes(instance.artifact.package.id(), instance.test_name));
+                .any(|expr| expr.includes(test_binary.package.id(), test_name));
 
         match accepted {
             false => Some(FilterMatch::Mismatch {
@@ -221,9 +212,9 @@ impl<'filter> TestFilter<'filter> {
         }
     }
 
-    fn filter_partition_mismatch(&self, instance: FilterInstance<'_>) -> Option<FilterMatch> {
-        let partition_match = match &self.partitioner {
-            Some(partitioner) => partitioner.test_matches(instance.test_name, instance.index),
+    fn filter_partition_mismatch(&mut self, test_name: &str) -> Option<FilterMatch> {
+        let partition_match = match &mut self.partitioner {
+            Some(partitioner) => partitioner.test_matches(test_name),
             None => true,
         };
         if partition_match {

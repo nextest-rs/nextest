@@ -44,7 +44,7 @@ pub enum PartitionerBuilder {
 /// Represents an individual partitioner, typically scoped to a test binary.
 pub trait Partitioner: fmt::Debug {
     /// Returns true if the given test name matches the partition.
-    fn test_matches(&self, test_name: &str, index: usize) -> bool;
+    fn test_matches(&mut self, test_name: &str) -> bool;
 }
 
 impl PartitionerBuilder {
@@ -145,6 +145,7 @@ fn parse_shards(
 struct CountPartitioner {
     shard_minus_one: u64,
     total_shards: u64,
+    curr: u64,
 }
 
 impl CountPartitioner {
@@ -153,13 +154,16 @@ impl CountPartitioner {
         Self {
             shard_minus_one,
             total_shards,
+            curr: 0,
         }
     }
 }
 
 impl Partitioner for CountPartitioner {
-    fn test_matches(&self, _test_name: &str, index: usize) -> bool {
-        (index as u64) % self.total_shards == self.shard_minus_one
+    fn test_matches(&mut self, _test_name: &str) -> bool {
+        let matches = self.curr == self.shard_minus_one;
+        self.curr = (self.curr + 1) % self.total_shards;
+        matches
     }
 }
 
@@ -180,7 +184,7 @@ impl HashPartitioner {
 }
 
 impl Partitioner for HashPartitioner {
-    fn test_matches(&self, test_name: &str, _index: usize) -> bool {
+    fn test_matches(&mut self, test_name: &str) -> bool {
         let mut hasher = XxHash64::default();
         test_name.hash(&mut hasher);
         hasher.finish() % self.total_shards == self.shard_minus_one
