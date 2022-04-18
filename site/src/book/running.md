@@ -11,7 +11,7 @@ This will produce output that looks like:
 ![Output of cargo nextest run](../static/nextest-run.png)
 
 In the output above:
-* Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.603 seconds to execute.
+* Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.052 seconds to execute.
 * Tests that take more than a specified amount of time are marked **SLOW**. The timeout is 60 seconds by default, and can be [changed through configuration](configuration.md).
 * The part of the test in purple is the *test binary*. A test binary is either:
   * a *unit test binary* built from tests inline within `lib.rs`. These test binaries are shown by nextest as just the crate name, without a `::` separator inside them.
