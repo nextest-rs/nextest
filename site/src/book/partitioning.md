@@ -16,7 +16,7 @@ Tests not in the current bucket are marked skipped.
 
 Count-based partitioning is done *per test binary*. This means that the tests in one binary *do not* influence counting for other binaries.
 
-Count-based partitioning also applies after all other test filters. For example, if you specify `cargo nextest run --partition count:1/3 test_parsing`, nextest first filters out tests that match the substring `test_parsing`, then buckets them into 3 partitions and runs the tests in partition 1.
+Count-based partitioning also applies after all other test filters. For example, if you specify `cargo nextest run --partition count:1/3 test_parsing`, nextest first selects tests that match the substring `test_parsing`, then buckets this subset of tests into 3 partitions and runs the tests in partition 1.
 
 ## Hash-based partitioning
 
