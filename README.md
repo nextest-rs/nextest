@@ -11,7 +11,7 @@ This repository contains the source code for:
   * [**nextest-runner**](nextest-runner): core logic for cargo-nextest
     [![nextest-runner on crates.io](https://img.shields.io/crates/v/nextest-runner)](https://crates.io/crates/nextest-runner)
     [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-runner)
-    [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/quick_junit/)
+    [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/nextest_runner/)
   * [**nextest-metadata**](nextest-metadata): library for calling cargo-nextest over the command line
     [![nextest-metadata on crates.io](https://img.shields.io/crates/v/nextest-metadata)](https://crates.io/crates/nextest-metadata)
     [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-metadata)
