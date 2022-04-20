@@ -150,6 +150,7 @@ dependencies = [
  "nextest-filtering",
  "nextest-metadata",
  "nextest-runner",
+ "nextest-workspace-hack",
  "once_cell",
  "owo-colors",
  "pathdiff",
@@ -715,6 +716,7 @@ dependencies = [
  "clap",
  "guppy",
  "miette",
+ "nextest-workspace-hack",
  "nom 7.1.1",
  "nom-tracable",
  "nom_locate 4.0.0",
@@ -728,6 +730,7 @@ name = "nextest-metadata"
 version = "0.3.1"
 dependencies = [
  "camino",
+ "nextest-workspace-hack",
  "serde",
  "serde_json",
 ]
@@ -756,6 +759,7 @@ dependencies = [
  "maplit",
  "nextest-filtering",
  "nextest-metadata",
+ "nextest-workspace-hack",
  "num_cpus",
  "once_cell",
  "owo-colors",
@@ -772,6 +776,29 @@ dependencies = [
  "tempfile",
  "toml",
  "twox-hash",
+]
+
+[[package]]
+name = "nextest-workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "backtrace",
+ "clap",
+ "indexmap",
+ "libc",
+ "log",
+ "memchr",
+ "miette",
+ "nom-tracable",
+ "num-traits",
+ "owo-colors",
+ "proc-macro2 1.0.36",
+ "quote 1.0.15",
+ "serde",
+ "serde_json",
+ "syn 1.0.86",
+ "textwrap",
+ "winapi",
 ]
 
 [[package]]
@@ -1059,6 +1086,7 @@ dependencies = [
  "chrono",
  "goldenfile",
  "indexmap",
+ "nextest-workspace-hack",
  "owo-colors",
  "quick-xml",
 ]
