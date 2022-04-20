@@ -43,6 +43,7 @@ twox-hash = { version = "1.6.2", default-features = false }
 nextest-filtering = { version = "0.1.0", path = "../nextest-filtering" }
 nextest-metadata = { version = "0.3.1", path = "../nextest-metadata" }
 quick-junit = { version = "0.1.5", path = "../quick-junit" }
+nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 color-eyre = { version = "0.6.1", default-features = false }

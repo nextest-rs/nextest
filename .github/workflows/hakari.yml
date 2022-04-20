@@ -1,0 +1,46 @@
+# This workflow file serves as an example for cargo-hakari CI integration.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+name: cargo hakari
+
+jobs:
+  workspace-hack-check:
+    name: Check workspace-hack
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          # cargo-guppy chooses to check out the tip of the pull request rather than a merge commit.
+          # If you're copying this CI job over, you may wish to use the default instead.
+          # https://github.com/actions/checkout#checkout-pull-request-head-commit-instead-of-merge-commit
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      # Caching adapted from
+      # https://github.com/unicode-org/icu4x/blob/2d64d81d4661090c0d446b7bd700e65035840a5e/.github/workflows/build-test.yml#L32-L50.
+      - name: Install cargo-hakari
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-hakari
+          version: "0.9"  # Most recent version compatible with 0.9        id: install-cargo-search2
+      - name: Check workspace-hack Cargo.toml is up-to-date
+        uses: actions-rs/cargo@v1
+        with:
+          command: hakari
+          args: generate --diff
+      - name: Check all crates depend on workspace-hack
+        uses: actions-rs/cargo@v1
+        with:
+          command: hakari
+          args: manage-deps --dry-run
