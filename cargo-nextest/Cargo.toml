@@ -14,7 +14,7 @@ rust-version = "1.56"
 [dependencies]
 camino = "1.0.7"
 cfg-if = "1.0.0"
-clap = { version = "3.1.9", features = ["derive", "env"] }
+clap = { version = "3.1.10", features = ["derive", "env"] }
 # we don't use the tracing support
 color-eyre = { version = "0.6.1", default-features = false }
 duct = "0.13.5"
