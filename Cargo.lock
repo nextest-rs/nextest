@@ -658,9 +658,9 @@ dependencies = [
 
 [[package]]
 name = "miette"
-version = "4.5.0"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01ff8e2f24552a78cbf93f2b197f6a788192200c7200648514647cce438714bf"
+checksum = "8218047465aa2a0aa5ceca2b5065ae27b54f744c16bf9272fdbc39917362785f"
 dependencies = [
  "atty",
  "backtrace",
@@ -678,9 +678,9 @@ dependencies = [
 
 [[package]]
 name = "miette-derive"
-version = "4.5.0"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7119608a3ee194199d537849bb7b600f9e04bb1c91b98fb2620b9a867f17ef20"
+checksum = "e04d56e20719ef4fc7fd02960f72a2451a724e3c348627a941e2f37dda37b247"
 dependencies = [
  "proc-macro2 1.0.37",
  "quote 1.0.18",
