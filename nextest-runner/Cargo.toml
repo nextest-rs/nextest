@@ -16,7 +16,7 @@ config = { version = "0.13.1", default-features = false, features = ["toml"] }
 cargo_metadata = "0.14.2"
 chrono = "0.4.19"
 crossbeam-channel = "0.5.4"
-ctrlc = { version = "3.2.1", features = ["termination"] }
+ctrlc = { version = "3.2.2", features = ["termination"] }
 debug-ignore = "1.0.2"
 duct = "0.13.5"
 guppy = "0.14.1"
