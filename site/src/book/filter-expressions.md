@@ -29,13 +29,13 @@ cargo nextest run -E 'test(my_test)' -E 'package(my-crate)'
 This is equivalent to:
 
 ```
-cargo nextest run -E 'test(my_test) + package(=my-crate)'
+cargo nextest run -E 'test(my_test) + package(my-crate)'
 ```
 
 ### Examples
 
 - `package(serde) and test(deserialize)`: every test containing the string `deserialize` in the package `serde`
-- `not (test(/parse[0-9]*/) | test(run))`: every test not containing `parse` or `run`
+- `not (test(/parse[0-9]*/) | test(run))`: every test name not matching the regex `parse[0-9]*` or the substring `run`
 
 ## DSL reference
 
