@@ -10,7 +10,7 @@ cargo nextest list
 
 ![Output of cargo nextest list](../static/nextest-list.png)
 
-[^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust.
+[^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
 
 ## Options and arguments
 

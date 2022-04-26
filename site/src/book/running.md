@@ -60,7 +60,8 @@ cargo nextest run --no-capture
 
 In this mode, cargo-nextest will run tests *serially* so that output from different tests isn't interspersed. This is different from `cargo test -- --nocapture`, which will run tests in parallel.
 
-[^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust.
+[^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
+
 
 ## Options and arguments
 
