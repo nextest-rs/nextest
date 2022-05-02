@@ -32,7 +32,7 @@ textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unic
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 proc-macro2 = { version = "1.0.37", features = ["proc-macro"] }
 quote = { version = "1.0.18", features = ["proc-macro"] }
-syn = { version = "1.0.91", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
+syn = { version = "1.0.92", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 libc = { version = "0.2.124", default-features = false, features = ["extra_traits"] }
