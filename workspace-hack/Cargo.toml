@@ -15,7 +15,7 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.65", features = ["gimli-symbolize", "std"] }
-clap = { version = "3.1.14", features = ["atty", "clap_derive", "color", "derive", "env", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
+clap = { version = "3.1.15", features = ["atty", "clap_derive", "color", "derive", "env", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
 indexmap = { version = "1.8.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.124", features = ["std"] }
 log = { version = "0.4.16", default-features = false, features = ["std"] }
@@ -32,7 +32,7 @@ textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unic
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 proc-macro2 = { version = "1.0.37", features = ["proc-macro"] }
 quote = { version = "1.0.18", features = ["proc-macro"] }
-syn = { version = "1.0.91", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
+syn = { version = "1.0.92", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 libc = { version = "0.2.124", default-features = false, features = ["extra_traits"] }
