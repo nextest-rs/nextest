@@ -18,11 +18,6 @@ jobs:
       RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v2
-        with:
-          # cargo-guppy chooses to check out the tip of the pull request rather than a merge commit.
-          # If you're copying this CI job over, you may wish to use the default instead.
-          # https://github.com/actions/checkout#checkout-pull-request-head-commit-instead-of-merge-commit
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
