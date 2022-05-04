@@ -14,5 +14,5 @@ rust-version = "1.56"
 [dependencies]
 camino = { version = "1.0.7", features = ["serde1"] }
 serde = { version = "1.0.137", features = ["derive"] }
-serde_json = "1.0.79"
+serde_json = "1.0.81"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
