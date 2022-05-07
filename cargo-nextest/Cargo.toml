@@ -22,7 +22,7 @@ enable-ansi-support = "0.1.2"
 # we don't use the default formatter so we don't need default features
 env_logger = { version = "0.9.0", default-features = false }
 guppy = "0.14.1"
-log = "0.4.16"
+log = "0.4.17"
 itertools = "0.10.2"
 miette = { version = "4.7.0", features = ["fancy"] }
 nextest-filtering = { version = "0.1.0", path = "../nextest-filtering" }
