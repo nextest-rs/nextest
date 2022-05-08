@@ -18,11 +18,11 @@ backtrace = { version = "0.3.65", features = ["gimli-symbolize", "std"] }
 clap = { version = "3.1.16", features = ["atty", "clap_derive", "color", "derive", "env", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
 indexmap = { version = "1.8.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.124", features = ["std"] }
-log = { version = "0.4.16", default-features = false, features = ["std"] }
+log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
-miette = { version = "4.6.0", features = ["atty", "backtrace", "fancy", "fancy-no-backtrace", "owo-colors", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
+miette = { version = "4.7.0", features = ["atty", "backtrace", "fancy", "fancy-no-backtrace", "owo-colors", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 nom-tracable = { version = "0.8.0", features = ["trace"] }
-num-traits = { version = "0.2.14", default-features = false, features = ["std"] }
+num-traits = { version = "0.2.15", default-features = false, features = ["std"] }
 owo-colors = { version = "3.4.0", default-features = false, features = ["supports-color", "supports-colors"] }
 serde = { version = "1.0.137", features = ["derive", "serde_derive", "std"] }
 serde_json = { version = "1.0.81", features = ["std", "unbounded_depth"] }
@@ -30,7 +30,7 @@ textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unic
 
 [build-dependencies]
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
-proc-macro2 = { version = "1.0.37", features = ["proc-macro"] }
+proc-macro2 = { version = "1.0.38", features = ["proc-macro"] }
 quote = { version = "1.0.18", features = ["proc-macro"] }
 syn = { version = "1.0.92", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
