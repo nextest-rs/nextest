@@ -38,7 +38,7 @@ strip-ansi-escapes = "0.1.1"
 target-spec = "1.0"
 # For parsing of .cargo/config.toml files
 toml = "0.5.9"
-twox-hash = { version = "1.6.2", default-features = false }
+twox-hash = { version = "1.6.3", default-features = false }
 
 nextest-filtering = { version = "0.1.0", path = "../nextest-filtering" }
 nextest-metadata = { version = "0.3.1", path = "../nextest-metadata" }
