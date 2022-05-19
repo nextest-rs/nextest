@@ -71,6 +71,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 fn kind_ty(run_status: &ExecuteStatus) -> (NonSuccessKind, &'static str) {
                     match run_status.result {
                         ExecutionResult::Fail => (NonSuccessKind::Failure, "test failure"),
+                        ExecutionResult::Timeout => (NonSuccessKind::Failure, "test timeout"),
                         ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure"),
                         ExecutionResult::Pass => unreachable!("this is a failure status"),
                     }

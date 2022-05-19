@@ -495,6 +495,15 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) ->
         )?;
     }
 
+    if run_stats.timed_out > 0 {
+        write!(
+            out,
+            "{} {}, ",
+            run_stats.timed_out.style(styles.count),
+            "timed out".style(styles.fail),
+        )?;
+    }
+
     write!(
         out,
         "{} {}",
@@ -664,11 +673,13 @@ impl<'a> TestReporterImpl<'a> {
                 elapsed,
                 run_stats,
             } => {
-                let summary_style = if run_stats.failed > 0 || run_stats.exec_failed > 0 {
-                    self.styles.fail
-                } else {
-                    self.styles.pass
-                };
+                let summary_style =
+                    if run_stats.failed > 0 || run_stats.exec_failed > 0 || run_stats.timed_out > 0
+                    {
+                        self.styles.fail
+                    } else {
+                        self.styles.pass
+                    };
                 write!(writer, "{:>12} ", "Summary".style(summary_style))?;
 
                 // Next, print the total time taken.
@@ -752,6 +763,7 @@ impl<'a> TestReporterImpl<'a> {
                     ExecutionResult::Fail => "FAIL",
                     ExecutionResult::ExecFail => "XFAIL",
                     ExecutionResult::Pass => unreachable!("this is a failing test"),
+                    ExecutionResult::Timeout => "TIMEOUT",
                 };
 
                 if last_status.attempt == 1 {

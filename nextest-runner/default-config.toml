@@ -55,8 +55,10 @@ success-output = "never"
 # to false.
 fail-fast = true
 
-# Treat a test that takes longer than this as slow, and print a message.
-slow-timeout = "60s"
+# Treat a test that takes longer than this period as slow, and print a message.
+# Given a non-zero positive integer the test will be terminated after the number
+# periods have passed.
+slow-timeout = { period = "60s", terminate-after = 0 }
 
 [profile.default.junit]
 # Output a JUnit report into the given file inside 'store.dir/<profile-name>'.

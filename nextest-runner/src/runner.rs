@@ -109,7 +109,7 @@ pub struct TestRunner<'a> {
     no_capture: bool,
     tries: usize,
     fail_fast: bool,
-    slow_timeout: Duration,
+    slow_timeout: crate::config::SlowTimeout,
     test_list: &'a TestList<'a>,
     target_runner: TargetRunner,
     run_pool: ThreadPool,
@@ -357,6 +357,8 @@ impl<'a> TestRunner<'a> {
 
         let handle = cmd.start()?;
 
+        let mut status: Option<ExecutionResult> = None;
+
         self.wait_pool.in_place_scope(|s| {
             let (sender, receiver) = crossbeam_channel::bounded::<()>(1);
             let wait_handle = &handle;
@@ -369,15 +371,63 @@ impl<'a> TestRunner<'a> {
                 let _ = sender.send(());
             });
 
+            let mut timeout_hit = 0;
+
             // Continue waiting for the test to finish with a timeout, logging at slow-timeout
             // intervals
-            while let Err(error) = receiver.recv_timeout(self.slow_timeout) {
+            while let Err(error) = receiver.recv_timeout(self.slow_timeout.period) {
                 match error {
                     RecvTimeoutError::Timeout => {
                         let _ = run_sender.send(InternalTestEvent::Slow {
                             test_instance: test,
                             elapsed: stopwatch.elapsed(),
                         });
+
+                        if let Some(terminate_after) = self.slow_timeout.terminate_after {
+                            timeout_hit += 1;
+
+                            if terminate_after > 0 && timeout_hit >= terminate_after {
+                                // attempt to terminate the slow test.
+                                // as there is a race between shutting down a slow test and its own completion
+                                // we silently ignore errors to avoid printing false warnings.
+
+                                #[cfg(unix)]
+                                let exited = {
+                                    use duct::unix::HandleExt;
+                                    use libc::SIGTERM;
+
+                                    let _ = handle.send_signal(SIGTERM);
+
+                                    let mut i = 0;
+
+                                    // give the process a grace period of 10s
+                                    loop {
+                                        std::thread::sleep(Duration::from_secs(1));
+
+                                        match ((0..9).contains(&i), handle.try_wait()) {
+                                            (_, Ok(Some(_))) => break true,
+                                            (true, Ok(None)) => (),
+                                            (false, Ok(None)) => break false,
+                                            // in case of an error we'll send SIGKILL nonetheless
+                                            (_, Err(_)) => break false,
+                                        }
+
+                                        i += 1;
+                                    }
+                                };
+
+                                #[cfg(not(unix))]
+                                let exited = false;
+
+                                if !exited {
+                                    let _ = handle.kill();
+                                }
+
+                                status = Some(ExecutionResult::Timeout);
+
+                                break;
+                            }
+                        }
                     }
                     RecvTimeoutError::Disconnected => {
                         unreachable!("Waiting thread should never drop the sender")
@@ -388,11 +438,14 @@ impl<'a> TestRunner<'a> {
 
         let output = handle.into_output()?;
 
-        let status = if output.status.success() {
-            ExecutionResult::Pass
-        } else {
-            ExecutionResult::Fail
-        };
+        let status = status.unwrap_or_else(|| {
+            if output.status.success() {
+                ExecutionResult::Pass
+            } else {
+                ExecutionResult::Fail
+            }
+        });
+
         Ok(InternalExecuteStatus {
             stdout: output.stdout,
             stderr: output.stderr,
@@ -590,6 +643,9 @@ pub struct RunStats {
     /// The number of tests that failed.
     pub failed: usize,
 
+    /// The number of tests that timed out.
+    pub timed_out: usize,
+
     /// The number of tests that encountered an execution failure.
     pub exec_failed: usize,
 
@@ -633,6 +689,7 @@ impl RunStats {
                 }
             }
             ExecutionResult::Fail => self.failed += 1,
+            ExecutionResult::Timeout => self.timed_out += 1,
             ExecutionResult::ExecFail => self.exec_failed += 1,
         }
     }
@@ -819,6 +876,8 @@ pub enum ExecutionResult {
     Fail,
     /// An error occurred while executing the test.
     ExecFail,
+    /// The test was terminated due to timeout.
+    Timeout,
 }
 
 impl ExecutionResult {
@@ -826,7 +885,7 @@ impl ExecutionResult {
     pub fn is_success(self) -> bool {
         match self {
             ExecutionResult::Pass => true,
-            ExecutionResult::Fail | ExecutionResult::ExecFail => false,
+            ExecutionResult::Fail | ExecutionResult::ExecFail | ExecutionResult::Timeout => false,
         }
     }
 }
