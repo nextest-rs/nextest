@@ -23,10 +23,10 @@ nom = "7.1.1"
 nom-tracable = "0.8.0"
 nom_locate = "4.0.0"
 regex = "1.5.5"
-regex-syntax = "0.6.25"
+regex-syntax = "0.6.26"
 thiserror = "1.0.31"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-clap = { version = "3.1.17", features = ["derive"] }
+clap = { version = "3.1.18", features = ["derive"] }
 camino = "1.0.8"
