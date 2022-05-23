@@ -16,7 +16,7 @@ Any custom test harness that uses [libtest-mimic](https://github.com/LukasKalber
 
 For an example test harness that uses libtest-mimic, see [datatest-stable](https://github.com/nextest-rs/datatest-stable).
 
-> NOTE: Versions of libtest-mimic prior to 0.4.0 are not compatible with nextest.
+> **Note:** Versions of libtest-mimic prior to 0.4.0 are not compatible with nextest.
 
 ## Manually implementing a test harness
 
