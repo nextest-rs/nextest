@@ -20,7 +20,7 @@ indexmap = { version = "1.8.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.124", features = ["std"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
-miette = { version = "4.7.0", features = ["atty", "backtrace", "fancy", "fancy-no-backtrace", "owo-colors", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
+miette = { version = "4.7.1", features = ["atty", "backtrace", "fancy", "fancy-no-backtrace", "owo-colors", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 nom-tracable = { version = "0.8.0", features = ["trace"] }
 num-traits = { version = "0.2.15", default-features = false, features = ["std"] }
 owo-colors = { version = "3.4.0", default-features = false, features = ["supports-color", "supports-colors"] }
@@ -32,7 +32,7 @@ textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unic
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 proc-macro2 = { version = "1.0.39", features = ["proc-macro"] }
 quote = { version = "1.0.18", features = ["proc-macro"] }
-syn = { version = "1.0.94", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
+syn = { version = "1.0.95", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 libc = { version = "0.2.124", default-features = false, features = ["extra_traits"] }
