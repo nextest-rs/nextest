@@ -83,6 +83,17 @@ To install a version series or specific version, use this instead:
     # version: 0.9.11
 ```
 
+> **Tip:** GitHub Actions supports ANSI color codes. To get color support for nextest (and Cargo), add this to your workflow:
+>
+> ```yml
+> jobs:
+>   my-test-job:
+>     env:
+>       CARGO_TERM_COLOR: always
+> ```
+>
+> For a full list of environment variables supported by nextest, see [Environment variables](env-vars.md).
+
 ### Other CI systems
 
 Install pre-built binaries on other CI systems by downloading and extracting the respective archives, using the commands above as a guide. See [Release URLs](release-urls.md) for more about how to specify nextest versions and platforms.
