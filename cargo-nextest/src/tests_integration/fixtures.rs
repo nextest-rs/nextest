@@ -108,9 +108,13 @@ pub fn cargo_bin() -> String {
 }
 
 #[track_caller]
-pub(super) fn set_rustflags() {
+pub(super) fn set_env_vars() {
     // The dynamic library tests require this flag.
     std::env::set_var("RUSTFLAGS", "-C prefer-dynamic");
+    // Set CARGO_TERM_COLOR to never to ensure that ANSI color codes don't interfere with the
+    // output.
+    // TODO: remove this once programmatic run statuses are supported.
+    std::env::set_var("CARGO_TERM_COLOR", "never");
 }
 
 #[track_caller]

@@ -27,7 +27,7 @@ use tempfile::TempDir;
 
 #[test]
 fn test_list_default() {
-    set_rustflags();
+    set_env_vars();
     let p = TempProject::new().unwrap();
 
     let args = CargoNextestApp::parse_from([
@@ -49,7 +49,7 @@ fn test_list_default() {
 
 #[test]
 fn test_list_full() {
-    set_rustflags();
+    set_env_vars();
     let mut p = TempProject::new().unwrap();
     p.persist();
 
@@ -83,7 +83,7 @@ fn test_list_full() {
 
 #[test]
 fn test_list_binaries_only() {
-    set_rustflags();
+    set_env_vars();
     let p = TempProject::new().unwrap();
 
     let args = CargoNextestApp::parse_from([
@@ -107,7 +107,7 @@ fn test_list_binaries_only() {
 
 #[test]
 fn test_target_dir() {
-    set_rustflags();
+    set_env_vars();
 
     let p = TempProject::new().unwrap();
 
@@ -173,7 +173,7 @@ fn test_target_dir() {
 
 #[test]
 fn test_list_full_after_build() {
-    set_rustflags();
+    set_env_vars();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -198,7 +198,7 @@ fn test_list_full_after_build() {
 
 #[test]
 fn test_list_host_after_build() {
-    set_rustflags();
+    set_env_vars();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -225,7 +225,7 @@ fn test_list_host_after_build() {
 
 #[test]
 fn test_list_target_after_build() {
-    set_rustflags();
+    set_env_vars();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -252,7 +252,7 @@ fn test_list_target_after_build() {
 
 #[test]
 fn test_run() {
-    set_rustflags();
+    set_env_vars();
 
     let p = TempProject::new().unwrap();
 
@@ -274,7 +274,7 @@ fn test_run() {
 
 #[test]
 fn test_run_after_build() {
-    set_rustflags();
+    set_env_vars();
 
     let p = TempProject::new().unwrap();
     build_tests(&p);
@@ -298,7 +298,7 @@ fn test_run_after_build() {
 
 #[test]
 fn test_relocated_run() {
-    set_rustflags();
+    set_env_vars();
 
     let custom_target_dir = TempDir::new().unwrap();
     let custom_target_path: &Utf8Path = custom_target_dir
