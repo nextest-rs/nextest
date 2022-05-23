@@ -9,8 +9,8 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
-use serde::Deserialize;
-use std::{collections::HashMap, time::Duration};
+use serde::{de::IntoDeserializer, Deserialize};
+use std::{collections::HashMap, fmt, time::Duration};
 
 /// Overall configuration for nextest.
 ///
@@ -162,8 +162,8 @@ impl<'cfg> NextestProfile<'cfg> {
     /// Returns the time after which tests are treated as slow for this profile.
     pub fn slow_timeout(&self) -> Duration {
         self.custom_profile
-            .and_then(|profile| profile.slow_timeout)
-            .unwrap_or(self.default_profile.slow_timeout)
+            .and_then(|profile| profile.slow_timeout.display_after)
+            .unwrap_or(self.default_profile.slow_timeout.display_after)
     }
 
     /// Returns the test status level.
@@ -291,9 +291,51 @@ struct DefaultProfileImpl {
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
     fail_fast: bool,
-    #[serde(with = "humantime_serde")]
-    slow_timeout: Duration,
+    #[serde(deserialize_with = "deserialize_default_slow_timeout")]
+    slow_timeout: DefaultSlowTimeout,
     junit: DefaultJunitImpl,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct DefaultSlowTimeout {
+    #[serde(with = "humantime_serde")]
+    display_after: Duration,
+}
+
+fn deserialize_default_slow_timeout<'de, D>(deserializer: D) -> Result<DefaultSlowTimeout, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct V;
+
+    impl<'de2> serde::de::Visitor<'de2> for V {
+        type Value = DefaultSlowTimeout;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(
+                formatter,
+                "a table {{ display-after = \"60s\" }} or a string (\"60s\")"
+            )
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            let display_after = humantime_serde::deserialize(v.into_deserializer())?;
+            Ok(DefaultSlowTimeout { display_after })
+        }
+
+        fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de2>,
+        {
+            DefaultSlowTimeout::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_any(V)
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -319,11 +361,52 @@ struct CustomProfileImpl {
     success_output: Option<TestOutputDisplay>,
     #[serde(default)]
     fail_fast: Option<bool>,
-    #[serde(with = "humantime_serde")]
-    #[serde(default)]
-    slow_timeout: Option<Duration>,
+    #[serde(default, deserialize_with = "deserialize_custom_slow_timeout")]
+    slow_timeout: CustomSlowTimeout,
     #[serde(default)]
     junit: JunitImpl,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct CustomSlowTimeout {
+    #[serde(with = "humantime_serde::option")]
+    display_after: Option<Duration>,
+}
+
+fn deserialize_custom_slow_timeout<'de, D>(deserializer: D) -> Result<CustomSlowTimeout, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct V;
+
+    impl<'de2> serde::de::Visitor<'de2> for V {
+        type Value = CustomSlowTimeout;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(
+                formatter,
+                "a table {{ display-after = \"60s\" }} or a string (\"60s\")"
+            )
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            let display_after = Some(humantime_serde::deserialize(v.into_deserializer())?);
+            Ok(CustomSlowTimeout { display_after })
+        }
+
+        fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de2>,
+        {
+            CustomSlowTimeout::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_any(V)
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
