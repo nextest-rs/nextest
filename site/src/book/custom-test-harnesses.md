@@ -12,9 +12,9 @@ As mentioned in [*How nextest works*](how-it-works.md), cargo-nextest has a much
 
 ## libtest-mimic (recommended)
 
-Any custom test harness that uses [libtest-mimic](https://github.com/LukasKalbertodt/libtest-mimic) (version 0.4.0 or above) is compatible with nextest. Using this crate is recommended.
+Any custom test harness that is based on [libtest-mimic](https://github.com/LukasKalbertodt/libtest-mimic) (version 0.4.0 or above) is compatible with nextest. Using this crate is recommended.
 
-For an example test harness that uses libtest-mimic, see [datatest-stable](https://github.com/nextest-rs/datatest-stable).
+For an example test harness that is based on libtest-mimic, see [datatest-stable](https://github.com/nextest-rs/datatest-stable).
 
 > **Note:** Versions of libtest-mimic prior to 0.4.0 are not compatible with nextest.
 
