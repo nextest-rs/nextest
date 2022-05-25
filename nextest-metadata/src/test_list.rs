@@ -264,8 +264,23 @@ pub struct RustBuildMetaSummary {
     /// Base output directories, relative to the target directory.
     pub base_output_directories: BTreeSet<Utf8PathBuf>,
 
+    /// Information about non-test binaries, keyed by package ID.
+    pub non_test_binaries: BTreeMap<String, BTreeSet<RustNonTestBinarySummary>>,
+
     /// Linked paths, relative to the target directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
+}
+
+/// A non-test Rust binary. Used to set the correct environment
+/// variables in reused builds.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RustNonTestBinarySummary {
+    /// The name of the binary.
+    pub name: String,
+
+    /// The path to the binary, relative to the target directory.
+    pub path: Utf8PathBuf,
 }
 
 /// A serializable suite of tests within a Rust test binary.
