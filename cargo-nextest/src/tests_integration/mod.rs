@@ -360,3 +360,58 @@ fn test_relocated_run() {
 
     check_run_output(output.stderr().unwrap(), true);
 }
+
+#[test]
+fn test_run_from_archive() {
+    set_env_vars();
+
+    let custom_target_dir = TempDir::new().unwrap();
+    let custom_target_path: &Utf8Path = custom_target_dir
+        .path()
+        .try_into()
+        .expect("tempdir is valid UTF-8");
+    let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
+
+    let archive_file = p.temp_root().join("my-archive.tar.zst");
+
+    // Write the archive to the archive_file above.
+    let args = CargoNextestApp::parse_from([
+        "cargo",
+        "nextest",
+        "--manifest-path",
+        p.manifest_path().as_str(),
+        "archive",
+        "--file",
+        archive_file.as_str(),
+        "--workspace",
+        "--all-targets",
+    ]);
+
+    let mut output = OutputWriter::new_test();
+    args.exec(&mut output).unwrap();
+
+    // Remove the old source and target directories to ensure that any tests that refer to files within
+    // it fail.
+    std::fs::remove_dir_all(p.workspace_root()).unwrap();
+    std::fs::remove_dir_all(p.target_dir()).unwrap();
+
+    let mut p2 = TempProject::new().unwrap();
+    p2.persist();
+
+    let args = CargoNextestApp::parse_from([
+        "cargo",
+        "nextest",
+        "run",
+        "--archive",
+        archive_file.as_str(),
+        "--persist-extract-dir",
+        "--workspace-remap",
+        p2.workspace_root().as_str(),
+    ]);
+
+    let mut output = OutputWriter::new_test();
+    let err = args.exec(&mut output).unwrap_err();
+    assert_eq!("test run failed\n", err.to_string());
+
+    check_run_output(output.stderr().unwrap(), true);
+}

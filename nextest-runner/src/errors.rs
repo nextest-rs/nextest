@@ -9,6 +9,7 @@ use crate::{
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
+use itertools::Either;
 use std::{borrow::Cow, env::JoinPathsError, error, fmt};
 
 /// An error that occurred while parsing the config.
@@ -479,6 +480,240 @@ impl error::Error for WriteTestListError {
         match self {
             WriteTestListError::Io(error) => Some(error),
             WriteTestListError::Json(error) => Some(error),
+        }
+    }
+}
+
+/// An error that occurs while archiving data.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ArchiveCreateError {
+    /// An error occurred while creating the binary list to be written.
+    CreateBinaryList(WriteTestListError),
+
+    /// An error occurred while writing data to the output file.
+    OutputFileIo(std::io::Error),
+
+    /// An error occurred in the reporter.
+    ReporterIo(std::io::Error),
+
+    /// An error occurred while validating the created archive.
+    Validation(ArchiveReadError),
+}
+
+impl fmt::Display for ArchiveCreateError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ArchiveCreateError::CreateBinaryList(_) => {
+                write!(f, "error creating binary list")
+            }
+            ArchiveCreateError::OutputFileIo(_) => {
+                write!(f, "error writing to output file")
+            }
+            ArchiveCreateError::ReporterIo(_) => {
+                write!(f, "error reporting archive status")
+            }
+            ArchiveCreateError::Validation(_) => {
+                write!(f, "error validating created archive")
+            }
+        }
+    }
+}
+
+impl error::Error for ArchiveCreateError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            ArchiveCreateError::CreateBinaryList(error) => Some(error),
+            ArchiveCreateError::OutputFileIo(error) | ArchiveCreateError::ReporterIo(error) => {
+                Some(error)
+            }
+            ArchiveCreateError::Validation(error) => Some(error),
+        }
+    }
+}
+
+/// An error occurred while reading a file.
+///
+/// Returned as part of both [`ArchiveCreateError`] and [`ArchiveExtractError`].
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ArchiveReadError {
+    /// An I/O error occurred while reading the archive.
+    Io(std::io::Error),
+
+    /// A path wasn't valid UTF-8.
+    NonUtf8Path(Vec<u8>),
+
+    /// A file path within the archive didn't begin with "target/".
+    NoTargetPrefix(Utf8PathBuf),
+
+    /// A file path within the archive had an invalid component within it.
+    InvalidComponent {
+        /// The path that had an invalid component.
+        path: Utf8PathBuf,
+
+        /// The invalid component.
+        component: String,
+    },
+
+    /// An entry had an invalid checksum.
+    InvalidChecksum {
+        /// The path that had an invalid checksum.
+        path: Utf8PathBuf,
+        /// The payload, which is either the (expected, actual) checksum, or an error that occurred
+        /// while reading the checksum.
+        payload: Either<(u32, u32), std::io::Error>,
+    },
+
+    /// A metadata file wasn't found.
+    MetadataFileNotFound(&'static Utf8Path),
+
+    /// An error occurred while deserializing a metadata file.
+    MetadataDeserializeError {
+        /// The name of the metadata file.
+        path: &'static Utf8Path,
+
+        /// The deserialize error.
+        error: serde_json::Error,
+    },
+
+    /// An error occurred while building a `PackageGraph`.
+    PackageGraphConstructError {
+        /// The name of the metadata file.
+        path: &'static Utf8Path,
+
+        /// The error.
+        error: guppy::Error,
+    },
+}
+
+impl fmt::Display for ArchiveReadError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ArchiveReadError::Io(_) => {
+                write!(f, "I/O error reading archive")
+            }
+            ArchiveReadError::NonUtf8Path(path) => {
+                write!(
+                    f,
+                    "path in archive `{}` wasn't valid UTF-8",
+                    String::from_utf8_lossy(path)
+                )
+            }
+            ArchiveReadError::NoTargetPrefix(path) => {
+                write!(f, "path in archive `{path}` doesn't start with `target/`")
+            }
+            ArchiveReadError::InvalidComponent { path, component } => {
+                write!(
+                    f,
+                    "path in archive `{path}` contains an invalid component `{component}`"
+                )
+            }
+            ArchiveReadError::InvalidChecksum { path, payload } => {
+                write!(f, "corrupted archive: invalid checksum for path `{path}`")?;
+                if let Either::Left((expected, actual)) = payload {
+                    write!(f, ": expected {expected:#x}, actual {actual:#x}")?;
+                }
+                Ok(())
+            }
+            ArchiveReadError::MetadataFileNotFound(path) => {
+                write!(f, "metadata file `{path}` not found in archive")
+            }
+            ArchiveReadError::MetadataDeserializeError { path, .. } => {
+                write!(f, "error deserializing metadata file `{path}` in archive")
+            }
+            ArchiveReadError::PackageGraphConstructError { path, .. } => {
+                write!(f, "error building package graph from `{path}` in archive")
+            }
+        }
+    }
+}
+
+impl error::Error for ArchiveReadError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            ArchiveReadError::Io(error) => Some(error),
+            ArchiveReadError::MetadataDeserializeError { error, .. } => Some(error),
+            ArchiveReadError::InvalidChecksum { payload, .. } => match payload {
+                Either::Left(_) => None,
+                Either::Right(error) => Some(error),
+            },
+            ArchiveReadError::PackageGraphConstructError { error, .. } => Some(error),
+            ArchiveReadError::MetadataFileNotFound(_)
+            | ArchiveReadError::NonUtf8Path(_)
+            | ArchiveReadError::NoTargetPrefix(_)
+            | ArchiveReadError::InvalidComponent { .. } => None,
+        }
+    }
+}
+
+/// An error occurred while extracting a file.
+///
+/// Returned by [`extract_archive`](crate::reuse_build::ReuseBuildInfo::extract_archive).
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ArchiveExtractError {
+    /// An error occurred while creating a temporary directory.
+    TempDirCreate(std::io::Error),
+
+    /// An error occurred while canonicalizing the destination directory.
+    DestDirCanonicalization {
+        /// The directory that failed to canonicalize.
+        dir: Utf8PathBuf,
+
+        /// The error that occurred.
+        error: std::io::Error,
+    },
+
+    /// The destination already exists and `--overwrite` was not passed in.
+    DestinationExists(Utf8PathBuf),
+
+    /// An error occurred while reading the archive.
+    Read(ArchiveReadError),
+
+    /// An error occurred while writing out a file to the destination directory.
+    WriteFile {
+        /// The path that we couldn't write out.
+        path: Utf8PathBuf,
+
+        /// The error that occurred.
+        error: std::io::Error,
+    },
+
+    /// An error occurred while reporting the extraction status.
+    ReporterIo(std::io::Error),
+}
+
+impl fmt::Display for ArchiveExtractError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ArchiveExtractError::TempDirCreate(_) => {
+                write!(f, "error creating temporary directory")
+            }
+            ArchiveExtractError::DestDirCanonicalization { dir, .. } => {
+                write!(f, "error canonicalizing destination directory `{dir}`")
+            }
+            ArchiveExtractError::DestinationExists(path) => {
+                write!(f, "destination `{}` already exists", path)
+            }
+            ArchiveExtractError::Read(_) => write!(f, "error reading archive"),
+            ArchiveExtractError::WriteFile { path, .. } => {
+                write!(f, "error writing file `{path}` to disk")
+            }
+            ArchiveExtractError::ReporterIo(_) => write!(f, "error reporting extract status"),
+        }
+    }
+}
+
+impl error::Error for ArchiveExtractError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            ArchiveExtractError::DestinationExists(_) => None,
+            ArchiveExtractError::Read(error) => Some(error),
+            ArchiveExtractError::TempDirCreate(error)
+            | ArchiveExtractError::DestDirCanonicalization { error, .. }
+            | ArchiveExtractError::WriteFile { error, .. }
+            | ArchiveExtractError::ReporterIo(error) => Some(error),
         }
     }
 }

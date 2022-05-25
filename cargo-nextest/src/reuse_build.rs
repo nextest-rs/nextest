@@ -1,32 +1,86 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{output::OutputContext, ExpectedError};
+use std::io::Write;
+
+use crate::{output::OutputContext, ExpectedError, OutputWriter};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Args;
 use guppy::graph::PackageGraph;
 use nextest_runner::{
     errors::PathMapperConstructKind,
-    reuse_build::{MetadataJsonWithRemap, PathMapper, ReuseBuildInfo},
+    reuse_build::{
+        ArchiveReporter, ExtractDestination, MetadataWithRemap, PathMapper, ReuseBuildInfo,
+    },
 };
+use owo_colors::Stream;
 
-#[derive(Debug, Args)]
-#[clap(next_help_heading = "REUSE BUILD OPTIONS")]
+#[derive(Debug, Default, Args)]
+#[clap(
+    next_help_heading = "REUSE BUILD OPTIONS",
+    // These groups define data sources for various aspects of reuse-build inputs
+    group = clap::ArgGroup::new("cargo-metadata-sources"),
+    group = clap::ArgGroup::new("binaries-metadata-sources"),
+    group = clap::ArgGroup::new("target-dir-remap-sources"),
+)]
 pub(crate) struct ReuseBuildOpts {
+    /// Path to nextest archive (.tar.zst)
+    #[clap(
+        long,
+        groups = &["cargo-metadata-sources", "binaries-metadata-sources", "target-dir-remap-sources"],
+        conflicts_with_all = &["cargo-opts", "binaries-metadata", "cargo-metadata"],
+        value_name = "PATH",
+    )]
+    pub(crate) archive: Option<Utf8PathBuf>,
+
+    /// Destination directory to extract archive to [default: temporary directory]
+    #[clap(
+        long,
+        conflicts_with = "cargo-opts",
+        requires = "archive",
+        value_name = "DIR"
+    )]
+    pub(crate) extract_to: Option<Utf8PathBuf>,
+
+    /// Overwrite files in destination directory while extracting archive
+    #[clap(long, conflicts_with = "cargo-opts", requires_all = &["archive", "extract-to"])]
+    pub(crate) extract_overwrite: bool,
+
+    /// Persist temporary directory destination is extracted to
+    #[clap(long, conflicts_with_all = &["cargo-opts", "extract-to"], requires = "archive")]
+    pub(crate) persist_extract_dir: bool,
+
     /// Path to cargo metadata JSON
-    #[clap(long, conflicts_with("manifest-path"), value_name = "PATH")]
+    #[clap(
+        long,
+        group = "cargo-metadata-sources",
+        conflicts_with = "manifest-path",
+        value_name = "PATH"
+    )]
     pub(crate) cargo_metadata: Option<Utf8PathBuf>,
 
     /// Remapping for the workspace root
-    #[clap(long, requires("cargo-metadata"), value_name = "PATH")]
+    #[clap(long, requires = "cargo-metadata-sources", value_name = "PATH")]
     pub(crate) workspace_remap: Option<Utf8PathBuf>,
 
     /// Path to binaries-metadata JSON
-    #[clap(long, conflicts_with = "cargo-opts", value_name = "PATH")]
+    #[clap(
+        long,
+        group = "binaries-metadata-sources",
+        conflicts_with = "cargo-opts",
+        value_name = "PATH"
+    )]
     pub(crate) binaries_metadata: Option<Utf8PathBuf>,
 
     /// Remapping for the target directory
-    #[clap(long, requires("binaries-metadata"), value_name = "PATH")]
+    #[clap(
+        long,
+        group = "target-dir-remap-sources",
+        // Note: --target-dir-remap is incompatible with --archive, hence this requires
+        // binaries-metadata and not binaries-metadata-sources.
+        requires = "binaries-metadata",
+        value_name = "PATH"
+    )]
     pub(crate) target_dir_remap: Option<Utf8PathBuf>,
 }
 
@@ -41,27 +95,58 @@ impl ReuseBuildOpts {
         }
     }
 
-    pub(crate) fn process(&self) -> ReuseBuildInfo {
-        let cargo_metadata = self
-            .cargo_metadata
-            .as_ref()
-            .map(|path| MetadataJsonWithRemap {
-                path: path.clone(),
-                remap: self.workspace_remap.clone(),
+    pub(crate) fn process(
+        &self,
+        output: OutputContext,
+        output_writer: &mut OutputWriter,
+    ) -> Result<ReuseBuildInfo, ExpectedError> {
+        if let Some(archive_file) = &self.archive {
+            // Process this archive.
+            let dest = match &self.extract_to {
+                Some(dir) => ExtractDestination::Destination {
+                    dir: dir.clone(),
+                    overwrite: self.extract_overwrite,
+                },
+                None => ExtractDestination::TempDir {
+                    persist: self.persist_extract_dir,
+                },
+            };
+
+            let mut reporter = ArchiveReporter::new(output.verbose);
+            if output.color.should_colorize(Stream::Stderr) {
+                reporter.colorize();
+            }
+
+            let mut writer = output_writer.stderr_writer();
+            return ReuseBuildInfo::extract_archive(
+                archive_file,
+                dest,
+                |event| {
+                    reporter.report_event(event, &mut writer)?;
+                    writer.flush()
+                },
+                self.workspace_remap.as_deref(),
+            )
+            .map_err(|err| ExpectedError::ArchiveExtractError {
+                archive_file: archive_file.clone(),
+                err,
             });
+        }
+
+        let cargo_metadata = self.cargo_metadata.as_ref().map(|path| MetadataWithRemap {
+            metadata: path.clone().into(),
+            remap: self.workspace_remap.clone(),
+        });
 
         let binaries_metadata = self
             .binaries_metadata
             .as_ref()
-            .map(|path| MetadataJsonWithRemap {
-                path: path.clone(),
+            .map(|path| MetadataWithRemap {
+                metadata: path.clone().into(),
                 remap: self.target_dir_remap.clone(),
             });
 
-        ReuseBuildInfo {
-            cargo_metadata,
-            binaries_metadata,
-        }
+        Ok(ReuseBuildInfo::new(cargo_metadata, binaries_metadata))
     }
 }
 

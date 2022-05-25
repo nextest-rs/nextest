@@ -10,6 +10,7 @@ edition = "2021"
 rust-version = "1.59"
 
 [dependencies]
+atomicwrites = "0.3.1"
 aho-corasick = "0.7.18"
 camino = { version = "1.0.9", features = ["serde1"] }
 config = { version = "0.13.1", default-features = false, features = ["toml"] }
@@ -34,11 +35,14 @@ rayon = "1.5.3"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 strip-ansi-escapes = "0.1.1"
+tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
 target-spec = "1.0"
+tempfile = "3.3.0"
 # For parsing of .cargo/config.toml files
 toml = "0.5.9"
 twox-hash = { version = "1.6.3", default-features = false }
+zstd = { version = "0.11.2", features = ["zstdmt"] }
 
 nextest-filtering = { version = "0.1.0", path = "../nextest-filtering" }
 nextest-metadata = { version = "0.3.1", path = "../nextest-metadata" }
@@ -53,7 +57,6 @@ pathdiff = { version = "0.2.1", features = ["camino"] }
 pretty_assertions = "1.2.1"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
-tempfile = "3.3.0"
 
 [[bin]]
 name = "passthrough"
