@@ -10,123 +10,127 @@ use std::path::PathBuf;
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
-#[clap(next_help_heading = "CARGO OPTIONS", setting = AppSettings::DeriveDisplayOrder)]
+#[clap(
+    next_help_heading = "CARGO OPTIONS",
+    group = clap::ArgGroup::new("cargo-opts").multiple(true),
+    setting = AppSettings::DeriveDisplayOrder,
+)]
 pub(crate) struct CargoOptions {
     /// Test only this package's library unit tests
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     lib: bool,
 
     /// Test only the specified binary
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     bin: Vec<String>,
 
     /// Test all binaries
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     bins: bool,
 
     /// Test only the specified test target
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     test: Vec<String>,
 
     /// Test all targets
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     tests: bool,
 
     /// Test only the specified bench target
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     bench: Vec<String>,
 
     /// Test all benches
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     benches: bool,
 
     /// Test all targets
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     all_targets: bool,
 
     //  TODO: doc?
     // no-run is handled by test runner
     /// Package to test
-    #[clap(short = 'p', long = "package", conflicts_with = "binaries-metadata")]
+    #[clap(short = 'p', long = "package", group = "cargo-opts")]
     packages: Vec<String>,
 
     /// Build all packages in the workspace
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     workspace: bool,
 
     /// Exclude packages from the test
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     exclude: Vec<String>,
 
     /// Alias for workspace (deprecated)
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     all: bool,
 
     // jobs is handled by test runner
     /// Build artifacts in release mode, with optimizations
-    #[clap(long, short = 'r', conflicts_with = "binaries-metadata")]
+    #[clap(long, short = 'r', group = "cargo-opts")]
     release: bool,
 
     /// Build artifacts with the specified Cargo profile
-    #[clap(long, value_name = "NAME", conflicts_with = "binaries-metadata")]
+    #[clap(long, value_name = "NAME", group = "cargo-opts")]
     cargo_profile: Option<String>,
 
     /// Number of build jobs to run
-    #[clap(long, value_name = "JOBS", conflicts_with = "binaries-metadata")]
+    #[clap(long, value_name = "JOBS", group = "cargo-opts")]
     build_jobs: Option<String>,
 
     /// Space or comma separated list of features to activate
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     features: Vec<String>,
 
     /// Activate all available features
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     all_features: bool,
 
     /// Do not activate the `default` feature
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     no_default_features: bool,
 
     /// Build for the target triple
-    #[clap(long, value_name = "TRIPLE", conflicts_with = "binaries-metadata")]
+    #[clap(long, value_name = "TRIPLE", group = "cargo-opts")]
     pub(crate) target: Option<String>,
 
     /// Directory for all generated artifacts
-    #[clap(long, value_name = "DIR", conflicts_with = "binaries-metadata")]
+    #[clap(long, value_name = "DIR", group = "cargo-opts")]
     pub(crate) target_dir: Option<Utf8PathBuf>,
 
     /// Ignore `rust-version` specification in packages
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     ignore_rust_version: bool,
     // --message-format is captured by nextest
     /// Output build graph in JSON (unstable)
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     unit_graph: bool,
 
     /// Outputs a future incompatibility report at the end of the build
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     future_incompat_report: bool,
 
     // --verbose is not currently supported
     // --color is handled by runner
     /// Require Cargo.lock and cache are up to date
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     frozen: bool,
 
     /// Require Cargo.lock is up to date
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     locked: bool,
 
     /// Run without accessing the network
-    #[clap(long, conflicts_with = "binaries-metadata")]
+    #[clap(long, group = "cargo-opts")]
     offline: bool,
 
     /// Override a configuration value (unstable)
-    #[clap(long, value_name = "KEY=VALUE", conflicts_with = "binaries-metadata")]
+    #[clap(long, value_name = "KEY=VALUE", group = "cargo-opts")]
     config: Vec<String>,
 
     /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
-    #[clap(short = 'Z', value_name = "FLAG", conflicts_with = "binaries-metadata")]
+    #[clap(short = 'Z', value_name = "FLAG", group = "cargo-opts")]
     unstable_flags: Vec<String>,
 }
 
