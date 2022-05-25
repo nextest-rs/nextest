@@ -760,3 +760,187 @@ fn warn_on_target_runner_err(err: &TargetRunnerError) -> Result<(), std::fmt::Er
     log::warn!("{}", s);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_argument_parsing() {
+        use clap::ErrorKind::{self, *};
+
+        let valid: &[&[&str]] = &[
+            // ---
+            // Basic commands
+            // ---
+            &["cargo", "nextest", "list"],
+            &["cargo", "nextest", "run"],
+            // ---
+            // Commands with arguments
+            // ---
+            &["cargo", "nextest", "list", "--list-type", "binaries-only"],
+            &["cargo", "nextest", "list", "--list-type", "full"],
+            &[
+                "cargo",
+                "nextest",
+                "list",
+                "--message-format",
+                "json-pretty",
+            ],
+            &["cargo", "nextest", "run", "--failure-output", "never"],
+            &["cargo", "nextest", "run", "--success-output=immediate"],
+            &["cargo", "nextest", "run", "--status-level=all"],
+            &["cargo", "nextest", "run", "--no-capture"],
+            &["cargo", "nextest", "run", "--nocapture"],
+            // ---
+            // Cargo options
+            // ---
+            &["cargo", "nextest", "list", "--lib", "--bins"],
+            &[
+                "cargo",
+                "nextest",
+                "run",
+                "--ignore-rust-version",
+                "--unit-graph",
+            ],
+            // ---
+            // Reuse build options
+            // ---
+            &["cargo", "nextest", "list", "--binaries-metadata=foo"],
+            &[
+                "cargo",
+                "nextest",
+                "run",
+                "--binaries-metadata=foo",
+                "--target-dir-remap=bar",
+            ],
+            &["cargo", "nextest", "list", "--cargo-metadata", "path"],
+            &[
+                "cargo",
+                "nextest",
+                "run",
+                "--cargo-metadata=path",
+                "--workspace-remap",
+                "remapped-path",
+            ],
+            // ---
+            // Filter expressions
+            // ---
+            &["cargo", "nextest", "list", "-E", "deps(foo)"],
+            &[
+                "cargo",
+                "nextest",
+                "run",
+                "--filter-expr",
+                "test(bar)",
+                "--package=my-package",
+                "test-filter",
+            ],
+        ];
+
+        let invalid: &[(&[&str], ErrorKind)] = &[
+            // ---
+            // --no-capture and these options conflict
+            // ---
+            (
+                &[
+                    "cargo",
+                    "nextest",
+                    "run",
+                    "--no-capture",
+                    "--test-threads=24",
+                ],
+                ArgumentConflict,
+            ),
+            (
+                &[
+                    "cargo",
+                    "nextest",
+                    "run",
+                    "--no-capture",
+                    "--failure-output=never",
+                ],
+                ArgumentConflict,
+            ),
+            (
+                &[
+                    "cargo",
+                    "nextest",
+                    "run",
+                    "--no-capture",
+                    "--success-output=final",
+                ],
+                ArgumentConflict,
+            ),
+            // ---
+            // Reuse build options conflict with cargo options
+            // ---
+            (
+                &[
+                    "cargo",
+                    "nextest",
+                    "run",
+                    "--manifest-path",
+                    "foo",
+                    "--cargo-metadata",
+                    "bar",
+                ],
+                ArgumentConflict,
+            ),
+            (
+                &[
+                    "cargo",
+                    "nextest",
+                    "run",
+                    "--binaries-metadata=foo",
+                    "--lib",
+                ],
+                ArgumentConflict,
+            ),
+            // ---
+            // workspace-remap requires cargo-metadata
+            // ---
+            (
+                &["cargo", "nextest", "run", "--workspace-remap", "foo"],
+                MissingRequiredArgument,
+            ),
+            // ---
+            // target-dir-remap requires binaries-metadata
+            // ---
+            (
+                &["cargo", "nextest", "run", "--target-dir-remap", "bar"],
+                MissingRequiredArgument,
+            ),
+        ];
+
+        for &valid_args in valid {
+            if let Err(error) = CargoNextestApp::try_parse_from(valid_args) {
+                panic!(
+                    "{} should have successfully parsed, but didn't: {}",
+                    shellwords::join(valid_args),
+                    error
+                );
+            }
+        }
+
+        for &(invalid_args, kind) in invalid {
+            match CargoNextestApp::try_parse_from(invalid_args) {
+                Ok(_) => {
+                    panic!(
+                        "{} should have errored out but successfully parsed",
+                        shellwords::join(invalid_args)
+                    );
+                }
+                Err(error) => {
+                    let actual_kind = error.kind();
+                    if kind != actual_kind {
+                        panic!(
+                            "{} should error with kind {kind:?}, but actual kind was {actual_kind:?}",
+                            shellwords::join(invalid_args),
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
