@@ -19,6 +19,9 @@ impl NextestExitCode {
     /// One or more tests failed.
     pub const TEST_RUN_FAILED: i32 = 100;
 
+    /// Creating an archive produced an error.
+    pub const ARCHIVE_CREATION_FAILED: i32 = 103;
+
     /// A user issue happened while setting up a nextest invocation.
     pub const SETUP_ERROR: i32 = 96;
 

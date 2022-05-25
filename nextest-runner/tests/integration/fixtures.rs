@@ -19,6 +19,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     env, fmt,
     io::Cursor,
+    sync::Arc,
 };
 
 #[derive(Copy, Clone, Debug)]
@@ -207,8 +208,9 @@ pub(crate) struct FixtureTargets {
 impl FixtureTargets {
     fn new() -> Self {
         let graph = &*PACKAGE_GRAPH;
-        let binary_list =
-            BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph).unwrap();
+        let binary_list = Arc::new(
+            BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph).unwrap(),
+        );
         let rust_build_meta = binary_list.rust_build_meta.clone();
 
         let path_mapper = PathMapper::noop();

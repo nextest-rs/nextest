@@ -27,6 +27,7 @@ use std::{
     io,
     io::Write,
     path::PathBuf,
+    sync::Arc,
 };
 
 /// A Rust test binary built by Cargo. This artifact hasn't been run yet so there's no information
@@ -65,20 +66,20 @@ impl<'g> RustTestArtifact<'g> {
     /// Constructs a list of test binaries from the list of built binaries.
     pub fn from_binary_list(
         graph: &'g PackageGraph,
-        binary_list: BinaryList,
+        binary_list: Arc<BinaryList>,
         rust_build_meta: &RustBuildMeta<TestListState>,
         path_mapper: &PathMapper,
         platform_filter: Option<BuildPlatform>,
     ) -> Result<Vec<Self>, FromMessagesError> {
         let mut binaries = vec![];
 
-        for binary in binary_list.rust_binaries {
+        for binary in &binary_list.rust_binaries {
             if platform_filter.is_some() && platform_filter != Some(binary.build_platform) {
                 continue;
             }
 
             // Look up the executable by package ID.
-            let package_id = PackageId::new(binary.package_id);
+            let package_id = PackageId::new(binary.package_id.clone());
             let package = graph
                 .metadata(&package_id)
                 .map_err(FromMessagesError::PackageGraph)?;
@@ -95,7 +96,7 @@ impl<'g> RustTestArtifact<'g> {
                 })
                 .to_path_buf();
 
-            let binary_path = path_mapper.map_binary(binary.path);
+            let binary_path = path_mapper.map_binary(binary.path.clone());
             let cwd = path_mapper.map_cwd(cwd);
 
             // Non-test binaries are only exposed to integration tests and benchmarks.
@@ -123,11 +124,11 @@ impl<'g> RustTestArtifact<'g> {
             };
 
             binaries.push(RustTestArtifact {
-                binary_id: binary.id,
+                binary_id: binary.id.clone(),
                 package,
                 binary_path,
-                binary_name: binary.name,
-                kind: binary.kind,
+                binary_name: binary.name.clone(),
+                kind: binary.kind.clone(),
                 cwd,
                 non_test_binaries,
                 build_platform: binary.build_platform,

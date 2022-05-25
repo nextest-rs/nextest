@@ -7,20 +7,105 @@
 //!
 //! The main data structures here are [`ReuseBuildInfo`] and [`PathMapper`].
 
-use crate::errors::{PathMapperConstructError, PathMapperConstructKind};
+use crate::{
+    errors::{
+        ArchiveExtractError, ArchiveReadError, PathMapperConstructError, PathMapperConstructKind,
+    },
+    list::BinaryList,
+};
 use camino::{Utf8Path, Utf8PathBuf};
+use guppy::graph::PackageGraph;
+use std::{fs, io, sync::Arc};
+use tempfile::TempDir;
+
+mod archive_reporter;
+mod archiver;
+mod unarchiver;
+
+pub use archive_reporter::*;
+pub use archiver::*;
+pub use unarchiver::*;
+
+/// The name of the file in which Cargo metadata is stored.
+pub const CARGO_METADATA_FILE_NAME: &str = "target/nextest/cargo_metadata.json";
+
+/// The name of the file in which binaries metadata is stored.
+pub const BINARIES_METADATA_FILE_NAME: &str = "target/nextest/binaries_metadata.json";
 
 /// Reuse build information.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct ReuseBuildInfo {
     /// Cargo metadata and remapping for the target directory.
-    pub cargo_metadata: Option<MetadataJsonWithRemap>,
+    pub cargo_metadata: Option<MetadataWithRemap<(String, PackageGraph)>>,
 
     /// Binaries metadata JSON and remapping for the target directory.
-    pub binaries_metadata: Option<MetadataJsonWithRemap>,
+    pub binaries_metadata: Option<MetadataWithRemap<BinaryList>>,
+
+    /// Optional temporary directory used for cleanup.
+    _temp_dir: Option<TempDir>,
 }
 
 impl ReuseBuildInfo {
+    /// Creates a new [`ReuseBuildInfo`] from the given cargo and binaries metadata information.
+    pub fn new(
+        cargo_metadata: Option<MetadataWithRemap<(String, PackageGraph)>>,
+        binaries_metadata: Option<MetadataWithRemap<BinaryList>>,
+    ) -> Self {
+        Self {
+            cargo_metadata,
+            binaries_metadata,
+            _temp_dir: None,
+        }
+    }
+
+    /// Extracts an archive and constructs a [`ReuseBuildInfo`] from it.
+    pub fn extract_archive<F>(
+        archive_file: &Utf8Path,
+        dest: ExtractDestination,
+        callback: F,
+        workspace_remap: Option<&Utf8Path>,
+    ) -> Result<Self, ArchiveExtractError>
+    where
+        F: for<'e> FnMut(ArchiveEvent<'e>) -> io::Result<()>,
+    {
+        let mut file = fs::File::open(archive_file)
+            .map_err(|err| ArchiveExtractError::Read(ArchiveReadError::Io(err)))?;
+
+        let mut unarchiver = Unarchiver::new(&mut file);
+        let ExtractInfo {
+            dest_dir,
+            temp_dir,
+            binary_list,
+            cargo_metadata_json,
+            graph,
+        } = unarchiver.extract(dest, callback)?;
+
+        let cargo_metadata = MetadataWithRemap {
+            metadata: MetadataOrPath::metadata((cargo_metadata_json, graph)),
+            remap: workspace_remap.map(|p| p.to_owned()),
+        };
+        let binaries_metadata = MetadataWithRemap {
+            metadata: MetadataOrPath::metadata(binary_list),
+            remap: Some(dest_dir.join("target")),
+        };
+
+        Ok(Self {
+            cargo_metadata: Some(cargo_metadata),
+            binaries_metadata: Some(binaries_metadata),
+            _temp_dir: temp_dir,
+        })
+    }
+
+    /// Returns the Cargo metadata.
+    pub fn cargo_metadata(&self) -> Option<&MetadataOrPath<(String, PackageGraph)>> {
+        self.cargo_metadata.as_ref().map(|m| &m.metadata)
+    }
+
+    /// Returns the binaries metadata.
+    pub fn binaries_metadata(&self) -> Option<&MetadataOrPath<BinaryList>> {
+        self.binaries_metadata.as_ref().map(|m| &m.metadata)
+    }
+
     /// Returns the new workspace directory.
     pub fn workspace_remap(&self) -> Option<&Utf8Path> {
         self.cargo_metadata
@@ -38,12 +123,39 @@ impl ReuseBuildInfo {
 
 /// A metadata JSON file path, along with a possible directory remap.
 #[derive(Clone, Debug)]
-pub struct MetadataJsonWithRemap {
-    /// Path to the metadata JSON file.
-    pub path: Utf8PathBuf,
+pub struct MetadataWithRemap<T> {
+    /// Metadata as either a path to data or as data that's already been read.
+    pub metadata: MetadataOrPath<T>,
 
     /// The remapped directory.
     pub remap: Option<Utf8PathBuf>,
+}
+
+/// Represents either a path to metadata or actual deserialized metadata.
+///
+/// Part of [`MetadataWithRemap`].
+#[derive(Clone, Debug)]
+pub enum MetadataOrPath<T> {
+    /// Deserialized metadata.
+    Metadata(Arc<T>),
+
+    /// Path to metadata.
+    Path(Utf8PathBuf),
+}
+
+impl<T> MetadataOrPath<T> {
+    /// Creates a new [`MetadataOrPath`] with actual metadata.
+    #[inline]
+    pub fn metadata(metadata: T) -> Self {
+        Self::Metadata(Arc::new(metadata))
+    }
+}
+
+impl<T> From<Utf8PathBuf> for MetadataOrPath<T> {
+    #[inline]
+    fn from(path: Utf8PathBuf) -> Self {
+        Self::Path(path)
+    }
 }
 
 /// A helper for path remapping.

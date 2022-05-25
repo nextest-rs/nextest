@@ -20,6 +20,7 @@ use nextest_runner::{
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
+    reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::TestRunnerBuilder,
     signal::SignalHandler,
     target_runner::TargetRunner,
@@ -101,6 +102,7 @@ impl AppOpts {
                     self.config_opts,
                     self.manifest_path,
                     build_filter_needs_deps(&build_filter),
+                    output_writer,
                 )?;
                 let app = App::new(base, build_filter)?;
                 app.exec_list(message_format, list_type, output_writer)
@@ -120,7 +122,8 @@ impl AppOpts {
                     cargo_options,
                     self.config_opts,
                     self.manifest_path,
-                    build_filter_needs_deps(&build_filter),
+                    false,
+                    output_writer,
                 )?;
                 let app = App::new(base, build_filter)?;
                 app.exec_run(
@@ -130,6 +133,22 @@ impl AppOpts {
                     &reporter_opts,
                     output_writer,
                 )
+            }
+            Command::Archive {
+                cargo_options,
+                file,
+                compression_level,
+            } => {
+                let app = BaseApp::new(
+                    self.output,
+                    ReuseBuildOpts::default(),
+                    cargo_options,
+                    self.config_opts,
+                    self.manifest_path,
+                    true,
+                    output_writer,
+                )?;
+                app.exec_archive(&file, compression_level, output_writer)
             }
         }
     }
@@ -223,6 +242,37 @@ enum Command {
 
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
+    },
+    /// Build and archive tests
+    ///
+    /// This command builds test binaries and archives them to a file. The archive can then be
+    /// transferred to another machine, and tests within it can be run with `cargo nextest run
+    /// --archive`.
+    ///
+    /// The archive is a tarball compressed with Zstandard (.tar.zst).
+    Archive {
+        #[clap(flatten)]
+        cargo_options: CargoOptions,
+
+        /// Write archive to file
+        #[clap(
+            long,
+            short = 'f',
+            help_heading = "ARCHIVE OPTIONS",
+            default_value = "nextest-archive.tar.zst"
+        )]
+        file: Utf8PathBuf,
+
+        /// Compression level (-7 to 22, higher is more compressed + slower)
+        #[clap(
+            long,
+            help_heading = "ARCHIVE OPTIONS",
+            value_name = "LEVEL",
+            default_value_t = 0,
+            allow_hyphen_values = true
+        )]
+        compression_level: i32,
+        // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
     },
 }
 
@@ -323,14 +373,13 @@ impl TestBuildFilter {
     fn compute_test_list<'g>(
         &self,
         graph: &'g PackageGraph,
-        binary_list: BinaryList,
+        binary_list: Arc<BinaryList>,
         runner: &TargetRunner,
-        reuse_build: &ReuseBuildOpts,
+        reuse_build: &ReuseBuildInfo,
         filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList<'g>> {
-        let reuse_build_info = reuse_build.process();
         let path_mapper = make_path_mapper(
-            &reuse_build_info,
+            reuse_build,
             graph,
             &binary_list.rust_build_meta.target_directory,
         )?;
@@ -492,7 +541,7 @@ struct BaseApp {
     graph_data: Arc<(String, PackageGraph)>,
     workspace_root: Utf8PathBuf,
     manifest_path: Option<Utf8PathBuf>,
-    reuse_build: ReuseBuildOpts,
+    reuse_build: ReuseBuildInfo,
     cargo_opts: CargoOptions,
     config_opts: ConfigOpts,
 }
@@ -505,25 +554,36 @@ impl BaseApp {
         config_opts: ConfigOpts,
         manifest_path: Option<Utf8PathBuf>,
         graph_with_deps: bool,
+        writer: &mut OutputWriter,
     ) -> Result<Self> {
         let output = output.init();
         reuse_build.check_experimental(output);
 
-        let json = match reuse_build.cargo_metadata.as_deref() {
-            Some(path) => std::fs::read_to_string(path).map_err(|err| {
-                ExpectedError::argument_file_read_error("cargo-metadata", path, err)
-            })?,
-            None => acquire_graph_data(
-                manifest_path.as_deref(),
-                cargo_opts.target_dir.as_deref(),
-                output,
-                graph_with_deps,
-            )?,
+        let reuse_build = reuse_build.process(output, writer)?;
+
+        let graph_data = match reuse_build.cargo_metadata() {
+            Some(MetadataOrPath::Metadata(graph_data)) => graph_data.clone(),
+            Some(MetadataOrPath::Path(path)) => {
+                let json = std::fs::read_to_string(path).map_err(|err| {
+                    ExpectedError::argument_file_read_error("cargo-metadata", path, err)
+                })?;
+                let graph = PackageGraph::from_json(&json).map_err(|err| {
+                    ExpectedError::cargo_metadata_parse_error(Some(path.clone()), err)
+                })?;
+                Arc::new((json, graph))
+            }
+            None => {
+                let json = acquire_graph_data(
+                    manifest_path.as_deref(),
+                    cargo_opts.target_dir.as_deref(),
+                    output,
+                    graph_with_deps,
+                )?;
+                let graph = PackageGraph::from_json(&json)
+                    .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
+                Arc::new((json, graph))
+            }
         };
-        let graph = PackageGraph::from_json(&json).map_err(|err| {
-            ExpectedError::cargo_metadata_parse_error(reuse_build.cargo_metadata.clone(), err)
-        })?;
-        let graph_data = Arc::new((json, graph));
 
         let manifest_path = if reuse_build.cargo_metadata.is_some() {
             Some(graph_data.1.workspace().root().join("Cargo.toml"))
@@ -531,8 +591,8 @@ impl BaseApp {
             manifest_path
         };
 
-        let workspace_root = match &reuse_build.workspace_remap {
-            Some(path) => path.clone(),
+        let workspace_root = match reuse_build.workspace_remap() {
+            Some(path) => path.to_owned(),
             _ => graph_data.1.workspace().root().to_owned(),
         };
 
@@ -547,9 +607,46 @@ impl BaseApp {
         })
     }
 
-    fn build_binary_list(&self) -> Result<BinaryList> {
-        let binary_list = match self.reuse_build.binaries_metadata.as_deref() {
-            Some(path) => {
+    fn exec_archive(
+        &self,
+        output_file: &Utf8Path,
+        compression_level: i32,
+        output_writer: &mut OutputWriter,
+    ) -> Result<()> {
+        let binary_list = self.build_binary_list()?;
+        let path_mapper = PathMapper::noop();
+
+        let mut reporter = ArchiveReporter::new(self.output.verbose);
+        if self.output.color.should_colorize(Stream::Stderr) {
+            reporter.colorize();
+        }
+
+        let mut writer = output_writer.stderr_writer();
+        archive_to_file(
+            &binary_list,
+            &self.graph_data.0,
+            // Note that path_mapper is currently a no-op -- we don't support reusing builds for
+            // archive creation because it's too confusing.
+            &path_mapper,
+            compression_level,
+            output_file,
+            |event| {
+                reporter.report_event(event, &mut writer)?;
+                writer.flush()
+            },
+        )
+        .map_err(|err| ExpectedError::ArchiveCreateError {
+            archive_file: output_file.to_owned(),
+            err,
+        })?;
+
+        Ok(())
+    }
+
+    fn build_binary_list(&self) -> Result<Arc<BinaryList>> {
+        let binary_list = match self.reuse_build.binaries_metadata() {
+            Some(MetadataOrPath::Metadata(binary_list)) => binary_list.clone(),
+            Some(MetadataOrPath::Path(path)) => {
                 let raw_binary_list = std::fs::read_to_string(path).map_err(|err| {
                     ExpectedError::argument_file_read_error("binaries-metadata", path, err)
                 })?;
@@ -557,15 +654,20 @@ impl BaseApp {
                     .map_err(|err| {
                         ExpectedError::argument_json_parse_error("binaries-metadata", path, err)
                     })?;
-                BinaryList::from_summary(binary_list)
+                Arc::new(BinaryList::from_summary(binary_list))
             }
-            None => self.cargo_opts.compute_binary_list(
-                &self.graph_data.1,
+            None => Arc::new(self.cargo_opts.compute_binary_list(
+                self.graph(),
                 self.manifest_path.as_deref(),
                 self.output,
-            )?,
+            )?),
         };
         Ok(binary_list)
+    }
+
+    #[inline]
+    fn graph(&self) -> &PackageGraph {
+        &self.graph_data.1
     }
 }
 
@@ -600,7 +702,7 @@ impl App {
             .build_filter
             .filter_expr
             .iter()
-            .map(|input| FilteringExpr::parse(input, &self.base.graph_data.1))
+            .map(|input| FilteringExpr::parse(input, self.base.graph()))
             .partition_result();
 
         if !all_errors.is_empty() {
@@ -612,12 +714,12 @@ impl App {
 
     fn build_test_list(
         &self,
-        binary_list: BinaryList,
+        binary_list: Arc<BinaryList>,
         target_runner: &TargetRunner,
         filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList> {
         self.build_filter.compute_test_list(
-            &self.base.graph_data.1,
+            self.base.graph(),
             binary_list,
             target_runner,
             &self.base.reuse_build,
@@ -823,6 +925,13 @@ mod tests {
             "cargo nextest run --binaries-metadata=foo --target-dir-remap=bar",
             "cargo nextest list --cargo-metadata path",
             "cargo nextest run --cargo-metadata=path --workspace-remap remapped-path",
+            "cargo nextest archive",
+            "cargo nextest archive --file my-archive.tar.zst --compression-level -1",
+            "cargo nextest list --archive my-archive.tar.zst",
+            "cargo nextest list --archive my-archive.tar.zst --extract-to my-path",
+            "cargo nextest list --archive my-archive.tar.zst --extract-to my-path --extract-overwrite",
+            "cargo nextest list --archive my-archive.tar.zst --persist-extract-dir",
+            "cargo nextest list --archive my-archive.tar.zst --workspace-remap foo",
             // ---
             // Filter expressions
             // ---
@@ -850,6 +959,8 @@ mod tests {
             // Reuse build options conflict with cargo options
             // ---
             (
+                // NOTE: cargo nextest --manifest-path foo run --cargo-metadata bar is currently
+                // accepted. This is a bug: https://github.com/clap-rs/clap/issues/1204
                 "cargo nextest run --manifest-path foo --cargo-metadata bar",
                 ArgumentConflict,
             ),
@@ -870,6 +981,41 @@ mod tests {
             (
                 "cargo nextest run --target-dir-remap bar",
                 MissingRequiredArgument,
+            ),
+            // ---
+            // Archive options
+            // ---
+            (
+                "cargo nextest run --extract-to foo",
+                MissingRequiredArgument,
+            ),
+            (
+                "cargo nextest run --archive foo --extract-overwrite",
+                MissingRequiredArgument,
+            ),
+            (
+                "cargo nextest run --extract-to foo --extract-overwrite",
+                MissingRequiredArgument,
+            ),
+            (
+                "cargo nextest run --persist-extract-dir",
+                MissingRequiredArgument,
+            ),
+            (
+                "cargo nextest run --archive foo --extract-to bar --persist-extract-dir",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --archive foo --cargo-metadata bar",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --archive foo --binaries-metadata bar",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --archive foo --target-dir-remap bar",
+                ArgumentConflict,
             ),
         ];
 
