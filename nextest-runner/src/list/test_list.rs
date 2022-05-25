@@ -794,6 +794,7 @@ mod tests {
               "rust-build-meta": {
                 "target-directory": "/fake",
                 "base-output-directories": [],
+                "non-test-binaries": {},
                 "linked-paths": []
               },
               "test-count": 4,

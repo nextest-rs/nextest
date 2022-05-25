@@ -6,8 +6,11 @@ use crate::{
     reuse_build::PathMapper,
 };
 use camino::Utf8PathBuf;
-use nextest_metadata::RustBuildMetaSummary;
-use std::{collections::BTreeSet, marker::PhantomData};
+use nextest_metadata::{RustBuildMetaSummary, RustNonTestBinarySummary};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    marker::PhantomData,
+};
 
 /// Rust-related metadata used for builds and test runs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -18,6 +21,9 @@ pub struct RustBuildMeta<State> {
     /// A list of base output directories, relative to the target directory. These directories
     /// and their "deps" subdirectories are added to the dynamic library path.
     pub base_output_directories: BTreeSet<Utf8PathBuf>,
+
+    /// Information about non-test executables, keyed by package ID.
+    pub non_test_binaries: BTreeMap<String, BTreeSet<RustNonTestBinarySummary>>,
 
     /// A list of linked paths, relative to the target directory. These directories are
     /// added to the dynamic library path.
@@ -32,6 +38,7 @@ impl RustBuildMeta<BinaryListState> {
         Self {
             target_directory: target_directory.into(),
             base_output_directories: BTreeSet::new(),
+            non_test_binaries: BTreeMap::new(),
             linked_paths: BTreeSet::new(),
             state: PhantomData,
         }
@@ -46,6 +53,7 @@ impl RustBuildMeta<BinaryListState> {
                 .to_path_buf(),
             // Since these are relative paths, they don't need to be mapped.
             base_output_directories: self.base_output_directories.clone(),
+            non_test_binaries: self.non_test_binaries.clone(),
             linked_paths: self.linked_paths.clone(),
             state: PhantomData,
         }
@@ -59,6 +67,7 @@ impl RustBuildMeta<TestListState> {
         Self {
             target_directory: Utf8PathBuf::new(),
             base_output_directories: BTreeSet::new(),
+            non_test_binaries: BTreeMap::new(),
             linked_paths: BTreeSet::new(),
             state: PhantomData,
         }
@@ -93,6 +102,7 @@ impl<State> RustBuildMeta<State> {
         Self {
             target_directory: summary.target_directory,
             base_output_directories: summary.base_output_directories,
+            non_test_binaries: summary.non_test_binaries,
             linked_paths: summary.linked_paths,
             state: PhantomData,
         }
@@ -103,6 +113,7 @@ impl<State> RustBuildMeta<State> {
         RustBuildMetaSummary {
             target_directory: self.target_directory.clone(),
             base_output_directories: self.base_output_directories.clone(),
+            non_test_binaries: self.non_test_binaries.clone(),
             linked_paths: self.linked_paths.clone(),
         }
     }
