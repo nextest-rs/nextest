@@ -1,4 +1,4 @@
-# nextest
+# Nextest
 
 Nextest is a next-generation test runner for Rust. For more information, **check out [the website](https://nexte.st/)**.
 
