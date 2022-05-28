@@ -5,7 +5,7 @@ use crate::{output::OutputContext, ExpectedError};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Args;
 use guppy::graph::PackageGraph;
-use nextest_runner::{errors::PathMapperConstructKind, list::PathMapper};
+use nextest_runner::{errors::PathMapperConstructKind, reuse_build::PathMapper};
 
 #[derive(Debug, Args)]
 #[clap(next_help_heading = "REUSE BUILD OPTIONS")]

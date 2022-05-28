@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Path, Utf8PathBuf};
-
 use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
-    list::{BinaryList, BinaryListState, PathMapper, RustBuildMeta, RustTestArtifact, TestList},
+    list::{BinaryList, BinaryListState, RustBuildMeta, RustTestArtifact, TestList},
     reporter::TestEvent,
+    reuse_build::PathMapper,
     runner::{ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
     target_runner::TargetRunner,
     test_filter::TestFilterBuilder,

@@ -1,7 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::list::{BinaryListState, PathMapper, TestListState};
+use crate::{
+    list::{BinaryListState, TestListState},
+    reuse_build::PathMapper,
+};
 use camino::Utf8PathBuf;
 use nextest_metadata::RustBuildMetaSummary;
 use std::{collections::BTreeSet, marker::PhantomData};
