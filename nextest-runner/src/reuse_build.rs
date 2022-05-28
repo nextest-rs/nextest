@@ -3,15 +3,53 @@
 
 //! Reuse builds performed earlier.
 //!
+//! Nextest allows users to reuse builds done on one machine. This module contains support for that.
+//!
 //! The main data structures here are [`ReuseBuildInfo`] and [`PathMapper`].
 
 use crate::errors::{PathMapperConstructError, PathMapperConstructKind};
 use camino::{Utf8Path, Utf8PathBuf};
 
+/// Reuse build information.
+#[derive(Clone, Debug, Default)]
+pub struct ReuseBuildInfo {
+    /// Cargo metadata and remapping for the target directory.
+    pub cargo_metadata: Option<MetadataJsonWithRemap>,
+
+    /// Binaries metadata JSON and remapping for the target directory.
+    pub binaries_metadata: Option<MetadataJsonWithRemap>,
+}
+
+impl ReuseBuildInfo {
+    /// Returns the new workspace directory.
+    pub fn workspace_remap(&self) -> Option<&Utf8Path> {
+        self.cargo_metadata
+            .as_ref()
+            .and_then(|m| m.remap.as_deref())
+    }
+
+    /// Returns the new target directory.
+    pub fn target_dir_remap(&self) -> Option<&Utf8Path> {
+        self.binaries_metadata
+            .as_ref()
+            .and_then(|m| m.remap.as_deref())
+    }
+}
+
+/// A metadata JSON file path, along with a possible directory remap.
+#[derive(Clone, Debug)]
+pub struct MetadataJsonWithRemap {
+    /// Path to the metadata JSON file.
+    pub path: Utf8PathBuf,
+
+    /// The remapped directory.
+    pub remap: Option<Utf8PathBuf>,
+}
+
 /// A helper for path remapping.
 ///
 /// This is useful when running tests in a different directory, or a different computer, from building them.
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PathMapper {
     workspace: Option<(Utf8PathBuf, Utf8PathBuf)>,
     target_dir: Option<(Utf8PathBuf, Utf8PathBuf)>,
@@ -21,14 +59,14 @@ impl PathMapper {
     /// Constructs the path mapper.
     pub fn new(
         orig_workspace_root: impl Into<Utf8PathBuf>,
-        workspace_root: Option<&Utf8Path>,
+        workspace_remap: Option<&Utf8Path>,
         orig_target_dir: impl Into<Utf8PathBuf>,
-        target_dir: Option<&Utf8Path>,
+        target_dir_remap: Option<&Utf8Path>,
     ) -> Result<Self, PathMapperConstructError> {
-        let workspace_root = workspace_root
+        let workspace_root = workspace_remap
             .map(|root| Self::canonicalize_dir(root, PathMapperConstructKind::WorkspaceRoot))
             .transpose()?;
-        let target_dir = target_dir
+        let target_dir = target_dir_remap
             .map(|dir| Self::canonicalize_dir(dir, PathMapperConstructKind::WorkspaceRoot))
             .transpose()?;
 

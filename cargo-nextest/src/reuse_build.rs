@@ -5,19 +5,14 @@ use crate::{output::OutputContext, ExpectedError};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Args;
 use guppy::graph::PackageGraph;
-use nextest_runner::{errors::PathMapperConstructKind, reuse_build::PathMapper};
+use nextest_runner::{
+    errors::PathMapperConstructKind,
+    reuse_build::{MetadataJsonWithRemap, PathMapper, ReuseBuildInfo},
+};
 
 #[derive(Debug, Args)]
 #[clap(next_help_heading = "REUSE BUILD OPTIONS")]
 pub(crate) struct ReuseBuildOpts {
-    /// Path to binaries-metadata JSON
-    #[clap(long, value_name = "PATH")]
-    pub(crate) binaries_metadata: Option<Utf8PathBuf>,
-
-    /// Remapping for the target directory
-    #[clap(long, requires("binaries-metadata"), value_name = "PATH")]
-    pub(crate) target_dir_remap: Option<Utf8PathBuf>,
-
     /// Path to cargo metadata JSON
     #[clap(long, conflicts_with("manifest-path"), value_name = "PATH")]
     pub(crate) cargo_metadata: Option<Utf8PathBuf>,
@@ -25,6 +20,14 @@ pub(crate) struct ReuseBuildOpts {
     /// Remapping for the workspace root
     #[clap(long, requires("cargo-metadata"), value_name = "PATH")]
     pub(crate) workspace_remap: Option<Utf8PathBuf>,
+
+    /// Path to binaries-metadata JSON
+    #[clap(long, conflicts_with = "cargo-opts", value_name = "PATH")]
+    pub(crate) binaries_metadata: Option<Utf8PathBuf>,
+
+    /// Remapping for the target directory
+    #[clap(long, requires("binaries-metadata"), value_name = "PATH")]
+    pub(crate) target_dir_remap: Option<Utf8PathBuf>,
 }
 
 impl ReuseBuildOpts {
@@ -38,23 +41,46 @@ impl ReuseBuildOpts {
         }
     }
 
-    pub(crate) fn make_path_mapper(
-        &self,
-        graph: &PackageGraph,
-        orig_target_dir: &Utf8Path,
-    ) -> Result<PathMapper, ExpectedError> {
-        PathMapper::new(
-            graph.workspace().root(),
-            self.workspace_remap.as_deref(),
-            orig_target_dir,
-            self.target_dir_remap.as_deref(),
-        )
-        .map_err(|err| {
-            let arg_name = match err.kind() {
-                PathMapperConstructKind::WorkspaceRoot => "workspace-remap",
-                PathMapperConstructKind::TargetDir => "target-dir-remap",
-            };
-            ExpectedError::PathMapperConstructError { arg_name, err }
-        })
+    pub(crate) fn process(&self) -> ReuseBuildInfo {
+        let cargo_metadata = self
+            .cargo_metadata
+            .as_ref()
+            .map(|path| MetadataJsonWithRemap {
+                path: path.clone(),
+                remap: self.workspace_remap.clone(),
+            });
+
+        let binaries_metadata = self
+            .binaries_metadata
+            .as_ref()
+            .map(|path| MetadataJsonWithRemap {
+                path: path.clone(),
+                remap: self.target_dir_remap.clone(),
+            });
+
+        ReuseBuildInfo {
+            cargo_metadata,
+            binaries_metadata,
+        }
     }
+}
+
+pub(crate) fn make_path_mapper(
+    info: &ReuseBuildInfo,
+    graph: &PackageGraph,
+    orig_target_dir: &Utf8Path,
+) -> Result<PathMapper, ExpectedError> {
+    PathMapper::new(
+        graph.workspace().root(),
+        info.workspace_remap(),
+        orig_target_dir,
+        info.target_dir_remap(),
+    )
+    .map_err(|err| {
+        let arg_name = match err.kind() {
+            PathMapperConstructKind::WorkspaceRoot => "workspace-remap",
+            PathMapperConstructKind::TargetDir => "target-dir-remap",
+        };
+        ExpectedError::PathMapperConstructError { arg_name, err }
+    })
 }

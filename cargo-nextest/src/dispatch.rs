@@ -4,7 +4,7 @@
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, OutputOpts, OutputWriter},
-    reuse_build::ReuseBuildOpts,
+    reuse_build::{make_path_mapper, ReuseBuildOpts},
     ExpectedError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -311,8 +311,13 @@ impl TestBuildFilter {
         reuse_build: &ReuseBuildOpts,
         filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList<'g>> {
-        let path_mapper =
-            reuse_build.make_path_mapper(graph, &binary_list.rust_build_meta.target_directory)?;
+        let reuse_build_info = reuse_build.process();
+        let path_mapper = make_path_mapper(
+            &reuse_build_info,
+            graph,
+            &binary_list.rust_build_meta.target_directory,
+        )?;
+
         let rust_build_meta = binary_list.rust_build_meta.clone();
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,
