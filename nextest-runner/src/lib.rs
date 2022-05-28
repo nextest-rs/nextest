@@ -46,6 +46,7 @@ mod helpers;
 pub mod list;
 pub mod partition;
 pub mod reporter;
+pub mod reuse_build;
 pub mod runner;
 pub mod signal;
 mod stopwatch;
