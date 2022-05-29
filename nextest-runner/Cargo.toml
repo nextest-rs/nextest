@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://docs.rs/nextest-runner"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.59"
 
 [dependencies]
 aho-corasick = "0.7.18"
