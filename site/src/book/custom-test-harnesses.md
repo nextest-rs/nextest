@@ -20,7 +20,7 @@ For an example test harness that is based on libtest-mimic, see [datatest-stable
 
 ## Manually implementing a test harness
 
-For your test harness to work with nextest, follow these rules (keywords are as in [RFC2119]):
+For your test harness to work with nextest, follow these rules (keywords are as in [RFC 2119]):
 
 [RFC2119]: https://datatracker.ietf.org/doc/html/rfc2119
 
