@@ -16,8 +16,8 @@ use guppy::{
     PackageId,
 };
 use nextest_metadata::{
-    BuildPlatform, RustTestBinarySummary, RustTestCaseSummary, RustTestSuiteSummary,
-    TestListSummary,
+    BuildPlatform, RustTestBinaryKind, RustTestBinarySummary, RustTestCaseSummary,
+    RustTestSuiteSummary, TestListSummary,
 };
 use once_cell::sync::OnceCell;
 use owo_colors::OwoColorize;
@@ -47,6 +47,9 @@ pub struct RustTestArtifact<'g> {
 
     /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
     pub binary_name: String,
+
+    /// The kind of Rust test binary this is.
+    pub kind: RustTestBinaryKind,
 
     /// The working directory that this test should be executed in. If None, the current directory
     /// will not be changed.
@@ -97,6 +100,7 @@ impl<'g> RustTestArtifact<'g> {
                 package,
                 binary_path,
                 binary_name: binary.name,
+                kind: binary.kind,
                 cwd,
                 build_platform: binary.build_platform,
             })
@@ -130,6 +134,9 @@ pub struct RustTestSuite<'g> {
 
     /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
     pub binary_name: String,
+
+    /// The kind of Rust test binary this is.
+    pub kind: RustTestBinaryKind,
 
     /// The working directory that this test binary will be executed in. If None, the current directory
     /// will not be changed.
@@ -273,6 +280,7 @@ impl<'g> TestList<'g> {
                     binary: RustTestBinarySummary {
                         binary_name: info.binary_name.clone(),
                         package_id: info.package.id().repr().to_owned(),
+                        kind: info.kind.clone(),
                         binary_path: binary_path.clone(),
                         binary_id: info.binary_id.clone(),
                         build_platform: platform,
@@ -406,6 +414,7 @@ impl<'g> TestList<'g> {
             package,
             binary_path,
             binary_name,
+            kind,
             cwd,
             build_platform: platform,
         } = test_binary;
@@ -416,6 +425,7 @@ impl<'g> TestList<'g> {
                 binary_id,
                 package,
                 binary_name,
+                kind,
                 testcases: tests,
                 cwd,
                 build_platform: platform,
@@ -718,6 +728,7 @@ mod tests {
             package: package_metadata(),
             binary_name: fake_binary_name.clone(),
             binary_id: fake_binary_id.clone(),
+            kind: RustTestBinaryKind::LIB,
             build_platform: BuildPlatform::Target,
         };
         let rust_build_meta = RustBuildMeta::new("/fake");
@@ -755,6 +766,7 @@ mod tests {
                     package: package_metadata(),
                     binary_name: fake_binary_name,
                     binary_id: fake_binary_id,
+                    kind: RustTestBinaryKind::LIB,
                 }
             }
         );
@@ -791,6 +803,7 @@ mod tests {
                   "binary-id": "fake-package::fake-binary",
                   "binary-name": "fake-binary",
                   "package-id": "metadata-helper 0.1.0 (path+file:///Users/fakeuser/local/testcrates/metadata/metadata-helper)",
+                  "kind": "lib",
                   "binary-path": "/fake/binary",
                   "build-platform": "target",
                   "cwd": "/fake/cwd",

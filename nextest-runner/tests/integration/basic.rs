@@ -46,14 +46,16 @@ fn test_list_tests() -> Result<()> {
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
+    let mut summary = test_list.to_summary();
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
-        let info = test_list
-            .get(&test_binary.binary_path)
+        let info = summary
+            .rust_suites
+            .remove(&test_binary.binary_id)
             .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary_path));
         let tests: Vec<_> = info
             .testcases
@@ -61,6 +63,17 @@ fn test_list_tests() -> Result<()> {
             .map(|(name, info)| (name.as_str(), info.filter_match))
             .collect();
         assert_eq!(expected, &tests, "test list matches");
+    }
+
+    // Are there any remaining tests?
+    if !summary.rust_suites.is_empty() {
+        let mut err_msg = "actual output has test suites missing in expected output:\n".to_owned();
+        for missing_suite in summary.rust_suites.keys() {
+            err_msg.push_str("  - ");
+            err_msg.push_str(missing_suite);
+            err_msg.push('\n');
+        }
+        panic!("{}", err_msg);
     }
 
     Ok(())

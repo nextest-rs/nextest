@@ -9,7 +9,9 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::{Artifact, BuildScript, Message};
 use guppy::{graph::PackageGraph, PackageId};
-use nextest_metadata::{BinaryListSummary, BuildPlatform, RustTestBinarySummary};
+use nextest_metadata::{
+    BinaryListSummary, BuildPlatform, RustTestBinaryKind, RustTestBinarySummary,
+};
 use owo_colors::OwoColorize;
 use std::{collections::BTreeSet, io, io::Write};
 
@@ -22,6 +24,8 @@ pub struct RustTestBinary {
     pub path: Utf8PathBuf,
     /// The package this artifact belongs to.
     pub package_id: String,
+    /// The kind of Rust test binary this is.
+    pub kind: RustTestBinaryKind,
     /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
     pub name: String,
     /// Platform for which this binary was built.
@@ -64,6 +68,7 @@ impl BinaryList {
                 name: bin.binary_name,
                 path: bin.binary_path,
                 package_id: bin.package_id,
+                kind: bin.kind,
                 id: bin.binary_id,
                 build_platform: bin.build_platform,
             })
@@ -99,6 +104,7 @@ impl BinaryList {
                 let summary = RustTestBinarySummary {
                     binary_name: bin.name.clone(),
                     package_id: bin.package_id.clone(),
+                    kind: bin.kind.clone(),
                     binary_path: bin.path.clone(),
                     binary_id: bin.id.clone(),
                     build_platform: bin.build_platform,
@@ -201,48 +207,54 @@ impl<'g> BinaryListBuildState<'g> {
                 let mut id = package.name().to_owned();
                 let name = artifact.target.name;
 
-                // To ensure unique binary IDs, we use the following scheme:
-                // 1. If the target is a lib, use the package name.
-                //      There can only be one lib per package, so this
-                //      will always be unique.
-                if !artifact.target.kind.contains(&"lib".to_owned()) {
-                    id.push_str("::");
-
-                    match artifact.target.kind.get(0) {
-                        // 2. For integration tests, use the target name.
-                        //      Cargo enforces unique names for the same
-                        //      kind of targets in a package, so these
-                        //      will always be unique.
-                        Some(kind) if kind == "test" => {
-                            id.push_str(&name);
-                        }
-                        // 3. For all other target kinds, use a
-                        //      combination of the target kind and
-                        //      the target name. For the same reason
-                        //      as above, these will always be unique.
-                        Some(kind) => {
-                            id.push_str(&format!("{}/{}", kind, name));
-                        }
-                        None => {
-                            return Err(FromMessagesError::MissingTargetKind {
-                                package_name: package.name().to_owned(),
-                                binary_name: name.clone(),
-                            });
-                        }
-                    }
+                let kind = artifact.target.kind;
+                if kind.is_empty() {
+                    return Err(FromMessagesError::MissingTargetKind {
+                        package_name: package.name().to_owned(),
+                        binary_name: name.clone(),
+                    });
                 }
 
-                let platform = if artifact.target.kind.len() == 1
-                    && artifact.target.kind.get(0).map(String::as_str) == Some("proc-macro")
-                {
-                    BuildPlatform::Host
+                let (computed_kind, platform) = if kind.iter().any(|k| {
+                    // https://doc.rust-lang.org/nightly/cargo/reference/cargo-targets.html#the-crate-type-field
+                    k == "lib" || k == "rlib" || k == "dylib" || k == "cdylib" || k == "staticlib"
+                }) {
+                    (RustTestBinaryKind::LIB, BuildPlatform::Target)
+                } else if kind.get(0).map(String::as_str) == Some("proc-macro") {
+                    (RustTestBinaryKind::PROC_MACRO, BuildPlatform::Host)
                 } else {
-                    BuildPlatform::Target
+                    // Non-lib kinds should always have just one element. Grab the first one.
+                    (
+                        RustTestBinaryKind::new(
+                            kind.into_iter()
+                                .next()
+                                .expect("already checked that kind is non-empty"),
+                        ),
+                        BuildPlatform::Target,
+                    )
                 };
+
+                // To ensure unique binary IDs, we use the following scheme:
+                if computed_kind == RustTestBinaryKind::LIB {
+                    // 1. If the target is a lib, use the package name. There can only be one
+                    //    lib per package, so this will always be unique.
+                } else if computed_kind == RustTestBinaryKind::TEST {
+                    // 2. For integration tests, use the target name. Cargo enforces unique
+                    //    names for the same kind of targets in a package, so these will always
+                    //    be unique.
+                    id.push_str("::");
+                    id.push_str(&name);
+                } else {
+                    // 3. For all other target kinds, use a combination of the target kind and
+                    //      the target name. For the same reason as above, these will always be
+                    //      unique.
+                    id.push_str(&format!("::{}/{}", computed_kind, name));
+                }
 
                 self.rust_binaries.push(RustTestBinary {
                     path,
                     package_id,
+                    kind: computed_kind,
                     name,
                     id,
                     build_platform: platform,
@@ -326,6 +338,7 @@ mod tests {
             path: "/fake/binary".into(),
             package_id: "fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)"
                 .to_owned(),
+            kind: RustTestBinaryKind::LIB,
             name: "fake-binary".to_owned(),
             build_platform: BuildPlatform::Target,
         };
@@ -334,6 +347,7 @@ mod tests {
             path: "/fake/macro".into(),
             package_id: "fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)"
                 .to_owned(),
+            kind: RustTestBinaryKind::PROC_MACRO,
             name: "fake-macro".to_owned(),
             build_platform: BuildPlatform::Host,
         };
@@ -368,6 +382,7 @@ mod tests {
               "binary-id": "fake-macro::proc-macro/fake-macro",
               "binary-name": "fake-macro",
               "package-id": "fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)",
+              "kind": "proc-macro",
               "binary-path": "/fake/macro",
               "build-platform": "host"
             },
@@ -375,6 +390,7 @@ mod tests {
               "binary-id": "fake-package::bin/fake-binary",
               "binary-name": "fake-binary",
               "package-id": "fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)",
+              "kind": "lib",
               "binary-path": "/fake/binary",
               "build-platform": "target"
             }
