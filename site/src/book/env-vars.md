@@ -39,7 +39,7 @@ cargo-nextest delegates to Cargo for the build, which controls the environment v
 cargo-nextest also sets these environment variables at runtime, matching the behavior of cargo test:
 
 * `CARGO` — Path to the `cargo` binary performing the build.
-* `CARGO_MANIFEST_DIR` — The directory containing the manifest of your package.
+* `CARGO_MANIFEST_DIR` — The directory containing the manifest of your package. If [`--workspace-remap`](reusing-builds.md#new-options) is passed in, this is set to the remapped manifest directory. You can obtain the non-remapped directory using the value of this variable at compile-time, e.g. `env!("CARGO_MANIFEST_DIR")`.
 * `CARGO_PKG_VERSION` — The full version of your package.
 * `CARGO_PKG_VERSION_MAJOR` — The major version of your package.
 * `CARGO_PKG_VERSION_MINOR` — The minor version of your package.
