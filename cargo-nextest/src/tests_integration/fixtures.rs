@@ -32,6 +32,11 @@ impl TestInfo {
 pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
     vec![
         TestInfo::new(
+            "cdylib-example",
+            BuildPlatform::Target,
+            vec![("tests::test_multiply_two_cdylib", false)],
+        ),
+        TestInfo::new(
             "cdylib-link",
             BuildPlatform::Target,
             vec![("test_multiply_two", false)],
@@ -249,6 +254,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
 
     let expected = &[
         (true, "cdylib-link test_multiply_two"),
+        (true, "cdylib-example tests::test_multiply_two_cdylib"),
         (true, "nextest-tests::basic test_cargo_env_vars"),
         (false, "nextest-tests::basic test_failure_error"),
         (false, "nextest-tests::basic test_flaky_mod_2"),
@@ -281,9 +287,9 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *18 tests run: 12 passed, 6 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *19 tests run: 13 passed, 6 failed, 2 skipped").unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *18 tests run: 13 passed, 5 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *19 tests run: 14 passed, 5 failed, 2 skipped").unwrap()
     };
     assert!(summary_reg.is_match(&output), "summary didn't match");
 }

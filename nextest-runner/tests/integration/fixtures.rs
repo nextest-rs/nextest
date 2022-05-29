@@ -113,6 +113,9 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
                 TestFixture { name: "test_multiply_two", status: FixtureStatus::Pass },
             ],
             "dylib-test" => vec![],
+            "cdylib-example" => vec![
+                TestFixture { name: "tests::test_multiply_two_cdylib", status: FixtureStatus::Pass },
+            ]
         }
     },
 );
