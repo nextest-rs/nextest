@@ -51,8 +51,8 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
-        # 1.56 is the MSRV
-        rust-version: [ 1.56, stable ]
+        # 1.59 is the MSRV
+        rust-version: [ 1.59, stable ]
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
