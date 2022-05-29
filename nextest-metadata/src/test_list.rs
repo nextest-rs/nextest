@@ -5,6 +5,7 @@ use crate::CommandError;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     fmt,
     path::PathBuf,
@@ -185,12 +186,61 @@ pub struct RustTestBinarySummary {
     /// This package ID can be used for lookups in `cargo metadata`.
     pub package_id: String,
 
+    /// The kind of Rust test binary this is.
+    pub kind: RustTestBinaryKind,
+
     /// The path to the test binary executable.
     pub binary_path: Utf8PathBuf,
 
     /// Platform for which this binary was built.
     /// (Proc-macro tests are built for the host.)
     pub build_platform: BuildPlatform,
+}
+
+/// The kind of Rust test binary this is. Kinds are used to generate binary IDs and to figure out
+/// whether some environment variables should be set.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct RustTestBinaryKind(pub Cow<'static, str>);
+
+impl RustTestBinaryKind {
+    /// Creates a new `RustTestBinaryKind` from a string.
+    #[inline]
+    pub fn new(kind: impl Into<Cow<'static, str>>) -> Self {
+        Self(kind.into())
+    }
+
+    /// Creates a new `RustTestBinaryKind` from a static string.
+    #[inline]
+    pub const fn new_const(kind: &'static str) -> Self {
+        Self(Cow::Borrowed(kind))
+    }
+
+    /// Returns the kind as a string.
+    pub fn as_str(&self) -> &str {
+        &*self.0
+    }
+
+    /// The "lib" kind, used for unit tests within the library.
+    pub const LIB: Self = Self::new_const("lib");
+
+    /// The "test" kind, used for integration tests.
+    pub const TEST: Self = Self::new_const("test");
+
+    /// The "bench" kind, used for benchmarks.
+    pub const BENCH: Self = Self::new_const("bench");
+
+    /// The "bin" kind, used for unit tests within binaries.
+    pub const BIN: Self = Self::new_const("bin");
+
+    /// The "proc-macro" kind, used for tests within procedural macros.
+    pub const PROC_MACRO: Self = Self::new_const("proc-macro");
+}
+
+impl fmt::Display for RustTestBinaryKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 /// A serializable suite of test binaries.

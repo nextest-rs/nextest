@@ -36,11 +36,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
             BuildPlatform::Target,
             vec![("test_multiply_two", false)],
         ),
-        TestInfo::new(
-            "dylib-test::dylib/dylib-test",
-            BuildPlatform::Target,
-            vec![],
-        ),
+        TestInfo::new("dylib-test", BuildPlatform::Target, vec![]),
         TestInfo::new(
             "nextest-tests::basic",
             BuildPlatform::Target,
