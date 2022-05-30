@@ -912,7 +912,7 @@ mod tests {
             if let Err(error) = CargoNextestApp::try_parse_from(valid_args) {
                 panic!(
                     "{} should have successfully parsed, but didn't: {}",
-                    shellwords::join(valid_args),
+                    shell_words::join(valid_args),
                     error
                 );
             }
@@ -923,7 +923,7 @@ mod tests {
                 Ok(_) => {
                     panic!(
                         "{} should have errored out but successfully parsed",
-                        shellwords::join(invalid_args)
+                        shell_words::join(invalid_args)
                     );
                 }
                 Err(error) => {
@@ -931,7 +931,7 @@ mod tests {
                     if kind != actual_kind {
                         panic!(
                             "{} should error with kind {kind:?}, but actual kind was {actual_kind:?}",
-                            shellwords::join(invalid_args),
+                            shell_words::join(invalid_args),
                         );
                     }
                 }

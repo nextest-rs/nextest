@@ -41,7 +41,7 @@ pub enum ExpectedError {
         err: guppy::Error,
     },
     BuildFailed {
-        escaped_command: Vec<String>,
+        command: String,
         exit_code: Option<i32>,
     },
     TestRunFailed,
@@ -110,10 +110,7 @@ impl ExpectedError {
         exit_code: Option<i32>,
     ) -> Self {
         Self::BuildFailed {
-            escaped_command: command
-                .into_iter()
-                .map(|arg| shellwords::escape(arg.as_ref()))
-                .collect(),
+            command: shell_words::join(command),
             exit_code,
         }
     }
@@ -205,10 +202,7 @@ impl ExpectedError {
                 log::error!("error parsing Cargo metadata{}", metadata_source);
                 Some(err as &dyn Error)
             }
-            Self::BuildFailed {
-                escaped_command,
-                exit_code,
-            } => {
+            Self::BuildFailed { command, exit_code } => {
                 let with_code_str = match exit_code {
                     Some(code) => {
                         format!(
@@ -220,10 +214,8 @@ impl ExpectedError {
                 };
 
                 log::error!(
-                    "command {} exited{}",
-                    escaped_command
-                        .join(" ")
-                        .if_supports_color(Stream::Stderr, |x| x.bold()),
+                    "command `{}` exited{}",
+                    command.if_supports_color(Stream::Stderr, |x| x.bold()),
                     with_code_str,
                 );
 
