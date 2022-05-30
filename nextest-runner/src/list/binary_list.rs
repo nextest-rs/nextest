@@ -10,8 +10,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::{Artifact, BuildScript, Message};
 use guppy::{graph::PackageGraph, PackageId};
 use nextest_metadata::{
-    BinaryListSummary, BuildPlatform, RustNonTestBinarySummary, RustTestBinaryKind,
-    RustTestBinarySummary,
+    BinaryListSummary, BuildPlatform, RustNonTestBinaryKind, RustNonTestBinarySummary,
+    RustTestBinaryKind, RustTestBinarySummary,
 };
 use owo_colors::OwoColorize;
 use std::{io, io::Write};
@@ -261,6 +261,7 @@ impl<'g> BinaryListBuildState<'g> {
                 if let Ok(rel_path) = path.strip_prefix(&self.rust_build_meta.target_directory) {
                     let non_test_binary = RustNonTestBinarySummary {
                         name: artifact.target.name,
+                        kind: RustNonTestBinaryKind::BIN_EXE,
                         path: convert_rel_path_to_forward_slash(rel_path),
                     };
 
@@ -270,6 +271,23 @@ impl<'g> BinaryListBuildState<'g> {
                         .or_default()
                         .insert(non_test_binary);
                 };
+            }
+        } else if artifact.target.kind.iter().any(|x| x.contains("dylib")) {
+            // Also look for and grab dynamic libraries to store in archives.
+            for filename in artifact.filenames {
+                if let Ok(rel_path) = filename.strip_prefix(&self.rust_build_meta.target_directory)
+                {
+                    let non_test_binary = RustNonTestBinarySummary {
+                        name: artifact.target.name.clone(),
+                        kind: RustNonTestBinaryKind::DYLIB,
+                        path: convert_rel_path_to_forward_slash(rel_path),
+                    };
+                    self.rust_build_meta
+                        .non_test_binaries
+                        .entry(artifact.package_id.repr.clone())
+                        .or_default()
+                        .insert(non_test_binary);
+                }
             }
         }
 
@@ -344,6 +362,7 @@ mod tests {
     use super::*;
     use crate::list::SerializableFormat;
     use indoc::indoc;
+    use maplit::btreeset;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -367,8 +386,33 @@ mod tests {
             build_platform: BuildPlatform::Host,
         };
 
+        let mut rust_build_meta = RustBuildMeta::new("/fake/target");
+        rust_build_meta
+            .base_output_directories
+            .insert("my-profile".into());
+        rust_build_meta.non_test_binaries.insert(
+            "my-package-id".into(),
+            btreeset! {
+                RustNonTestBinarySummary {
+                    name: "my-name".into(),
+                    kind: RustNonTestBinaryKind::BIN_EXE,
+                    path: "my-profile/my-name".into(),
+                },
+                RustNonTestBinarySummary {
+                    name: "your-name".into(),
+                    kind: RustNonTestBinaryKind::DYLIB,
+                    path: "my-profile/your-name.dll".into(),
+                },
+                RustNonTestBinarySummary {
+                    name: "your-name".into(),
+                    kind: RustNonTestBinaryKind::DYLIB,
+                    path: "my-profile/your-name.exp".into(),
+                },
+            },
+        );
+
         let binary_list = BinaryList {
-            rust_build_meta: RustBuildMeta::new("/fake"),
+            rust_build_meta,
             rust_binaries: vec![fake_bin_test, fake_macro_test],
         };
 
@@ -388,9 +432,29 @@ mod tests {
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
         {
           "rust-build-meta": {
-            "target-directory": "/fake",
-            "base-output-directories": [],
-            "non-test-binaries": {},
+            "target-directory": "/fake/target",
+            "base-output-directories": [
+              "my-profile"
+            ],
+            "non-test-binaries": {
+              "my-package-id": [
+                {
+                  "name": "my-name",
+                  "kind": "bin-exe",
+                  "path": "my-profile/my-name"
+                },
+                {
+                  "name": "your-name",
+                  "kind": "dylib",
+                  "path": "my-profile/your-name.dll"
+                },
+                {
+                  "name": "your-name",
+                  "kind": "dylib",
+                  "path": "my-profile/your-name.exp"
+                }
+              ]
+            },
             "linked-paths": []
           },
           "rust-binaries": {
