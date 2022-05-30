@@ -72,6 +72,12 @@ fn test_ignored_fail() {
     panic!("ignored test that fails");
 }
 
+/// Test that a binary can be successfully executed.
+#[test]
+fn test_execute_bin() {
+    nextest_tests::test_execute_bin_helper();
+}
+
 macro_rules! assert_env {
     ($name: expr) => {
         assert_env!($name, $name);
