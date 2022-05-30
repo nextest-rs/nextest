@@ -171,7 +171,7 @@ impl fmt::Display for BuildPlatform {
 
 /// A serializable Rust test binary.
 ///
-/// Part of a [`RustTestSuiteSummary`] and [`RustBinaryListSummary`].
+/// Part of a [`RustTestSuiteSummary`] and [`BinaryListSummary`].
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RustTestBinarySummary {
