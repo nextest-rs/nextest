@@ -42,6 +42,27 @@ jobs:
       - name: Check for differences
         run: git diff --exit-code
 
+  build-rustdoc:
+    name: Build documentation
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+      fail-fast: false
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
+      - name: Build rustdoc
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --all-features --workspace
+
   build:
     name: Build and test
     runs-on: ${{ matrix.os }}

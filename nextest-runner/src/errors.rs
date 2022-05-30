@@ -197,7 +197,7 @@ impl fmt::Display for PartitionerBuilderParseError {
 
 impl error::Error for PartitionerBuilderParseError {}
 
-/// An error occurred in [`PathMapper::new`](crate::test_list::PathMapper::new).
+/// An error occurred in [`PathMapper::new`](crate::reuse_build::PathMapper::new).
 #[derive(Debug)]
 pub enum PathMapperConstructError {
     /// An error occurred while canonicalizing a directory.
@@ -287,7 +287,7 @@ impl error::Error for PathMapperConstructError {
 }
 
 /// The kind of directory that failed to be read in
-/// [`PathMapper::new`](crate::test_list::PathMapper::new).
+/// [`PathMapper::new`](crate::reuse_build::PathMapper::new).
 ///
 /// Returned as part of [`PathMapperConstructError`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -308,7 +308,8 @@ impl fmt::Display for PathMapperConstructKind {
     }
 }
 
-/// An error that occurs in [`RustTestArtifact::from_messages`](crate::test_list::RustTestArtifact::from_messages).
+/// An error that occurs in [`BinaryList::from_messages`](crate::list::BinaryList::from_messages) or
+/// [`RustTestArtifact::from_binary_list`](crate::list::RustTestArtifact::from_binary_list).
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum FromMessagesError {
