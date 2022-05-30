@@ -335,7 +335,9 @@ impl TestBuildFilter {
         TestList::new(test_artifacts, rust_build_meta, &test_filter, runner)
             .wrap_err("error building test list")
     }
+}
 
+impl CargoOptions {
     fn compute_binary_list(
         &self,
         graph: &PackageGraph,
@@ -348,7 +350,7 @@ impl TestBuildFilter {
 
         // Only build tests in the cargo test invocation, do not run them.
         cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
-        cargo_cli.add_options(&self.cargo_options);
+        cargo_cli.add_options(self);
 
         let expression = cargo_cli.to_expression();
         let output = expression
@@ -557,7 +559,7 @@ impl App {
                     })?;
                 BinaryList::from_summary(binary_list)
             }
-            None => self.build_filter.compute_binary_list(
+            None => self.build_filter.cargo_options.compute_binary_list(
                 &self.graph,
                 self.manifest_path.as_deref(),
                 self.output,
