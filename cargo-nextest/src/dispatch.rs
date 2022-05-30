@@ -764,166 +764,104 @@ mod tests {
     fn test_argument_parsing() {
         use clap::ErrorKind::{self, *};
 
-        let valid: &[&[&str]] = &[
+        let valid: &[&'static str] = &[
             // ---
             // Basic commands
             // ---
-            &["cargo", "nextest", "list"],
-            &["cargo", "nextest", "run"],
+            "cargo nextest list",
+            "cargo nextest run",
             // ---
             // Commands with arguments
             // ---
-            &["cargo", "nextest", "list", "--list-type", "binaries-only"],
-            &["cargo", "nextest", "list", "--list-type", "full"],
-            &[
-                "cargo",
-                "nextest",
-                "list",
-                "--message-format",
-                "json-pretty",
-            ],
-            &["cargo", "nextest", "run", "--failure-output", "never"],
-            &["cargo", "nextest", "run", "--success-output=immediate"],
-            &["cargo", "nextest", "run", "--status-level=all"],
-            &["cargo", "nextest", "run", "--no-capture"],
-            &["cargo", "nextest", "run", "--nocapture"],
+            "cargo nextest list --list-type binaries-only",
+            "cargo nextest list --list-type full",
+            "cargo nextest list --message-format json-pretty",
+            "cargo nextest run --failure-output never",
+            "cargo nextest run --success-output=immediate",
+            "cargo nextest run --status-level=all",
+            "cargo nextest run --no-capture",
+            "cargo nextest run --nocapture",
             // ---
             // Cargo options
             // ---
-            &["cargo", "nextest", "list", "--lib", "--bins"],
-            &[
-                "cargo",
-                "nextest",
-                "run",
-                "--ignore-rust-version",
-                "--unit-graph",
-            ],
+            "cargo nextest list --lib --bins",
+            "cargo nextest run --ignore-rust-version --unit-graph",
             // ---
             // Reuse build options
             // ---
-            &["cargo", "nextest", "list", "--binaries-metadata=foo"],
-            &[
-                "cargo",
-                "nextest",
-                "run",
-                "--binaries-metadata=foo",
-                "--target-dir-remap=bar",
-            ],
-            &["cargo", "nextest", "list", "--cargo-metadata", "path"],
-            &[
-                "cargo",
-                "nextest",
-                "run",
-                "--cargo-metadata=path",
-                "--workspace-remap",
-                "remapped-path",
-            ],
+            "cargo nextest list --binaries-metadata=foo",
+            "cargo nextest run --binaries-metadata=foo --target-dir-remap=bar",
+            "cargo nextest list --cargo-metadata path",
+            "cargo nextest run --cargo-metadata=path --workspace-remap remapped-path",
             // ---
             // Filter expressions
             // ---
-            &["cargo", "nextest", "list", "-E", "deps(foo)"],
-            &[
-                "cargo",
-                "nextest",
-                "run",
-                "--filter-expr",
-                "test(bar)",
-                "--package=my-package",
-                "test-filter",
-            ],
+            "cargo nextest list -E deps(foo)",
+            "cargo nextest run --filter-expr 'test(bar)' --package=my-package test-filter",
         ];
 
-        let invalid: &[(&[&str], ErrorKind)] = &[
+        let invalid: &[(&'static str, ErrorKind)] = &[
             // ---
             // --no-capture and these options conflict
             // ---
             (
-                &[
-                    "cargo",
-                    "nextest",
-                    "run",
-                    "--no-capture",
-                    "--test-threads=24",
-                ],
+                "cargo nextest run --no-capture --test-threads=24",
                 ArgumentConflict,
             ),
             (
-                &[
-                    "cargo",
-                    "nextest",
-                    "run",
-                    "--no-capture",
-                    "--failure-output=never",
-                ],
+                "cargo nextest run --no-capture --failure-output=never",
                 ArgumentConflict,
             ),
             (
-                &[
-                    "cargo",
-                    "nextest",
-                    "run",
-                    "--no-capture",
-                    "--success-output=final",
-                ],
+                "cargo nextest run --no-capture --success-output=final",
                 ArgumentConflict,
             ),
             // ---
             // Reuse build options conflict with cargo options
             // ---
             (
-                &[
-                    "cargo",
-                    "nextest",
-                    "run",
-                    "--manifest-path",
-                    "foo",
-                    "--cargo-metadata",
-                    "bar",
-                ],
+                "cargo nextest run --manifest-path foo --cargo-metadata bar",
                 ArgumentConflict,
             ),
             (
-                &[
-                    "cargo",
-                    "nextest",
-                    "run",
-                    "--binaries-metadata=foo",
-                    "--lib",
-                ],
+                "cargo nextest run --binaries-metadata=foo --lib",
                 ArgumentConflict,
             ),
             // ---
             // workspace-remap requires cargo-metadata
             // ---
             (
-                &["cargo", "nextest", "run", "--workspace-remap", "foo"],
+                "cargo nextest run --workspace-remap foo",
                 MissingRequiredArgument,
             ),
             // ---
             // target-dir-remap requires binaries-metadata
             // ---
             (
-                &["cargo", "nextest", "run", "--target-dir-remap", "bar"],
+                "cargo nextest run --target-dir-remap bar",
                 MissingRequiredArgument,
             ),
         ];
 
-        for &valid_args in valid {
-            if let Err(error) = CargoNextestApp::try_parse_from(valid_args) {
+        for valid_args in valid {
+            if let Err(error) = CargoNextestApp::try_parse_from(
+                shell_words::split(valid_args).expect("valid command line"),
+            ) {
                 panic!(
                     "{} should have successfully parsed, but didn't: {}",
-                    shell_words::join(valid_args),
-                    error
+                    valid_args, error
                 );
             }
         }
 
         for &(invalid_args, kind) in invalid {
-            match CargoNextestApp::try_parse_from(invalid_args) {
+            match CargoNextestApp::try_parse_from(
+                shell_words::split(invalid_args).expect("valid command"),
+            ) {
                 Ok(_) => {
                     panic!(
                         "{} should have errored out but successfully parsed",
-                        shell_words::join(invalid_args)
+                        invalid_args
                     );
                 }
                 Err(error) => {
@@ -931,7 +869,7 @@ mod tests {
                     if kind != actual_kind {
                         panic!(
                             "{} should error with kind {kind:?}, but actual kind was {actual_kind:?}",
-                            shell_words::join(invalid_args),
+                            invalid_args,
                         );
                     }
                 }
