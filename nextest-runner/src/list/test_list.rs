@@ -4,7 +4,7 @@
 use crate::{
     errors::{FromMessagesError, ParseTestListError, WriteTestListError},
     helpers::{dylib_path, dylib_path_envvar, write_test_name},
-    list::{BinaryList, BinaryListState, OutputFormat, RustBuildMeta, Styles, TestListState},
+    list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::TestFilterBuilder,
@@ -22,7 +22,7 @@ use nextest_metadata::{
 use once_cell::sync::OnceCell;
 use owo_colors::OwoColorize;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
     io,
     io::Write,
@@ -51,8 +51,10 @@ pub struct RustTestArtifact<'g> {
     /// The kind of Rust test binary this is.
     pub kind: RustTestBinaryKind,
 
-    /// The working directory that this test should be executed in. If None, the current directory
-    /// will not be changed.
+    /// Non-test binaries to be exposed to this artifact at runtime (name, path).
+    pub non_test_binaries: BTreeSet<(String, Utf8PathBuf)>,
+
+    /// The working directory that this test should be executed in.
     pub cwd: Utf8PathBuf,
 
     /// The platform for which this test artifact was built.
@@ -64,6 +66,7 @@ impl<'g> RustTestArtifact<'g> {
     pub fn from_binary_list(
         graph: &'g PackageGraph,
         binary_list: BinaryList,
+        rust_build_meta: &RustBuildMeta<TestListState>,
         path_mapper: &PathMapper,
         platform_filter: Option<BuildPlatform>,
     ) -> Result<Vec<Self>, FromMessagesError> {
@@ -95,6 +98,29 @@ impl<'g> RustTestArtifact<'g> {
             let binary_path = path_mapper.map_binary(binary.path);
             let cwd = path_mapper.map_cwd(cwd);
 
+            // Non-test binaries are only exposed to integration tests and benchmarks.
+            let non_test_binaries = if binary.kind == RustTestBinaryKind::TEST
+                || binary.kind == RustTestBinaryKind::BENCH
+            {
+                // Note we must use the TestListState rust_build_meta here to ensure we get remapped
+                // paths.
+                match rust_build_meta.non_test_binaries.get(package_id.repr()) {
+                    Some(binaries) => binaries
+                        .iter()
+                        .map(|binary| {
+                            // Convert relative paths to absolute ones here.
+                            (
+                                binary.name.clone(),
+                                rust_build_meta.target_directory.join(&binary.path),
+                            )
+                        })
+                        .collect(),
+                    None => BTreeSet::new(),
+                }
+            } else {
+                BTreeSet::new()
+            };
+
             binaries.push(RustTestArtifact {
                 binary_id: binary.id,
                 package,
@@ -102,6 +128,7 @@ impl<'g> RustTestArtifact<'g> {
                 binary_name: binary.name,
                 kind: binary.kind,
                 cwd,
+                non_test_binaries,
                 build_platform: binary.build_platform,
             })
         }
@@ -145,6 +172,9 @@ pub struct RustTestSuite<'g> {
     /// The platform the test suite is for (host or target).
     pub build_platform: BuildPlatform,
 
+    /// Non-test binaries corresponding to this test suite (name, path).
+    pub non_test_binaries: BTreeSet<(String, Utf8PathBuf)>,
+
     /// Test case names and other information about them.
     pub testcases: BTreeMap<String, RustTestCaseSummary>,
 }
@@ -153,13 +183,11 @@ impl<'g> TestList<'g> {
     /// Creates a new test list by running the given command and applying the specified filter.
     pub fn new(
         test_artifacts: impl IntoIterator<Item = RustTestArtifact<'g>>,
-        rust_build_meta: &RustBuildMeta<BinaryListState>,
-        path_mapper: &PathMapper,
+        rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
         runner: &TargetRunner,
     ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
-        let rust_build_meta = rust_build_meta.map_paths(path_mapper);
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
 
         let test_artifacts = test_artifacts
@@ -191,11 +219,12 @@ impl<'g> TestList<'g> {
         test_bin_outputs: impl IntoIterator<
             Item = (RustTestArtifact<'g>, impl AsRef<str>, impl AsRef<str>),
         >,
-        rust_build_meta: &RustBuildMeta<BinaryListState>,
-        path_mapper: &PathMapper,
+        rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
     ) -> Result<Self, ParseTestListError> {
         let mut test_count = 0;
+
+        let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
 
         let test_artifacts = test_bin_outputs
             .into_iter()
@@ -210,9 +239,6 @@ impl<'g> TestList<'g> {
                 Ok((bin, info))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-
-        let rust_build_meta = rust_build_meta.map_paths(path_mapper);
-        let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
 
         Ok(Self {
             rust_suites: test_artifacts,
@@ -415,6 +441,7 @@ impl<'g> TestList<'g> {
             binary_path,
             binary_name,
             kind,
+            non_test_binaries,
             cwd,
             build_platform: platform,
         } = test_binary;
@@ -426,6 +453,7 @@ impl<'g> TestList<'g> {
                 package,
                 binary_name,
                 kind,
+                non_test_binaries,
                 testcases: tests,
                 cwd,
                 build_platform: platform,
@@ -541,8 +569,15 @@ impl<'g> RustTestArtifact<'g> {
             argv.push("--ignored");
         }
 
-        let cmd = make_test_expression(program, argv, &self.cwd, &self.package, dylib_path)
-            .stdout_capture();
+        let cmd = make_test_expression(
+            program,
+            argv,
+            &self.cwd,
+            &self.package,
+            dylib_path,
+            &self.non_test_binaries,
+        )
+        .stdout_capture();
 
         cmd.read().map_err(|error| {
             ParseTestListError::command(
@@ -623,6 +658,7 @@ impl<'a> TestInstance<'a> {
             &self.bin_info.cwd,
             &self.bin_info.package,
             test_list.updated_dylib_path(),
+            &self.bin_info.non_test_binaries,
         )
     }
 }
@@ -634,8 +670,9 @@ pub(crate) fn make_test_expression(
     cwd: &Utf8PathBuf,
     package: &PackageMetadata<'_>,
     dylib_path: &OsStr,
+    non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
 ) -> duct::Expression {
-    let cmd = duct::cmd(program, args)
+    let mut cmd = duct::cmd(program, args)
         .dir(cwd)
         // This environment variable is set to indicate that tests are being run under nextest.
         .env("NEXTEST", "1")
@@ -689,6 +726,12 @@ pub(crate) fn make_test_expression(
         )
         .env(dylib_path_envvar(), dylib_path);
 
+    // Expose paths to non-test binaries at runtime so that relocated paths work.
+    // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.
+    for (name, path) in non_test_binaries {
+        cmd = cmd.env(format!("NEXTEST_BIN_EXE_{}", name), &path);
+    }
+
     cmd
 }
 
@@ -729,13 +772,13 @@ mod tests {
             binary_name: fake_binary_name.clone(),
             binary_id: fake_binary_id.clone(),
             kind: RustTestBinaryKind::LIB,
+            non_test_binaries: BTreeSet::new(),
             build_platform: BuildPlatform::Target,
         };
-        let rust_build_meta = RustBuildMeta::new("/fake");
+        let rust_build_meta = RustBuildMeta::new("/fake").map_paths(&PathMapper::noop());
         let test_list = TestList::new_with_outputs(
             iter::once((test_binary, &non_ignored_output, &ignored_output)),
-            &rust_build_meta,
-            &PathMapper::noop(),
+            rust_build_meta,
             &test_filter,
         )
         .expect("valid output");
@@ -767,6 +810,7 @@ mod tests {
                     binary_name: fake_binary_name,
                     binary_id: fake_binary_id,
                     kind: RustTestBinaryKind::LIB,
+                    non_test_binaries: BTreeSet::new(),
                 }
             }
         );

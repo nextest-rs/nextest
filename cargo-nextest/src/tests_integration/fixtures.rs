@@ -48,6 +48,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
             vec![
                 ("test_cargo_env_vars", false),
                 ("test_cwd", false),
+                ("test_execute_bin", false),
                 ("test_failure_assert", false),
                 ("test_failure_error", false),
                 ("test_failure_should_panic", false),
@@ -63,6 +64,11 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
             "nextest-derive::proc-macro/nextest-derive",
             BuildPlatform::Host,
             vec![("it_works", false)],
+        ),
+        TestInfo::new(
+            "nextest-tests::bench/my-bench",
+            BuildPlatform::Target,
+            vec![("tests::test_execute_bin", false)],
         ),
         TestInfo::new(
             "nextest-tests::bin/nextest-tests",
@@ -144,6 +150,7 @@ pub fn build_tests(p: &TempProject) {
         p.manifest_path().as_str(),
         "list",
         "--workspace",
+        "--all-targets",
         "--message-format",
         "json",
         "--list-type",
@@ -256,6 +263,11 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
         (true, "cdylib-link test_multiply_two"),
         (true, "cdylib-example tests::test_multiply_two_cdylib"),
         (true, "nextest-tests::basic test_cargo_env_vars"),
+        (true, "nextest-tests::basic test_execute_bin"),
+        (
+            true,
+            "nextest-tests::bench/my-bench tests::test_execute_bin",
+        ),
         (false, "nextest-tests::basic test_failure_error"),
         (false, "nextest-tests::basic test_flaky_mod_2"),
         (true, "nextest-tests::bin/nextest-tests tests::bin_success"),
@@ -287,9 +299,13 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *19 tests run: 13 passed, 6 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *21 tests run: 15 passed, 6 failed, 2 skipped").unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *19 tests run: 14 passed, 5 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *21 tests run: 16 passed, 5 failed, 2 skipped").unwrap()
     };
-    assert!(summary_reg.is_match(&output), "summary didn't match");
+    assert!(
+        summary_reg.is_match(&output),
+        "summary didn't match (actual output: {})",
+        output
+    );
 }

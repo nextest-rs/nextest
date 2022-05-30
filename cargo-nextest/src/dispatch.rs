@@ -318,10 +318,11 @@ impl TestBuildFilter {
             &binary_list.rust_build_meta.target_directory,
         )?;
 
-        let rust_build_meta = binary_list.rust_build_meta.clone();
+        let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,
             binary_list,
+            &rust_build_meta,
             &path_mapper,
             self.platform_filter.into(),
         )?;
@@ -331,14 +332,8 @@ impl TestBuildFilter {
             &self.filter,
             filter_exprs,
         );
-        TestList::new(
-            test_artifacts,
-            &rust_build_meta,
-            &path_mapper,
-            &test_filter,
-            runner,
-        )
-        .wrap_err("error building test list")
+        TestList::new(test_artifacts, rust_build_meta, &test_filter, runner)
+            .wrap_err("error building test list")
     }
 
     fn compute_binary_list(

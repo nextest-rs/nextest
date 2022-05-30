@@ -37,6 +37,7 @@ fn test_list_default() {
         p.manifest_path().as_str(),
         "list",
         "--workspace",
+        "--all-targets",
         "--message-format",
         "json",
     ]);
@@ -60,6 +61,7 @@ fn test_list_full() {
         p.manifest_path().as_str(),
         "list",
         "--workspace",
+        "--all-targets",
         "--message-format",
         "json",
         "--list-type",
@@ -93,6 +95,7 @@ fn test_list_binaries_only() {
         p.manifest_path().as_str(),
         "list",
         "--workspace",
+        "--all-targets",
         "--message-format",
         "json",
         "--list-type",
@@ -120,6 +123,7 @@ fn test_target_dir() {
             "nextest",
             "list",
             "--workspace",
+            "--all-targets",
             "--message-format",
             "json",
         ];
@@ -263,6 +267,7 @@ fn test_run() {
         p.manifest_path().as_str(),
         "run",
         "--workspace",
+        "--all-targets",
     ]);
 
     let mut output = OutputWriter::new_test();
@@ -316,7 +321,11 @@ fn test_relocated_run() {
 
     // copy target directory over
     std::fs::create_dir_all(&new_target_path).unwrap();
-    temp_project::copy_dir_all(custom_target_path, &new_target_path, true).unwrap();
+    temp_project::copy_dir_all(custom_target_path, &new_target_path, false).unwrap();
+    // Remove the old target path to ensure that any tests that refer to files within it
+    // fail.
+    std::fs::remove_dir_all(custom_target_path).unwrap();
+
     p2.set_target_dir(new_target_path);
 
     // Use relative paths to the workspace root and target directory to do testing in.

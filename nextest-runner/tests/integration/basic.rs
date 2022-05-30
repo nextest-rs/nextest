@@ -99,13 +99,12 @@ fn test_run() -> Result<()> {
     );
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
-    println!("{instance_statuses:#?}");
 
-    for (name, expected) in &*EXPECTED_TESTS {
+    for (binary_id, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(*name)
-            .unwrap_or_else(|| panic!("unexpected test name {}", name));
+            .get(*binary_id)
+            .unwrap_or_else(|| panic!("unexpected binary ID {}", binary_id));
         for fixture in expected {
             let instance_value = instance_statuses
                 .get(&(test_binary.binary_path.as_path(), fixture.name))

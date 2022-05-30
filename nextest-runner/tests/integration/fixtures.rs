@@ -7,7 +7,7 @@ use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
-    list::{BinaryList, BinaryListState, RustBuildMeta, RustTestArtifact, TestList},
+    list::{BinaryList, RustBuildMeta, RustTestArtifact, TestList, TestListState},
     reporter::TestEvent,
     reuse_build::PathMapper,
     runner::{ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
@@ -72,6 +72,7 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
             "nextest-tests::basic" => vec![
                 TestFixture { name: "test_cargo_env_vars", status: FixtureStatus::Pass },
                 TestFixture { name: "test_cwd", status: FixtureStatus::Pass },
+                TestFixture { name: "test_execute_bin", status: FixtureStatus::Pass },
                 TestFixture { name: "test_failure_assert", status: FixtureStatus::Fail },
                 TestFixture { name: "test_failure_error", status: FixtureStatus::Fail },
                 TestFixture { name: "test_failure_should_panic", status: FixtureStatus::Fail },
@@ -103,6 +104,10 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
             ],
             "nextest-tests::example/other" => vec![
                 TestFixture { name: "tests::other_example_success", status: FixtureStatus::Pass },
+            ],
+            // Benchmarks
+            "nextest-tests::bench/my-bench" => vec![
+                TestFixture { name: "tests::test_execute_bin", status: FixtureStatus::Pass },
             ],
             // Proc-macro tests
             "nextest-derive::proc-macro/nextest-derive" => vec![
@@ -181,7 +186,8 @@ fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
         "--no-run",
         "--workspace",
         "--message-format",
-        "json-render-diagnostics"
+        "json-render-diagnostics",
+        "--all-targets",
     )
     .dir(workspace_root())
     .stdout_capture();
@@ -194,7 +200,7 @@ pub(crate) static FIXTURE_TARGETS: Lazy<FixtureTargets> = Lazy::new(FixtureTarge
 
 #[derive(Debug)]
 pub(crate) struct FixtureTargets {
-    pub(crate) rust_build_meta: RustBuildMeta<BinaryListState>,
+    pub(crate) rust_build_meta: RustBuildMeta<TestListState>,
     pub(crate) test_artifacts: BTreeMap<String, RustTestArtifact<'static>>,
 }
 
@@ -206,9 +212,16 @@ impl FixtureTargets {
         let rust_build_meta = binary_list.rust_build_meta.clone();
 
         let path_mapper = PathMapper::noop();
+        let rust_build_meta = rust_build_meta.map_paths(&path_mapper);
 
-        let test_artifacts =
-            RustTestArtifact::from_binary_list(graph, binary_list, &path_mapper, None).unwrap();
+        let test_artifacts = RustTestArtifact::from_binary_list(
+            graph,
+            binary_list,
+            &rust_build_meta,
+            &path_mapper,
+            None,
+        )
+        .unwrap();
 
         let test_artifacts = test_artifacts
             .into_iter()
@@ -226,11 +239,9 @@ impl FixtureTargets {
         target_runner: &TargetRunner,
     ) -> TestList<'_> {
         let test_bins: Vec<_> = self.test_artifacts.values().cloned().collect();
-        let path_mapper = PathMapper::noop();
         TestList::new(
             test_bins,
-            &self.rust_build_meta,
-            &path_mapper,
+            self.rust_build_meta.clone(),
             test_filter,
             target_runner,
         )
