@@ -37,6 +37,7 @@ pub(super) fn copy_dir_all(
 #[derive(Debug)]
 pub struct TempProject {
     temp_dir: Option<TempDir>,
+    temp_root: Utf8PathBuf,
     workspace_root: Utf8PathBuf,
     target_dir: Utf8PathBuf,
 }
@@ -54,18 +55,21 @@ impl TempProject {
         let temp_dir = tempfile::Builder::new()
             .prefix("nextest-fixture")
             .tempdir()?;
-        let utf8_path: &Utf8Path = temp_dir
-            .path()
-            .try_into()
-            .expect("tempdir should be valid UTF-8");
-
+        // Note: can't use canonicalize here because it ends up creating a UNC path on Windows,
+        // which doesn't match compile time.
+        let temp_root: Utf8PathBuf = fixup_macos_path(
+            temp_dir
+                .path()
+                .try_into()
+                .expect("tempdir should be valid UTF-8"),
+        );
+        let workspace_root = temp_root.join("src");
         let src_dir = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .join("fixtures/nextest-tests");
 
-        copy_dir_all(&src_dir, &utf8_path, true)?;
-        let workspace_root = fixup_macos_path(utf8_path);
+        copy_dir_all(&src_dir, &workspace_root, true)?;
 
         let target_dir = match custom_target_dir {
             Some(dir) => fixup_macos_path(&dir),
@@ -74,6 +78,7 @@ impl TempProject {
 
         Ok(Self {
             temp_dir: Some(temp_dir),
+            temp_root,
             workspace_root,
             target_dir,
         })
@@ -84,6 +89,11 @@ impl TempProject {
         if let Some(dir) = self.temp_dir.take() {
             dir.into_path();
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn temp_root(&self) -> &Utf8Path {
+        &self.temp_root
     }
 
     pub fn workspace_root(&self) -> &Utf8Path {
