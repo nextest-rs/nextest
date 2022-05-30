@@ -82,7 +82,7 @@ pub struct TestFilterBuilder {
 
 #[derive(Clone, Debug)]
 enum NameMatch {
-    MatchAll,
+    EmptyPatterns,
     MatchSet(Box<AhoCorasick>),
 }
 
@@ -97,7 +97,7 @@ impl TestFilterBuilder {
         exprs: Vec<FilteringExpr>,
     ) -> Self {
         let name_match = if patterns.is_empty() {
-            NameMatch::MatchAll
+            NameMatch::EmptyPatterns
         } else {
             NameMatch::MatchSet(Box::new(AhoCorasick::new_auto_configured(patterns)))
         };
@@ -115,7 +115,7 @@ impl TestFilterBuilder {
         Self {
             run_ignored,
             partitioner_builder: None,
-            name_match: NameMatch::MatchAll,
+            name_match: NameMatch::EmptyPatterns,
             exprs: Vec::new(),
         }
     }
@@ -152,14 +152,20 @@ impl<'filter> TestFilter<'filter> {
     ) -> FilterMatch {
         self.filter_ignored_mismatch(ignored)
             .or_else(|| {
+                use FilterNameMatch::*;
                 match (
-                    self.filter_name_mismatch(test_name),
-                    self.filter_expression_mismatch(test_binary, test_name),
+                    self.filter_name_match(test_name),
+                    self.filter_expression_match(test_binary, test_name),
                 ) {
                     // if accepted by at least one filtering strategy => accepted
-                    (None, Some(_)) | (Some(_), None) | (None, None) => None,
-                    // if rejected by both filtering strategies => rejected
-                    (Some(mis), Some(_)) => Some(mis),
+                    (MatchEmptyPatterns, MatchEmptyPatterns)
+                    | (MatchWithPatterns, _)
+                    | (_, MatchWithPatterns) => None,
+                    // if rejected by both filtering strategies, or if one match is empty and is
+                    // rejected by the other match => rejected
+                    (MatchEmptyPatterns, Mismatch(reason))
+                    | (Mismatch(reason), MatchEmptyPatterns)
+                    | (Mismatch(reason), Mismatch(_)) => Some(FilterMatch::Mismatch { reason }),
                 }
             })
             // Note that partition-based filtering MUST come after all other kinds of filtering,
@@ -190,37 +196,35 @@ impl<'filter> TestFilter<'filter> {
         None
     }
 
-    fn filter_name_mismatch(&self, test_name: &str) -> Option<FilterMatch> {
-        let string_match = match &self.builder.name_match {
-            NameMatch::MatchAll => true,
-            NameMatch::MatchSet(set) => set.is_match(test_name),
-        };
-        if string_match {
-            None
-        } else {
-            Some(FilterMatch::Mismatch {
-                reason: MismatchReason::String,
-            })
+    fn filter_name_match(&self, test_name: &str) -> FilterNameMatch {
+        match &self.builder.name_match {
+            NameMatch::EmptyPatterns => FilterNameMatch::MatchEmptyPatterns,
+            NameMatch::MatchSet(set) => {
+                if set.is_match(test_name) {
+                    FilterNameMatch::MatchWithPatterns
+                } else {
+                    FilterNameMatch::Mismatch(MismatchReason::String)
+                }
+            }
         }
     }
 
-    fn filter_expression_mismatch(
+    fn filter_expression_match(
         &self,
         test_binary: &RustTestArtifact<'_>,
         test_name: &str,
-    ) -> Option<FilterMatch> {
-        let accepted = self.builder.exprs.is_empty()
-            || self
-                .builder
-                .exprs
-                .iter()
-                .any(|expr| expr.includes(test_binary.package.id(), test_name));
-
-        match accepted {
-            false => Some(FilterMatch::Mismatch {
-                reason: MismatchReason::Expression,
-            }),
-            true => None,
+    ) -> FilterNameMatch {
+        if self.builder.exprs.is_empty() {
+            FilterNameMatch::MatchEmptyPatterns
+        } else if self
+            .builder
+            .exprs
+            .iter()
+            .any(|expr| expr.includes(test_binary.package.id(), test_name))
+        {
+            FilterNameMatch::MatchWithPatterns
+        } else {
+            FilterNameMatch::Mismatch(MismatchReason::Expression)
         }
     }
 
@@ -239,6 +243,26 @@ impl<'filter> TestFilter<'filter> {
     }
 }
 
+#[derive(Clone, Debug)]
+enum FilterNameMatch {
+    /// Match because there are no patterns.
+    MatchEmptyPatterns,
+    /// Matches with non-empty patterns.
+    MatchWithPatterns,
+    /// Mismatch.
+    Mismatch(MismatchReason),
+}
+
+impl FilterNameMatch {
+    #[cfg(test)]
+    fn is_match(&self) -> bool {
+        match self {
+            Self::MatchEmptyPatterns | Self::MatchWithPatterns => true,
+            Self::Mismatch(_) => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,7 +275,7 @@ mod tests {
             let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new());
             let single_filter = test_filter.build();
             for test_name in test_names {
-                prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
+                prop_assert!(single_filter.filter_name_match(&test_name).is_match());
             }
         }
 
@@ -261,7 +285,7 @@ mod tests {
             let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, Vec::new());
             let single_filter = test_filter.build();
             for test_name in test_names {
-                prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
+                prop_assert!(single_filter.filter_name_match(&test_name).is_match());
             }
         }
 
@@ -280,7 +304,7 @@ mod tests {
             let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, Vec::new());
             let single_filter = test_filter.build();
             for test_name in test_names {
-                prop_assert!(single_filter.filter_name_mismatch(&test_name).is_none());
+                prop_assert!(single_filter.filter_name_match(&test_name).is_match());
             }
         }
 
@@ -295,7 +319,7 @@ mod tests {
             let pattern = prefix + &substring + &suffix;
             let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern], Vec::new());
             let single_filter = test_filter.build();
-            prop_assert!(single_filter.filter_name_mismatch(&substring).is_some());
+            prop_assert!(!single_filter.filter_name_match(&substring).is_match());
         }
     }
 

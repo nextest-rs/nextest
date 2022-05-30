@@ -3,6 +3,7 @@
 
 use crate::fixtures::*;
 use color_eyre::eyre::Result;
+use nextest_filtering::FilteringExpr;
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     config::NextestConfig,
@@ -92,8 +93,15 @@ fn test_run() -> Result<()> {
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
-            let instance_value =
-                &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
+            let instance_value = instance_statuses
+                .get(&(test_binary.binary_path.as_path(), fixture.name))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "no instance status found for key ({}, {})",
+                        test_binary.binary_path.as_path(),
+                        fixture.name
+                    )
+                });
             let valid = match &instance_value.status {
                 InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
                 InstanceStatus::Finished(run_statuses) => {
@@ -174,6 +182,66 @@ fn test_run_ignored() -> Result<()> {
     }
 
     assert!(!run_stats.is_success(), "run should be marked failed");
+    Ok(())
+}
+
+/// Test that filter expressions without name matches behave as expected.
+#[test]
+fn test_filter_expr_without_name_matches() -> Result<()> {
+    set_rustflags();
+
+    let expr = FilteringExpr::parse(
+        "test(test_multiply_two) | test(=tests::call_dylib_add_two)",
+        &*PACKAGE_GRAPH,
+    )
+    .expect("filter expression is valid");
+
+    let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[] as &[&str], vec![expr]);
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
+    for test in test_list.iter_tests() {
+        if test.name.contains("test_multiply_two") || test.name == "tests::call_dylib_add_two" {
+            assert!(
+                test.test_info.filter_match.is_match(),
+                "expected test {test:?} to be a match, but it isn't"
+            );
+        } else {
+            assert!(
+                !test.test_info.filter_match.is_match(),
+                "expected test {test:?} to not be a match, but it is"
+            )
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_name_match_without_filter_expr() -> Result<()> {
+    set_rustflags();
+
+    let test_filter = TestFilterBuilder::new(
+        RunIgnored::Default,
+        None,
+        &["test_multiply_two", "tests::call_dylib_add_two"],
+        vec![],
+    );
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
+    for test in test_list.iter_tests() {
+        if test.name.contains("test_multiply_two")
+            || test.name.contains("tests::call_dylib_add_two")
+        {
+            assert!(
+                test.test_info.filter_match.is_match(),
+                "expected test {test:?} to be a match, but it isn't"
+            );
+        } else {
+            assert!(
+                !test.test_info.filter_match.is_match(),
+                "expected test {test:?} to not be a match, but it is"
+            )
+        }
+    }
+
     Ok(())
 }
 
