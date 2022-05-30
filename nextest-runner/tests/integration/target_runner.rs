@@ -258,8 +258,15 @@ fn test_run_with_target_runner() -> Result<()> {
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
-            let instance_value =
-                &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
+            let instance_value = instance_statuses
+                .get(&(test_binary.binary_path.as_path(), fixture.name))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "no instance status found for key ({}, {})",
+                        test_binary.binary_path.as_path(),
+                        fixture.name
+                    )
+                });
             let valid = match &instance_value.status {
                 InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
                 InstanceStatus::Finished(run_statuses) => {
