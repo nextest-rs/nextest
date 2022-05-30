@@ -78,37 +78,50 @@ struct AppOpts {
 impl AppOpts {
     /// Execute the command.
     fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
+        fn build_filter_needs_deps(build_filter: &TestBuildFilter) -> bool {
+            build_filter
+                .filter_expr
+                .iter()
+                .any(|expr| FilteringExpr::needs_deps(expr))
+        }
+
         match self.command {
             Command::List {
+                cargo_options,
                 build_filter,
                 message_format,
                 list_type,
                 reuse_build,
             } => {
-                let app = App::new(
+                let base = BaseApp::new(
                     self.output,
                     reuse_build,
-                    build_filter,
+                    cargo_options,
                     self.config_opts,
                     self.manifest_path,
+                    build_filter_needs_deps(&build_filter),
                 )?;
+                let app = App::new(base, build_filter)?;
                 app.exec_list(message_format, list_type, output_writer)
             }
             Command::Run {
                 profile,
                 no_capture,
+                cargo_options,
                 build_filter,
                 runner_opts,
                 reporter_opts,
                 reuse_build,
             } => {
-                let app = App::new(
+                let base = BaseApp::new(
                     self.output,
                     reuse_build,
-                    build_filter,
+                    cargo_options,
                     self.config_opts,
                     self.manifest_path,
+                    build_filter_needs_deps(&build_filter),
                 )?;
+                let app = App::new(base, build_filter)?;
                 app.exec_run(
                     profile.as_deref(),
                     no_capture,
@@ -145,6 +158,9 @@ enum Command {
     ///
     /// For more information, see <https://nexte.st/book/listing>.
     List {
+        #[clap(flatten)]
+        cargo_options: CargoOptions,
+
         #[clap(flatten)]
         build_filter: TestBuildFilter,
 
@@ -191,6 +207,9 @@ enum Command {
             display_order = 100
         )]
         no_capture: bool,
+
+        #[clap(flatten)]
+        cargo_options: CargoOptions,
 
         #[clap(flatten)]
         build_filter: TestBuildFilter,
@@ -267,9 +286,6 @@ impl Default for MessageFormatOpts {
 #[derive(Debug, Args)]
 #[clap(next_help_heading = "FILTER OPTIONS")]
 struct TestBuildFilter {
-    #[clap(flatten)]
-    cargo_options: CargoOptions,
-
     /// Run ignored tests
     #[clap(
         long,
@@ -469,57 +485,39 @@ impl TestReporterOpts {
     }
 }
 
-struct App {
+#[derive(Debug)]
+struct BaseApp {
     output: OutputContext,
     graph: PackageGraph,
     workspace_root: Utf8PathBuf,
     manifest_path: Option<Utf8PathBuf>,
     reuse_build: ReuseBuildOpts,
-    build_filter: TestBuildFilter,
+    cargo_opts: CargoOptions,
     config_opts: ConfigOpts,
 }
 
-fn check_experimental_filtering(build_filter: &TestBuildFilter) -> Result<()> {
-    const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
-    let enabled = std::env::var(EXPERIMENTAL_ENV).is_ok();
-    if !build_filter.filter_expr.is_empty() && !enabled {
-        Err(Report::new(ExpectedError::experimental_feature_error(
-            "expression filtering",
-            EXPERIMENTAL_ENV,
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-impl App {
+impl BaseApp {
     fn new(
         output: OutputOpts,
         reuse_build: ReuseBuildOpts,
-        build_filter: TestBuildFilter,
+        cargo_opts: CargoOptions,
         config_opts: ConfigOpts,
         manifest_path: Option<Utf8PathBuf>,
+        graph_with_deps: bool,
     ) -> Result<Self> {
         let output = output.init();
         reuse_build.check_experimental(output);
-        check_experimental_filtering(&build_filter)?;
 
         let graph_data = match reuse_build.cargo_metadata.as_deref() {
             Some(path) => std::fs::read_to_string(path).map_err(|err| {
                 ExpectedError::argument_file_read_error("cargo-metadata", path, err)
             })?,
-            None => {
-                let with_deps = build_filter
-                    .filter_expr
-                    .iter()
-                    .any(|expr| FilteringExpr::needs_deps(expr));
-                acquire_graph_data(
-                    manifest_path.as_deref(),
-                    build_filter.cargo_options.target_dir.as_deref(),
-                    output,
-                    with_deps,
-                )?
-            }
+            None => acquire_graph_data(
+                manifest_path.as_deref(),
+                cargo_opts.target_dir.as_deref(),
+                output,
+                graph_with_deps,
+            )?,
         };
         let graph = PackageGraph::from_json(&graph_data).map_err(|err| {
             ExpectedError::cargo_metadata_parse_error(reuse_build.cargo_metadata.clone(), err)
@@ -540,9 +538,9 @@ impl App {
             output,
             graph,
             reuse_build,
-            build_filter,
             manifest_path,
             workspace_root,
+            cargo_opts,
             config_opts,
         })
     }
@@ -559,7 +557,7 @@ impl App {
                     })?;
                 BinaryList::from_summary(binary_list)
             }
-            None => self.build_filter.cargo_options.compute_binary_list(
+            None => self.cargo_opts.compute_binary_list(
                 &self.graph,
                 self.manifest_path.as_deref(),
                 self.output,
@@ -567,13 +565,40 @@ impl App {
         };
         Ok(binary_list)
     }
+}
+
+#[derive(Debug)]
+struct App {
+    base: BaseApp,
+    build_filter: TestBuildFilter,
+}
+
+fn check_experimental_filtering(build_filter: &TestBuildFilter) -> Result<()> {
+    const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
+    let enabled = std::env::var(EXPERIMENTAL_ENV).is_ok();
+    if !build_filter.filter_expr.is_empty() && !enabled {
+        Err(Report::new(ExpectedError::experimental_feature_error(
+            "expression filtering",
+            EXPERIMENTAL_ENV,
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+impl App {
+    fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
+        check_experimental_filtering(&build_filter)?;
+
+        Ok(Self { base, build_filter })
+    }
 
     fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
         let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
             .filter_expr
             .iter()
-            .map(|input| FilteringExpr::parse(input, &self.graph))
+            .map(|input| FilteringExpr::parse(input, &self.base.graph))
             .partition_result();
 
         if !all_errors.is_empty() {
@@ -590,10 +615,10 @@ impl App {
         filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList> {
         self.build_filter.compute_test_list(
-            &self.graph,
+            &self.base.graph,
             binary_list,
             target_runner,
-            &self.reuse_build,
+            &self.base.reuse_build,
             filter_exprs,
         )
     }
@@ -615,7 +640,7 @@ impl App {
     fn load_runner(&self) -> TargetRunner {
         // When cross-compiling we should not use the cross target runner
         // for running the host tests (like proc-macro ones).
-        runner_for_target(self.build_filter.cargo_options.target.as_deref())
+        runner_for_target(self.base.cargo_opts.target.as_deref())
     }
 
     fn exec_list(
@@ -625,15 +650,15 @@ impl App {
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let filter_exprs = self.build_filtering_expressions()?;
-        let binary_list = self.build_binary_list()?;
+        let binary_list = self.base.build_binary_list()?;
 
         match list_type {
             ListType::BinariesOnly => {
                 let mut writer = output_writer.stdout_writer();
                 binary_list.write(
-                    message_format.to_output_format(self.output.verbose),
+                    message_format.to_output_format(self.base.output.verbose),
                     &mut writer,
-                    self.output.color.should_colorize(Stream::Stdout),
+                    self.base.output.color.should_colorize(Stream::Stdout),
                 )?;
                 writer.flush()?;
             }
@@ -643,9 +668,9 @@ impl App {
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
-                    message_format.to_output_format(self.output.verbose),
+                    message_format.to_output_format(self.base.output.verbose),
                     &mut writer,
-                    self.output.color.should_colorize(Stream::Stdout),
+                    self.base.output.color.should_colorize(Stream::Stdout),
                 )?;
                 writer.flush()?;
             }
@@ -662,21 +687,22 @@ impl App {
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let config = self
+            .base
             .config_opts
-            .make_config(self.workspace_root.as_path())?;
+            .make_config(self.base.workspace_root.as_path())?;
         let profile = self.load_profile(profile_name, &config)?;
 
         let target_runner = self.load_runner();
 
         let filter_exprs = self.build_filtering_expressions()?;
-        let binary_list = self.build_binary_list()?;
+        let binary_list = self.base.build_binary_list()?;
         let test_list = self.build_test_list(binary_list, &target_runner, filter_exprs)?;
 
         let mut reporter = reporter_opts
             .to_builder(no_capture)
-            .set_verbose(self.output.verbose)
+            .set_verbose(self.base.output.verbose)
             .build(&test_list, &profile);
-        if self.output.color.should_colorize(Stream::Stderr) {
+        if self.base.output.color.should_colorize(Stream::Stderr) {
             reporter.colorize();
         }
 
