@@ -30,6 +30,7 @@ use std::{
     error::Error,
     fmt::Write as _,
     io::{Cursor, Write},
+    sync::Arc,
 };
 use supports_color::Stream;
 
@@ -488,7 +489,7 @@ impl TestReporterOpts {
 #[derive(Debug)]
 struct BaseApp {
     output: OutputContext,
-    graph: PackageGraph,
+    graph_data: Arc<(String, PackageGraph)>,
     workspace_root: Utf8PathBuf,
     manifest_path: Option<Utf8PathBuf>,
     reuse_build: ReuseBuildOpts,
@@ -508,7 +509,7 @@ impl BaseApp {
         let output = output.init();
         reuse_build.check_experimental(output);
 
-        let graph_data = match reuse_build.cargo_metadata.as_deref() {
+        let json = match reuse_build.cargo_metadata.as_deref() {
             Some(path) => std::fs::read_to_string(path).map_err(|err| {
                 ExpectedError::argument_file_read_error("cargo-metadata", path, err)
             })?,
@@ -519,24 +520,25 @@ impl BaseApp {
                 graph_with_deps,
             )?,
         };
-        let graph = PackageGraph::from_json(&graph_data).map_err(|err| {
+        let graph = PackageGraph::from_json(&json).map_err(|err| {
             ExpectedError::cargo_metadata_parse_error(reuse_build.cargo_metadata.clone(), err)
         })?;
+        let graph_data = Arc::new((json, graph));
 
         let manifest_path = if reuse_build.cargo_metadata.is_some() {
-            Some(graph.workspace().root().join("Cargo.toml"))
+            Some(graph_data.1.workspace().root().join("Cargo.toml"))
         } else {
             manifest_path
         };
 
         let workspace_root = match &reuse_build.workspace_remap {
             Some(path) => path.clone(),
-            _ => graph.workspace().root().to_owned(),
+            _ => graph_data.1.workspace().root().to_owned(),
         };
 
         Ok(Self {
             output,
-            graph,
+            graph_data,
             reuse_build,
             manifest_path,
             workspace_root,
@@ -558,7 +560,7 @@ impl BaseApp {
                 BinaryList::from_summary(binary_list)
             }
             None => self.cargo_opts.compute_binary_list(
-                &self.graph,
+                &self.graph_data.1,
                 self.manifest_path.as_deref(),
                 self.output,
             )?,
@@ -598,7 +600,7 @@ impl App {
             .build_filter
             .filter_expr
             .iter()
-            .map(|input| FilteringExpr::parse(input, &self.base.graph))
+            .map(|input| FilteringExpr::parse(input, &self.base.graph_data.1))
             .partition_result();
 
         if !all_errors.is_empty() {
@@ -615,7 +617,7 @@ impl App {
         filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList> {
         self.build_filter.compute_test_list(
-            &self.base.graph,
+            &self.base.graph_data.1,
             binary_list,
             target_runner,
             &self.base.reuse_build,
