@@ -197,8 +197,10 @@ pub struct RustTestBinarySummary {
     pub build_platform: BuildPlatform,
 }
 
-/// The kind of Rust test binary this is. Kinds are used to generate binary IDs and to figure out
-/// whether some environment variables should be set.
+/// Information about the kind of a Rust test binary.
+///
+/// Kinds are used to generate binary IDs and to figure out whether some environment variables
+/// should be set.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct RustTestBinaryKind(pub Cow<'static, str>);
@@ -279,8 +281,51 @@ pub struct RustNonTestBinarySummary {
     /// The name of the binary.
     pub name: String,
 
+    /// The kind of binary this is.
+    pub kind: RustNonTestBinaryKind,
+
     /// The path to the binary, relative to the target directory.
     pub path: Utf8PathBuf,
+}
+
+/// Information about the kind of a Rust non-test binary.
+///
+/// This is part of [`RustNonTestBinarySummary`], and is used to determine runtime environment
+/// variables.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct RustNonTestBinaryKind(pub Cow<'static, str>);
+
+impl RustNonTestBinaryKind {
+    /// Creates a new `RustNonTestBinaryKind` from a string.
+    #[inline]
+    pub fn new(kind: impl Into<Cow<'static, str>>) -> Self {
+        Self(kind.into())
+    }
+
+    /// Creates a new `RustNonTestBinaryKind` from a static string.
+    #[inline]
+    pub const fn new_const(kind: &'static str) -> Self {
+        Self(Cow::Borrowed(kind))
+    }
+
+    /// Returns the kind as a string.
+    pub fn as_str(&self) -> &str {
+        &*self.0
+    }
+
+    /// The "dylib" kind, used for dynamic libraries (`.so` on Linux). Also used for
+    /// .pdb and other similar files on Windows.
+    pub const DYLIB: Self = Self::new_const("dylib");
+
+    /// The "bin-exe" kind, used for binary executables.
+    pub const BIN_EXE: Self = Self::new_const("bin-exe");
+}
+
+impl fmt::Display for RustNonTestBinaryKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 /// A serializable suite of tests within a Rust test binary.

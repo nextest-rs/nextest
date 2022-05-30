@@ -16,8 +16,8 @@ use guppy::{
     PackageId,
 };
 use nextest_metadata::{
-    BuildPlatform, RustTestBinaryKind, RustTestBinarySummary, RustTestCaseSummary,
-    RustTestSuiteSummary, TestListSummary,
+    BuildPlatform, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
+    RustTestCaseSummary, RustTestSuiteSummary, TestListSummary,
 };
 use once_cell::sync::OnceCell;
 use owo_colors::OwoColorize;
@@ -107,12 +107,13 @@ impl<'g> RustTestArtifact<'g> {
                 match rust_build_meta.non_test_binaries.get(package_id.repr()) {
                     Some(binaries) => binaries
                         .iter()
-                        .map(|binary| {
-                            // Convert relative paths to absolute ones here.
-                            (
-                                binary.name.clone(),
-                                rust_build_meta.target_directory.join(&binary.path),
-                            )
+                        .filter_map(|binary| {
+                            // Only expose BIN_EXE non-test files.
+                            (binary.kind == RustNonTestBinaryKind::BIN_EXE).then(|| {
+                                // Convert relative paths to absolute ones by joining with the target directory.
+                                let abs_path = rust_build_meta.target_directory.join(&binary.path);
+                                (binary.name.clone(), abs_path)
+                            })
                         })
                         .collect(),
                     None => BTreeSet::new(),
@@ -765,6 +766,7 @@ mod tests {
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
         let fake_binary_name = "fake-binary".to_owned();
         let fake_binary_id = "fake-package::fake-binary".to_owned();
+
         let test_binary = RustTestArtifact {
             binary_path: "/fake/binary".into(),
             cwd: fake_cwd.clone(),
