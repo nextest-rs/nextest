@@ -51,8 +51,7 @@ fn test_list_default() {
 #[test]
 fn test_list_full() {
     set_env_vars();
-    let mut p = TempProject::new().unwrap();
-    p.persist();
+    let p = TempProject::new().unwrap();
 
     let args = CargoNextestApp::parse_from([
         "cargo",
@@ -310,8 +309,7 @@ fn test_relocated_run() {
         .path()
         .try_into()
         .expect("tempdir is valid UTF-8");
-    let mut p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
-    p.persist();
+    let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
 
     build_tests(&p);
     save_cargo_metadata(&p);
