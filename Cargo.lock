@@ -454,9 +454,9 @@ checksum = "78cc372d058dcf6d5ecd98510e7fbc9e5aec4d21de70f65fea8fecebcd881bd4"
 
 [[package]]
 name = "goldenfile"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f46e6a4d70c06f0b9a70d36dd8eef4fdeaa1ab657e4f1eaff290f69e48145f2"
+checksum = "3732ab10289fcc53ae0d9bc1479f45a5155450f86403dd63f5f71899d730aa6c"
 dependencies = [
  "difference",
  "tempfile",
