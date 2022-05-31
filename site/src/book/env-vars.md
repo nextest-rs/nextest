@@ -29,7 +29,9 @@ cargo-nextest exposes these environment variables to your tests *at runtime only
 
 * `NEXTEST` — always set to `"1"`.
 * `NEXTEST_EXECUTION_MODE` — currently, always set to `process-per-test`. More options may be added in the future if nextest gains the ability to run all tests within the same process ([#27]).
-* `NEXTEST_BIN_EXE_<name>`: The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`. Binaries are automatically built when the test is built, unless the binary has required features that are not enabled.
+* `NEXTEST_BIN_EXE_<name>`: The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.
+  * Binaries are automatically built when the test is built, unless the binary has required features that are not enabled.
+  * When [reusing builds](reusing-builds.md) from an archive, this is set to the remapped path within the target directory.
 
 [#27]: https://github.com/nextest-rs/nextest/issues/27
 [integration test]: https://doc.rust-lang.org/cargo/reference/cargo-targets.html#integration-tests
@@ -41,7 +43,7 @@ cargo-nextest delegates to Cargo for the build, which controls the environment v
 cargo-nextest also sets these environment variables at runtime, matching the behavior of cargo test:
 
 * `CARGO` — Path to the `cargo` binary performing the build.
-* `CARGO_MANIFEST_DIR` — The directory containing the manifest of your package. If [`--workspace-remap`](reusing-builds.md#new-options) is passed in, this is set to the remapped manifest directory. You can obtain the non-remapped directory using the value of this variable at compile-time, e.g. `env!("CARGO_MANIFEST_DIR")`.
+* `CARGO_MANIFEST_DIR` — The directory containing the manifest of your package. If [`--workspace-remap`](reusing-builds.md#specifying-a-new-location-for-the-workspace) is passed in, this is set to the remapped manifest directory. You can obtain the non-remapped directory using the value of this variable at compile-time, e.g. `env!("CARGO_MANIFEST_DIR")`.
 * `CARGO_PKG_VERSION` — The full version of your package.
 * `CARGO_PKG_VERSION_MAJOR` — The major version of your package.
 * `CARGO_PKG_VERSION_MINOR` — The minor version of your package.
