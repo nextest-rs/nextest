@@ -1,19 +1,19 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::io::Write;
-
 use crate::{output::OutputContext, ExpectedError, OutputWriter};
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::Args;
+use clap::{ArgEnum, Args};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
     errors::PathMapperConstructKind,
     reuse_build::{
-        ArchiveReporter, ExtractDestination, MetadataWithRemap, PathMapper, ReuseBuildInfo,
+        ArchiveFormat, ArchiveReporter, ExtractDestination, MetadataWithRemap, PathMapper,
+        ReuseBuildInfo,
     },
 };
 use owo_colors::Stream;
+use std::io::Write;
 
 #[derive(Debug, Default, Args)]
 #[clap(
@@ -24,7 +24,7 @@ use owo_colors::Stream;
     group = clap::ArgGroup::new("target-dir-remap-sources"),
 )]
 pub(crate) struct ReuseBuildOpts {
-    /// Path to nextest archive (.tar.zst)
+    /// Path to nextest archive
     #[clap(
         long,
         groups = &["cargo-metadata-sources", "binaries-metadata-sources", "target-dir-remap-sources"],
@@ -32,6 +32,16 @@ pub(crate) struct ReuseBuildOpts {
         value_name = "PATH",
     )]
     pub(crate) archive_file: Option<Utf8PathBuf>,
+
+    /// Archive format
+    #[clap(
+        long,
+        arg_enum,
+        default_value_t,
+        requires = "archive-file",
+        value_name = "FORMAT"
+    )]
+    pub(crate) archive_format: ArchiveFormatOpt,
 
     /// Destination directory to extract archive to [default: temporary directory]
     #[clap(
@@ -101,6 +111,7 @@ impl ReuseBuildOpts {
         output_writer: &mut OutputWriter,
     ) -> Result<ReuseBuildInfo, ExpectedError> {
         if let Some(archive_file) = &self.archive_file {
+            let format = self.archive_format.to_archive_format(archive_file)?;
             // Process this archive.
             let dest = match &self.extract_to {
                 Some(dir) => ExtractDestination::Destination {
@@ -120,6 +131,7 @@ impl ReuseBuildOpts {
             let mut writer = output_writer.stderr_writer();
             return ReuseBuildInfo::extract_archive(
                 archive_file,
+                format,
                 dest,
                 |event| {
                     reporter.report_event(event, &mut writer)?;
@@ -147,6 +159,36 @@ impl ReuseBuildOpts {
             });
 
         Ok(ReuseBuildInfo::new(cargo_metadata, binaries_metadata))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ArgEnum)]
+pub(crate) enum ArchiveFormatOpt {
+    Auto,
+    #[clap(alias = "tar-zstd")]
+    TarZst,
+}
+
+impl ArchiveFormatOpt {
+    pub(crate) fn to_archive_format(
+        self,
+        archive_file: &Utf8Path,
+    ) -> Result<ArchiveFormat, ExpectedError> {
+        match self {
+            Self::TarZst => Ok(ArchiveFormat::TarZst),
+            Self::Auto => ArchiveFormat::autodetect(archive_file).map_err(|err| {
+                ExpectedError::UnknownArchiveFormat {
+                    archive_file: archive_file.to_owned(),
+                    err,
+                }
+            }),
+        }
+    }
+}
+
+impl Default for ArchiveFormatOpt {
+    fn default() -> Self {
+        Self::Auto
     }
 }
 

@@ -4,7 +4,7 @@
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, OutputOpts, OutputWriter},
-    reuse_build::{make_path_mapper, ReuseBuildOpts},
+    reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
     ExpectedError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -137,6 +137,7 @@ impl AppOpts {
             Command::Archive {
                 cargo_options,
                 archive_file,
+                archive_format,
                 zstd_level,
             } => {
                 let app = BaseApp::new(
@@ -148,7 +149,7 @@ impl AppOpts {
                     true,
                     output_writer,
                 )?;
-                app.exec_archive(&archive_file, zstd_level, output_writer)
+                app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)
             }
         }
     }
@@ -255,8 +256,18 @@ enum Command {
         cargo_options: CargoOptions,
 
         /// File to write archive to
-        #[clap(long, help_heading = "ARCHIVE OPTIONS")]
+        #[clap(long, help_heading = "ARCHIVE OPTIONS", value_name = "PATH")]
         archive_file: Utf8PathBuf,
+
+        /// Archive format
+        #[clap(
+            long,
+            arg_enum,
+            help_heading = "ARCHIVE OPTIONS",
+            value_name = "FORMAT",
+            default_value_t
+        )]
+        archive_format: ArchiveFormatOpt,
 
         /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
         #[clap(
@@ -605,9 +616,12 @@ impl BaseApp {
     fn exec_archive(
         &self,
         output_file: &Utf8Path,
+        format: ArchiveFormatOpt,
         zstd_level: i32,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
+        // Do format detection first so we fail immediately.
+        let format = format.to_archive_format(output_file)?;
         let binary_list = self.build_binary_list()?;
         let path_mapper = PathMapper::noop();
 
@@ -623,6 +637,7 @@ impl BaseApp {
             // Note that path_mapper is currently a no-op -- we don't support reusing builds for
             // archive creation because it's too confusing.
             &path_mapper,
+            format,
             zstd_level,
             output_file,
             |event| {
@@ -921,7 +936,10 @@ mod tests {
             "cargo nextest list --cargo-metadata path",
             "cargo nextest run --cargo-metadata=path --workspace-remap remapped-path",
             "cargo nextest archive --archive-file my-archive.tar.zst --zstd-level -1",
+            "cargo nextest archive --archive-file my-archive.foo --archive-format tar-zst",
+            "cargo nextest archive --archive-file my-archive.foo --archive-format tar-zstd",
             "cargo nextest list --archive-file my-archive.tar.zst",
+            "cargo nextest list --archive-file my-archive.tar.zst --archive-format tar-zst",
             "cargo nextest list --archive-file my-archive.tar.zst --extract-to my-path",
             "cargo nextest list --archive-file my-archive.tar.zst --extract-to my-path --extract-overwrite",
             "cargo nextest list --archive-file my-archive.tar.zst --persist-extract-tempdir",
@@ -979,6 +997,14 @@ mod tests {
             // ---
             // Archive options
             // ---
+            (
+                "cargo nextest run --archive-format tar-zst",
+                MissingRequiredArgument,
+            ),
+            (
+                "cargo nextest run --archive-file foo --archive-format no",
+                InvalidValue,
+            ),
             (
                 "cargo nextest run --extract-to foo",
                 MissingRequiredArgument,

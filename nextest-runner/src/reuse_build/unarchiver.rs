@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
+use super::{ArchiveEvent, ArchiveFormat, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
     errors::{ArchiveExtractError, ArchiveReadError},
     list::BinaryList,
@@ -20,11 +20,12 @@ use tempfile::TempDir;
 #[derive(Debug)]
 pub(crate) struct Unarchiver<'a> {
     file: &'a mut fs::File,
+    format: ArchiveFormat,
 }
 
 impl<'a> Unarchiver<'a> {
-    pub(crate) fn new(file: &'a mut fs::File) -> Self {
-        Self { file }
+    pub(crate) fn new(file: &'a mut fs::File, format: ArchiveFormat) -> Self {
+        Self { file, format }
     }
 
     pub(crate) fn extract<F>(
@@ -89,7 +90,7 @@ impl<'a> Unarchiver<'a> {
             .seek(io::SeekFrom::Start(0))
             .map_err(|error| ArchiveExtractError::Read(ArchiveReadError::Io(error)))?;
         let mut archive_reader =
-            ArchiveReader::new(self.file).map_err(ArchiveExtractError::Read)?;
+            ArchiveReader::new(self.file, self.format).map_err(ArchiveExtractError::Read)?;
 
         // Will be filled out by the for loop below\
         let mut binary_list = None;
@@ -229,9 +230,13 @@ struct ArchiveReader<'a> {
 }
 
 impl<'a> ArchiveReader<'a> {
-    fn new(file: &'a mut fs::File) -> Result<Self, ArchiveReadError> {
-        let decoder = zstd::Decoder::new(file).map_err(ArchiveReadError::Io)?;
-        let archive = tar::Archive::new(decoder);
+    fn new(file: &'a mut fs::File, format: ArchiveFormat) -> Result<Self, ArchiveReadError> {
+        let archive = match format {
+            ArchiveFormat::TarZst => {
+                let decoder = zstd::Decoder::new(file).map_err(ArchiveReadError::Io)?;
+                tar::Archive::new(decoder)
+            }
+        };
         Ok(Self { archive })
     }
 
