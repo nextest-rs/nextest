@@ -31,24 +31,24 @@ pub(crate) struct ReuseBuildOpts {
         conflicts_with_all = &["cargo-opts", "binaries-metadata", "cargo-metadata"],
         value_name = "PATH",
     )]
-    pub(crate) archive: Option<Utf8PathBuf>,
+    pub(crate) archive_file: Option<Utf8PathBuf>,
 
     /// Destination directory to extract archive to [default: temporary directory]
     #[clap(
         long,
         conflicts_with = "cargo-opts",
-        requires = "archive",
+        requires = "archive-file",
         value_name = "DIR"
     )]
     pub(crate) extract_to: Option<Utf8PathBuf>,
 
     /// Overwrite files in destination directory while extracting archive
-    #[clap(long, conflicts_with = "cargo-opts", requires_all = &["archive", "extract-to"])]
+    #[clap(long, conflicts_with = "cargo-opts", requires_all = &["archive-file", "extract-to"])]
     pub(crate) extract_overwrite: bool,
 
     /// Persist temporary directory destination is extracted to
-    #[clap(long, conflicts_with_all = &["cargo-opts", "extract-to"], requires = "archive")]
-    pub(crate) persist_extract_dir: bool,
+    #[clap(long, conflicts_with_all = &["cargo-opts", "extract-to"], requires = "archive-file")]
+    pub(crate) persist_extract_tempdir: bool,
 
     /// Path to cargo metadata JSON
     #[clap(
@@ -100,7 +100,7 @@ impl ReuseBuildOpts {
         output: OutputContext,
         output_writer: &mut OutputWriter,
     ) -> Result<ReuseBuildInfo, ExpectedError> {
-        if let Some(archive_file) = &self.archive {
+        if let Some(archive_file) = &self.archive_file {
             // Process this archive.
             let dest = match &self.extract_to {
                 Some(dir) => ExtractDestination::Destination {
@@ -108,7 +108,7 @@ impl ReuseBuildOpts {
                     overwrite: self.extract_overwrite,
                 },
                 None => ExtractDestination::TempDir {
-                    persist: self.persist_extract_dir,
+                    persist: self.persist_extract_tempdir,
                 },
             };
 

@@ -136,8 +136,8 @@ impl AppOpts {
             }
             Command::Archive {
                 cargo_options,
-                file,
-                compression_level,
+                archive_file,
+                zstd_level,
             } => {
                 let app = BaseApp::new(
                     self.output,
@@ -148,7 +148,7 @@ impl AppOpts {
                     true,
                     output_writer,
                 )?;
-                app.exec_archive(&file, compression_level, output_writer)
+                app.exec_archive(&archive_file, zstd_level, output_writer)
             }
         }
     }
@@ -247,23 +247,18 @@ enum Command {
     ///
     /// This command builds test binaries and archives them to a file. The archive can then be
     /// transferred to another machine, and tests within it can be run with `cargo nextest run
-    /// --archive`.
+    /// --archive-file`.
     ///
     /// The archive is a tarball compressed with Zstandard (.tar.zst).
     Archive {
         #[clap(flatten)]
         cargo_options: CargoOptions,
 
-        /// Write archive to file
-        #[clap(
-            long,
-            short = 'f',
-            help_heading = "ARCHIVE OPTIONS",
-            default_value = "nextest-archive.tar.zst"
-        )]
-        file: Utf8PathBuf,
+        /// File to write archive to
+        #[clap(long, help_heading = "ARCHIVE OPTIONS")]
+        archive_file: Utf8PathBuf,
 
-        /// Compression level (-7 to 22, higher is more compressed + slower)
+        /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
         #[clap(
             long,
             help_heading = "ARCHIVE OPTIONS",
@@ -271,7 +266,7 @@ enum Command {
             default_value_t = 0,
             allow_hyphen_values = true
         )]
-        compression_level: i32,
+        zstd_level: i32,
         // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
     },
 }
@@ -610,7 +605,7 @@ impl BaseApp {
     fn exec_archive(
         &self,
         output_file: &Utf8Path,
-        compression_level: i32,
+        zstd_level: i32,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let binary_list = self.build_binary_list()?;
@@ -628,7 +623,7 @@ impl BaseApp {
             // Note that path_mapper is currently a no-op -- we don't support reusing builds for
             // archive creation because it's too confusing.
             &path_mapper,
-            compression_level,
+            zstd_level,
             output_file,
             |event| {
                 reporter.report_event(event, &mut writer)?;
@@ -925,13 +920,12 @@ mod tests {
             "cargo nextest run --binaries-metadata=foo --target-dir-remap=bar",
             "cargo nextest list --cargo-metadata path",
             "cargo nextest run --cargo-metadata=path --workspace-remap remapped-path",
-            "cargo nextest archive",
-            "cargo nextest archive --file my-archive.tar.zst --compression-level -1",
-            "cargo nextest list --archive my-archive.tar.zst",
-            "cargo nextest list --archive my-archive.tar.zst --extract-to my-path",
-            "cargo nextest list --archive my-archive.tar.zst --extract-to my-path --extract-overwrite",
-            "cargo nextest list --archive my-archive.tar.zst --persist-extract-dir",
-            "cargo nextest list --archive my-archive.tar.zst --workspace-remap foo",
+            "cargo nextest archive --archive-file my-archive.tar.zst --zstd-level -1",
+            "cargo nextest list --archive-file my-archive.tar.zst",
+            "cargo nextest list --archive-file my-archive.tar.zst --extract-to my-path",
+            "cargo nextest list --archive-file my-archive.tar.zst --extract-to my-path --extract-overwrite",
+            "cargo nextest list --archive-file my-archive.tar.zst --persist-extract-tempdir",
+            "cargo nextest list --archive-file my-archive.tar.zst --workspace-remap foo",
             // ---
             // Filter expressions
             // ---
@@ -990,7 +984,7 @@ mod tests {
                 MissingRequiredArgument,
             ),
             (
-                "cargo nextest run --archive foo --extract-overwrite",
+                "cargo nextest run --archive-file foo --extract-overwrite",
                 MissingRequiredArgument,
             ),
             (
@@ -998,23 +992,23 @@ mod tests {
                 MissingRequiredArgument,
             ),
             (
-                "cargo nextest run --persist-extract-dir",
+                "cargo nextest run --persist-extract-tempdir",
                 MissingRequiredArgument,
             ),
             (
-                "cargo nextest run --archive foo --extract-to bar --persist-extract-dir",
+                "cargo nextest run --archive-file foo --extract-to bar --persist-extract-tempdir",
                 ArgumentConflict,
             ),
             (
-                "cargo nextest run --archive foo --cargo-metadata bar",
+                "cargo nextest run --archive-file foo --cargo-metadata bar",
                 ArgumentConflict,
             ),
             (
-                "cargo nextest run --archive foo --binaries-metadata bar",
+                "cargo nextest run --archive-file foo --binaries-metadata bar",
                 ArgumentConflict,
             ),
             (
-                "cargo nextest run --archive foo --target-dir-remap bar",
+                "cargo nextest run --archive-file foo --target-dir-remap bar",
                 ArgumentConflict,
             ),
         ];
