@@ -260,6 +260,9 @@ enum Command {
         archive_file: Utf8PathBuf,
 
         /// Archive format
+        ///
+        /// `auto` uses the file extension to determine the archive format. Currently supported is
+        /// `.tar.zst`.
         #[clap(
             long,
             arg_enum,
