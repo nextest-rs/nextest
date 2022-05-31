@@ -121,7 +121,7 @@ impl ReuseBuildInfo {
     }
 }
 
-/// A metadata JSON file path, along with a possible directory remap.
+/// Metadata as either deserialized contents or a path, along with a possible directory remap.
 #[derive(Clone, Debug)]
 pub struct MetadataWithRemap<T> {
     /// Metadata as either a path to data or as data that's already been read.
