@@ -9,22 +9,25 @@ To produce a list of tests in the JSON output format `cargo nextest list --messa
 ```json
 % cargo nextest list -p tokio-util --features full --lib --message-format json-pretty
 {
-  "test-count": 4,
   "rust-build-meta": {
     "target-directory": "/home/rain/dev/tokio/target",
     "base-output-directories": [
       "debug"
     ],
+    "non-test-binaries": {},
     "linked-paths": []
   },
+  "test-count": 4,
   "rust-suites": {
     "tokio-util": {
       "package-name": "tokio-util",
+      "binary-id": "tokio-util",
       "binary-name": "tokio-util",
-      "package-id": "tokio-util 0.7.0 (path+file:///home/me/dev/tokio/tokio-util)",
-      "binary-path": "/home/me/dev/tokio/target/debug/deps/tokio_util-def0ee51cb418fe8",
-      "cwd": "/home/rain/dev/tokio/tokio-util",
+      "package-id": "tokio-util 0.7.0 (path+file:///home/rain/dev/tokio/tokio-util)",
+      "kind": "lib",
+      "binary-path": "/home/me/dev/tokio/target/debug/deps/tokio_util-ab2fb640a9e5e856",
       "build-platform": "target",
+      "cwd": "/home/rain/dev/tokio/tokio-util",
       "testcases": {
         "either::tests::either_is_async_read": {
           "ignored": false,
