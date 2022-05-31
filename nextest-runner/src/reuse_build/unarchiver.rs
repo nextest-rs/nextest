@@ -7,21 +7,15 @@ use crate::{
     list::BinaryList,
 };
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
-use guppy::graph::PackageGraph;
+use guppy::{graph::PackageGraph, CargoMetadata};
 use itertools::Either;
 use nextest_metadata::BinaryListSummary;
 use std::{
     fs,
-    io::{self, Read, Seek},
+    io::{self, Seek},
     time::Instant,
 };
 use tempfile::TempDir;
-
-#[derive(Clone, Debug)]
-pub(crate) struct ArchiveInfo {
-    pub binary_list: BinaryList,
-    pub file_count: usize,
-}
 
 #[derive(Debug)]
 pub(crate) struct Unarchiver<'a> {
@@ -31,56 +25,6 @@ pub(crate) struct Unarchiver<'a> {
 impl<'a> Unarchiver<'a> {
     pub(crate) fn new(file: &'a mut fs::File) -> Self {
         Self { file }
-    }
-
-    pub(crate) fn get_info(&mut self) -> Result<ArchiveInfo, ArchiveReadError> {
-        self.file
-            .seek(io::SeekFrom::Start(0))
-            .map_err(ArchiveReadError::Io)?;
-        let mut archive_reader = ArchiveReader::new(self.file)?;
-
-        let mut file_count = 0;
-        let mut binary_list = None;
-        let mut found_cargo_metadata = false;
-
-        let binaries_metadata_path = Utf8Path::new(BINARIES_METADATA_FILE_NAME);
-        let cargo_metadata_path = Utf8Path::new(CARGO_METADATA_FILE_NAME);
-
-        for entry in archive_reader.entries()? {
-            let (entry, path) = entry?;
-            file_count += 1;
-
-            if path == binaries_metadata_path {
-                // Try reading the binary list out of this entry.
-                let summary: BinaryListSummary =
-                    serde_json::from_reader(entry).map_err(|error| {
-                        ArchiveReadError::MetadataDeserializeError {
-                            path: binaries_metadata_path,
-                            error,
-                        }
-                    })?;
-                binary_list = Some(BinaryList::from_summary(summary));
-            } else if path == cargo_metadata_path {
-                found_cargo_metadata = true;
-            }
-        }
-
-        let binary_list = match binary_list {
-            Some(binary_list) => binary_list,
-            None => {
-                return Err(ArchiveReadError::MetadataFileNotFound(
-                    binaries_metadata_path,
-                ))
-            }
-        };
-        if !found_cargo_metadata {
-            return Err(ArchiveReadError::MetadataFileNotFound(cargo_metadata_path));
-        }
-
-        Ok(ArchiveInfo {
-            file_count,
-            binary_list,
-        })
     }
 
     pub(crate) fn extract<F>(
@@ -140,24 +84,6 @@ impl<'a> Unarchiver<'a> {
 
         let start_time = Instant::now();
 
-        // Read archive and validate it.
-        let archive_info = self.get_info().map_err(ArchiveExtractError::Read)?;
-        let file_count = archive_info.file_count;
-        let binary_list = archive_info.binary_list;
-        let test_binary_count = binary_list.rust_binaries.len();
-        let non_test_binary_count = binary_list.rust_build_meta.non_test_binaries.len();
-        let linked_path_count = binary_list.rust_build_meta.linked_paths.len();
-
-        // Report begin extraction.
-        callback(ArchiveEvent::ExtractStarted {
-            file_count,
-            test_binary_count,
-            non_test_binary_count,
-            linked_path_count,
-            dest_dir: &dest_dir,
-        })
-        .map_err(ArchiveExtractError::ReporterIo)?;
-
         // Extract the archive.
         self.file
             .seek(io::SeekFrom::Start(0))
@@ -165,44 +91,101 @@ impl<'a> Unarchiver<'a> {
         let mut archive_reader =
             ArchiveReader::new(self.file).map_err(ArchiveExtractError::Read)?;
 
-        // Will be filled out by the for loop below
-        let mut cargo_metadata = None;
+        // Will be filled out by the for loop below\
+        let mut binary_list = None;
+        let mut graph_data = None;
+        let binaries_metadata_path = Utf8Path::new(BINARIES_METADATA_FILE_NAME);
         let cargo_metadata_path = Utf8Path::new(CARGO_METADATA_FILE_NAME);
+
+        let mut file_count = 0;
 
         for entry in archive_reader
             .entries()
             .map_err(ArchiveExtractError::Read)?
         {
+            file_count += 1;
             let (mut entry, path) = entry.map_err(ArchiveExtractError::Read)?;
-            if path == Utf8Path::new(BINARIES_METADATA_FILE_NAME) {
-                // The BinaryList was already read in the ArchiveInfo above -- no need to re-read or
-                // extract it.
-                continue;
-            } else if path == Utf8Path::new(CARGO_METADATA_FILE_NAME) {
-                // Parse the input Cargo metadata as a `PackageGraph`.
-                let mut json = String::with_capacity(entry.size() as usize);
-                entry
-                    .read_to_string(&mut json)
-                    .map_err(|error| ArchiveExtractError::Read(ArchiveReadError::Io(error)))?;
 
-                let package_graph = PackageGraph::from_json(&json).map_err(|error| {
+            entry
+                .unpack_in(&dest_dir)
+                .map_err(|error| ArchiveExtractError::WriteFile {
+                    path: path.clone(),
+                    error,
+                })?;
+
+            // For archives created by nextest, binaries_metadata_path should be towards the beginning
+            // so this should report the ExtractStarted event instantly.
+            if path == binaries_metadata_path {
+                // Try reading the binary list from the file on disk.
+                let mut file = fs::File::open(dest_dir.join(binaries_metadata_path))
+                    .map_err(|error| ArchiveExtractError::WriteFile { path, error })?;
+
+                let summary: BinaryListSummary =
+                    serde_json::from_reader(&mut file).map_err(|error| {
+                        ArchiveExtractError::Read(ArchiveReadError::MetadataDeserializeError {
+                            path: binaries_metadata_path,
+                            error,
+                        })
+                    })?;
+
+                let this_binary_list = BinaryList::from_summary(summary);
+                let test_binary_count = this_binary_list.rust_binaries.len();
+                let non_test_binary_count =
+                    this_binary_list.rust_build_meta.non_test_binaries.len();
+                let linked_path_count = this_binary_list.rust_build_meta.linked_paths.len();
+
+                // Report begin extraction.
+                callback(ArchiveEvent::ExtractStarted {
+                    test_binary_count,
+                    non_test_binary_count,
+                    linked_path_count,
+                    dest_dir: &dest_dir,
+                })
+                .map_err(ArchiveExtractError::ReporterIo)?;
+
+                binary_list = Some(this_binary_list);
+            } else if path == cargo_metadata_path {
+                // Parse the input Cargo metadata as a `PackageGraph`.
+                let json = fs::read_to_string(dest_dir.join(cargo_metadata_path))
+                    .map_err(|error| ArchiveExtractError::WriteFile { path, error })?;
+
+                // Doing this in multiple steps results in better error messages.
+                let cargo_metadata: CargoMetadata =
+                    serde_json::from_str(&json).map_err(|error| {
+                        ArchiveExtractError::Read(ArchiveReadError::MetadataDeserializeError {
+                            path: binaries_metadata_path,
+                            error,
+                        })
+                    })?;
+
+                let package_graph = cargo_metadata.build_graph().map_err(|error| {
                     ArchiveExtractError::Read(ArchiveReadError::PackageGraphConstructError {
                         path: cargo_metadata_path,
                         error,
                     })
                 })?;
-                cargo_metadata = Some((json, package_graph));
+                graph_data = Some((json, package_graph));
                 continue;
             }
-
-            // Extract all other files.
-            entry
-                .unpack_in(&dest_dir)
-                .map_err(|error| ArchiveExtractError::WriteFile { path, error })?;
         }
 
-        let (cargo_metadata_json, graph) =
-            cargo_metadata.expect("get_info already verified that Cargo metadata exists");
+        let binary_list = match binary_list {
+            Some(binary_list) => binary_list,
+            None => {
+                return Err(ArchiveExtractError::Read(
+                    ArchiveReadError::MetadataFileNotFound(binaries_metadata_path),
+                ));
+            }
+        };
+
+        let (cargo_metadata_json, graph) = match graph_data {
+            Some(x) => x,
+            None => {
+                return Err(ArchiveExtractError::Read(
+                    ArchiveReadError::MetadataFileNotFound(cargo_metadata_path),
+                ));
+            }
+        };
 
         let elapsed = start_time.elapsed();
         // Report end extraction.

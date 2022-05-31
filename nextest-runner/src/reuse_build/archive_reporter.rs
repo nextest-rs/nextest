@@ -69,7 +69,6 @@ impl ArchiveReporter {
                 )?;
             }
             ArchiveEvent::ExtractStarted {
-                file_count,
                 test_binary_count,
                 non_test_binary_count,
                 linked_path_count,
@@ -84,12 +83,7 @@ impl ArchiveReporter {
                     &mut writer,
                 )?;
 
-                writeln!(
-                    writer,
-                    " ({} files total) to {}",
-                    file_count.style(self.styles.bold),
-                    destination_dir.style(self.styles.bold),
-                )?;
+                writeln!(writer, " to {}", destination_dir.style(self.styles.bold))?;
             }
             ArchiveEvent::Extracted {
                 file_count,
@@ -191,9 +185,6 @@ pub enum ArchiveEvent<'a> {
 
     /// The extraction process started.
     ExtractStarted {
-        /// The number of files in the archive.
-        file_count: usize,
-
         /// The number of test binaries to extract.
         test_binary_count: usize,
 
