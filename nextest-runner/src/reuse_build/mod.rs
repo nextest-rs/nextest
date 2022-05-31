@@ -61,6 +61,7 @@ impl ReuseBuildInfo {
     /// Extracts an archive and constructs a [`ReuseBuildInfo`] from it.
     pub fn extract_archive<F>(
         archive_file: &Utf8Path,
+        format: ArchiveFormat,
         dest: ExtractDestination,
         callback: F,
         workspace_remap: Option<&Utf8Path>,
@@ -71,7 +72,7 @@ impl ReuseBuildInfo {
         let mut file = fs::File::open(archive_file)
             .map_err(|err| ArchiveExtractError::Read(ArchiveReadError::Io(err)))?;
 
-        let mut unarchiver = Unarchiver::new(&mut file);
+        let mut unarchiver = Unarchiver::new(&mut file, format);
         let ExtractInfo {
             dest_dir,
             temp_dir,

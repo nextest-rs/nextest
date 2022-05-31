@@ -5,11 +5,12 @@
 
 use crate::{
     reporter::{StatusLevel, TestOutputDisplay},
+    reuse_build::ArchiveFormat,
     test_filter::RunIgnored,
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
-use itertools::Either;
+use itertools::{Either, Itertools};
 use std::{borrow::Cow, env::JoinPathsError, error, fmt};
 
 /// An error that occurred while parsing the config.
@@ -483,6 +484,32 @@ impl error::Error for WriteTestListError {
         }
     }
 }
+
+/// Represents an unknown archive format.
+///
+/// Returned by [`ArchiveFormat::autodetect`].
+#[derive(Debug)]
+pub struct UnknownArchiveFormat {
+    /// The name of the archive file without any leading components.
+    pub file_name: String,
+}
+
+impl fmt::Display for UnknownArchiveFormat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let supported_extensions = ArchiveFormat::SUPPORTED_FORMATS
+            .iter()
+            .map(|(extension, _)| *extension)
+            .join(", ");
+        write!(
+            f,
+            "could not detect archive format from file name `{}` \
+            (supported extensions: {supported_extensions})",
+            self.file_name
+        )
+    }
+}
+
+impl error::Error for UnknownArchiveFormat {}
 
 /// An error that occurs while archiving data.
 #[derive(Debug)]

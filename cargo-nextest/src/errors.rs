@@ -6,7 +6,7 @@ use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::{
     ArchiveCreateError, ArchiveExtractError, ConfigParseError, PathMapperConstructError,
-    ProfileNotFound,
+    ProfileNotFound, UnknownArchiveFormat,
 };
 use owo_colors::{OwoColorize, Stream};
 use std::{
@@ -29,6 +29,10 @@ pub enum ExpectedError {
         arg_name: &'static str,
         file_name: Utf8PathBuf,
         err: std::io::Error,
+    },
+    UnknownArchiveFormat {
+        archive_file: Utf8PathBuf,
+        err: UnknownArchiveFormat,
     },
     ArchiveCreateError {
         archive_file: Utf8PathBuf,
@@ -143,6 +147,7 @@ impl ExpectedError {
             Self::ProfileNotFound { .. }
             | Self::ConfigParseError { .. }
             | Self::ArgumentFileReadError { .. }
+            | Self::UnknownArchiveFormat { .. }
             | Self::ArchiveExtractError { .. }
             | Self::PathMapperConstructError { .. }
             | Self::ArgumentJsonParseError { .. }
@@ -181,6 +186,13 @@ impl ExpectedError {
                     "argument {} specified file `{}` that couldn't be read",
                     format!("--{}", arg_name).if_supports_color(Stream::Stderr, |x| x.bold()),
                     file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                );
+                Some(err as &dyn Error)
+            }
+            Self::UnknownArchiveFormat { archive_file, err } => {
+                log::error!(
+                    "failed to autodetect archive format for {}",
+                    archive_file.if_supports_color(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -289,6 +301,7 @@ impl fmt::Display for ExpectedError {
             Self::ProfileNotFound { .. } => writeln!(f, "profile not found"),
             Self::ConfigParseError { .. } => writeln!(f, "config read error"),
             Self::ArgumentFileReadError { .. } => writeln!(f, "argument file error"),
+            Self::UnknownArchiveFormat { .. } => writeln!(f, "unknown archive format"),
             Self::ArchiveCreateError { .. } => writeln!(f, "archive create error"),
             Self::ArchiveExtractError { .. } => writeln!(f, "archive extract error"),
             Self::PathMapperConstructError { .. } => writeln!(f, "path mapper construct error"),

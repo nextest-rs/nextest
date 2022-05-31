@@ -3,7 +3,7 @@
 
 use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
-    errors::ArchiveCreateError,
+    errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::convert_rel_path_to_forward_slash,
     list::{BinaryList, OutputFormat, SerializableFormat},
     reuse_build::PathMapper,
@@ -16,6 +16,34 @@ use std::{
 };
 use zstd::Encoder;
 
+/// Archive format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ArchiveFormat {
+    /// A Zstandard-compressed tarball.
+    TarZst,
+}
+
+impl ArchiveFormat {
+    /// The list of supported formats as a list of (file extension, format) pairs.
+    pub const SUPPORTED_FORMATS: &'static [(&'static str, Self)] = &[(".tar.zst", Self::TarZst)];
+
+    /// Automatically detects an archive format from a given file name, and returns an error if the
+    /// detection failed.
+    pub fn autodetect(archive_file: &Utf8Path) -> Result<Self, UnknownArchiveFormat> {
+        let file_name = archive_file.file_name().unwrap_or("");
+        for (extension, format) in Self::SUPPORTED_FORMATS {
+            if file_name.ends_with(extension) {
+                return Ok(*format);
+            }
+        }
+
+        Err(UnknownArchiveFormat {
+            file_name: file_name.to_owned(),
+        })
+    }
+}
+
 /// Archives test binaries along with metadata to the given file.
 ///
 /// The output file is a Zstandard-compressed tarball (`.tar.zst`).
@@ -23,6 +51,7 @@ pub fn archive_to_file<'a, F>(
     binary_list: &'a BinaryList,
     cargo_metadata: &'a str,
     path_mapper: &'a PathMapper,
+    format: ArchiveFormat,
     zstd_level: i32,
     output_file: &'a Utf8Path,
     mut callback: F,
@@ -46,8 +75,14 @@ where
             })
             .map_err(ArchiveCreateError::ReporterIo)?;
             // Write out the archive.
-            let archiver =
-                Archiver::new(binary_list, cargo_metadata, path_mapper, zstd_level, file)?;
+            let archiver = Archiver::new(
+                binary_list,
+                cargo_metadata,
+                path_mapper,
+                format,
+                zstd_level,
+                file,
+            )?;
             let (_, file_count) = archiver.archive()?;
             Ok(file_count)
         })
@@ -82,19 +117,24 @@ impl<'a, W: Write> Archiver<'a, W> {
         binary_list: &'a BinaryList,
         cargo_metadata: &'a str,
         path_mapper: &'a PathMapper,
+        format: ArchiveFormat,
         compression_level: i32,
         writer: W,
     ) -> Result<Self, ArchiveCreateError> {
         let buf_writer = BufWriter::new(writer);
-        let mut encoder = zstd::Encoder::new(buf_writer, compression_level)
-            .map_err(ArchiveCreateError::OutputFileIo)?;
-        encoder
-            .include_checksum(true)
-            .map_err(ArchiveCreateError::OutputFileIo)?;
-        encoder
-            .multithread(num_cpus::get() as u32)
-            .map_err(ArchiveCreateError::OutputFileIo)?;
-        let builder = tar::Builder::new(encoder);
+        let builder = match format {
+            ArchiveFormat::TarZst => {
+                let mut encoder = zstd::Encoder::new(buf_writer, compression_level)
+                    .map_err(ArchiveCreateError::OutputFileIo)?;
+                encoder
+                    .include_checksum(true)
+                    .map_err(ArchiveCreateError::OutputFileIo)?;
+                encoder
+                    .multithread(num_cpus::get() as u32)
+                    .map_err(ArchiveCreateError::OutputFileIo)?;
+                tar::Builder::new(encoder)
+            }
+        };
 
         let unix_timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -241,5 +281,24 @@ impl<'a, W: Write> Archiver<'a, W> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_archive_format_autodetect() {
+        assert_eq!(
+            ArchiveFormat::autodetect("foo.tar.zst".as_ref()).unwrap(),
+            ArchiveFormat::TarZst,
+        );
+        assert_eq!(
+            ArchiveFormat::autodetect("foo/bar.tar.zst".as_ref()).unwrap(),
+            ArchiveFormat::TarZst,
+        );
+        ArchiveFormat::autodetect("foo".as_ref()).unwrap_err();
+        ArchiveFormat::autodetect("/".as_ref()).unwrap_err();
     }
 }
