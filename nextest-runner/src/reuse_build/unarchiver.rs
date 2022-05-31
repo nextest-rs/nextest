@@ -13,6 +13,7 @@ use nextest_metadata::BinaryListSummary;
 use std::{
     fs,
     io::{self, Read, Seek},
+    time::Instant,
 };
 use tempfile::TempDir;
 
@@ -137,6 +138,8 @@ impl<'a> Unarchiver<'a> {
             }
         };
 
+        let start_time = Instant::now();
+
         // Read archive and validate it.
         let archive_info = self.get_info().map_err(ArchiveExtractError::Read)?;
         let file_count = archive_info.file_count;
@@ -201,10 +204,12 @@ impl<'a> Unarchiver<'a> {
         let (cargo_metadata_json, graph) =
             cargo_metadata.expect("get_info already verified that Cargo metadata exists");
 
+        let elapsed = start_time.elapsed();
         // Report end extraction.
         callback(ArchiveEvent::Extracted {
             file_count,
             dest_dir: &dest_dir,
+            elapsed,
         })
         .map_err(ArchiveExtractError::ReporterIo)?;
 

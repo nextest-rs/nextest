@@ -1,10 +1,14 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::io::{self, Write};
-
 use camino::Utf8Path;
 use owo_colors::{OwoColorize, Style};
+use std::{
+    io::{self, Write},
+    time::Duration,
+};
+
+use crate::helpers::format_duration;
 
 #[derive(Debug)]
 /// Reporter for archive operations.
@@ -53,13 +57,15 @@ impl ArchiveReporter {
             ArchiveEvent::Archived {
                 file_count,
                 output_file,
+                elapsed,
             } => {
                 write!(writer, "{:>12} ", "Archived".style(self.styles.success))?;
                 writeln!(
                     writer,
-                    "{} files to {}",
+                    "{} files to {} in {}",
                     file_count.style(self.styles.bold),
-                    output_file.style(self.styles.bold)
+                    output_file.style(self.styles.bold),
+                    format_duration(elapsed),
                 )?;
             }
             ArchiveEvent::ExtractStarted {
@@ -88,13 +94,15 @@ impl ArchiveReporter {
             ArchiveEvent::Extracted {
                 file_count,
                 dest_dir: destination_dir,
+                elapsed,
             } => {
                 write!(writer, "{:>12} ", "Extracted".style(self.styles.success))?;
                 writeln!(
                     writer,
-                    "{} files to {}",
+                    "{} files to {} in {}",
                     file_count.style(self.styles.bold),
-                    destination_dir.style(self.styles.bold)
+                    destination_dir.style(self.styles.bold),
+                    format_duration(elapsed),
                 )?;
             }
         }
@@ -176,6 +184,9 @@ pub enum ArchiveEvent<'a> {
 
         /// The archive output file.
         output_file: &'a Utf8Path,
+
+        /// How long it took to create the archive.
+        elapsed: Duration,
     },
 
     /// The extraction process started.
@@ -203,5 +214,8 @@ pub enum ArchiveEvent<'a> {
 
         /// The destination directory.
         dest_dir: &'a Utf8Path,
+
+        /// How long it took to extract the archive.
+        elapsed: Duration,
     },
 }

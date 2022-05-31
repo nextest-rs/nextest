@@ -7,6 +7,7 @@ use owo_colors::OwoColorize;
 use std::{
     io::{self, Write},
     path::PathBuf,
+    time::Duration,
 };
 
 /// Write out a test name.
@@ -88,4 +89,13 @@ pub(crate) fn convert_rel_path_to_forward_slash(rel_path: &Utf8Path) -> Utf8Path
 #[cfg(not(windows))]
 pub(crate) fn convert_rel_path_to_forward_slash(rel_path: &Utf8Path) -> Utf8PathBuf {
     rel_path.to_path_buf()
+}
+
+pub(crate) fn format_duration(duration: Duration) -> String {
+    let duration = duration.as_secs_f64();
+    if duration > 60.0 {
+        format!("{}m {:.2}s", duration as u32 / 60, duration % 60.0)
+    } else {
+        format!("{:.2}s", duration)
+    }
 }

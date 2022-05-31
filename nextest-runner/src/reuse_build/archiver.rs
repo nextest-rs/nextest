@@ -12,7 +12,7 @@ use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::Utf8Path;
 use std::{
     io::{self, BufWriter, Write},
-    time::SystemTime,
+    time::{Instant, SystemTime},
 };
 use zstd::Encoder;
 
@@ -34,6 +34,7 @@ where
     let test_binary_count = binary_list.rust_binaries.len();
     let non_test_binary_count = binary_list.rust_build_meta.non_test_binaries.len();
     let linked_path_count = binary_list.rust_build_meta.linked_paths.len();
+    let start_time = Instant::now();
 
     file.write(|file| {
         callback(ArchiveEvent::ArchiveStarted {
@@ -69,10 +70,13 @@ where
         .get_info()
         .map_err(ArchiveCreateError::Validation)?;
 
+    let elapsed = start_time.elapsed();
+
     callback(ArchiveEvent::Archived {
         // TODO: obtain file count from archive
         file_count: info.file_count,
         output_file,
+        elapsed,
     })
     .map_err(ArchiveCreateError::ReporterIo)?;
 
