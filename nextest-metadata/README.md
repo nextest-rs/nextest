@@ -39,7 +39,7 @@ Once a crate has reached 1.x, any MSRV bump will be accompanied with a new minor
 
 ## Minimum supported cargo-nextest version
 
-The "minimum supported cargo-nextest version" is **cargo-nextest 0.9.12**.
+The "minimum supported cargo-nextest version" is **cargo-nextest 0.9.15**.
 
 For more about nextest-metadata's stability policy, see the [Stability
 page](https://nexte.st/book/stability#nextest-metadata) on the nextest site.
