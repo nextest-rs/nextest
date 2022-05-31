@@ -86,10 +86,8 @@ To install a version series or specific version, use this instead:
 > **Tip:** GitHub Actions supports ANSI color codes. To get color support for nextest (and Cargo), add this to your workflow:
 >
 > ```yml
-> jobs:
->   my-test-job:
->     env:
->       CARGO_TERM_COLOR: always
+> env:
+>   CARGO_TERM_COLOR: always
 > ```
 >
 > For a full list of environment variables supported by nextest, see [Environment variables](env-vars.md).
