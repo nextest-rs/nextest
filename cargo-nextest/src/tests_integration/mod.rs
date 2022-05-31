@@ -381,7 +381,7 @@ fn test_run_from_archive() {
         "--manifest-path",
         p.manifest_path().as_str(),
         "archive",
-        "--file",
+        "--archive-file",
         archive_file.as_str(),
         "--workspace",
         "--all-targets",
@@ -395,16 +395,14 @@ fn test_run_from_archive() {
     std::fs::remove_dir_all(p.workspace_root()).unwrap();
     std::fs::remove_dir_all(p.target_dir()).unwrap();
 
-    let mut p2 = TempProject::new().unwrap();
-    p2.persist();
+    let p2 = TempProject::new().unwrap();
 
     let args = CargoNextestApp::parse_from([
         "cargo",
         "nextest",
         "run",
-        "--archive",
+        "--archive-file",
         archive_file.as_str(),
-        "--persist-extract-dir",
         "--workspace-remap",
         p2.workspace_root().as_str(),
     ]);

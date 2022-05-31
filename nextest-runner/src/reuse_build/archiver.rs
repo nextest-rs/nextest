@@ -23,7 +23,7 @@ pub fn archive_to_file<'a, F>(
     binary_list: &'a BinaryList,
     cargo_metadata: &'a str,
     path_mapper: &'a PathMapper,
-    compression_level: i32,
+    zstd_level: i32,
     output_file: &'a Utf8Path,
     mut callback: F,
 ) -> Result<(), ArchiveCreateError>
@@ -46,13 +46,8 @@ where
             })
             .map_err(ArchiveCreateError::ReporterIo)?;
             // Write out the archive.
-            let archiver = Archiver::new(
-                binary_list,
-                cargo_metadata,
-                path_mapper,
-                compression_level,
-                file,
-            )?;
+            let archiver =
+                Archiver::new(binary_list, cargo_metadata, path_mapper, zstd_level, file)?;
             let (_, file_count) = archiver.archive()?;
             Ok(file_count)
         })
