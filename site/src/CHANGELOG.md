@@ -3,6 +3,24 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.15] - 2022-05-31
+
+### Added
+
+- Improved support for [reusing builds](https://nexte.st/book/reusing-builds):
+  - New command `cargo nextest archive` automatically archives test binaries and other relevant
+    files after building tests. Currently the `.tar.zst` format is supported.
+  - New option `cargo nextest run --archive-file` automatically extracts archives before running the tests within them.
+  - New runtime environment variable `NEXTEST_BIN_EXE_<name>` is set to the absolute path to a binary target's executable, taking path remapping into account. This is equivalent to [`CARGO_BIN_EXE_<name>`], except this is set at runtime.
+  - `cargo nextest list --list-type binaries-only` now records information about non-test binaries as well.
+
+[`CARGO_BIN_EXE_<name>`]: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
+
+### Fixed
+
+Fix for experimental feature [filter expressions](https://nexte.st/book/filter-expressions.html):
+- Fix test filtering when expression filters are set but name-based filters aren't.
+
 ## [0.9.14] - 2022-04-18
 
 ### Fixed
@@ -175,6 +193,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.15]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.15
 [0.9.14]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.14
 [0.9.13]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.13
 [0.9.12]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.12

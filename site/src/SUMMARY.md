@@ -13,7 +13,7 @@
   - [Running tests](book/running.md)
   - [Listing tests](book/listing.md)
   - [Retries and flaky tests](book/retries.md)
-  - [Reusing builds](book/reusing-builds.md)
+  - [Archiving and reusing builds](book/reusing-builds.md)
   - [Partitioning test runs in CI](book/partitioning.md)
   - [Target runners](book/target-runners.md)
   - [Other options](book/other-options.md)

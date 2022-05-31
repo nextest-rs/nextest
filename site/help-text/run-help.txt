@@ -66,16 +66,24 @@ FILTER OPTIONS:
 
 REPORTER OPTIONS:
         --failure-output <WHEN>    Output stdout and stderr on failure [env:
-                                   NEXTEST_FAILURE_OUTPUT=] [possible values: immediate, immediate-
-                                   final, final, never]
+                                   NEXTEST_FAILURE_OUTPUT=] [possible values: immediate,
+                                   immediate-final, final, never]
         --success-output <WHEN>    Output stdout and stderr on success [env:
-                                   NEXTEST_SUCCESS_OUTPUT=] [possible values: immediate, immediate-
-                                   final, final, never]
+                                   NEXTEST_SUCCESS_OUTPUT=] [possible values: immediate,
+                                   immediate-final, final, never]
         --status-level <LEVEL>     Test statuses to output [env: NEXTEST_STATUS_LEVEL=] [possible
                                    values: none, fail, retry, slow, pass, skip, all]
 
 REUSE BUILD OPTIONS:
-        --binaries-metadata <PATH>    Path to binaries-metadata JSON
-        --target-dir-remap <PATH>     Remapping for the target directory
+        --archive-file <PATH>         Path to nextest archive
+        --archive-format <FORMAT>     Archive format [default: auto] [possible values: auto,
+                                      tar-zst]
+        --extract-to <DIR>            Destination directory to extract archive to [default:
+                                      temporary directory]
+        --extract-overwrite           Overwrite files in destination directory while extracting
+                                      archive
+        --persist-extract-tempdir     Persist temporary directory destination is extracted to
         --cargo-metadata <PATH>       Path to cargo metadata JSON
         --workspace-remap <PATH>      Remapping for the workspace root
+        --binaries-metadata <PATH>    Path to binaries-metadata JSON
+        --target-dir-remap <PATH>     Remapping for the target directory

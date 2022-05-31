@@ -27,10 +27,10 @@ pub use archiver::*;
 pub use unarchiver::*;
 
 /// The name of the file in which Cargo metadata is stored.
-pub const CARGO_METADATA_FILE_NAME: &str = "target/nextest/cargo_metadata.json";
+pub const CARGO_METADATA_FILE_NAME: &str = "target/nextest/cargo-metadata.json";
 
 /// The name of the file in which binaries metadata is stored.
-pub const BINARIES_METADATA_FILE_NAME: &str = "target/nextest/binaries_metadata.json";
+pub const BINARIES_METADATA_FILE_NAME: &str = "target/nextest/binaries-metadata.json";
 
 /// Reuse build information.
 #[derive(Debug, Default)]

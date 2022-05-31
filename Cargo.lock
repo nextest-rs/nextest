@@ -758,7 +758,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-metadata"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "camino",
  "nextest-workspace-hack",
@@ -768,7 +768,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-runner"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aho-corasick",
  "atomicwrites",

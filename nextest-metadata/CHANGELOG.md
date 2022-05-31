@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0] - 2022-05-31
+
+### Added
+
+- Support for archiving test binaries:
+  - Non-test binaries and dynamic libraries are now recorded to `RustBuildMetaSummary`.
+
+### Changed
+
+- Minimum supported nextest version bumped to 0.9.15.
+- MSRV bumped to 1.59.
+
 ## [0.3.1] - 2022-04-16
 
 ### Added
@@ -39,6 +51,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.0
 [0.3.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.3.1
 [0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.3.0
 [0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.2.1

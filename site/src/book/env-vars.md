@@ -29,8 +29,10 @@ cargo-nextest exposes these environment variables to your tests *at runtime only
 
 * `NEXTEST` — always set to `"1"`.
 * `NEXTEST_EXECUTION_MODE` — currently, always set to `process-per-test`. More options may be added in the future if nextest gains the ability to run all tests within the same process ([#27]).
+* `NEXTEST_BIN_EXE_<name>`: The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`. Binaries are automatically built when the test is built, unless the binary has required features that are not enabled.
 
 [#27]: https://github.com/nextest-rs/nextest/issues/27
+[integration test]: https://doc.rust-lang.org/cargo/reference/cargo-targets.html#integration-tests
 
 ### Cargo-related environment variables nextest sets
 

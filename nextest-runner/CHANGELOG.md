@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.0] - 2022-05-31
+
+### Added
+
+- Support for creating and running archives of test binaries.
+  - Most of the new logic is within a new `reuse_build` module.
+- Non-test binaries and dynamic libraries are now recorded in `BinaryList`.
+
+### Fixed
+
+Fix for experimental feature [filter expressions](https://nexte.st/book/filter-expressions.html):
+- Fix test filtering when expression filters are set but name-based filters aren't.
+
+
+### Changed
+
+- MSRV bumped to Rust 1.59.
+
 ## [0.7.0] - 2022-04-18
 
 ### Fixed
@@ -75,6 +93,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.8.0
 [0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.7.0
 [0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.6.0
 [0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.5.0

@@ -58,11 +58,19 @@ FILTER OPTIONS:
 OUTPUT OPTIONS:
     -T, --message-format <FMT>    Output format [default: human] [possible values: human, json,
                                   json-pretty]
-        --list-type <TYPE>        Type of listing [default: full] [possible values: full, binaries-
-                                  only]
+        --list-type <TYPE>        Type of listing [default: full] [possible values: full,
+                                  binaries-only]
 
 REUSE BUILD OPTIONS:
-        --binaries-metadata <PATH>    Path to binaries-metadata JSON
-        --target-dir-remap <PATH>     Remapping for the target directory
+        --archive-file <PATH>         Path to nextest archive
+        --archive-format <FORMAT>     Archive format [default: auto] [possible values: auto,
+                                      tar-zst]
+        --extract-to <DIR>            Destination directory to extract archive to [default:
+                                      temporary directory]
+        --extract-overwrite           Overwrite files in destination directory while extracting
+                                      archive
+        --persist-extract-tempdir     Persist temporary directory destination is extracted to
         --cargo-metadata <PATH>       Path to cargo metadata JSON
         --workspace-remap <PATH>      Remapping for the workspace root
+        --binaries-metadata <PATH>    Path to binaries-metadata JSON
+        --target-dir-remap <PATH>     Remapping for the target directory
