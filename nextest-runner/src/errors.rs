@@ -518,14 +518,32 @@ pub enum ArchiveCreateError {
     /// An error occurred while creating the binary list to be written.
     CreateBinaryList(WriteTestListError),
 
+    /// An error occurred while reading data from a file on disk.
+    InputFileRead {
+        /// The name of the file that could not be read.
+        path: Utf8PathBuf,
+
+        /// Whether this is a directory. `None` means the status was unknown.
+        is_dir: Option<bool>,
+
+        /// The error that occurred.
+        error: std::io::Error,
+    },
+
+    /// An error occurred while reading entries from a directory on disk.
+    DirEntryRead {
+        /// The name of the directory from which entries couldn't be read.
+        path: Utf8PathBuf,
+
+        /// The error that occurred.
+        error: std::io::Error,
+    },
+
     /// An error occurred while writing data to the output file.
-    OutputFileIo(std::io::Error),
+    OutputArchiveIo(std::io::Error),
 
     /// An error occurred in the reporter.
     ReporterIo(std::io::Error),
-
-    /// An error occurred while validating the created archive.
-    Validation(ArchiveReadError),
 }
 
 impl fmt::Display for ArchiveCreateError {
@@ -534,14 +552,22 @@ impl fmt::Display for ArchiveCreateError {
             ArchiveCreateError::CreateBinaryList(_) => {
                 write!(f, "error creating binary list")
             }
-            ArchiveCreateError::OutputFileIo(_) => {
-                write!(f, "error writing to output file")
+            ArchiveCreateError::InputFileRead { path, is_dir, .. } => {
+                let kind_str = match is_dir {
+                    Some(true) => "directory",
+                    Some(false) => "file",
+                    None => "path",
+                };
+                write!(f, "error writing {kind_str} `{path}` to archive")
+            }
+            ArchiveCreateError::DirEntryRead { path, .. } => {
+                write!(f, "error reading directory entry from `{path}`")
+            }
+            ArchiveCreateError::OutputArchiveIo(_) => {
+                write!(f, "error writing to archive")
             }
             ArchiveCreateError::ReporterIo(_) => {
                 write!(f, "error reporting archive status")
-            }
-            ArchiveCreateError::Validation(_) => {
-                write!(f, "error validating created archive")
             }
         }
     }
@@ -551,10 +577,10 @@ impl error::Error for ArchiveCreateError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             ArchiveCreateError::CreateBinaryList(error) => Some(error),
-            ArchiveCreateError::OutputFileIo(error) | ArchiveCreateError::ReporterIo(error) => {
-                Some(error)
-            }
-            ArchiveCreateError::Validation(error) => Some(error),
+            ArchiveCreateError::InputFileRead { error, .. }
+            | ArchiveCreateError::DirEntryRead { error, .. }
+            | ArchiveCreateError::OutputArchiveIo(error)
+            | ArchiveCreateError::ReporterIo(error) => Some(error),
         }
     }
 }
