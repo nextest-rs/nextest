@@ -690,8 +690,8 @@ pub(crate) fn make_test_expression(
     // Nextest never changes these environment variables within its own process, so caching them is
     // valid.
     fn is_sip_sanitized(var: &str) -> bool {
-        // Is this the correct set of environment variables? The exact list isn't documented anywhere
-        // but it seems like this would be a good heuristic.
+        // Look for variables starting with LD_ or DYLD_.
+        // https://briandfoy.github.io/macos-s-system-integrity-protection-sanitizes-your-environment/
         var.starts_with("LD_") || var.starts_with("DYLD_")
     }
 

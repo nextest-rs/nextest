@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.1] - 2022-06-02
+
+### Added
+
+- Nextest now [sets `NEXTEST_LD_*` and `NEXTEST_DYLD_*` environment
+  variables](https://nexte.st/book/env-vars.html#environment-variables-nextest-sets) to work around
+  macOS System Integrity Protection sanitization.
+
+### Fixed
+
+- While [archiving build artifacts](https://nexte.st/book/reusing-builds), work around some libraries producing linked paths that don't exist ([#247]). Print a warning for those paths instead of failing.
+
+[#247]: https://github.com/nextest-rs/nextest/issues/247
+
+### Changed
+
+- Build artifact archives no longer recurse into linked path subdirectories. This is not a behavioral change because `LD_LIBRARY_PATH` and other similar variables do not recurse into subdirectories either.
+
 ## [0.8.0] - 2022-05-31
 
 ### Added
@@ -12,7 +30,6 @@
 
 Fix for experimental feature [filter expressions](https://nexte.st/book/filter-expressions.html):
 - Fix test filtering when expression filters are set but name-based filters aren't.
-
 
 ### Changed
 
@@ -93,6 +110,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.8.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.8.1
 [0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.8.0
 [0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.7.0
 [0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.6.0

@@ -3,6 +3,24 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.16] - 2022-06-02
+
+### Added
+
+- Nextest now [sets `NEXTEST_LD_*` and `NEXTEST_DYLD_*` environment
+  variables](https://nexte.st/book/env-vars.html#environment-variables-nextest-sets) to work around
+  macOS System Integrity Protection sanitization.
+
+### Fixed
+
+- While [archiving build artifacts](https://nexte.st/book/reusing-builds), work around some libraries producing linked paths that don't exist ([#247]). Print a warning for those paths instead of failing.
+
+[#247]: https://github.com/nextest-rs/nextest/issues/247
+
+### Changed
+
+- Build artifact archives no longer recurse into linked path subdirectories. This is not a behavioral change because `LD_LIBRARY_PATH` and other similar variables do not recurse into subdirectories either.
+
 ## [0.9.15] - 2022-05-31
 
 ### Added
@@ -193,6 +211,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.16]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.16
 [0.9.15]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.15
 [0.9.14]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.14
 [0.9.13]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.13
