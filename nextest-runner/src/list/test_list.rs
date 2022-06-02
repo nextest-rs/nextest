@@ -19,10 +19,10 @@ use nextest_metadata::{
     BuildPlatform, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
     RustTestCaseSummary, RustTestSuiteSummary, TestListSummary,
 };
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 use owo_colors::OwoColorize;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     io,
     io::Write,
@@ -674,6 +674,36 @@ pub(crate) fn make_test_expression(
     dylib_path: &OsStr,
     non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
 ) -> duct::Expression {
+    // This is a workaround for a macOS SIP issue:
+    // https://github.com/nextest-rs/nextest/pull/84
+    //
+    // Basically, if SIP is enabled, macOS removes any environment variables that start with
+    // "LD_" or "DYLD_" when spawning system-protected processes. This unfortunately includes
+    // processes like bash -- this means that if nextest invokes a shell script, paths might
+    // end up getting sanitized.
+    //
+    // This is particularly relevant for target runners, which are often shell scripts.
+    //
+    // To work around this, re-export any variables that begin with LD_ or DYLD_ as "NEXTEST_LD_"
+    // or "NEXTEST_DYLD_". Do this on all platforms for uniformity.
+    //
+    // Nextest never changes these environment variables within its own process, so caching them is
+    // valid.
+    fn is_sip_sanitized(var: &str) -> bool {
+        // Is this the correct set of environment variables? The exact list isn't documented anywhere
+        // but it seems like this would be a good heuristic.
+        var.starts_with("LD_") || var.starts_with("DYLD_")
+    }
+
+    static LD_DYLD_ENV_VARS: Lazy<HashMap<String, OsString>> = Lazy::new(|| {
+        std::env::vars_os()
+            .filter_map(|(k, v)| match k.into_string() {
+                Ok(k) => is_sip_sanitized(&k).then(|| (k, v)),
+                Err(_) => None,
+            })
+            .collect()
+    });
+
     let mut cmd = duct::cmd(program, args)
         .dir(cwd)
         // This environment variable is set to indicate that tests are being run under nextest.
@@ -727,6 +757,16 @@ pub(crate) fn make_test_expression(
             package.repository().unwrap_or_default(),
         )
         .env(dylib_path_envvar(), dylib_path);
+
+    for (k, v) in &*LD_DYLD_ENV_VARS {
+        if k != dylib_path_envvar() {
+            cmd = cmd.env("NEXTEST_".to_owned() + k, v);
+        }
+    }
+    // Also add the dylib path envvar under the NEXTEST_ prefix.
+    if is_sip_sanitized(dylib_path_envvar()) {
+        cmd = cmd.env("NEXTEST_".to_owned() + dylib_path_envvar(), dylib_path);
+    }
 
     // Expose paths to non-test binaries at runtime so that relocated paths work.
     // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.
