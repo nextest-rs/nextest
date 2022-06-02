@@ -2,7 +2,9 @@
 //! Protection on macOS: <https://github.com/nextest-rs/nextest/pull/84#issuecomment-1057287763>
 
 use std::{
+    collections::BTreeMap,
     env,
+    ffi::OsString,
     process::{exit, Command},
 };
 
@@ -14,6 +16,16 @@ fn main() {
         eprintln!("[passthrough] --ensure-this-arg-is-sent not passed as the first element");
         exit(1);
     }
+
+    // Ensure that LD_ and DYLD_ env vars are also prefixed with NEXTEST_ as a workaround
+    // for macOS SIP.
+    let ld_dyld_paths = sanitized_env_vars("");
+    let nextest_ld_dyld_paths = sanitized_env_vars("NEXTEST_");
+
+    assert_eq!(
+        ld_dyld_paths, nextest_ld_dyld_paths,
+        "[passthrough] SIP-sanitized env vars should be identical under the NEXTEST_ prefix"
+    );
 
     match Command::new(&args[2]).args(&args[3..]).status() {
         Ok(status) => match status.code() {
@@ -33,4 +45,22 @@ fn main() {
             exit(102);
         }
     }
+}
+
+// This is a BTreeMap for better error messages.
+fn sanitized_env_vars(strip_prefix: &str) -> BTreeMap<String, OsString> {
+    std::env::vars_os()
+        .filter_map(|(k, v)| match k.into_string() {
+            Ok(k) => k
+                // first strip the prefix...
+                .strip_prefix(strip_prefix)
+                // ...then check whether the suffix is SIP-sanitized
+                .and_then(|suffix| is_sip_sanitized(suffix).then(|| (suffix.to_owned(), v))),
+            Err(_) => None,
+        })
+        .collect()
+}
+
+fn is_sip_sanitized(var: &str) -> bool {
+    var.starts_with("LD_") || var.starts_with("DYLD_")
 }
