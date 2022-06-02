@@ -223,7 +223,9 @@ impl<'a, W: Write> Archiver<'a, W> {
 
             let rel_path = Utf8Path::new("target").join(linked_path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
-            self.append_dir_all(&rel_path, &src_path, true)?;
+            // Since LD_LIBRARY_PATH etc aren't recursive, we only need to add the top-level files
+            // from linked paths.
+            self.append_dir_one_level(&rel_path, &src_path)?;
         }
 
         // TODO: add extra files.
@@ -262,50 +264,37 @@ impl<'a, W: Write> Archiver<'a, W> {
         Ok(())
     }
 
-    // Adapted from tar-rs's source, with tracking for file counts and better error messages.
-    fn append_dir_all(
+    fn append_dir_one_level(
         &mut self,
         rel_path: &Utf8Path,
         src_path: &Utf8Path,
-        follow: bool,
     ) -> Result<(), ArchiveCreateError> {
-        let mut stack = vec![(src_path.to_path_buf(), true, false)];
-
-        while let Some((src, is_dir, is_symlink)) = stack.pop() {
-            let dest = rel_path.join(src.strip_prefix(&src_path).unwrap());
-            // In case of a symlink pointing to a directory, is_dir is false, but src.is_dir() will return true
-            if is_dir || (is_symlink && follow && src.is_dir()) {
-                for entry in
-                    src.read_dir_utf8()
-                        .map_err(|error| ArchiveCreateError::InputFileRead {
-                            path: src.clone(),
-                            is_dir: Some(true),
-                            error,
-                        })?
-                {
-                    let entry = entry.map_err(|error| ArchiveCreateError::DirEntryRead {
-                        path: src.clone(),
+        // In case of a symlink pointing to a directory, is_dir is false, but src.is_dir() will return true
+        for entry in
+            src_path
+                .read_dir_utf8()
+                .map_err(|error| ArchiveCreateError::InputFileRead {
+                    path: src_path.to_owned(),
+                    is_dir: Some(true),
+                    error,
+                })?
+        {
+            let entry = entry.map_err(|error| ArchiveCreateError::DirEntryRead {
+                path: src_path.to_owned(),
+                error,
+            })?;
+            let src = entry.path();
+            let file_type =
+                entry
+                    .file_type()
+                    .map_err(|error| ArchiveCreateError::InputFileRead {
+                        path: src.to_owned(),
+                        is_dir: None,
                         error,
                     })?;
-                    let file_name = entry.path();
-                    let file_type =
-                        entry
-                            .file_type()
-                            .map_err(|error| ArchiveCreateError::InputFileRead {
-                                path: file_name.to_owned(),
-                                is_dir: None,
-                                error,
-                            })?;
-                    stack.push((
-                        entry.path().to_path_buf(),
-                        file_type.is_dir(),
-                        file_type.is_symlink(),
-                    ));
-                }
-                // No need to append the directory entry to the tarball since we don't care about
-                // its metadata.
-            } else {
-                self.append_path(&src, &dest)?;
+            if !file_type.is_dir() {
+                let dest = rel_path.join(src.file_name().expect("entries should have a file name"));
+                self.append_path(src, &dest)?;
             }
         }
 

@@ -37,6 +37,7 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", out_dir.display());
 
     // Also output a bogus linked path that doesn't exist on disk.
+    // Some libraries like grpcio-sys 1.1.8 produce them.
     println!(
         "cargo:rustc-link-search=native={}",
         out_dir.parent().unwrap().join("does-not-exist").display()

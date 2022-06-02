@@ -16,6 +16,7 @@
 use crate::{dispatch::CargoNextestApp, ExpectedError, OutputWriter};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::StructOpt;
+use color_eyre::Report;
 use nextest_metadata::{BuildPlatform, TestListSummary};
 
 mod fixtures;
@@ -68,16 +69,7 @@ fn test_list_full() {
     ]);
 
     let mut output = OutputWriter::new_test();
-    args.exec(&mut output)
-        .map_err(|err| {
-            let expected_error: ExpectedError = match err.downcast() {
-                Ok(err) => err,
-                Err(err) => return err,
-            };
-            expected_error.display_to_stderr();
-            expected_error.into()
-        })
-        .unwrap();
+    args.exec(&mut output).map_err(print_error_chain).unwrap();
 
     check_list_full_output(output.stdout().unwrap(), None);
 }
@@ -388,7 +380,7 @@ fn test_run_from_archive() {
     ]);
 
     let mut output = OutputWriter::new_test();
-    args.exec(&mut output).unwrap();
+    args.exec(&mut output).map_err(print_error_chain).unwrap();
 
     // Remove the old source and target directories to ensure that any tests that refer to files within
     // it fail.
@@ -412,4 +404,19 @@ fn test_run_from_archive() {
     assert_eq!("test run failed\n", err.to_string());
 
     check_run_output(output.stderr().unwrap(), true);
+}
+
+// Debugging helper to print out the full chain of errors for a report.
+fn print_error_chain(report: Report) -> Report {
+    match report.downcast_ref::<ExpectedError>() {
+        Some(err) => {
+            err.display_to_stderr();
+        }
+        None => {
+            for err in report.chain() {
+                println!("- {}", err);
+            }
+        }
+    };
+    report
 }
