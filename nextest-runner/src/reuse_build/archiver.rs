@@ -9,8 +9,9 @@ use crate::{
     reuse_build::PathMapper,
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use std::{
+    collections::HashSet,
     io::{self, BufWriter, Write},
     time::{Instant, SystemTime},
 };
@@ -109,7 +110,7 @@ struct Archiver<'a, W: Write> {
     path_mapper: &'a PathMapper,
     builder: tar::Builder<Encoder<'static, BufWriter<W>>>,
     unix_timestamp: u64,
-    file_count: usize,
+    added_files: HashSet<Utf8PathBuf>,
 }
 
 impl<'a, W: Write> Archiver<'a, W> {
@@ -147,7 +148,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             path_mapper,
             builder,
             unix_timestamp,
-            file_count: 0,
+            added_files: HashSet::new(),
         })
     }
 
@@ -173,7 +174,6 @@ impl<'a, W: Write> Archiver<'a, W> {
             let rel_path = convert_rel_path_to_forward_slash(rel_path);
 
             self.append_path(&binary.path, &rel_path)?;
-            self.file_count += 1;
         }
         for non_test_binary in self
             .binary_list
@@ -193,7 +193,6 @@ impl<'a, W: Write> Archiver<'a, W> {
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
             self.append_path(&src_path, &rel_path)?;
-            self.file_count += 1;
         }
 
         // Write linked paths to the archive.
@@ -243,7 +242,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             .into_inner()
             .map_err(|err| ArchiveCreateError::OutputArchiveIo(err.into_error()))?;
 
-        Ok((writer, self.file_count))
+        Ok((writer, self.added_files.len()))
     }
 
     // ---
@@ -260,7 +259,9 @@ impl<'a, W: Write> Archiver<'a, W> {
         self.builder
             .append_data(&mut header, name, io::Cursor::new(contents))
             .map_err(ArchiveCreateError::OutputArchiveIo)?;
-        self.file_count += 1;
+        // We always prioritize appending files from memory over files on disk, so don't check
+        // membership in added_files before adding the file to the archive.
+        self.added_files.insert(name.into());
         Ok(())
     }
 
@@ -302,14 +303,17 @@ impl<'a, W: Write> Archiver<'a, W> {
     }
 
     fn append_path(&mut self, src: &Utf8Path, dest: &Utf8Path) -> Result<(), ArchiveCreateError> {
-        self.builder
-            .append_path_with_name(src, dest)
-            .map_err(|error| ArchiveCreateError::InputFileRead {
-                path: src.to_owned(),
-                is_dir: Some(false),
-                error,
-            })?;
-        self.file_count += 1;
+        // Check added_files to ensure we aren't adding duplicate files.
+        if !self.added_files.contains(dest) {
+            self.builder
+                .append_path_with_name(src, dest)
+                .map_err(|error| ArchiveCreateError::InputFileRead {
+                    path: src.to_owned(),
+                    is_dir: Some(false),
+                    error,
+                })?;
+            self.added_files.insert(dest.into());
+        }
         Ok(())
     }
 }
