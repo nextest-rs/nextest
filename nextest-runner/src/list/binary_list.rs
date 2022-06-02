@@ -7,8 +7,8 @@ use crate::{
     list::{BinaryListState, OutputFormat, RustBuildMeta, Styles},
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use cargo_metadata::{Artifact, BuildScript, Message};
-use guppy::{graph::PackageGraph, PackageId};
+use cargo_metadata::{Artifact, BuildScript, Message, PackageId};
+use guppy::graph::PackageGraph;
 use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustNonTestBinaryKind, RustNonTestBinarySummary,
     RustTestBinaryKind, RustTestBinarySummary,
@@ -195,7 +195,7 @@ impl<'g> BinaryListBuildState<'g> {
                 // Look up the executable by package ID.
                 let package = self
                     .graph
-                    .metadata(&PackageId::new(package_id.clone()))
+                    .metadata(&guppy::PackageId::new(package_id.clone()))
                     .map_err(FromMessagesError::PackageGraph)?;
 
                 // Construct the binary ID from the package and build target.
@@ -324,13 +324,13 @@ impl<'g> BinaryListBuildState<'g> {
 
     fn process_build_script(&mut self, build_script: BuildScript) -> Result<(), FromMessagesError> {
         for path in build_script.linked_paths {
-            self.detect_linked_path(&path);
+            self.detect_linked_path(&build_script.package_id, &path);
         }
         Ok(())
     }
 
     /// The `Option` in the return value is to let ? work.
-    fn detect_linked_path(&mut self, path: &Utf8Path) -> Option<()> {
+    fn detect_linked_path(&mut self, package_id: &PackageId, path: &Utf8Path) -> Option<()> {
         // Remove anything up to the first "=" (e.g. "native=").
         let actual_path = match path.as_str().split_once('=') {
             Some((_, p)) => p.into(),
@@ -339,11 +339,12 @@ impl<'g> BinaryListBuildState<'g> {
         let rel_path = actual_path
             .strip_prefix(&self.rust_build_meta.target_directory)
             .ok()?;
-        if !self.rust_build_meta.linked_paths.contains(rel_path) {
-            self.rust_build_meta
-                .linked_paths
-                .insert(convert_rel_path_to_forward_slash(rel_path));
-        }
+
+        self.rust_build_meta
+            .linked_paths
+            .entry(convert_rel_path_to_forward_slash(rel_path))
+            .or_default()
+            .insert(package_id.repr.clone());
 
         Some(())
     }

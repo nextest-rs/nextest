@@ -197,7 +197,7 @@ impl<'a, W: Write> Archiver<'a, W> {
         }
 
         // Write linked paths to the archive.
-        for linked_path in &self.binary_list.rust_build_meta.linked_paths {
+        for (linked_path, requested_by) in &self.binary_list.rust_build_meta.linked_paths {
             // linked paths are e.g. debug/foo/bar. We need to prepend the target directory.
             let src_path = self
                 .binary_list
@@ -205,6 +205,21 @@ impl<'a, W: Write> Archiver<'a, W> {
                 .target_directory
                 .join(linked_path);
             let src_path = self.path_mapper.map_binary(src_path);
+
+            // Some crates produce linked paths that don't exist. This is a bug in those libraries.
+            if !src_path.exists() {
+                let mut s = String::new();
+                for package_id in requested_by {
+                    s.push_str("  - ");
+                    s.push_str(package_id);
+                    s.push('\n');
+                }
+                log::warn!(
+                    target: "nextest-runner",
+                    "these crates link against `{src_path}` which doesn't exist, ignoring:\n{s}  (this is a bug in these crates that should be fixed)",
+                );
+                continue;
+            }
 
             let rel_path = Utf8Path::new("target").join(linked_path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
