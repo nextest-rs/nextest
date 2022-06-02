@@ -35,6 +35,12 @@ fn main() {
     }
     println!("cargo:rustc-link-lib=dylib=cdylib_example");
     println!("cargo:rustc-link-search=native={}", out_dir.display());
+
+    // Also output a bogus linked path that doesn't exist on disk.
+    println!(
+        "cargo:rustc-link-search=native={}",
+        out_dir.parent().unwrap().join("does-not-exist").display()
+    );
 }
 
 // https://github.com/rust-lang/cargo/blob/5e09899f33744efafb99af7023acfd0a14af1c2f/tests/testsuite/build.rs#L4717-L4727
