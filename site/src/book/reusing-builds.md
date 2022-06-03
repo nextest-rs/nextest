@@ -1,6 +1,6 @@
 # Archiving and reusing builds
 
-In some cases, it can be useful to separate out building tests from running them. Nextest supports serializing test metadata on one machine, and then using that to run tests on another machine.
+In some cases, it can be useful to separate out building tests from running them. Nextest supports archiving builds on one machine, and then extracting the archive to run tests on another machine.
 
 ## Terms
 
