@@ -21,18 +21,18 @@ Nextest also reads the following environment variables to emulate Cargo's behavi
 
 ### Cargo-related environment variables nextest reads
 
-cargo-nextest delegates to Cargo for the build, which recognizes a number of environment variables. See [Environment variables Cargo reads](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-reads) for a full list.
+Nextest delegates to Cargo for the build, which recognizes a number of environment variables. See [Environment variables Cargo reads](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-reads) for a full list.
 
 ## Environment variables nextest sets
 
-cargo-nextest exposes these environment variables to your tests *at runtime only*. They are not set at build time because cargo-nextest may reuse builds done outside of the nextest environment.
+Nextest exposes these environment variables to your tests *at runtime only*. They are not set at build time because cargo-nextest may reuse builds done outside of the nextest environment.
 
 * `NEXTEST` — always set to `"1"`.
 * `NEXTEST_EXECUTION_MODE` — currently, always set to `process-per-test`. More options may be added in the future if nextest gains the ability to run all tests within the same process ([#27]).
 * `NEXTEST_BIN_EXE_<name>` — The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.
   * Binaries are automatically built when the test is built, unless the binary has required features that are not enabled.
   * When [reusing builds](reusing-builds.md) from an archive, this is set to the remapped path within the target directory.
-* `NEXTEST_LD_*` and `NEXTEST_DYLD_*` — These replicate the values of any environment variables that start with the prefixes `LD_` and `DYLD_`, such as `LD_PRELOAD` or `DYLD_LIBRARY_PATH`.
+* `NEXTEST_LD_*` and `NEXTEST_DYLD_*` — These replicate the values of any environment variables that start with the prefixes `LD_` or `DYLD_`, such as `LD_PRELOAD` or `DYLD_FALLBACK_LIBRARY_PATH`.
 
   This is a workaround for [macOS's System Integrity Protection](https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/RuntimeProtections/RuntimeProtections.html) sanitizing dynamic linker environment variables for processes like the system `bash`, and is particularly relevant for [target runners](target-runners.md). See [this blog post](https://briandfoy.github.io/macos-s-system-integrity-protection-sanitizes-your-environment/) for more about how sanitization works.
 
@@ -43,9 +43,9 @@ cargo-nextest exposes these environment variables to your tests *at runtime only
 
 ### Cargo-related environment variables nextest sets
 
-cargo-nextest delegates to Cargo for the build, which controls the environment variables that are set. See [Environment variables Cargo sets for crates](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates) for a full list.
+Nextest delegates to Cargo for the build, which controls the environment variables that are set. See [Environment variables Cargo sets for crates](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates) for a full list.
 
-cargo-nextest also sets these environment variables at runtime, matching the behavior of cargo test:
+Nextest also sets these environment variables at runtime, matching the behavior of cargo test:
 
 * `CARGO` — Path to the `cargo` binary performing the build.
 * `CARGO_MANIFEST_DIR` — The directory containing the manifest of your package. If [`--workspace-remap`](reusing-builds.md#specifying-a-new-location-for-the-workspace) is passed in, this is set to the remapped manifest directory. You can obtain the non-remapped directory using the value of this variable at compile-time, e.g. `env!("CARGO_MANIFEST_DIR")`.
