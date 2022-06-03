@@ -32,7 +32,7 @@ cargo-nextest exposes these environment variables to your tests *at runtime only
 * `NEXTEST_BIN_EXE_<name>` — The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.
   * Binaries are automatically built when the test is built, unless the binary has required features that are not enabled.
   * When [reusing builds](reusing-builds.md) from an archive, this is set to the remapped path within the target directory.
-* `NEXTEST_LD_*` and `NEXTEST_DYLD_*` — These replicate the values of any environment variables that start with the prefixes `LD_*` and `DYLD_*`, such as `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH`.
+* `NEXTEST_LD_*` and `NEXTEST_DYLD_*` — These replicate the values of any environment variables that start with the prefixes `LD_` and `DYLD_`, such as `LD_PRELOAD` or `DYLD_LIBRARY_PATH`.
 
   This is a workaround for [macOS's System Integrity Protection](https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/RuntimeProtections/RuntimeProtections.html) sanitizing dynamic linker environment variables for processes like the system `bash`, and is particularly relevant for [target runners](target-runners.md). See [this blog post](https://briandfoy.github.io/macos-s-system-integrity-protection-sanitizes-your-environment/) for more about how sanitization works.
 
