@@ -366,7 +366,7 @@ fn update_progress_bar<'a>(event: &TestEvent<'a>, styles: &Styles, progress_bar:
         } => {
             progress_bar.set_prefix(progress_bar_prefix(*cancel_state, current_stats, styles));
             progress_bar.set_message(progress_bar_msg(current_stats, *running, styles));
-            progress_bar.set_position(current_stats.final_run_count as u64);
+            progress_bar.set_position(current_stats.finished_count as u64);
         }
         _ => {}
     }
@@ -652,9 +652,9 @@ impl<'a> TestReporterImpl<'a> {
                 write!(
                     writer,
                     "{}",
-                    run_stats.final_run_count.style(self.styles.count)
+                    run_stats.finished_count.style(self.styles.count)
                 )?;
-                if run_stats.final_run_count != run_stats.initial_run_count {
+                if run_stats.finished_count != run_stats.initial_run_count {
                     write!(
                         writer,
                         "/{}",

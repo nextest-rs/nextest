@@ -562,11 +562,11 @@ impl InternalExecuteStatus {
 pub struct RunStats {
     /// The total number of tests that were expected to be run at the beginning.
     ///
-    /// If the test run is canceled, this will be more than `final_run_count`.
+    /// If the test run is canceled, this will be more than `finished_count`.
     pub initial_run_count: usize,
 
     /// The total number of tests that finished running.
-    pub final_run_count: usize,
+    pub finished_count: usize,
 
     /// The number of tests that passed. Includes `flaky`.
     pub passed: usize,
@@ -592,7 +592,7 @@ impl RunStats {
     /// * any tests failed
     /// * any tests encountered an execution failure
     pub fn is_success(&self) -> bool {
-        if self.initial_run_count > self.final_run_count {
+        if self.initial_run_count > self.finished_count {
             return false;
         }
         if self.failed > 0 || self.exec_failed > 0 {
@@ -602,7 +602,7 @@ impl RunStats {
     }
 
     fn on_test_finished(&mut self, run_statuses: &ExecutionStatuses) {
-        self.final_run_count += 1;
+        self.finished_count += 1;
         // run_statuses is guaranteed to have at least one element.
         // * If the last element is success, treat it as success (and possibly flaky).
         // * If the last element is a failure, use it to determine fail/exec fail.
@@ -852,7 +852,7 @@ mod tests {
         assert!(
             RunStats {
                 initial_run_count: 42,
-                final_run_count: 42,
+                finished_count: 42,
                 ..RunStats::default()
             }
             .is_success(),
@@ -861,7 +861,7 @@ mod tests {
         assert!(
             !RunStats {
                 initial_run_count: 42,
-                final_run_count: 41,
+                finished_count: 41,
                 ..RunStats::default()
             }
             .is_success(),
@@ -870,7 +870,7 @@ mod tests {
         assert!(
             !RunStats {
                 initial_run_count: 42,
-                final_run_count: 42,
+                finished_count: 42,
                 failed: 1,
                 ..RunStats::default()
             }
@@ -880,7 +880,7 @@ mod tests {
         assert!(
             !RunStats {
                 initial_run_count: 42,
-                final_run_count: 42,
+                finished_count: 42,
                 exec_failed: 1,
                 ..RunStats::default()
             }
@@ -890,7 +890,7 @@ mod tests {
         assert!(
             RunStats {
                 initial_run_count: 42,
-                final_run_count: 42,
+                finished_count: 42,
                 skipped: 1,
                 ..RunStats::default()
             }
