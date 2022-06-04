@@ -265,11 +265,21 @@ impl TestReporterBuilder {
                 // TODO: customize progress bar
                 let progress_bar = ProgressBar::new(test_list.test_count() as u64);
                 // Emulate Cargo's style.
-                let width = format!("{}", test_list.test_count()).len();
-                // Create the template using the width as an input. This is a little confusing -- {{foo}}
+                let test_count_width = format!("{}", test_list.test_count()).len();
+                // Make the bar take the same width as the binary ID, which requires reducing its length
+                // by 2 to compensate for the surrounding [].
+                // Also set a floor for the width to ensure that the bar isn't too small. 27 is the
+                // width of the bar Cargo produces; match that.
+                let bar_width = binary_id_width.max(27) - 2;
+                // Create the template using the widths inputs. This is a little confusing -- {{foo}}
                 // is what's passed into the ProgressBar, while {bar} is inserted by the format!() statement.
+                //
+                // Note: ideally we'd use the same format as our other duration displays for the elapsed time,
+                // but that isn't possible due to https://github.com/console-rs/indicatif/issues/440. Use
+                // {{elapsed_precise}} as an OK tradeoff here.
                 let template = format!(
-                    "{{prefix:>12}} [{{elapsed:>9}}] [{{bar:40}}] {{pos:>{width}}}/{{len:{width}}}  {{msg}}"
+                    "{{prefix:>12}} [{{elapsed_precise:>9}}] [{{bar:{bar_width}}}] \
+                    {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}"
                 );
                 progress_bar.set_style(
                     ProgressStyle::default_bar()
@@ -369,32 +379,48 @@ fn update_progress_bar<'a>(event: &TestEvent<'a>, styles: &Styles, progress_bar:
             cancel_state,
             ..
         } => {
-            progress_bar.set_prefix(progress_bar_prefix(*cancel_state, current_stats, styles));
+            let running_state = RunningState::new(*cancel_state, current_stats);
+            progress_bar.set_prefix(running_state.progress_bar_prefix(styles));
             progress_bar.set_message(progress_bar_msg(current_stats, *running, styles));
             progress_bar.set_position(current_stats.finished_count as u64);
+        }
+        TestEvent::RunBeginCancel { reason, .. } => {
+            let running_state = RunningState::Canceling(*reason);
+            progress_bar.set_prefix(running_state.progress_bar_prefix(styles));
         }
         _ => {}
     }
 }
 
-fn progress_bar_prefix(
-    cancel_state: Option<CancelReason>,
-    current_stats: &RunStats,
-    styles: &Styles,
-) -> String {
-    let prefix_str = if cancel_state.is_some() {
-        "Canceling"
-    } else {
-        "Running"
-    };
+#[derive(Copy, Clone, Debug)]
+enum RunningState<'a> {
+    Running(&'a RunStats),
+    Canceling(CancelReason),
+}
 
-    let prefix_style = if current_stats.failed > 0 || current_stats.exec_failed > 0 {
-        styles.fail
-    } else {
-        styles.pass
-    };
+impl<'a> RunningState<'a> {
+    fn new(cancel_state: Option<CancelReason>, current_stats: &'a RunStats) -> Self {
+        match cancel_state {
+            Some(cancel_state) => Self::Canceling(cancel_state),
+            None => Self::Running(current_stats),
+        }
+    }
 
-    format!("{:>12}", prefix_str.style(prefix_style))
+    fn progress_bar_prefix(self, styles: &Styles) -> String {
+        let (prefix_str, prefix_style) = match self {
+            Self::Running(current_stats) => {
+                let prefix_style = if current_stats.failed > 0 || current_stats.exec_failed > 0 {
+                    styles.fail
+                } else {
+                    styles.pass
+                };
+                ("Running", prefix_style)
+            }
+            Self::Canceling(_) => ("Canceling", styles.fail),
+        };
+
+        format!("{:>12}", prefix_str.style(prefix_style))
+    }
 }
 
 fn progress_bar_msg(current_stats: &RunStats, running: usize, styles: &Styles) -> String {
