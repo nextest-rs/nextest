@@ -303,6 +303,7 @@ pub(crate) fn execute_collect<'a>(
             TestEvent::TestFinished {
                 test_instance,
                 run_statuses,
+                ..
             } => (test_instance, InstanceStatus::Finished(run_statuses)),
             _ => return,
         };

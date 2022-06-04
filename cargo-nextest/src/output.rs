@@ -6,6 +6,7 @@ use clap::{ArgEnum, Args};
 use env_logger::fmt::Formatter;
 use log::{Level, LevelFilter, Record};
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
+use nextest_runner::reporter::ReporterStderr;
 use owo_colors::{style, OwoColorize, Style};
 use std::{
     io::{BufWriter, Stderr, Stdout, Write},
@@ -225,6 +226,14 @@ impl OutputWriter {
             Self::Test { ref mut stdout, .. } => StdoutWriter::Test {
                 buf: BufWriter::new(stdout),
             },
+        }
+    }
+
+    pub(crate) fn reporter_output(&mut self) -> ReporterStderr<'_> {
+        match self {
+            Self::Normal => ReporterStderr::Terminal,
+            #[cfg(test)]
+            Self::Test { ref mut stderr, .. } => ReporterStderr::Buffer(stderr),
         }
     }
 

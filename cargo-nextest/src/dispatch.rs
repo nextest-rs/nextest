@@ -16,7 +16,7 @@ use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     config::{NextestConfig, NextestProfile},
-    errors::{TargetRunnerError, WriteEventError},
+    errors::TargetRunnerError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
@@ -815,10 +815,12 @@ impl App {
         let binary_list = self.base.build_binary_list()?;
         let test_list = self.build_test_list(binary_list, &target_runner, filter_exprs)?;
 
+        let output = output_writer.reporter_output();
+
         let mut reporter = reporter_opts
             .to_builder(no_capture)
             .set_verbose(self.base.output.verbose)
-            .build(&test_list, &profile);
+            .build(&test_list, &profile, output);
         if self.base.output.color.should_colorize(Stream::Stderr) {
             reporter.colorize();
         }
@@ -827,11 +829,9 @@ impl App {
         let runner_builder = runner_opts.to_builder(no_capture);
         let runner = runner_builder.build(&test_list, &profile, handler, target_runner);
 
-        let mut writer = output_writer.stderr_writer();
         let run_stats = runner.try_execute(|event| {
             // Write and flush the event.
-            reporter.report_event(event, &mut writer)?;
-            writer.flush().map_err(WriteEventError::Io)
+            reporter.report_event(event)
         })?;
         if !run_stats.is_success() {
             return Err(Report::new(ExpectedError::test_run_failed()));

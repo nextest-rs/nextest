@@ -66,6 +66,7 @@ impl<'cfg> MetadataJunit<'cfg> {
             TestEvent::TestFinished {
                 test_instance,
                 run_statuses,
+                ..
             } => {
                 fn kind_ty(run_status: &ExecuteStatus) -> (NonSuccessKind, &'static str) {
                     match run_status.result {
