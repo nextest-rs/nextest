@@ -562,7 +562,7 @@ impl InternalExecuteStatus {
 pub struct RunStats {
     /// The total number of tests that were expected to be run at the beginning.
     ///
-    /// If the test run is canceled, this will be more than `finished_count`.
+    /// If the test run is canceled, this will be more than `finished_count` at the end.
     pub initial_run_count: usize,
 
     /// The total number of tests that finished running.
