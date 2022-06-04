@@ -16,7 +16,7 @@ use crate::{
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses, RunStats},
 };
 use debug_ignore::DebugIgnore;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
 use serde::Deserialize;
@@ -269,13 +269,18 @@ impl TestReporterBuilder {
                 // Create the template using the width as an input. This is a little confusing -- {{foo}}
                 // is what's passed into the ProgressBar, while {bar} is inserted by the format!() statement.
                 let template = format!(
-                    "{{prefix:>12}} [{{bar:40}}] {{pos:>{width}}}/{{len:{width}}}  {{msg}}"
+                    "{{prefix:>12}} [{{elapsed:>9}}] [{{bar:40}}] {{pos:>{width}}}/{{len:{width}}}  {{msg}}"
                 );
                 progress_bar.set_style(
                     ProgressStyle::default_bar()
                         .progress_chars("=> ")
                         .template(&template),
                 );
+                // Enable a steady tick 10 times a second.
+                progress_bar.enable_steady_tick(100);
+                // Since we only update the progress bar on a steady tick, there's no need to buffer in
+                // ProgressDrawTarget.
+                progress_bar.set_draw_target(ProgressDrawTarget::stderr_nohz());
                 ReporterStderrImpl::Terminal(progress_bar)
             }
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
