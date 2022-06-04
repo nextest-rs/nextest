@@ -565,7 +565,7 @@ pub struct RunStats {
     /// If the test run is canceled, this will be more than `final_run_count`.
     pub initial_run_count: usize,
 
-    /// The total number of tests that were actually run.
+    /// The total number of tests that finished running.
     pub final_run_count: usize,
 
     /// The number of tests that passed. Includes `flaky`.
@@ -662,8 +662,13 @@ where
         match event {
             InternalEvent::Test(InternalTestEvent::Started { test_instance }) => {
                 self.running += 1;
-                (self.callback)(TestEvent::TestStarted { test_instance })
-                    .map_err(InternalError::Error)
+                (self.callback)(TestEvent::TestStarted {
+                    test_instance,
+                    current_stats: self.run_stats,
+                    running: self.running,
+                    cancel_state: self.cancel_state,
+                })
+                .map_err(InternalError::Error)
             }
             InternalEvent::Test(InternalTestEvent::Slow {
                 test_instance,
@@ -694,6 +699,9 @@ where
                 (self.callback)(TestEvent::TestFinished {
                     test_instance,
                     run_statuses,
+                    current_stats: self.run_stats,
+                    running: self.running,
+                    cancel_state: self.cancel_state,
                 })
                 .map_err(InternalError::Error)?;
 

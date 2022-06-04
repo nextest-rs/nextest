@@ -16,11 +16,13 @@ use crate::{
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses, RunStats},
 };
 use debug_ignore::DebugIgnore;
+use indicatif::{ProgressBar, ProgressStyle};
 use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
 use serde::Deserialize;
 use std::{
-    fmt, io,
+    fmt::{self, Write as _},
+    io,
     io::Write,
     str::FromStr,
     time::{Duration, SystemTime},
@@ -163,6 +165,19 @@ impl fmt::Display for StatusLevel {
     }
 }
 
+/// Standard error destination for the reporter.
+///
+/// This is usually a terminal, but can be an in-memory buffer for tests.
+pub enum ReporterStderr<'a> {
+    /// Produce output on the (possibly piped) terminal.
+    ///
+    /// If the terminal isn't piped, produce output to a progress bar.
+    Terminal,
+
+    /// Write output to a buffer.
+    Buffer(&'a mut Vec<u8>),
+}
+
 /// Test reporter builder.
 #[derive(Debug, Default)]
 pub struct TestReporterBuilder {
@@ -214,6 +229,7 @@ impl TestReporterBuilder {
         &self,
         test_list: &TestList,
         profile: &'a NextestProfile<'a>,
+        output: ReporterStderr<'a>,
     ) -> TestReporter<'a> {
         let styles = Box::new(Styles::default());
         let binary_id_width = test_list
@@ -244,50 +260,65 @@ impl TestReporterBuilder {
                 .unwrap_or_else(|| profile.success_output()),
         };
 
+        let stderr = match output {
+            ReporterStderr::Terminal => {
+                // TODO: customize progress bar
+                let progress_bar = ProgressBar::new(test_list.test_count() as u64);
+                // Emulate Cargo's style.
+                let width = format!("{}", test_list.test_count()).len();
+                // Create the template using the width as an input. This is a little confusing -- {{foo}}
+                // is what's passed into the ProgressBar, while {bar} is inserted by the format!() statement.
+                let template = format!(
+                    "{{prefix:>12}} [{{bar:40}}] {{pos:>{width}}}/{{len:{width}}}  {{msg}}"
+                );
+                progress_bar.set_style(
+                    ProgressStyle::default_bar()
+                        .progress_chars("=> ")
+                        .template(&template),
+                );
+                ReporterStderrImpl::Terminal(progress_bar)
+            }
+            ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
+        };
+
         TestReporter {
-            status_level,
-            failure_output,
-            success_output,
-            no_capture: self.no_capture,
-            binary_id_width,
-            styles,
-            cancel_status: None,
-            final_outputs: DebugIgnore(vec![]),
+            inner: TestReporterImpl {
+                status_level,
+                failure_output,
+                success_output,
+                no_capture: self.no_capture,
+                binary_id_width,
+                styles,
+                cancel_status: None,
+                final_outputs: DebugIgnore(vec![]),
+            },
+            stderr,
             metadata_reporter: aggregator,
         }
     }
 }
 
+enum ReporterStderrImpl<'a> {
+    Terminal(ProgressBar),
+    Buffer(&'a mut Vec<u8>),
+}
+
 /// Functionality to report test results to stderr and JUnit
 pub struct TestReporter<'a> {
-    status_level: StatusLevel,
-    failure_output: TestOutputDisplay,
-    success_output: TestOutputDisplay,
-    no_capture: bool,
-    binary_id_width: usize,
-    styles: Box<Styles>,
-
-    // TODO: too many concerns mixed up here. Should have a better model, probably in conjunction
-    // with factoring out the different reporters below.
-    cancel_status: Option<CancelReason>,
-    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, ExecuteStatus)>>,
-
+    inner: TestReporterImpl<'a>,
+    stderr: ReporterStderrImpl<'a>,
     metadata_reporter: EventAggregator<'a>,
 }
 
 impl<'a> TestReporter<'a> {
     /// Colorizes output.
     pub fn colorize(&mut self) {
-        self.styles.colorize();
+        self.inner.styles.colorize();
     }
 
     /// Report a test event.
-    pub fn report_event(
-        &mut self,
-        event: TestEvent<'a>,
-        writer: impl Write,
-    ) -> Result<(), WriteEventError> {
-        self.write_event(event, writer)
+    pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
+        self.write_event(event)
     }
 
     // ---
@@ -295,17 +326,132 @@ impl<'a> TestReporter<'a> {
     // ---
 
     /// Report this test event to the given writer.
-    fn write_event(
-        &mut self,
-        event: TestEvent<'a>,
-        writer: impl Write,
-    ) -> Result<(), WriteEventError> {
-        self.write_event_impl(&event, writer)
-            .map_err(WriteEventError::Io)?;
+    fn write_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
+        match &mut self.stderr {
+            ReporterStderrImpl::Terminal(progress_bar) => {
+                // Write to a string that will be printed as a log line.
+                let mut buf: Vec<u8> = Vec::new();
+                self.inner
+                    .write_event_impl(&event, &mut buf)
+                    .map_err(WriteEventError::Io)?;
+                let s = String::from_utf8_lossy(&buf);
+                progress_bar.println(&s);
+
+                update_progress_bar(&event, &self.inner.styles, progress_bar);
+            }
+            ReporterStderrImpl::Buffer(buf) => {
+                self.inner
+                    .write_event_impl(&event, buf)
+                    .map_err(WriteEventError::Io)?;
+            }
+        }
         self.metadata_reporter.write_event(event)?;
         Ok(())
     }
+}
 
+fn update_progress_bar<'a>(event: &TestEvent<'a>, styles: &Styles, progress_bar: &mut ProgressBar) {
+    match event {
+        TestEvent::TestStarted {
+            current_stats,
+            running,
+            cancel_state,
+            ..
+        }
+        | TestEvent::TestFinished {
+            current_stats,
+            running,
+            cancel_state,
+            ..
+        } => {
+            progress_bar.set_prefix(progress_bar_prefix(*cancel_state, current_stats, styles));
+            progress_bar.set_message(progress_bar_msg(current_stats, *running, styles));
+            progress_bar.set_position(current_stats.final_run_count as u64);
+        }
+        _ => {}
+    }
+}
+
+fn progress_bar_prefix(
+    cancel_state: Option<CancelReason>,
+    current_stats: &RunStats,
+    styles: &Styles,
+) -> String {
+    let prefix_str = if cancel_state.is_some() {
+        "Canceling"
+    } else {
+        "Running"
+    };
+
+    let prefix_style = if current_stats.failed > 0 || current_stats.exec_failed > 0 {
+        styles.fail
+    } else {
+        styles.pass
+    };
+
+    format!("{:>12}", prefix_str.style(prefix_style))
+}
+
+fn progress_bar_msg(current_stats: &RunStats, running: usize, styles: &Styles) -> String {
+    let mut s = format!("{} running, ", running.style(styles.count));
+    // Writing to strings is infallible.
+    let _ = write_summary_str(current_stats, styles, &mut s);
+    s
+}
+
+fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) -> fmt::Result {
+    write!(out, "{} passed", run_stats.passed.style(styles.pass))?;
+
+    if run_stats.flaky > 0 {
+        write!(
+            out,
+            " ({} {})",
+            run_stats.flaky.style(styles.count),
+            "flaky".style(styles.skip),
+        )?;
+    }
+    write!(out, ", ")?;
+
+    if run_stats.failed > 0 {
+        write!(
+            out,
+            "{} {}, ",
+            run_stats.failed.style(styles.count),
+            "failed".style(styles.fail),
+        )?;
+    }
+
+    if run_stats.exec_failed > 0 {
+        write!(
+            out,
+            "{} {}, ",
+            run_stats.exec_failed.style(styles.count),
+            "exec failed".style(styles.fail),
+        )?;
+    }
+
+    write!(
+        out,
+        "{} {}",
+        run_stats.skipped.style(styles.count),
+        "skipped".style(styles.skip),
+    )?;
+
+    Ok(())
+}
+
+struct TestReporterImpl<'a> {
+    status_level: StatusLevel,
+    failure_output: TestOutputDisplay,
+    success_output: TestOutputDisplay,
+    no_capture: bool,
+    binary_id_width: usize,
+    styles: Box<Styles>,
+    cancel_status: Option<CancelReason>,
+    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, ExecuteStatus)>>,
+}
+
+impl<'a> TestReporterImpl<'a> {
     fn write_event_impl(
         &mut self,
         event: &TestEvent<'a>,
@@ -331,7 +477,7 @@ impl<'a> TestReporter<'a> {
 
                 writeln!(writer)?;
             }
-            TestEvent::TestStarted { test_instance } => {
+            TestEvent::TestStarted { test_instance, .. } => {
                 // In no-capture mode, print out a test start event.
                 if self.no_capture {
                     // The spacing is to align test instances.
@@ -386,6 +532,7 @@ impl<'a> TestReporter<'a> {
             TestEvent::TestFinished {
                 test_instance,
                 run_statuses,
+                ..
             } => {
                 let describe = run_statuses.describe();
 
@@ -486,18 +633,9 @@ impl<'a> TestReporter<'a> {
             TestEvent::RunFinished {
                 start_time: _start_time,
                 elapsed,
-                run_stats:
-                    RunStats {
-                        initial_run_count,
-                        final_run_count,
-                        passed,
-                        flaky,
-                        failed,
-                        exec_failed,
-                        skipped,
-                    },
+                run_stats,
             } => {
-                let summary_style = if *failed > 0 || *exec_failed > 0 {
+                let summary_style = if run_stats.failed > 0 || run_stats.exec_failed > 0 {
                     self.styles.fail
                 } else {
                     self.styles.pass
@@ -511,52 +649,23 @@ impl<'a> TestReporter<'a> {
                 // TODO: better time printing mechanism than this
                 write!(writer, "[{:>8.3?}s] ", elapsed.as_secs_f64())?;
 
-                write!(writer, "{}", final_run_count.style(self.styles.count))?;
-                if final_run_count != initial_run_count {
-                    write!(writer, "/{}", initial_run_count.style(self.styles.count))?;
-                }
                 write!(
                     writer,
-                    " tests run: {} passed",
-                    passed.style(self.styles.pass)
+                    "{}",
+                    run_stats.final_run_count.style(self.styles.count)
                 )?;
-
-                if *flaky > 0 {
+                if run_stats.final_run_count != run_stats.initial_run_count {
                     write!(
                         writer,
-                        " ({} {})",
-                        flaky.style(self.styles.count),
-                        "flaky".style(self.styles.skip),
-                    )?;
-                }
-                write!(writer, ", ")?;
-
-                if *failed > 0 {
-                    write!(
-                        writer,
-                        "{} {}, ",
-                        failed.style(self.styles.count),
-                        "failed".style(self.styles.fail),
+                        "/{}",
+                        run_stats.initial_run_count.style(self.styles.count)
                     )?;
                 }
 
-                if *exec_failed > 0 {
-                    write!(
-                        writer,
-                        "{} {}, ",
-                        exec_failed.style(self.styles.count),
-                        "exec failed".style(self.styles.fail),
-                    )?;
-                }
-
-                write!(
-                    writer,
-                    "{} {}",
-                    skipped.style(self.styles.count),
-                    "skipped".style(self.styles.skip),
-                )?;
-
-                writeln!(writer)?;
+                let mut summary_str = String::new();
+                // Writing to a string is infallible.
+                let _ = write_summary_str(run_stats, &self.styles, &mut summary_str);
+                writeln!(writer, " tests run: {summary_str}")?;
 
                 // Don't print out test failures if canceled due to Ctrl-C.
                 if self.status_level >= StatusLevel::Fail
@@ -720,6 +829,15 @@ pub enum TestEvent<'a> {
     TestStarted {
         /// The test instance that was started.
         test_instance: TestInstance<'a>,
+
+        /// Current run statistics so far.
+        current_stats: RunStats,
+
+        /// The number of tests currently running, including this one.
+        running: usize,
+
+        /// The cancel status of the run. This is None if the run is still ongoing.
+        cancel_state: Option<CancelReason>,
     },
 
     /// A test was slower than a configured soft timeout.
@@ -749,6 +867,15 @@ pub enum TestEvent<'a> {
 
         /// Information about all the runs for this test.
         run_statuses: ExecutionStatuses,
+
+        /// Current statistics for number of tests so far.
+        current_stats: RunStats,
+
+        /// The number of tests that are currently running, excluding this one.
+        running: usize,
+
+        /// The cancel status of the run. This is None if the run is still ongoing.
+        cancel_state: Option<CancelReason>,
     },
 
     /// A test was skipped.
@@ -840,20 +967,23 @@ mod tests {
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
-        let reporter = builder.build(&test_list, &profile);
-        assert!(reporter.no_capture, "no_capture is true");
+
+        let mut buf: Vec<u8> = Vec::new();
+        let output = ReporterStderr::Buffer(&mut buf);
+        let reporter = builder.build(&test_list, &profile, output);
+        assert!(reporter.inner.no_capture, "no_capture is true");
         assert_eq!(
-            reporter.failure_output,
+            reporter.inner.failure_output,
             TestOutputDisplay::Never,
             "failure output is never, overriding other settings"
         );
         assert_eq!(
-            reporter.success_output,
+            reporter.inner.success_output,
             TestOutputDisplay::Never,
             "success output is never, overriding other settings"
         );
         assert_eq!(
-            reporter.status_level,
+            reporter.inner.status_level,
             StatusLevel::Pass,
             "status level is pass, overriding other settings"
         );
