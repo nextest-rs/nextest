@@ -262,7 +262,6 @@ impl TestReporterBuilder {
 
         let stderr = match output {
             ReporterStderr::Terminal => {
-                // TODO: customize progress bar
                 let progress_bar = ProgressBar::new(test_list.test_count() as u64);
                 // Emulate Cargo's style.
                 let test_count_width = format!("{}", test_list.test_count()).len();
