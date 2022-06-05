@@ -466,6 +466,7 @@ impl ExecutionStatuses {
 /// A description of test executions obtained from `ExecuteStatuses`.
 ///
 /// This can be used to quickly determine whether a test passed, failed or was flaky.
+#[derive(Copy, Clone, Debug)]
 pub enum ExecutionDescription<'a> {
     /// The test was run once and was successful.
     Success {
@@ -502,8 +503,20 @@ impl<'a> ExecutionDescription<'a> {
     pub fn status_level(&self) -> StatusLevel {
         match self {
             ExecutionDescription::Success { .. } => StatusLevel::Pass,
+            // A flaky test implies that we print out retry information for it.
             ExecutionDescription::Flaky { .. } => StatusLevel::Retry,
             ExecutionDescription::Failure { .. } => StatusLevel::Fail,
+        }
+    }
+
+    /// Returns the last run status.
+    pub fn last_status(&self) -> &'a ExecuteStatus {
+        match self {
+            ExecutionDescription::Success {
+                single_status: last_status,
+            }
+            | ExecutionDescription::Flaky { last_status, .. }
+            | ExecutionDescription::Failure { last_status, .. } => last_status,
         }
     }
 }

@@ -173,6 +173,13 @@ impl<'cfg> NextestProfile<'cfg> {
             .unwrap_or(self.default_profile.status_level)
     }
 
+    /// Returns the test status level at the end of the run.
+    pub fn final_status_level(&self) -> StatusLevel {
+        self.custom_profile
+            .and_then(|profile| profile.final_status_level)
+            .unwrap_or(self.default_profile.final_status_level)
+    }
+
     /// Returns the failure output config for this profile.
     pub fn failure_output(&self) -> TestOutputDisplay {
         self.custom_profile
@@ -280,6 +287,7 @@ impl NextestProfilesImpl {
 struct DefaultProfileImpl {
     retries: usize,
     status_level: StatusLevel,
+    final_status_level: StatusLevel,
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
     fail_fast: bool,
@@ -303,6 +311,8 @@ struct CustomProfileImpl {
     retries: Option<usize>,
     #[serde(default)]
     status_level: Option<StatusLevel>,
+    #[serde(default)]
+    final_status_level: Option<StatusLevel>,
     #[serde(default)]
     failure_output: Option<TestOutputDisplay>,
     #[serde(default)]
