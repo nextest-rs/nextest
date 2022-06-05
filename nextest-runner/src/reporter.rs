@@ -185,6 +185,7 @@ pub struct TestReporterBuilder {
     failure_output: Option<TestOutputDisplay>,
     success_output: Option<TestOutputDisplay>,
     status_level: Option<StatusLevel>,
+    final_status_level: Option<StatusLevel>,
     verbose: bool,
 }
 
@@ -213,6 +214,12 @@ impl TestReporterBuilder {
     /// Sets the kinds of statuses to output.
     pub fn set_status_level(&mut self, status_level: StatusLevel) -> &mut Self {
         self.status_level = Some(status_level);
+        self
+    }
+
+    /// Sets the kinds of statuses to output at the end of the run.
+    pub fn set_final_status_level(&mut self, final_status_level: StatusLevel) -> &mut Self {
+        self.final_status_level = Some(final_status_level);
         self
     }
 
@@ -245,6 +252,10 @@ impl TestReporterBuilder {
             true => status_level.max(StatusLevel::Pass),
             false => status_level,
         };
+        let final_status_level = self
+            .final_status_level
+            .unwrap_or_else(|| profile.final_status_level());
+
         // failure_output and success_output are meaningless if the runner isn't capturing any
         // output.
         let failure_output = match self.no_capture {
@@ -298,6 +309,7 @@ impl TestReporterBuilder {
         TestReporter {
             inner: TestReporterImpl {
                 status_level,
+                final_status_level,
                 failure_output,
                 success_output,
                 no_capture: self.no_capture,
@@ -472,13 +484,14 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) ->
 
 struct TestReporterImpl<'a> {
     status_level: StatusLevel,
+    final_status_level: StatusLevel,
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
     no_capture: bool,
     binary_id_width: usize,
     styles: Box<Styles>,
     cancel_status: Option<CancelReason>,
-    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, ExecuteStatus)>>,
+    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, ExecutionStatuses)>>,
 }
 
 impl<'a> TestReporterImpl<'a> {
@@ -565,73 +578,31 @@ impl<'a> TestReporterImpl<'a> {
                 ..
             } => {
                 let describe = run_statuses.describe();
+                let last_status = run_statuses.last_status();
+                let test_output_display = match last_status.result.is_success() {
+                    true => self.success_output,
+                    false => self.failure_output,
+                };
 
                 if self.status_level >= describe.status_level() {
-                    // First, print the status.
-                    let last_status = match describe {
-                        ExecutionDescription::Success {
-                            single_status: run_status,
-                        } => {
-                            write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
-                            run_status
-                        }
-                        ExecutionDescription::Flaky { last_status, .. } => {
-                            // Use the skip color to also represent a flaky test.
-                            write!(
-                                writer,
-                                "{:>12} ",
-                                format!("TRY {} PASS", last_status.attempt).style(self.styles.skip)
-                            )?;
-                            last_status
-                        }
-                        ExecutionDescription::Failure { last_status, .. } => {
-                            let status_str = match last_status.result {
-                                ExecutionResult::Fail => "FAIL",
-                                ExecutionResult::ExecFail => "XFAIL",
-                                ExecutionResult::Pass => unreachable!("this is a failing test"),
-                            };
-
-                            if last_status.attempt == 1 {
-                                write!(writer, "{:>12} ", status_str.style(self.styles.fail))?;
-                            } else {
-                                write!(
-                                    writer,
-                                    "{:>12} ",
-                                    format!("TRY {} {}", last_status.attempt, status_str)
-                                        .style(self.styles.fail)
-                                )?;
-                            }
-                            last_status
-                        }
-                    };
-
-                    // Next, print the time taken.
-                    self.write_duration(last_status.time_taken, &mut writer)?;
-
-                    // Print the name of the test.
-                    self.write_instance(*test_instance, &mut writer)?;
-                    writeln!(writer)?;
+                    self.write_status_line(*test_instance, describe, &mut writer)?;
 
                     // If the test failed to execute, print its output and error status.
                     // (don't print out test failures after Ctrl-C)
-                    if self.cancel_status < Some(CancelReason::Signal) {
-                        let test_output_display = match last_status.result.is_success() {
-                            true => self.success_output,
-                            false => self.failure_output,
-                        };
-                        if test_output_display.is_immediate() {
-                            self.write_stdout_stderr(
-                                test_instance,
-                                last_status,
-                                false,
-                                &mut writer,
-                            )?;
-                        }
-                        if test_output_display.is_final() {
-                            self.final_outputs
-                                .push((*test_instance, last_status.clone()));
-                        }
+                    if self.cancel_status < Some(CancelReason::Signal)
+                        && test_output_display.is_immediate()
+                    {
+                        self.write_stdout_stderr(test_instance, last_status, false, &mut writer)?;
                     }
+                }
+
+                // Store the output in final_outputs if test output display is requested, or if
+                // we have to print a one-line summary at the end.
+                if test_output_display.is_final()
+                    || self.final_status_level >= describe.status_level()
+                {
+                    self.final_outputs
+                        .push((*test_instance, run_statuses.clone()));
                 }
             }
             TestEvent::TestSkipped {
@@ -702,16 +673,83 @@ impl<'a> TestReporterImpl<'a> {
                 let _ = write_summary_str(run_stats, &self.styles, &mut summary_str);
                 writeln!(writer, " tests run: {summary_str}")?;
 
-                // Don't print out test failures if canceled due to Ctrl-C.
-                if self.status_level >= StatusLevel::Fail
-                    && self.cancel_status < Some(CancelReason::Signal)
-                {
-                    for (test_instance, run_status) in &*self.final_outputs {
-                        self.write_stdout_stderr(test_instance, run_status, false, &mut writer)?;
+                // Don't print out final outputs if canceled due to Ctrl-C.
+                if self.cancel_status < Some(CancelReason::Signal) {
+                    for (test_instance, run_statuses) in &*self.final_outputs {
+                        let last_status = run_statuses.last_status();
+                        let test_output_display = match last_status.result.is_success() {
+                            true => self.success_output,
+                            false => self.failure_output,
+                        };
+                        let describe = run_statuses.describe();
+
+                        if self.final_status_level >= describe.status_level() {
+                            self.write_status_line(*test_instance, describe, &mut writer)?;
+                        }
+                        // This was previously gated on "if self.status_level >= StatusLevel::Fail"
+                        // but that seems incorrect -- the test output display and status level
+                        // controls are independent of each other.
+                        if test_output_display.is_final() {
+                            self.write_stdout_stderr(
+                                test_instance,
+                                last_status,
+                                false,
+                                &mut writer,
+                            )?;
+                        }
                     }
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn write_status_line(
+        &self,
+        test_instance: TestInstance<'a>,
+        describe: ExecutionDescription<'_>,
+        mut writer: impl Write,
+    ) -> io::Result<()> {
+        let last_status = describe.last_status();
+        match describe {
+            ExecutionDescription::Success { .. } => {
+                write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+            }
+            ExecutionDescription::Flaky { .. } => {
+                // Use the skip color to also represent a flaky test.
+                write!(
+                    writer,
+                    "{:>12} ",
+                    format!("TRY {} PASS", last_status.attempt).style(self.styles.skip)
+                )?;
+            }
+            ExecutionDescription::Failure { .. } => {
+                let status_str = match last_status.result {
+                    ExecutionResult::Fail => "FAIL",
+                    ExecutionResult::ExecFail => "XFAIL",
+                    ExecutionResult::Pass => unreachable!("this is a failing test"),
+                };
+
+                if last_status.attempt == 1 {
+                    write!(writer, "{:>12} ", status_str.style(self.styles.fail))?;
+                } else {
+                    write!(
+                        writer,
+                        "{:>12} ",
+                        format!("TRY {} {}", last_status.attempt, status_str)
+                            .style(self.styles.fail)
+                    )?;
+                }
+            }
+        };
+
+        // Next, print the time taken.
+        self.write_duration(last_status.time_taken, &mut writer)?;
+
+        // Print the name of the test.
+        self.write_instance(test_instance, &mut writer)?;
+        writeln!(writer)?;
 
         Ok(())
     }

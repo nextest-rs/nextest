@@ -525,6 +525,15 @@ struct TestReporterOpts {
         env = "NEXTEST_STATUS_LEVEL",
     )]
     status_level: Option<StatusLevel>,
+
+    /// Test statuses to output at the end of the run.
+    #[clap(
+        long,
+        possible_values = StatusLevel::variants(),
+        value_name = "LEVEL",
+        env = "NEXTEST_FINAL_STATUS_LEVEL",
+    )]
+    final_status_level: Option<StatusLevel>,
 }
 
 impl TestReporterOpts {
@@ -539,6 +548,9 @@ impl TestReporterOpts {
         }
         if let Some(status_level) = self.status_level {
             builder.set_status_level(status_level);
+        }
+        if let Some(final_status_level) = self.final_status_level {
+            builder.set_final_status_level(final_status_level);
         }
         builder
     }
