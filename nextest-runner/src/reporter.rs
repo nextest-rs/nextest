@@ -553,7 +553,7 @@ impl<'a> TestReporterImpl<'a> {
                         "only failing tests are retried"
                     );
                     if self.failure_output.is_immediate() {
-                        self.write_run_status(test_instance, run_status, true, &mut writer)?;
+                        self.write_stdout_stderr(test_instance, run_status, true, &mut writer)?;
                     }
 
                     // The final output doesn't show retries.
@@ -620,7 +620,12 @@ impl<'a> TestReporterImpl<'a> {
                             false => self.failure_output,
                         };
                         if test_output_display.is_immediate() {
-                            self.write_run_status(test_instance, last_status, false, &mut writer)?;
+                            self.write_stdout_stderr(
+                                test_instance,
+                                last_status,
+                                false,
+                                &mut writer,
+                            )?;
                         }
                         if test_output_display.is_final() {
                             self.final_outputs
@@ -702,7 +707,7 @@ impl<'a> TestReporterImpl<'a> {
                     && self.cancel_status < Some(CancelReason::Signal)
                 {
                     for (test_instance, run_status) in &*self.final_outputs {
-                        self.write_run_status(test_instance, run_status, false, &mut writer)?;
+                        self.write_stdout_stderr(test_instance, run_status, false, &mut writer)?;
                     }
                 }
             }
@@ -742,7 +747,7 @@ impl<'a> TestReporterImpl<'a> {
         write!(writer, "[>{:>7.3?}s] ", duration.as_secs_f64())
     }
 
-    fn write_run_status(
+    fn write_stdout_stderr(
         &self,
         test_instance: &TestInstance<'a>,
         run_status: &ExecuteStatus,
