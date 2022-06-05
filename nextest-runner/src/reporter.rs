@@ -23,7 +23,7 @@ use serde::Deserialize;
 use std::{
     fmt::{self, Write as _},
     io,
-    io::Write,
+    io::{BufWriter, Write},
     str::FromStr,
     time::{Duration, SystemTime},
 };
@@ -271,8 +271,8 @@ impl TestReporterBuilder {
                 .unwrap_or_else(|| profile.success_output()),
         };
 
-        let stderr = match output {
-            ReporterStderr::Terminal => {
+        let stderr = match (output, self.no_capture) {
+            (ReporterStderr::Terminal, false) => {
                 let progress_bar = ProgressBar::new(test_list.test_count() as u64);
                 // Emulate Cargo's style.
                 let test_count_width = format!("{}", test_list.test_count()).len();
@@ -301,9 +301,20 @@ impl TestReporterBuilder {
                 // Since we only update the progress bar on a steady tick, there's no need to buffer in
                 // ProgressDrawTarget.
                 progress_bar.set_draw_target(ProgressDrawTarget::stderr_nohz());
-                ReporterStderrImpl::Terminal(progress_bar)
+                ReporterStderrImpl::TerminalWithBar(progress_bar)
             }
-            ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
+            (ReporterStderr::Terminal, true) => {
+                // Do not use a progress bar if --no-capture is passed in. This is required since we
+                // pass down stderr to the child process.
+                //
+                // In the future, we could potentially switch to using a pty, in which case we could
+                // still potentially use the progress bar as a status bar. However, that brings
+                // about its own complications: what if a test's output doesn't include a newline?
+                // We might have to use a curses-like UI which would be a lot of work for not much
+                // gain.
+                ReporterStderrImpl::TerminalWithoutBar
+            }
+            (ReporterStderr::Buffer(buf), _) => ReporterStderrImpl::Buffer(buf),
         };
 
         TestReporter {
@@ -325,7 +336,8 @@ impl TestReporterBuilder {
 }
 
 enum ReporterStderrImpl<'a> {
-    Terminal(ProgressBar),
+    TerminalWithBar(ProgressBar),
+    TerminalWithoutBar,
     Buffer(&'a mut Vec<u8>),
 }
 
@@ -354,7 +366,7 @@ impl<'a> TestReporter<'a> {
     /// Report this test event to the given writer.
     fn write_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
         match &mut self.stderr {
-            ReporterStderrImpl::Terminal(progress_bar) => {
+            ReporterStderrImpl::TerminalWithBar(progress_bar) => {
                 // Write to a string that will be printed as a log line.
                 let mut buf: Vec<u8> = Vec::new();
                 self.inner
@@ -364,6 +376,14 @@ impl<'a> TestReporter<'a> {
                 progress_bar.println(&s);
 
                 update_progress_bar(&event, &self.inner.styles, progress_bar);
+            }
+            ReporterStderrImpl::TerminalWithoutBar => {
+                // Write to a buffered stderr.
+                let mut writer = BufWriter::new(std::io::stderr());
+                self.inner
+                    .write_event_impl(&event, &mut writer)
+                    .map_err(WriteEventError::Io)?;
+                writer.flush().map_err(WriteEventError::Io)?;
             }
             ReporterStderrImpl::Buffer(buf) => {
                 self.inner
