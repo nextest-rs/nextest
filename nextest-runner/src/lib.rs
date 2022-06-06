@@ -53,3 +53,5 @@ pub mod signal;
 mod stopwatch;
 pub mod target_runner;
 pub mod test_filter;
+#[cfg(feature = "self-update")]
+pub mod update;

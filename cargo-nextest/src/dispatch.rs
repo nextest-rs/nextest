@@ -48,7 +48,7 @@ pub struct CargoNextestApp {
 
 impl CargoNextestApp {
     /// Executes the app.
-    pub fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
+    pub fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
         let NextestSubcommand::Nextest(mut app) = self.subcommand;
         app.validate()?;
         app.exec(output_writer)
@@ -112,7 +112,9 @@ impl AppOpts {
     }
 
     /// Execute the command.
-    fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
+    ///
+    /// Returns the exit code.
+    fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
         fn build_filter_needs_deps(build_filter: &TestBuildFilter) -> bool {
             build_filter
                 .filter_expr
@@ -139,7 +141,8 @@ impl AppOpts {
                     output_writer,
                 )?;
                 let app = App::new(base, build_filter)?;
-                app.exec_list(message_format, list_type, output_writer)
+                app.exec_list(message_format, list_type, output_writer)?;
+                Ok(0)
             }
             Command::Run {
                 profile,
@@ -167,7 +170,8 @@ impl AppOpts {
                     &runner_opts,
                     &reporter_opts,
                     output_writer,
-                )
+                )?;
+                Ok(0)
             }
             Command::Archive {
                 cargo_options,
@@ -184,8 +188,10 @@ impl AppOpts {
                     true,
                     output_writer,
                 )?;
-                app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)
+                app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
+                Ok(0)
             }
+            Command::Self_ { command } => command.exec(self.output),
         }
     }
 }
@@ -325,6 +331,12 @@ enum Command {
         )]
         zstd_level: i32,
         // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
+    },
+    /// Modify the nextest installation
+    #[clap(name = "self")]
+    Self_ {
+        #[clap(subcommand)]
+        command: SelfCommand,
     },
 }
 
@@ -997,6 +1009,82 @@ impl App {
             return Err(Report::new(ExpectedError::test_run_failed()));
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum SelfCommand {
+    #[cfg_attr(
+        not(feature = "self-update"),
+        doc = "This version of nextest does not have self-update enabled\n\
+        \n\
+        Always exits with code 93 (SELF_UPDATE_UNAVAILABLE).
+        "
+    )]
+    #[cfg_attr(
+        feature = "self-update",
+        doc = "Download and install updates to nextest\n\
+        \n\
+        This command checks the internet for updates to nextest, then downloads and
+        installs them if an update is available."
+    )]
+    Update {
+        /// Version or version range to download
+        #[clap(long, default_value = "latest")]
+        version: String,
+
+        /// Check for updates rather than downloading them
+        ///
+        /// If no update is available, exits with code 0. If an update is available, exits with code
+        /// 80 (UPDATE_AVAILABLE).
+        #[clap(short = 'n', long)]
+        check: bool,
+
+        /// Do not prompt for confirmation
+        #[clap(short = 'y', long, conflicts_with = "check")]
+        yes: bool,
+
+        /// Force downgrades and reinstalls
+        #[clap(long)]
+        force: bool,
+
+        /// URL to download releases.json from
+        #[clap(long)]
+        releases_url: Option<String>,
+    },
+}
+
+impl SelfCommand {
+    #[allow(unused_variables)]
+    fn exec(self, output: OutputOpts) -> Result<i32> {
+        let output = output.init();
+
+        match self {
+            Self::Update {
+                version,
+                check,
+                yes,
+                force,
+                releases_url,
+            } => {
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "self-update")] {
+                        crate::update::perform_update(
+                            &version,
+                            check,
+                            yes,
+                            force,
+                            releases_url,
+                            output,
+                        )
+                    } else {
+                        log::info!("this version of cargo-nextest cannot perform self-updates\n\
+                                    (hint: this usually means nextest is managed by another package manager)");
+                        Ok(nextest_metadata::NextestExitCode::SELF_UPDATE_UNAVAILABLE)
+                    }
+                }
+            }
+        }
     }
 }
 

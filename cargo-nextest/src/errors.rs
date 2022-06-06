@@ -75,6 +75,14 @@ pub enum ExpectedError {
         exit_code: Option<i32>,
     },
     TestRunFailed,
+    #[cfg(feature = "self-update")]
+    UpdateVersionParseError {
+        err: UpdateVersionParseError,
+    },
+    #[cfg(feature = "self-update")]
+    UpdateError {
+        err: UpdateError,
+    },
     ExperimentalFeatureNotEnabled {
         name: &'static str,
         var_name: &'static str,
@@ -178,10 +186,14 @@ impl ExpectedError {
             | Self::ArgumentJsonParseError { .. }
             | Self::CargoMetadataParseError { .. }
             | Self::TestBinaryArgsParseError { .. } => NextestExitCode::SETUP_ERROR,
+            #[cfg(feature = "self-update")]
+            Self::UpdateVersionParseError { .. } => NextestExitCode::SETUP_ERROR,
             Self::CreateTestListError { .. } => NextestExitCode::TEST_LIST_CREATION_FAILED,
             Self::BuildFailed { .. } => NextestExitCode::BUILD_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
+            #[cfg(feature = "self-update")]
+            Self::UpdateError { .. } => NextestExitCode::UPDATE_ERROR,
             Self::ExperimentalFeatureNotEnabled { .. } => {
                 NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
             }
@@ -323,6 +335,19 @@ impl ExpectedError {
                 log::error!("test run failed");
                 None
             }
+            #[cfg(feature = "self-update")]
+            Self::UpdateVersionParseError { err } => {
+                log::error!("failed to parse --version");
+                Some(err as &dyn Error)
+            }
+            #[cfg(feature = "self-update")]
+            Self::UpdateError { err } => {
+                log::error!(
+                    "failed to update nextest (please update manually by visiting <{}>)",
+                    "https://get.nexte.st".if_supports_color(Stream::Stderr, |x| x.bold())
+                );
+                Some(err as &dyn Error)
+            }
             Self::ExperimentalFeatureNotEnabled { name, var_name } => {
                 log::error!(
                     "'{}' is an experimental feature and must be enabled with {}=1",
@@ -379,6 +404,10 @@ impl fmt::Display for ExpectedError {
             Self::CreateTestListError { .. } => writeln!(f, "parse test list error"),
             Self::BuildFailed { .. } => writeln!(f, "build failed"),
             Self::TestRunFailed => writeln!(f, "test run failed"),
+            #[cfg(feature = "self-update")]
+            Self::UpdateVersionParseError { .. } => writeln!(f, "parsing update version failed"),
+            #[cfg(feature = "self-update")]
+            Self::UpdateError { .. } => writeln!(f, "update failed"),
             Self::ExperimentalFeatureNotEnabled { .. } => {
                 writeln!(f, "experimental feature not enabled")
             }

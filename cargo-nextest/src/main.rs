@@ -11,7 +11,7 @@ fn main() -> Result<()> {
 
     let opts = CargoNextestApp::parse();
     match opts.exec(&mut OutputWriter::default()) {
-        Ok(()) => Ok(()),
+        Ok(code) => std::process::exit(code),
         Err(err) => {
             let expected_error: ExpectedError = err.downcast()?;
             expected_error.display_to_stderr();
