@@ -25,6 +25,18 @@ impl NextestExitCode {
     /// Creating a test list produced an error.
     pub const TEST_LIST_CREATION_FAILED: i32 = 104;
 
+    /// Downloading an update resulted in an error.
+    pub const UPDATE_ERROR: i32 = 90;
+
+    /// An update was available and `--check` was requested.
+    pub const UPDATE_AVAILABLE: i32 = 80;
+
+    /// A downgrade was requested but not performed.
+    pub const UPDATE_DOWNGRADE_NOT_PERFORMED: i32 = 81;
+
+    /// An update was available but the user canceled it.
+    pub const UPDATE_CANCELED: i32 = 82;
+
     /// A user issue happened while setting up a nextest invocation.
     pub const SETUP_ERROR: i32 = 96;
 
@@ -33,4 +45,7 @@ impl NextestExitCode {
 
     /// A filtering expression failed to parse.
     pub const INVALID_FILTER_EXPRESSION: i32 = 94;
+
+    /// A self-update was requested but this version of cargo-nextest cannot perform self-updates.
+    pub const SELF_UPDATE_UNAVAILABLE: i32 = 93;
 }

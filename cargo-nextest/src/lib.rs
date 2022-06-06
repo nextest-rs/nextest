@@ -18,6 +18,8 @@ mod dispatch;
 mod errors;
 mod output;
 mod reuse_build;
+#[cfg(feature = "self-update")]
+mod update;
 
 #[cfg(test)]
 mod tests_integration;

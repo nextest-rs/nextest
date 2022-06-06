@@ -24,6 +24,7 @@ guppy = "0.14.2"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home = "0.5.3"
+http = "0.2.8"
 humantime-serde = "1.1.1"
 indent_write = "2.2.0"
 indicatif = "0.16.2"
@@ -33,6 +34,7 @@ once_cell = "1.12.0"
 owo-colors = "3.4.0"
 num_cpus = "1.13.1"
 rayon = "1.5.3"
+semver = "1.0.7"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
 shell-words = "1.1.0"
@@ -46,6 +48,17 @@ thiserror = "1.0.31"
 toml = "0.5.9"
 twox-hash = { version = "1.6.3", default-features = false }
 zstd = { version = "0.11.2", features = ["zstdmt"] }
+
+###
+### Update-related features, optionally enabled
+###
+mukti-metadata = { git = "https://github.com/nextest-rs/mukti", rev = "b2637d3472e9b84cf6cedf2d81a27320a9ad6a0c", optional = true }
+# TODO: remove dependency on self_update, build our own thing on top of mukti
+self_update = { version = "0.30.0", optional = true, features = [
+    "archive-tar",
+    "compression-flate2",
+    "rustls",
+] }
 
 nextest-filtering = { version = "0.1.0", path = "../nextest-filtering" }
 nextest-metadata = { version = "0.4.1", path = "../nextest-metadata" }
@@ -69,3 +82,6 @@ test-case = "2.1.0"
 [[bin]]
 name = "passthrough"
 path = "test-helpers/passthrough.rs"
+
+[features]
+self-update = ["self_update", "mukti-metadata"]

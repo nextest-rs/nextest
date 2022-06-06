@@ -16,14 +16,17 @@ publish = false
 [dependencies]
 backtrace = { version = "0.3.65", features = ["gimli-symbolize", "std"] }
 clap = { version = "3.1.18", features = ["atty", "clap_derive", "color", "derive", "env", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
+console = { version = "0.15.0", features = ["ansi-parsing", "regex", "unicode-width"] }
+either = { version = "1.6.1", features = ["use_std"] }
 indexmap = { version = "1.8.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.126", features = ["std"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 miette = { version = "4.7.1", features = ["atty", "backtrace", "fancy", "fancy-no-backtrace", "owo-colors", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 nom-tracable = { version = "0.8.0", features = ["trace"] }
 num-traits = { version = "0.2.15", default-features = false, features = ["std"] }
 owo-colors = { version = "3.4.0", default-features = false, features = ["supports-color", "supports-colors"] }
+regex = { version = "1.5.6", features = ["aho-corasick", "memchr", "perf", "perf-cache", "perf-dfa", "perf-inline", "perf-literal", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
+regex-syntax = { version = "0.6.26", features = ["unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 serde = { version = "1.0.137", features = ["derive", "serde_derive", "std"] }
 serde_json = { version = "1.0.81", features = ["std", "unbounded_depth"] }
 textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unicode-width"] }
@@ -33,21 +36,23 @@ cc = { version = "1.0.73", default-features = false, features = ["jobserver", "p
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 proc-macro2 = { version = "1.0.39", features = ["proc-macro"] }
 quote = { version = "1.0.18", features = ["proc-macro"] }
+regex = { version = "1.5.6", features = ["aho-corasick", "memchr", "perf", "perf-cache", "perf-dfa", "perf-inline", "perf-literal", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
+regex-syntax = { version = "0.6.26", features = ["unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 syn = { version = "1.0.96", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-libc = { version = "0.2.126", default-features = false, features = ["extra_traits"] }
+libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-apple-darwin.dependencies]
-libc = { version = "0.2.126", default-features = false, features = ["extra_traits"] }
+libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-winapi = { version = "0.3.9", default-features = false, features = ["consoleapi", "errhandlingapi", "fileapi", "handleapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "processenv", "processthreadsapi", "profileapi", "shlobj", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winuser"] }
+winapi = { version = "0.3.9", default-features = false, features = ["consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "minwinbase", "minwindef", "mswsock", "namedpipeapi", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "shlobj", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 
 ### END HAKARI SECTION
