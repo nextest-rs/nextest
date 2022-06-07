@@ -7,6 +7,7 @@ use crate::{
     helpers::dylib_path_envvar,
     reporter::{StatusLevel, TestOutputDisplay},
     reuse_build::ArchiveFormat,
+    target_runner::PlatformRunnerSource,
     test_filter::RunIgnored,
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
@@ -882,8 +883,9 @@ pub enum TargetRunnerError {
     /// An environment variable or config key was found that matches the target
     /// triple, but it didn't actually contain a binary
     BinaryNotSpecified {
-        /// The environment variable or config key path
-        key: String,
+        /// The source under consideration.
+        source: PlatformRunnerSource,
+
         /// The value that was read from the key
         value: String,
     },
@@ -930,11 +932,11 @@ impl fmt::Display for TargetRunnerError {
             Self::InvalidEnvironmentVar(key) => {
                 write!(f, "environment variable '{}' contained non-utf8 data", key)
             }
-            Self::BinaryNotSpecified { key, value } => {
+            Self::BinaryNotSpecified { source, value } => {
                 write!(
                     f,
                     "runner '{}' = '{}' did not contain a runner binary",
-                    key, value
+                    source, value
                 )
             }
             Self::UnableToReadDir(io) => {
