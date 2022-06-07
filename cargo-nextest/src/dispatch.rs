@@ -23,7 +23,7 @@ use nextest_runner::{
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::TestRunnerBuilder,
     signal::SignalHandler,
-    target_runner::TargetRunner,
+    target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
 };
 use owo_colors::{OwoColorize, Style};
@@ -888,12 +888,40 @@ fn acquire_graph_data(
 
 fn runner_for_target(triple: Option<&str>) -> TargetRunner {
     match TargetRunner::new(triple) {
-        Ok(runner) => runner,
+        Ok(runner) => {
+            match triple {
+                Some(_) => {
+                    if let Some(runner) = runner.target() {
+                        log_platform_runner("for the target platform, ", runner);
+                    }
+                    if let Some(runner) = runner.host() {
+                        log_platform_runner("for the host platform, ", runner);
+                    }
+                }
+                None => {
+                    // If triple is None, then the host and target platforms use the same runner if
+                    // any.
+                    if let Some(runner) = runner.target() {
+                        log_platform_runner("", runner);
+                    }
+                }
+            }
+            runner
+        }
         Err(err) => {
             warn_on_target_runner_err(&err).expect("writing to a string is infallible");
             TargetRunner::empty()
         }
     }
+}
+
+fn log_platform_runner(prefix: &str, runner: &PlatformRunner) {
+    let runner_command = shell_words::join(std::iter::once(runner.binary()).chain(runner.args()));
+    log::info!(
+        "{prefix}using target runner `{}` defined by {}",
+        runner_command.if_supports_color(Stream::Stderr, |s| s.bold()),
+        runner.source()
+    )
 }
 
 fn warn_on_target_runner_err(err: &TargetRunnerError) -> Result<(), std::fmt::Error> {
