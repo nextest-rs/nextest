@@ -3,6 +3,22 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.17] - 2022-06-07
+
+This release contains a number of user experience improvements.
+
+### Added
+
+- If producing output to an interactive terminal, nextest now prints out its status as a progress bar. This makes it easy to see the status of a test run at a glance.
+- Nextest's configuration has a new `final-status-level` option which can be used to print out some statuses at the end of a run (defaults to `none`). On the command line, this can be overridden with the `--final-status-level` argument or `NEXTEST_FINAL_STATUS_LEVEL` in the environment.
+- If a [target runner](https://nexte.st/book/target-runners) is in use, nextest now prints out its name and the environment variable or config file the definition was obtained from.
+
+### Changed
+
+- If the creation of a test list fails, nextest now prints a more descriptive error message, and exits with the exit code 104 ([`TEST_LIST_CREATION_FAILED`]).
+
+[`TEST_LIST_CREATION_FAILED`]: https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.TEST_LIST_CREATION_FAILED
+
 ## [0.9.16] - 2022-06-02
 
 ### Added
@@ -211,6 +227,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.17]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.17
 [0.9.16]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.16
 [0.9.15]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.15
 [0.9.14]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.14

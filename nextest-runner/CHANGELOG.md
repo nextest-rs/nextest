@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.0] - 2022-06-07
+
+This release contains a number of user experience improvements.
+
+### Added
+
+- If producing output to an interactive terminal, nextest now prints out its status as a progress bar. This makes it easy to see the status of a test run at a glance.
+- Nextest's configuration has a new `final-status-level` option which can be used to print out some statuses at the end of a run (defaults to `none`). On the command line, this can be overridden with the `--final-status-level` argument or `NEXTEST_FINAL_STATUS_LEVEL` in the environment.
+- If a [target runner](https://nexte.st/book/target-runners) is in use, nextest now prints out its name and the environment variable or config file the definition was obtained from.
+
+### Changed
+
+- If the creation of a test list fails, nextest now prints a more descriptive error message, and exits with the exit code 104 ([`TEST_LIST_CREATION_FAILED`]).
+
+[`TEST_LIST_CREATION_FAILED`]: https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.TEST_LIST_CREATION_FAILED
+
 ## [0.8.1] - 2022-06-02
 
 ### Added
@@ -110,6 +126,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.9.0
 [0.8.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.8.1
 [0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.8.0
 [0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.7.0
