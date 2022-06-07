@@ -296,11 +296,14 @@ impl TestReporterBuilder {
                         .progress_chars("=> ")
                         .template(&template),
                 );
+                // Since we only update the progress bar on a steady tick (below), there's no need
+                // to buffer in ProgressDrawTarget.
+                //
+                // NOTE: set_draw_target must be called before enable_steady_tick to avoid a
+                // spurious extra line from being printed as the draw target changes.
+                progress_bar.set_draw_target(ProgressDrawTarget::stderr_nohz());
                 // Enable a steady tick 10 times a second.
                 progress_bar.enable_steady_tick(100);
-                // Since we only update the progress bar on a steady tick, there's no need to buffer in
-                // ProgressDrawTarget.
-                progress_bar.set_draw_target(ProgressDrawTarget::stderr_nohz());
                 ReporterStderrImpl::TerminalWithBar(progress_bar)
             }
             (ReporterStderr::Terminal, true) => {
