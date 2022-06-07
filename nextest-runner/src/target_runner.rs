@@ -6,7 +6,7 @@
 use crate::errors::TargetRunnerError;
 use camino::{Utf8Path, Utf8PathBuf};
 use nextest_metadata::BuildPlatform;
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt};
 use target_spec::Platform;
 
 #[derive(serde::Deserialize, Debug)]
@@ -109,6 +109,7 @@ impl TargetRunner {
 pub struct PlatformRunner {
     runner_binary: Utf8PathBuf,
     args: Vec<String>,
+    source: PlatformRunnerSource,
 }
 
 impl PlatformRunner {
@@ -159,7 +160,7 @@ impl PlatformRunner {
             let runner = runner_var
                 .into_string()
                 .map_err(|_osstr| TargetRunnerError::InvalidEnvironmentVar(env_key.clone()))?;
-            Self::parse_runner(&env_key, Runner::Simple(runner)).map(Some)
+            Self::parse_runner(PlatformRunnerSource::Env(env_key), Runner::Simple(runner)).map(Some)
         } else {
             Ok(None)
         }
@@ -263,8 +264,6 @@ impl PlatformRunner {
 
         let mut target_runner = None;
 
-        let triple_runner_key = format!("target.{}.runner", target.triple_str());
-
         // Now that we've found all of the config files that could declare
         // a runner that matches our target triple, we need to actually find
         // all the matches, but in reverse order as the closer the config is
@@ -285,9 +284,15 @@ impl PlatformRunner {
 
             if let Some(mut targets) = config.target {
                 // First lookup by the exact triple, as that one always takes precedence
-                if let Some(target) = targets.remove(target.triple_str()) {
-                    if let Some(runner) = target.runner {
-                        target_runner = Some(Self::parse_runner(&triple_runner_key, runner)?);
+                if let Some(parent) = targets.remove(target.triple_str()) {
+                    if let Some(runner) = parent.runner {
+                        target_runner = Some(Self::parse_runner(
+                            PlatformRunnerSource::CargoConfig {
+                                path: config_path.clone(),
+                                target_table: target.triple_str().into(),
+                            },
+                            runner,
+                        )?);
                         continue;
                     }
                 }
@@ -307,7 +312,13 @@ impl PlatformRunner {
                     };
 
                     if expr.eval(&target) == Some(true) {
-                        target_runner = Some(Self::parse_runner(&triple_runner_key, runner)?);
+                        target_runner = Some(Self::parse_runner(
+                            PlatformRunnerSource::CargoConfig {
+                                path: config_path,
+                                target_table: cfg,
+                            },
+                            runner,
+                        )?);
                         continue 'config;
                     }
                 }
@@ -317,7 +328,10 @@ impl PlatformRunner {
         Ok(target_runner)
     }
 
-    fn parse_runner(key: &str, runner: Runner) -> Result<Self, TargetRunnerError> {
+    fn parse_runner(
+        source: PlatformRunnerSource,
+        runner: Runner,
+    ) -> Result<Self, TargetRunnerError> {
         let (runner_binary, args) = match runner {
             Runner::Simple(value) => {
                 // We only split on whitespace, which doesn't take quoting into account,
@@ -328,7 +342,7 @@ impl PlatformRunner {
                     runner_iter
                         .next()
                         .ok_or_else(|| TargetRunnerError::BinaryNotSpecified {
-                            key: key.to_owned(),
+                            source: source.clone(),
                             value: value.clone(),
                         })?;
                 let args = runner_iter.map(String::from).collect();
@@ -337,7 +351,7 @@ impl PlatformRunner {
             Runner::List(mut values) => {
                 if values.is_empty() {
                     return Err(TargetRunnerError::BinaryNotSpecified {
-                        key: key.to_owned(),
+                        source,
                         value: String::new(),
                     });
                 } else {
@@ -350,6 +364,7 @@ impl PlatformRunner {
         Ok(Self {
             runner_binary,
             args,
+            source,
         })
     }
 
@@ -369,6 +384,47 @@ impl PlatformRunner {
     pub fn args(&self) -> impl Iterator<Item = &str> {
         self.args.iter().map(AsRef::as_ref)
     }
+
+    /// Returns the location where the platform runner is defined.
+    #[inline]
+    pub fn source(&self) -> &PlatformRunnerSource {
+        &self.source
+    }
+}
+
+/// The place where a platform runner's configuration was picked up from.
+///
+/// Returned by [`PlatformRunner::source`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PlatformRunnerSource {
+    /// The platform runner was defined by this environment variable.
+    Env(String),
+
+    /// The platform runner was defined through a `.cargo/config.toml` or `.cargo/config` file.
+    CargoConfig {
+        /// The path to the configuration file.
+        path: Utf8PathBuf,
+
+        /// The table name within `target` that was used.
+        ///
+        /// # Examples
+        ///
+        /// If `target.'cfg(target_os = "linux")'.runner` is used, this is `cfg(target_os = "linux")`.
+        target_table: String,
+    },
+}
+
+impl fmt::Display for PlatformRunnerSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Env(var) => {
+                write!(f, "environment variable `{var}`")
+            }
+            Self::CargoConfig { path, target_table } => {
+                write!(f, "`target.{target_table}.runner` within `{path}`")
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -381,9 +437,9 @@ mod tests {
     #[test]
     fn test_find_config() {
         let dir = setup_temp_dir().unwrap();
-        let dir_path = <&Utf8Path>::try_from(dir.path()).unwrap();
-        let dir_foo_path = Utf8PathBuf::try_from(dir.path().join("foo")).unwrap();
-        let dir_foo_bar_path = Utf8PathBuf::try_from(dir.path().join("foo/bar")).unwrap();
+        let dir_path = Utf8PathBuf::try_from(dir.path().canonicalize().unwrap()).unwrap();
+        let dir_foo_path = dir_path.join("foo");
+        let dir_foo_bar_path = dir_foo_path.join("bar");
 
         // ---
         // Searches through the full directory tree
@@ -392,12 +448,16 @@ mod tests {
             PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
-                Some(dir_path),
+                Some(&dir_path),
             )
             .unwrap(),
             Some(PlatformRunner {
                 runner_binary: "wine".into(),
                 args: vec!["--test-arg".into()],
+                source: PlatformRunnerSource::CargoConfig {
+                    path: dir_path.join("foo/bar/.cargo/config.toml"),
+                    target_table: "x86_64-pc-windows-msvc".into()
+                },
             }),
         );
 
@@ -405,12 +465,16 @@ mod tests {
             PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
-                Some(dir_path),
+                Some(&dir_path),
             )
             .unwrap(),
             Some(PlatformRunner {
                 runner_binary: "wine2".into(),
                 args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    path: dir_path.join("foo/bar/.cargo/config.toml"),
+                    target_table: "cfg(windows)".into()
+                },
             }),
         );
 
@@ -418,12 +482,16 @@ mod tests {
             PlatformRunner::find_config(
                 Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
-                Some(dir_path),
+                Some(&dir_path),
             )
             .unwrap(),
             Some(PlatformRunner {
                 runner_binary: "unix-runner".into(),
                 args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    path: dir_path.join(".cargo/config"),
+                    target_table: "cfg(unix)".into()
+                },
             }),
         );
 
@@ -434,12 +502,16 @@ mod tests {
             PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_path,
-                Some(dir_path),
+                Some(&dir_path),
             )
             .unwrap(),
             Some(PlatformRunner {
                 runner_binary: "parent-wine".into(),
                 args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    path: dir_path.join(".cargo/config"),
+                    target_table: "x86_64-pc-windows-msvc".into()
+                },
             }),
         );
 
@@ -447,7 +519,7 @@ mod tests {
             PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_path,
-                Some(dir_path),
+                Some(&dir_path),
             )
             .unwrap(),
             None,
@@ -459,21 +531,25 @@ mod tests {
         assert_eq!(
             PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
-                dir_path,
-                Some(dir_path),
+                &dir_path,
+                Some(&dir_path),
             )
             .unwrap(),
             Some(PlatformRunner {
                 runner_binary: "parent-wine".into(),
                 args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    path: dir_path.join(".cargo/config"),
+                    target_table: "x86_64-pc-windows-msvc".into()
+                },
             }),
         );
 
         assert_eq!(
             PlatformRunner::find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
-                dir_path,
-                Some(dir_path),
+                &dir_path,
+                Some(&dir_path),
             )
             .unwrap(),
             None,
