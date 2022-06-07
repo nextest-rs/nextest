@@ -76,8 +76,9 @@ impl Color {
         }
 
         INIT_LOGGER.call_once(|| {
-            env_logger::Builder::from_env("NEXTEST_LOG")
-                .filter_level(LevelFilter::Warn)
+            env_logger::Builder::new()
+                .filter_level(LevelFilter::Info)
+                .parse_env("NEXTEST_LOG")
                 .format(format_fn)
                 .init();
 
