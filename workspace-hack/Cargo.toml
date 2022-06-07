@@ -17,7 +17,7 @@ publish = false
 backtrace = { version = "0.3.65", features = ["gimli-symbolize", "std"] }
 clap = { version = "3.1.18", features = ["atty", "clap_derive", "color", "derive", "env", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
 indexmap = { version = "1.8.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.124", features = ["std"] }
+libc = { version = "0.2.126", features = ["std"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 miette = { version = "4.7.1", features = ["atty", "backtrace", "fancy", "fancy-no-backtrace", "owo-colors", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
@@ -36,16 +36,16 @@ quote = { version = "1.0.18", features = ["proc-macro"] }
 syn = { version = "1.0.96", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-libc = { version = "0.2.124", default-features = false, features = ["extra_traits"] }
+libc = { version = "0.2.126", default-features = false, features = ["extra_traits"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-libc = { version = "0.2.124", features = ["extra_traits", "std"] }
+libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-apple-darwin.dependencies]
-libc = { version = "0.2.124", default-features = false, features = ["extra_traits"] }
+libc = { version = "0.2.126", default-features = false, features = ["extra_traits"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
-libc = { version = "0.2.124", features = ["extra_traits", "std"] }
+libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 winapi = { version = "0.3.9", default-features = false, features = ["consoleapi", "errhandlingapi", "fileapi", "handleapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "processenv", "processthreadsapi", "profileapi", "shlobj", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winuser"] }

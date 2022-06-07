@@ -39,7 +39,7 @@ shell-words = "1.1.0"
 strip-ansi-escapes = "0.1.1"
 tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
-target-spec = "1.0"
+target-spec = "1.0.2"
 tempfile = "3.3.0"
 # For parsing of .cargo/config.toml files
 toml = "0.5.9"
