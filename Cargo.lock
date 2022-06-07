@@ -835,6 +835,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "shell-words",
  "strip-ansi-escapes",
  "tar",
  "target-spec",

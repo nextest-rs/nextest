@@ -412,7 +412,7 @@ impl<'g> TestList<'g> {
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
         // based on one doesn't affect the other.
         let mut non_ignored_filter = filter.build();
-        for test_name in Self::parse(non_ignored.as_ref())? {
+        for test_name in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
             tests.insert(
                 test_name.into(),
                 RustTestCaseSummary {
@@ -423,7 +423,7 @@ impl<'g> TestList<'g> {
         }
 
         let mut ignored_filter = filter.build();
-        for test_name in Self::parse(ignored.as_ref())? {
+        for test_name in Self::parse(&test_binary.binary_id, ignored.as_ref())? {
             // Note that libtest prints out:
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
@@ -464,15 +464,19 @@ impl<'g> TestList<'g> {
     }
 
     /// Parses the output of --list --format terse and returns a sorted list.
-    fn parse(list_output: &str) -> Result<Vec<&'_ str>, ParseTestListError> {
-        let mut list = Self::parse_impl(list_output).collect::<Result<Vec<_>, _>>()?;
+    fn parse<'a>(
+        binary_id: &'a str,
+        list_output: &'a str,
+    ) -> Result<Vec<&'a str>, ParseTestListError> {
+        let mut list = Self::parse_impl(binary_id, list_output).collect::<Result<Vec<_>, _>>()?;
         list.sort_unstable();
         Ok(list)
     }
 
-    fn parse_impl(
-        list_output: &str,
-    ) -> impl Iterator<Item = Result<&'_ str, ParseTestListError>> + '_ {
+    fn parse_impl<'a>(
+        binary_id: &'a str,
+        list_output: &'a str,
+    ) -> impl Iterator<Item = Result<&'a str, ParseTestListError>> + 'a {
         // The output is in the form:
         // <test name>: test
         // <test name>: test
@@ -487,6 +491,7 @@ impl<'g> TestList<'g> {
 
             let res = line.strip_suffix(": test").ok_or_else(|| {
                 ParseTestListError::parse_line(
+                    binary_id,
                     format!(
                         "line '{}' did not end with the string ': test' or ': benchmark'",
                         line
@@ -557,13 +562,17 @@ impl<'g> RustTestArtifact<'g> {
     ) -> Result<String, ParseTestListError> {
         let mut argv = Vec::new();
 
-        let program: std::ffi::OsString = if let Some(runner) = runner {
+        let program: String = if let Some(runner) = runner {
             argv.extend(runner.args());
             argv.push(self.binary_path.as_str());
             runner.binary().into()
         } else {
-            use duct::IntoExecutablePath;
-            self.binary_path.as_std_path().to_executable()
+            debug_assert!(
+                self.binary_path.is_absolute(),
+                "binary path {} is absolute",
+                self.binary_path
+            );
+            self.binary_path.clone().into()
         };
 
         argv.extend(["--list", "--format", "terse"]);
@@ -572,8 +581,8 @@ impl<'g> RustTestArtifact<'g> {
         }
 
         let cmd = make_test_expression(
-            program,
-            argv,
+            program.clone(),
+            &argv,
             &self.cwd,
             &self.package,
             dylib_path,
@@ -583,11 +592,8 @@ impl<'g> RustTestArtifact<'g> {
 
         cmd.read().map_err(|error| {
             ParseTestListError::command(
-                format!(
-                    "'{} --list --format terse{}'",
-                    self.binary_path,
-                    if ignored { " --ignored" } else { "" }
-                ),
+                &self.binary_id,
+                std::iter::once(program).chain(argv.iter().map(|&s| s.to_owned())),
                 error,
             )
         })
@@ -637,16 +643,13 @@ impl<'a> TestInstance<'a> {
 
         let mut args = Vec::new();
 
-        let program: std::ffi::OsString = match platform_runner {
+        let program: String = match platform_runner {
             Some(runner) => {
                 args.extend(runner.args());
                 args.push(self.binary.as_str());
                 runner.binary().into()
             }
-            None => {
-                use duct::IntoExecutablePath;
-                self.binary.as_std_path().to_executable()
-            }
+            None => self.binary.to_owned().into(),
         };
 
         args.extend(["--exact", self.name, "--nocapture"]);
@@ -667,7 +670,7 @@ impl<'a> TestInstance<'a> {
 
 /// Create a duct Expression for a test binary with the given arguments, using the specified [`PackageMetadata`].
 pub(crate) fn make_test_expression(
-    program: OsString,
+    program: String,
     args: impl IntoIterator<Item = impl Into<OsString>>,
     cwd: &Utf8PathBuf,
     package: &PackageMetadata<'_>,

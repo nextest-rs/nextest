@@ -4,6 +4,7 @@
 //! Errors produced by nextest.
 
 use crate::{
+    helpers::dylib_path_envvar,
     reporter::{StatusLevel, TestOutputDisplay},
     reuse_build::ArchiveFormat,
     test_filter::RunIgnored,
@@ -369,8 +370,11 @@ impl error::Error for FromMessagesError {
 pub enum ParseTestListError {
     /// Running a command to gather the list of tests failed.
     Command {
+        /// The binary ID for which gathering the list of tests failed.
+        binary_id: String,
+
         /// The command that was run.
-        command: Cow<'static, str>,
+        command: Vec<String>,
 
         /// The underlying error.
         error: std::io::Error,
@@ -378,6 +382,9 @@ pub enum ParseTestListError {
 
     /// An error occurred while parsing a line in the test output.
     ParseLine {
+        /// The binary ID for which parsing the list of tests failed.
+        binary_id: String,
+
         /// A descriptive message.
         message: Cow<'static, str>,
 
@@ -396,46 +403,63 @@ pub enum ParseTestListError {
 }
 
 impl ParseTestListError {
-    pub(crate) fn command(command: impl Into<Cow<'static, str>>, error: std::io::Error) -> Self {
-        ParseTestListError::Command {
-            command: command.into(),
+    pub(crate) fn command(
+        binary_id: impl Into<String>,
+        command: impl IntoIterator<Item = impl Into<String>>,
+        error: std::io::Error,
+    ) -> Self {
+        Self::Command {
+            binary_id: binary_id.into(),
+            command: command.into_iter().map(|s| s.into()).collect(),
             error,
         }
     }
 
     pub(crate) fn parse_line(
+        binary_id: impl Into<String>,
         message: impl Into<Cow<'static, str>>,
         full_output: impl Into<String>,
     ) -> Self {
-        ParseTestListError::ParseLine {
+        Self::ParseLine {
+            binary_id: binary_id.into(),
             message: message.into(),
             full_output: full_output.into(),
         }
     }
 
     pub(crate) fn dylib_join_paths(new_paths: Vec<Utf8PathBuf>, error: JoinPathsError) -> Self {
-        ParseTestListError::DylibJoinPaths { new_paths, error }
+        Self::DylibJoinPaths { new_paths, error }
     }
 }
 
 impl fmt::Display for ParseTestListError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ParseTestListError::Command { command, .. } => {
-                write!(f, "running '{}' failed", command)
+            Self::Command {
+                binary_id, command, ..
+            } => {
+                write!(
+                    f,
+                    "for `{binary_id}`, running command `{}` failed",
+                    shell_words::join(command)
+                )
             }
-            ParseTestListError::ParseLine {
+            Self::ParseLine {
+                binary_id,
                 message,
                 full_output,
             } => {
-                write!(f, "{}\nfull output:\n{}", message, full_output)
+                write!(
+                    f,
+                    "for `{binary_id}`, {message}\nfull output:\n{full_output}"
+                )
             }
-            ParseTestListError::DylibJoinPaths { new_paths, .. } => {
+            Self::DylibJoinPaths { new_paths, .. } => {
                 let new_paths_display = itertools::join(new_paths, ", ");
                 write!(
                     f,
-                    "error adding dynamic library paths: [{}]",
-                    new_paths_display,
+                    "error joining dynamic library paths for {}: [{new_paths_display}]",
+                    dylib_path_envvar()
                 )
             }
         }
@@ -445,9 +469,9 @@ impl fmt::Display for ParseTestListError {
 impl error::Error for ParseTestListError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            ParseTestListError::Command { error, .. } => Some(error),
-            ParseTestListError::DylibJoinPaths { error, .. } => Some(error),
-            ParseTestListError::ParseLine { .. } => None,
+            Self::Command { error, .. } => Some(error),
+            Self::DylibJoinPaths { error, .. } => Some(error),
+            Self::ParseLine { .. } => None,
         }
     }
 }
