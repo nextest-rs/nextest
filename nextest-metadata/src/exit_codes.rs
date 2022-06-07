@@ -22,6 +22,9 @@ impl NextestExitCode {
     /// Creating an archive produced an error.
     pub const ARCHIVE_CREATION_FAILED: i32 = 103;
 
+    /// Parsing a test list produced an error.
+    pub const PARSE_TEST_LIST_FAILED: i32 = 104;
+
     /// A user issue happened while setting up a nextest invocation.
     pub const SETUP_ERROR: i32 = 96;
 

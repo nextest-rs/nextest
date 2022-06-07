@@ -407,8 +407,10 @@ impl TestBuildFilter {
             &self.filter,
             filter_exprs,
         );
-        TestList::new(test_artifacts, rust_build_meta, &test_filter, runner)
-            .wrap_err("error building test list")
+        Ok(
+            TestList::new(test_artifacts, rust_build_meta, &test_filter, runner)
+                .map_err(|err| ExpectedError::ParseTestListError { err })?,
+        )
     }
 }
 
