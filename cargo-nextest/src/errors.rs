@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::{
-    ArchiveCreateError, ArchiveExtractError, ConfigParseError, ParseTestListError,
+    ArchiveCreateError, ArchiveExtractError, ConfigParseError, CreateTestListError,
     PathMapperConstructError, ProfileNotFound, UnknownArchiveFormat,
 };
 use owo_colors::{OwoColorize, Stream};
@@ -55,8 +55,8 @@ pub enum ExpectedError {
         file_name: Option<Utf8PathBuf>,
         err: guppy::Error,
     },
-    ParseTestListError {
-        err: ParseTestListError,
+    CreateTestListError {
+        err: CreateTestListError,
     },
     BuildFailed {
         command: String,
@@ -155,7 +155,7 @@ impl ExpectedError {
             | Self::PathMapperConstructError { .. }
             | Self::ArgumentJsonParseError { .. }
             | Self::CargoMetadataParseError { .. } => NextestExitCode::SETUP_ERROR,
-            Self::ParseTestListError { .. } => NextestExitCode::PARSE_TEST_LIST_FAILED,
+            Self::CreateTestListError { .. } => NextestExitCode::TEST_LIST_CREATION_FAILED,
             Self::BuildFailed { .. } => NextestExitCode::BUILD_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
@@ -245,8 +245,8 @@ impl ExpectedError {
                 log::error!("error parsing Cargo metadata{}", metadata_source);
                 Some(err as &dyn Error)
             }
-            Self::ParseTestListError { err } => {
-                log::error!("building test list failed");
+            Self::CreateTestListError { err } => {
+                log::error!("creating test list failed");
                 Some(err as &dyn Error)
             }
             Self::BuildFailed { command, exit_code } => {
@@ -315,7 +315,7 @@ impl fmt::Display for ExpectedError {
             Self::PathMapperConstructError { .. } => writeln!(f, "path mapper construct error"),
             Self::ArgumentJsonParseError { .. } => writeln!(f, "argument json decode error"),
             Self::CargoMetadataParseError { .. } => writeln!(f, "cargo metadata parse error"),
-            Self::ParseTestListError { .. } => writeln!(f, "parse test list error"),
+            Self::CreateTestListError { .. } => writeln!(f, "parse test list error"),
             Self::BuildFailed { .. } => writeln!(f, "build failed"),
             Self::TestRunFailed => writeln!(f, "test run failed"),
             Self::ExperimentalFeatureNotEnabled { .. } => {

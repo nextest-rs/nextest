@@ -409,7 +409,7 @@ impl TestBuildFilter {
         );
         Ok(
             TestList::new(test_artifacts, rust_build_meta, &test_filter, runner)
-                .map_err(|err| ExpectedError::ParseTestListError { err })?,
+                .map_err(|err| ExpectedError::CreateTestListError { err })?,
         )
     }
 }

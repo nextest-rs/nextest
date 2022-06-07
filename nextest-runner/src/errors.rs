@@ -368,7 +368,7 @@ impl error::Error for FromMessagesError {
 /// An error that occurs while parsing test list output.
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum ParseTestListError {
+pub enum CreateTestListError {
     /// Running a command to gather the list of tests failed.
     Command {
         /// The binary ID for which gathering the list of tests failed.
@@ -403,7 +403,7 @@ pub enum ParseTestListError {
     },
 }
 
-impl ParseTestListError {
+impl CreateTestListError {
     pub(crate) fn command(
         binary_id: impl Into<String>,
         command: impl IntoIterator<Item = impl Into<String>>,
@@ -433,7 +433,7 @@ impl ParseTestListError {
     }
 }
 
-impl fmt::Display for ParseTestListError {
+impl fmt::Display for CreateTestListError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Command {
@@ -467,7 +467,7 @@ impl fmt::Display for ParseTestListError {
     }
 }
 
-impl error::Error for ParseTestListError {
+impl error::Error for CreateTestListError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Self::Command { error, .. } => Some(error),

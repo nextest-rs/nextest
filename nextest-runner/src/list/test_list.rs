@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    errors::{FromMessagesError, ParseTestListError, WriteTestListError},
+    errors::{CreateTestListError, FromMessagesError, WriteTestListError},
     helpers::{dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
@@ -188,7 +188,7 @@ impl<'g> TestList<'g> {
         rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
         runner: &TargetRunner,
-    ) -> Result<Self, ParseTestListError> {
+    ) -> Result<Self, CreateTestListError> {
         let mut test_count = 0;
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
 
@@ -223,7 +223,7 @@ impl<'g> TestList<'g> {
         >,
         rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
-    ) -> Result<Self, ParseTestListError> {
+    ) -> Result<Self, CreateTestListError> {
         let mut test_count = 0;
 
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
@@ -384,7 +384,7 @@ impl<'g> TestList<'g> {
 
     pub(crate) fn create_dylib_path(
         rust_build_meta: &RustBuildMeta<TestListState>,
-    ) -> Result<OsString, ParseTestListError> {
+    ) -> Result<OsString, CreateTestListError> {
         let dylib_path = dylib_path();
         let new_paths = rust_build_meta.dylib_paths();
 
@@ -398,7 +398,7 @@ impl<'g> TestList<'g> {
         updated_dylib_path.extend(dylib_path);
 
         std::env::join_paths(updated_dylib_path)
-            .map_err(move |error| ParseTestListError::dylib_join_paths(new_paths, error))
+            .map_err(move |error| CreateTestListError::dylib_join_paths(new_paths, error))
     }
 
     fn process_output(
@@ -406,7 +406,7 @@ impl<'g> TestList<'g> {
         filter: &TestFilterBuilder,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
-    ) -> Result<(Utf8PathBuf, RustTestSuite<'g>), ParseTestListError> {
+    ) -> Result<(Utf8PathBuf, RustTestSuite<'g>), CreateTestListError> {
         let mut tests = BTreeMap::new();
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
@@ -467,7 +467,7 @@ impl<'g> TestList<'g> {
     fn parse<'a>(
         binary_id: &'a str,
         list_output: &'a str,
-    ) -> Result<Vec<&'a str>, ParseTestListError> {
+    ) -> Result<Vec<&'a str>, CreateTestListError> {
         let mut list = Self::parse_impl(binary_id, list_output).collect::<Result<Vec<_>, _>>()?;
         list.sort_unstable();
         Ok(list)
@@ -476,7 +476,7 @@ impl<'g> TestList<'g> {
     fn parse_impl<'a>(
         binary_id: &'a str,
         list_output: &'a str,
-    ) -> impl Iterator<Item = Result<&'a str, ParseTestListError>> + 'a {
+    ) -> impl Iterator<Item = Result<&'a str, CreateTestListError>> + 'a {
         // The output is in the form:
         // <test name>: test
         // <test name>: test
@@ -490,7 +490,7 @@ impl<'g> TestList<'g> {
             }
 
             let res = line.strip_suffix(": test").ok_or_else(|| {
-                ParseTestListError::parse_line(
+                CreateTestListError::parse_line(
                     binary_id,
                     format!(
                         "line '{}' did not end with the string ': test' or ': benchmark'",
@@ -546,7 +546,7 @@ impl<'g> RustTestArtifact<'g> {
         &self,
         dylib_path: &OsStr,
         runner: &TargetRunner,
-    ) -> Result<(String, String), ParseTestListError> {
+    ) -> Result<(String, String), CreateTestListError> {
         let platform_runner = runner.for_build_platform(self.build_platform);
 
         let non_ignored = self.exec_single(false, dylib_path, platform_runner)?;
@@ -559,7 +559,7 @@ impl<'g> RustTestArtifact<'g> {
         ignored: bool,
         dylib_path: &OsStr,
         runner: Option<&PlatformRunner>,
-    ) -> Result<String, ParseTestListError> {
+    ) -> Result<String, CreateTestListError> {
         let mut argv = Vec::new();
 
         let program: String = if let Some(runner) = runner {
@@ -591,7 +591,7 @@ impl<'g> RustTestArtifact<'g> {
         .stdout_capture();
 
         cmd.read().map_err(|error| {
-            ParseTestListError::command(
+            CreateTestListError::command(
                 &self.binary_id,
                 std::iter::once(program).chain(argv.iter().map(|&s| s.to_owned())),
                 error,
