@@ -63,6 +63,8 @@ pathdiff = { version = "0.2.1", features = ["camino"] }
 pretty_assertions = "1.2.1"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
+test-case = "2.1.0"
+
 
 [[bin]]
 name = "passthrough"
