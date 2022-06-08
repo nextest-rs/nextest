@@ -81,6 +81,7 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
                 TestFixture { name: "test_flaky_mod_3", status: FixtureStatus::Flaky { pass_attempt: 3 } },
                 TestFixture { name: "test_ignored", status: FixtureStatus::IgnoredPass },
                 TestFixture { name: "test_ignored_fail", status: FixtureStatus::IgnoredFail },
+                TestFixture { name: "test_slow_timeout", status: FixtureStatus::IgnoredPass },
                 TestFixture { name: "test_success", status: FixtureStatus::Pass },
                 TestFixture { name: "test_success_should_panic", status: FixtureStatus::Pass },
             ],

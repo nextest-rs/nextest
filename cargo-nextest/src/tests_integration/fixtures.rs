@@ -56,6 +56,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
                 ("test_flaky_mod_3", false),
                 ("test_ignored", true),
                 ("test_ignored_fail", true),
+                ("test_slow_timeout", true),
                 ("test_success", false),
                 ("test_success_should_panic", false),
             ],
@@ -299,9 +300,9 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *21 tests run: 15 passed, 6 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *21 tests run: 15 passed, 6 failed, 3 skipped").unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *21 tests run: 16 passed, 5 failed, 2 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *21 tests run: 16 passed, 5 failed, 3 skipped").unwrap()
     };
     assert!(
         summary_reg.is_match(&output),
