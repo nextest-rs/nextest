@@ -299,6 +299,7 @@ struct DefaultProfileImpl {
 
 /// Type for the slow-timeout config key.
 #[derive(Clone, Copy, Debug, Deserialize)]
+#[cfg_attr(test, derive(PartialEq))]
 #[serde(rename_all = "kebab-case")]
 pub struct SlowTimeout {
     #[serde(with = "humantime_serde")]
@@ -401,6 +402,10 @@ struct JunitImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
+    use std::io::Write;
+    use tempfile::tempdir;
+    use test_case::test_case;
 
     #[test]
     fn default_config_is_valid() {
@@ -408,5 +413,75 @@ mod tests {
         default_config
             .profile(NextestConfig::DEFAULT_PROFILE)
             .expect("default profile should exist");
+    }
+
+    #[test_case(
+        "",
+        SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(0)},
+        None
+
+        ; "empty config is expected to use the hardcoded values"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = "30s"
+        "#},
+        SlowTimeout { period: Duration::from_secs(30), terminate_after: None },
+        None
+
+        ; "overrides the default profile"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = "30s"
+
+            [profile.ci]
+            slow-timeout = { period = "60s", terminate-after = 3 }
+        "#},
+        SlowTimeout { period: Duration::from_secs(30), terminate_after: None, },
+        Some(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(3), })
+
+        ; "adds a custom profile 'ci'"
+    )]
+    fn slowtimeout_adheres_to_hierarchy(
+        workspace_config: &str,
+        expected_default: SlowTimeout,
+        maybe_expected_ci: Option<SlowTimeout>,
+    ) {
+        let workspace_dir = tempdir().unwrap();
+        let config_dir = workspace_dir.path().join(".config");
+        std::fs::create_dir(&config_dir).unwrap();
+
+        let workspace_config_path = config_dir.join("nextest.toml");
+        let mut workspace_config_file = std::fs::File::create(&workspace_config_path).unwrap();
+        workspace_config_file
+            .write_all(workspace_config.as_bytes())
+            .unwrap();
+
+        let nextest_config = NextestConfig::from_sources(
+            camino::Utf8Path::from_path(workspace_dir.path()).unwrap(),
+            camino::Utf8Path::from_path(&workspace_config_path),
+        )
+        .expect("config file should parse");
+
+        assert_eq!(
+            nextest_config
+                .profile("default")
+                .expect("default profile should exist")
+                .slow_timeout(),
+            expected_default,
+        );
+
+        if let Some(expected_ci) = maybe_expected_ci {
+            assert_eq!(
+                nextest_config
+                    .profile("ci")
+                    .expect("ci profile should exist")
+                    .slow_timeout(),
+                expected_ci,
+            );
+        }
     }
 }
