@@ -5,7 +5,7 @@
 
 use crate::{
     config::{NextestJunitConfig, NextestProfile},
-    errors::{JunitError, WriteEventError},
+    errors::WriteEventError,
     list::TestInstance,
     reporter::TestEvent,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
@@ -169,10 +169,12 @@ impl<'cfg> MetadataJunit<'cfg> {
                     file: junit_path.to_path_buf(),
                     error,
                 })?;
-                report.serialize(f).map_err(|err| WriteEventError::Junit {
-                    file: junit_path.to_path_buf(),
-                    error: JunitError::new(err),
-                })?;
+                report
+                    .serialize(f)
+                    .map_err(|error| WriteEventError::Junit {
+                        file: junit_path.to_path_buf(),
+                        error,
+                    })?;
             }
         }
 

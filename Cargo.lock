@@ -840,6 +840,7 @@ dependencies = [
  "tar",
  "target-spec",
  "tempfile",
+ "thiserror",
  "toml",
  "twox-hash",
  "zstd",

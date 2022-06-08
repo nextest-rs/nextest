@@ -8,7 +8,6 @@ use crate::{
 };
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use guppy::{graph::PackageGraph, CargoMetadata};
-use itertools::Either;
 use nextest_metadata::BinaryListSummary;
 use std::{
     fs,
@@ -275,9 +274,9 @@ impl<'a> ArchiveReader<'a> {
             let mut header = entry.header().clone();
             let actual_cksum = header
                 .cksum()
-                .map_err(|err| ArchiveReadError::InvalidChecksum {
+                .map_err(|error| ArchiveReadError::ChecksumRead {
                     path: path.clone(),
-                    payload: Either::Right(err),
+                    error,
                 })?;
 
             header.set_cksum();
@@ -288,7 +287,8 @@ impl<'a> ArchiveReader<'a> {
             if expected_cksum != actual_cksum {
                 return Err(ArchiveReadError::InvalidChecksum {
                     path,
-                    payload: Either::Left((expected_cksum, actual_cksum)),
+                    expected: expected_cksum,
+                    actual: actual_cksum,
                 });
             }
 

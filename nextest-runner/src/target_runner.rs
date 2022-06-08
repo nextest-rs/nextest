@@ -144,9 +144,9 @@ impl PlatformRunner {
                 // based on the current working directory, _not_ the manifest path, this bug
                 // has existed for a while https://github.com/rust-lang/cargo/issues/2930
                 let dir = std::env::current_dir()
-                    .map_err(TargetRunnerError::UnableToReadDir)
+                    .map_err(TargetRunnerError::GetCurrentDir)
                     .and_then(|cwd| {
-                        Utf8PathBuf::from_path_buf(cwd).map_err(TargetRunnerError::NonUtf8Path)
+                        Utf8PathBuf::try_from(cwd).map_err(TargetRunnerError::NonUtf8Path)
                     })?;
                 Cow::Owned(dir)
             }
@@ -210,7 +210,7 @@ impl PlatformRunner {
                 error,
             })
             .and_then(|canon| {
-                Utf8PathBuf::from_path_buf(canon).map_err(TargetRunnerError::NonUtf8Path)
+                Utf8PathBuf::try_from(canon).map_err(TargetRunnerError::NonUtf8Path)
             })?;
 
         for _ in 0..dir.ancestors().count() {
@@ -237,9 +237,9 @@ impl PlatformRunner {
             // Attempt lookup the $CARGO_HOME directory from the cwd, as that can
             // contain a default config.toml
             let mut cargo_home_path = home::cargo_home_with_cwd(start_search_at.as_std_path())
-                .map_err(TargetRunnerError::UnableToReadDir)
+                .map_err(TargetRunnerError::GetCargoHome)
                 .and_then(|home| {
-                    Utf8PathBuf::from_path_buf(home).map_err(TargetRunnerError::NonUtf8Path)
+                    Utf8PathBuf::try_from(home).map_err(TargetRunnerError::NonUtf8Path)
                 })?;
 
             if let Some(home_config) = read_config_dir(&mut cargo_home_path) {
@@ -342,7 +342,7 @@ impl PlatformRunner {
                     runner_iter
                         .next()
                         .ok_or_else(|| TargetRunnerError::BinaryNotSpecified {
-                            source: source.clone(),
+                            key: source.clone(),
                             value: value.clone(),
                         })?;
                 let args = runner_iter.map(String::from).collect();
@@ -351,7 +351,7 @@ impl PlatformRunner {
             Runner::List(mut values) => {
                 if values.is_empty() {
                     return Err(TargetRunnerError::BinaryNotSpecified {
-                        source,
+                        key: source,
                         value: String::new(),
                     });
                 } else {

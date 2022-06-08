@@ -12,14 +12,17 @@ use crate::{
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
-use itertools::{Either, Itertools};
-use std::{borrow::Cow, env::JoinPathsError, error, fmt};
+use itertools::Itertools;
+use std::{borrow::Cow, env::JoinPathsError, fmt};
+use thiserror::Error;
 
 /// An error that occurred while parsing the config.
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error("failed to parse nextest config at `{config_file}`")]
 #[non_exhaustive]
 pub struct ConfigParseError {
     config_file: Utf8PathBuf,
+    #[source]
     err: ConfigError,
 }
 
@@ -32,25 +35,9 @@ impl ConfigParseError {
     }
 }
 
-impl fmt::Display for ConfigParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "failed to parse nextest config at `{}`",
-            self.config_file
-        )?;
-        Ok(())
-    }
-}
-
-impl error::Error for ConfigParseError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        Some(&self.err)
-    }
-}
-
 /// An error which indicates that a profile was requested but not known to nextest.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
+#[error("profile `{profile} not found (known profiles: {})`", .all_profiles.join(", "))]
 pub struct ProfileNotFound {
     profile: String,
     all_profiles: Vec<String>,
@@ -70,21 +57,12 @@ impl ProfileNotFound {
     }
 }
 
-impl fmt::Display for ProfileNotFound {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "profile '{}' not found (known profiles: {})",
-            self.profile,
-            self.all_profiles.join(", ")
-        )
-    }
-}
-
-impl error::Error for ProfileNotFound {}
-
 /// Error returned while parsing a [`TestOutputDisplay`] value from a string.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
+#[error(
+    "unrecognized value for test output display: {input}\n(known values: {})",
+    TestOutputDisplay::variants().join(", "),
+)]
 pub struct TestOutputDisplayParseError {
     input: String,
 }
@@ -97,21 +75,12 @@ impl TestOutputDisplayParseError {
     }
 }
 
-impl fmt::Display for TestOutputDisplayParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "unrecognized value for test output display: {}\n(known values: {})",
-            self.input,
-            TestOutputDisplay::variants().join(", ")
-        )
-    }
-}
-
-impl error::Error for TestOutputDisplayParseError {}
-
 /// Error returned while parsing a [`StatusLevel`] value from a string.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
+#[error(
+    "unrecognized value for status-level: {input}\n(known values: {})",
+    StatusLevel::variants().join(", "),
+)]
 pub struct StatusLevelParseError {
     input: String,
 }
@@ -124,21 +93,13 @@ impl StatusLevelParseError {
     }
 }
 
-impl fmt::Display for StatusLevelParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "unrecognized value for status-level: {}\n(known values: {})",
-            self.input,
-            StatusLevel::variants().join(", ")
-        )
-    }
-}
-
-impl error::Error for StatusLevelParseError {}
-
 /// An error that occurs while parsing a [`RunIgnored`] value from a string.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
+#[error(
+    "unrecognized value for run-ignored: {input}\n(known values: {})",
+    RunIgnored::variants().join(", "),
+)]
+
 pub struct RunIgnoredParseError {
     input: String,
 }
@@ -151,22 +112,9 @@ impl RunIgnoredParseError {
     }
 }
 
-impl fmt::Display for RunIgnoredParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "unrecognized value for run-ignored: {}\n(known values: {})",
-            self.input,
-            RunIgnored::variants().join(", ")
-        )
-    }
-}
-
-impl error::Error for RunIgnoredParseError {}
-
 /// An error that occurs while parsing a
 /// [`PartitionerBuilder`](crate::partition::PartitionerBuilder) input.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub struct PartitionerBuilderParseError {
     expected_format: Option<&'static str>,
     message: Cow<'static, str>,
@@ -199,12 +147,11 @@ impl fmt::Display for PartitionerBuilderParseError {
     }
 }
 
-impl error::Error for PartitionerBuilderParseError {}
-
 /// An error occurred in [`PathMapper::new`](crate::reuse_build::PathMapper::new).
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum PathMapperConstructError {
     /// An error occurred while canonicalizing a directory.
+    #[error("{kind} `{input}` failed to canonicalize")]
     Canonicalization {
         /// The directory that failed to be canonicalized.
         kind: PathMapperConstructKind,
@@ -213,9 +160,11 @@ pub enum PathMapperConstructError {
         input: Utf8PathBuf,
 
         /// The error that occurred.
+        #[source]
         err: std::io::Error,
     },
     /// The canonicalized path isn't valid UTF-8.
+    #[error("{kind} `{input}` canonicalized to a non-UTF-8 path")]
     NonUtf8Path {
         /// The directory that failed to be canonicalized.
         kind: PathMapperConstructKind,
@@ -224,10 +173,11 @@ pub enum PathMapperConstructError {
         input: Utf8PathBuf,
 
         /// The underlying error.
+        #[source]
         err: FromPathBufError,
     },
-
     /// A provided input is not a directory.
+    #[error("{kind} `{canonicalized_path}` is not a directory")]
     NotADirectory {
         /// The directory that failed to be canonicalized.
         kind: PathMapperConstructKind,
@@ -260,36 +210,6 @@ impl PathMapperConstructError {
     }
 }
 
-impl fmt::Display for PathMapperConstructError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Canonicalization { kind, input, .. } => {
-                write!(f, "{} `{}` failed to canonicalize", kind, input)
-            }
-            Self::NonUtf8Path { kind, input, .. } => {
-                write!(f, "{} `{}` canonicalized to a non-UTF-8 path", kind, input)
-            }
-            Self::NotADirectory {
-                kind,
-                canonicalized_path,
-                ..
-            } => {
-                write!(f, "{} `{}` is not a directory", kind, canonicalized_path)
-            }
-        }
-    }
-}
-
-impl error::Error for PathMapperConstructError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Self::Canonicalization { err, .. } => Some(err),
-            Self::NonUtf8Path { err, .. } => Some(err),
-            Self::NotADirectory { .. } => None,
-        }
-    }
-}
-
 /// The kind of directory that failed to be read in
 /// [`PathMapper::new`](crate::reuse_build::PathMapper::new).
 ///
@@ -314,16 +234,19 @@ impl fmt::Display for PathMapperConstructKind {
 
 /// An error that occurs in [`BinaryList::from_messages`](crate::list::BinaryList::from_messages) or
 /// [`RustTestArtifact::from_binary_list`](crate::list::RustTestArtifact::from_binary_list).
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum FromMessagesError {
     /// An error occurred while reading Cargo's JSON messages.
-    ReadMessages(std::io::Error),
+    #[error("error reading Cargo JSON messages")]
+    ReadMessages(#[source] std::io::Error),
 
     /// An error occurred while querying the package graph.
-    PackageGraph(guppy::Error),
+    #[error("error querying package graph")]
+    PackageGraph(#[source] guppy::Error),
 
     /// A target in the package graph was missing `kind` information.
+    #[error("missing kind for target {binary_name} in package {package_name}")]
     MissingTargetKind {
         /// The name of the malformed package.
         package_name: String,
@@ -332,44 +255,15 @@ pub enum FromMessagesError {
     },
 }
 
-impl fmt::Display for FromMessagesError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FromMessagesError::ReadMessages(_) => {
-                write!(f, "error reading Cargo JSON messages")
-            }
-            FromMessagesError::PackageGraph(_) => {
-                write!(f, "error querying package graph")
-            }
-            FromMessagesError::MissingTargetKind {
-                package_name,
-                binary_name,
-            } => {
-                write!(
-                    f,
-                    "missing kind for target {} in package {}",
-                    binary_name, package_name
-                )
-            }
-        }
-    }
-}
-
-impl error::Error for FromMessagesError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            FromMessagesError::ReadMessages(error) => Some(error),
-            FromMessagesError::PackageGraph(error) => Some(error),
-            FromMessagesError::MissingTargetKind { .. } => None,
-        }
-    }
-}
-
 /// An error that occurs while parsing test list output.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum CreateTestListError {
     /// Running a command to gather the list of tests failed.
+    #[error(
+        "for `{binary_id}`, running command `{}` failed",
+        shell_words::join(command)
+    )]
     Command {
         /// The binary ID for which gathering the list of tests failed.
         binary_id: String,
@@ -378,10 +272,12 @@ pub enum CreateTestListError {
         command: Vec<String>,
 
         /// The underlying error.
+        #[source]
         error: std::io::Error,
     },
 
     /// An error occurred while parsing a line in the test output.
+    #[error("for `{binary_id}`, {message}\nfull output:\n{full_output}")]
     ParseLine {
         /// The binary ID for which parsing the list of tests failed.
         binary_id: String,
@@ -394,11 +290,17 @@ pub enum CreateTestListError {
     },
 
     /// An error occurred while joining paths for dynamic libraries.
+    #[error(
+        "error joining dynamic library paths for {}: [{}]",
+        dylib_path_envvar(),
+        itertools::join(.new_paths, ", ")
+    )]
     DylibJoinPaths {
         /// New paths attempted to be added to the dynamic library environment variable.
         new_paths: Vec<Utf8PathBuf>,
 
         /// The underlying error.
+        #[source]
         error: JoinPathsError,
     },
 }
@@ -433,117 +335,49 @@ impl CreateTestListError {
     }
 }
 
-impl fmt::Display for CreateTestListError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Command {
-                binary_id, command, ..
-            } => {
-                write!(
-                    f,
-                    "for `{binary_id}`, running command `{}` failed",
-                    shell_words::join(command)
-                )
-            }
-            Self::ParseLine {
-                binary_id,
-                message,
-                full_output,
-            } => {
-                write!(
-                    f,
-                    "for `{binary_id}`, {message}\nfull output:\n{full_output}"
-                )
-            }
-            Self::DylibJoinPaths { new_paths, .. } => {
-                let new_paths_display = itertools::join(new_paths, ", ");
-                write!(
-                    f,
-                    "error joining dynamic library paths for {}: [{new_paths_display}]",
-                    dylib_path_envvar()
-                )
-            }
-        }
-    }
-}
-
-impl error::Error for CreateTestListError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Self::Command { error, .. } => Some(error),
-            Self::DylibJoinPaths { error, .. } => Some(error),
-            Self::ParseLine { .. } => None,
-        }
-    }
-}
-
 /// An error that occurs while writing list output.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum WriteTestListError {
     /// An error occurred while writing the list to the provided output.
-    Io(std::io::Error),
+    #[error("error writing to output")]
+    Io(#[source] std::io::Error),
 
     /// An error occurred while serializing JSON, or while writing it to the provided output.
-    Json(serde_json::Error),
-}
-
-impl fmt::Display for WriteTestListError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            WriteTestListError::Io(_) => {
-                write!(f, "error writing to output")
-            }
-            WriteTestListError::Json(_) => {
-                write!(f, "error serializing to JSON")
-            }
-        }
-    }
-}
-
-impl error::Error for WriteTestListError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            WriteTestListError::Io(error) => Some(error),
-            WriteTestListError::Json(error) => Some(error),
-        }
-    }
+    #[error("error serializing to JSON")]
+    Json(#[source] serde_json::Error),
 }
 
 /// Represents an unknown archive format.
 ///
 /// Returned by [`ArchiveFormat::autodetect`].
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error(
+    "could not detect archive format from file name `{file_name}` (supported extensions: {})",
+    supported_extensions()
+)]
 pub struct UnknownArchiveFormat {
     /// The name of the archive file without any leading components.
     pub file_name: String,
 }
 
-impl fmt::Display for UnknownArchiveFormat {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let supported_extensions = ArchiveFormat::SUPPORTED_FORMATS
-            .iter()
-            .map(|(extension, _)| *extension)
-            .join(", ");
-        write!(
-            f,
-            "could not detect archive format from file name `{}` \
-            (supported extensions: {supported_extensions})",
-            self.file_name
-        )
-    }
+fn supported_extensions() -> String {
+    ArchiveFormat::SUPPORTED_FORMATS
+        .iter()
+        .map(|(extension, _)| *extension)
+        .join(", ")
 }
 
-impl error::Error for UnknownArchiveFormat {}
-
 /// An error that occurs while archiving data.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ArchiveCreateError {
     /// An error occurred while creating the binary list to be written.
-    CreateBinaryList(WriteTestListError),
+    #[error("error creating binary list")]
+    CreateBinaryList(#[source] WriteTestListError),
 
     /// An error occurred while reading data from a file on disk.
+    #[error("error writing {} `{path}` to archive", kind_str(*.is_dir))]
     InputFileRead {
         /// The name of the file that could not be read.
         path: Utf8PathBuf,
@@ -552,80 +386,58 @@ pub enum ArchiveCreateError {
         is_dir: Option<bool>,
 
         /// The error that occurred.
+        #[source]
         error: std::io::Error,
     },
 
     /// An error occurred while reading entries from a directory on disk.
+    #[error("error reading directory entry from `{path}")]
     DirEntryRead {
         /// The name of the directory from which entries couldn't be read.
         path: Utf8PathBuf,
 
         /// The error that occurred.
+        #[source]
         error: std::io::Error,
     },
 
     /// An error occurred while writing data to the output file.
-    OutputArchiveIo(std::io::Error),
+    #[error("error writing to archive")]
+    OutputArchiveIo(#[source] std::io::Error),
 
     /// An error occurred in the reporter.
-    ReporterIo(std::io::Error),
+    #[error("error reporting archive status")]
+    ReporterIo(#[source] std::io::Error),
 }
 
-impl fmt::Display for ArchiveCreateError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ArchiveCreateError::CreateBinaryList(_) => {
-                write!(f, "error creating binary list")
-            }
-            ArchiveCreateError::InputFileRead { path, is_dir, .. } => {
-                let kind_str = match is_dir {
-                    Some(true) => "directory",
-                    Some(false) => "file",
-                    None => "path",
-                };
-                write!(f, "error writing {kind_str} `{path}` to archive")
-            }
-            ArchiveCreateError::DirEntryRead { path, .. } => {
-                write!(f, "error reading directory entry from `{path}`")
-            }
-            ArchiveCreateError::OutputArchiveIo(_) => {
-                write!(f, "error writing to archive")
-            }
-            ArchiveCreateError::ReporterIo(_) => {
-                write!(f, "error reporting archive status")
-            }
-        }
-    }
-}
-
-impl error::Error for ArchiveCreateError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            ArchiveCreateError::CreateBinaryList(error) => Some(error),
-            ArchiveCreateError::InputFileRead { error, .. }
-            | ArchiveCreateError::DirEntryRead { error, .. }
-            | ArchiveCreateError::OutputArchiveIo(error)
-            | ArchiveCreateError::ReporterIo(error) => Some(error),
-        }
+fn kind_str(is_dir: Option<bool>) -> &'static str {
+    match is_dir {
+        Some(true) => "directory",
+        Some(false) => "file",
+        None => "path",
     }
 }
 
 /// An error occurred while reading a file.
 ///
 /// Returned as part of both [`ArchiveCreateError`] and [`ArchiveExtractError`].
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ArchiveReadError {
     /// An I/O error occurred while reading the archive.
-    Io(std::io::Error),
+    #[error("I/O error reading archive")]
+    Io(#[source] std::io::Error),
 
     /// A path wasn't valid UTF-8.
+    #[error("path in archive `{}` wasn't valid UTF-8", String::from_utf8_lossy(.0))]
     NonUtf8Path(Vec<u8>),
 
     /// A file path within the archive didn't begin with "target/".
+    #[error("path in archive `{0}` doesn't start with `target/`")]
     NoTargetPrefix(Utf8PathBuf),
 
     /// A file path within the archive had an invalid component within it.
+    #[error("path in archive `{path}` contains an invalid component `{component}`")]
     InvalidComponent {
         /// The path that had an invalid component.
         path: Utf8PathBuf,
@@ -634,361 +446,209 @@ pub enum ArchiveReadError {
         component: String,
     },
 
+    /// An error occurred while reading a checksum.
+    #[error("corrupted archive: checksum read error for path `{path}`")]
+    ChecksumRead {
+        /// The path for which there was a checksum read error.
+        path: Utf8PathBuf,
+
+        /// The error that occurred.
+        #[source]
+        error: std::io::Error,
+    },
+
     /// An entry had an invalid checksum.
+    #[error("corrupted archive: invalid checksum for path `{path}`")]
     InvalidChecksum {
         /// The path that had an invalid checksum.
         path: Utf8PathBuf,
-        /// The payload, which is either the (expected, actual) checksum, or an error that occurred
-        /// while reading the checksum.
-        payload: Either<(u32, u32), std::io::Error>,
+
+        /// The expected checksum.
+        expected: u32,
+
+        /// The actual checksum.
+        actual: u32,
     },
 
     /// A metadata file wasn't found.
+    #[error("metadata file `{0}` not found in archive")]
     MetadataFileNotFound(&'static Utf8Path),
 
     /// An error occurred while deserializing a metadata file.
+    #[error("error deserializing metadata file `{path}` in archive")]
     MetadataDeserializeError {
         /// The name of the metadata file.
         path: &'static Utf8Path,
 
         /// The deserialize error.
+        #[source]
         error: serde_json::Error,
     },
 
     /// An error occurred while building a `PackageGraph`.
+    #[error("error building package graph from `{path}` in archive")]
     PackageGraphConstructError {
         /// The name of the metadata file.
         path: &'static Utf8Path,
 
         /// The error.
+        #[source]
         error: guppy::Error,
     },
-}
-
-impl fmt::Display for ArchiveReadError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ArchiveReadError::Io(_) => {
-                write!(f, "I/O error reading archive")
-            }
-            ArchiveReadError::NonUtf8Path(path) => {
-                write!(
-                    f,
-                    "path in archive `{}` wasn't valid UTF-8",
-                    String::from_utf8_lossy(path)
-                )
-            }
-            ArchiveReadError::NoTargetPrefix(path) => {
-                write!(f, "path in archive `{path}` doesn't start with `target/`")
-            }
-            ArchiveReadError::InvalidComponent { path, component } => {
-                write!(
-                    f,
-                    "path in archive `{path}` contains an invalid component `{component}`"
-                )
-            }
-            ArchiveReadError::InvalidChecksum { path, payload } => {
-                write!(f, "corrupted archive: invalid checksum for path `{path}`")?;
-                if let Either::Left((expected, actual)) = payload {
-                    write!(f, ": expected {expected:#x}, actual {actual:#x}")?;
-                }
-                Ok(())
-            }
-            ArchiveReadError::MetadataFileNotFound(path) => {
-                write!(f, "metadata file `{path}` not found in archive")
-            }
-            ArchiveReadError::MetadataDeserializeError { path, .. } => {
-                write!(f, "error deserializing metadata file `{path}` in archive")
-            }
-            ArchiveReadError::PackageGraphConstructError { path, .. } => {
-                write!(f, "error building package graph from `{path}` in archive")
-            }
-        }
-    }
-}
-
-impl error::Error for ArchiveReadError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            ArchiveReadError::Io(error) => Some(error),
-            ArchiveReadError::MetadataDeserializeError { error, .. } => Some(error),
-            ArchiveReadError::InvalidChecksum { payload, .. } => match payload {
-                Either::Left(_) => None,
-                Either::Right(error) => Some(error),
-            },
-            ArchiveReadError::PackageGraphConstructError { error, .. } => Some(error),
-            ArchiveReadError::MetadataFileNotFound(_)
-            | ArchiveReadError::NonUtf8Path(_)
-            | ArchiveReadError::NoTargetPrefix(_)
-            | ArchiveReadError::InvalidComponent { .. } => None,
-        }
-    }
 }
 
 /// An error occurred while extracting a file.
 ///
 /// Returned by [`extract_archive`](crate::reuse_build::ReuseBuildInfo::extract_archive).
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ArchiveExtractError {
     /// An error occurred while creating a temporary directory.
-    TempDirCreate(std::io::Error),
+    #[error("error creating temporary directory")]
+    TempDirCreate(#[source] std::io::Error),
 
     /// An error occurred while canonicalizing the destination directory.
+    #[error("error canonicalizing destination directory `{dir}`")]
     DestDirCanonicalization {
         /// The directory that failed to canonicalize.
         dir: Utf8PathBuf,
 
         /// The error that occurred.
+        #[source]
         error: std::io::Error,
     },
 
     /// The destination already exists and `--overwrite` was not passed in.
+    #[error("destination `{0}` already exists")]
     DestinationExists(Utf8PathBuf),
 
     /// An error occurred while reading the archive.
-    Read(ArchiveReadError),
+    #[error("error reading archive")]
+    Read(#[source] ArchiveReadError),
 
     /// An error occurred while writing out a file to the destination directory.
+    #[error("error writing file `{path}` to disk")]
     WriteFile {
         /// The path that we couldn't write out.
         path: Utf8PathBuf,
 
         /// The error that occurred.
+        #[source]
         error: std::io::Error,
     },
 
     /// An error occurred while reporting the extraction status.
+    #[error("error reporting extract status")]
     ReporterIo(std::io::Error),
 }
 
-impl fmt::Display for ArchiveExtractError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ArchiveExtractError::TempDirCreate(_) => {
-                write!(f, "error creating temporary directory")
-            }
-            ArchiveExtractError::DestDirCanonicalization { dir, .. } => {
-                write!(f, "error canonicalizing destination directory `{dir}`")
-            }
-            ArchiveExtractError::DestinationExists(path) => {
-                write!(f, "destination `{}` already exists", path)
-            }
-            ArchiveExtractError::Read(_) => write!(f, "error reading archive"),
-            ArchiveExtractError::WriteFile { path, .. } => {
-                write!(f, "error writing file `{path}` to disk")
-            }
-            ArchiveExtractError::ReporterIo(_) => write!(f, "error reporting extract status"),
-        }
-    }
-}
-
-impl error::Error for ArchiveExtractError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            ArchiveExtractError::DestinationExists(_) => None,
-            ArchiveExtractError::Read(error) => Some(error),
-            ArchiveExtractError::TempDirCreate(error)
-            | ArchiveExtractError::DestDirCanonicalization { error, .. }
-            | ArchiveExtractError::WriteFile { error, .. }
-            | ArchiveExtractError::ReporterIo(error) => Some(error),
-        }
-    }
-}
-
 /// An error that occurs while writing an event.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum WriteEventError {
     /// An error occurred while writing the event to the provided output.
-    Io(std::io::Error),
+    #[error("error writing to output")]
+    Io(#[source] std::io::Error),
 
     /// An error occurred while operating on the file system.
+    #[error("error operating on path {file}")]
     Fs {
         /// The file being operated on.
         file: Utf8PathBuf,
 
         /// The underlying IO error.
+        #[source]
         error: std::io::Error,
     },
 
     /// An error occurred while producing JUnit XML.
+    #[error("error writing JUnit output to {file}")]
     Junit {
         /// The output file.
         file: Utf8PathBuf,
 
         /// The underlying error.
-        error: JunitError,
+        #[source]
+        error: quick_junit::Error,
     },
 }
 
-impl fmt::Display for WriteEventError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            WriteEventError::Io(_) => {
-                write!(f, "error writing to output")
-            }
-            WriteEventError::Fs { file, .. } => {
-                write!(f, "error operating on path {}", file)
-            }
-            WriteEventError::Junit { file, .. } => {
-                write!(f, "error writing JUnit output to {}", file)
-            }
-        }
-    }
-}
-
-impl error::Error for WriteEventError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            WriteEventError::Io(error) => Some(error),
-            WriteEventError::Fs { error, .. } => Some(error),
-            WriteEventError::Junit { error, .. } => Some(error),
-        }
-    }
-}
-
-/// An error that occurred while producing JUnit XML.
-#[derive(Debug)]
-pub struct JunitError {
-    err: quick_junit::Error,
-}
-
-impl JunitError {
-    pub(crate) fn new(err: quick_junit::Error) -> Self {
-        Self { err }
-    }
-}
-
-impl fmt::Display for JunitError {
-    fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
-        Ok(())
-    }
-}
-
-impl error::Error for JunitError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        Some(&self.err)
-    }
-}
-
 /// An error occurred determining the target runner
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum TargetRunnerError {
     /// Failed to determine the host triple, which is needed to determine the
     /// default target triple when a target is not explicitly specified
-    UnknownHostPlatform(target_spec::Error),
+    #[error("unable to determine host platform")]
+    UnknownHostPlatform(#[source] target_spec::Error),
+
     /// An environment variable contained non-utf8 content
+    #[error("environment variable '{0}' contained non-UTF-8 data")]
     InvalidEnvironmentVar(String),
+
     /// An environment variable or config key was found that matches the target
     /// triple, but it didn't actually contain a binary
+    #[error("runner '{key}' = '{value}' did not contain a runner binary")]
     BinaryNotSpecified {
         /// The source under consideration.
-        source: PlatformRunnerSource,
+        key: PlatformRunnerSource,
 
         /// The value that was read from the key
         value: String,
     },
-    /// Failed to retrieve a directory
-    UnableToReadDir(std::io::Error),
+
+    /// Failed to retrieve the current directory
+    #[error("failed to retrieve current directory")]
+    GetCurrentDir(#[source] std::io::Error),
+
+    /// Failed to retrieve the Cargo home directory.
+    #[error("failed to retrieve the Cargo home directory")]
+    GetCargoHome(#[source] std::io::Error),
+
     /// Failed to canonicalize a path
+    #[error("failed to canonicalize path `{path}")]
     FailedPathCanonicalization {
         /// The path that failed to canonicalize
         path: Utf8PathBuf,
+
         /// The error the occurred during canonicalization
+        #[source]
         error: std::io::Error,
     },
-    /// A path was non-utf8
-    NonUtf8Path(std::path::PathBuf),
+
+    /// A non-UTF-8 path was encountered.
+    #[error("non-UTF-8 path encountered")]
+    NonUtf8Path(#[source] FromPathBufError),
+
     /// Failed to read config file
+    #[error("failed to read config at `{path}`")]
     FailedToReadConfig {
         /// The path of the config file
         path: Utf8PathBuf,
+
         /// The error that occurred trying to read the config file
+        #[source]
         error: std::io::Error,
     },
+
     /// Failed to deserialize config file
+    #[error("failed to parse config at `{path}`")]
     FailedToParseConfig {
         /// The path of the config file
         path: Utf8PathBuf,
+
         /// The error that occurred trying to deserialize the config file
+        #[source]
         error: toml::de::Error,
     },
+
     /// Failed to parse the specified target triple
+    #[error("failed to parse triple `{triple}`")]
     FailedToParseTargetTriple {
         /// The triple that failed to parse
         triple: String,
+
         /// The error that occurred parsing the triple
+        #[source]
         error: target_spec::errors::TripleParseError,
     },
 }
-
-impl fmt::Display for TargetRunnerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnknownHostPlatform(_) => {
-                write!(f, "unable to determine host platform")
-            }
-            Self::InvalidEnvironmentVar(key) => {
-                write!(f, "environment variable '{}' contained non-utf8 data", key)
-            }
-            Self::BinaryNotSpecified { source, value } => {
-                write!(
-                    f,
-                    "runner '{}' = '{}' did not contain a runner binary",
-                    source, value
-                )
-            }
-            Self::UnableToReadDir(io) => {
-                write!(f, "unable to read directory: {}", io)
-            }
-            Self::FailedPathCanonicalization { path, .. } => {
-                write!(f, "failed to canonicalize path: {}", path)
-            }
-            Self::NonUtf8Path(path) => {
-                write!(f, "path '{}' is non-utf8", path.display())
-            }
-            Self::FailedToReadConfig { path, .. } => {
-                write!(f, "failed to read config at {}", path)
-            }
-            Self::FailedToParseConfig { path, .. } => {
-                write!(f, "failed to parse config at {}", path)
-            }
-            Self::FailedToParseTargetTriple { triple, .. } => {
-                write!(f, "failed to parse triple '{}'", triple)
-            }
-        }
-    }
-}
-
-impl error::Error for TargetRunnerError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Self::UnknownHostPlatform(error) => Some(error),
-            Self::UnableToReadDir(io) => Some(io),
-            Self::FailedPathCanonicalization { error, .. } => Some(error),
-            Self::FailedToReadConfig { error, .. } => Some(error),
-            Self::FailedToParseConfig { error, .. } => Some(error),
-            Self::FailedToParseTargetTriple { error, .. } => Some(error),
-            _ => None,
-        }
-    }
-}
-
-/// An error occurred while parsing a filtering expression
-#[derive(Debug)]
-pub enum ParseFilterExprError {
-    // TODO
-    /// The parsing failed
-    Failed(String),
-}
-
-impl fmt::Display for ParseFilterExprError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Failed(input) => write!(f, "invalid filter expression: {}", input),
-        }
-    }
-}
-
-impl error::Error for ParseFilterExprError {}
