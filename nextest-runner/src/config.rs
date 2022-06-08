@@ -10,7 +10,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
 use serde::{de::IntoDeserializer, Deserialize};
-use std::{collections::HashMap, fmt, time::Duration};
+use std::{collections::HashMap, fmt, num::NonZeroUsize, time::Duration};
 
 /// Overall configuration for nextest.
 ///
@@ -305,7 +305,7 @@ pub struct SlowTimeout {
     #[serde(with = "humantime_serde")]
     pub(crate) period: Duration,
     #[serde(default)]
-    pub(crate) terminate_after: Option<usize>,
+    pub(crate) terminate_after: Option<NonZeroUsize>,
 }
 
 fn require_deserialize_slow_timeout<'de, D>(deserializer: D) -> Result<SlowTimeout, D::Error>
@@ -331,7 +331,7 @@ where
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             write!(
                 formatter,
-                "a table ({{ period = \"60s\", terminate-after = \"2\" }}) or a string (\"60s\")"
+                "a table ({{ period = \"60s\", terminate-after = 2 }}) or a string (\"60s\")"
             )
         }
 
@@ -417,7 +417,7 @@ mod tests {
 
     #[test_case(
         "",
-        SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(0)},
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None }),
         None
 
         ; "empty config is expected to use the hardcoded values"
@@ -427,7 +427,7 @@ mod tests {
             [profile.default]
             slow-timeout = "30s"
         "#},
-        SlowTimeout { period: Duration::from_secs(30), terminate_after: None },
+        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None }),
         None
 
         ; "overrides the default profile"
@@ -440,14 +440,60 @@ mod tests {
             [profile.ci]
             slow-timeout = { period = "60s", terminate-after = 3 }
         "#},
-        SlowTimeout { period: Duration::from_secs(30), terminate_after: None, },
-        Some(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(3), })
+        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None }),
+        Some(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), })
 
         ; "adds a custom profile 'ci'"
     )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = { period = "60s", terminate-after = 3 }
+
+            [profile.ci]
+            slow-timeout = "30s"
+        "#},
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()) }),
+        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, })
+
+        ; "ci profile uses string notation"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = { period = "60s" }
+        "#},
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None }),
+        None
+
+        ; "partial table"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = { period = "60s", terminate-after = 0 }
+        "#},
+        Err("err: invalid value: integer `0`, expected a nonzero usize"),
+        None
+
+        ; "zero terminate-after should fail"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
+            slow-timeout = "60s"
+
+            [profile.ci]
+            slow-timeout = { terminate-after = 3 }
+        "#},
+        Err("err: missing field `period`"),
+        None
+
+        ; "partial slow-timeout table should error"
+    )]
     fn slowtimeout_adheres_to_hierarchy(
         workspace_config: &str,
-        expected_default: SlowTimeout,
+        expected_default: Result<SlowTimeout, &str>,
         maybe_expected_ci: Option<SlowTimeout>,
     ) {
         let workspace_dir = tempdir().unwrap();
@@ -460,28 +506,39 @@ mod tests {
             .write_all(workspace_config.as_bytes())
             .unwrap();
 
-        let nextest_config = NextestConfig::from_sources(
+        let nextest_config_result = NextestConfig::from_sources(
             camino::Utf8Path::from_path(workspace_dir.path()).unwrap(),
             camino::Utf8Path::from_path(&workspace_config_path),
-        )
-        .expect("config file should parse");
-
-        assert_eq!(
-            nextest_config
-                .profile("default")
-                .expect("default profile should exist")
-                .slow_timeout(),
-            expected_default,
         );
 
-        if let Some(expected_ci) = maybe_expected_ci {
-            assert_eq!(
-                nextest_config
-                    .profile("ci")
-                    .expect("ci profile should exist")
-                    .slow_timeout(),
-                expected_ci,
-            );
+        match expected_default {
+            Ok(expected_default) => {
+                let nextest_config = nextest_config_result.expect("config file should parse");
+
+                assert_eq!(
+                    nextest_config
+                        .profile("default")
+                        .expect("default profile should exist")
+                        .slow_timeout(),
+                    expected_default,
+                );
+
+                if let Some(expected_ci) = maybe_expected_ci {
+                    assert_eq!(
+                        nextest_config
+                            .profile("ci")
+                            .expect("ci profile should exist")
+                            .slow_timeout(),
+                        expected_ci,
+                    );
+                }
+            }
+
+            Err(expected_err_str) => {
+                let err_str = format!("{:?}", nextest_config_result.unwrap_err());
+
+                assert!(err_str.contains(expected_err_str), "{}", err_str,)
+            }
         }
     }
 }
