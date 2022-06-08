@@ -10,7 +10,13 @@ contributions will be accepted.
    
     > NOTE: Nextest's own tests do not work with `cargo test`. You must [install nextest](https://nexte.st/book/pre-built-binaries) to run its own test suite.
 
-6. Run `cargo xfmt` to automatically format your changes (CI will let you know if you missed this).
+5. Run `cargo xfmt` to automatically format your changes (CI will let you know if you missed this).
+
+Nextest aims to provide a high-quality, polished user experience. If you're adding a new
+feature, please pay attention to:
+* [Coloring support](https://rust-cli-recommendations.sunshowers.io/colors.html).
+* [Configuration](https://rust-cli-recommendations.sunshowers.io/configuration.html), including hierarchical configuration.
+* Error handling. In particular, errors caused by components outside of nextest itself *should* be part of [`ExpectedError`](https://github.com/nextest-rs/nextest/blob/main/cargo-nextest/src/errors.rs) and use a [well-defined exit code](https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html).
 
 ## Logically Separate Commits
 
