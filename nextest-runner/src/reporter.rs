@@ -443,7 +443,7 @@ impl<'a> RunningState<'a> {
     fn progress_bar_prefix(self, styles: &Styles) -> String {
         let (prefix_str, prefix_style) = match self {
             Self::Running(current_stats) => {
-                let prefix_style = if current_stats.failed > 0 || current_stats.exec_failed > 0 {
+                let prefix_style = if current_stats.any_failed() {
                     styles.fail
                 } else {
                     styles.pass
@@ -673,13 +673,11 @@ impl<'a> TestReporterImpl<'a> {
                 elapsed,
                 run_stats,
             } => {
-                let summary_style =
-                    if run_stats.failed > 0 || run_stats.exec_failed > 0 || run_stats.timed_out > 0
-                    {
-                        self.styles.fail
-                    } else {
-                        self.styles.pass
-                    };
+                let summary_style = if run_stats.any_failed() {
+                    self.styles.fail
+                } else {
+                    self.styles.pass
+                };
                 write!(writer, "{:>12} ", "Summary".style(summary_style))?;
 
                 // Next, print the total time taken.

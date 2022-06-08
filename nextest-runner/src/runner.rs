@@ -668,10 +668,16 @@ impl RunStats {
         if self.initial_run_count > self.finished_count {
             return false;
         }
-        if self.failed > 0 || self.exec_failed > 0 {
+        if self.any_failed() {
             return false;
         }
         true
+    }
+
+    /// Returns true if any tests failed or were timed out.
+    #[inline]
+    pub fn any_failed(&self) -> bool {
+        self.failed > 0 || self.exec_failed > 0 || self.timed_out > 0
     }
 
     fn on_test_finished(&mut self, run_statuses: &ExecutionStatuses) {
@@ -964,6 +970,16 @@ mod tests {
             "exec failed => failure"
         );
         assert!(
+            !RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                timed_out: 1,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "timed out => failure"
+        );
+        assert!(
             RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
@@ -971,6 +987,63 @@ mod tests {
                 ..RunStats::default()
             }
             .is_success(),
+            "skipped => not considered a failure"
+        );
+    }
+
+    #[test]
+    fn test_any_failed() {
+        assert!(
+            !RunStats::default().any_failed(),
+            "empty run => none failed"
+        );
+        assert!(
+            !RunStats {
+                initial_run_count: 42,
+                finished_count: 41,
+                ..RunStats::default()
+            }
+            .any_failed(),
+            "initial run count > final run count doesn't necessarily mean any failed"
+        );
+        assert!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                failed: 1,
+                ..RunStats::default()
+            }
+            .any_failed(),
+            "failed => failure"
+        );
+        assert!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                exec_failed: 1,
+                ..RunStats::default()
+            }
+            .any_failed(),
+            "exec failed => failure"
+        );
+        assert!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                timed_out: 1,
+                ..RunStats::default()
+            }
+            .any_failed(),
+            "timed out => failure"
+        );
+        assert!(
+            !RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                skipped: 1,
+                ..RunStats::default()
+            }
+            .any_failed(),
             "skipped => not considered a failure"
         );
     }
