@@ -406,9 +406,7 @@ impl<'a> TestRunner<'a> {
 
                                     // give the process a grace period of 10s
                                     loop {
-                                        std::thread::sleep(Duration::from_secs(1));
-
-                                        match ((0..9).contains(&i), handle.try_wait()) {
+                                        match ((0..100).contains(&i), handle.try_wait()) {
                                             (_, Ok(Some(_))) => break true,
                                             (true, Ok(None)) => (),
                                             (false, Ok(None)) => break false,
@@ -417,6 +415,7 @@ impl<'a> TestRunner<'a> {
                                         }
 
                                         i += 1;
+                                        std::thread::sleep(Duration::from_millis(100));
                                     }
                                 };
 
@@ -628,7 +627,7 @@ impl InternalExecuteStatus {
 }
 
 /// Statistics for a test run.
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
 pub struct RunStats {
     /// The total number of tests that were expected to be run at the beginning.
     ///

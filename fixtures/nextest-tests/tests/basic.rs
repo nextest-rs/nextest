@@ -152,3 +152,10 @@ fn test_cargo_env_vars() {
     // CARGO_TARGET_TMPDIR is missing at runtime
     // TODO: dynamic library paths?
 }
+
+#[test]
+#[ignore]
+fn test_slow_timeout() {
+    // The timeout for the with-termination profile is set to 2 seconds.
+    std::thread::sleep(std::time::Duration::from_secs(4));
+}

@@ -6,3 +6,6 @@ fail-fast = false
 
 [profile.with-retries]
 retries = 2
+
+[profile.with-termination]
+slow-timeout = { period = "1s", terminate-after = 2 }
