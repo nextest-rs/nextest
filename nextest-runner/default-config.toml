@@ -60,7 +60,7 @@ fail-fast = true
 # Optional: specify the parameter 'terminate-after' with a non-zero integer,
 # which will cause slow tests to be terminated after the specified number of
 # periods have passed.
-# Example: slow-timeout = { period = "60s", terminate-after = 2; }
+# Example: slow-timeout = { period = "60s", terminate-after = 2 }
 slow-timeout = { period = "60s" }
 
 [profile.default.junit]
