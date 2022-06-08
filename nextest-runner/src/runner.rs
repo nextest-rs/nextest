@@ -19,6 +19,7 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     convert::Infallible,
     marker::PhantomData,
+    num::NonZeroUsize,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -386,7 +387,10 @@ impl<'a> TestRunner<'a> {
                         if let Some(terminate_after) = self.slow_timeout.terminate_after {
                             timeout_hit += 1;
 
-                            if terminate_after > 0 && timeout_hit >= terminate_after {
+                            if NonZeroUsize::new(timeout_hit)
+                                .expect("timeout_hit cannot be non-zero")
+                                >= terminate_after
+                            {
                                 // attempt to terminate the slow test.
                                 // as there is a race between shutting down a slow test and its own completion
                                 // we silently ignore errors to avoid printing false warnings.
