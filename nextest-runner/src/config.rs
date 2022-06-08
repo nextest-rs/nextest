@@ -162,9 +162,8 @@ impl<'cfg> NextestProfile<'cfg> {
     /// Returns the time after which tests are treated as slow for this profile.
     pub fn slow_timeout(&self) -> SlowTimeout {
         self.custom_profile
-            .and_then(|profile| profile.slow_timeout.as_ref())
-            .unwrap_or(&self.default_profile.slow_timeout)
-            .clone()
+            .and_then(|profile| profile.slow_timeout)
+            .unwrap_or(self.default_profile.slow_timeout)
     }
 
     /// Returns the test status level.
@@ -340,7 +339,7 @@ where
             E: serde::de::Error,
         {
             if v.is_empty() {
-                return Ok(None);
+                Ok(None)
             } else {
                 let period = humantime_serde::deserialize(v.into_deserializer())?;
                 Ok(Some(SlowTimeout {
@@ -354,8 +353,7 @@ where
         where
             A: serde::de::MapAccess<'de2>,
         {
-            SlowTimeout::deserialize(serde::de::value::MapAccessDeserializer::new(map))
-                .map(|st| Some(st))
+            SlowTimeout::deserialize(serde::de::value::MapAccessDeserializer::new(map)).map(Some)
         }
     }
 
