@@ -259,6 +259,19 @@ pub enum FromMessagesError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum CreateTestListError {
+    /// The proposed cwd for a process is not a directory.
+    #[error(
+        "for `{binary_id}`, current directory `{cwd}` is not a directory\n\
+         (hint: ensure project source is available at this location)"
+    )]
+    CwdIsNotDir {
+        /// The binary ID for which the current directory wasn't found.
+        binary_id: String,
+
+        /// The current directory that wasn't found.
+        cwd: Utf8PathBuf,
+    },
+
     /// Running a command to gather the list of tests failed.
     #[error(
         "for `{binary_id}`, running command `{}` failed",

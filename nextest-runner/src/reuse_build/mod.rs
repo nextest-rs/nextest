@@ -107,6 +107,12 @@ impl ReuseBuildInfo {
         self.binaries_metadata.as_ref().map(|m| &m.metadata)
     }
 
+    /// Returns true if any component of the build is being reused.
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        self.cargo_metadata.is_some() || self.binaries_metadata.is_some()
+    }
+
     /// Returns the new workspace directory.
     pub fn workspace_remap(&self) -> Option<&Utf8Path> {
         self.cargo_metadata
