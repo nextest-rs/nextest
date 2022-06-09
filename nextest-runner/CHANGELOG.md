@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.10.0] - 2022-06-08
+
+### Added
+
+- Support for terminating tests if they take too long, via the configuration parameter `slow-timeout.terminate-after`. For example, to time out after 120 seconds:
+
+    ```toml
+    slow-timeout = { period = "60s", terminate-after = 2 }
+    ```
+
+    Thanks [steveeJ](https://github.com/steveeJ) for your contribution ([#214])!
+
+[#214]: https://github.com/nextest-rs/nextest/pull/214
+
+### Fixed
+
+- Improved support for [reusing builds](https://nexte.st/book/reusing-builds): produce better error messages if the workspace's source is missing.
+
+### Changed
+
+- Errors are now defined with [thiserror](https://docs.rs/thiserror). Some minor API changes were required for the migration.
+
 ## [0.9.0] - 2022-06-07
 
 This release contains a number of user experience improvements.
@@ -126,6 +148,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.10.0
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.9.0
 [0.8.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.8.1
 [0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.8.0

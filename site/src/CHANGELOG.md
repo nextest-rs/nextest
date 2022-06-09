@@ -3,6 +3,27 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.18] - 2022-06-08
+
+### Added
+
+
+### Added
+
+- Support for terminating tests if they take too long, via the configuration parameter `slow-timeout.terminate-after`. For example, to time out after 120 seconds:
+
+    ```toml
+    slow-timeout = { period = "60s", terminate-after = 2 }
+    ```
+
+    Thanks [steveeJ](https://github.com/steveeJ) for your contribution ([#214])!
+
+[#214]: https://github.com/nextest-rs/nextest/pull/214
+
+### Fixed
+
+- Improved support for [reusing builds](https://nexte.st/book/reusing-builds): produce better error messages if the workspace's source is missing.
+
 ## [0.9.17] - 2022-06-07
 
 This release contains a number of user experience improvements.
@@ -227,6 +248,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.18]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.18
 [0.9.17]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.17
 [0.9.16]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.16
 [0.9.15]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.15
