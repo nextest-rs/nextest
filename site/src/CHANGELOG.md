@@ -7,9 +7,6 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ### Added
 
-
-### Added
-
 - Support for terminating tests if they take too long, via the configuration parameter `slow-timeout.terminate-after`. For example, to time out after 120 seconds:
 
     ```toml
