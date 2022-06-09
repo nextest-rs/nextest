@@ -86,6 +86,9 @@ impl AppOpts {
                 .iter()
                 .any(|expr| FilteringExpr::needs_deps(expr))
         }
+        fn handle_unsupported_test_binary_args(args: Vec<String>) {
+            log::warn!("skipping unsupported test binary arguments: {:?}", args);
+        }
 
         match self.command {
             Command::List {
@@ -97,6 +100,7 @@ impl AppOpts {
                 mut test_binary_args,
             } => {
                 build_filter.merge_test_binary_args(&mut test_binary_args);
+                handle_unsupported_test_binary_args(test_binary_args);
                 let base = BaseApp::new(
                     self.output,
                     reuse_build,
@@ -120,6 +124,7 @@ impl AppOpts {
                 mut test_binary_args,
             } => {
                 build_filter.merge_test_binary_args(&mut test_binary_args);
+                handle_unsupported_test_binary_args(test_binary_args);
                 let base = BaseApp::new(
                     self.output,
                     reuse_build,
@@ -145,6 +150,7 @@ impl AppOpts {
                 zstd_level,
                 test_binary_args,
             } => {
+                handle_unsupported_test_binary_args(test_binary_args);
                 let app = BaseApp::new(
                     self.output,
                     ReuseBuildOpts::default(),
@@ -294,11 +300,11 @@ enum Command {
             allow_hyphen_values = true
         )]
         zstd_level: i32,
-        // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
 
         /// Test binary arguments. Unused. Kept for compatibility reason.
         #[clap(value_name = "args", last = true)]
         test_binary_args: Vec<String>,
+        // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
     },
 }
 
@@ -437,6 +443,9 @@ impl TestBuildFilter {
                 false
             } else if s == "--ignored" {
                 ignore_filter.push(RunIgnored::IgnoredOnly);
+                false
+            } else if !s.starts_with('-') {
+                self.filter.push(s.to_owned());
                 false
             } else {
                 true
