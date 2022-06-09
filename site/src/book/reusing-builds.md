@@ -43,7 +43,7 @@ By default, archives are extracted to a temporary directory, and nextest remaps 
 target directory. To specify the directory archives should be extracted to, use the `--extract-to`
 option.
 
-**Note that archives do not include the source code.** It is your responsibility to ensure that the source code is transferred over to the target machine.
+**Note that archives do not include the source code for your project.** It is your responsibility to ensure that the source code for your project is transferred over to the target machine.
 
 ### Specifying a new location for the source code
 
