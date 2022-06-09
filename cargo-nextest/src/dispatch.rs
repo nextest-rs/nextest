@@ -90,11 +90,13 @@ impl AppOpts {
         match self.command {
             Command::List {
                 cargo_options,
-                build_filter,
+                mut build_filter,
                 message_format,
                 list_type,
                 reuse_build,
+                mut test_binary_args,
             } => {
+                build_filter.merge_test_binary_args(&mut test_binary_args);
                 let base = BaseApp::new(
                     self.output,
                     reuse_build,
@@ -111,11 +113,13 @@ impl AppOpts {
                 profile,
                 no_capture,
                 cargo_options,
-                build_filter,
+                mut build_filter,
                 runner_opts,
                 reporter_opts,
                 reuse_build,
+                mut test_binary_args,
             } => {
+                build_filter.merge_test_binary_args(&mut test_binary_args);
                 let base = BaseApp::new(
                     self.output,
                     reuse_build,
@@ -139,6 +143,7 @@ impl AppOpts {
                 archive_file,
                 archive_format,
                 zstd_level,
+                test_binary_args,
             } => {
                 let app = BaseApp::new(
                     self.output,
@@ -208,6 +213,10 @@ enum Command {
 
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
+
+        /// Test binary arguments. Partially supported.
+        #[clap(value_name = "args", last = true)]
+        test_binary_args: Vec<String>,
     },
     /// Build and run tests
     ///
@@ -243,6 +252,10 @@ enum Command {
 
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
+
+        /// Test binary arguments. Partially supported.
+        #[clap(value_name = "args", last = true)]
+        test_binary_args: Vec<String>,
     },
     /// Build and archive tests
     ///
@@ -282,6 +295,10 @@ enum Command {
         )]
         zstd_level: i32,
         // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
+
+        /// Test binary arguments. Unused. Kept for compatibility reason.
+        #[clap(value_name = "args", last = true)]
+        test_binary_args: Vec<String>,
     },
 }
 
@@ -350,10 +367,9 @@ struct TestBuildFilter {
     #[clap(
         long,
         possible_values = RunIgnored::variants(),
-        default_value_t,
         value_name = "WHICH",
     )]
-    run_ignored: RunIgnored,
+    run_ignored: Option<RunIgnored>,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
     #[clap(long)]
@@ -402,7 +418,7 @@ impl TestBuildFilter {
             self.platform_filter.into(),
         )?;
         let test_filter = TestFilterBuilder::new(
-            self.run_ignored,
+            self.run_ignored.unwrap_or_default(),
             self.partition.clone(),
             &self.filter,
             filter_exprs,
@@ -411,6 +427,27 @@ impl TestBuildFilter {
             TestList::new(test_artifacts, rust_build_meta, &test_filter, runner)
                 .map_err(|err| ExpectedError::CreateTestListError { err })?,
         )
+    }
+
+    fn merge_test_binary_args(&mut self, test_binary_args: &mut Vec<String>) {
+        let mut ignore_filter = Vec::new();
+        test_binary_args.retain(|s| {
+            if s == "--include-ignored" {
+                ignore_filter.push(RunIgnored::All);
+                false
+            } else if s == "--ignored" {
+                ignore_filter.push(RunIgnored::IgnoredOnly);
+                false
+            } else {
+                true
+            }
+        });
+        for f in ignore_filter {
+            if self.run_ignored.is_some() && self.run_ignored != Some(f) {
+                log::warn!("skipping conflicting ignore filter: {}", f);
+            }
+            self.run_ignored = Some(f);
+        }
     }
 }
 
@@ -1013,6 +1050,11 @@ mod tests {
             // ---
             "cargo nextest list -E deps(foo)",
             "cargo nextest run --filter-expr 'test(bar)' --package=my-package test-filter",
+            // ---
+            // Test binary arguments
+            // ---
+            "cargo nextest run -- --ignored",
+            "cargo nextest list -- --run-ignored",
         ];
 
         let invalid: &[(&'static str, ErrorKind)] = &[
