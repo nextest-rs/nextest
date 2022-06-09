@@ -33,6 +33,8 @@ In some cases, it can be useful to separate out building tests from running them
   * Dynamic libraries that test binaries might link to
   * Non-test binaries used by integration tests
 
+**Note that archives do not include the source code for your project.** It is your responsibility to ensure that the source code for your workspace is transferred over to the target machine and has the same contents.
+
 Currently, the only format supported is a Zstandard-compressed tarball (`.tar.zst`).
 
 ## Running tests from archives
@@ -42,8 +44,6 @@ Currently, the only format supported is a Zstandard-compressed tarball (`.tar.zs
 By default, archives are extracted to a temporary directory, and nextest remaps paths to use the new
 target directory. To specify the directory archives should be extracted to, use the `--extract-to`
 option.
-
-**Note that archives do not include the source code for your project.** It is your responsibility to ensure that the source code for your project is transferred over to the target machine.
 
 ### Specifying a new location for the source code
 
