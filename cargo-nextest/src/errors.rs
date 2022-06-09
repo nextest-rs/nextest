@@ -14,11 +14,23 @@ use std::{
     fmt,
 };
 
+#[derive(Debug)]
+#[doc(hidden)]
+pub enum ReuseBuildKind {
+    Normal,
+    ReuseWithWorkspaceRemap { workspace_root: Utf8PathBuf },
+    Reuse,
+}
+
 /// An error occurred in a program that nextest ran, not in nextest itself.
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum ExpectedError {
     CargoMetadataFailed,
+    RootManifestNotFound {
+        path: Utf8PathBuf,
+        reuse_build_kind: ReuseBuildKind,
+    },
     ProfileNotFound {
         err: ProfileNotFound,
     },
@@ -148,6 +160,7 @@ impl ExpectedError {
         match self {
             Self::CargoMetadataFailed => NextestExitCode::CARGO_METADATA_FAILED,
             Self::ProfileNotFound { .. }
+            | Self::RootManifestNotFound { .. }
             | Self::ConfigParseError { .. }
             | Self::ArgumentFileReadError { .. }
             | Self::UnknownArchiveFormat { .. }
@@ -176,6 +189,30 @@ impl ExpectedError {
             Self::ProfileNotFound { err } => {
                 log::error!("{}", err);
                 err.source()
+            }
+            Self::RootManifestNotFound {
+                path,
+                reuse_build_kind,
+            } => {
+                let hint_str = match reuse_build_kind {
+                    ReuseBuildKind::ReuseWithWorkspaceRemap { workspace_root } => {
+                        format!(
+                            "\n(hint: ensure that project source is available at {})",
+                            workspace_root.if_supports_color(Stream::Stderr, |x| x.bold())
+                        )
+                    }
+                    ReuseBuildKind::Reuse => {
+                        "\n(hint: ensure that project source is available for reused build, \
+                          using --workspace-remap if necessary)"
+                            .to_owned()
+                    }
+                    ReuseBuildKind::Normal => String::new(),
+                };
+                log::error!(
+                    "workspace root manifest at {} does not exist{hint_str}",
+                    path.if_supports_color(Stream::Stderr, |x| x.bold())
+                );
+                None
             }
             Self::ConfigParseError { err } => {
                 log::error!("{}", err);
@@ -307,6 +344,7 @@ impl fmt::Display for ExpectedError {
         match self {
             Self::CargoMetadataFailed => writeln!(f, "cargo metadata failed"),
             Self::ProfileNotFound { .. } => writeln!(f, "profile not found"),
+            Self::RootManifestNotFound { .. } => writeln!(f, "root manifest not found"),
             Self::ConfigParseError { .. } => writeln!(f, "config read error"),
             Self::ArgumentFileReadError { .. } => writeln!(f, "argument file error"),
             Self::UnknownArchiveFormat { .. } => writeln!(f, "unknown archive format"),

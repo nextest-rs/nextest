@@ -5,7 +5,7 @@ use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, OutputOpts, OutputWriter},
     reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
-    ExpectedError,
+    ExpectedError, ReuseBuildKind,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgEnum, Args, Parser, Subcommand};
@@ -618,6 +618,25 @@ impl BaseApp {
             Some(path) => path.to_owned(),
             _ => graph_data.1.workspace().root().to_owned(),
         };
+
+        let root_manifest_path = workspace_root.join("Cargo.toml");
+        if !root_manifest_path.exists() {
+            // This doesn't happen in normal use, but is a common situation if the build is being
+            // reused.
+            let reuse_build_kind = if reuse_build.workspace_remap().is_some() {
+                ReuseBuildKind::ReuseWithWorkspaceRemap { workspace_root }
+            } else if reuse_build.is_active() {
+                ReuseBuildKind::Reuse
+            } else {
+                ReuseBuildKind::Normal
+            };
+
+            return Err(ExpectedError::RootManifestNotFound {
+                path: root_manifest_path,
+                reuse_build_kind,
+            }
+            .into());
+        }
 
         Ok(Self {
             output,

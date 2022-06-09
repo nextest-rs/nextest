@@ -547,6 +547,14 @@ impl<'g> RustTestArtifact<'g> {
         dylib_path: &OsStr,
         runner: &TargetRunner,
     ) -> Result<(String, String), CreateTestListError> {
+        // This error situation has been known to happen with reused builds. It produces
+        // a really terrible and confusing "file not found" message if allowed to prceed.
+        if !self.cwd.is_dir() {
+            return Err(CreateTestListError::CwdIsNotDir {
+                binary_id: self.binary_id.clone(),
+                cwd: self.cwd.clone(),
+            });
+        }
         let platform_runner = runner.for_build_platform(self.build_platform);
 
         let non_ignored = self.exec_single(false, dylib_path, platform_runner)?;
