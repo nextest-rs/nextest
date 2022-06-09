@@ -43,9 +43,11 @@ By default, archives are extracted to a temporary directory, and nextest remaps 
 target directory. To specify the directory archives should be extracted to, use the `--extract-to`
 option.
 
-### Specifying a new location for the workspace
+**Note that archives do not include the source code.** It is your responsibility to ensure that the source code is transferred over to the target machine.
 
-By default, nextest expects the workspace to be in the same location on both the build and target machines. To specify a new location for the workspace, use the `--workspace-remap <path-to-workspace-root>` option with the `list` or `run` commands.
+### Specifying a new location for the source code
+
+By default, nextest expects the workspace's source code to be in the same location on both the build and target machines. To specify a new location for the workspace, use the `--workspace-remap <path-to-workspace-root>` option with the `list` or `run` commands.
 
 ## Example: Simple build/run split
 
