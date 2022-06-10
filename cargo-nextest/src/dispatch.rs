@@ -506,8 +506,8 @@ struct TestReporterOpts {
         env = "NEXTEST_FAILURE_OUTPUT",
     )]
     failure_output: Option<TestOutputDisplay>,
-    /// Output stdout and stderr on success
 
+    /// Output stdout and stderr on success
     #[clap(
         long,
         possible_values = TestOutputDisplay::variants(),
