@@ -5,6 +5,7 @@ use crate::fixtures::*;
 use camino::Utf8Path;
 use color_eyre::Result;
 use nextest_runner::{
+    cargo_config::CargoConfigs,
     config::NextestConfig,
     errors::TargetRunnerError,
     runner::TestRunnerBuilder,
@@ -52,7 +53,9 @@ fn default() -> &'static target_spec::Platform {
 }
 
 fn runner_for_target(triple: Option<&str>) -> Result<TargetRunner, TargetRunnerError> {
-    TargetRunner::with_isolation(triple, &workspace_root(), &workspace_root())
+    let configs =
+        CargoConfigs::discover_with_isolation(&workspace_root(), &workspace_root()).unwrap();
+    TargetRunner::new(&configs, triple)
 }
 
 #[test]
@@ -103,9 +106,10 @@ fn parse_triple(triple: &'static str) -> target_spec::Platform {
 
 #[test]
 fn parses_cargo_config_exact() {
+    let workspace_root = workspace_root();
     let windows = parse_triple("x86_64-pc-windows-gnu");
-
-    let runner = PlatformRunner::find_config(windows, &workspace_root(), Some(&workspace_root()))
+    let configs = CargoConfigs::discover_with_isolation(&workspace_root, &workspace_root).unwrap();
+    let runner = PlatformRunner::find_config(&configs, windows)
         .unwrap()
         .unwrap();
 
@@ -115,20 +119,20 @@ fn parses_cargo_config_exact() {
 
 #[test]
 fn disregards_non_matching() {
+    let workspace_root = workspace_root();
     let windows = parse_triple("x86_64-unknown-linux-gnu");
-    assert!(
-        PlatformRunner::find_config(windows, &workspace_root(), Some(&workspace_root()))
-            .unwrap()
-            .is_none()
-    );
+    let configs = CargoConfigs::discover_with_isolation(&workspace_root, &workspace_root).unwrap();
+    assert!(PlatformRunner::find_config(&configs, windows)
+        .unwrap()
+        .is_none());
 }
 
 #[test]
 fn parses_cargo_config_cfg() {
     let workspace_root = workspace_root();
-    let terminate_search_at = Some(workspace_root.as_path());
     let android = parse_triple("aarch64-linux-android");
-    let runner = PlatformRunner::find_config(android, &workspace_root, terminate_search_at)
+    let configs = CargoConfigs::discover_with_isolation(&workspace_root, &workspace_root).unwrap();
+    let runner = PlatformRunner::find_config(&configs, android)
         .unwrap()
         .unwrap();
 
@@ -136,7 +140,7 @@ fn parses_cargo_config_cfg() {
     assert_eq!(vec!["-x"], runner.args().collect::<Vec<_>>());
 
     let linux = parse_triple("x86_64-unknown-linux-musl");
-    let runner = PlatformRunner::find_config(linux, &workspace_root, terminate_search_at)
+    let runner = PlatformRunner::find_config(&configs, linux)
         .unwrap()
         .unwrap();
 
@@ -156,13 +160,7 @@ fn falls_back_to_cargo_config() {
             "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
             "cargo-runner-windows",
         )],
-        || {
-            TargetRunner::with_isolation(
-                Some(linux.triple_str()),
-                &workspace_root(),
-                &workspace_root(),
-            )
-        },
+        || runner_for_target(Some(linux.triple_str())),
     )
     .unwrap();
 

@@ -586,6 +586,55 @@ pub enum WriteEventError {
     },
 }
 
+/// An error occurred while looking for Cargo configuration files.
+#[derive(Debug, Error)]
+pub enum CargoConfigSearchError {
+    /// Failed to retrieve the current directory
+    #[error("failed to retrieve current directory")]
+    GetCurrentDir(#[source] std::io::Error),
+
+    /// A non-UTF-8 path was encountered.
+    #[error("non-UTF-8 path encountered")]
+    NonUtf8Path(#[source] FromPathBufError),
+
+    /// Failed to retrieve the Cargo home directory.
+    #[error("failed to retrieve the Cargo home directory")]
+    GetCargoHome(#[source] std::io::Error),
+
+    /// Failed to canonicalize a path
+    #[error("failed to canonicalize path `{path}")]
+    FailedPathCanonicalization {
+        /// The path that failed to canonicalize
+        path: Utf8PathBuf,
+
+        /// The error the occurred during canonicalization
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to read config file
+    #[error("failed to read config at `{path}`")]
+    ConfigReadError {
+        /// The path of the config file
+        path: Utf8PathBuf,
+
+        /// The error that occurred trying to read the config file
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to deserialize config file
+    #[error("failed to parse config at `{path}`")]
+    ConfigParseError {
+        /// The path of the config file
+        path: Utf8PathBuf,
+
+        /// The error that occurred trying to deserialize the config file
+        #[source]
+        error: toml::de::Error,
+    },
+}
+
 /// An error occurred determining the target runner
 #[derive(Debug, Error)]
 pub enum TargetRunnerError {
@@ -607,51 +656,6 @@ pub enum TargetRunnerError {
 
         /// The value that was read from the key
         value: String,
-    },
-
-    /// Failed to retrieve the current directory
-    #[error("failed to retrieve current directory")]
-    GetCurrentDir(#[source] std::io::Error),
-
-    /// Failed to retrieve the Cargo home directory.
-    #[error("failed to retrieve the Cargo home directory")]
-    GetCargoHome(#[source] std::io::Error),
-
-    /// Failed to canonicalize a path
-    #[error("failed to canonicalize path `{path}")]
-    FailedPathCanonicalization {
-        /// The path that failed to canonicalize
-        path: Utf8PathBuf,
-
-        /// The error the occurred during canonicalization
-        #[source]
-        error: std::io::Error,
-    },
-
-    /// A non-UTF-8 path was encountered.
-    #[error("non-UTF-8 path encountered")]
-    NonUtf8Path(#[source] FromPathBufError),
-
-    /// Failed to read config file
-    #[error("failed to read config at `{path}`")]
-    FailedToReadConfig {
-        /// The path of the config file
-        path: Utf8PathBuf,
-
-        /// The error that occurred trying to read the config file
-        #[source]
-        error: std::io::Error,
-    },
-
-    /// Failed to deserialize config file
-    #[error("failed to parse config at `{path}`")]
-    FailedToParseConfig {
-        /// The path of the config file
-        path: Utf8PathBuf,
-
-        /// The error that occurred trying to deserialize the config file
-        #[source]
-        error: toml::de::Error,
     },
 
     /// Failed to parse the specified target triple
