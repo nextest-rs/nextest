@@ -15,8 +15,8 @@ use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
+    cargo_config::CargoConfigs,
     config::{NextestConfig, NextestProfile},
-    errors::TargetRunnerError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
     reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
@@ -28,7 +28,6 @@ use nextest_runner::{
 };
 use owo_colors::{OwoColorize, Style};
 use std::{
-    error::Error,
     fmt::Write as _,
     io::{Cursor, Write},
     sync::Arc,
@@ -906,7 +905,15 @@ fn acquire_graph_data(
 }
 
 fn runner_for_target(triple: Option<&str>) -> TargetRunner {
-    match TargetRunner::new(triple) {
+    let configs = match CargoConfigs::discover() {
+        Ok(configs) => configs,
+        Err(err) => {
+            warn_on_target_runner_err(&err).expect("writing to a string is infallible");
+            return TargetRunner::empty();
+        }
+    };
+
+    match TargetRunner::new(&configs, triple) {
         Ok(runner) => {
             match triple {
                 Some(_) => {
@@ -943,7 +950,7 @@ fn log_platform_runner(prefix: &str, runner: &PlatformRunner) {
     )
 }
 
-fn warn_on_target_runner_err(err: &TargetRunnerError) -> Result<(), std::fmt::Error> {
+fn warn_on_target_runner_err(err: &(dyn std::error::Error)) -> Result<(), std::fmt::Error> {
     let mut s = String::with_capacity(256);
     write!(s, "could not determine target runner: {}", err)?;
     let mut next_error = err.source();

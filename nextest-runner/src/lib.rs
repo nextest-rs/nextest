@@ -40,6 +40,7 @@
 //! 6. The test reporter sees events and prints them to stderr (and aggregates them if necessary
 //!    based on configs).
 
+pub mod cargo_config;
 pub mod config;
 pub mod errors;
 mod helpers;

@@ -3,18 +3,14 @@
 
 //! Support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 
-use crate::errors::TargetRunnerError;
-use camino::{Utf8Path, Utf8PathBuf};
+use crate::{
+    cargo_config::{CargoConfigs, Runner},
+    errors::TargetRunnerError,
+};
+use camino::Utf8PathBuf;
 use nextest_metadata::BuildPlatform;
-use std::{borrow::Cow, fmt};
+use std::fmt;
 use target_spec::Platform;
-
-#[derive(serde::Deserialize, Debug)]
-#[serde(untagged)]
-enum Runner {
-    Simple(String),
-    List(Vec<String>),
-}
 
 /// A [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 /// used to execute a test binary rather than the default of executing natively.
@@ -28,38 +24,17 @@ impl TargetRunner {
     /// Acquires the [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
     /// which can be set in a [.cargo/config.toml](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
     /// or via a `CARGO_TARGET_{TRIPLE}_RUNNER` environment variable
-    pub fn new(target_triple: Option<&str>) -> Result<Self, TargetRunnerError> {
-        let host = PlatformRunner::by_precedence(None, None, None)?;
-        let target = if target_triple.is_some() {
-            PlatformRunner::by_precedence(target_triple, None, None)?
-        } else {
-            host.clone()
-        };
-
-        Ok(Self { host, target })
-    }
-
-    /// Configures the start and terminate search the search for cargo configs.
-    ///
-    /// The default is normally the current working directory. Not part of the public API, for
-    /// testing only.
-    #[doc(hidden)]
-    pub fn with_isolation(
+    pub fn new(
+        configs: &CargoConfigs,
         target_triple: Option<&str>,
-        start_search_at: &Utf8Path,
-        terminate_search_at: &Utf8Path,
     ) -> Result<Self, TargetRunnerError> {
-        let host =
-            PlatformRunner::by_precedence(None, Some(start_search_at), Some(terminate_search_at))?;
+        let host = PlatformRunner::by_precedence(configs, None)?;
         let target = if target_triple.is_some() {
-            PlatformRunner::by_precedence(
-                target_triple,
-                Some(start_search_at),
-                Some(terminate_search_at),
-            )?
+            PlatformRunner::by_precedence(configs, target_triple)?
         } else {
             host.clone()
         };
+
         Ok(Self { host, target })
     }
 
@@ -114,9 +89,8 @@ pub struct PlatformRunner {
 
 impl PlatformRunner {
     fn by_precedence(
+        configs: &CargoConfigs,
         target_triple: Option<&str>,
-        root: Option<&Utf8Path>,
-        terminate_search_at: Option<&Utf8Path>,
     ) -> Result<Option<Self>, TargetRunnerError> {
         let target = match target_triple {
             Some(target) => Platform::from_triple(
@@ -137,22 +111,7 @@ impl PlatformRunner {
             return Ok(Some(tr));
         }
 
-        let start_search_at = match root {
-            Some(rp) => Cow::Borrowed(rp),
-            None => {
-                // This is a bit non-intuitive, but the .cargo/config.toml hierarchy is actually
-                // based on the current working directory, _not_ the manifest path, this bug
-                // has existed for a while https://github.com/rust-lang/cargo/issues/2930
-                let dir = std::env::current_dir()
-                    .map_err(TargetRunnerError::GetCurrentDir)
-                    .and_then(|cwd| {
-                        Utf8PathBuf::try_from(cwd).map_err(TargetRunnerError::NonUtf8Path)
-                    })?;
-                Cow::Owned(dir)
-            }
-        };
-
-        Self::find_config(target, &start_search_at, terminate_search_at)
+        Self::find_config(configs, target)
     }
 
     fn from_env(env_key: String) -> Result<Option<Self>, TargetRunnerError> {
@@ -179,119 +138,26 @@ impl PlatformRunner {
     /// Not part of the public API. For testing only.
     #[doc(hidden)]
     pub fn find_config(
+        configs: &CargoConfigs,
         target: target_spec::Platform,
-        start_search_at: &Utf8Path,
-        terminate_search_at: Option<&Utf8Path>,
     ) -> Result<Option<Self>, TargetRunnerError> {
-        let mut configs = Vec::new();
-
-        fn read_config_dir(dir: &mut Utf8PathBuf) -> Option<Utf8PathBuf> {
-            // Check for config before config.toml, same as cargo does
-            dir.push("config");
-
-            if !dir.exists() {
-                dir.set_extension("toml");
-            }
-
-            let ret = if dir.exists() {
-                Some(dir.clone())
-            } else {
-                None
-            };
-
-            dir.pop();
-            ret
-        }
-
-        let mut dir = start_search_at
-            .canonicalize()
-            .map_err(|error| TargetRunnerError::FailedPathCanonicalization {
-                path: start_search_at.to_owned(),
-                error,
-            })
-            .and_then(|canon| {
-                Utf8PathBuf::try_from(canon).map_err(TargetRunnerError::NonUtf8Path)
-            })?;
-
-        for _ in 0..dir.ancestors().count() {
-            dir.push(".cargo");
-
-            if !dir.exists() {
-                dir.pop();
-                dir.pop();
-                continue;
-            }
-
-            if let Some(config) = read_config_dir(&mut dir) {
-                configs.push(config);
-            }
-
-            dir.pop();
-            if Some(dir.as_path()) == terminate_search_at {
-                break;
-            }
-            dir.pop();
-        }
-
-        if terminate_search_at.is_none() {
-            // Attempt lookup the $CARGO_HOME directory from the cwd, as that can
-            // contain a default config.toml
-            let mut cargo_home_path = home::cargo_home_with_cwd(start_search_at.as_std_path())
-                .map_err(TargetRunnerError::GetCargoHome)
-                .and_then(|home| {
-                    Utf8PathBuf::try_from(home).map_err(TargetRunnerError::NonUtf8Path)
-                })?;
-
-            if let Some(home_config) = read_config_dir(&mut cargo_home_path) {
-                // Ensure we don't add a duplicate if the current directory is underneath
-                // the same root as $CARGO_HOME
-                if !configs.iter().any(|path| path == &home_config) {
-                    configs.push(home_config);
-                }
-            }
-        }
-
-        #[derive(serde::Deserialize, Debug)]
-        struct CargoConfigRunner {
-            #[serde(default)]
-            runner: Option<Runner>,
-        }
-
-        #[derive(serde::Deserialize, Debug)]
-        struct CargoConfig {
-            target: Option<std::collections::BTreeMap<String, CargoConfigRunner>>,
-        }
-
         let mut target_runner = None;
 
         // Now that we've found all of the config files that could declare
         // a runner that matches our target triple, we need to actually find
         // all the matches, but in reverse order as the closer the config is
         // to our current working directory, the higher precedence it has
-        'config: for config_path in configs.into_iter().rev() {
-            let config_contents = std::fs::read_to_string(&config_path).map_err(|error| {
-                TargetRunnerError::FailedToReadConfig {
-                    path: config_path.clone(),
-                    error,
-                }
-            })?;
-            let config: CargoConfig = toml::from_str(&config_contents).map_err(|error| {
-                TargetRunnerError::FailedToParseConfig {
-                    path: config_path.clone(),
-                    error,
-                }
-            })?;
-
-            if let Some(mut targets) = config.target {
+        'config: for (path, config) in configs.discovered_configs().into_iter().rev() {
+            if let Some(targets) = &config.target {
                 // First lookup by the exact triple, as that one always takes precedence
-                if let Some(parent) = targets.remove(target.triple_str()) {
-                    if let Some(runner) = parent.runner {
+                if let Some(parent) = targets.get(target.triple_str()) {
+                    if let Some(runner) = &parent.runner {
                         target_runner = Some(Self::parse_runner(
                             PlatformRunnerSource::CargoConfig {
-                                path: config_path.clone(),
+                                path: path.to_owned(),
                                 target_table: target.triple_str().into(),
                             },
-                            runner,
+                            runner.clone(),
                         )?);
                         continue;
                     }
@@ -301,12 +167,12 @@ impl PlatformRunner {
                 // the target. cargo states that it is not allowed for more than
                 // 1 cfg runner to match the target, but we let cargo handle that
                 // error itself, we just use the first one that matches
-                for (cfg, runner) in targets.into_iter().filter_map(|(k, v)| match v.runner {
+                for (cfg, runner) in targets.iter().filter_map(|(k, v)| match &v.runner {
                     Some(runner) if k.starts_with("cfg(") => Some((k, runner)),
                     _ => None,
                 }) {
                     // Treat these as non-fatal, but would be good to log maybe
-                    let expr = match target_spec::TargetExpression::new(&cfg) {
+                    let expr = match target_spec::TargetExpression::new(cfg) {
                         Ok(expr) => expr,
                         Err(_err) => continue,
                     };
@@ -314,10 +180,10 @@ impl PlatformRunner {
                     if expr.eval(&target) == Some(true) {
                         target_runner = Some(Self::parse_runner(
                             PlatformRunnerSource::CargoConfig {
-                                path: config_path,
-                                target_table: cfg,
+                                path: path.to_owned(),
+                                target_table: cfg.clone(),
                             },
-                            runner,
+                            runner.clone(),
                         )?);
                         continue 'config;
                     }
@@ -430,6 +296,7 @@ impl fmt::Display for PlatformRunnerSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8Path;
     use color_eyre::eyre::{Context, Result};
     use target_spec::TargetFeatures;
     use tempfile::TempDir;
@@ -445,12 +312,11 @@ mod tests {
         // Searches through the full directory tree
         // ---
         assert_eq!(
-            PlatformRunner::find_config(
+            find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
-                Some(&dir_path),
-            )
-            .unwrap(),
+                &dir_path,
+            ),
             Some(PlatformRunner {
                 runner_binary: "wine".into(),
                 args: vec!["--test-arg".into()],
@@ -462,12 +328,11 @@ mod tests {
         );
 
         assert_eq!(
-            PlatformRunner::find_config(
+            find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
-                Some(&dir_path),
-            )
-            .unwrap(),
+                &dir_path,
+            ),
             Some(PlatformRunner {
                 runner_binary: "wine2".into(),
                 args: vec![],
@@ -479,12 +344,11 @@ mod tests {
         );
 
         assert_eq!(
-            PlatformRunner::find_config(
+            find_config(
                 Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_bar_path,
-                Some(&dir_path),
-            )
-            .unwrap(),
+                &dir_path,
+            ),
             Some(PlatformRunner {
                 runner_binary: "unix-runner".into(),
                 args: vec![],
@@ -499,12 +363,11 @@ mod tests {
         // Searches starting from the "foo" directory which has no .cargo/config in it
         // ---
         assert_eq!(
-            PlatformRunner::find_config(
+            find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_path,
-                Some(&dir_path),
-            )
-            .unwrap(),
+                &dir_path,
+            ),
             Some(PlatformRunner {
                 runner_binary: "parent-wine".into(),
                 args: vec![],
@@ -516,12 +379,11 @@ mod tests {
         );
 
         assert_eq!(
-            PlatformRunner::find_config(
+            find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_foo_path,
-                Some(&dir_path),
-            )
-            .unwrap(),
+                &dir_path,
+            ),
             None,
         );
 
@@ -529,12 +391,11 @@ mod tests {
         // Searches starting and ending at the root directory.
         // ---
         assert_eq!(
-            PlatformRunner::find_config(
+            find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 &dir_path,
-                Some(&dir_path),
-            )
-            .unwrap(),
+                &dir_path,
+            ),
             Some(PlatformRunner {
                 runner_binary: "parent-wine".into(),
                 args: vec![],
@@ -546,12 +407,11 @@ mod tests {
         );
 
         assert_eq!(
-            PlatformRunner::find_config(
+            find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
                 &dir_path,
-                Some(&dir_path),
-            )
-            .unwrap(),
+                &dir_path,
+            ),
             None,
         );
     }
@@ -575,6 +435,16 @@ mod tests {
         .wrap_err("error writing foo/bar/.cargo/config.toml")?;
 
         Ok(dir)
+    }
+
+    fn find_config(
+        platform: Platform,
+        start_search_at: &Utf8Path,
+        terminate_search_at: &Utf8Path,
+    ) -> Option<PlatformRunner> {
+        let configs =
+            CargoConfigs::discover_with_isolation(start_search_at, terminate_search_at).unwrap();
+        PlatformRunner::find_config(&configs, platform).unwrap()
     }
 
     static CARGO_CONFIG_CONTENTS: &str = r#"
