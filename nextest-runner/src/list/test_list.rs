@@ -191,6 +191,11 @@ impl<'g> TestList<'g> {
     ) -> Result<Self, CreateTestListError> {
         let mut test_count = 0;
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
+        log::debug!(
+            "updated {}: {}",
+            dylib_path_envvar(),
+            updated_dylib_path.to_string_lossy(),
+        );
 
         let test_artifacts = test_artifacts
             .into_iter()
