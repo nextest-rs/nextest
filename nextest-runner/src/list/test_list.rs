@@ -386,6 +386,7 @@ impl<'g> TestList<'g> {
         rust_build_meta: &RustBuildMeta<TestListState>,
     ) -> Result<OsString, CreateTestListError> {
         let dylib_path = dylib_path();
+        let dylib_path_is_empty = dylib_path.is_empty();
         let new_paths = rust_build_meta.dylib_paths();
 
         let mut updated_dylib_path: Vec<PathBuf> =
@@ -396,6 +397,20 @@ impl<'g> TestList<'g> {
                 .map(|path| path.clone().into_std_path_buf()),
         );
         updated_dylib_path.extend(dylib_path);
+
+        // On macOS, these are the defaults when DYLD_FALLBACK_LIBRARY_PATH isn't set or set to an
+        // empty string. (This is relevant if nextest is invoked as its own process and not
+        // a Cargo subcommand.)
+        //
+        // This copies the logic from
+        // https://cs.github.com/rust-lang/cargo/blob/7d289b171183578d45dcabc56db6db44b9accbff/src/cargo/core/compiler/compilation.rs#L292.
+        if cfg!(target_os = "macos") && dylib_path_is_empty {
+            if let Some(home) = home::home_dir() {
+                updated_dylib_path.push(home.join("lib"));
+            }
+            updated_dylib_path.push("/usr/local/lib".into());
+            updated_dylib_path.push("/usr/lib".into());
+        }
 
         std::env::join_paths(updated_dylib_path)
             .map_err(move |error| CreateTestListError::dylib_join_paths(new_paths, error))
