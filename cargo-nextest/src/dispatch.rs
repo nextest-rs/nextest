@@ -244,8 +244,8 @@ enum Command {
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
 
-        /// Test binary arguments. Partially supported. Kept for compatibility reason.
-        #[clap(value_name = "args", last = true)]
+        /// Arguments for the test binary. Partially supported. Kept for compatibility reason.
+        #[clap(value_name = "test-binary-args", last = true)]
         test_binary_args: Vec<String>,
     },
     /// Build and run tests
@@ -284,7 +284,7 @@ enum Command {
         reuse_build: ReuseBuildOpts,
 
         /// Test binary arguments. Partially supported. Kept for compatibility reason.
-        #[clap(value_name = "args", last = true)]
+        #[clap(value_name = "test-binary-args", last = true)]
         test_binary_args: Vec<String>,
     },
     /// Build and archive tests
@@ -466,6 +466,8 @@ impl TestBuildFilter {
                 false
             } else if !s.starts_with('-') {
                 self.filter.push(s.to_owned());
+                false
+            } else if s.chars().all(|c| c == '-') {
                 false
             } else {
                 true
@@ -1250,6 +1252,17 @@ mod tests {
             (
                 "cargo nextest list -- --include-ignored",
                 "cargo nextest list --run-ignored all",
+            ),
+            // ---
+            // multiple escapes
+            // ---
+            (
+                "cargo nextest run -- --ignored --- str",
+                "cargo nextest run --run-ignored ignored-only str",
+            ),
+            (
+                "cargo nextest list -- str1 --- str2 ---- str3",
+                "cargo nextest list str1 str2 str3",
             ),
         ];
         let invalid = &[
