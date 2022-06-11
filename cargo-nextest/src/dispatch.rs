@@ -80,7 +80,7 @@ struct AppOpts {
 
 impl AppOpts {
     fn validate(&mut self) -> Result<()> {
-        fn handle_test_binary_args(args: &Vec<String>) -> Result<()> {
+        fn handle_test_binary_args(args: &[String]) -> Result<()> {
             if !args.is_empty() {
                 return Err(Report::new(ExpectedError::test_binary_args_parse_error(
                     "unsupported",
@@ -283,7 +283,7 @@ enum Command {
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
 
-        /// Test binary arguments. Partially supported. Kept for compatibility reason.
+        /// Arguments for the test binary. Partially supported. Kept for compatibility reason.
         #[clap(value_name = "test-binary-args", last = true)]
         test_binary_args: Vec<String>,
     },
@@ -1229,7 +1229,7 @@ mod tests {
             let app = CargoNextestApp::try_parse_from(
                 shell_words::split(cmd).expect("valid command line"),
             )
-            .expect(&format!("{} should have successfully parsed", cmd));
+            .unwrap_or_else(|_| panic!("{} should have successfully parsed", cmd));
             let NextestSubcommand::Nextest(mut app) = app.subcommand;
             app.validate()?;
             Ok(app)
@@ -1294,8 +1294,14 @@ mod tests {
         ];
 
         for (a, b) in valid {
-            let a_str = format!("{:?}", get_app_opts(a).expect(&format!("parsing {}", a)));
-            let b_str = format!("{:?}", get_app_opts(b).expect(&format!("parsing {}", b)));
+            let a_str = format!(
+                "{:?}",
+                get_app_opts(a).unwrap_or_else(|_| panic!("failed to parse {}", a))
+            );
+            let b_str = format!(
+                "{:?}",
+                get_app_opts(b).unwrap_or_else(|_| panic!("failed to parse {}", b))
+            );
             assert_eq!(a_str, b_str);
         }
 
