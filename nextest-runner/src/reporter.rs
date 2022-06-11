@@ -593,6 +593,12 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) ->
     Ok(())
 }
 
+#[derive(Debug)]
+enum FinalOutput {
+    Skipped(MismatchReason),
+    Executed(ExecutionStatuses),
+}
+
 struct TestReporterImpl<'a> {
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
@@ -602,7 +608,7 @@ struct TestReporterImpl<'a> {
     binary_id_width: usize,
     styles: Box<Styles>,
     cancel_status: Option<CancelReason>,
-    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, ExecutionStatuses)>>,
+    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, FinalOutput)>>,
 }
 
 impl<'a> TestReporterImpl<'a> {
@@ -713,20 +719,19 @@ impl<'a> TestReporterImpl<'a> {
                     || self.final_status_level >= describe.final_status_level()
                 {
                     self.final_outputs
-                        .push((*test_instance, run_statuses.clone()));
+                        .push((*test_instance, FinalOutput::Executed(run_statuses.clone())));
                 }
             }
             TestEvent::TestSkipped {
                 test_instance,
-                reason: _reason,
+                reason,
             } => {
                 if self.status_level >= StatusLevel::Skip {
-                    write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
-                    // same spacing [   0.034s]
-                    write!(writer, "[         ] ")?;
-
-                    self.write_instance(*test_instance, &mut writer)?;
-                    writeln!(writer)?;
+                    self.write_skip_line(*test_instance, writer)?;
+                }
+                if self.final_status_level >= FinalStatusLevel::Skip {
+                    self.final_outputs
+                        .push((*test_instance, FinalOutput::Skipped(*reason)));
                 }
             }
             TestEvent::RunBeginCancel { running, reason } => {
@@ -790,32 +795,58 @@ impl<'a> TestReporterImpl<'a> {
                     self.final_outputs
                         .sort_by_key(|(test_instance, _)| test_instance.sort_key());
 
-                    for (test_instance, run_statuses) in &*self.final_outputs {
-                        let last_status = run_statuses.last_status();
-                        let test_output_display = match last_status.result.is_success() {
-                            true => self.success_output,
-                            false => self.failure_output,
-                        };
-                        let describe = run_statuses.describe();
+                    for (test_instance, final_output) in &*self.final_outputs {
+                        match final_output {
+                            FinalOutput::Skipped(_) => {
+                                self.write_skip_line(*test_instance, &mut writer)?;
+                            }
+                            FinalOutput::Executed(run_statuses) => {
+                                let last_status = run_statuses.last_status();
+                                let test_output_display = match last_status.result.is_success() {
+                                    true => self.success_output,
+                                    false => self.failure_output,
+                                };
+                                let describe = run_statuses.describe();
 
-                        if self.final_status_level >= describe.final_status_level() {
-                            self.write_final_status_line(*test_instance, describe, &mut writer)?;
-                        }
-                        // This was previously gated on "if self.status_level >= StatusLevel::Fail"
-                        // but that seems incorrect -- the test output display and status level
-                        // controls are independent of each other.
-                        if test_output_display.is_final() {
-                            self.write_stdout_stderr(
-                                test_instance,
-                                last_status,
-                                false,
-                                &mut writer,
-                            )?;
+                                if self.final_status_level >= describe.final_status_level() {
+                                    self.write_final_status_line(
+                                        *test_instance,
+                                        describe,
+                                        &mut writer,
+                                    )?;
+                                }
+                                // This was previously gated on "if self.status_level >= StatusLevel::Fail"
+                                // but that seems incorrect -- the test output display and status level
+                                // controls are independent of each other.
+                                if test_output_display.is_final() {
+                                    self.write_stdout_stderr(
+                                        test_instance,
+                                        last_status,
+                                        false,
+                                        &mut writer,
+                                    )?;
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn write_skip_line(
+        &self,
+        test_instance: TestInstance<'a>,
+        mut writer: impl Write,
+    ) -> io::Result<()> {
+        write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
+        // same spacing [   0.034s]
+        write!(writer, "[         ] ")?;
+
+        self.write_instance(test_instance, &mut writer)?;
+        writeln!(writer)?;
 
         Ok(())
     }
