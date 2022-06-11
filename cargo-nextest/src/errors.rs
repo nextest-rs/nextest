@@ -82,6 +82,10 @@ pub enum ExpectedError {
     FilterExpressionParseError {
         all_errors: Vec<FilterExpressionParseErrors>,
     },
+    TestBinaryArgsParseError {
+        reason: &'static str,
+        args: Vec<String>,
+    },
 }
 
 impl ExpectedError {
@@ -155,6 +159,10 @@ impl ExpectedError {
         Self::TestRunFailed
     }
 
+    pub(crate) fn test_binary_args_parse_error(reason: &'static str, args: Vec<String>) -> Self {
+        Self::TestBinaryArgsParseError { reason, args }
+    }
+
     /// Returns the exit code for the process.
     pub fn process_exit_code(&self) -> i32 {
         match self {
@@ -167,7 +175,8 @@ impl ExpectedError {
             | Self::ArchiveExtractError { .. }
             | Self::PathMapperConstructError { .. }
             | Self::ArgumentJsonParseError { .. }
-            | Self::CargoMetadataParseError { .. } => NextestExitCode::SETUP_ERROR,
+            | Self::CargoMetadataParseError { .. }
+            | Self::TestBinaryArgsParseError { .. } => NextestExitCode::SETUP_ERROR,
             Self::CreateTestListError { .. } => NextestExitCode::TEST_LIST_CREATION_FAILED,
             Self::BuildFailed { .. } => NextestExitCode::BUILD_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
@@ -329,6 +338,14 @@ impl ExpectedError {
                 log::error!("failed to parse filter expression");
                 None
             }
+            Self::TestBinaryArgsParseError { reason, args } => {
+                log::error!(
+                    "failed to parse test binary arguments {:?} due to {}",
+                    args,
+                    reason
+                );
+                None
+            }
         };
 
         while let Some(err) = next_error {
@@ -361,6 +378,9 @@ impl fmt::Display for ExpectedError {
             }
             Self::FilterExpressionParseError { .. } => {
                 writeln!(f, "Failed to parse some filter expressions")
+            }
+            Self::TestBinaryArgsParseError { .. } => {
+                writeln!(f, "test binary arguments parse error")
             }
         }
     }

@@ -48,7 +48,8 @@ pub struct CargoNextestApp {
 impl CargoNextestApp {
     /// Executes the app.
     pub fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
-        let NextestSubcommand::Nextest(app) = self.subcommand;
+        let NextestSubcommand::Nextest(mut app) = self.subcommand;
+        app.validate()?;
         app.exec(output_writer)
     }
 }
@@ -77,6 +78,38 @@ struct AppOpts {
 }
 
 impl AppOpts {
+    fn validate(&mut self) -> Result<()> {
+        fn handle_test_binary_args(args: &[String]) -> Result<()> {
+            if !args.is_empty() {
+                return Err(Report::new(ExpectedError::test_binary_args_parse_error(
+                    "unsupported",
+                    args.to_owned(),
+                )));
+            }
+            Ok(())
+        }
+        match &mut self.command {
+            Command::List {
+                build_filter,
+                test_binary_args,
+                ..
+            } => {
+                build_filter.merge_test_binary_args(test_binary_args)?;
+                handle_test_binary_args(test_binary_args)?;
+            }
+            Command::Run {
+                build_filter,
+                test_binary_args,
+                ..
+            } => {
+                build_filter.merge_test_binary_args(test_binary_args)?;
+                handle_test_binary_args(test_binary_args)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Execute the command.
     fn exec(self, output_writer: &mut OutputWriter) -> Result<()> {
         fn build_filter_needs_deps(build_filter: &TestBuildFilter) -> bool {
@@ -93,6 +126,7 @@ impl AppOpts {
                 message_format,
                 list_type,
                 reuse_build,
+                ..
             } => {
                 let base = BaseApp::new(
                     self.output,
@@ -114,6 +148,7 @@ impl AppOpts {
                 runner_opts,
                 reporter_opts,
                 reuse_build,
+                ..
             } => {
                 let base = BaseApp::new(
                     self.output,
@@ -207,6 +242,10 @@ enum Command {
 
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
+
+        /// Arguments for the test binary. Partially supported. Kept for compatibility reason.
+        #[clap(value_name = "test-binary-args", last = true)]
+        test_binary_args: Vec<String>,
     },
     /// Build and run tests
     ///
@@ -242,6 +281,10 @@ enum Command {
 
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
+
+        /// Arguments for the test binary. Partially supported. Kept for compatibility reason.
+        #[clap(value_name = "test-binary-args", last = true)]
+        test_binary_args: Vec<String>,
     },
     /// Build and archive tests
     ///
@@ -349,10 +392,9 @@ struct TestBuildFilter {
     #[clap(
         long,
         possible_values = RunIgnored::variants(),
-        default_value_t,
         value_name = "WHICH",
     )]
-    run_ignored: RunIgnored,
+    run_ignored: Option<RunIgnored>,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
     #[clap(long)]
@@ -401,7 +443,7 @@ impl TestBuildFilter {
             self.platform_filter.into(),
         )?;
         let test_filter = TestFilterBuilder::new(
-            self.run_ignored,
+            self.run_ignored.unwrap_or_default(),
             self.partition.clone(),
             &self.filter,
             filter_exprs,
@@ -410,6 +452,46 @@ impl TestBuildFilter {
             TestList::new(test_artifacts, rust_build_meta, &test_filter, runner)
                 .map_err(|err| ExpectedError::CreateTestListError { err })?,
         )
+    }
+
+    fn merge_test_binary_args(&mut self, args: &mut Vec<String>) -> Result<()> {
+        let mut ignore_filters = Vec::new();
+        let mut read_trailing_filters = false;
+        args.retain(|s| {
+            if read_trailing_filters || !s.starts_with('-') {
+                self.filter.push(s.to_owned());
+                false
+            } else if s == "--include-ignored" {
+                ignore_filters.push((s.clone(), RunIgnored::All));
+                false
+            } else if s == "--ignored" {
+                ignore_filters.push((s.clone(), RunIgnored::IgnoredOnly));
+                false
+            } else if s == "--" {
+                read_trailing_filters = true;
+                false
+            } else {
+                true
+            }
+        });
+        for (s, f) in ignore_filters {
+            if let Some(run_ignored) = self.run_ignored {
+                if run_ignored != f {
+                    return Err(Report::new(ExpectedError::test_binary_args_parse_error(
+                        "mutually exclusive",
+                        vec![s],
+                    )));
+                } else {
+                    return Err(Report::new(ExpectedError::test_binary_args_parse_error(
+                        "duplicated",
+                        vec![s],
+                    )));
+                }
+            } else {
+                self.run_ignored = Some(f);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1050,6 +1132,10 @@ mod tests {
             // ---
             "cargo nextest list -E deps(foo)",
             "cargo nextest run --filter-expr 'test(bar)' --package=my-package test-filter",
+            // ---
+            // Test binary arguments
+            // ---
+            "cargo nextest run -- --a an arbitary arg",
         ];
 
         let invalid: &[(&'static str, ErrorKind)] = &[
@@ -1170,6 +1256,103 @@ mod tests {
                         );
                     }
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn test_test_binary_argument_parsing() {
+        fn get_app_opts(cmd: &str) -> Result<AppOpts> {
+            let app = CargoNextestApp::try_parse_from(
+                shell_words::split(cmd).expect("valid command line"),
+            )
+            .unwrap_or_else(|_| panic!("{} should have successfully parsed", cmd));
+            let NextestSubcommand::Nextest(mut app) = app.subcommand;
+            app.validate()?;
+            Ok(app)
+        }
+
+        let valid = &[
+            // ---
+            // substring filter
+            // ---
+            ("cargo nextest run -- str1", "cargo nextest run str1"),
+            (
+                "cargo nextest list -- str2 str3",
+                "cargo nextest list str2 str3",
+            ),
+            // ---
+            // ignored
+            // ---
+            (
+                "cargo nextest run -- --ignored",
+                "cargo nextest run --run-ignored ignored-only",
+            ),
+            (
+                "cargo nextest list -- --include-ignored",
+                "cargo nextest list --run-ignored all",
+            ),
+            // ---
+            // two escapes
+            // ---
+            (
+                "cargo nextest run -- --ignored -- str --- --ignored",
+                "cargo nextest run --run-ignored ignored-only str -- -- --- --ignored",
+            ),
+            (
+                "cargo nextest list -- -- str1 str2 --",
+                "cargo nextest list str1 str2 -- -- --",
+            ),
+        ];
+        let invalid = &[
+            // ---
+            // duplicated
+            // ---
+            (
+                "cargo nextest run -- --include-ignored --include-ignored",
+                "duplicated",
+            ),
+            ("cargo nextest list -- --ignored --ignored", "duplicated"),
+            // ---
+            // mutually exclusive
+            // ---
+            (
+                "cargo nextest run -- --ignored --include-ignored",
+                "mutually exclusive",
+            ),
+            (
+                "cargo nextest list --run-ignored all -- --ignored",
+                "mutually exclusive",
+            ),
+            // ---
+            // unsupported
+            // ---
+            ("cargo nextest list -- --exact", "unsupported"),
+        ];
+
+        for (a, b) in valid {
+            let a_str = format!(
+                "{:?}",
+                get_app_opts(a).unwrap_or_else(|_| panic!("failed to parse {}", a))
+            );
+            let b_str = format!(
+                "{:?}",
+                get_app_opts(b).unwrap_or_else(|_| panic!("failed to parse {}", b))
+            );
+            assert_eq!(a_str, b_str);
+        }
+
+        for (s, r) in invalid {
+            if let Ok(ExpectedError::TestBinaryArgsParseError { reason, .. }) = get_app_opts(s)
+                .expect_err(&format!("{} should error", s))
+                .downcast::<ExpectedError>()
+            {
+                assert_eq!(&reason, r);
+            } else {
+                panic!(
+                    "{} should have errored out with TestBinaryArgsParseError",
+                    s
+                );
             }
         }
     }
