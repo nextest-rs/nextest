@@ -457,17 +457,19 @@ impl TestBuildFilter {
 
     fn merge_test_binary_args(&mut self, args: &mut Vec<String>) -> Result<()> {
         let mut ignore_filters = Vec::new();
+        let mut read_trailing_filters = false;
         args.retain(|s| {
-            if s == "--include-ignored" {
+            if read_trailing_filters || !s.starts_with('-') {
+                self.filter.push(s.to_owned());
+                false
+            } else if s == "--include-ignored" {
                 ignore_filters.push((s.clone(), RunIgnored::All));
                 false
             } else if s == "--ignored" {
                 ignore_filters.push((s.clone(), RunIgnored::IgnoredOnly));
                 false
-            } else if !s.starts_with('-') {
-                self.filter.push(s.to_owned());
-                false
-            } else if s.chars().all(|c| c == '-') {
+            } else if s == "--" {
+                read_trailing_filters = true;
                 false
             } else {
                 true
@@ -1254,15 +1256,15 @@ mod tests {
                 "cargo nextest list --run-ignored all",
             ),
             // ---
-            // multiple escapes
+            // two escapes
             // ---
             (
-                "cargo nextest run -- --ignored --- str",
-                "cargo nextest run --run-ignored ignored-only str",
+                "cargo nextest run -- --ignored -- str --- --ignored",
+                "cargo nextest run --run-ignored ignored-only str -- -- --- --ignored",
             ),
             (
-                "cargo nextest list -- str1 --- str2 ---- str3",
-                "cargo nextest list str1 str2 str3",
+                "cargo nextest list -- -- str1 str2 --",
+                "cargo nextest list str1 str2 -- -- --",
             ),
         ];
         let invalid = &[
@@ -1292,8 +1294,8 @@ mod tests {
         ];
 
         for (a, b) in valid {
-            let a_str = format!("{:?}", get_app_opts(a).unwrap());
-            let b_str = format!("{:?}", get_app_opts(b).unwrap());
+            let a_str = format!("{:?}", get_app_opts(a).expect(&format!("parsing {}", a)));
+            let b_str = format!("{:?}", get_app_opts(b).expect(&format!("parsing {}", b)));
             assert_eq!(a_str, b_str);
         }
 
