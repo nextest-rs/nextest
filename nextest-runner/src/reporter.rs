@@ -786,6 +786,10 @@ impl<'a> TestReporterImpl<'a> {
 
                 // Don't print out final outputs if canceled due to Ctrl-C.
                 if self.cancel_status < Some(CancelReason::Signal) {
+                    // Sort the final outputs for a friendlier experience.
+                    self.final_outputs
+                        .sort_by_key(|(test_instance, _)| test_instance.sort_key());
+
                     for (test_instance, run_statuses) in &*self.final_outputs {
                         let last_status = run_statuses.last_status();
                         let test_output_display = match last_status.result.is_success() {

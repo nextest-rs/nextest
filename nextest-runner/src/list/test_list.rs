@@ -660,6 +660,12 @@ impl<'a> TestInstance<'a> {
         }
     }
 
+    /// Return a reasonable key for sorting. This is (binary ID, test name).
+    #[inline]
+    pub(crate) fn sort_key(&self) -> (&'a str, &'a str) {
+        (&self.bin_info.binary_id, self.name)
+    }
+
     /// Creates the command expression for this test instance.
     pub(crate) fn make_expression(
         &self,
