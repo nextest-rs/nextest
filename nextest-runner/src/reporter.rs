@@ -9,7 +9,10 @@ mod aggregator;
 
 use crate::{
     config::NextestProfile,
-    errors::{StatusLevelParseError, TestOutputDisplayParseError, WriteEventError},
+    errors::{
+        FinalStatusLevelParseError, StatusLevelParseError, TestOutputDisplayParseError,
+        WriteEventError,
+    },
     helpers::write_test_name,
     list::{TestInstance, TestList},
     reporter::aggregator::EventAggregator,
@@ -165,6 +168,82 @@ impl fmt::Display for StatusLevel {
     }
 }
 
+/// Status level to show at the end of test runs in the reporter output.
+///
+/// Status levels are incremental.
+///
+/// This differs from [`StatusLevel`] in two ways:
+/// * It has a "flaky" test indicator that's different from "retry" (though "retry" works as an alias.)
+/// * It has a different ordering: skipped tests are prioritized over passing ones.
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum FinalStatusLevel {
+    /// No output.
+    None,
+
+    /// Only output test failures.
+    Fail,
+
+    /// Output flaky tests.
+    #[serde(alias = "retry")]
+    Flaky,
+
+    /// Output information about slow tests, and all variants above.
+    Slow,
+
+    /// Output skipped tests in addition to all variants above.
+    Skip,
+
+    /// Output passing tests in addition to all variants above.
+    Pass,
+
+    /// Currently has the same meaning as [`Pass`](Self::Pass).
+    All,
+}
+
+impl FinalStatusLevel {
+    /// Returns string representations of all known variants.
+    pub fn variants() -> &'static [&'static str] {
+        &[
+            // (flaky is the same as retry)
+            "none", "fail", "flaky", "retry", "slow", "skip", "pass", "all",
+        ]
+    }
+}
+
+impl FromStr for FinalStatusLevel {
+    type Err = FinalStatusLevelParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let val = match s {
+            "none" => FinalStatusLevel::None,
+            "fail" => FinalStatusLevel::Fail,
+            "flaky" | "retry" => FinalStatusLevel::Flaky,
+            "slow" => FinalStatusLevel::Slow,
+            "skip" => FinalStatusLevel::Skip,
+            "pass" => FinalStatusLevel::Pass,
+            "all" => FinalStatusLevel::All,
+            other => return Err(FinalStatusLevelParseError::new(other)),
+        };
+        Ok(val)
+    }
+}
+
+impl fmt::Display for FinalStatusLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FinalStatusLevel::None => write!(f, "none"),
+            FinalStatusLevel::Fail => write!(f, "fail"),
+            FinalStatusLevel::Flaky => write!(f, "flaky"),
+            FinalStatusLevel::Slow => write!(f, "slow"),
+            FinalStatusLevel::Skip => write!(f, "skip"),
+            FinalStatusLevel::Pass => write!(f, "pass"),
+            FinalStatusLevel::All => write!(f, "all"),
+        }
+    }
+}
+
 /// Standard error destination for the reporter.
 ///
 /// This is usually a terminal, but can be an in-memory buffer for tests.
@@ -185,7 +264,7 @@ pub struct TestReporterBuilder {
     failure_output: Option<TestOutputDisplay>,
     success_output: Option<TestOutputDisplay>,
     status_level: Option<StatusLevel>,
-    final_status_level: Option<StatusLevel>,
+    final_status_level: Option<FinalStatusLevel>,
     verbose: bool,
 }
 
@@ -218,7 +297,7 @@ impl TestReporterBuilder {
     }
 
     /// Sets the kinds of statuses to output at the end of the run.
-    pub fn set_final_status_level(&mut self, final_status_level: StatusLevel) -> &mut Self {
+    pub fn set_final_status_level(&mut self, final_status_level: FinalStatusLevel) -> &mut Self {
         self.final_status_level = Some(final_status_level);
         self
     }
@@ -516,7 +595,7 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) ->
 
 struct TestReporterImpl<'a> {
     status_level: StatusLevel,
-    final_status_level: StatusLevel,
+    final_status_level: FinalStatusLevel,
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
     no_capture: bool,
@@ -631,7 +710,7 @@ impl<'a> TestReporterImpl<'a> {
                 // Store the output in final_outputs if test output display is requested, or if
                 // we have to print a one-line summary at the end.
                 if test_output_display.is_final()
-                    || self.final_status_level >= describe.status_level()
+                    || self.final_status_level >= describe.final_status_level()
                 {
                     self.final_outputs
                         .push((*test_instance, run_statuses.clone()));
@@ -715,8 +794,8 @@ impl<'a> TestReporterImpl<'a> {
                         };
                         let describe = run_statuses.describe();
 
-                        if self.final_status_level >= describe.status_level() {
-                            self.write_status_line(*test_instance, describe, &mut writer)?;
+                        if self.final_status_level >= describe.final_status_level() {
+                            self.write_final_status_line(*test_instance, describe, &mut writer)?;
                         }
                         // This was previously gated on "if self.status_level >= StatusLevel::Fail"
                         // but that seems incorrect -- the test output display and status level
@@ -754,6 +833,64 @@ impl<'a> TestReporterImpl<'a> {
                     writer,
                     "{:>12} ",
                     format!("TRY {} PASS", last_status.attempt).style(self.styles.skip)
+                )?;
+            }
+            ExecutionDescription::Failure { .. } => {
+                let status_str = match last_status.result {
+                    ExecutionResult::Fail => "FAIL",
+                    ExecutionResult::ExecFail => "XFAIL",
+                    ExecutionResult::Pass => unreachable!("this is a failing test"),
+                    ExecutionResult::Timeout => "TIMEOUT",
+                };
+
+                if last_status.attempt == 1 {
+                    write!(writer, "{:>12} ", status_str.style(self.styles.fail))?;
+                } else {
+                    write!(
+                        writer,
+                        "{:>12} ",
+                        format!("TRY {} {}", last_status.attempt, status_str)
+                            .style(self.styles.fail)
+                    )?;
+                }
+            }
+        };
+
+        // Next, print the time taken.
+        self.write_duration(last_status.time_taken, &mut writer)?;
+
+        // Print the name of the test.
+        self.write_instance(test_instance, &mut writer)?;
+        writeln!(writer)?;
+
+        Ok(())
+    }
+
+    fn write_final_status_line(
+        &self,
+        test_instance: TestInstance<'a>,
+        describe: ExecutionDescription<'_>,
+        mut writer: impl Write,
+    ) -> io::Result<()> {
+        let last_status = describe.last_status();
+        match describe {
+            ExecutionDescription::Success { .. } => {
+                if last_status.is_slow {
+                    write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
+                } else {
+                    write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+                }
+            }
+            ExecutionDescription::Flaky { .. } => {
+                // Use the skip color to also represent a flaky test.
+                write!(
+                    writer,
+                    "{:>12} ",
+                    format!(
+                        "FLAKY {}/{}",
+                        last_status.attempt, last_status.total_attempts
+                    )
+                    .style(self.styles.skip)
                 )?;
             }
             ExecutionDescription::Failure { .. } => {

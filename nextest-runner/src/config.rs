@@ -5,7 +5,7 @@
 
 use crate::{
     errors::{ConfigParseError, ProfileNotFound},
-    reporter::{StatusLevel, TestOutputDisplay},
+    reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
@@ -174,7 +174,7 @@ impl<'cfg> NextestProfile<'cfg> {
     }
 
     /// Returns the test status level at the end of the run.
-    pub fn final_status_level(&self) -> StatusLevel {
+    pub fn final_status_level(&self) -> FinalStatusLevel {
         self.custom_profile
             .and_then(|profile| profile.final_status_level)
             .unwrap_or(self.default_profile.final_status_level)
@@ -287,7 +287,7 @@ impl NextestProfilesImpl {
 struct DefaultProfileImpl {
     retries: usize,
     status_level: StatusLevel,
-    final_status_level: StatusLevel,
+    final_status_level: FinalStatusLevel,
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
     fail_fast: bool,
@@ -376,7 +376,7 @@ struct CustomProfileImpl {
     #[serde(default)]
     status_level: Option<StatusLevel>,
     #[serde(default)]
-    final_status_level: Option<StatusLevel>,
+    final_status_level: Option<FinalStatusLevel>,
     #[serde(default)]
     failure_output: Option<TestOutputDisplay>,
     #[serde(default)]
