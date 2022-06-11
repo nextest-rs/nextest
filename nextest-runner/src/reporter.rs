@@ -762,7 +762,11 @@ impl<'a> TestReporterImpl<'a> {
                 } else {
                     self.styles.pass
                 };
-                write!(writer, "{:>12} ", "Summary".style(summary_style))?;
+                write!(
+                    writer,
+                    "------------\n{:>12} ",
+                    "Summary".style(summary_style)
+                )?;
 
                 // Next, print the total time taken.
                 // * > means right-align.
