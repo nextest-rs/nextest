@@ -9,10 +9,7 @@ mod aggregator;
 
 use crate::{
     config::NextestProfile,
-    errors::{
-        FinalStatusLevelParseError, StatusLevelParseError, TestOutputDisplayParseError,
-        WriteEventError,
-    },
+    errors::{StatusLevelParseError, TestOutputDisplayParseError, WriteEventError},
     helpers::write_test_name,
     list::{TestInstance, TestList},
     reporter::aggregator::EventAggregator,
@@ -200,48 +197,6 @@ pub enum FinalStatusLevel {
 
     /// Currently has the same meaning as [`Pass`](Self::Pass).
     All,
-}
-
-impl FinalStatusLevel {
-    /// Returns string representations of all known variants.
-    pub fn variants() -> &'static [&'static str] {
-        &[
-            // (flaky is the same as retry)
-            "none", "fail", "flaky", "retry", "slow", "skip", "pass", "all",
-        ]
-    }
-}
-
-impl FromStr for FinalStatusLevel {
-    type Err = FinalStatusLevelParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val = match s {
-            "none" => FinalStatusLevel::None,
-            "fail" => FinalStatusLevel::Fail,
-            "flaky" | "retry" => FinalStatusLevel::Flaky,
-            "slow" => FinalStatusLevel::Slow,
-            "skip" => FinalStatusLevel::Skip,
-            "pass" => FinalStatusLevel::Pass,
-            "all" => FinalStatusLevel::All,
-            other => return Err(FinalStatusLevelParseError::new(other)),
-        };
-        Ok(val)
-    }
-}
-
-impl fmt::Display for FinalStatusLevel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FinalStatusLevel::None => write!(f, "none"),
-            FinalStatusLevel::Fail => write!(f, "fail"),
-            FinalStatusLevel::Flaky => write!(f, "flaky"),
-            FinalStatusLevel::Slow => write!(f, "slow"),
-            FinalStatusLevel::Skip => write!(f, "skip"),
-            FinalStatusLevel::Pass => write!(f, "pass"),
-            FinalStatusLevel::All => write!(f, "all"),
-        }
-    }
 }
 
 /// Standard error destination for the reporter.
