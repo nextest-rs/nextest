@@ -6,3 +6,4 @@
 mod basic;
 mod fixtures;
 mod target_runner;
+mod target_triple;

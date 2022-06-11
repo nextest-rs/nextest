@@ -4,10 +4,7 @@
 use camino::Utf8PathBuf;
 use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::errors::{
-    ArchiveCreateError, ArchiveExtractError, ConfigParseError, CreateTestListError,
-    PathMapperConstructError, ProfileNotFound, UnknownArchiveFormat,
-};
+use nextest_runner::errors::*;
 use owo_colors::{OwoColorize, Stream};
 use std::{
     error::{self, Error},
@@ -33,6 +30,9 @@ pub enum ExpectedError {
     },
     ProfileNotFound {
         err: ProfileNotFound,
+    },
+    CargoConfigsConstructError {
+        err: CargoConfigsConstructError,
     },
     ConfigParseError {
         err: ConfigParseError,
@@ -169,6 +169,7 @@ impl ExpectedError {
             Self::CargoMetadataFailed => NextestExitCode::CARGO_METADATA_FAILED,
             Self::ProfileNotFound { .. }
             | Self::RootManifestNotFound { .. }
+            | Self::CargoConfigsConstructError { .. }
             | Self::ConfigParseError { .. }
             | Self::ArgumentFileReadError { .. }
             | Self::UnknownArchiveFormat { .. }
@@ -222,6 +223,10 @@ impl ExpectedError {
                     path.if_supports_color(Stream::Stderr, |x| x.bold())
                 );
                 None
+            }
+            Self::CargoConfigsConstructError { err } => {
+                log::error!("{}", err);
+                err.source()
             }
             Self::ConfigParseError { err } => {
                 log::error!("{}", err);
@@ -362,6 +367,7 @@ impl fmt::Display for ExpectedError {
             Self::CargoMetadataFailed => writeln!(f, "cargo metadata failed"),
             Self::ProfileNotFound { .. } => writeln!(f, "profile not found"),
             Self::RootManifestNotFound { .. } => writeln!(f, "root manifest not found"),
+            Self::CargoConfigsConstructError { .. } => writeln!(f, "CargoConfigs construct error"),
             Self::ConfigParseError { .. } => writeln!(f, "config read error"),
             Self::ArgumentFileReadError { .. } => writeln!(f, "argument file error"),
             Self::UnknownArchiveFormat { .. } => writeln!(f, "unknown archive format"),

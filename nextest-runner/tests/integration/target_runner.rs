@@ -5,56 +5,26 @@ use crate::fixtures::*;
 use camino::Utf8Path;
 use color_eyre::Result;
 use nextest_runner::{
-    cargo_config::CargoConfigs,
+    cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
-    errors::TargetRunnerError,
     runner::TestRunnerBuilder,
     signal::SignalHandler,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
 };
 use once_cell::sync::OnceCell;
-use std::{env, sync::Mutex};
+use std::env;
 use target_spec::Platform;
-
-fn env_mutex() -> &'static Mutex<()> {
-    static MUTEX: OnceCell<Mutex<()>> = OnceCell::new();
-    MUTEX.get_or_init(|| Mutex::new(()))
-}
-
-pub fn with_env(
-    vars: impl IntoIterator<Item = (impl Into<String>, impl AsRef<str>)>,
-    func: impl FnOnce() -> Result<TargetRunner, TargetRunnerError>,
-) -> Result<TargetRunner, TargetRunnerError> {
-    let lock = env_mutex().lock().unwrap();
-
-    let keys: Vec<_> = vars
-        .into_iter()
-        .map(|(key, val)| {
-            let key = key.into();
-            env::set_var(&key, val.as_ref());
-            key
-        })
-        .collect();
-
-    let res = func();
-
-    for key in keys {
-        env::remove_var(key);
-    }
-    drop(lock);
-
-    res
-}
 
 fn default() -> &'static target_spec::Platform {
     static DEF: OnceCell<target_spec::Platform> = OnceCell::new();
     DEF.get_or_init(|| target_spec::Platform::current().unwrap())
 }
 
-fn runner_for_target(triple: Option<&str>) -> Result<TargetRunner, TargetRunnerError> {
+fn runner_for_target(triple: Option<&str>) -> Result<TargetRunner> {
     let configs = CargoConfigs::new_with_isolation(&workspace_root(), &workspace_root()).unwrap();
-    TargetRunner::new(&configs, triple)
+    let triple = TargetTriple::find(&configs, triple)?;
+    Ok(TargetRunner::new(&configs, triple.as_ref())?)
 }
 
 #[test]

@@ -4,7 +4,7 @@
 //! Support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 
 use crate::{
-    cargo_config::{CargoConfigs, Runner},
+    cargo_config::{CargoConfigs, Runner, TargetTriple},
     errors::TargetRunnerError,
 };
 use camino::Utf8PathBuf;
@@ -14,7 +14,7 @@ use target_spec::Platform;
 
 /// A [target runner](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 /// used to execute a test binary rather than the default of executing natively.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TargetRunner {
     host: Option<PlatformRunner>,
     target: Option<PlatformRunner>,
@@ -26,7 +26,7 @@ impl TargetRunner {
     /// or via a `CARGO_TARGET_{TRIPLE}_RUNNER` environment variable
     pub fn new(
         configs: &CargoConfigs,
-        target_triple: Option<&str>,
+        target_triple: Option<&TargetTriple>,
     ) -> Result<Self, TargetRunnerError> {
         let host = PlatformRunner::by_precedence(configs, None)?;
         let target = if target_triple.is_some() {
@@ -90,13 +90,13 @@ pub struct PlatformRunner {
 impl PlatformRunner {
     fn by_precedence(
         configs: &CargoConfigs,
-        target_triple: Option<&str>,
+        triple: Option<&TargetTriple>,
     ) -> Result<Option<Self>, TargetRunnerError> {
-        let target = match target_triple {
+        let target = match triple {
             Some(target) => Platform::from_triple(
-                target_spec::Triple::new(target.to_owned()).map_err(|error| {
+                target_spec::Triple::new(target.triple.to_owned()).map_err(|error| {
                     TargetRunnerError::FailedToParseTargetTriple {
-                        triple: target.to_owned(),
+                        triple: target.triple.to_owned(),
                         error,
                     }
                 })?,
