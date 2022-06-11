@@ -4,6 +4,7 @@
 //! Errors produced by nextest.
 
 use crate::{
+    cargo_config::TargetTriple,
     helpers::dylib_path_envvar,
     reporter::{StatusLevel, TestOutputDisplay},
     reuse_build::ArchiveFormat,
@@ -586,13 +587,24 @@ pub enum WriteEventError {
     },
 }
 
-/// An error occurred while looking for Cargo configuration files.
+/// An error occurred while constructing a [`CargoConfigs`](crate::cargo_config::CargoConfigs)
+/// instance.
 #[derive(Debug, Error)]
-pub enum CargoConfigSearchError {
-    /// Failed to retrieve the current directory
+#[non_exhaustive]
+pub enum CargoConfigsConstructError {
+    /// Failed to retrieve the current directory.
     #[error("failed to retrieve current directory")]
     GetCurrentDir(#[source] std::io::Error),
 
+    /// The current directory was invalid UTF-8.
+    #[error("current directory is invalid UTF-8")]
+    CurrentDirInvalidUtf8(#[source] FromPathBufError),
+}
+
+/// An error occurred while looking for Cargo configuration files.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum CargoConfigSearchError {
     /// A non-UTF-8 path was encountered.
     #[error("non-UTF-8 path encountered")]
     NonUtf8Path(#[source] FromPathBufError),
@@ -635,6 +647,25 @@ pub enum CargoConfigSearchError {
     },
 }
 
+/// An error occurred while determining the cross-compiling target triple.
+#[derive(Debug, Error)]
+pub enum TargetTripleError {
+    /// The environment variable contained non-utf8 content
+    #[error(
+        "environment variable '{}' contained non-UTF-8 data",
+        TargetTriple::CARGO_BUILD_TARGET_ENV
+    )]
+    InvalidEnvironmentVar,
+
+    /// Error looking up Cargo configs
+    #[error("error discovering Cargo configs")]
+    CargoConfigSearchError(
+        #[from]
+        #[source]
+        CargoConfigSearchError,
+    ),
+}
+
 /// An error occurred determining the target runner
 #[derive(Debug, Error)]
 pub enum TargetRunnerError {
@@ -669,7 +700,7 @@ pub enum TargetRunnerError {
         error: target_spec::errors::TripleParseError,
     },
 
-    /// Error looking up Cargo configs
+    /// Error looking up Cargo configs.
     #[error("error discovering Cargo configs")]
     CargoConfigSearchError(
         #[from]

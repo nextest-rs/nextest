@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Path, Utf8PathBuf};
+use color_eyre::Result;
 use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
@@ -14,12 +15,12 @@ use nextest_runner::{
     target_runner::TargetRunner,
     test_filter::TestFilterBuilder,
 };
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use std::{
     collections::{BTreeMap, HashMap},
     env, fmt,
     io::Cursor,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Copy, Clone, Debug)]
@@ -320,4 +321,34 @@ pub(crate) fn execute_collect<'a>(
     });
 
     (instance_statuses, run_stats)
+}
+
+fn env_mutex() -> &'static Mutex<()> {
+    static MUTEX: OnceCell<Mutex<()>> = OnceCell::new();
+    MUTEX.get_or_init(|| Mutex::new(()))
+}
+
+pub fn with_env<T>(
+    vars: impl IntoIterator<Item = (impl Into<String>, impl AsRef<str>)>,
+    func: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    let lock = env_mutex().lock().unwrap();
+
+    let keys: Vec<_> = vars
+        .into_iter()
+        .map(|(key, val)| {
+            let key = key.into();
+            env::set_var(&key, val.as_ref());
+            key
+        })
+        .collect();
+
+    let res = func();
+
+    for key in keys {
+        env::remove_var(key);
+    }
+    drop(lock);
+
+    res
 }

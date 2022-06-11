@@ -15,7 +15,7 @@ use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
-    cargo_config::CargoConfigs,
+    cargo_config::{CargoConfigs, TargetTriple},
     config::{NextestConfig, NextestProfile},
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
@@ -26,6 +26,7 @@ use nextest_runner::{
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
 };
+use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Style};
 use std::{
     fmt::Write as _,
@@ -829,6 +830,9 @@ impl BaseApp {
 struct App {
     base: BaseApp,
     build_filter: TestBuildFilter,
+    cargo_configs: CargoConfigs,
+    target_triple: OnceCell<Option<TargetTriple>>,
+    target_runner: OnceCell<TargetRunner>,
 }
 
 fn check_experimental_filtering(build_filter: &TestBuildFilter) -> Result<()> {
@@ -848,7 +852,14 @@ impl App {
     fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
         check_experimental_filtering(&build_filter)?;
 
-        Ok(Self { base, build_filter })
+        Ok(Self {
+            base,
+            build_filter,
+            cargo_configs: CargoConfigs::new()
+                .map_err(|err| ExpectedError::CargoConfigsConstructError { err })?,
+            target_triple: OnceCell::new(),
+            target_runner: OnceCell::new(),
+        })
     }
 
     fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
@@ -895,10 +906,18 @@ impl App {
         Ok(profile)
     }
 
-    fn load_runner(&self) -> TargetRunner {
-        // When cross-compiling we should not use the cross target runner
-        // for running the host tests (like proc-macro ones).
-        runner_for_target(self.base.cargo_opts.target.as_deref())
+    fn load_triple(&self) -> Option<&TargetTriple> {
+        self.target_triple
+            .get_or_init(|| {
+                discover_target_triple(&self.cargo_configs, self.base.cargo_opts.target.as_deref())
+            })
+            .as_ref()
+    }
+
+    fn load_runner(&self) -> &TargetRunner {
+        let triple = self.load_triple();
+        self.target_runner
+            .get_or_init(|| runner_for_target(&self.cargo_configs, triple))
     }
 
     fn exec_list(
@@ -922,7 +941,7 @@ impl App {
             }
             ListType::Full => {
                 let target_runner = self.load_runner();
-                let test_list = self.build_test_list(binary_list, &target_runner, filter_exprs)?;
+                let test_list = self.build_test_list(binary_list, target_runner, filter_exprs)?;
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
@@ -954,7 +973,7 @@ impl App {
 
         let filter_exprs = self.build_filtering_expressions()?;
         let binary_list = self.base.build_binary_list()?;
-        let test_list = self.build_test_list(binary_list, &target_runner, filter_exprs)?;
+        let test_list = self.build_test_list(binary_list, target_runner, filter_exprs)?;
 
         let output = output_writer.reporter_output();
 
@@ -968,7 +987,7 @@ impl App {
 
         let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
         let runner_builder = runner_opts.to_builder(no_capture);
-        let runner = runner_builder.build(&test_list, &profile, handler, target_runner);
+        let runner = runner_builder.build(&test_list, &profile, handler, target_runner.clone());
 
         let run_stats = runner.try_execute(|event| {
             // Write and flush the event.
@@ -1013,16 +1032,32 @@ fn acquire_graph_data(
     Ok(json)
 }
 
-fn runner_for_target(triple: Option<&str>) -> TargetRunner {
-    let configs = match CargoConfigs::new() {
-        Ok(configs) => configs,
-        Err(err) => {
-            warn_on_target_runner_err(&err).expect("writing to a string is infallible");
-            return TargetRunner::empty();
+fn discover_target_triple(
+    cargo_configs: &CargoConfigs,
+    target_cli_option: Option<&str>,
+) -> Option<TargetTriple> {
+    match TargetTriple::find(cargo_configs, target_cli_option) {
+        Ok(Some(triple)) => {
+            log::debug!(
+                "using target triple `{}` defined by `{}`",
+                triple.triple,
+                triple.source
+            );
+            Some(triple)
         }
-    };
+        Ok(None) => {
+            log::debug!("no target triple found, assuming no cross-compilation");
+            None
+        }
+        Err(err) => {
+            warn_on_err("target triple", &err).expect("writing to a string is infallible");
+            None
+        }
+    }
+}
 
-    match TargetRunner::new(&configs, triple) {
+fn runner_for_target(cargo_configs: &CargoConfigs, triple: Option<&TargetTriple>) -> TargetRunner {
+    match TargetRunner::new(cargo_configs, triple) {
         Ok(runner) => {
             match triple {
                 Some(_) => {
@@ -1044,7 +1079,7 @@ fn runner_for_target(triple: Option<&str>) -> TargetRunner {
             runner
         }
         Err(err) => {
-            warn_on_target_runner_err(&err).expect("writing to a string is infallible");
+            warn_on_err("target runner", &err).expect("writing to a string is infallible");
             TargetRunner::empty()
         }
     }
@@ -1059,9 +1094,9 @@ fn log_platform_runner(prefix: &str, runner: &PlatformRunner) {
     )
 }
 
-fn warn_on_target_runner_err(err: &(dyn std::error::Error)) -> Result<(), std::fmt::Error> {
+fn warn_on_err(thing: &str, err: &(dyn std::error::Error)) -> Result<(), std::fmt::Error> {
     let mut s = String::with_capacity(256);
-    write!(s, "could not determine target runner: {}", err)?;
+    write!(s, "could not determine {thing}: {}", err)?;
     let mut next_error = err.source();
     while let Some(err) = next_error {
         write!(
