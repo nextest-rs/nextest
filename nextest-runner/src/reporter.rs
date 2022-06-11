@@ -21,6 +21,7 @@ use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
 use serde::Deserialize;
 use std::{
+    cmp::Reverse,
     fmt::{self, Write as _},
     io,
     io::{BufWriter, Write},
@@ -554,6 +555,15 @@ enum FinalOutput {
     Executed(ExecutionStatuses),
 }
 
+impl FinalOutput {
+    fn final_status_level(&self) -> FinalStatusLevel {
+        match self {
+            Self::Skipped(_) => FinalStatusLevel::Skip,
+            Self::Executed(run_statuses) => run_statuses.describe().final_status_level(),
+        }
+    }
+}
+
 struct TestReporterImpl<'a> {
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
@@ -752,9 +762,16 @@ impl<'a> TestReporterImpl<'a> {
                 if self.cancel_status < Some(CancelReason::Signal) {
                     // Sort the final outputs for a friendlier experience.
                     self.final_outputs
-                        .sort_by_key(|(test_instance, _)| test_instance.sort_key());
+                        .sort_by_key(|(test_instance, final_output)| {
+                            // Use the final status level, reversed (i.e. failing tests are printed at the very end).
+                            (
+                                Reverse(final_output.final_status_level()),
+                                test_instance.sort_key(),
+                            )
+                        });
 
                     for (test_instance, final_output) in &*self.final_outputs {
+                        let final_status_level = final_output.final_status_level();
                         match final_output {
                             FinalOutput::Skipped(_) => {
                                 self.write_skip_line(*test_instance, &mut writer)?;
@@ -765,12 +782,11 @@ impl<'a> TestReporterImpl<'a> {
                                     true => self.success_output,
                                     false => self.failure_output,
                                 };
-                                let describe = run_statuses.describe();
 
-                                if self.final_status_level >= describe.final_status_level() {
+                                if self.final_status_level >= final_status_level {
                                     self.write_final_status_line(
                                         *test_instance,
-                                        describe,
+                                        run_statuses.describe(),
                                         &mut writer,
                                     )?;
                                 }
