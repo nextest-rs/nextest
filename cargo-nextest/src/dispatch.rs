@@ -19,7 +19,7 @@ use nextest_runner::{
     config::{NextestConfig, NextestProfile},
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
-    reporter::{StatusLevel, TestOutputDisplay, TestReporterBuilder},
+    reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::TestRunnerBuilder,
     signal::SignalHandler,
@@ -530,11 +530,11 @@ struct TestReporterOpts {
     /// Test statuses to output at the end of the run.
     #[clap(
         long,
-        possible_values = StatusLevel::variants(),
+        possible_values = FinalStatusLevel::variants(),
         value_name = "LEVEL",
         env = "NEXTEST_FINAL_STATUS_LEVEL",
     )]
-    final_status_level: Option<StatusLevel>,
+    final_status_level: Option<FinalStatusLevel>,
 }
 
 impl TestReporterOpts {

@@ -8,7 +8,7 @@
 use crate::{
     config::NextestProfile,
     list::{TestInstance, TestList},
-    reporter::{CancelReason, StatusLevel, TestEvent},
+    reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
     signal::{SignalEvent, SignalHandler},
     stopwatch::{StopwatchEnd, StopwatchStart},
     target_runner::TargetRunner,
@@ -332,6 +332,7 @@ impl<'a> TestRunner<'a> {
                 stderr: vec![],
                 result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.end(),
+                is_slow: false,
             },
         }
     }
@@ -359,6 +360,7 @@ impl<'a> TestRunner<'a> {
         let handle = cmd.start()?;
 
         let mut status: Option<ExecutionResult> = None;
+        let mut is_slow = false;
 
         self.wait_pool.in_place_scope(|s| {
             let (sender, receiver) = crossbeam_channel::bounded::<()>(1);
@@ -383,6 +385,7 @@ impl<'a> TestRunner<'a> {
                             test_instance: test,
                             elapsed: stopwatch.elapsed(),
                         });
+                        is_slow = true;
 
                         if let Some(terminate_after) = self.slow_timeout.terminate_after {
                             timeout_hit += 1;
@@ -454,6 +457,7 @@ impl<'a> TestRunner<'a> {
             stderr: output.stderr,
             result: status,
             stopwatch_end: stopwatch.end(),
+            is_slow,
         })
     }
 }
@@ -555,13 +559,29 @@ pub enum ExecutionDescription<'a> {
 }
 
 impl<'a> ExecutionDescription<'a> {
-    /// Returns the status level for this `RunDescribe`.
+    /// Returns the status level for this `ExecutionDescription`.
     pub fn status_level(&self) -> StatusLevel {
         match self {
             ExecutionDescription::Success { .. } => StatusLevel::Pass,
             // A flaky test implies that we print out retry information for it.
             ExecutionDescription::Flaky { .. } => StatusLevel::Retry,
             ExecutionDescription::Failure { .. } => StatusLevel::Fail,
+        }
+    }
+
+    /// Returns the final status level for this `ExecutionDescription`.
+    pub fn final_status_level(&self) -> FinalStatusLevel {
+        match self {
+            ExecutionDescription::Success { single_status, .. } => {
+                if single_status.is_slow {
+                    FinalStatusLevel::Slow
+                } else {
+                    FinalStatusLevel::Pass
+                }
+            }
+            // A flaky test implies that we print out retry information for it.
+            ExecutionDescription::Flaky { .. } => FinalStatusLevel::Flaky,
+            ExecutionDescription::Failure { .. } => FinalStatusLevel::Fail,
         }
     }
 
@@ -592,6 +612,8 @@ pub struct ExecuteStatus {
     pub start_time: SystemTime,
     /// The time it took for the test to run.
     pub time_taken: Duration,
+    /// Whether this test counts as slow.
+    pub is_slow: bool,
 }
 
 impl ExecuteStatus {
@@ -611,6 +633,7 @@ struct InternalExecuteStatus {
     stderr: Vec<u8>,
     result: ExecutionResult,
     stopwatch_end: StopwatchEnd,
+    is_slow: bool,
 }
 
 impl InternalExecuteStatus {
@@ -622,6 +645,7 @@ impl InternalExecuteStatus {
             result: self.result,
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,
+            is_slow: self.is_slow,
         }
     }
 }

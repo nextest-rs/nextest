@@ -5,7 +5,7 @@
 
 use crate::{
     helpers::dylib_path_envvar,
-    reporter::{StatusLevel, TestOutputDisplay},
+    reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
     reuse_build::ArchiveFormat,
     target_runner::PlatformRunnerSource,
     test_filter::RunIgnored,
@@ -86,6 +86,24 @@ pub struct StatusLevelParseError {
 }
 
 impl StatusLevelParseError {
+    pub(crate) fn new(input: impl Into<String>) -> Self {
+        Self {
+            input: input.into(),
+        }
+    }
+}
+
+/// Error returned while parsing a [`FinalStatusLevel`] value from a string.
+#[derive(Clone, Debug, Error)]
+#[error(
+    "unrecognized value for final-status-level: {input}\n(known values: {})",
+    FinalStatusLevel::variants().join(", "),
+)]
+pub struct FinalStatusLevelParseError {
+    input: String,
+}
+
+impl FinalStatusLevelParseError {
     pub(crate) fn new(input: impl Into<String>) -> Self {
         Self {
             input: input.into(),
