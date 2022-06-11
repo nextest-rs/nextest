@@ -668,4 +668,12 @@ pub enum TargetRunnerError {
         #[source]
         error: target_spec::errors::TripleParseError,
     },
+
+    /// Error looking up Cargo configs
+    #[error("error discovering Cargo configs")]
+    CargoConfigSearchError(
+        #[from]
+        #[source]
+        CargoConfigSearchError,
+    ),
 }

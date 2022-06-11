@@ -1014,7 +1014,7 @@ fn acquire_graph_data(
 }
 
 fn runner_for_target(triple: Option<&str>) -> TargetRunner {
-    let configs = match CargoConfigs::discover() {
+    let configs = match CargoConfigs::new() {
         Ok(configs) => configs,
         Err(err) => {
             warn_on_target_runner_err(&err).expect("writing to a string is infallible");

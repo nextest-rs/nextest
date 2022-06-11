@@ -147,7 +147,7 @@ impl PlatformRunner {
         // a runner that matches our target triple, we need to actually find
         // all the matches, but in reverse order as the closer the config is
         // to our current working directory, the higher precedence it has
-        'config: for (path, config) in configs.discovered_configs().into_iter().rev() {
+        'config: for (path, config) in configs.discovered_configs()?.into_iter().rev() {
             if let Some(targets) = &config.target {
                 // First lookup by the exact triple, as that one always takes precedence
                 if let Some(parent) = targets.get(target.triple_str()) {
@@ -443,7 +443,7 @@ mod tests {
         terminate_search_at: &Utf8Path,
     ) -> Option<PlatformRunner> {
         let configs =
-            CargoConfigs::discover_with_isolation(start_search_at, terminate_search_at).unwrap();
+            CargoConfigs::new_with_isolation(start_search_at, terminate_search_at).unwrap();
         PlatformRunner::find_config(&configs, platform).unwrap()
     }
 
