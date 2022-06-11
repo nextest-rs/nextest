@@ -530,11 +530,11 @@ struct TestReporterOpts {
     /// Test statuses to output at the end of the run.
     #[clap(
         long,
-        possible_values = FinalStatusLevel::variants(),
+        arg_enum,
         value_name = "LEVEL",
-        env = "NEXTEST_FINAL_STATUS_LEVEL",
+        env = "NEXTEST_FINAL_STATUS_LEVEL"
     )]
-    final_status_level: Option<FinalStatusLevel>,
+    final_status_level: Option<FinalStatusLevelOpt>,
 }
 
 impl TestReporterOpts {
@@ -551,9 +551,36 @@ impl TestReporterOpts {
             builder.set_status_level(status_level);
         }
         if let Some(final_status_level) = self.final_status_level {
-            builder.set_final_status_level(final_status_level);
+            builder.set_final_status_level(final_status_level.into_final_status_level());
         }
         builder
+    }
+}
+
+/// This is copied from `FinalStatusLevel` except it also has a retry option.
+#[derive(Clone, Copy, Debug, ArgEnum)]
+enum FinalStatusLevelOpt {
+    None,
+    Fail,
+    #[clap(alias = "retry")]
+    Flaky,
+    Slow,
+    Skip,
+    Pass,
+    All,
+}
+
+impl FinalStatusLevelOpt {
+    fn into_final_status_level(self) -> FinalStatusLevel {
+        match self {
+            Self::None => FinalStatusLevel::None,
+            Self::Fail => FinalStatusLevel::Fail,
+            Self::Flaky => FinalStatusLevel::Flaky,
+            Self::Slow => FinalStatusLevel::Slow,
+            Self::Skip => FinalStatusLevel::Skip,
+            Self::Pass => FinalStatusLevel::Pass,
+            Self::All => FinalStatusLevel::All,
+        }
     }
 }
 
@@ -994,6 +1021,9 @@ mod tests {
             "cargo nextest run --status-level=all",
             "cargo nextest run --no-capture",
             "cargo nextest run --nocapture",
+            "cargo nextest run --final-status-level flaky",
+            // retry is an alias for flaky -- ensure that it parses
+            "cargo nextest run --final-status-level retry",
             // ---
             // Cargo options
             // ---
