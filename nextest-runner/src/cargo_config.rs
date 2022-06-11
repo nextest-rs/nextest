@@ -8,6 +8,7 @@
 
 use crate::errors::CargoConfigSearchError;
 use camino::{Utf8Path, Utf8PathBuf};
+use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -17,39 +18,55 @@ use std::collections::BTreeMap;
 /// discovery.
 #[derive(Debug)]
 pub struct CargoConfigs {
-    discovered: Vec<(Utf8PathBuf, CargoConfig)>,
+    start_search_at: Utf8PathBuf,
+    terminate_search_at: Option<Utf8PathBuf>,
+    discovered: OnceCell<Vec<(Utf8PathBuf, CargoConfig)>>,
 }
 
 impl CargoConfigs {
     /// Discover Cargo config files using the same algorithm that Cargo uses.
-    pub fn discover() -> Result<Self, CargoConfigSearchError> {
-        let current = std::env::current_dir()
+    pub fn new() -> Result<Self, CargoConfigSearchError> {
+        let start_search_at = std::env::current_dir()
             .map_err(CargoConfigSearchError::GetCurrentDir)
             .and_then(|cwd| {
                 Utf8PathBuf::try_from(cwd).map_err(CargoConfigSearchError::NonUtf8Path)
             })?;
-        let discovered = discover_impl(&current, None)?;
-        Ok(Self { discovered })
+        Ok(Self {
+            start_search_at,
+            terminate_search_at: None,
+            discovered: OnceCell::new(),
+        })
     }
 
     /// Discover Cargo config files with isolation.
     ///
     /// Not part of the public API, for testing only.
     #[doc(hidden)]
-    pub fn discover_with_isolation(
+    pub fn new_with_isolation(
         start_search_at: &Utf8Path,
         terminate_search_at: &Utf8Path,
     ) -> Result<Self, CargoConfigSearchError> {
-        let discovered = discover_impl(start_search_at, Some(terminate_search_at))?;
-        Ok(Self { discovered })
+        Ok(Self {
+            start_search_at: start_search_at.to_owned(),
+            terminate_search_at: Some(terminate_search_at.to_owned()),
+            discovered: OnceCell::new(),
+        })
     }
 
     pub(crate) fn discovered_configs(
         &self,
-    ) -> impl Iterator<Item = (&Utf8Path, &CargoConfig)> + DoubleEndedIterator + '_ {
-        self.discovered
+    ) -> Result<
+        impl Iterator<Item = (&Utf8Path, &CargoConfig)> + DoubleEndedIterator + '_,
+        CargoConfigSearchError,
+    > {
+        let iter = self
+            .discovered
+            .get_or_try_init(|| {
+                discover_impl(&self.start_search_at, self.terminate_search_at.as_deref())
+            })?
             .iter()
-            .map(|(path, config)| (path.as_path(), config))
+            .map(|(path, config)| (path.as_path(), config));
+        Ok(iter)
     }
 }
 
