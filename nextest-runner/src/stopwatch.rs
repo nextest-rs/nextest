@@ -26,11 +26,6 @@ impl StopwatchStart {
         }
     }
 
-    #[inline]
-    pub(crate) fn elapsed(&self) -> Duration {
-        self.instant.elapsed()
-    }
-
     pub(crate) fn end(&self) -> StopwatchEnd {
         StopwatchEnd {
             start_time: self.start_time,

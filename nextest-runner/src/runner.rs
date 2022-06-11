@@ -381,16 +381,18 @@ impl<'a> TestRunner<'a> {
             while let Err(error) = receiver.recv_timeout(self.slow_timeout.period) {
                 match error {
                     RecvTimeoutError::Timeout => {
+                        is_slow = true;
+                        timeout_hit += 1;
+
                         let _ = run_sender.send(InternalTestEvent::Slow {
                             test_instance: test,
-                            elapsed: stopwatch.elapsed(),
+                            // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
+                            // slightly longer.
+                            elapsed: timeout_hit * self.slow_timeout.period,
                         });
-                        is_slow = true;
 
                         if let Some(terminate_after) = self.slow_timeout.terminate_after {
-                            timeout_hit += 1;
-
-                            if NonZeroUsize::new(timeout_hit)
+                            if NonZeroUsize::new(timeout_hit as usize)
                                 .expect("timeout_hit cannot be non-zero")
                                 >= terminate_after
                             {
