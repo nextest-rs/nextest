@@ -4,7 +4,7 @@
 use std::cmp::Ordering;
 
 use crate::{errors::ExpectedError, output::OutputContext};
-use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use color_eyre::eyre::{Context, Result};
 use nextest_metadata::NextestExitCode;
 use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersion};
@@ -42,9 +42,11 @@ pub(crate) fn perform_update(
         .map_err(|err| ExpectedError::UpdateError { err })?;
 
     // The binary is always present at this path.
-    let bin_path_in_archive = Utf8Path::new("cargo-nextest");
+    let mut bin_path_in_archive = Utf8PathBuf::from("cargo-nextest");
+    bin_path_in_archive.set_extension(std::env::consts::EXE_EXTENSION);
+
     let status = releases
-        .check(&version, force, bin_path_in_archive)
+        .check(&version, force, &bin_path_in_archive)
         .map_err(|err| ExpectedError::UpdateError { err })?;
 
     match status {
