@@ -74,6 +74,9 @@ jobs:
           - windows-latest
         # 1.59 is the MSRV
         rust-version: [ 1.59, stable ]
+        # no-default-features means no self-update, all-features means
+        # with self-update
+        features: [ --no-default-features, --all-features ]
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
@@ -85,40 +88,43 @@ jobs:
           toolchain: ${{ matrix.rust-version }}
           override: true
       - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
+        with:
+          # Matrix instances (other than OS) need to be added to this explicitly
+          key: ${{ matrix.rust-version }}-${{ matrix.features }}
       - name: Build quick-junit
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --package quick-junit
+          args: --package quick-junit ${{ matrix.features }}
       - name: Build nextest-metadata
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --package nextest-metadata
+          args: --package nextest-metadata ${{ matrix.features }}
       - name: Build cargo-nextest
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --package cargo-nextest
-      - name: Build all targets with all features
+          args: --package cargo-nextest ${{ matrix.features }}
+      - name: Build all targets
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all-targets --all-features
+          args: --all-targets ${{ matrix.features }}
       - name: Doctests
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --doc --all-features
+          args: --doc ${{ matrix.features }}
       - name: Test with locally built nextest
         uses: actions-rs/cargo@v1
         with:
           command: local-nt
-          args: run --all-features --profile ci
+          args: run ${{ matrix.features }} --profile ci
       - name: Install latest nextest release
         uses: taiki-e/install-action@nextest
       - name: Test with latest nextest release
         uses: actions-rs/cargo@v1
         with:
           command: nextest
-          args: run --all-features --profile ci
+          args: run ${{ matrix.features }} --profile ci
