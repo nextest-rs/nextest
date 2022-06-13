@@ -370,9 +370,8 @@ impl ExpectedError {
             }
             Self::TestBinaryArgsParseError { reason, args } => {
                 log::error!(
-                    "failed to parse test binary arguments `{}` due to {}",
+                    "failed to parse test binary arguments `{}`: arguments are {reason}",
                     args.join(", "),
-                    reason
                 );
                 None
             }
