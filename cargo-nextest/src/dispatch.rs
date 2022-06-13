@@ -291,7 +291,7 @@ enum Command {
         zstd_level: i32,
         // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
     },
-    /// Modify the nextest installation
+    /// Manage the nextest installation
     #[clap(name = "self")]
     Self_ {
         #[clap(subcommand)]
