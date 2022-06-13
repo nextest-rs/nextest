@@ -49,8 +49,7 @@ pub struct CargoNextestApp {
 impl CargoNextestApp {
     /// Executes the app.
     pub fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
-        let NextestSubcommand::Nextest(mut app) = self.subcommand;
-        app.validate()?;
+        let NextestSubcommand::Nextest(app) = self.subcommand;
         app.exec(output_writer)
     }
 }
@@ -79,38 +78,6 @@ struct AppOpts {
 }
 
 impl AppOpts {
-    fn validate(&mut self) -> Result<()> {
-        fn error_on_unsupported(args: &[String]) -> Result<(), ExpectedError> {
-            if !args.is_empty() {
-                return Err(ExpectedError::test_binary_args_parse_error(
-                    "unsupported",
-                    args.to_owned(),
-                ));
-            }
-            Ok(())
-        }
-        match &mut self.command {
-            Command::List {
-                build_filter,
-                test_binary_args,
-                ..
-            } => {
-                build_filter.merge_test_binary_args(test_binary_args)?;
-                error_on_unsupported(test_binary_args)?;
-            }
-            Command::Run {
-                build_filter,
-                test_binary_args,
-                ..
-            } => {
-                build_filter.merge_test_binary_args(test_binary_args)?;
-                error_on_unsupported(test_binary_args)?;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
     /// Execute the command.
     ///
     /// Returns the exit code.
@@ -249,10 +216,6 @@ enum Command {
 
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
-
-        /// Arguments for the test binary. Partially supported. Kept for compatibility reason.
-        #[clap(value_name = "test-binary-args", last = true)]
-        test_binary_args: Vec<String>,
     },
     /// Build and run tests
     ///
@@ -288,13 +251,6 @@ enum Command {
 
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
-
-        /// Arguments for the test binary (partially supported)
-        ///
-        /// The only arguments supported are test filters (treated the same as FILTERS),
-        /// --include-ignored and --ignored.
-        #[clap(value_name = "TEST-BINARY-ARGS", last = true)]
-        test_binary_args: Vec<String>,
     },
     /// Build and archive tests
     ///
@@ -433,6 +389,10 @@ struct TestBuildFilter {
     /// Test name filter
     #[clap(name = "FILTERS", help_heading = None)]
     filter: Vec<String>,
+
+    /// Emulated cargo test binary arguments (partially supported)
+    #[clap(help_heading = None, value_name = "TEST-BINARY-ARGS", last = true)]
+    test_binary_args: Vec<String>,
 }
 
 impl TestBuildFilter {
@@ -450,6 +410,11 @@ impl TestBuildFilter {
             &binary_list.rust_build_meta.target_directory,
         )?;
 
+        // Merge the test binary args into the patterns.
+        let mut run_ignored = self.run_ignored;
+        let mut patterns = self.filter.clone();
+        self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
+
         let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
         let test_artifacts = RustTestArtifact::from_binary_list(
             graph,
@@ -459,9 +424,9 @@ impl TestBuildFilter {
             self.platform_filter.into(),
         )?;
         let test_filter = TestFilterBuilder::new(
-            self.run_ignored.unwrap_or_default(),
+            run_ignored.unwrap_or_default(),
             self.partition.clone(),
-            &self.filter,
+            &patterns,
             filter_exprs,
         );
         Ok(
@@ -470,42 +435,62 @@ impl TestBuildFilter {
         )
     }
 
-    fn merge_test_binary_args(&mut self, args: &mut Vec<String>) -> Result<()> {
+    fn merge_test_binary_args(
+        &self,
+        run_ignored: &mut Option<RunIgnored>,
+        patterns: &mut Vec<String>,
+    ) -> Result<(), ExpectedError> {
         let mut ignore_filters = Vec::new();
         let mut read_trailing_filters = false;
-        args.retain(|s| {
-            if read_trailing_filters || !s.starts_with('-') {
-                self.filter.push(s.to_owned());
-                false
-            } else if s == "--include-ignored" {
-                ignore_filters.push((s.clone(), RunIgnored::All));
-                false
-            } else if s == "--ignored" {
-                ignore_filters.push((s.clone(), RunIgnored::IgnoredOnly));
-                false
-            } else if s == "--" {
-                read_trailing_filters = true;
-                false
-            } else {
-                true
-            }
-        });
+
+        let mut unsupported_args = Vec::new();
+
+        patterns.extend(
+            self.test_binary_args
+                .iter()
+                .filter(|&s| {
+                    if read_trailing_filters || !s.starts_with('-') {
+                        true
+                    } else if s == "--include-ignored" {
+                        ignore_filters.push((s.clone(), RunIgnored::All));
+                        false
+                    } else if s == "--ignored" {
+                        ignore_filters.push((s.clone(), RunIgnored::IgnoredOnly));
+                        false
+                    } else if s == "--" {
+                        read_trailing_filters = true;
+                        false
+                    } else {
+                        unsupported_args.push(s.clone());
+                        true
+                    }
+                })
+                .cloned(),
+        );
+
         for (s, f) in ignore_filters {
             if let Some(run_ignored) = self.run_ignored {
                 if run_ignored != f {
-                    return Err(Report::new(ExpectedError::test_binary_args_parse_error(
+                    return Err(ExpectedError::test_binary_args_parse_error(
                         "mutually exclusive",
                         vec![s],
-                    )));
+                    ));
                 } else {
-                    return Err(Report::new(ExpectedError::test_binary_args_parse_error(
+                    return Err(ExpectedError::test_binary_args_parse_error(
                         "duplicated",
                         vec![s],
-                    )));
+                    ));
                 }
             } else {
-                self.run_ignored = Some(f);
+                *run_ignored = Some(f);
             }
+        }
+
+        if !unsupported_args.is_empty() {
+            return Err(ExpectedError::test_binary_args_parse_error(
+                "unsupported",
+                unsupported_args,
+            ));
         }
         Ok(())
     }
@@ -1394,7 +1379,6 @@ mod tests {
             )
             .unwrap_or_else(|_| panic!("{} should have successfully parsed", cmd));
             let NextestSubcommand::Nextest(mut app) = app.subcommand;
-            app.validate()?;
             Ok(app)
         }
 
