@@ -400,20 +400,15 @@ impl TestBuildFilter {
         &self,
         graph: &'g PackageGraph,
         binary_list: Arc<BinaryList>,
+        test_filter_builder: TestFilterBuilder,
         runner: &TargetRunner,
         reuse_build: &ReuseBuildInfo,
-        filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList<'g>> {
         let path_mapper = make_path_mapper(
             reuse_build,
             graph,
             &binary_list.rust_build_meta.target_directory,
         )?;
-
-        // Merge the test binary args into the patterns.
-        let mut run_ignored = self.run_ignored;
-        let mut patterns = self.filter.clone();
-        self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
 
         let rust_build_meta = binary_list.rust_build_meta.map_paths(&path_mapper);
         let test_artifacts = RustTestArtifact::from_binary_list(
@@ -423,16 +418,30 @@ impl TestBuildFilter {
             &path_mapper,
             self.platform_filter.into(),
         )?;
-        let test_filter = TestFilterBuilder::new(
+        Ok(TestList::new(
+            test_artifacts,
+            rust_build_meta,
+            &test_filter_builder,
+            runner,
+        )
+        .map_err(|err| ExpectedError::CreateTestListError { err })?)
+    }
+
+    fn make_test_filter_builder(
+        &self,
+        filter_exprs: Vec<FilteringExpr>,
+    ) -> Result<TestFilterBuilder, ExpectedError> {
+        // Merge the test binary args into the patterns.
+        let mut run_ignored = self.run_ignored;
+        let mut patterns = self.filter.clone();
+        self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
+
+        Ok(TestFilterBuilder::new(
             run_ignored.unwrap_or_default(),
             self.partition.clone(),
             &patterns,
             filter_exprs,
-        );
-        Ok(
-            TestList::new(test_artifacts, rust_build_meta, &test_filter, runner)
-                .map_err(|err| ExpectedError::CreateTestListError { err })?,
-        )
+        ))
     }
 
     fn merge_test_binary_args(
@@ -469,8 +478,8 @@ impl TestBuildFilter {
         );
 
         for (s, f) in ignore_filters {
-            if let Some(run_ignored) = self.run_ignored {
-                if run_ignored != f {
+            if let Some(run_ignored) = run_ignored {
+                if *run_ignored != f {
                     return Err(ExpectedError::test_binary_args_parse_error(
                         "mutually exclusive",
                         vec![s],
@@ -880,15 +889,15 @@ impl App {
     fn build_test_list(
         &self,
         binary_list: Arc<BinaryList>,
+        test_filter_builder: TestFilterBuilder,
         target_runner: &TargetRunner,
-        filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestList> {
         self.build_filter.compute_test_list(
             self.base.graph(),
             binary_list,
+            test_filter_builder,
             target_runner,
             &self.base.reuse_build,
-            filter_exprs,
         )
     }
 
@@ -927,6 +936,8 @@ impl App {
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let filter_exprs = self.build_filtering_expressions()?;
+        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+
         let binary_list = self.base.build_binary_list()?;
 
         match list_type {
@@ -941,7 +952,8 @@ impl App {
             }
             ListType::Full => {
                 let target_runner = self.load_runner();
-                let test_list = self.build_test_list(binary_list, target_runner, filter_exprs)?;
+                let test_list =
+                    self.build_test_list(binary_list, test_filter_builder, target_runner)?;
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
@@ -972,8 +984,11 @@ impl App {
         let target_runner = self.load_runner();
 
         let filter_exprs = self.build_filtering_expressions()?;
+        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+
         let binary_list = self.base.build_binary_list()?;
-        let test_list = self.build_test_list(binary_list, target_runner, filter_exprs)?;
+
+        let test_list = self.build_test_list(binary_list, test_filter_builder, target_runner)?;
 
         let output = output_writer.reporter_output();
 
@@ -1371,97 +1386,76 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Parser)]
+    struct TestCli {
+        #[structopt(flatten)]
+        build_filter: TestBuildFilter,
+    }
+
     #[test]
     fn test_test_binary_argument_parsing() {
-        fn get_app_opts(cmd: &str) -> Result<AppOpts> {
-            let app = CargoNextestApp::try_parse_from(
-                shell_words::split(cmd).expect("valid command line"),
-            )
-            .unwrap_or_else(|_| panic!("{} should have successfully parsed", cmd));
-            let NextestSubcommand::Nextest(mut app) = app.subcommand;
-            Ok(app)
+        fn get_test_filter_builder(cmd: &str) -> Result<TestFilterBuilder, ExpectedError> {
+            let app = TestCli::try_parse_from(shell_words::split(cmd).expect("valid command line"))
+                .unwrap_or_else(|_| panic!("{} should have successfully parsed", cmd));
+            app.build_filter.make_test_filter_builder(vec![])
         }
 
         let valid = &[
             // ---
             // substring filter
             // ---
-            ("cargo nextest run -- str1", "cargo nextest run str1"),
-            (
-                "cargo nextest list -- str2 str3",
-                "cargo nextest list str2 str3",
-            ),
+            ("foo -- str1", "foo str1"),
+            ("foo -- str2 str3", "foo str2 str3"),
             // ---
             // ignored
             // ---
-            (
-                "cargo nextest run -- --ignored",
-                "cargo nextest run --run-ignored ignored-only",
-            ),
-            (
-                "cargo nextest list -- --include-ignored",
-                "cargo nextest list --run-ignored all",
-            ),
+            ("foo -- --ignored", "foo --run-ignored ignored-only"),
+            ("foo -- --include-ignored", "foo --run-ignored all"),
             // ---
             // two escapes
             // ---
             (
-                "cargo nextest run -- --ignored -- str --- --ignored",
-                "cargo nextest run --run-ignored ignored-only str -- -- --- --ignored",
+                "foo -- --ignored -- str --- --ignored",
+                "foo --run-ignored ignored-only str -- -- --- --ignored",
             ),
-            (
-                "cargo nextest list -- -- str1 str2 --",
-                "cargo nextest list str1 str2 -- -- --",
-            ),
+            ("foo -- -- str1 str2 --", "foo str1 str2 -- -- --"),
         ];
         let invalid = &[
             // ---
             // duplicated
             // ---
-            (
-                "cargo nextest run -- --include-ignored --include-ignored",
-                "duplicated",
-            ),
-            ("cargo nextest list -- --ignored --ignored", "duplicated"),
+            ("foo -- --include-ignored --include-ignored", "duplicated"),
+            ("foo -- --ignored --ignored", "duplicated"),
             // ---
             // mutually exclusive
             // ---
-            (
-                "cargo nextest run -- --ignored --include-ignored",
-                "mutually exclusive",
-            ),
-            (
-                "cargo nextest list --run-ignored all -- --ignored",
-                "mutually exclusive",
-            ),
+            ("foo -- --ignored --include-ignored", "mutually exclusive"),
+            ("foo --run-ignored all -- --ignored", "mutually exclusive"),
             // ---
             // unsupported
             // ---
-            ("cargo nextest list -- --exact", "unsupported"),
+            ("foo -- --exact", "unsupported"),
         ];
 
         for (a, b) in valid {
             let a_str = format!(
                 "{:?}",
-                get_app_opts(a).unwrap_or_else(|_| panic!("failed to parse {}", a))
+                get_test_filter_builder(a).unwrap_or_else(|_| panic!("failed to parse {}", a))
             );
             let b_str = format!(
                 "{:?}",
-                get_app_opts(b).unwrap_or_else(|_| panic!("failed to parse {}", b))
+                get_test_filter_builder(b).unwrap_or_else(|_| panic!("failed to parse {}", b))
             );
             assert_eq!(a_str, b_str);
         }
 
         for (s, r) in invalid {
-            if let Ok(ExpectedError::TestBinaryArgsParseError { reason, .. }) = get_app_opts(s)
-                .expect_err(&format!("{} should error", s))
-                .downcast::<ExpectedError>()
-            {
-                assert_eq!(&reason, r);
+            let res = get_test_filter_builder(s);
+            if let Err(ExpectedError::TestBinaryArgsParseError { reason, .. }) = &res {
+                assert_eq!(reason, r);
             } else {
                 panic!(
-                    "{} should have errored out with TestBinaryArgsParseError",
-                    s
+                    "{s} should have errored out with TestBinaryArgsParseError, actual: {res:?}",
                 );
             }
         }

@@ -209,7 +209,8 @@ fn test_filter_expr_without_name_matches() -> Result<()> {
     )
     .expect("filter expression is valid");
 
-    let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[] as &[&str], vec![expr]);
+    let test_filter =
+        TestFilterBuilder::new(RunIgnored::Default, None, Vec::<String>::new(), vec![expr]);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     for test in test_list.iter_tests() {
         if test.name.contains("test_multiply_two") || test.name == "tests::call_dylib_add_two" {
@@ -235,7 +236,7 @@ fn test_name_match_without_filter_expr() -> Result<()> {
     let test_filter = TestFilterBuilder::new(
         RunIgnored::Default,
         None,
-        &["test_multiply_two", "tests::call_dylib_add_two"],
+        vec!["test_multiply_two", "tests::call_dylib_add_two"],
         vec![],
     );
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
@@ -373,8 +374,12 @@ fn test_termination() -> Result<()> {
     set_rustflags();
 
     let expr = FilteringExpr::parse("test(=test_slow_timeout)", &*PACKAGE_GRAPH).unwrap();
-    let test_filter =
-        TestFilterBuilder::new(RunIgnored::IgnoredOnly, None, &[] as &[&str], vec![expr]);
+    let test_filter = TestFilterBuilder::new(
+        RunIgnored::IgnoredOnly,
+        None,
+        Vec::<String>::new(),
+        vec![expr],
+    );
 
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config =

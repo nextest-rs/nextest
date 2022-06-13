@@ -72,7 +72,7 @@ impl FromStr for RunIgnored {
 }
 
 /// A builder for `TestFilter` instances.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TestFilterBuilder {
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
@@ -83,8 +83,27 @@ pub struct TestFilterBuilder {
 #[derive(Clone, Debug)]
 enum NameMatch {
     EmptyPatterns,
-    MatchSet(Box<AhoCorasick>),
+    MatchSet {
+        patterns: Vec<String>,
+        matcher: Box<AhoCorasick>,
+    },
 }
+
+impl PartialEq for NameMatch {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::EmptyPatterns, Self::EmptyPatterns) => true,
+            (Self::MatchSet { patterns: sp, .. }, Self::MatchSet { patterns: op, .. })
+                if sp == op =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Eq for NameMatch {}
 
 impl TestFilterBuilder {
     /// Creates a new `TestFilterBuilder` from the given patterns.
@@ -93,13 +112,18 @@ impl TestFilterBuilder {
     pub fn new(
         run_ignored: RunIgnored,
         partitioner_builder: Option<PartitionerBuilder>,
-        patterns: &[impl AsRef<[u8]>],
+        patterns: impl IntoIterator<Item = impl Into<String>>,
         exprs: Vec<FilteringExpr>,
     ) -> Self {
+        let mut patterns: Vec<_> = patterns.into_iter().map(|s| s.into()).collect();
+        patterns.sort_unstable();
+
         let name_match = if patterns.is_empty() {
             NameMatch::EmptyPatterns
         } else {
-            NameMatch::MatchSet(Box::new(AhoCorasick::new_auto_configured(patterns)))
+            let matcher = Box::new(AhoCorasick::new_auto_configured(&patterns));
+
+            NameMatch::MatchSet { patterns, matcher }
         };
 
         Self {
@@ -199,8 +223,8 @@ impl<'filter> TestFilter<'filter> {
     fn filter_name_match(&self, test_name: &str) -> FilterNameMatch {
         match &self.builder.name_match {
             NameMatch::EmptyPatterns => FilterNameMatch::MatchEmptyPatterns,
-            NameMatch::MatchSet(set) => {
-                if set.is_match(test_name) {
+            NameMatch::MatchSet { matcher, .. } => {
+                if matcher.is_match(test_name) {
                     FilterNameMatch::MatchWithPatterns
                 } else {
                     FilterNameMatch::Mismatch(MismatchReason::String)
@@ -317,7 +341,7 @@ mod tests {
         ) {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[&pattern], Vec::new());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[pattern], Vec::new());
             let single_filter = test_filter.build();
             prop_assert!(!single_filter.filter_name_match(&substring).is_match());
         }
