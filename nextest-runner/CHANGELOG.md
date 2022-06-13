@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.11.0] - 2022-06-13
+
+### Added
+
+- Nextest can now update itself! Once this version is installed, simply run `cargo nextest self update` to update to the latest version.
+    > Note to distributors: you can disable self-update by building cargo-nextest with `--no-default-features`.
+- Partial, emulated support for test binary arguments passed in after `cargo nextest run --` ([#265], thanks [@tabokie](https://github.com/tabokie) for your contribution!).
+
+  For example, `cargo nextest run -- my_test --ignored` will run ignored tests containing `my_test`, similar to `cargo test -- my_test --ignored`.
+
+  Support is limited to test names, `--ignored` and `--include-ignored`.
+
+  > Note to integrators: to reliably disable all argument parsing, pass in `--` twice. For example, `cargo nextest run -- -- my-filter`.
+
+### Fixed
+
+- Better detection for cross-compilation -- now look through the `CARGO_BUILD_TARGET` environment variable, and Cargo configuration as well. The `--target` option is still preferred.
+- Slow and flaky tests are now printed out properly in the final status output ([#270]).
+
+[#265]: https://github.com/nextest-rs/nextest/pull/265
+[#270]: https://github.com/nextest-rs/nextest/issues/270
+
 ## [0.10.0] - 2022-06-08
 
 ### Added
@@ -148,6 +170,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.11.0
 [0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.10.0
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.9.0
 [0.8.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.8.1

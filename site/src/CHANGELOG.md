@@ -3,7 +3,27 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.19-b.2] - 2022-06-12
+## [0.9.19] - 2022-06-13
+
+### Added
+
+- Nextest can now update itself! Once this version is installed, simply run `cargo nextest self update` to update to the latest version.
+    > Note to distributors: you can disable self-update by building cargo-nextest with `--no-default-features`.
+- Partial, emulated support for test binary arguments passed in after `cargo nextest run --` ([#265], thanks [@tabokie](https://github.com/tabokie) for your contribution!).
+
+  For example, `cargo nextest run -- my_test --ignored` will run ignored tests containing `my_test`, similar to `cargo test -- my_test --ignored`.
+
+  Support is limited to test names, `--ignored` and `--include-ignored`.
+
+  > Note to integrators: to reliably disable all argument parsing, pass in `--` twice. For example, `cargo nextest run -- -- <filters...>`.
+
+### Fixed
+
+- Better detection for cross-compilation -- now look through the `CARGO_BUILD_TARGET` environment variable, and Cargo configuration as well. The `--target` option is still preferred.
+- Slow and flaky tests are now printed out properly in the final status output ([#270]).
+
+[#265]: https://github.com/nextest-rs/nextest/pull/265
+[#270]: https://github.com/nextest-rs/nextest/issues/270
 
 This is a test release.
 
@@ -249,7 +269,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.19-b.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.19-b.2
+[0.9.19]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.19
 [0.9.18]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.18
 [0.9.17]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.17
 [0.9.16]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.16

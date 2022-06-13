@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.2] - 2022-06-13
+
+### Added
+
+- New [documented exit codes] related to self-updates:
+  - `UPDATE_ERROR`
+  - `UPDATE_AVAILABLE`
+  - `UPDATE_DOWNGRADE_NOT_PERFORMED`
+  - `UPDATE_CANCELED`
+  - `SELF_UPDATE_UNAVAILABLE`
+
+[documented exit codes]: https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html
+
 ## [0.4.1] - 2022-06-07
 
 ### Added
@@ -59,6 +72,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.4.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.2
 [0.4.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.1
 [0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.0
 [0.3.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.3.1

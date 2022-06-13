@@ -2,10 +2,11 @@ cargo-nextest-list
 List tests in workspace
 
 USAGE:
-    cargo nextest list [OPTIONS] [FILTERS]...
+    cargo nextest list [OPTIONS] [FILTERS]... [-- <TEST-BINARY-ARGS>...]
 
 ARGS:
-    <FILTERS>...    Test name filter
+    <FILTERS>...             Test name filter
+    <TEST-BINARY-ARGS>...    Emulated cargo test binary arguments (partially supported)
 
 OPTIONS:
         --manifest-path <PATH>    Path to Cargo.toml
@@ -47,8 +48,8 @@ CARGO OPTIONS:
                                     for details
 
 FILTER OPTIONS:
-        --run-ignored <WHICH>           Run ignored tests [default: default] [possible values:
-                                        default, ignored-only, all]
+        --run-ignored <WHICH>           Run ignored tests [possible values: default, ignored-only,
+                                        all]
         --partition <PARTITION>         Test partition, e.g. hash:1/2 or count:2/3
         --platform-filter <PLATFORM>    Filter test binaries by build platform [default: any]
                                         [possible values: target, host, any]
