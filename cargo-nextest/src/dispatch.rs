@@ -80,12 +80,12 @@ struct AppOpts {
 
 impl AppOpts {
     fn validate(&mut self) -> Result<()> {
-        fn handle_test_binary_args(args: &[String]) -> Result<()> {
+        fn error_on_unsupported(args: &[String]) -> Result<(), ExpectedError> {
             if !args.is_empty() {
-                return Err(Report::new(ExpectedError::test_binary_args_parse_error(
+                return Err(ExpectedError::test_binary_args_parse_error(
                     "unsupported",
                     args.to_owned(),
-                )));
+                ));
             }
             Ok(())
         }
@@ -96,7 +96,7 @@ impl AppOpts {
                 ..
             } => {
                 build_filter.merge_test_binary_args(test_binary_args)?;
-                handle_test_binary_args(test_binary_args)?;
+                error_on_unsupported(test_binary_args)?;
             }
             Command::Run {
                 build_filter,
@@ -104,7 +104,7 @@ impl AppOpts {
                 ..
             } => {
                 build_filter.merge_test_binary_args(test_binary_args)?;
-                handle_test_binary_args(test_binary_args)?;
+                error_on_unsupported(test_binary_args)?;
             }
             _ => {}
         }
@@ -289,8 +289,11 @@ enum Command {
         #[clap(flatten)]
         reuse_build: ReuseBuildOpts,
 
-        /// Arguments for the test binary. Partially supported. Kept for compatibility reason.
-        #[clap(value_name = "test-binary-args", last = true)]
+        /// Arguments for the test binary (partially supported)
+        ///
+        /// The only arguments supported are test filters (treated the same as FILTERS),
+        /// --include-ignored and --ignored.
+        #[clap(value_name = "TEST-BINARY-ARGS", last = true)]
         test_binary_args: Vec<String>,
     },
     /// Build and archive tests
@@ -1079,7 +1082,7 @@ impl SelfCommand {
                         )
                     } else {
                         log::info!("this version of cargo-nextest cannot perform self-updates\n\
-                                    (hint: this usually means nextest is managed by another package manager)");
+                                    (hint: this usually means nextest was installed by a package manager)");
                         Ok(nextest_metadata::NextestExitCode::SELF_UPDATE_UNAVAILABLE)
                     }
                 }

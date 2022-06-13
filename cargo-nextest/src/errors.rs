@@ -350,7 +350,7 @@ impl ExpectedError {
             }
             Self::ExperimentalFeatureNotEnabled { name, var_name } => {
                 log::error!(
-                    "'{}' is an experimental feature and must be enabled with {}=1",
+                    "{} is an experimental feature and must be enabled with {}=1",
                     name,
                     var_name
                 );
@@ -370,8 +370,8 @@ impl ExpectedError {
             }
             Self::TestBinaryArgsParseError { reason, args } => {
                 log::error!(
-                    "failed to parse test binary arguments {:?} due to {}",
-                    args,
+                    "failed to parse test binary arguments `{}` due to {}",
+                    args.join(", "),
                     reason
                 );
                 None
