@@ -3,6 +3,13 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+
+## [0.9.20] - 2022-06-13
+
+### Fixed
+
+- Account for skipped tests when determining the length of the progress bar.
+
 ## [0.9.19] - 2022-06-13
 
 ### Added
@@ -269,6 +276,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.20]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.20
 [0.9.19]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.19
 [0.9.18]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.18
 [0.9.17]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.17

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.11.1] - 2022-06-13
+
+### Fixed
+
+- Account for skipped tests when determining the length of the progress bar.
+
 ## [0.11.0] - 2022-06-13
 
 ### Added
@@ -170,6 +176,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.11.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.11.1
 [0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.11.0
 [0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.10.0
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.9.0

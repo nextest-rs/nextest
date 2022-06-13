@@ -451,6 +451,9 @@ fn update_progress_bar<'a>(event: &TestEvent<'a>, styles: &Styles, progress_bar:
             let running_state = RunningState::new(*cancel_state, current_stats);
             progress_bar.set_prefix(running_state.progress_bar_prefix(styles));
             progress_bar.set_message(progress_bar_msg(current_stats, *running, styles));
+            // If there are skipped tests, the initial run count will be lower than when constructed
+            // in ProgressBar::new.
+            progress_bar.set_length(current_stats.initial_run_count as u64);
             progress_bar.set_position(current_stats.finished_count as u64);
         }
         TestEvent::RunBeginCancel { reason, .. } => {
