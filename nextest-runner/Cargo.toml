@@ -52,7 +52,7 @@ zstd = { version = "0.11.2", features = ["zstdmt"] }
 ###
 ### Update-related features, optionally enabled
 ###
-mukti-metadata = { git = "https://github.com/nextest-rs/mukti", rev = "b2637d3472e9b84cf6cedf2d81a27320a9ad6a0c", optional = true }
+mukti-metadata = { version = "0.1.0", optional = true }
 # TODO: remove dependency on self_update, build our own thing on top of mukti
 self_update = { version = "0.30.0", optional = true, default-features = false, features = [
     "archive-tar",

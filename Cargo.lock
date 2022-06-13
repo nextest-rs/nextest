@@ -1026,7 +1026,8 @@ dependencies = [
 [[package]]
 name = "mukti-metadata"
 version = "0.1.0"
-source = "git+https://github.com/nextest-rs/mukti?rev=b2637d3472e9b84cf6cedf2d81a27320a9ad6a0c#b2637d3472e9b84cf6cedf2d81a27320a9ad6a0c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eff38cdb6843983df19a14b015249acdbcf18516a0fee429631948165687644"
 dependencies = [
  "semver",
  "serde",
