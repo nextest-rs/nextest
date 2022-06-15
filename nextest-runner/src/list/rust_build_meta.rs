@@ -85,7 +85,8 @@ impl RustBuildMeta<TestListState> {
     /// These paths are prepended to the dynamic library environment variable for the current
     /// platform (e.g. `LD_LIBRARY_PATH` on non-Apple Unix platforms).
     pub fn dylib_paths(&self) -> Vec<Utf8PathBuf> {
-        // TODO: rustc sysroot library path? is this even possible to get?
+        // FIXME/HELP WANTED: get the rustc sysroot library path here.
+        // See https://github.com/nextest-rs/nextest/issues/267.
 
         // Cargo puts linked paths before base output directories.
         self.linked_paths
