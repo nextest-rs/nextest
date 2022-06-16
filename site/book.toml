@@ -13,6 +13,7 @@ build-dir = "output"
 [output.html]
 default-theme = "rust"
 additional-css = ["css/extra.css"]
+copy-fonts = false
 git-repository-url = "https://github.com/nextest-rs/nextest"
 edit-url-template = "https://github.com/nextest-rs/nextest/edit/main/site/{path}"
 site-url = "https://nexte.st"
