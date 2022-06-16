@@ -18,7 +18,7 @@
 
 :root {
     font-family: "Inter", sans-serif;
-    font-feature-settings: "ss01", "ss03", "cv11";
+    font-feature-settings: "ss01", "ss03";
     font-variant-ligatures: common-ligatures;
     letter-spacing: -0.008em;
 }
@@ -46,6 +46,7 @@ h4,
 h5,
 h6 {
     font-weight: 300;
+    font-feature-settings: "ss01", "ss03", "cv11";
 }
 
 h1 {
