@@ -18,7 +18,7 @@
 
 :root {
     font-family: "Inter", sans-serif;
-    font-feature-settings: "ss01", "ss03", "cv08";
+    font-feature-settings: "ss01", "ss03";
     font-variant-ligatures: common-ligatures;
     letter-spacing: -0.008em;
 }
