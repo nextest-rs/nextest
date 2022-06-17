@@ -1091,10 +1091,22 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
 
 #[cfg(unix)]
 fn signal_str(signal: i32) -> Option<&'static str> {
-    // These signal numbers are the same on all Unixes.
+    // These signal numbers are the same on at least Linux, macOS and FreeBSD.
     match signal {
+        1 => Some("HUP"),
         2 => Some("INT"),
+        5 => Some("TRAP"),
+        6 => Some("ABRT"),
+        8 => Some("FPE"),
+        9 => Some("KILL"),
         11 => Some("SEGV"),
+        13 => Some("PIPE"),
+        14 => Some("ALRM"),
+        15 => Some("TERM"),
+        24 => Some("XCPU"),
+        25 => Some("XFSZ"),
+        26 => Some("VTALRM"),
+        27 => Some("PROF"),
         _ => None,
     }
 }
