@@ -297,7 +297,7 @@ fn test_retries() -> Result<()> {
                     let expected_len = match fixture.status {
                         FixtureStatus::Flaky { pass_attempt } => pass_attempt,
                         FixtureStatus::Pass => 1,
-                        FixtureStatus::Fail => retries + 1,
+                        FixtureStatus::Fail | FixtureStatus::Segfault => retries + 1,
                         FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail => {
                             unreachable!("ignored tests should be skipped")
                         }
@@ -324,9 +324,8 @@ fn test_retries() -> Result<()> {
                                 "correct length for prior statuses"
                             );
                             for prior_status in prior_statuses {
-                                assert_eq!(
-                                    prior_status.result,
-                                    ExecutionResult::Fail,
+                                assert!(
+                                    matches!(prior_status.result, ExecutionResult::Fail { .. }),
                                     "prior status {} should be fail",
                                     prior_status.attempt
                                 );
@@ -344,14 +343,13 @@ fn test_retries() -> Result<()> {
                                 "correct length for retries"
                             );
                             for retry in retries {
-                                assert_eq!(
-                                    retry.result,
-                                    ExecutionResult::Fail,
+                                assert!(
+                                    matches!(retry.result, ExecutionResult::Fail { .. }),
                                     "retry {} should be fail",
                                     retry.attempt
                                 );
                             }
-                            first_status.result == ExecutionResult::Fail
+                            matches!(first_status.result, ExecutionResult::Fail { .. })
                         }
                     }
                 }

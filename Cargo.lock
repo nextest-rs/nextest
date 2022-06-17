@@ -1075,6 +1075,7 @@ dependencies = [
  "atomicwrites",
  "camino",
  "cargo_metadata",
+ "cfg-if",
  "chrono",
  "color-eyre",
  "config",

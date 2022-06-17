@@ -40,6 +40,7 @@ pub(crate) enum FixtureStatus {
     Pass,
     Fail,
     Flaky { pass_attempt: usize },
+    Segfault,
     IgnoredPass,
     IgnoredFail,
 }
@@ -52,10 +53,24 @@ impl FixtureStatus {
                 if pass_attempt <= total_attempts {
                     ExecutionResult::Pass
                 } else {
-                    ExecutionResult::Fail
+                    ExecutionResult::Fail { signal: None }
                 }
             }
-            FixtureStatus::Fail | FixtureStatus::IgnoredFail => ExecutionResult::Fail,
+            FixtureStatus::Segfault => {
+                // We don't have a signal on Windows but we do on Unix.
+                cfg_if::cfg_if! {
+                    if #[cfg(unix)] {
+                        // SIGSEGV is 11.
+                        let signal = Some(11);
+                    } else {
+                        let signal = None;
+                    }
+                }
+                ExecutionResult::Fail { signal }
+            }
+            FixtureStatus::Fail | FixtureStatus::IgnoredFail => {
+                ExecutionResult::Fail { signal: None }
+            }
         }
     }
 
@@ -88,6 +103,9 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
             ],
             "nextest-tests::other" => vec![
                 TestFixture { name: "other_test_success", status: FixtureStatus::Pass },
+            ],
+            "nextest-tests::segfault" => vec![
+                TestFixture { name: "test_segfault", status: FixtureStatus::Segfault },
             ],
             // Unit tests
             "nextest-tests" => vec![

@@ -21,6 +21,7 @@ use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
 use serde::Deserialize;
 use std::{
+    borrow::Cow,
     cmp::Reverse,
     fmt::{self, Write as _},
     io,
@@ -849,16 +850,14 @@ impl<'a> TestReporterImpl<'a> {
                 )?;
             }
             ExecutionDescription::Failure { .. } => {
-                let status_str = match last_status.result {
-                    ExecutionResult::Fail => "FAIL",
-                    ExecutionResult::ExecFail => "XFAIL",
-                    ExecutionResult::Pass => unreachable!("this is a failing test"),
-                    ExecutionResult::Timeout => "TIMEOUT",
-                };
-
                 if last_status.attempt == 1 {
-                    write!(writer, "{:>12} ", status_str.style(self.styles.fail))?;
+                    write!(
+                        writer,
+                        "{:>12} ",
+                        status_str(last_status.result).style(self.styles.fail)
+                    )?;
                 } else {
+                    let status_str = short_status_str(last_status.result);
                     write!(
                         writer,
                         "{:>12} ",
@@ -907,16 +906,14 @@ impl<'a> TestReporterImpl<'a> {
                 )?;
             }
             ExecutionDescription::Failure { .. } => {
-                let status_str = match last_status.result {
-                    ExecutionResult::Fail => "FAIL",
-                    ExecutionResult::ExecFail => "XFAIL",
-                    ExecutionResult::Pass => unreachable!("this is a failing test"),
-                    ExecutionResult::Timeout => "TIMEOUT",
-                };
-
                 if last_status.attempt == 1 {
-                    write!(writer, "{:>12} ", status_str.style(self.styles.fail))?;
+                    write!(
+                        writer,
+                        "{:>12} ",
+                        status_str(last_status.result).style(self.styles.fail)
+                    )?;
                 } else {
+                    let status_str = short_status_str(last_status.result);
                     write!(
                         writer,
                         "{:>12} ",
@@ -1063,6 +1060,48 @@ impl<'a> fmt::Debug for TestReporter<'a> {
             .field("stderr", &"BufferWriter { .. }")
             .finish()
     }
+}
+
+fn status_str(result: ExecutionResult) -> Cow<'static, str> {
+    // Use shorter strings for this.
+    match result {
+        ExecutionResult::Fail { signal: Some(sig) } => match signal_str(sig) {
+            Some(s) => format!("SIG{s}").into(),
+            None => format!("ABRT SIG {sig}").into(),
+        },
+        ExecutionResult::Fail { signal: None } => "FAIL".into(),
+        ExecutionResult::ExecFail => "XFAIL".into(),
+        ExecutionResult::Pass => "PASS".into(),
+        ExecutionResult::Timeout => "TIMEOUT".into(),
+    }
+}
+
+fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
+    match result {
+        ExecutionResult::Fail { signal: Some(sig) } => match signal_str(sig) {
+            Some(s) => s.into(),
+            None => format!("SIG {sig}").into(),
+        },
+        ExecutionResult::Fail { signal: None } => "FAIL".into(),
+        ExecutionResult::ExecFail => "XFAIL".into(),
+        ExecutionResult::Pass => "PASS".into(),
+        ExecutionResult::Timeout => "TMT".into(),
+    }
+}
+
+#[cfg(unix)]
+fn signal_str(signal: i32) -> Option<&'static str> {
+    // These signal numbers are the same on all Unixes.
+    match signal {
+        2 => Some("INT"),
+        11 => Some("SEGV"),
+        _ => None,
+    }
+}
+
+#[cfg(not(unix))]
+fn signal_str(_signal: i32) -> Option<&'static str> {
+    None
 }
 
 /// A test event.
