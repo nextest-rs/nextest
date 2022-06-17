@@ -3,6 +3,16 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.21] - 2022-06-17
+
+### Added
+
+- On Unix, tests that fail due to a signal (e.g. SIGSEGV) will print out the name of the signal rather than the generic "FAIL".
+- `cargo-nextest` has a new `"default-no-update"` feature that will contain all default features except for self-update. If you're distributing nextest or installing it in CI, the recommended, forward-compatible way to build cargo-nextest is with `--no-default-features --features default-no-update`.
+
+### Changed
+
+- Progress bars now take up the entire width of the screen. This prevents issues with the bar wrapping around on terminals that aren't wide enough.
 
 ## [0.9.20] - 2022-06-13
 
@@ -276,6 +286,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.21]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.21
 [0.9.20]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.20
 [0.9.19]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.19
 [0.9.18]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.18

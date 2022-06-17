@@ -12,4 +12,4 @@ For cargo-nextest 0.9.18 or below, update by redownloading and reinstalling the 
 
 ## For distributors
 
-To disable the self-update functionality, build cargo-nextest with `--no-default-features`.
+`cargo-nextest` 0.9.21 and above has a new `default-no-update` feature, which will contain all default features except for self-update. The recommended, forward-compatible way to build cargo-nextest is with `--no-default-features --features default-no-update`.

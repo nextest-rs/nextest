@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.0] - 2022-06-17
+
+### Added
+
+- On Unix, tests that fail due to a signal (e.g. SIGSEGV) will print out the name of the signal rather than the generic "FAIL".
+
+### Changed
+
+- Progress bars now take up the entire width of the screen. This prevents issues with the bar wrapping around on terminals that aren't wide enough.
+
 ## [0.11.1] - 2022-06-13
 
 ### Fixed
@@ -176,6 +186,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.12.0
 [0.11.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.11.1
 [0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.11.0
 [0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.10.0
