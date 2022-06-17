@@ -90,6 +90,11 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
             vec![("other_test_success", false)],
         ),
         TestInfo::new(
+            "nextest-tests::segfault",
+            BuildPlatform::Target,
+            vec![("test_segfault", false)],
+        ),
+        TestInfo::new(
             "nextest-tests::bin/other",
             BuildPlatform::Target,
             vec![("tests::other_bin_success", false)],
@@ -245,7 +250,7 @@ fn make_check_result_regex(result: bool, name: &str) -> Regex {
     if result {
         Regex::new(&format!(r"PASS \[.*\] *{}", name)).unwrap()
     } else {
-        Regex::new(&format!(r"FAIL \[.*\] *{}", name)).unwrap()
+        Regex::new(&format!(r"(FAIL|SIGSEGV) \[.*\] *{}", name)).unwrap()
     }
 }
 
@@ -286,6 +291,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
         ),
         (true, "nextest-tests::other other_test_success"),
         (true, "nextest-tests::basic test_success"),
+        (false, "nextest-tests::segfault test_segfault"),
         (true, "nextest-derive::proc-macro/nextest-derive it_works"),
         (
             true,
@@ -300,9 +306,9 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *21 tests run: 15 passed, 6 failed, 3 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *22 tests run: 15 passed, 7 failed, 3 skipped").unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *21 tests run: 16 passed, 5 failed, 3 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *22 tests run: 16 passed, 6 failed, 3 skipped").unwrap()
     };
     assert!(
         summary_reg.is_match(&output),

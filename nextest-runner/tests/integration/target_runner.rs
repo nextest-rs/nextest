@@ -7,7 +7,7 @@ use color_eyre::Result;
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
-    runner::TestRunnerBuilder,
+    runner::{ExecutionResult, TestRunnerBuilder},
     signal::SignalHandler,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -245,7 +245,13 @@ fn test_run_with_target_runner() -> Result<()> {
                         fixture.name
                     );
                     let run_status = run_statuses.last_status();
-                    run_status.result == fixture.status.to_test_status(1)
+                    // Segfaults aren't passed through by the passthrough runner.
+                    let expected_status = if fixture.status == FixtureStatus::Segfault {
+                        ExecutionResult::Fail { signal: None }
+                    } else {
+                        fixture.status.to_test_status(1)
+                    };
+                    run_status.result == expected_status
                 }
             };
             if !valid {

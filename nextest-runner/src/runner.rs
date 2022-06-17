@@ -450,7 +450,16 @@ impl<'a> TestRunner<'a> {
             if output.status.success() {
                 ExecutionResult::Pass
             } else {
-                ExecutionResult::Fail
+                // On Unix, extract the signal if it's found.
+                cfg_if::cfg_if! {
+                    if #[cfg(unix)] {
+                        use std::os::unix::process::ExitStatusExt;
+                        let signal = output.status.signal();
+                    } else {
+                        let signal = None;
+                    }
+                }
+                ExecutionResult::Fail { signal }
             }
         });
 
@@ -723,7 +732,7 @@ impl RunStats {
                     self.flaky += 1;
                 }
             }
-            ExecutionResult::Fail => self.failed += 1,
+            ExecutionResult::Fail { .. } => self.failed += 1,
             ExecutionResult::Timeout => self.timed_out += 1,
             ExecutionResult::ExecFail => self.exec_failed += 1,
         }
@@ -908,7 +917,10 @@ pub enum ExecutionResult {
     /// The test passed.
     Pass,
     /// The test failed.
-    Fail,
+    Fail {
+        /// The signal the test failed with, if any. Only relevant on Unix.
+        signal: Option<i32>,
+    },
     /// An error occurred while executing the test.
     ExecFail,
     /// The test was terminated due to timeout.
@@ -920,7 +932,9 @@ impl ExecutionResult {
     pub fn is_success(self) -> bool {
         match self {
             ExecutionResult::Pass => true,
-            ExecutionResult::Fail | ExecutionResult::ExecFail | ExecutionResult::Timeout => false,
+            ExecutionResult::Fail { .. } | ExecutionResult::ExecFail | ExecutionResult::Timeout => {
+                false
+            }
         }
     }
 }

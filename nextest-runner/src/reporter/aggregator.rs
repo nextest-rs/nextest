@@ -14,7 +14,7 @@ use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
 use debug_ignore::DebugIgnore;
 use quick_junit::{NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite};
-use std::{collections::HashMap, fs::File, time::SystemTime};
+use std::{borrow::Cow, collections::HashMap, fs::File, time::SystemTime};
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -68,11 +68,21 @@ impl<'cfg> MetadataJunit<'cfg> {
                 run_statuses,
                 ..
             } => {
-                fn kind_ty(run_status: &ExecuteStatus) -> (NonSuccessKind, &'static str) {
+                fn kind_ty(run_status: &ExecuteStatus) -> (NonSuccessKind, Cow<'static, str>) {
                     match run_status.result {
-                        ExecutionResult::Fail => (NonSuccessKind::Failure, "test failure"),
-                        ExecutionResult::Timeout => (NonSuccessKind::Failure, "test timeout"),
-                        ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure"),
+                        ExecutionResult::Fail { signal: Some(sig) } => (
+                            NonSuccessKind::Failure,
+                            format!("test failure due to signal {}", sig).into(),
+                        ),
+                        ExecutionResult::Fail { signal: None } => {
+                            (NonSuccessKind::Failure, "test failure".into())
+                        }
+                        ExecutionResult::Timeout => {
+                            (NonSuccessKind::Failure, "test timeout".into())
+                        }
+                        ExecutionResult::ExecFail => {
+                            (NonSuccessKind::Error, "execution failure".into())
+                        }
                         ExecutionResult::Pass => unreachable!("this is a failure status"),
                     }
                 }
