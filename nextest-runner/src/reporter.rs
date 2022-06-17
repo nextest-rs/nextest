@@ -319,8 +319,8 @@ impl TestReporterBuilder {
                 // but that isn't possible due to https://github.com/console-rs/indicatif/issues/440. Use
                 // {{elapsed_precise}} as an OK tradeoff here.
                 let template = format!(
-                    "{{prefix:>12}} [{{elapsed_precise:>9}}] [{{wide_bar:40}}] \
-                    {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}"
+                    "{{prefix:>12}} [{{elapsed_precise:>9}}] [{{wide_bar}}] \
+                    {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}     "
                 );
                 progress_bar.set_style(
                     ProgressStyle::default_bar()
