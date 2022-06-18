@@ -5,7 +5,7 @@ The quickest way to get going with nextest is to download a pre-built binary for
 * [**get.nexte.st/latest/mac**](https://get.nexte.st/latest/mac) for macOS, both x86_64 and Apple Silicon
 * [**get.nexte.st/latest/windows**](https://get.nexte.st/latest/windows) for Windows x86_64
 
-These archives contain a single binary called `cargo-nextest`. Add this binary to a location on your PATH.
+These archives contain a single binary called `cargo-nextest` (`cargo-nextest.exe` on Windows). Add this binary to a location on your PATH.
 
 ## Downloading and installing from your terminal
 
