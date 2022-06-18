@@ -8,7 +8,7 @@ To request a specific version, run (e.g.) `cargo nextest self update --version 0
 
 ## For older versions
 
-For cargo-nextest 0.9.18 or below, update by redownloading and reinstalling the binary following the instructions at [Pre-built binaries](pre-built-binaries.md).
+If you're on cargo-nextest 0.9.18 or below, update by redownloading and reinstalling the binary following the instructions at [Pre-built binaries](pre-built-binaries.md).
 
 ## For distributors
 
