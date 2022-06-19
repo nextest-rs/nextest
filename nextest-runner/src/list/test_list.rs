@@ -502,10 +502,9 @@ impl<'g> TestList<'g> {
         // <test name>: test
         // ...
 
-        list_output.lines().filter_map(move |line| {
-            let res = line
-                .strip_suffix(": test")
-                .or(line.strip_suffix(": benchmark"))
+        list_output.lines().map(move |line| {
+            line.strip_suffix(": test")
+                .or_else(|| line.strip_suffix(": benchmark"))
                 .ok_or_else(|| {
                     CreateTestListError::parse_line(
                         binary_id,
@@ -515,8 +514,7 @@ impl<'g> TestList<'g> {
                         ),
                         list_output,
                     )
-                });
-            Some(res)
+                })
         })
     }
 
