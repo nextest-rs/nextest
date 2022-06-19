@@ -2,3 +2,22 @@
 <meta property="og:title" content="{{title}}" />
 <meta property="og:image" content="https://nexte.st/static/cover.png" />
 <meta property="og:description" content="{{description}}" />
+<link rel="stylesheet" href="/fonts/inter.css" />
+<style>
+    :root,
+    html {
+        font-family: "Inter", "Helvetica Neue", "Arial", sans-serif;
+        font-feature-settings: "ss01", "ss03";
+        font-variant-ligatures: common-ligatures;
+        letter-spacing: -0.008em;
+    }
+
+    @supports (font-variation-settings: normal) {
+        :root {
+            font-family: 'Inter var', "Helvetica Neue", "Arial", sans-serif;
+        }
+    }
+</style>
+<link rel="stylesheet" href="/css/extra.css" />
+<link rel="preload" href="/fonts/Inter-roman.var.woff2?v=26a312df" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/fonts/Inter-italic.var.woff2?v=26a312df" as="font" type="font/woff2" crossorigin />
