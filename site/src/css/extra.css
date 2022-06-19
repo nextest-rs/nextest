@@ -1,0 +1,49 @@
+#nextest-cover {
+    float: right;
+    width: 250px;
+}
+
+@media only screen and (max-width: 480px) {
+    #nextest-cover {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        float: none;
+        width: 80%;
+        max-width: 250px;
+    }
+}
+
+
+
+/* use 600 rather than 700 for bold text because it looks more elegant */
+strong,
+th {
+    font-weight: 600;
+}
+
+h1.menu-title {
+    letter-spacing: -0.025em;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-weight: 300;
+    font-feature-settings: "ss01", "ss03", "cv11";
+}
+
+h1 {
+    letter-spacing: -0.034em;
+}
+
+h2 {
+    letter-spacing: -0.030em;
+}
+
+h3 {
+    letter-spacing: -0.028em;
+}
