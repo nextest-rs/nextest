@@ -503,22 +503,19 @@ impl<'g> TestList<'g> {
         // ...
 
         list_output.lines().filter_map(move |line| {
-            if line.ends_with(": benchmark") {
-                // These lines are produced by the default Rust benchmark harness (#[bench]).
-                // Ignore them.
-                return None;
-            }
-
-            let res = line.strip_suffix(": test").ok_or_else(|| {
-                CreateTestListError::parse_line(
-                    binary_id,
-                    format!(
-                        "line '{}' did not end with the string ': test' or ': benchmark'",
-                        line
-                    ),
-                    list_output,
-                )
-            });
+            let res = line
+                .strip_suffix(": test")
+                .or(line.strip_suffix(": benchmark"))
+                .ok_or_else(|| {
+                    CreateTestListError::parse_line(
+                        binary_id,
+                        format!(
+                            "line '{}' did not end with the string ': test' or ': benchmark'",
+                            line
+                        ),
+                        list_output,
+                    )
+                });
             Some(res)
         })
     }
@@ -832,12 +829,12 @@ mod tests {
         let non_ignored_output = indoc! {"
             tests::foo::test_bar: test
             tests::baz::test_quux: test
-            benches::should_be_skipped: benchmark
+            benches::bench_foo: benchmark
         "};
         let ignored_output = indoc! {"
-            benches::ignored_should_be_skipped: benchmark
             tests::ignored::test_bar: test
             tests::baz::test_ignored: test
+            benches::ignored_bench_foo: benchmark
         "};
 
         let test_filter = TestFilterBuilder::any(RunIgnored::Default);
@@ -875,11 +872,19 @@ mod tests {
                             ignored: false,
                             filter_match: FilterMatch::Matches,
                         },
+                        "benches::bench_foo".to_owned() => RustTestCaseSummary {
+                            ignored: false,
+                            filter_match: FilterMatch::Matches,
+                        },
                         "tests::ignored::test_bar".to_owned() => RustTestCaseSummary {
                             ignored: true,
                             filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                         },
                         "tests::baz::test_ignored".to_owned() => RustTestCaseSummary {
+                            ignored: true,
+                            filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                        },
+                        "benches::ignored_bench_foo".to_owned() => RustTestCaseSummary {
                             ignored: true,
                             filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                         },
@@ -898,6 +903,8 @@ mod tests {
         // Check that the expected outputs are valid.
         static EXPECTED_HUMAN: &str = indoc! {"
         fake-package::fake-binary:
+            benches::bench_foo
+            benches::ignored_bench_foo (skipped)
             tests::baz::test_ignored (skipped)
             tests::baz::test_quux
             tests::foo::test_bar
@@ -908,6 +915,8 @@ mod tests {
               bin: /fake/binary
               cwd: /fake/cwd
               build platform: target
+                benches::bench_foo
+                benches::ignored_bench_foo (skipped)
                 tests::baz::test_ignored (skipped)
                 tests::baz::test_quux
                 tests::foo::test_bar
@@ -921,7 +930,7 @@ mod tests {
                 "non-test-binaries": {},
                 "linked-paths": []
               },
-              "test-count": 4,
+              "test-count": 6,
               "rust-suites": {
                 "fake-package::fake-binary": {
                   "package-name": "metadata-helper",
@@ -933,6 +942,19 @@ mod tests {
                   "build-platform": "target",
                   "cwd": "/fake/cwd",
                   "testcases": {
+                    "benches::bench_foo": {
+                      "ignored": false,
+                      "filter-match": {
+                        "status": "matches"
+                      }
+                    },
+                    "benches::ignored_bench_foo": {
+                      "ignored": true,
+                      "filter-match": {
+                        "status": "mismatch",
+                        "reason": "ignored"
+                      }
+                    },
                     "tests::baz::test_ignored": {
                       "ignored": true,
                       "filter-match": {
