@@ -128,6 +128,7 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
             ],
             // Benchmarks
             "nextest-tests::bench/my-bench" => vec![
+                TestFixture { name: "bench_add_two", status: FixtureStatus::Pass },
                 TestFixture { name: "tests::test_execute_bin", status: FixtureStatus::Pass },
             ],
             // Proc-macro tests
@@ -194,7 +195,7 @@ pub(crate) static FIXTURE_RAW_CARGO_TEST_OUTPUT: Lazy<Vec<u8>> =
     Lazy::new(init_fixture_raw_cargo_test_output);
 
 fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
-    // TODO: actually productionize this, probably requires moving x into this repo
+    // This is a simple version of what cargo does.
     let cmd_name = match env::var("CARGO") {
         Ok(v) => v,
         Err(env::VarError::NotPresent) => "cargo".to_owned(),
@@ -210,6 +211,9 @@ fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
         "json-render-diagnostics",
         "--all-targets",
     )
+    // This environment variable is required to test the #[bench] fixture. Note that THIS IS FOR
+    // TEST CODE ONLY. NEVER USE THIS IN PRODUCTION.
+    .env("RUSTC_BOOTSTRAP", "1")
     .dir(workspace_root())
     .stdout_capture();
 
