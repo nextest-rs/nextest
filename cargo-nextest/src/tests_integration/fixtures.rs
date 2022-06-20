@@ -69,7 +69,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
         TestInfo::new(
             "nextest-tests::bench/my-bench",
             BuildPlatform::Target,
-            vec![("tests::test_execute_bin", false)],
+            vec![("bench_add_two", false), ("tests::test_execute_bin", false)],
         ),
         TestInfo::new(
             "nextest-tests::bin/nextest-tests",
@@ -128,6 +128,9 @@ pub(super) fn set_env_vars() {
     // output.
     // TODO: remove this once programmatic run statuses are supported.
     std::env::set_var("CARGO_TERM_COLOR", "never");
+    // This environment variable is required to test the #[bench] fixture. Note that THIS IS FOR
+    // TEST CODE ONLY. NEVER USE THIS IN PRODUCTION.
+    std::env::set_var("RUSTC_BOOTSTRAP", "1");
 }
 
 #[track_caller]
@@ -270,6 +273,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
         (true, "cdylib-example tests::test_multiply_two_cdylib"),
         (true, "nextest-tests::basic test_cargo_env_vars"),
         (true, "nextest-tests::basic test_execute_bin"),
+        (true, "nextest-tests::bench/my-bench bench_add_two"),
         (
             true,
             "nextest-tests::bench/my-bench tests::test_execute_bin",
@@ -306,9 +310,9 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *22 tests run: 15 passed, 7 failed, 3 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *23 tests run: 16 passed, 7 failed, 3 skipped").unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *22 tests run: 16 passed, 6 failed, 3 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *23 tests run: 17 passed, 6 failed, 3 skipped").unwrap()
     };
     assert!(
         summary_reg.is_match(&output),
