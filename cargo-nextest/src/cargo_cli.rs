@@ -80,7 +80,7 @@ pub(crate) struct CargoOptions {
     build_jobs: Option<String>,
 
     /// Space or comma separated list of features to activate
-    #[clap(long, group = "cargo-opts")]
+    #[clap(long, short = 'F', group = "cargo-opts")]
     features: Vec<String>,
 
     /// Activate all available features
