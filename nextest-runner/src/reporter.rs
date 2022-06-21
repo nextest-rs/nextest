@@ -988,14 +988,8 @@ impl<'a> TestReporterImpl<'a> {
             self.write_instance(*test_instance, &mut writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            {
-                // Strip ANSI escapes from the output in case some test framework doesn't check for
-                // ttys before producing color output.
-                // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
-                // fixed
-                let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
-                no_color.write_all(run_status.stdout())?;
-            }
+            writer.write_all(run_status.stdout())?;
+            Self::reset_ansi(&mut writer)?;
         }
 
         if !run_status.stderr().is_empty() {
@@ -1011,17 +1005,22 @@ impl<'a> TestReporterImpl<'a> {
             self.write_instance(*test_instance, &mut writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            {
-                // Strip ANSI escapes from the output in case some test framework doesn't check for
-                // ttys before producing color output.
-                // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
-                // fixed
-                let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
-                no_color.write_all(run_status.stderr())?;
-            }
+            writer.write_all(run_status.stderr())?;
+            Self::reset_ansi(&mut writer)?;
         }
 
         writeln!(writer)
+    }
+
+    /// Force reset any ANSI codes that were written in the the test output.
+    /// This is to catch cases where test output sets the color but never resets
+    /// it, which would normally result in all of the output after that to be
+    /// colored as well (including the output from nexttest itself)
+    fn reset_ansi(writer: &mut impl Write) -> io::Result<()> {
+        // It doesn't look like `owo_colors` provides a way to write an ANSI
+        // reset code, but writing an empty string with any style would result
+        // in adding that style + reset code automatically.
+        write!(writer, "{}", "".white())
     }
 
     // Returns the number of characters written out to the screen.
