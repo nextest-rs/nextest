@@ -4,7 +4,8 @@
 //! Serialize a `Report`.
 
 use crate::{
-    NonSuccessKind, Output, Property, Report, TestCase, TestCaseStatus, TestRerun, TestSuite,
+    NonSuccessKind, Output, Property, Report, SerializeError, TestCase, TestCaseStatus, TestRerun,
+    TestSuite,
 };
 use chrono::{DateTime, FixedOffset};
 use quick_xml::{
@@ -29,7 +30,10 @@ static SKIPPED_TAG: &str = "skipped";
 static SYSTEM_OUT_TAG: &str = "system-out";
 static SYSTEM_ERR_TAG: &str = "system-err";
 
-pub(crate) fn serialize_report(report: &Report, writer: impl io::Write) -> quick_xml::Result<()> {
+pub(crate) fn serialize_report(
+    report: &Report,
+    writer: impl io::Write,
+) -> Result<(), SerializeError> {
     let mut writer = Writer::new_with_indent(writer, b' ', 4);
 
     let decl = BytesDecl::new(b"1.0", Some(b"UTF-8"), None);
@@ -38,7 +42,7 @@ pub(crate) fn serialize_report(report: &Report, writer: impl io::Write) -> quick
     serialize_report_impl(report, &mut writer)?;
 
     // Add a trailing newline.
-    writer.write_indent()
+    Ok(writer.write_indent()?)
 }
 
 pub(crate) fn serialize_report_impl(

@@ -71,11 +71,9 @@
 //! * [**junit-report**](https://crates.io/crates/junit-report): Older, more mature project. Doesn't
 //!   appear to support flaky tests or arbitrary properties as of version 0.7.0.
 
+mod errors;
 mod report;
 mod serialize;
 
+pub use errors::*;
 pub use report::*;
-
-// Re-export `quick_xml::Error` and `Result` so it can be used by downstream consumers.
-#[doc(no_inline)]
-pub use quick_xml::{Error, Result};

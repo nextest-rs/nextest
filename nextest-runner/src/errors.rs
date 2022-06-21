@@ -583,7 +583,7 @@ pub enum WriteEventError {
 
         /// The underlying error.
         #[source]
-        error: quick_junit::Error,
+        error: quick_junit::SerializeError,
     },
 }
 

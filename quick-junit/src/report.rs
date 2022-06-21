@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::serialize::serialize_report;
+use crate::{serialize::serialize_report, SerializeError};
 use chrono::{DateTime, FixedOffset};
 use indexmap::map::IndexMap;
 use std::{io, iter, time::Duration};
@@ -88,15 +88,16 @@ impl Report {
     }
 
     /// Serialize this report to the given writer.
-    pub fn serialize(&self, writer: impl io::Write) -> quick_xml::Result<()> {
+    pub fn serialize(&self, writer: impl io::Write) -> Result<(), SerializeError> {
         serialize_report(self, writer)
     }
 
     /// Serialize this report to a string.
-    pub fn to_string(&self) -> quick_xml::Result<String> {
+    pub fn to_string(&self) -> Result<String, SerializeError> {
         let mut buf: Vec<u8> = vec![];
         self.serialize(&mut buf)?;
-        String::from_utf8(buf).map_err(|utf8_err| quick_xml::Error::Utf8(utf8_err.utf8_error()))
+        String::from_utf8(buf)
+            .map_err(|utf8_err| quick_xml::Error::Utf8(utf8_err.utf8_error()).into())
     }
 }
 
