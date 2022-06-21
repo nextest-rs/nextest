@@ -15,7 +15,7 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.65", features = ["gimli-symbolize", "std"] }
-clap = { version = "3.1.18", features = ["atty", "clap_derive", "color", "derive", "env", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
+clap = { version = "3.2.2", features = ["atty", "clap_derive", "color", "derive", "env", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
 console = { version = "0.15.0", features = ["ansi-parsing", "regex", "unicode-width"] }
 either = { version = "1.6.1", features = ["use_std"] }
 indexmap = { version = "1.9.1", default-features = false, features = ["std"] }
