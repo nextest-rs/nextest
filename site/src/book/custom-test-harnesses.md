@@ -22,7 +22,7 @@ For an example test harness that is based on libtest-mimic, see [datatest-stable
 
 For your test harness to work with nextest, follow these rules (keywords are as in [RFC 2119]):
 
-[RFC2119]: https://datatracker.ietf.org/doc/html/rfc2119
+[RFC 2119]: https://datatracker.ietf.org/doc/html/rfc2119
 
 * **The test harness MUST support being run with `--list --format terse`.** This command MUST print to stdout all tests in *exactly* the format
 
