@@ -579,7 +579,7 @@ impl<'a> TestReporterImpl<'a> {
     fn write_event_impl(
         &mut self,
         event: &TestEvent<'a>,
-        mut writer: impl Write,
+        writer: &mut impl Write,
     ) -> io::Result<()> {
         match event {
             TestEvent::RunStarted { test_list } => {
@@ -610,7 +610,7 @@ impl<'a> TestReporterImpl<'a> {
                         "{:>12}             ",
                         "START".style(self.styles.pass),
                     )?;
-                    self.write_instance(*test_instance, &mut writer)?;
+                    self.write_instance(*test_instance, writer)?;
                     writeln!(writer)?;
                 }
             }
@@ -620,8 +620,8 @@ impl<'a> TestReporterImpl<'a> {
             } => {
                 if self.status_level >= StatusLevel::Slow {
                     write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
-                    self.write_slow_duration(*elapsed, &mut writer)?;
-                    self.write_instance(*test_instance, &mut writer)?;
+                    self.write_slow_duration(*elapsed, writer)?;
+                    self.write_instance(*test_instance, writer)?;
                     writeln!(writer)?;
                 }
             }
@@ -635,10 +635,10 @@ impl<'a> TestReporterImpl<'a> {
                     write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
 
                     // Next, print the time taken.
-                    self.write_duration(run_status.time_taken, &mut writer)?;
+                    self.write_duration(run_status.time_taken, writer)?;
 
                     // Print the name of the test.
-                    self.write_instance(*test_instance, &mut writer)?;
+                    self.write_instance(*test_instance, writer)?;
                     writeln!(writer)?;
 
                     // This test is guaranteed to have failed.
@@ -647,7 +647,7 @@ impl<'a> TestReporterImpl<'a> {
                         "only failing tests are retried"
                     );
                     if self.failure_output.is_immediate() {
-                        self.write_stdout_stderr(test_instance, run_status, true, &mut writer)?;
+                        self.write_stdout_stderr(test_instance, run_status, true, writer)?;
                     }
 
                     // The final output doesn't show retries.
@@ -666,14 +666,14 @@ impl<'a> TestReporterImpl<'a> {
                 };
 
                 if self.status_level >= describe.status_level() {
-                    self.write_status_line(*test_instance, describe, &mut writer)?;
+                    self.write_status_line(*test_instance, describe, writer)?;
 
                     // If the test failed to execute, print its output and error status.
                     // (don't print out test failures after Ctrl-C)
                     if self.cancel_status < Some(CancelReason::Signal)
                         && test_output_display.is_immediate()
                     {
-                        self.write_stdout_stderr(test_instance, last_status, false, &mut writer)?;
+                        self.write_stdout_stderr(test_instance, last_status, false, writer)?;
                     }
                 }
 
@@ -773,7 +773,7 @@ impl<'a> TestReporterImpl<'a> {
                         let final_status_level = final_output.final_status_level();
                         match final_output {
                             FinalOutput::Skipped(_) => {
-                                self.write_skip_line(*test_instance, &mut writer)?;
+                                self.write_skip_line(*test_instance, writer)?;
                             }
                             FinalOutput::Executed(run_statuses) => {
                                 let last_status = run_statuses.last_status();
@@ -786,7 +786,7 @@ impl<'a> TestReporterImpl<'a> {
                                     self.write_final_status_line(
                                         *test_instance,
                                         run_statuses.describe(),
-                                        &mut writer,
+                                        writer,
                                     )?;
                                 }
                                 // This was previously gated on "if self.status_level >= StatusLevel::Fail"
@@ -797,7 +797,7 @@ impl<'a> TestReporterImpl<'a> {
                                         test_instance,
                                         last_status,
                                         false,
-                                        &mut writer,
+                                        writer,
                                     )?;
                                 }
                             }
@@ -813,13 +813,13 @@ impl<'a> TestReporterImpl<'a> {
     fn write_skip_line(
         &self,
         test_instance: TestInstance<'a>,
-        mut writer: impl Write,
+        writer: &mut impl Write,
     ) -> io::Result<()> {
         write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
         // same spacing [   0.034s]
         write!(writer, "[         ] ")?;
 
-        self.write_instance(test_instance, &mut writer)?;
+        self.write_instance(test_instance, writer)?;
         writeln!(writer)?;
 
         Ok(())
@@ -829,7 +829,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
-        mut writer: impl Write,
+        writer: &mut impl Write,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
         match describe {
@@ -864,10 +864,10 @@ impl<'a> TestReporterImpl<'a> {
         };
 
         // Next, print the time taken.
-        self.write_duration(last_status.time_taken, &mut writer)?;
+        self.write_duration(last_status.time_taken, writer)?;
 
         // Print the name of the test.
-        self.write_instance(test_instance, &mut writer)?;
+        self.write_instance(test_instance, writer)?;
         writeln!(writer)?;
 
         Ok(())
@@ -877,7 +877,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
-        mut writer: impl Write,
+        writer: &mut impl Write,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
         match describe {
@@ -920,16 +920,20 @@ impl<'a> TestReporterImpl<'a> {
         };
 
         // Next, print the time taken.
-        self.write_duration(last_status.time_taken, &mut writer)?;
+        self.write_duration(last_status.time_taken, writer)?;
 
         // Print the name of the test.
-        self.write_instance(test_instance, &mut writer)?;
+        self.write_instance(test_instance, writer)?;
         writeln!(writer)?;
 
         Ok(())
     }
 
-    fn write_instance(&self, instance: TestInstance<'a>, mut writer: impl Write) -> io::Result<()> {
+    fn write_instance(
+        &self,
+        instance: TestInstance<'a>,
+        writer: &mut impl Write,
+    ) -> io::Result<()> {
         write!(
             writer,
             "{:>width$} ",
@@ -943,7 +947,7 @@ impl<'a> TestReporterImpl<'a> {
         write_test_name(instance.name, &self.styles.list_styles, writer)
     }
 
-    fn write_duration(&self, duration: Duration, mut writer: impl Write) -> io::Result<()> {
+    fn write_duration(&self, duration: Duration, writer: &mut impl Write) -> io::Result<()> {
         // * > means right-align.
         // * 8 is the number of characters to pad to.
         // * .3 means print three digits after the decimal point.
@@ -951,7 +955,7 @@ impl<'a> TestReporterImpl<'a> {
         write!(writer, "[{:>8.3?}s] ", duration.as_secs_f64())
     }
 
-    fn write_slow_duration(&self, duration: Duration, mut writer: impl Write) -> io::Result<()> {
+    fn write_slow_duration(&self, duration: Duration, writer: &mut impl Write) -> io::Result<()> {
         // Inside the curly braces:
         // * > means right-align.
         // * 7 is the number of characters to pad to.
@@ -965,7 +969,7 @@ impl<'a> TestReporterImpl<'a> {
         test_instance: &TestInstance<'a>,
         run_status: &ExecuteStatus,
         is_retry: bool,
-        mut writer: impl Write,
+        writer: &mut impl Write,
     ) -> io::Result<()> {
         let (header_style, _output_style) = if is_retry {
             (self.styles.retry, self.styles.retry_output)
@@ -977,7 +981,7 @@ impl<'a> TestReporterImpl<'a> {
 
         if !run_status.stdout().is_empty() {
             write!(writer, "\n{}", "--- ".style(header_style))?;
-            let out_len = self.write_attempt(run_status, header_style, &mut writer)?;
+            let out_len = self.write_attempt(run_status, header_style, writer)?;
             // The width is to align test instances.
             write!(
                 writer,
@@ -985,15 +989,15 @@ impl<'a> TestReporterImpl<'a> {
                 "STDOUT:".style(header_style),
                 width = (21 - out_len)
             )?;
-            self.write_instance(*test_instance, &mut writer)?;
+            self.write_instance(*test_instance, writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_output(run_status.stdout(), &mut writer)?;
+            self.write_test_output(run_status.stdout(), writer)?;
         }
 
         if !run_status.stderr().is_empty() {
             write!(writer, "\n{}", "--- ".style(header_style))?;
-            let out_len = self.write_attempt(run_status, header_style, &mut writer)?;
+            let out_len = self.write_attempt(run_status, header_style, writer)?;
             // The width is to align test instances.
             write!(
                 writer,
@@ -1001,10 +1005,10 @@ impl<'a> TestReporterImpl<'a> {
                 "STDERR:".style(header_style),
                 width = (21 - out_len)
             )?;
-            self.write_instance(*test_instance, &mut writer)?;
+            self.write_instance(*test_instance, writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_output(run_status.stderr(), &mut writer)?;
+            self.write_test_output(run_status.stderr(), writer)?;
         }
 
         writeln!(writer)
@@ -1031,7 +1035,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         run_status: &ExecuteStatus,
         style: Style,
-        mut writer: impl Write,
+        writer: &mut impl Write,
     ) -> io::Result<usize> {
         if run_status.total_attempts > 1 {
             // 3 for 'TRY' + 1 for ' ' + length of the current attempt + 1 for following space.
