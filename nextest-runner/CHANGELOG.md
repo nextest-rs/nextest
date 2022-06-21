@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.13.0] - 2022-06-21
+
+### Added
+
+- Benchmarks are now treated as normal tests. ([#283], thanks [@tabokie](https://github.com/tabokie) for your contribution!).
+
+  Note that criterion.rs benchmarks are currently incompatible with nextest ([#96]) -- this change doesn't have any effect on that.
+
+### Changed
+
+- If nextest's output is colorized, it no longer strips ANSI escape codes from test runs.
+- quick-junit updated to 0.2.0.
+
+[#283]: https://github.com/nextest-rs/nextest/pull/283
+[#96]: https://github.com/nextest-rs/nextest/issues/96
+
 ## [0.12.0] - 2022-06-17
 
 ### Added
@@ -186,6 +202,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.13.0
 [0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.12.0
 [0.11.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.11.1
 [0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.11.0

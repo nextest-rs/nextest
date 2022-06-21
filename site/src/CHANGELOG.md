@@ -3,6 +3,24 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.22] - 2022-06-21
+
+### Added
+
+- Benchmarks are now treated as normal tests. ([#283], thanks [@tabokie](https://github.com/tabokie) for your contribution!).
+
+  Note that criterion.rs benchmarks are currently incompatible with nextest ([#96]) -- this change doesn't have any effect on that.
+
+- Added `-F` as a shortcut for `--features`, mirroring an upcoming addition to Cargo 1.62 ([#287], thanks [Alexendoo](https://github.com/Alexendoo) for your first contribution!)
+
+### Changed
+
+- If nextest's output is colorized, it no longer strips ANSI escape codes from test runs.
+
+[#283]: https://github.com/nextest-rs/nextest/pull/283
+[#287]: https://github.com/nextest-rs/nextest/pull/287
+[#96]: https://github.com/nextest-rs/nextest/issues/96
+
 ## [0.9.21] - 2022-06-17
 
 ### Added
@@ -286,6 +304,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.22]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.22
 [0.9.21]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.21
 [0.9.20]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.20
 [0.9.19]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.19
