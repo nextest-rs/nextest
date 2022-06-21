@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## [0.2.0] - 2022-06-21
 
 ### Changed
 
-- MSRV bumped to Rust 1.56.
+- quick-xml updated to 0.23.0.
+- The error type is now defined by quick-junit, so that future breaking changes to quick-xml will not necessitate a breaking change to this crate.
+- MSRV bumped to Rust 1.59.
 
 ## [0.1.5] - 2022-02-14
 
@@ -42,6 +44,7 @@
 
 - Initial version.
 
+[0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.2.0
 [0.1.5]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.1.5
 [0.1.4]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.1.4
 [0.1.3]: https://github.com/diem/diem-devtools/releases/tag/quick-junit-0.1.3
