@@ -28,7 +28,7 @@ CARGO OPTIONS:
     -r, --release                   Build artifacts in release mode, with optimizations
         --cargo-profile <NAME>      Build artifacts with the specified Cargo profile
         --build-jobs <JOBS>         Number of build jobs to run
-        --features <FEATURES>       Space or comma separated list of features to activate
+    -F, --features <FEATURES>       Space or comma separated list of features to activate
         --all-features              Activate all available features
         --no-default-features       Do not activate the `default` feature
         --target <TRIPLE>           Build for the target triple
