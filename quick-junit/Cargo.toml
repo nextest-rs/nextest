@@ -13,7 +13,7 @@ rust-version = "1.59"
 
 [dependencies]
 chrono = "0.4.19"
-indexmap = "1.8.2"
+indexmap = "1.9.1"
 quick-xml = "0.22.0"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
