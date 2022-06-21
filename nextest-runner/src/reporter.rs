@@ -988,14 +988,7 @@ impl<'a> TestReporterImpl<'a> {
             self.write_instance(*test_instance, &mut writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            {
-                // Strip ANSI escapes from the output in case some test framework doesn't check for
-                // ttys before producing color output.
-                // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
-                // fixed
-                let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
-                no_color.write_all(run_status.stdout())?;
-            }
+            self.write_test_output(run_status.stdout(), &mut writer)?;
         }
 
         if !run_status.stderr().is_empty() {
@@ -1011,17 +1004,26 @@ impl<'a> TestReporterImpl<'a> {
             self.write_instance(*test_instance, &mut writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            {
-                // Strip ANSI escapes from the output in case some test framework doesn't check for
-                // ttys before producing color output.
-                // TODO: apply output style once https://github.com/jam1garner/owo-colors/issues/41 is
-                // fixed
-                let mut no_color = strip_ansi_escapes::Writer::new(&mut writer);
-                no_color.write_all(run_status.stderr())?;
-            }
+            self.write_test_output(run_status.stderr(), &mut writer)?;
         }
 
         writeln!(writer)
+    }
+
+    fn write_test_output(&self, output: &[u8], writer: &mut impl Write) -> io::Result<()> {
+        if self.styles.is_colorized {
+            const RESET_COLOR: &[u8] = b"\x1b[0m";
+            // Output the text without stripping ANSI escapes, then reset the color afterwards in case
+            // the output is malformed.
+            writer.write_all(output)?;
+            writer.write_all(RESET_COLOR)?;
+        } else {
+            // Strip ANSI escapes from the output if nextest itself isn't colorized.
+            let mut no_color = strip_ansi_escapes::Writer::new(writer);
+            no_color.write_all(output)?;
+        }
+
+        Ok(())
     }
 
     // Returns the number of characters written out to the screen.
@@ -1227,6 +1229,7 @@ pub enum CancelReason {
 
 #[derive(Debug, Default)]
 struct Styles {
+    is_colorized: bool,
     count: Style,
     pass: Style,
     retry: Style,
@@ -1240,6 +1243,7 @@ struct Styles {
 
 impl Styles {
     fn colorize(&mut self) {
+        self.is_colorized = true;
         self.count = Style::new().bold();
         self.pass = Style::new().green().bold();
         self.retry = Style::new().magenta().bold();
