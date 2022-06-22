@@ -7,7 +7,7 @@ If pre-built binaries are not available for your platform, or you'd otherwise li
 Run the following command:
 
 ```
-cargo install cargo-nextest
+cargo install cargo-nextest --locked
 ```
 
 `cargo nextest` must be compiled and installed with **Rust 1.59** or later (see [Stability policy] for more), but it can build and run
@@ -36,6 +36,7 @@ jobs:
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
+          locked: true
           # Uncomment the following line if you'd like to stay on the 0.9 series
           # version: 0.9
       # At this point, cargo-nextest will be available on your PATH
