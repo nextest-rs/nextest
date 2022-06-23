@@ -14,7 +14,7 @@ atomicwrites = "0.3.1"
 aho-corasick = "0.7.18"
 camino = { version = "1.0.9", features = ["serde1"] }
 config = { version = "0.13.1", default-features = false, features = ["toml"] }
-cargo_metadata = "0.14.2"
+cargo_metadata = "0.15.0"
 cfg-if = "1.0.0"
 chrono = "0.4.19"
 crossbeam-channel = "0.5.5"
