@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{output::OutputContext, ExpectedError, OutputWriter};
+use crate::{output::OutputContext, ExpectedError, OutputWriter, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgEnum, Args};
 use guppy::graph::PackageGraph;
@@ -109,7 +109,7 @@ impl ReuseBuildOpts {
         &self,
         output: OutputContext,
         output_writer: &mut OutputWriter,
-    ) -> Result<ReuseBuildInfo, ExpectedError> {
+    ) -> Result<ReuseBuildInfo> {
         if let Some(archive_file) = &self.archive_file {
             let format = self.archive_format.to_archive_format(archive_file)?;
             // Process this archive.
@@ -170,10 +170,7 @@ pub(crate) enum ArchiveFormatOpt {
 }
 
 impl ArchiveFormatOpt {
-    pub(crate) fn to_archive_format(
-        self,
-        archive_file: &Utf8Path,
-    ) -> Result<ArchiveFormat, ExpectedError> {
+    pub(crate) fn to_archive_format(self, archive_file: &Utf8Path) -> Result<ArchiveFormat> {
         match self {
             Self::TarZst => Ok(ArchiveFormat::TarZst),
             Self::Auto => ArchiveFormat::autodetect(archive_file).map_err(|err| {
@@ -196,7 +193,7 @@ pub(crate) fn make_path_mapper(
     info: &ReuseBuildInfo,
     graph: &PackageGraph,
     orig_target_dir: &Utf8Path,
-) -> Result<PathMapper, ExpectedError> {
+) -> Result<PathMapper> {
     PathMapper::new(
         graph.workspace().root(),
         info.workspace_remap(),
