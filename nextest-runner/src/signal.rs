@@ -3,6 +3,7 @@
 
 //! Support for handling signals in nextest.
 
+use crate::errors::SignalHandlerSetupError;
 use crossbeam_channel::Receiver;
 
 /// A receiver that generates signals if ctrl-c is pressed.
@@ -19,7 +20,7 @@ impl SignalHandler {
     ///
     /// Errors if a signal handler has already been registered in this process. Only one signal
     /// handler can be registered for a process at any given time.
-    pub fn new() -> Result<Self, ctrlc::Error> {
+    pub fn new() -> Result<Self, SignalHandlerSetupError> {
         let (sender, receiver) = crossbeam_channel::unbounded();
         ctrlc::set_handler(move || {
             let _ = sender.send(SignalEvent::Interrupted);

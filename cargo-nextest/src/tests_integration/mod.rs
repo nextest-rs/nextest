@@ -16,7 +16,6 @@
 use crate::{dispatch::CargoNextestApp, ExpectedError, OutputWriter};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::StructOpt;
-use color_eyre::Report;
 use nextest_metadata::{BuildPlatform, TestListSummary};
 
 mod fixtures;
@@ -69,7 +68,7 @@ fn test_list_full() {
     ]);
 
     let mut output = OutputWriter::new_test();
-    args.exec(&mut output).map_err(print_error_chain).unwrap();
+    args.exec(&mut output).map_err(print_error).unwrap();
 
     check_list_full_output(output.stdout().unwrap(), None);
 }
@@ -263,7 +262,7 @@ fn test_run() {
 
     let mut output = OutputWriter::new_test();
     let err = args.exec(&mut output).unwrap_err();
-    assert_eq!("test run failed\n", err.to_string());
+    assert_eq!("test run failed", err.to_string());
 
     check_run_output(output.stderr().unwrap(), false);
 }
@@ -287,7 +286,7 @@ fn test_run_after_build() {
 
     let mut output = OutputWriter::new_test();
     let err = args.exec(&mut output).unwrap_err();
-    assert_eq!("test run failed\n", err.to_string());
+    assert_eq!("test run failed", err.to_string());
 
     check_run_output(output.stderr().unwrap(), false);
 }
@@ -348,7 +347,7 @@ fn test_relocated_run() {
 
     let mut output = OutputWriter::new_test();
     let err = args.exec(&mut output).unwrap_err();
-    assert_eq!("test run failed\n", err.to_string());
+    assert_eq!("test run failed", err.to_string());
 
     check_run_output(output.stderr().unwrap(), true);
 }
@@ -380,7 +379,7 @@ fn test_run_from_archive() {
     ]);
 
     let mut output = OutputWriter::new_test();
-    args.exec(&mut output).map_err(print_error_chain).unwrap();
+    args.exec(&mut output).map_err(print_error).unwrap();
 
     // Remove the old source and target directories to ensure that any tests that refer to files within
     // it fail.
@@ -401,22 +400,13 @@ fn test_run_from_archive() {
 
     let mut output = OutputWriter::new_test();
     let err = args.exec(&mut output).unwrap_err();
-    assert_eq!("test run failed\n", err.to_string());
+    assert_eq!("test run failed", err.to_string());
 
     check_run_output(output.stderr().unwrap(), true);
 }
 
 // Debugging helper to print out the full chain of errors for a report.
-fn print_error_chain(report: Report) -> Report {
-    match report.downcast_ref::<ExpectedError>() {
-        Some(err) => {
-            err.display_to_stderr();
-        }
-        None => {
-            for err in report.chain() {
-                println!("- {}", err);
-            }
-        }
-    };
-    report
+fn print_error(error: ExpectedError) -> ExpectedError {
+    error.display_to_stderr();
+    error
 }

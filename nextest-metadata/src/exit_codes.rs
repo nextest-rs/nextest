@@ -25,6 +25,9 @@ impl NextestExitCode {
     /// Creating a test list produced an error.
     pub const TEST_LIST_CREATION_FAILED: i32 = 104;
 
+    /// Writing data to stdout or stderr produced an error.
+    pub const WRITE_OUTPUT_ERROR: i32 = 110;
+
     /// Downloading an update resulted in an error.
     pub const UPDATE_ERROR: i32 = 90;
 

@@ -190,6 +190,7 @@ dependencies = [
  "supports-color",
  "supports-unicode",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]

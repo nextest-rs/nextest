@@ -1,15 +1,13 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cmp::Ordering;
-
-use crate::{errors::ExpectedError, output::OutputContext};
+use crate::{output::OutputContext, ExpectedError, Result};
 use camino::Utf8PathBuf;
-use color_eyre::eyre::{Context, Result};
 use nextest_metadata::NextestExitCode;
 use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersion};
 use owo_colors::OwoColorize;
 use semver::Version;
+use std::cmp::Ordering;
 use supports_color::Stream;
 
 /// Perform an update.
@@ -37,17 +35,13 @@ pub(crate) fn perform_update(
         .parse()
         .expect("cargo-nextest uses semantic versioning");
 
-    let releases = backend
-        .fetch_releases(current_version.clone())
-        .map_err(|err| ExpectedError::UpdateError { err })?;
+    let releases = backend.fetch_releases(current_version.clone())?;
 
     // The binary is always present at this path.
     let mut bin_path_in_archive = Utf8PathBuf::from("cargo-nextest");
     bin_path_in_archive.set_extension(std::env::consts::EXE_EXTENSION);
 
-    let status = releases
-        .check(&version, force, &bin_path_in_archive)
-        .map_err(|err| ExpectedError::UpdateError { err })?;
+    let status = releases.check(&version, force, &bin_path_in_archive)?;
 
     match status {
         CheckStatus::AlreadyOnRequested(version) => {
@@ -99,7 +93,7 @@ pub(crate) fn perform_update(
                     .default(true)
                     .show_default(true)
                     .interact()
-                    .wrap_err("error reading input from stdin")?
+                    .map_err(|err| ExpectedError::DialoguerError { err })?
             };
 
             if should_apply {

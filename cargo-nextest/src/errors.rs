@@ -6,10 +6,10 @@ use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::*;
 use owo_colors::{OwoColorize, Stream};
-use std::{
-    error::{self, Error},
-    fmt,
-};
+use std::error::Error;
+use thiserror::Error;
+
+pub(crate) type Result<T, E = ExpectedError> = std::result::Result<T, E>;
 
 #[derive(Debug)]
 #[doc(hidden)]
@@ -19,77 +19,155 @@ pub enum ReuseBuildKind {
     Reuse,
 }
 
+// Note that the #[error()] strings are mostly placeholder messages -- the expected way to print out
+// errors is with the display_to_stderr method, which colorizes errors.
+
 /// An error occurred in a program that nextest ran, not in nextest itself.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[doc(hidden)]
 pub enum ExpectedError {
-    CargoMetadataFailed,
+    #[error("cargo metadata exec failed")]
+    CargoMetadataExecFailed {
+        command: String,
+        err: std::io::Error,
+    },
+    #[error("cargo metadata failed")]
+    CargoMetadataFailed { command: String },
+    #[error("root manifest not found at {path}")]
     RootManifestNotFound {
         path: Utf8PathBuf,
         reuse_build_kind: ReuseBuildKind,
     },
+    #[error("profile not found")]
     ProfileNotFound {
+        #[from]
         err: ProfileNotFound,
     },
+    #[error("failed to create store directory")]
+    StoreDirCreateError {
+        store_dir: Utf8PathBuf,
+        #[source]
+        err: std::io::Error,
+    },
+    #[error("cargo configs construction error")]
     CargoConfigsConstructError {
+        #[from]
         err: CargoConfigsConstructError,
     },
+    #[error("config parse error")]
     ConfigParseError {
+        #[from]
         err: ConfigParseError,
     },
+    #[error("argument file read error")]
     ArgumentFileReadError {
         arg_name: &'static str,
         file_name: Utf8PathBuf,
+        #[source]
         err: std::io::Error,
     },
+    #[error("unknown archive format")]
     UnknownArchiveFormat {
         archive_file: Utf8PathBuf,
+        #[source]
         err: UnknownArchiveFormat,
     },
+    #[error("archive create error")]
     ArchiveCreateError {
         archive_file: Utf8PathBuf,
+        #[source]
         err: ArchiveCreateError,
     },
+    #[error("archive extract error")]
     ArchiveExtractError {
         archive_file: Utf8PathBuf,
+        #[source]
         err: ArchiveExtractError,
     },
+    #[error("path mapper construct error")]
     PathMapperConstructError {
         arg_name: &'static str,
+        #[source]
         err: PathMapperConstructError,
     },
+    #[error("argument json parse error")]
     ArgumentJsonParseError {
         arg_name: &'static str,
         file_name: Utf8PathBuf,
+        #[source]
         err: serde_json::Error,
     },
+    #[error("cargo metadata parse error")]
     CargoMetadataParseError {
         file_name: Option<Utf8PathBuf>,
+        #[source]
         err: guppy::Error,
     },
+    #[error("error parsing Cargo messages")]
+    FromMessagesError {
+        #[from]
+        err: FromMessagesError,
+    },
+    #[error("create test list error")]
     CreateTestListError {
+        #[source]
         err: CreateTestListError,
     },
+    #[error("failed to execute build command")]
+    BuildExecFailed {
+        command: String,
+        #[source]
+        err: std::io::Error,
+    },
+    #[error("build failed")]
     BuildFailed {
         command: String,
         exit_code: Option<i32>,
     },
+    #[error("writing test list to output failed")]
+    WriteTestListError {
+        #[from]
+        err: WriteTestListError,
+    },
+    #[error("writing event failed")]
+    WriteEventError {
+        #[from]
+        err: WriteEventError,
+    },
+    #[error("test run failed")]
     TestRunFailed,
     #[cfg(feature = "self-update")]
+    #[error("failed to parse --version")]
     UpdateVersionParseError {
+        #[from]
         err: UpdateVersionParseError,
     },
     #[cfg(feature = "self-update")]
+    #[error("failed to update")]
     UpdateError {
+        #[from]
         err: UpdateError,
     },
+    #[error("error reading prompt")]
+    DialoguerError {
+        #[source]
+        err: std::io::Error,
+    },
+    #[error("failed to set up Ctrl-C handler")]
+    SignalHandlerSetupError {
+        #[from]
+        err: SignalHandlerSetupError,
+    },
+    #[error("experimental feature not enabled")]
     ExperimentalFeatureNotEnabled {
         name: &'static str,
         var_name: &'static str,
     },
+    #[error("filter expression parse error")]
     FilterExpressionParseError {
         all_errors: Vec<FilterExpressionParseErrors>,
     },
+    #[error("test binary args parse error")]
     TestBinaryArgsParseError {
         reason: &'static str,
         args: Vec<String>,
@@ -97,8 +175,21 @@ pub enum ExpectedError {
 }
 
 impl ExpectedError {
-    pub(crate) fn cargo_metadata_failed() -> Self {
-        Self::CargoMetadataFailed
+    pub(crate) fn cargo_metadata_exec_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        err: std::io::Error,
+    ) -> Self {
+        Self::CargoMetadataExecFailed {
+            command: shell_words::join(command),
+            err,
+        }
+    }
+    pub(crate) fn cargo_metadata_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Self {
+        Self::CargoMetadataFailed {
+            command: shell_words::join(command),
+        }
     }
 
     pub(crate) fn profile_not_found(err: ProfileNotFound) -> Self {
@@ -147,6 +238,16 @@ impl ExpectedError {
         Self::ExperimentalFeatureNotEnabled { name, var_name }
     }
 
+    pub(crate) fn build_exec_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        err: std::io::Error,
+    ) -> Self {
+        Self::BuildExecFailed {
+            command: shell_words::join(command),
+            err,
+        }
+    }
+
     pub(crate) fn build_failed(
         command: impl IntoIterator<Item = impl AsRef<str>>,
         exit_code: Option<i32>,
@@ -174,8 +275,11 @@ impl ExpectedError {
     /// Returns the exit code for the process.
     pub fn process_exit_code(&self) -> i32 {
         match self {
-            Self::CargoMetadataFailed => NextestExitCode::CARGO_METADATA_FAILED,
+            Self::CargoMetadataExecFailed { .. } | Self::CargoMetadataFailed { .. } => {
+                NextestExitCode::CARGO_METADATA_FAILED
+            }
             Self::ProfileNotFound { .. }
+            | Self::StoreDirCreateError { .. }
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigsConstructError { .. }
             | Self::ConfigParseError { .. }
@@ -185,13 +289,22 @@ impl ExpectedError {
             | Self::PathMapperConstructError { .. }
             | Self::ArgumentJsonParseError { .. }
             | Self::CargoMetadataParseError { .. }
-            | Self::TestBinaryArgsParseError { .. } => NextestExitCode::SETUP_ERROR,
+            | Self::TestBinaryArgsParseError { .. }
+            | Self::DialoguerError { .. }
+            | Self::SignalHandlerSetupError { .. } => NextestExitCode::SETUP_ERROR,
             #[cfg(feature = "self-update")]
             Self::UpdateVersionParseError { .. } => NextestExitCode::SETUP_ERROR,
-            Self::CreateTestListError { .. } => NextestExitCode::TEST_LIST_CREATION_FAILED,
-            Self::BuildFailed { .. } => NextestExitCode::BUILD_FAILED,
+            Self::FromMessagesError { .. } | Self::CreateTestListError { .. } => {
+                NextestExitCode::TEST_LIST_CREATION_FAILED
+            }
+            Self::BuildExecFailed { .. } | Self::BuildFailed { .. } => {
+                NextestExitCode::BUILD_FAILED
+            }
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
+            Self::WriteTestListError { .. } | Self::WriteEventError { .. } => {
+                NextestExitCode::WRITE_OUTPUT_ERROR
+            }
             #[cfg(feature = "self-update")]
             Self::UpdateError { .. } => NextestExitCode::UPDATE_ERROR,
             Self::ExperimentalFeatureNotEnabled { .. } => {
@@ -204,7 +317,14 @@ impl ExpectedError {
     /// Displays this error to stderr.
     pub fn display_to_stderr(&self) {
         let mut next_error = match &self {
-            Self::CargoMetadataFailed => {
+            Self::CargoMetadataExecFailed { command, err } => {
+                log::error!(
+                    "failed to execute `{}`",
+                    command.if_supports_color(Stream::Stderr, |x| x.bold())
+                );
+                Some(err as &dyn Error)
+            }
+            Self::CargoMetadataFailed { .. } => {
                 // The error produced by `cargo metadata` is enough.
                 None
             }
@@ -235,6 +355,13 @@ impl ExpectedError {
                     path.if_supports_color(Stream::Stderr, |x| x.bold())
                 );
                 None
+            }
+            Self::StoreDirCreateError { store_dir, err } => {
+                log::error!(
+                    "failed to create store dir at `{}`",
+                    store_dir.if_supports_color(Stream::Stderr, |x| x.bold())
+                );
+                Some(err as &dyn Error)
             }
             Self::CargoConfigsConstructError { err } => {
                 log::error!("{}", err);
@@ -308,8 +435,19 @@ impl ExpectedError {
                 log::error!("error parsing Cargo metadata{}", metadata_source);
                 Some(err as &dyn Error)
             }
+            Self::FromMessagesError { err } => {
+                log::error!("failed to parse messages generated by Cargo");
+                Some(err as &dyn Error)
+            }
             Self::CreateTestListError { err } => {
                 log::error!("creating test list failed");
+                Some(err as &dyn Error)
+            }
+            Self::BuildExecFailed { command, err } => {
+                log::error!(
+                    "failed to execute `{}`",
+                    command.if_supports_color(Stream::Stderr, |x| x.bold())
+                );
                 Some(err as &dyn Error)
             }
             Self::BuildFailed { command, exit_code } => {
@@ -331,6 +469,14 @@ impl ExpectedError {
 
                 None
             }
+            Self::WriteTestListError { err } => {
+                log::error!("failed to write test list to output");
+                Some(err as &dyn Error)
+            }
+            Self::WriteEventError { err } => {
+                log::error!("failed to write event to output");
+                Some(err as &dyn Error)
+            }
             Self::TestRunFailed => {
                 log::error!("test run failed");
                 None
@@ -346,6 +492,14 @@ impl ExpectedError {
                     "failed to update nextest (please update manually by visiting <{}>)",
                     "https://get.nexte.st".if_supports_color(Stream::Stderr, |x| x.bold())
                 );
+                Some(err as &dyn Error)
+            }
+            Self::DialoguerError { err } => {
+                log::error!("error reading input prompt");
+                Some(err as &dyn Error)
+            }
+            Self::SignalHandlerSetupError { err } => {
+                log::error!("error setting up signal handler");
                 Some(err as &dyn Error)
             }
             Self::ExperimentalFeatureNotEnabled { name, var_name } => {
@@ -383,41 +537,3 @@ impl ExpectedError {
         }
     }
 }
-
-impl fmt::Display for ExpectedError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // This should generally not be called, but provide a stub implementation if it is
-        match self {
-            Self::CargoMetadataFailed => writeln!(f, "cargo metadata failed"),
-            Self::ProfileNotFound { .. } => writeln!(f, "profile not found"),
-            Self::RootManifestNotFound { .. } => writeln!(f, "root manifest not found"),
-            Self::CargoConfigsConstructError { .. } => writeln!(f, "CargoConfigs construct error"),
-            Self::ConfigParseError { .. } => writeln!(f, "config read error"),
-            Self::ArgumentFileReadError { .. } => writeln!(f, "argument file error"),
-            Self::UnknownArchiveFormat { .. } => writeln!(f, "unknown archive format"),
-            Self::ArchiveCreateError { .. } => writeln!(f, "archive create error"),
-            Self::ArchiveExtractError { .. } => writeln!(f, "archive extract error"),
-            Self::PathMapperConstructError { .. } => writeln!(f, "path mapper construct error"),
-            Self::ArgumentJsonParseError { .. } => writeln!(f, "argument json decode error"),
-            Self::CargoMetadataParseError { .. } => writeln!(f, "cargo metadata parse error"),
-            Self::CreateTestListError { .. } => writeln!(f, "parse test list error"),
-            Self::BuildFailed { .. } => writeln!(f, "build failed"),
-            Self::TestRunFailed => writeln!(f, "test run failed"),
-            #[cfg(feature = "self-update")]
-            Self::UpdateVersionParseError { .. } => writeln!(f, "parsing update version failed"),
-            #[cfg(feature = "self-update")]
-            Self::UpdateError { .. } => writeln!(f, "update failed"),
-            Self::ExperimentalFeatureNotEnabled { .. } => {
-                writeln!(f, "experimental feature not enabled")
-            }
-            Self::FilterExpressionParseError { .. } => {
-                writeln!(f, "Failed to parse some filter expressions")
-            }
-            Self::TestBinaryArgsParseError { .. } => {
-                writeln!(f, "test binary arguments parse error")
-            }
-        }
-    }
-}
-
-impl error::Error for ExpectedError {}

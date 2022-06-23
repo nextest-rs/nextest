@@ -709,6 +709,11 @@ pub enum TargetRunnerError {
     ),
 }
 
+/// An error that occurred while setting up the signal handler.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct SignalHandlerSetupError(#[from] ctrlc::Error);
+
 #[cfg(feature = "self-update")]
 mod self_update_errors {
     use super::*;

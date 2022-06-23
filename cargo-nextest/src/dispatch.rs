@@ -5,11 +5,10 @@ use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{OutputContext, OutputOpts, OutputWriter},
     reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
-    ExpectedError, ReuseBuildKind,
+    ExpectedError, Result, ReuseBuildKind,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgEnum, Args, Parser, Subcommand};
-use color_eyre::eyre::{Report, Result, WrapErr};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
@@ -17,6 +16,7 @@ use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::{NextestConfig, NextestProfile},
+    errors::WriteTestListError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
@@ -172,7 +172,7 @@ struct ConfigOpts {
 
 impl ConfigOpts {
     /// Creates a nextest config with the given options.
-    pub fn make_config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig, ExpectedError> {
+    pub fn make_config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig> {
         NextestConfig::from_sources(workspace_root, self.config_file.as_deref())
             .map_err(ExpectedError::config_parse_error)
     }
@@ -418,19 +418,19 @@ impl TestBuildFilter {
             &path_mapper,
             self.platform_filter.into(),
         )?;
-        Ok(TestList::new(
+        TestList::new(
             test_artifacts,
             rust_build_meta,
             &test_filter_builder,
             runner,
         )
-        .map_err(|err| ExpectedError::CreateTestListError { err })?)
+        .map_err(|err| ExpectedError::CreateTestListError { err })
     }
 
     fn make_test_filter_builder(
         &self,
         filter_exprs: Vec<FilteringExpr>,
-    ) -> Result<TestFilterBuilder, ExpectedError> {
+    ) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored;
         let mut patterns = self.filter.clone();
@@ -448,7 +448,7 @@ impl TestBuildFilter {
         &self,
         run_ignored: &mut Option<RunIgnored>,
         patterns: &mut Vec<String>,
-    ) -> Result<(), ExpectedError> {
+    ) -> Result<()> {
         let mut ignore_filters = Vec::new();
         let mut read_trailing_filters = false;
 
@@ -525,12 +525,12 @@ impl CargoOptions {
             .stdout_capture()
             .unchecked()
             .run()
-            .wrap_err("failed to build tests")?;
+            .map_err(|err| ExpectedError::build_exec_failed(cargo_cli.all_args(), err))?;
         if !output.status.success() {
-            return Err(Report::new(ExpectedError::build_failed(
+            return Err(ExpectedError::build_failed(
                 cargo_cli.all_args(),
                 output.status.code(),
-            )));
+            ));
         }
 
         let test_binaries = BinaryList::from_messages(Cursor::new(output.stdout), graph)?;
@@ -752,8 +752,7 @@ impl BaseApp {
             return Err(ExpectedError::RootManifestNotFound {
                 path: root_manifest_path,
                 reuse_build_kind,
-            }
-            .into());
+            });
         }
 
         Ok(Self {
@@ -848,10 +847,10 @@ fn check_experimental_filtering(build_filter: &TestBuildFilter) -> Result<()> {
     const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
     let enabled = std::env::var(EXPERIMENTAL_ENV).is_ok();
     if !build_filter.filter_expr.is_empty() && !enabled {
-        Err(Report::new(ExpectedError::experimental_feature_error(
+        Err(ExpectedError::experimental_feature_error(
             "expression filtering",
             EXPERIMENTAL_ENV,
-        )))
+        ))
     } else {
         Ok(())
     }
@@ -880,7 +879,7 @@ impl App {
             .partition_result();
 
         if !all_errors.is_empty() {
-            Err(ExpectedError::filter_expression_parse_error(all_errors).into())
+            Err(ExpectedError::filter_expression_parse_error(all_errors))
         } else {
             Ok(exprs)
         }
@@ -910,8 +909,10 @@ impl App {
             .profile(profile_name.unwrap_or(NextestConfig::DEFAULT_PROFILE))
             .map_err(ExpectedError::profile_not_found)?;
         let store_dir = profile.store_dir();
-        std::fs::create_dir_all(&store_dir)
-            .wrap_err_with(|| format!("failed to create store dir '{}'", store_dir))?;
+        std::fs::create_dir_all(&store_dir).map_err(|err| ExpectedError::StoreDirCreateError {
+            store_dir: store_dir.to_owned(),
+            err,
+        })?;
         Ok(profile)
     }
 
@@ -948,7 +949,7 @@ impl App {
                     &mut writer,
                     self.base.output.color.should_colorize(Stream::Stdout),
                 )?;
-                writer.flush()?;
+                writer.flush().map_err(WriteTestListError::Io)?;
             }
             ListType::Full => {
                 let target_runner = self.load_runner();
@@ -961,7 +962,7 @@ impl App {
                     &mut writer,
                     self.base.output.color.should_colorize(Stream::Stdout),
                 )?;
-                writer.flush()?;
+                writer.flush().map_err(WriteTestListError::Io)?;
             }
         }
         Ok(())
@@ -1000,7 +1001,7 @@ impl App {
             reporter.colorize();
         }
 
-        let handler = SignalHandler::new().wrap_err("failed to set up Ctrl-C handler")?;
+        let handler = SignalHandler::new()?;
         let runner_builder = runner_opts.to_builder(no_capture);
         let runner = runner_builder.build(&test_list, &profile, handler, target_runner.clone());
 
@@ -1009,7 +1010,7 @@ impl App {
             reporter.report_event(event)
         })?;
         if !run_stats.is_success() {
-            return Err(Report::new(ExpectedError::test_run_failed()));
+            return Err(ExpectedError::test_run_failed());
         }
         Ok(())
     }
@@ -1113,13 +1114,15 @@ fn acquire_graph_data(
     // Capture stdout but not stderr.
     let output = expression
         .run()
-        .wrap_err("cargo metadata execution failed")?;
+        .map_err(|err| ExpectedError::cargo_metadata_exec_failed(cargo_cli.all_args(), err))?;
     if !output.status.success() {
-        return Err(ExpectedError::cargo_metadata_failed().into());
+        return Err(ExpectedError::cargo_metadata_failed(cargo_cli.all_args()));
     }
 
-    let json =
-        String::from_utf8(output.stdout).wrap_err("cargo metadata output is invalid UTF-8")?;
+    let json = String::from_utf8(output.stdout).map_err(|error| {
+        let io_error = std::io::Error::new(std::io::ErrorKind::InvalidData, error);
+        ExpectedError::cargo_metadata_exec_failed(cargo_cli.all_args(), io_error)
+    })?;
     Ok(json)
 }
 
@@ -1394,7 +1397,7 @@ mod tests {
 
     #[test]
     fn test_test_binary_argument_parsing() {
-        fn get_test_filter_builder(cmd: &str) -> Result<TestFilterBuilder, ExpectedError> {
+        fn get_test_filter_builder(cmd: &str) -> Result<TestFilterBuilder> {
             let app = TestCli::try_parse_from(shell_words::split(cmd).expect("valid command line"))
                 .unwrap_or_else(|_| panic!("{} should have successfully parsed", cmd));
             app.build_filter.make_test_filter_builder(vec![])
