@@ -6,6 +6,7 @@
 //! The main structure in this module is [`TestReporter`].
 
 mod aggregator;
+pub use aggregator::heuristic_extract_description;
 
 use crate::{
     config::NextestProfile,

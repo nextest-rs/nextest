@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::fixtures::*;
+use cfg_if::cfg_if;
 use color_eyre::eyre::Result;
 use nextest_filtering::FilteringExpr;
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     config::NextestConfig,
     list::BinaryList,
+    reporter::heuristic_extract_description,
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
     signal::SignalHandler,
     target_runner::TargetRunner,
@@ -126,7 +128,34 @@ fn test_run() -> Result<()> {
                         fixture.name
                     );
                     let run_status = run_statuses.last_status();
-                    run_status.result == fixture.status.to_test_status(1)
+
+                    if run_status.result != fixture.status.to_test_status(1) {
+                        false
+                    } else {
+                        // Extracting descriptions works for segfaults on Unix but not on Windows.
+                        #[allow(unused_mut)]
+                        let mut can_extract_description = fixture.status == FixtureStatus::Fail
+                            || fixture.status == FixtureStatus::IgnoredFail;
+                        cfg_if! {
+                            if #[cfg(unix)] {
+                                can_extract_description |= fixture.status == FixtureStatus::Segfault;
+                            }
+                        }
+
+                        if can_extract_description {
+                            // Check that stderr can be parsed heuristically.
+                            let stdout = String::from_utf8_lossy(run_status.stdout());
+                            let stderr = String::from_utf8_lossy(run_status.stderr());
+                            let description =
+                                heuristic_extract_description(run_status.result, &stdout, &stderr);
+                            assert!(
+                                description.is_some(),
+                                "failed to extract description from {}\n*** stdout:\n{stdout}\n*** stderr:\n{stderr}\n",
+                                fixture.name
+                            );
+                        }
+                        true
+                    }
                 }
             };
             if !valid {

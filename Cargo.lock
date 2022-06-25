@@ -1108,6 +1108,7 @@ dependencies = [
  "proptest-derive",
  "quick-junit",
  "rayon",
+ "regex",
  "self_update",
  "semver",
  "serde",
