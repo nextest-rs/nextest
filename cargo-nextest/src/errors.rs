@@ -172,6 +172,11 @@ pub enum ExpectedError {
         reason: &'static str,
         args: Vec<String>,
     },
+    #[error(transparent)]
+    InstallManError {
+        #[from]
+        error: InstallManError,
+    },
 }
 
 impl ExpectedError {
@@ -311,6 +316,7 @@ impl ExpectedError {
                 NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
             }
             Self::FilterExpressionParseError { .. } => NextestExitCode::INVALID_FILTER_EXPRESSION,
+            Self::InstallManError { .. } => NextestExitCode::INSTALL_MAN_ERROR,
         }
     }
 
@@ -529,6 +535,11 @@ impl ExpectedError {
                 );
                 None
             }
+            Self::InstallManError { error } => {
+                // This is a transparent error.
+                log::error!("{}", error);
+                error.source()
+            }
         };
 
         while let Some(err) = next_error {
@@ -536,4 +547,26 @@ impl ExpectedError {
             next_error = err.source();
         }
     }
+}
+
+#[derive(Debug, Error)]
+#[doc(hidden)]
+pub enum InstallManError {
+    #[error("could not determine current executable path")]
+    CurrentExe {
+        #[source]
+        error: std::io::Error,
+    },
+    #[error("error creating output directory `{path}`")]
+    CreateOutputDir {
+        path: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+    #[error("error writing to `{path}`")]
+    WriteToFile {
+        path: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
 }

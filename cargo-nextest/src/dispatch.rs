@@ -3,6 +3,7 @@
 
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
+    mangen::install_man,
     output::{OutputContext, OutputOpts, OutputWriter},
     reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
     ExpectedError, Result, ReuseBuildKind,
@@ -55,14 +56,20 @@ impl CargoNextestApp {
 }
 
 #[derive(Debug, Subcommand)]
-enum NextestSubcommand {
+pub(crate) enum NextestSubcommand {
     /// A next-generation test runner for Rust. <https://nexte.st>
     Nextest(AppOpts),
 }
 
-#[derive(Debug, Args)]
+/// cargo-nextest is a next-generation test runner for Rust projects.
+///
+/// Nextest runs tests in parallel and provides a rich set of features, such as partitioning test
+/// runs, JUnit output, and archiving and reusing builds.
+///
+/// For the full documentation, see the nextest site at <https://nexte.st>.
+#[derive(Debug, Parser)]
 #[clap(version)]
-struct AppOpts {
+pub(crate) struct AppOpts {
     /// Path to Cargo.toml
     #[clap(long, global = true, value_name = "PATH")]
     manifest_path: Option<Utf8PathBuf>,
@@ -1018,6 +1025,12 @@ impl App {
 
 #[derive(Debug, Subcommand)]
 enum SelfCommand {
+    /// Install man pages for nextest.
+    InstallMan {
+        /// The output directory [default: <current-exe-path>/../man]
+        output_dir: Option<Utf8PathBuf>,
+    },
+
     #[cfg_attr(
         not(feature = "self-update"),
         doc = "This version of nextest does not have self-update enabled\n\
@@ -1064,6 +1077,10 @@ impl SelfCommand {
         let output = output.init();
 
         match self {
+            Self::InstallMan { output_dir } => {
+                install_man(output_dir)?;
+                Ok(0)
+            }
             Self::Update {
                 version,
                 check,
