@@ -51,7 +51,7 @@ fn test_success_should_panic() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "this is a panic message")]
 fn test_failure_should_panic() {}
 
 #[test]
@@ -158,4 +158,12 @@ fn test_cargo_env_vars() {
 fn test_slow_timeout() {
     // The timeout for the with-termination profile is set to 2 seconds.
     std::thread::sleep(std::time::Duration::from_secs(4));
+}
+
+#[test]
+fn test_result_failure() -> Result<(), std::io::Error> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        "this is an error",
+    ))
 }

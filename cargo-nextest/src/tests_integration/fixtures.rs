@@ -56,6 +56,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
                 ("test_flaky_mod_3", false),
                 ("test_ignored", true),
                 ("test_ignored_fail", true),
+                ("test_result_failure", false),
                 ("test_slow_timeout", true),
                 ("test_success", false),
                 ("test_success_should_panic", false),
@@ -285,6 +286,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
         (true, "nextest-tests::bin/nextest-tests tests::bin_success"),
         (false, "nextest-tests::basic test_failure_should_panic"),
         (true, "nextest-tests::bin/other tests::other_bin_success"),
+        (false, "nextest-tests::basic test_result_failure"),
         (true, "nextest-tests::basic test_success_should_panic"),
         (false, "nextest-tests::basic test_failure_assert"),
         (false, "nextest-tests::basic test_flaky_mod_3"),
@@ -310,9 +312,9 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *23 tests run: 16 passed, 7 failed, 3 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *24 tests run: 16 passed, 8 failed, 3 skipped").unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *23 tests run: 17 passed, 6 failed, 3 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *24 tests run: 17 passed, 7 failed, 3 skipped").unwrap()
     };
     assert!(
         summary_reg.is_match(&output),
