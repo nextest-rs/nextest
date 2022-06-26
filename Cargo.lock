@@ -162,7 +162,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-nextest"
-version = "0.9.22"
+version = "0.9.23"
 dependencies = [
  "camino",
  "cfg-if",
@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-metadata"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "camino",
  "nextest-workspace-hack",
@@ -1070,7 +1070,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-runner"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "aho-corasick",
  "atomicwrites",

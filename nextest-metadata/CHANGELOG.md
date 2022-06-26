@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.3] - 2022-06-26
+
+### Added
+
+- New documented exit code [`WRITE_OUTPUT_ERROR`].
+
+[`WRITE_OUTPUT_ERROR`]: https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.WRITE_OUTPUT_ERROR
+
 ## [0.4.2] - 2022-06-13
 
 ### Added
@@ -72,6 +80,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.4.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.3
 [0.4.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.2
 [0.4.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.1
 [0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.0

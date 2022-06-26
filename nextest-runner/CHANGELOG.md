@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.0] - 2022-06-26
+
+### Added
+
+- On Windows, nextest now detects tests that abort due to e.g. an access violation (segfault) and prints their status as "ABORT" rather than "FAIL", along with an explanatory message on the next line.
+- Improved JUnit support: nextest now heuristically detects stack traces and adds them to the text node of the `<failure>` element ([#311]).
+
+[#311]: https://github.com/nextest-rs/nextest/issues/311
+
 ## [0.13.0] - 2022-06-21
 
 ### Added
@@ -202,6 +211,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.14.0
 [0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.13.0
 [0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.12.0
 [0.11.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.11.1

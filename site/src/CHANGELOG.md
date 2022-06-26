@@ -3,6 +3,20 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.23] - 2022-06-26
+
+### Added
+
+- On Windows, nextest now detects tests that abort due to e.g. an access violation (segfault) and prints their status as "ABORT" rather than "FAIL", along with an explanatory message on the next line.
+- Improved JUnit support: nextest now heuristically detects stack traces and adds them to the text node of the `<failure>` element ([#311]).
+
+### Changed
+
+- Errors that happen while writing data to the output now have a new documented exit code: [`WRITE_OUTPUT_ERROR`]: https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.WRITE_OUTPUT_ERROR.
+
+[#311]: https://github.com/nextest-rs/nextest/issues/311
+[`WRITE_OUTPUT_ERROR`]: https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.WRITE_OUTPUT_ERROR
+
 ## [0.9.22] - 2022-06-21
 
 ### Added
@@ -304,6 +318,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.23]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.23
 [0.9.22]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.22
 [0.9.21]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.21
 [0.9.20]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.20
