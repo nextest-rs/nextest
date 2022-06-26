@@ -14,7 +14,10 @@ use crate::{
     helpers::write_test_name,
     list::{TestInstance, TestList},
     reporter::aggregator::EventAggregator,
-    runner::{ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses, RunStats},
+    runner::{
+        AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
+        RunStats,
+    },
 };
 use debug_ignore::DebugIgnore;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -871,6 +874,15 @@ impl<'a> TestReporterImpl<'a> {
         self.write_instance(test_instance, writer)?;
         writeln!(writer)?;
 
+        // On Windows, also print out the exception if available.
+        #[cfg(windows)]
+        if let ExecutionResult::Fail {
+            abort_status: Some(AbortStatus::WindowsNtStatus(nt_status)),
+        } = last_status.result
+        {
+            self.write_windows_message_line(nt_status, writer)?;
+        }
+
         Ok(())
     }
 
@@ -927,6 +939,15 @@ impl<'a> TestReporterImpl<'a> {
         self.write_instance(test_instance, writer)?;
         writeln!(writer)?;
 
+        // On Windows, also print out the exception if available.
+        #[cfg(windows)]
+        if let ExecutionResult::Fail {
+            abort_status: Some(AbortStatus::WindowsNtStatus(nt_status)),
+        } = last_status.result
+        {
+            self.write_windows_message_line(nt_status, writer)?;
+        }
+
         Ok(())
     }
 
@@ -963,6 +984,23 @@ impl<'a> TestReporterImpl<'a> {
         // * .3 means print three digits after the decimal point.
         // TODO: better time printing mechanism than this
         write!(writer, "[>{:>7.3?}s] ", duration.as_secs_f64())
+    }
+
+    #[cfg(windows)]
+    fn write_windows_message_line(
+        &self,
+        nt_status: windows::Win32::Foundation::NTSTATUS,
+        writer: &mut impl Write,
+    ) -> io::Result<()> {
+        write!(writer, "{:>12} ", "Message".style(self.styles.fail))?;
+        write!(writer, "[         ] ")?;
+        writeln!(
+            writer,
+            "code {}",
+            crate::helpers::display_nt_status(nt_status)
+        )?;
+
+        Ok(())
     }
 
     fn write_stdout_stderr(
@@ -1065,13 +1103,24 @@ impl<'a> fmt::Debug for TestReporter<'a> {
 }
 
 fn status_str(result: ExecutionResult) -> Cow<'static, str> {
-    // Use shorter strings for this.
+    // Max 12 characters here.
     match result {
-        ExecutionResult::Fail { signal: Some(sig) } => match signal_str(sig) {
+        #[cfg(unix)]
+        ExecutionResult::Fail {
+            abort_status: Some(AbortStatus::UnixSignal(sig)),
+        } => match signal_str(sig) {
             Some(s) => format!("SIG{s}").into(),
-            None => format!("ABRT SIG {sig}").into(),
+            None => format!("ABORT SIG {sig}").into(),
         },
-        ExecutionResult::Fail { signal: None } => "FAIL".into(),
+        #[cfg(windows)]
+        ExecutionResult::Fail {
+            abort_status: Some(AbortStatus::WindowsNtStatus(_)),
+        } => {
+            // Going to print out the full error message on the following line -- just "ABORT" will
+            // do for now.
+            "ABORT".into()
+        }
+        ExecutionResult::Fail { abort_status: None } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
         ExecutionResult::Pass => "PASS".into(),
         ExecutionResult::Timeout => "TIMEOUT".into(),
@@ -1079,12 +1128,24 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
 }
 
 fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
+    // Use shorter strings for this (max 6 characters).
     match result {
-        ExecutionResult::Fail { signal: Some(sig) } => match signal_str(sig) {
+        #[cfg(unix)]
+        ExecutionResult::Fail {
+            abort_status: Some(AbortStatus::UnixSignal(sig)),
+        } => match signal_str(sig) {
             Some(s) => s.into(),
             None => format!("SIG {sig}").into(),
         },
-        ExecutionResult::Fail { signal: None } => "FAIL".into(),
+        #[cfg(windows)]
+        ExecutionResult::Fail {
+            abort_status: Some(AbortStatus::WindowsNtStatus(_)),
+        } => {
+            // Going to print out the full error message on the following line -- just "ABORT" will
+            // do for now.
+            "ABORT".into()
+        }
+        ExecutionResult::Fail { abort_status: None } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
         ExecutionResult::Pass => "PASS".into(),
         ExecutionResult::Timeout => "TMT".into(),
@@ -1111,11 +1172,6 @@ fn signal_str(signal: i32) -> Option<&'static str> {
         27 => Some("PROF"),
         _ => None,
     }
-}
-
-#[cfg(not(unix))]
-fn signal_str(_signal: i32) -> Option<&'static str> {
-    None
 }
 
 /// A test event.

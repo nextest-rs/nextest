@@ -450,16 +450,21 @@ impl<'a> TestRunner<'a> {
             if output.status.success() {
                 ExecutionResult::Pass
             } else {
-                // On Unix, extract the signal if it's found.
                 cfg_if::cfg_if! {
                     if #[cfg(unix)] {
+                        // On Unix, extract the signal if it's found.
                         use std::os::unix::process::ExitStatusExt;
-                        let signal = output.status.signal();
+                        let abort_status = output.status.signal().map(AbortStatus::UnixSignal);
+                    } else if #[cfg(windows)] {
+                        let abort_status = output.status.code().and_then(|code| {
+                            let exception = windows::Win32::Foundation::NTSTATUS(code);
+                            exception.is_err().then(|| AbortStatus::WindowsNtStatus(exception))
+                        });
                     } else {
-                        let signal = None;
+                        let abort_status = None;
                     }
                 }
-                ExecutionResult::Fail { signal }
+                ExecutionResult::Fail { abort_status }
             }
         });
 
@@ -918,8 +923,8 @@ pub enum ExecutionResult {
     Pass,
     /// The test failed.
     Fail {
-        /// The signal the test failed with, if any. Only relevant on Unix.
-        signal: Option<i32>,
+        /// The abort status of the test, if any (for example, the signal on Unix).
+        abort_status: Option<AbortStatus>,
     },
     /// An error occurred while executing the test.
     ExecFail,
@@ -937,6 +942,20 @@ impl ExecutionResult {
             }
         }
     }
+}
+
+/// A signal or other abort status for a test.
+///
+/// Returned as part of the [`ExecutionResult::Fail`] variant.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum AbortStatus {
+    /// The test was aborted due to a signal on Unix.
+    #[cfg(unix)]
+    UnixSignal(i32),
+
+    /// The test was determined to have aborted because the high bit was set on Windows.
+    #[cfg(windows)]
+    WindowsNtStatus(windows::Win32::Foundation::NTSTATUS),
 }
 
 #[cfg(test)]

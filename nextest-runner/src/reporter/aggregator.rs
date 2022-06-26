@@ -3,6 +3,8 @@
 
 //! Metadata management.
 
+#[cfg(any(unix, windows))]
+use crate::runner::AbortStatus;
 use crate::{
     config::{NextestJunitConfig, NextestProfile},
     errors::WriteEventError,
@@ -11,7 +13,6 @@ use crate::{
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
 };
 use camino::Utf8Path;
-use cfg_if::cfg_if;
 use chrono::{DateTime, FixedOffset, Utc};
 use debug_ignore::DebugIgnore;
 use once_cell::sync::Lazy;
@@ -73,11 +74,10 @@ impl<'cfg> MetadataJunit<'cfg> {
             } => {
                 fn kind_ty(run_status: &ExecuteStatus) -> (NonSuccessKind, Cow<'static, str>) {
                     match run_status.result {
-                        ExecutionResult::Fail { signal: Some(sig) } => (
-                            NonSuccessKind::Failure,
-                            format!("test failure due to signal {}", sig).into(),
-                        ),
-                        ExecutionResult::Fail { signal: None } => {
+                        ExecutionResult::Fail {
+                            abort_status: Some(_),
+                        } => (NonSuccessKind::Failure, "test abort".into()),
+                        ExecutionResult::Fail { abort_status: None } => {
                             (NonSuccessKind::Failure, "test failure".into())
                         }
                         ExecutionResult::Timeout => {
@@ -229,6 +229,7 @@ static PANICKED_AT_REGEX: Lazy<Regex> = Lazy::new(|| {
     builder.build().unwrap()
 });
 
+#[allow(unused_variables)]
 /// Not part of the public API: only used for testing.
 #[doc(hidden)]
 pub fn heuristic_extract_description<'a>(
@@ -237,22 +238,30 @@ pub fn heuristic_extract_description<'a>(
     stderr: &'a str,
 ) -> Option<Cow<'a, str>> {
     // If the test crashed with a signal, use that.
+    #[cfg(unix)]
     if let ExecutionResult::Fail {
-        signal: Some(signal),
+        abort_status: Some(AbortStatus::UnixSignal(sig)),
     } = exec_result
     {
-        // TODO: Windows?
-        cfg_if! {
-            if #[cfg(unix)] {
-                let signal_str = match super::signal_str(signal) {
-                    Some(signal_str) => format!(" ({signal_str})"),
-                    None => String::new()
-                };
-            } else {
-                let signal_str = String::new();
-            }
-        }
-        return Some(format!("Test exited with signal {signal}{signal_str}").into());
+        let signal_str = match super::signal_str(sig) {
+            Some(signal_str) => format!(" SIG{signal_str}"),
+            None => String::new(),
+        };
+        return Some(format!("Test aborted with signal{signal_str} (code {sig})").into());
+    }
+
+    #[cfg(windows)]
+    if let ExecutionResult::Fail {
+        abort_status: Some(AbortStatus::WindowsNtStatus(exception)),
+    } = exec_result
+    {
+        return Some(
+            format!(
+                "Test aborted with code {}",
+                crate::helpers::display_nt_status(exception),
+            )
+            .into(),
+        );
     }
 
     // Try the heuristic stack trace extraction first as they're the more common kinds of test.

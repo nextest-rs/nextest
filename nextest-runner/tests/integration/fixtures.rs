@@ -11,7 +11,7 @@ use nextest_runner::{
     list::{BinaryList, RustBuildMeta, RustTestArtifact, TestList, TestListState},
     reporter::TestEvent,
     reuse_build::PathMapper,
-    runner::{ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
+    runner::{AbortStatus, ExecutionResult, ExecutionStatuses, RunStats, TestRunner},
     target_runner::TargetRunner,
     test_filter::TestFilterBuilder,
 };
@@ -53,23 +53,27 @@ impl FixtureStatus {
                 if pass_attempt <= total_attempts {
                     ExecutionResult::Pass
                 } else {
-                    ExecutionResult::Fail { signal: None }
+                    ExecutionResult::Fail { abort_status: None }
                 }
             }
             FixtureStatus::Segfault => {
-                // We don't have a signal on Windows but we do on Unix.
                 cfg_if::cfg_if! {
                     if #[cfg(unix)] {
                         // SIGSEGV is 11.
-                        let signal = Some(11);
+                        let abort_status = Some(AbortStatus::UnixSignal(11));
+                    } else if #[cfg(windows)] {
+                        // A segfault is an access violation on Windows.
+                        let abort_status = Some(AbortStatus::WindowsNtStatus(
+                            windows::Win32::Foundation::STATUS_ACCESS_VIOLATION,
+                        ));
                     } else {
-                        let signal = None;
+                        let abort_status = None;
                     }
                 }
-                ExecutionResult::Fail { signal }
+                ExecutionResult::Fail { abort_status }
             }
             FixtureStatus::Fail | FixtureStatus::IgnoredFail => {
-                ExecutionResult::Fail { signal: None }
+                ExecutionResult::Fail { abort_status: None }
             }
         }
     }

@@ -254,7 +254,7 @@ fn make_check_result_regex(result: bool, name: &str) -> Regex {
     if result {
         Regex::new(&format!(r"PASS \[.*\] *{}", name)).unwrap()
     } else {
-        Regex::new(&format!(r"(FAIL|SIGSEGV) \[.*\] *{}", name)).unwrap()
+        Regex::new(&format!(r"(FAIL|ABORT|SIGSEGV) \[.*\] *{}", name)).unwrap()
     }
 }
 

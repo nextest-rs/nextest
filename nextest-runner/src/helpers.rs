@@ -99,3 +99,21 @@ pub(crate) fn format_duration(duration: Duration) -> String {
         format!("{:.2}s", duration)
     }
 }
+
+#[cfg(windows)]
+pub(crate) fn display_nt_status(nt_status: windows::Win32::Foundation::NTSTATUS) -> String {
+    // Convert the NTSTATUS to a Win32 error code.
+    let win32_code = unsafe { windows::Win32::Foundation::RtlNtStatusToDosError(nt_status) };
+
+    if win32_code == windows::Win32::Foundation::ERROR_MR_MID_NOT_FOUND.0 {
+        // The Win32 code was not found.
+        let nt_status = nt_status.0;
+        return format!("{nt_status:#x} ({nt_status})");
+    }
+
+    return format!(
+        "{:#x}: {}",
+        nt_status.0,
+        io::Error::from_raw_os_error(win32_code as i32)
+    );
+}
