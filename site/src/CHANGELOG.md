@@ -12,7 +12,7 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ### Changed
 
-- Errors that happen while writing data to the output now have a new documented exit code: [`WRITE_OUTPUT_ERROR`]: https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.WRITE_OUTPUT_ERROR.
+- Errors that happen while writing data to the output now have a new documented exit code: [`WRITE_OUTPUT_ERROR`].
 
 [#311]: https://github.com/nextest-rs/nextest/issues/311
 [`WRITE_OUTPUT_ERROR`]: https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.WRITE_OUTPUT_ERROR
