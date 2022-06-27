@@ -19,5 +19,5 @@ thiserror = "1.0.31"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-goldenfile = "1.3.0"
+goldenfile = "1.4.3"
 owo-colors = "3.4.0"
