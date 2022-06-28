@@ -16,6 +16,7 @@
 mod cargo_cli;
 mod dispatch;
 mod errors;
+mod mangen;
 mod output;
 mod reuse_build;
 #[cfg(feature = "self-update")]

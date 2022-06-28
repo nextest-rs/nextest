@@ -178,12 +178,14 @@ dependencies = [
  "camino",
  "cfg-if",
  "clap",
+ "clap_mangen",
  "color-eyre",
  "dialoguer",
  "duct",
  "enable-ansi-support",
  "env_logger",
  "guppy",
+ "home",
  "itertools",
  "log",
  "miette",
@@ -301,6 +303,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87eba3c8c7f42ef17f6c659fc7416d0f4758cd3e58861ee63c5fa4a4dde649e4"
 dependencies = [
  "os_str_bytes",
+]
+
+[[package]]
+name = "clap_mangen"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e16658e2f46d5269f95e4ec0f16594524cfc1e51637af40b2e5118c7c71a9fe1"
+dependencies = [
+ "clap",
+ "roff",
 ]
 
 [[package]]
@@ -1665,6 +1677,12 @@ dependencies = [
  "web-sys",
  "winapi",
 ]
+
+[[package]]
+name = "roff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b833d8d034ea094b1ea68aa6d5c740e0d04bad9d16568d08ba6f76823a114316"
 
 [[package]]
 name = "rustc-demangle"

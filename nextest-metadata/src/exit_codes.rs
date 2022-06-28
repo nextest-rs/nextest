@@ -28,6 +28,9 @@ impl NextestExitCode {
     /// Writing data to stdout or stderr produced an error.
     pub const WRITE_OUTPUT_ERROR: i32 = 110;
 
+    /// Installing man pages produced an error.
+    pub const INSTALL_MAN_ERROR: i32 = 120;
+
     /// Downloading an update resulted in an error.
     pub const UPDATE_ERROR: i32 = 90;
 
