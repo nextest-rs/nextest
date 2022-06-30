@@ -13,7 +13,7 @@ use crate::{
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use std::{borrow::Cow, env::JoinPathsError, fmt};
 use thiserror::Error;
 
@@ -24,11 +24,14 @@ use thiserror::Error;
 pub struct ConfigParseError {
     config_file: Utf8PathBuf,
     #[source]
-    err: ConfigError,
+    err: Either<ConfigError, serde_path_to_error::Error<ConfigError>>,
 }
 
 impl ConfigParseError {
-    pub(crate) fn new(config_file: impl Into<Utf8PathBuf>, err: ConfigError) -> Self {
+    pub(crate) fn new(
+        config_file: impl Into<Utf8PathBuf>,
+        err: Either<ConfigError, serde_path_to_error::Error<ConfigError>>,
+    ) -> Self {
         Self {
             config_file: config_file.into(),
             err,
