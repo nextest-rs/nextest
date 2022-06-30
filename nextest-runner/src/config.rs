@@ -9,6 +9,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
+use itertools::Either;
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration};
 
@@ -53,9 +54,8 @@ impl NextestConfig {
     ) -> Result<Self, ConfigParseError> {
         let workspace_root = workspace_root.into();
         let (config_file, config) = Self::read_from_sources(&workspace_root, config_file)?;
-        let inner = config
-            .try_deserialize()
-            .map_err(|err| ConfigParseError::new(config_file, err))?;
+        let inner = serde_path_to_error::deserialize(config)
+            .map_err(|err| ConfigParseError::new(config_file, Either::Right(err)))?;
         Ok(Self {
             workspace_root,
             inner,
@@ -113,7 +113,7 @@ impl NextestConfig {
 
         let config = builder
             .build()
-            .map_err(|err| ConfigParseError::new(&config_path, err))?;
+            .map_err(|err| ConfigParseError::new(&config_path, Either::Left(err)))?;
         Ok((config_path, config))
     }
 
@@ -556,7 +556,7 @@ mod tests {
             [profile.default]
             slow-timeout = { period = "60s", terminate-after = 0 }
         "#},
-        Err("err: invalid value: integer `0`, expected a nonzero usize"),
+        Err("original: invalid value: integer `0`, expected a nonzero usize"),
         None
 
         ; "zero terminate-after should fail"
@@ -569,7 +569,7 @@ mod tests {
             [profile.ci]
             slow-timeout = { terminate-after = 3 }
         "#},
-        Err("err: missing field `period`"),
+        Err("original: missing field `period`"),
         None
 
         ; "partial slow-timeout table should error"
@@ -620,7 +620,11 @@ mod tests {
             Err(expected_err_str) => {
                 let err_str = format!("{:?}", nextest_config_result.unwrap_err());
 
-                assert!(err_str.contains(expected_err_str), "{}", err_str,)
+                assert!(
+                    err_str.contains(expected_err_str),
+                    "expected error string not found: {}",
+                    err_str,
+                )
             }
         }
     }
