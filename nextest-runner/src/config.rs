@@ -4,13 +4,13 @@
 //! Configuration support for nextest.
 
 use crate::{
-    errors::{ConfigParseError, ProfileNotFound},
+    errors::{ConfigParseError, ProfileNotFound, TestThreadsParseError},
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
 use serde::{de::IntoDeserializer, Deserialize};
-use std::{collections::HashMap, fmt, num::NonZeroUsize, time::Duration};
+use std::{collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration};
 
 /// Overall configuration for nextest.
 ///
@@ -159,6 +159,13 @@ impl<'cfg> NextestProfile<'cfg> {
             .unwrap_or(self.default_profile.retries)
     }
 
+    /// Returns the number of threads to run against for this profile.
+    pub fn test_threads(&self) -> TestThreads {
+        self.custom_profile
+            .and_then(|profile| profile.test_threads)
+            .unwrap_or(self.default_profile.test_threads)
+    }
+
     /// Returns the time after which tests are treated as slow for this profile.
     pub fn slow_timeout(&self) -> SlowTimeout {
         self.custom_profile
@@ -285,6 +292,7 @@ impl NextestProfilesImpl {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct DefaultProfileImpl {
+    test_threads: TestThreads,
     retries: usize,
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
@@ -294,6 +302,81 @@ struct DefaultProfileImpl {
     #[serde(deserialize_with = "require_deserialize_slow_timeout")]
     slow_timeout: SlowTimeout,
     junit: DefaultJunitImpl,
+}
+
+/// Type for the test-threads config key.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TestThreads {
+    /// Run tests with a specified number of threads.
+    Count(usize),
+
+    /// Run tests with a number of threads equal to the logical CPU count.
+    NumCpus,
+}
+
+impl TestThreads {
+    /// Gets the actual number of test threads computed at runtime.
+    pub fn compute(self) -> usize {
+        match self {
+            Self::Count(threads) => threads,
+            Self::NumCpus => num_cpus::get(),
+        }
+    }
+}
+
+impl FromStr for TestThreads {
+    type Err = TestThreadsParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "num-cpus" {
+            Ok(Self::NumCpus)
+        } else if let Ok(threads) = s.parse::<usize>() {
+            Ok(Self::Count(threads))
+        } else {
+            Err(TestThreadsParseError::new(s))
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TestThreads {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct V;
+
+        impl<'de2> serde::de::Visitor<'de2> for V {
+            type Value = TestThreads;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "an integer or the string \"num-cpus\"")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if v == "num-cpus" {
+                    Ok(TestThreads::NumCpus)
+                } else {
+                    Err(serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Str(v),
+                        &self,
+                    ))
+                }
+            }
+
+            // Note that TOML uses i64, not u64.
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(TestThreads::Count(v as usize))
+            }
+        }
+
+        deserializer.deserialize_any(V)
+    }
 }
 
 /// Type for the slow-timeout config key.
@@ -373,6 +456,8 @@ struct DefaultJunitImpl {
 struct CustomProfileImpl {
     #[serde(default)]
     retries: Option<usize>,
+    #[serde(default)]
+    test_threads: Option<TestThreads>,
     #[serde(default)]
     status_level: Option<StatusLevel>,
     #[serde(default)]

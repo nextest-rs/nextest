@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestRunner`].
 
 use crate::{
-    config::NextestProfile,
+    config::{NextestProfile, TestThreads},
     list::{TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
     signal::{SignalEvent, SignalHandler},
@@ -33,7 +33,7 @@ pub struct TestRunnerBuilder {
     no_capture: bool,
     retries: Option<usize>,
     fail_fast: Option<bool>,
-    test_threads: Option<usize>,
+    test_threads: Option<TestThreads>,
 }
 
 impl TestRunnerBuilder {
@@ -58,7 +58,7 @@ impl TestRunnerBuilder {
     }
 
     /// Sets the number of tests to run simultaneously.
-    pub fn set_test_threads(&mut self, test_threads: usize) -> &mut Self {
+    pub fn set_test_threads(&mut self, test_threads: TestThreads) -> &mut Self {
         self.test_threads = Some(test_threads);
         self
     }
@@ -73,7 +73,10 @@ impl TestRunnerBuilder {
     ) -> TestRunner<'a> {
         let test_threads = match self.no_capture {
             true => 1,
-            false => self.test_threads.unwrap_or_else(num_cpus::get),
+            false => self
+                .test_threads
+                .unwrap_or_else(|| profile.test_threads())
+                .compute(),
         };
         let retries = self.retries.unwrap_or_else(|| profile.retries());
         let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
@@ -967,7 +970,9 @@ mod tests {
     fn no_capture_settings() {
         // Ensure that output settings are ignored with no-capture.
         let mut builder = TestRunnerBuilder::default();
-        builder.set_no_capture(true).set_test_threads(20);
+        builder
+            .set_no_capture(true)
+            .set_test_threads(TestThreads::Count(20));
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();

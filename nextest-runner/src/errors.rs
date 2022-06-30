@@ -94,6 +94,23 @@ impl StatusLevelParseError {
     }
 }
 
+/// Error returned while parsing a [`TestThreads`](crate::config::TestThreads) value.
+#[derive(Clone, Debug, Error)]
+#[error(
+    "unrecognized value for test-threads: {input}\n(expected either an integer or \"num-cpus\")"
+)]
+pub struct TestThreadsParseError {
+    input: String,
+}
+
+impl TestThreadsParseError {
+    pub(crate) fn new(input: impl Into<String>) -> Self {
+        Self {
+            input: input.into(),
+        }
+    }
+}
+
 /// An error that occurs while parsing a [`RunIgnored`] value from a string.
 #[derive(Clone, Debug, Error)]
 #[error(

@@ -15,7 +15,7 @@ use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
-    config::{NextestConfig, NextestProfile},
+    config::{NextestConfig, NextestProfile, TestThreads},
     errors::WriteTestListError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
@@ -542,7 +542,7 @@ impl CargoOptions {
 #[derive(Debug, Default, Args)]
 #[clap(next_help_heading = "RUNNER OPTIONS")]
 pub struct TestRunnerOpts {
-    /// Number of tests to run simultaneously [default: logical CPU count]
+    /// Number of tests to run simultaneously [possible values: integer or "num-cpus"]
     #[clap(
         long,
         short = 'j',
@@ -551,7 +551,7 @@ pub struct TestRunnerOpts {
         conflicts_with = "no-capture",
         env = "NEXTEST_TEST_THREADS"
     )]
-    test_threads: Option<usize>,
+    test_threads: Option<TestThreads>,
 
     /// Number of retries for failing tests [default: from profile]
     #[clap(long)]
