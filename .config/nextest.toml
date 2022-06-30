@@ -5,3 +5,6 @@ fail-fast = false
 [profile.test-slow]
 # This is a test profile with a quick slow timeout.
 slow-timeout = "1s"
+
+[profile.serial]
+test-threads = 1
