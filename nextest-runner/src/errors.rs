@@ -14,11 +14,7 @@ use crate::{
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use itertools::{Either, Itertools};
-use std::{
-    borrow::Cow,
-    env::JoinPathsError,
-    fmt::{self, Write},
-};
+use std::{borrow::Cow, env::JoinPathsError, fmt};
 use thiserror::Error;
 
 /// An error that occurred while parsing the config.
@@ -857,6 +853,8 @@ mod self_update_errors {
     }
 
     fn known_versions(versions: &[(Version, ReleaseStatus)]) -> String {
+        use std::fmt::Write;
+
         // Take the first few versions here.
         const DISPLAY_COUNT: usize = 4;
 
