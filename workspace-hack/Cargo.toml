@@ -17,7 +17,7 @@ publish = false
 backtrace = { version = "0.3.65", features = ["gimli-symbolize", "std"] }
 clap = { version = "3.2.7", features = ["atty", "clap_derive", "color", "derive", "env", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
 console = { version = "0.15.0", features = ["ansi-parsing", "regex", "unicode-width"] }
-either = { version = "1.6.1", features = ["use_std"] }
+either = { version = "1.7.0", features = ["use_std"] }
 indexmap = { version = "1.9.1", default-features = false, features = ["std"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
