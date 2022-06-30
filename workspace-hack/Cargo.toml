@@ -28,7 +28,7 @@ owo-colors = { version = "3.4.0", default-features = false, features = ["support
 regex = { version = "1.5.6", features = ["aho-corasick", "memchr", "perf", "perf-cache", "perf-dfa", "perf-inline", "perf-literal", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 regex-syntax = { version = "0.6.26", features = ["unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 serde = { version = "1.0.137", features = ["derive", "serde_derive", "std"] }
-serde_json = { version = "1.0.81", features = ["std", "unbounded_depth"] }
+serde_json = { version = "1.0.82", features = ["std", "unbounded_depth"] }
 textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unicode-width"] }
 
 [build-dependencies]
