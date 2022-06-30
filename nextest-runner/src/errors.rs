@@ -14,7 +14,11 @@ use crate::{
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use itertools::{Either, Itertools};
-use std::{borrow::Cow, env::JoinPathsError, fmt};
+use std::{
+    borrow::Cow,
+    env::JoinPathsError,
+    fmt::{self, Write},
+};
 use thiserror::Error;
 
 /// An error that occurred while parsing the config.
@@ -865,10 +869,12 @@ mod self_update_errors {
             .collect();
         let mut display_str = display_versions.join(", ");
         if versions.len() > display_versions.len() {
-            display_str.push_str(&format!(
+            write!(
+                display_str,
                 " and {} others",
                 versions.len() - display_versions.len()
-            ));
+            )
+            .unwrap();
         }
 
         display_str

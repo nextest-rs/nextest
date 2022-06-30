@@ -14,7 +14,7 @@ use nextest_metadata::{
     RustTestBinaryKind, RustTestBinarySummary,
 };
 use owo_colors::OwoColorize;
-use std::{io, io::Write};
+use std::{fmt::Write as _, io, io::Write};
 
 /// A Rust test binary built by Cargo.
 #[derive(Clone, Debug)]
@@ -243,7 +243,7 @@ impl<'g> BinaryListBuildState<'g> {
                     // 3. For all other target kinds, use a combination of the target kind and
                     //      the target name. For the same reason as above, these will always be
                     //      unique.
-                    id.push_str(&format!("::{}/{}", computed_kind, name));
+                    write!(id, "::{computed_kind}/{name}").unwrap();
                 }
 
                 self.rust_binaries.push(RustTestBinary {
