@@ -55,12 +55,12 @@ default-no-update = []
 
 # Metadata for cargo-binstall to get the right artifacts.
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/cargo-nextest-{ version }/{ name }-{ version }-{ target }.tar.gz"
+pkg-url = "https://get.nexte.st/{ version }/{ target }.tar.gz"
 bin-dir = "{ bin }{ binary-ext }"
 pkg-fmt = "tgz"
 
 # Mac x86_64 and aarch64 use the same universal binary.
 [package.metadata.binstall.overrides.x86_64-apple-darwin]
-pkg-url = "{ repo }/releases/download/cargo-nextest-{ version }/{ name }-{ version }-universal-apple-darwin.tar.gz"
+pkg-url = "https://get.nexte.st/{ version }/universal-apple-darwin.tar.gz"
 [package.metadata.binstall.overrides.aarch64-apple-darwin]
-pkg-url = "{ repo }/releases/download/cargo-nextest-{ version }/{ name }-{ version }-universal-apple-darwin.tar.gz"
+pkg-url = "https://get.nexte.st/{ version }/universal-apple-darwin.tar.gz"
