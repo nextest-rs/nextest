@@ -53,6 +53,14 @@ curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-
 >
 > If you're a Windows expert who can come up with a better way to do this, please [add a suggestion to this issue](https://github.com/nextest-rs/nextest/issues/31)!
 
+### Using cargo-binstall
+
+If you have [cargo-binstall](https://github.com/ryankurte/cargo-binstall) available, you can install nextest with:
+
+```
+cargo binstall cargo-nextest --secure
+```
+
 ## Using pre-built binaries in CI
 
 Pre-built binaries can be used in continuous integration to speed up test runs.

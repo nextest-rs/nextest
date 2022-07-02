@@ -3,6 +3,21 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.24] - 2022-07-01
+
+### Added
+
+- New config option `profile.<profile-name>.test-threads` controls the number of tests run simultaneously. This option accepts either an integer with the number of threads, or the string "num-cpus" (default) for the number of logical CPUs. As usual, this option is overridden by `--test-threads` and `NEXTEST_TEST_THREADS`, in that order.
+- The command-line `--test-threads` option and the `NEXTEST_TEST_THREADS` environment variable now accept `num-cpus` as their argument.
+- nextest now works with [cargo binstall](https://github.com/ryankurte/cargo-binstall) ([#332]). Thanks [Remoun] for your first contribution!
+
+### Fixed
+
+- Within JUnit XML, test failure descriptions (text nodes for `<failure>` and `<error>` tags) now have invalid ANSI escape codes stripped from their output.
+
+[#332]: https://github.com/nextest-rs/nextest/pull/332
+[@remoun]: https://github.com/remoun
+
 ## [0.9.23] - 2022-06-26
 
 ### Added
@@ -318,6 +333,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.24]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.24
 [0.9.23]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.23
 [0.9.22]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.22
 [0.9.21]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.21

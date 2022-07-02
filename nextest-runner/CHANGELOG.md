@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.15.0] - 2022-07-01
+
+### Added
+
+- New config option `profile.<profile-name>.test-threads` controls the number of tests run simultaneously. This option accepts either an integer with the number of threads, or the string "num-cpus" (default) for the number of logical CPUs.
+
+### Fixed
+
+- Within JUnit XML, test failure descriptions (text nodes for `<failure>` and `<error>` tags) now have invalid ANSI escape codes stripped from their output.
+
 ## [0.14.0] - 2022-06-26
 
 ### Added
@@ -211,6 +221,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.15.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.15.0
 [0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.14.0
 [0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.13.0
 [0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.12.0
