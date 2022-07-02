@@ -16,7 +16,7 @@ use camino::Utf8Path;
 use chrono::{DateTime, FixedOffset, Utc};
 use debug_ignore::DebugIgnore;
 use once_cell::sync::Lazy;
-use quick_junit::{NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite};
+use quick_junit::{NonSuccessKind, Output, Report, TestCase, TestCaseStatus, TestRerun, TestSuite};
 use regex::{Regex, RegexBuilder};
 use std::{borrow::Cow, collections::HashMap, fs::File, time::SystemTime};
 
@@ -236,7 +236,7 @@ pub fn heuristic_extract_description<'a>(
     exec_result: ExecutionResult,
     stdout: &'a str,
     stderr: &'a str,
-) -> Option<Cow<'a, str>> {
+) -> Option<String> {
     // If the test crashed with a signal, use that.
     #[cfg(unix)]
     if let ExecutionResult::Fail {
@@ -247,7 +247,7 @@ pub fn heuristic_extract_description<'a>(
             Some(signal_str) => format!(" SIG{signal_str}"),
             None => String::new(),
         };
-        return Some(format!("Test aborted with signal{signal_str} (code {sig})").into());
+        return Some(format!("Test aborted with signal{signal_str} (code {sig})"));
     }
 
     #[cfg(windows)]
@@ -266,21 +266,22 @@ pub fn heuristic_extract_description<'a>(
 
     // Try the heuristic stack trace extraction first as they're the more common kinds of test.
     if let Some(description) = heuristic_stack_trace(stderr) {
-        return Some(description.into());
+        return Some(description);
     }
-    heuristic_should_panic(stdout).map(Cow::Borrowed)
+    heuristic_should_panic(stdout)
 }
 
-fn heuristic_should_panic(stdout: &str) -> Option<&str> {
+fn heuristic_should_panic(stdout: &str) -> Option<String> {
     for line in stdout.lines() {
         if line.contains("note: test did not panic as expected") {
-            return Some(line);
+            // Strip invalid XML characters (e.g. ANSI escapes) if they're around.
+            return Some(Output::new(line).into_string());
         }
     }
     None
 }
 
-fn heuristic_stack_trace(stderr: &str) -> Option<&str> {
+fn heuristic_stack_trace(stderr: &str) -> Option<String> {
     let panicked_at_match = PANICKED_AT_REGEX.find(stderr)?;
     // If the previous line starts with "Error: ", grab it as well -- it contains the error with
     // result-based test failures.
@@ -292,7 +293,7 @@ fn heuristic_stack_trace(stderr: &str) -> Option<&str> {
         }
     }
 
-    Some(stderr[start..].trim_end())
+    Some(Output::new(stderr[start..].trim_end()).into_string())
 }
 
 #[cfg(test)]
@@ -318,7 +319,7 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out;
         )];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_should_panic(*input), Some(*output));
+            assert_eq!(heuristic_should_panic(*input).as_deref(), Some(*output));
         }
     }
 
@@ -352,7 +353,7 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
         ];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_stack_trace(*input), Some(*output));
+            assert_eq!(heuristic_stack_trace(*input).as_deref(), Some(*output));
         }
     }
 }
