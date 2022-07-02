@@ -1089,6 +1089,7 @@ dependencies = [
  "ctrlc",
  "debug-ignore",
  "duct",
+ "either",
  "guppy",
  "home",
  "http",
