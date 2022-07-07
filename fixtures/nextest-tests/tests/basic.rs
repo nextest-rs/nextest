@@ -25,22 +25,22 @@ fn nextest_attempt() -> usize {
 }
 
 #[test]
-fn test_flaky_mod_2() {
+fn test_flaky_mod_4() {
     // Use this undocumented environment variable to figure out how many times this test has been
     // run so far.
     let nextest_attempt = nextest_attempt();
-    if nextest_attempt % 2 != 0 {
-        panic!("Failed because attempt {} % 2 != 0", nextest_attempt)
+    if nextest_attempt % 4 != 0 {
+        panic!("Failed because attempt {} % 4 != 0", nextest_attempt)
     }
 }
 
 #[test]
-fn test_flaky_mod_3() {
+fn test_flaky_mod_6() {
     // Use this undocumented environment variable to figure out how many times this test has been
     // run so far.
     let nextest_attempt = nextest_attempt();
-    if nextest_attempt % 3 != 0 {
-        panic!("Failed because attempt {} % 3 != 0", nextest_attempt)
+    if nextest_attempt % 6 != 0 {
+        panic!("Failed because attempt {} % 6 != 0", nextest_attempt)
     }
 }
 

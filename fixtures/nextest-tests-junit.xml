@@ -3,21 +3,21 @@
     <testsuite name="nextest-tests::basic" tests="3" disabled="0" errors="0" failures="1">
         <testcase name="test_cwd" classname="nextest-tests::basic" timestamp="2022-02-10T20:09:34.393+00:00" time="0.001">
         </testcase>
-        <testcase name="test_flaky_mod_2" classname="nextest-tests::basic" timestamp="2022-02-10T20:09:34.394+00:00" time="0.001">
+        <testcase name="test_flaky_mod_4" classname="nextest-tests::basic" timestamp="2022-02-10T20:09:34.394+00:00" time="0.001">
             <flakyFailure timestamp="2022-02-10T20:09:34.393+00:00" time="0.001" type="test failure">
                 <system-out>
 running 1 test
-test test_flaky_mod_2 ... FAILED
+test test_flaky_mod_4 ... FAILED
 
 failures:
 
 failures:
-    test_flaky_mod_2
+    test_flaky_mod_4
 
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
 
 </system-out>
-                <system-err>thread &apos;test_flaky_mod_2&apos; panicked at &apos;Failed because attempt 1 % 2 != 0&apos;, tests/basic.rs:33:9
+                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 1 % 2 != 0&apos;, tests/basic.rs:33:9
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 </system-err>
             </flakyFailure>

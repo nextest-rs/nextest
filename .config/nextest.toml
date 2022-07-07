@@ -8,3 +8,7 @@ slow-timeout = "1s"
 
 [profile.serial]
 test-threads = 1
+
+[[profile.serial.overrides]]
+filter = 'test(foo)'
+retries = 3

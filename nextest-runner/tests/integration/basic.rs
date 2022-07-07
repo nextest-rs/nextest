@@ -10,13 +10,14 @@ use nextest_runner::{
     config::NextestConfig,
     list::BinaryList,
     reporter::heuristic_extract_description,
-    runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
+    runner::{ExecutionDescription, ExecutionResult, IgnoreOverrides, TestRunnerBuilder},
     signal::SignalHandler,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
 };
 use pretty_assertions::assert_eq;
 use std::io::Cursor;
+use test_case::test_case;
 
 #[test]
 fn test_list_binaries() -> Result<()> {
@@ -87,15 +88,15 @@ fn test_run() -> Result<()> {
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
-    let config =
-        NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
+    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
+        .expect("loaded fixture config");
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
     let runner = TestRunnerBuilder::default().build(
         &test_list,
-        &profile,
+        profile,
         SignalHandler::noop(),
         TargetRunner::empty(),
     );
@@ -177,15 +178,15 @@ fn test_run_ignored() -> Result<()> {
 
     let test_filter = TestFilterBuilder::any(RunIgnored::IgnoredOnly);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
-    let config =
-        NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
+    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
+        .expect("loaded fixture config");
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
     let runner = TestRunnerBuilder::default().build(
         &test_list,
-        &profile,
+        profile,
         SignalHandler::noop(),
         TargetRunner::empty(),
     );
@@ -288,14 +289,25 @@ fn test_name_match_without_filter_expr() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_retries() -> Result<()> {
+#[test_case(
+    IgnoreOverrides::default()
+    ; "no overrides ignored"
+)]
+#[test_case(
+    {
+        let mut ignore_overrides = IgnoreOverrides::default();
+        ignore_overrides.add_retries();
+        ignore_overrides
+    }
+    ; "retry overrides ignored"
+)]
+fn test_retries(ignore_overrides: IgnoreOverrides) -> Result<()> {
     set_rustflags();
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
-    let config =
-        NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
+    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
+        .expect("loaded fixture config");
     let profile = config
         .profile("with-retries")
         .expect("with-retries config is valid");
@@ -303,9 +315,11 @@ fn test_retries() -> Result<()> {
     let retries = profile.retries();
     assert_eq!(retries, 2, "retries set in with-retries profile");
 
-    let runner = TestRunnerBuilder::default().build(
+    let mut builder = TestRunnerBuilder::default();
+    builder.set_ignore_overrides(ignore_overrides.clone());
+    let runner = builder.build(
         &test_list,
-        &profile,
+        profile,
         SignalHandler::noop(),
         TargetRunner::empty(),
     );
@@ -324,8 +338,16 @@ fn test_retries() -> Result<()> {
                 InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
                 InstanceStatus::Finished(run_statuses) => {
                     let expected_len = match fixture.status {
-                        FixtureStatus::Flaky { pass_attempt } => pass_attempt,
+                        FixtureStatus::Flaky { pass_attempt } => {
+                            if ignore_overrides.ignore_retries() {
+                                pass_attempt.min(retries + 1)
+                            } else {
+                                pass_attempt
+                            }
+                        }
                         FixtureStatus::Pass => 1,
+                        // Note that currently only the flaky test fixtures are controlled by overrides.
+                        // If more tests are controlled by retry overrides, this may need to be updated.
                         FixtureStatus::Fail | FixtureStatus::Segfault => retries + 1,
                         FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail => {
                             unreachable!("ignored tests should be skipped")
@@ -409,15 +431,15 @@ fn test_termination() -> Result<()> {
     );
 
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
-    let config =
-        NextestConfig::from_sources(&workspace_root(), None).expect("loaded fixture config");
+    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
+        .expect("loaded fixture config");
     let profile = config
         .profile("with-termination")
         .expect("with-termination config is valid");
 
     let runner = TestRunnerBuilder::default().build(
         &test_list,
-        &profile,
+        profile,
         SignalHandler::noop(),
         TargetRunner::empty(),
     );

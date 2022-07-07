@@ -13,7 +13,8 @@ use crate::{
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
-use itertools::{Either, Itertools};
+use itertools::Itertools;
+use nextest_filtering::errors::FilterExpressionParseErrors;
 use std::{borrow::Cow, env::JoinPathsError, fmt};
 use thiserror::Error;
 
@@ -24,19 +25,56 @@ use thiserror::Error;
 pub struct ConfigParseError {
     config_file: Utf8PathBuf,
     #[source]
-    err: Either<ConfigError, serde_path_to_error::Error<ConfigError>>,
+    kind: ConfigParseErrorKind,
 }
 
 impl ConfigParseError {
-    pub(crate) fn new(
-        config_file: impl Into<Utf8PathBuf>,
-        err: Either<ConfigError, serde_path_to_error::Error<ConfigError>>,
-    ) -> Self {
+    pub(crate) fn new(config_file: impl Into<Utf8PathBuf>, kind: ConfigParseErrorKind) -> Self {
         Self {
             config_file: config_file.into(),
-            err,
+            kind,
         }
     }
+
+    /// Returns the config file for this error.
+    pub fn config_file(&self) -> &Utf8Path {
+        &self.config_file
+    }
+
+    /// Returns the kind of error this is.
+    pub fn kind(&self) -> &ConfigParseErrorKind {
+        &self.kind
+    }
+}
+
+/// The kind of error that occurred while parsing a config.
+///
+/// Returned by [`ConfigParseError::kind`].
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ConfigParseErrorKind {
+    /// An error occurred while building the config.
+    #[error(transparent)]
+    BuildError(ConfigError),
+    #[error(transparent)]
+    /// An error occurred while deserializing the config.
+    DeserializeError(serde_path_to_error::Error<ConfigError>),
+    /// Errors occurred while parsing overrides.
+    #[error("error parsing overrides (destructure this variant for more details)")]
+    OverrideError(Vec<ConfigParseOverrideError>),
+}
+
+/// An error that occurred while parsing config overrides.
+///
+/// Part of [`ConfigParseErrorKind::OverrideError`].
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct ConfigParseOverrideError {
+    /// The name of the profile under which the override was found.
+    pub profile_name: String,
+
+    /// The expression, and the errors that occurred.
+    pub parse_errors: FilterExpressionParseErrors,
 }
 
 /// An error which indicates that a profile was requested but not known to nextest.

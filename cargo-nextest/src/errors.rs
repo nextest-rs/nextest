@@ -368,8 +368,31 @@ impl ExpectedError {
                 err.source()
             }
             Self::ConfigParseError { err } => {
-                log::error!("{}", err);
-                err.source()
+                match err.kind() {
+                    ConfigParseErrorKind::OverrideError(errors) => {
+                        // Override errors are printed out using miette.
+                        for override_error in errors {
+                            log::error!(
+                                "for config file `{}`, failed to parse overrides for profile: {}",
+                                err.config_file(),
+                                override_error
+                                    .profile_name
+                                    .if_supports_color(Stream::Stderr, |p| p.bold()),
+                            );
+                            for single_error in &override_error.parse_errors.errors {
+                                let report = miette::Report::new(single_error.clone())
+                                    .with_source_code(override_error.parse_errors.input.to_owned());
+                                log::error!(target: "cargo_nextest::no_heading", "{report:?}");
+                            }
+                        }
+                        None
+                    }
+                    _ => {
+                        // These other errors are printed out normally.
+                        log::error!("{}", err);
+                        err.source()
+                    }
+                }
             }
             Self::ArgumentFileReadError {
                 arg_name,

@@ -34,6 +34,7 @@ pub struct TestRunnerBuilder {
     retries: Option<usize>,
     fail_fast: Option<bool>,
     test_threads: Option<TestThreads>,
+    ignore_overrides: IgnoreOverrides,
 }
 
 impl TestRunnerBuilder {
@@ -63,11 +64,17 @@ impl TestRunnerBuilder {
         self
     }
 
+    /// Sets which profile overrides to ignore.
+    pub fn set_ignore_overrides(&mut self, ignore_overrides: IgnoreOverrides) -> &mut Self {
+        self.ignore_overrides = ignore_overrides;
+        self
+    }
+
     /// Creates a new test runner.
     pub fn build<'a>(
         self,
         test_list: &'a TestList,
-        profile: &NextestProfile<'_>,
+        profile: NextestProfile<'a>,
         handler: SignalHandler,
         target_runner: TargetRunner,
     ) -> TestRunner<'a> {
@@ -84,8 +91,10 @@ impl TestRunnerBuilder {
 
         TestRunner {
             no_capture: self.no_capture,
+            profile,
+            ignore_overrides: self.ignore_overrides,
             // The number of tries = retries + 1.
-            tries: retries + 1,
+            global_tries: retries + 1,
             fail_fast,
             slow_timeout,
             test_list,
@@ -106,12 +115,58 @@ impl TestRunnerBuilder {
     }
 }
 
+/// Which profile overrides to ignore.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum IgnoreOverrides {
+    /// Ignore all profile overrides.
+    All,
+
+    /// Ignore these specific profile overrides.
+    Overrides {
+        /// Ignore retries.
+        retries: bool,
+    },
+}
+
+impl IgnoreOverrides {
+    /// Add "all" to the set of ignore overrides.
+    pub fn add_all(&mut self) -> &mut Self {
+        *self = Self::All;
+        self
+    }
+
+    /// Add retries to the set of ignore overrides.
+    pub fn add_retries(&mut self) -> &mut Self {
+        match self {
+            Self::All => {}
+            Self::Overrides { retries } => *retries = true,
+        }
+        self
+    }
+
+    /// Returns true if retry overrides should be ignored.
+    pub fn ignore_retries(&self) -> bool {
+        match self {
+            Self::All => true,
+            Self::Overrides { retries } => *retries,
+        }
+    }
+}
+
+impl Default for IgnoreOverrides {
+    fn default() -> Self {
+        Self::Overrides { retries: false }
+    }
+}
+
 /// Context for running tests.
 ///
 /// Created using [`TestRunnerBuilder::build`].
 pub struct TestRunner<'a> {
     no_capture: bool,
-    tries: usize,
+    profile: NextestProfile<'a>,
+    ignore_overrides: IgnoreOverrides,
+    global_tries: usize,
     fail_fast: bool,
     slow_timeout: crate::config::SlowTimeout,
     test_list: &'a TestList<'a>,
@@ -180,6 +235,15 @@ impl<'a> TestRunner<'a> {
                     return;
                 }
 
+                let overrides = self
+                    .profile
+                    .overrides_for(test_instance.bin_info.package.id(), test_instance.name);
+                let total_attempts =
+                    match (self.ignore_overrides.ignore_retries(), overrides.retries()) {
+                        (true, _) | (false, None) => self.global_tries,
+                        (false, Some(retries)) => retries + 1,
+                    };
+
                 let this_run_sender = run_sender.clone();
                 run_scope.spawn(move |_| {
                     if canceled_ref.load(Ordering::Acquire) {
@@ -206,13 +270,13 @@ impl<'a> TestRunner<'a> {
 
                         let run_status = self
                             .run_test(test_instance, attempt, &this_run_sender)
-                            .into_external(attempt, self.tries);
+                            .into_external(attempt, total_attempts);
 
                         if run_status.result.is_success() {
                             // The test succeeded.
                             run_statuses.push(run_status);
                             break;
-                        } else if attempt < self.tries {
+                        } else if attempt < total_attempts {
                             // Retry this test: send a retry event, then retry the loop.
                             let _ = this_run_sender.send(InternalTestEvent::Retry {
                                 test_instance,
@@ -977,7 +1041,7 @@ mod tests {
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
         let handler = SignalHandler::noop();
-        let runner = builder.build(&test_list, &profile, handler, TargetRunner::empty());
+        let runner = builder.build(&test_list, profile, handler, TargetRunner::empty());
         assert!(runner.no_capture, "no_capture is true");
         assert_eq!(
             runner.run_pool.current_num_threads(),
