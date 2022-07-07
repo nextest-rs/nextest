@@ -43,7 +43,7 @@ nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 cfg-if = "1.0.0"
 tempfile = "3.3.0"
-regex = "1.5.6"
+regex = "1.6.0"
 
 [features]
 default = ["default-no-update", "self-update"]
