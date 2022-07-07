@@ -29,13 +29,13 @@ fn test_expr_package_contains() {
     let expr = FilteringExpr::parse("package(~_a)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(expr.includes(&mk_pid('a'), "test_something"));
-    assert!(!expr.includes(&mk_pid('b'), "test_something"));
-    assert!(!expr.includes(&mk_pid('c'), "test_something"));
-    assert!(!expr.includes(&mk_pid('d'), "test_something"));
-    assert!(!expr.includes(&mk_pid('e'), "test_something"));
-    assert!(!expr.includes(&mk_pid('f'), "test_something"));
-    assert!(!expr.includes(&mk_pid('g'), "test_something"));
+    assert!(expr.matches(&mk_pid('a'), "test_something"));
+    assert!(!expr.matches(&mk_pid('b'), "test_something"));
+    assert!(!expr.matches(&mk_pid('c'), "test_something"));
+    assert!(!expr.matches(&mk_pid('d'), "test_something"));
+    assert!(!expr.matches(&mk_pid('e'), "test_something"));
+    assert!(!expr.matches(&mk_pid('f'), "test_something"));
+    assert!(!expr.matches(&mk_pid('g'), "test_something"));
 }
 
 #[test]
@@ -44,13 +44,13 @@ fn test_expr_package_equal() {
     let expr = FilteringExpr::parse("package(=crate_a)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(expr.includes(&mk_pid('a'), "test_something"));
-    assert!(!expr.includes(&mk_pid('b'), "test_something"));
-    assert!(!expr.includes(&mk_pid('c'), "test_something"));
-    assert!(!expr.includes(&mk_pid('d'), "test_something"));
-    assert!(!expr.includes(&mk_pid('e'), "test_something"));
-    assert!(!expr.includes(&mk_pid('f'), "test_something"));
-    assert!(!expr.includes(&mk_pid('g'), "test_something"));
+    assert!(expr.matches(&mk_pid('a'), "test_something"));
+    assert!(!expr.matches(&mk_pid('b'), "test_something"));
+    assert!(!expr.matches(&mk_pid('c'), "test_something"));
+    assert!(!expr.matches(&mk_pid('d'), "test_something"));
+    assert!(!expr.matches(&mk_pid('e'), "test_something"));
+    assert!(!expr.matches(&mk_pid('f'), "test_something"));
+    assert!(!expr.matches(&mk_pid('g'), "test_something"));
 }
 
 #[test]
@@ -59,13 +59,13 @@ fn test_expr_package_regex() {
     let expr = FilteringExpr::parse("package(/crate_(a|b)/)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(expr.includes(&mk_pid('a'), "test_something"));
-    assert!(expr.includes(&mk_pid('b'), "test_something"));
-    assert!(!expr.includes(&mk_pid('c'), "test_something"));
-    assert!(!expr.includes(&mk_pid('d'), "test_something"));
-    assert!(!expr.includes(&mk_pid('e'), "test_something"));
-    assert!(!expr.includes(&mk_pid('f'), "test_something"));
-    assert!(!expr.includes(&mk_pid('g'), "test_something"));
+    assert!(expr.matches(&mk_pid('a'), "test_something"));
+    assert!(expr.matches(&mk_pid('b'), "test_something"));
+    assert!(!expr.matches(&mk_pid('c'), "test_something"));
+    assert!(!expr.matches(&mk_pid('d'), "test_something"));
+    assert!(!expr.matches(&mk_pid('e'), "test_something"));
+    assert!(!expr.matches(&mk_pid('f'), "test_something"));
+    assert!(!expr.matches(&mk_pid('g'), "test_something"));
 }
 
 #[test]
@@ -74,13 +74,13 @@ fn test_expr_deps() {
     let expr = FilteringExpr::parse("deps(crate_d)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(expr.includes(&mk_pid('a'), "test_something"));
-    assert!(expr.includes(&mk_pid('b'), "test_something"));
-    assert!(expr.includes(&mk_pid('c'), "test_something"));
-    assert!(expr.includes(&mk_pid('d'), "test_something"));
-    assert!(!expr.includes(&mk_pid('e'), "test_something"));
-    assert!(!expr.includes(&mk_pid('f'), "test_something"));
-    assert!(!expr.includes(&mk_pid('g'), "test_something"));
+    assert!(expr.matches(&mk_pid('a'), "test_something"));
+    assert!(expr.matches(&mk_pid('b'), "test_something"));
+    assert!(expr.matches(&mk_pid('c'), "test_something"));
+    assert!(expr.matches(&mk_pid('d'), "test_something"));
+    assert!(!expr.matches(&mk_pid('e'), "test_something"));
+    assert!(!expr.matches(&mk_pid('f'), "test_something"));
+    assert!(!expr.matches(&mk_pid('g'), "test_something"));
 }
 
 #[test]
@@ -89,13 +89,13 @@ fn test_expr_rdeps() {
     let expr = FilteringExpr::parse("rdeps(crate_d)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(!expr.includes(&mk_pid('a'), "test_something"));
-    assert!(!expr.includes(&mk_pid('b'), "test_something"));
-    assert!(!expr.includes(&mk_pid('c'), "test_something"));
-    assert!(expr.includes(&mk_pid('d'), "test_something"));
-    assert!(expr.includes(&mk_pid('e'), "test_something"));
-    assert!(expr.includes(&mk_pid('f'), "test_something"));
-    assert!(expr.includes(&mk_pid('g'), "test_something"));
+    assert!(!expr.matches(&mk_pid('a'), "test_something"));
+    assert!(!expr.matches(&mk_pid('b'), "test_something"));
+    assert!(!expr.matches(&mk_pid('c'), "test_something"));
+    assert!(expr.matches(&mk_pid('d'), "test_something"));
+    assert!(expr.matches(&mk_pid('e'), "test_something"));
+    assert!(expr.matches(&mk_pid('f'), "test_something"));
+    assert!(expr.matches(&mk_pid('g'), "test_something"));
 }
 
 #[test]
@@ -128,9 +128,9 @@ fn test_expr_test() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("test(parse)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(expr.includes(&mk_pid('b'), "test_parse"));
-    assert!(!expr.includes(&mk_pid('a'), "test_run"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(expr.matches(&mk_pid('b'), "test_parse"));
+    assert!(!expr.matches(&mk_pid('a'), "test_run"));
 }
 
 #[test]
@@ -138,8 +138,8 @@ fn test_expr_test_not() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("not test(parse)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(!expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(expr.includes(&mk_pid('a'), "test_run"));
+    assert!(!expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(expr.matches(&mk_pid('a'), "test_run"));
 }
 
 #[test]
@@ -147,21 +147,21 @@ fn test_expr_test_union() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("test(parse) + test(run)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(expr.includes(&mk_pid('a'), "test_run"));
-    assert!(!expr.includes(&mk_pid('a'), "test_build"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(expr.matches(&mk_pid('a'), "test_run"));
+    assert!(!expr.matches(&mk_pid('a'), "test_build"));
 
     let expr = FilteringExpr::parse("test(parse) | test(run)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(expr.includes(&mk_pid('a'), "test_run"));
-    assert!(!expr.includes(&mk_pid('a'), "test_build"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(expr.matches(&mk_pid('a'), "test_run"));
+    assert!(!expr.matches(&mk_pid('a'), "test_build"));
 
     let expr = FilteringExpr::parse("test(parse) or test(run)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(expr.includes(&mk_pid('a'), "test_run"));
-    assert!(!expr.includes(&mk_pid('a'), "test_build"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(expr.matches(&mk_pid('a'), "test_run"));
+    assert!(!expr.matches(&mk_pid('a'), "test_build"));
 }
 
 #[test]
@@ -169,15 +169,15 @@ fn test_expr_test_difference() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("test(parse) - test(expr)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(expr.includes(&mk_pid('a'), "test_parse_set"));
-    assert!(!expr.includes(&mk_pid('a'), "test_parse_expr"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse_set"));
+    assert!(!expr.matches(&mk_pid('a'), "test_parse_expr"));
 
     let expr = FilteringExpr::parse("test(parse) & not test(expr)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(expr.includes(&mk_pid('a'), "test_parse_set"));
-    assert!(!expr.includes(&mk_pid('a'), "test_parse_expr"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse_set"));
+    assert!(!expr.matches(&mk_pid('a'), "test_parse_expr"));
 }
 
 #[test]
@@ -185,13 +185,13 @@ fn test_expr_test_intersect() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("test(parse) & test(expr)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(!expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(!expr.includes(&mk_pid('a'), "test_expr"));
-    assert!(expr.includes(&mk_pid('a'), "test_parse_expr"));
+    assert!(!expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(!expr.matches(&mk_pid('a'), "test_expr"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse_expr"));
 
     let expr = FilteringExpr::parse("test(parse) and test(expr)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(!expr.includes(&mk_pid('a'), "test_parse"));
-    assert!(!expr.includes(&mk_pid('a'), "test_expr"));
-    assert!(expr.includes(&mk_pid('a'), "test_parse_expr"));
+    assert!(!expr.matches(&mk_pid('a'), "test_parse"));
+    assert!(!expr.matches(&mk_pid('a'), "test_expr"));
+    assert!(expr.matches(&mk_pid('a'), "test_parse_expr"));
 }

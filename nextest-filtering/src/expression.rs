@@ -75,7 +75,7 @@ impl NameMatcher {
 }
 
 impl FilteringSet {
-    fn includes(&self, package_id: &PackageId, name: &str) -> bool {
+    fn matches(&self, package_id: &PackageId, name: &str) -> bool {
         match self {
             Self::All => true,
             Self::None => false,
@@ -128,15 +128,15 @@ impl FilteringExpr {
     }
 
     /// Returns true if the given test is accepted by this filter
-    pub fn includes(&self, package_id: &PackageId, name: &str) -> bool {
+    pub fn matches(&self, package_id: &PackageId, name: &str) -> bool {
         match self {
-            Self::Set(set) => set.includes(package_id, name),
-            Self::Not(expr) => !expr.includes(package_id, name),
+            Self::Set(set) => set.matches(package_id, name),
+            Self::Not(expr) => !expr.matches(package_id, name),
             Self::Union(expr_1, expr_2) => {
-                expr_1.includes(package_id, name) || expr_2.includes(package_id, name)
+                expr_1.matches(package_id, name) || expr_2.matches(package_id, name)
             }
             Self::Intersection(expr_1, expr_2) => {
-                expr_1.includes(package_id, name) && expr_2.includes(package_id, name)
+                expr_1.matches(package_id, name) && expr_2.matches(package_id, name)
             }
         }
     }

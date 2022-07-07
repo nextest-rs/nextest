@@ -21,7 +21,7 @@ use nextest_runner::{
     partition::PartitionerBuilder,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
-    runner::TestRunnerBuilder,
+    runner::{IgnoreOverrides, TestRunnerBuilder},
     signal::SignalHandler,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -172,8 +172,12 @@ struct ConfigOpts {
 
 impl ConfigOpts {
     /// Creates a nextest config with the given options.
-    pub fn make_config(&self, workspace_root: &Utf8Path) -> Result<NextestConfig> {
-        NextestConfig::from_sources(workspace_root, self.config_file.as_deref())
+    pub fn make_config(
+        &self,
+        workspace_root: &Utf8Path,
+        graph: &PackageGraph,
+    ) -> Result<NextestConfig> {
+        NextestConfig::from_sources(workspace_root, graph, self.config_file.as_deref())
             .map_err(ExpectedError::config_parse_error)
     }
 }
@@ -564,6 +568,12 @@ pub struct TestRunnerOpts {
     /// Run all tests regardless of failure
     #[clap(long, overrides_with = "fail-fast")]
     no_fail_fast: bool,
+
+    /// Disable overrides configured in nextest.toml
+    ///
+    /// If --ignore-overrides is passed in without any arguments, all values will be ignored.
+    #[clap(long, arg_enum, value_name = "OVERRIDES", use_value_delimiter = true)]
+    ignore_overrides: Vec<IgnoreOverridesOpt>,
 }
 
 impl TestRunnerOpts {
@@ -582,8 +592,24 @@ impl TestRunnerOpts {
             builder.set_test_threads(test_threads);
         }
 
+        let mut overrides = IgnoreOverrides::default();
+        for override_ in &self.ignore_overrides {
+            match override_ {
+                IgnoreOverridesOpt::Retries => overrides.add_retries(),
+                IgnoreOverridesOpt::All => overrides.add_all(),
+            };
+        }
+
+        builder.set_ignore_overrides(overrides);
+
         builder
     }
+}
+
+#[derive(Clone, Copy, Debug, ArgEnum)]
+enum IgnoreOverridesOpt {
+    Retries,
+    All,
 }
 
 #[derive(Debug, Default, Args)]
@@ -680,6 +706,7 @@ impl FinalStatusLevelOpt {
 struct BaseApp {
     output: OutputContext,
     graph_data: Arc<(String, PackageGraph)>,
+    // Potentially remapped workspace root (might not be the same as the graph).
     workspace_root: Utf8PathBuf,
     manifest_path: Option<Utf8PathBuf>,
     reuse_build: ReuseBuildInfo,
@@ -758,9 +785,9 @@ impl BaseApp {
         Ok(Self {
             output,
             graph_data,
+            workspace_root,
             reuse_build,
             manifest_path,
-            workspace_root,
             cargo_opts,
             config_opts,
         })
@@ -979,7 +1006,7 @@ impl App {
         let config = self
             .base
             .config_opts
-            .make_config(self.base.workspace_root.as_path())?;
+            .make_config(&self.base.workspace_root, self.base.graph())?;
         let profile = self.load_profile(profile_name, &config)?;
 
         let target_runner = self.load_runner();
@@ -1003,7 +1030,7 @@ impl App {
 
         let handler = SignalHandler::new()?;
         let runner_builder = runner_opts.to_builder(no_capture);
-        let runner = runner_builder.build(&test_list, &profile, handler, target_runner.clone());
+        let runner = runner_builder.build(&test_list, profile, handler, target_runner.clone());
 
         let run_stats = runner.try_execute(|event| {
             // Write and flush the event.

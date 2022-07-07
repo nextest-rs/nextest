@@ -4,12 +4,16 @@
 //! Configuration support for nextest.
 
 use crate::{
-    errors::{ConfigParseError, ProfileNotFound, TestThreadsParseError},
+    errors::{
+        ConfigParseError, ConfigParseErrorKind, ConfigParseOverrideError, ProfileNotFound,
+        TestThreadsParseError,
+    },
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
-use itertools::Either;
+use guppy::{graph::PackageGraph, PackageId};
+use nextest_filtering::FilteringExpr;
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration};
 
@@ -25,6 +29,7 @@ use std::{collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Dura
 pub struct NextestConfig {
     workspace_root: Utf8PathBuf,
     inner: NextestConfigImpl,
+    overrides: NextestOverridesImpl,
 }
 
 impl NextestConfig {
@@ -44,21 +49,33 @@ impl NextestConfig {
     pub const DEFAULT_PROFILE: &'static str = "default";
 
     /// Reads the nextest config from the given file, or if not specified from `.config/nextest.toml`
-    /// in the given directory.
+    /// in the workspace root.
     ///
     /// If the file isn't specified and the directory doesn't have `.config/nextest.toml`, uses the
     /// default config options.
     pub fn from_sources(
         workspace_root: impl Into<Utf8PathBuf>,
+        graph: &PackageGraph,
         config_file: Option<&Utf8Path>,
     ) -> Result<Self, ConfigParseError> {
         let workspace_root = workspace_root.into();
         let (config_file, config) = Self::read_from_sources(&workspace_root, config_file)?;
-        let inner = serde_path_to_error::deserialize(config)
-            .map_err(|err| ConfigParseError::new(config_file, Either::Right(err)))?;
+        let inner: NextestConfigImpl =
+            serde_path_to_error::deserialize(config).map_err(|error| {
+                ConfigParseError::new(
+                    config_file.clone(),
+                    ConfigParseErrorKind::DeserializeError(error),
+                )
+            })?;
+
+        // Compile all the overrides and gather the errors.
+        let overrides = NextestOverridesImpl::new(graph, &inner)
+            .map_err(|kind| ConfigParseError::new(config_file, kind))?;
+
         Ok(Self {
             workspace_root,
             inner,
+            overrides,
         })
     }
 
@@ -74,6 +91,8 @@ impl NextestConfig {
         Self {
             workspace_root: workspace_root.into(),
             inner,
+            // The default config does not (cannot) have overrides.
+            overrides: NextestOverridesImpl::default(),
         }
     }
 
@@ -111,9 +130,9 @@ impl NextestConfig {
             }
         };
 
-        let config = builder
-            .build()
-            .map_err(|err| ConfigParseError::new(&config_path, Either::Left(err)))?;
+        let config = builder.build().map_err(|err| {
+            ConfigParseError::new(&config_path, ConfigParseErrorKind::BuildError(err))
+        })?;
         Ok((config_path, config))
     }
 
@@ -128,10 +147,21 @@ impl NextestConfig {
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
         store_dir.push(name);
 
+        // Grab the overrides as well.
+        let overrides = self
+            .overrides
+            .other
+            .get(name)
+            .into_iter()
+            .flatten()
+            .chain(self.overrides.default.iter())
+            .collect();
+
         Ok(NextestProfile {
             store_dir,
             default_profile: &self.inner.profiles.default,
             custom_profile,
+            overrides,
         })
     }
 }
@@ -144,6 +174,7 @@ pub struct NextestProfile<'cfg> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
+    overrides: Vec<&'cfg ProfileOverrideImpl>,
 }
 
 impl<'cfg> NextestProfile<'cfg> {
@@ -208,6 +239,22 @@ impl<'cfg> NextestProfile<'cfg> {
             .unwrap_or(self.default_profile.fail_fast)
     }
 
+    /// Returns override settings for individual tests.
+    pub fn overrides_for(&self, package_id: &PackageId, test_name: &str) -> ProfileOverrides {
+        let mut retries = None;
+
+        for &override_ in &self.overrides {
+            if !override_.expr.matches(package_id, test_name) {
+                continue;
+            }
+            if retries.is_none() && override_.data.retries.is_some() {
+                retries = override_.data.retries;
+            }
+        }
+
+        ProfileOverrides { retries }
+    }
+
     /// Returns the JUnit configuration for this profile.
     pub fn junit(&self) -> Option<NextestJunitConfig<'cfg>> {
         let path = self
@@ -224,6 +271,21 @@ impl<'cfg> NextestProfile<'cfg> {
                 .unwrap_or(&self.default_profile.junit.report_name);
             NextestJunitConfig { path, report_name }
         })
+    }
+}
+
+/// Override settings for individual tests.
+///
+/// Returned by
+#[derive(Clone, Debug)]
+pub struct ProfileOverrides {
+    retries: Option<usize>,
+}
+
+impl ProfileOverrides {
+    /// Returns the number of retries for this test.
+    pub fn retries(&self) -> Option<usize> {
+        self.retries
     }
 }
 
@@ -301,6 +363,8 @@ struct DefaultProfileImpl {
     fail_fast: bool,
     #[serde(deserialize_with = "require_deserialize_slow_timeout")]
     slow_timeout: SlowTimeout,
+    #[serde(default)]
+    overrides: Vec<ProfileOverrideSource>,
     junit: DefaultJunitImpl,
 }
 
@@ -471,7 +535,102 @@ struct CustomProfileImpl {
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
     #[serde(default)]
+    overrides: Vec<ProfileOverrideSource>,
+    #[serde(default)]
     junit: JunitImpl,
+}
+
+/// Pre-compiled form of profile overrides.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct ProfileOverrideSource {
+    /// The filter expression to match against.
+    filter: String,
+    /// Overrides.
+    #[serde(flatten)]
+    data: ProfileOverrideData,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct ProfileOverrideData {
+    retries: Option<usize>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct NextestOverridesImpl {
+    default: Vec<ProfileOverrideImpl>,
+    other: HashMap<String, Vec<ProfileOverrideImpl>>,
+}
+
+impl NextestOverridesImpl {
+    fn new(graph: &PackageGraph, config: &NextestConfigImpl) -> Result<Self, ConfigParseErrorKind> {
+        let mut errors = vec![];
+        let default = Self::compile_overrides(
+            graph,
+            "default",
+            &config.profiles.default.overrides,
+            &mut errors,
+        );
+        let other: HashMap<_, _> = config
+            .profiles
+            .other
+            .iter()
+            .map(|(profile_name, profile)| {
+                (
+                    profile_name.clone(),
+                    Self::compile_overrides(graph, profile_name, &profile.overrides, &mut errors),
+                )
+            })
+            .collect();
+
+        if errors.is_empty() {
+            Ok(Self { default, other })
+        } else {
+            Err(ConfigParseErrorKind::OverrideError(errors))
+        }
+    }
+
+    fn compile_overrides(
+        graph: &PackageGraph,
+        profile_name: &str,
+        overrides: &[ProfileOverrideSource],
+        errors: &mut Vec<ConfigParseOverrideError>,
+    ) -> Vec<ProfileOverrideImpl> {
+        overrides
+            .iter()
+            .filter_map(|source| ProfileOverrideImpl::new(graph, profile_name, source, errors))
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ProfileOverrideImpl {
+    expr: FilteringExpr,
+    data: ProfileOverrideData,
+}
+
+impl ProfileOverrideImpl {
+    fn new(
+        graph: &PackageGraph,
+        profile_name: &str,
+        source: &ProfileOverrideSource,
+        errors: &mut Vec<ConfigParseOverrideError>,
+    ) -> Option<Self> {
+        match FilteringExpr::parse(&source.filter, graph) {
+            Ok(expr) => Some(Self {
+                expr,
+                data: source.data.clone(),
+            }),
+            Err(parse_errors) => {
+                errors.push(ConfigParseOverrideError {
+                    profile_name: profile_name.to_owned(),
+                    parse_errors,
+                });
+                None
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -485,8 +644,9 @@ struct JunitImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use guppy::MetadataCommand;
     use indoc::indoc;
-    use std::io::Write;
+    use std::{io::Write, path::PathBuf, process::Command};
     use tempfile::tempdir;
     use test_case::test_case;
 
@@ -575,24 +735,17 @@ mod tests {
         ; "partial slow-timeout table should error"
     )]
     fn slowtimeout_adheres_to_hierarchy(
-        workspace_config: &str,
+        config_contents: &str,
         expected_default: Result<SlowTimeout, &str>,
         maybe_expected_ci: Option<SlowTimeout>,
     ) {
         let workspace_dir = tempdir().unwrap();
-        let config_dir = workspace_dir.path().join(".config");
-        std::fs::create_dir(&config_dir).unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
-        let workspace_config_path = config_dir.join("nextest.toml");
-        let mut workspace_config_file = std::fs::File::create(&workspace_config_path).unwrap();
-        workspace_config_file
-            .write_all(workspace_config.as_bytes())
-            .unwrap();
+        let graph = temp_workspace(workspace_path, config_contents);
 
-        let nextest_config_result = NextestConfig::from_sources(
-            camino::Utf8Path::from_path(workspace_dir.path()).unwrap(),
-            camino::Utf8Path::from_path(&workspace_config_path),
-        );
+        let nextest_config_result =
+            NextestConfig::from_sources(graph.workspace().root(), &graph, None);
 
         match expected_default {
             Ok(expected_default) => {
@@ -626,6 +779,136 @@ mod tests {
                     err_str,
                 )
             }
+        }
+    }
+
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 2
+
+            [profile.ci]
+        "#},
+        Some(2)
+
+        ; "my_test matches exactly"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            filter = "!test(=my_test)"
+            retries = 2
+
+            [profile.ci]
+        "#},
+        None
+
+        ; "not match"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+
+            [profile.ci]
+        "#},
+        None
+
+        ; "no retries specified"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            filter = "test(test)"
+            retries = 2
+
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 3
+
+            [profile.ci]
+        "#},
+        Some(2)
+
+        ; "earlier configs override later ones"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            filter = "test(test)"
+            retries = 2
+
+            [profile.ci]
+
+            [[profile.ci.overrides]]
+            filter = "test(=my_test)"
+            retries = 3
+        "#},
+        Some(3)
+
+        ; "profile-specific configs override default ones"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            filter = "(!package(test-package)) and test(test)"
+            retries = 2
+
+            [profile.ci]
+
+            [[profile.ci.overrides]]
+            filter = "!test(=my_test_2)"
+            retries = 3
+        "#},
+        Some(3)
+
+        ; "no overrides match my_test exactly"
+    )]
+
+    fn overrides_retries(config_contents: &str, retries: Option<usize>) {
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+        let package_id = graph.workspace().iter().next().unwrap().id();
+
+        let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None).unwrap();
+        let overrides_for = config
+            .profile("ci")
+            .expect("ci profile is defined")
+            .overrides_for(package_id, "my_test");
+        assert_eq!(
+            overrides_for.retries(),
+            retries,
+            "actual retries don't match expected retries"
+        );
+    }
+
+    fn temp_workspace(temp_dir: &Utf8Path, config_contents: &str) -> PackageGraph {
+        Command::new(cargo_path())
+            .args(["init", "--lib", "--name=test-package"])
+            .current_dir(temp_dir)
+            .status()
+            .expect("error initializing cargo project");
+
+        let config_dir = temp_dir.join(".config");
+        std::fs::create_dir(&config_dir).expect("error creating config dir");
+
+        let config_path = config_dir.join("nextest.toml");
+        let mut config_file = std::fs::File::create(&config_path).unwrap();
+        config_file.write_all(config_contents.as_bytes()).unwrap();
+
+        PackageGraph::from_command(MetadataCommand::new().current_dir(temp_dir))
+            .expect("error creating package graph")
+    }
+
+    fn cargo_path() -> Utf8PathBuf {
+        match std::env::var_os("CARGO") {
+            Some(cargo_path) => PathBuf::from(cargo_path)
+                .try_into()
+                .expect("CARGO env var is not valid UTF-8"),
+            None => Utf8PathBuf::from("cargo"),
         }
     }
 }

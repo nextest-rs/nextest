@@ -275,7 +275,7 @@ impl TestReporterBuilder {
     pub fn build<'a>(
         &self,
         test_list: &TestList,
-        profile: &'a NextestProfile<'a>,
+        profile: &NextestProfile<'a>,
         output: ReporterStderr<'a>,
     ) -> TestReporter<'a> {
         let styles = Box::new(Styles::default());

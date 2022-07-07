@@ -244,7 +244,7 @@ impl<'filter> TestFilter<'filter> {
             .builder
             .exprs
             .iter()
-            .any(|expr| expr.includes(test_binary.package.id(), test_name))
+            .any(|expr| expr.matches(test_binary.package.id(), test_name))
         {
             FilterNameMatch::MatchWithPatterns
         } else {

@@ -12,7 +12,7 @@ use crate::{
     reporter::TestEvent,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
 };
-use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use chrono::{DateTime, FixedOffset, Utc};
 use debug_ignore::DebugIgnore;
 use once_cell::sync::Lazy;
@@ -23,16 +23,16 @@ use std::{borrow::Cow, collections::HashMap, fs::File, time::SystemTime};
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub(crate) struct EventAggregator<'cfg> {
-    store_dir: &'cfg Utf8Path,
+    store_dir: Utf8PathBuf,
     // TODO: log information in a JSONable report (converting that to XML later) instead of directly
     // writing it to XML
     junit: Option<MetadataJunit<'cfg>>,
 }
 
 impl<'cfg> EventAggregator<'cfg> {
-    pub(crate) fn new(profile: &'cfg NextestProfile<'cfg>) -> Self {
+    pub(crate) fn new(profile: &NextestProfile<'cfg>) -> Self {
         Self {
-            store_dir: profile.store_dir(),
+            store_dir: profile.store_dir().to_owned(),
             junit: profile.junit().map(MetadataJunit::new),
         }
     }
