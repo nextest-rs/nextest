@@ -31,6 +31,8 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
       
       - name: Collect coverage data
-        run: cargo llvm-cov nextest
-        # TODO: generate HTML report and upload it
-        # (requires https://github.com/taiki-e/cargo-llvm-cov/pull/144#issuecomment-1072736931 to be addressed)
+        run: cargo llvm-cov nextest --lcov --output-path lcov.info
+      - name: Upload coverage data to codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
