@@ -107,6 +107,7 @@ fn compile_set_def(
             *span,
             errors,
         )),
+        SetDef::Kind(matcher, span) => FilteringSet::Kind(matcher.clone(), *span),
         SetDef::Test(matcher, span) => FilteringSet::Test(matcher.clone(), *span),
         SetDef::All => FilteringSet::All,
         SetDef::None => FilteringSet::None,

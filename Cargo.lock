@@ -1060,6 +1060,7 @@ dependencies = [
  "nom_locate 4.0.0",
  "regex",
  "regex-syntax",
+ "test-case",
  "thiserror",
 ]
 

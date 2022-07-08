@@ -4,8 +4,9 @@
 use guppy::PackageId;
 use nextest_filtering::{
     errors::{FilterExpressionParseErrors, ParseSingleError},
-    FilteringExpr,
+    FilteringExpr, FilteringExprQuery,
 };
+use test_case::test_case;
 
 #[track_caller]
 fn load_graph() -> guppy::graph::PackageGraph {
@@ -29,13 +30,24 @@ fn test_expr_package_contains() {
     let expr = FilteringExpr::parse("package(~_a)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(expr.matches(&mk_pid('a'), "test_something"));
-    assert!(!expr.matches(&mk_pid('b'), "test_something"));
-    assert!(!expr.matches(&mk_pid('c'), "test_something"));
-    assert!(!expr.matches(&mk_pid('d'), "test_something"));
-    assert!(!expr.matches(&mk_pid('e'), "test_something"));
-    assert!(!expr.matches(&mk_pid('f'), "test_something"));
-    assert!(!expr.matches(&mk_pid('g'), "test_something"));
+    let pid_a = mk_pid('a');
+    let pid_b = mk_pid('b');
+    let pid_c = mk_pid('c');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_b,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_c,
+        kind: "lib",
+        test_name: "test_something"
+    }));
 }
 
 #[test]
@@ -44,13 +56,24 @@ fn test_expr_package_equal() {
     let expr = FilteringExpr::parse("package(=crate_a)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(expr.matches(&mk_pid('a'), "test_something"));
-    assert!(!expr.matches(&mk_pid('b'), "test_something"));
-    assert!(!expr.matches(&mk_pid('c'), "test_something"));
-    assert!(!expr.matches(&mk_pid('d'), "test_something"));
-    assert!(!expr.matches(&mk_pid('e'), "test_something"));
-    assert!(!expr.matches(&mk_pid('f'), "test_something"));
-    assert!(!expr.matches(&mk_pid('g'), "test_something"));
+    let pid_a = mk_pid('a');
+    let pid_b = mk_pid('b');
+    let pid_c = mk_pid('c');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_b,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_c,
+        kind: "lib",
+        test_name: "test_something"
+    }));
 }
 
 #[test]
@@ -59,13 +82,24 @@ fn test_expr_package_regex() {
     let expr = FilteringExpr::parse("package(/crate_(a|b)/)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(expr.matches(&mk_pid('a'), "test_something"));
-    assert!(expr.matches(&mk_pid('b'), "test_something"));
-    assert!(!expr.matches(&mk_pid('c'), "test_something"));
-    assert!(!expr.matches(&mk_pid('d'), "test_something"));
-    assert!(!expr.matches(&mk_pid('e'), "test_something"));
-    assert!(!expr.matches(&mk_pid('f'), "test_something"));
-    assert!(!expr.matches(&mk_pid('g'), "test_something"));
+    let pid_a = mk_pid('a');
+    let pid_b = mk_pid('b');
+    let pid_c = mk_pid('c');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_b,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_c,
+        kind: "lib",
+        test_name: "test_something"
+    }));
 }
 
 #[test]
@@ -74,13 +108,51 @@ fn test_expr_deps() {
     let expr = FilteringExpr::parse("deps(crate_d)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(expr.matches(&mk_pid('a'), "test_something"));
-    assert!(expr.matches(&mk_pid('b'), "test_something"));
-    assert!(expr.matches(&mk_pid('c'), "test_something"));
-    assert!(expr.matches(&mk_pid('d'), "test_something"));
-    assert!(!expr.matches(&mk_pid('e'), "test_something"));
-    assert!(!expr.matches(&mk_pid('f'), "test_something"));
-    assert!(!expr.matches(&mk_pid('g'), "test_something"));
+    let pid_a = mk_pid('a');
+    let pid_b = mk_pid('b');
+    let pid_c = mk_pid('c');
+    let pid_d = mk_pid('d');
+    let pid_e = mk_pid('e');
+    let pid_f = mk_pid('f');
+    let pid_g = mk_pid('g');
+    // a-d are deps of d
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_b,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_c,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_d,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+
+    // e-g are not deps of d
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_e,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_f,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_g,
+        kind: "lib",
+        test_name: "test_something"
+    }));
 }
 
 #[test]
@@ -89,13 +161,51 @@ fn test_expr_rdeps() {
     let expr = FilteringExpr::parse("rdeps(crate_d)", &graph).unwrap();
     println!("{:?}", expr);
 
-    assert!(!expr.matches(&mk_pid('a'), "test_something"));
-    assert!(!expr.matches(&mk_pid('b'), "test_something"));
-    assert!(!expr.matches(&mk_pid('c'), "test_something"));
-    assert!(expr.matches(&mk_pid('d'), "test_something"));
-    assert!(expr.matches(&mk_pid('e'), "test_something"));
-    assert!(expr.matches(&mk_pid('f'), "test_something"));
-    assert!(expr.matches(&mk_pid('g'), "test_something"));
+    let pid_a = mk_pid('a');
+    let pid_b = mk_pid('b');
+    let pid_c = mk_pid('c');
+    let pid_d = mk_pid('d');
+    let pid_e = mk_pid('e');
+    let pid_f = mk_pid('f');
+    let pid_g = mk_pid('g');
+    // a-c are not rdeps of d
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_b,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_c,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+
+    // d-g are rdeps of d
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_d,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_e,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_f,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_g,
+        kind: "lib",
+        test_name: "test_something"
+    }));
 }
 
 #[test]
@@ -124,13 +234,72 @@ fn test_expr_with_no_matching_packages() {
 }
 
 #[test]
+fn test_expr_kind() {
+    let graph = load_graph();
+    let expr = FilteringExpr::parse("kind(lib)", &graph).unwrap();
+    println!("{:?}", expr);
+
+    let pid_a = mk_pid('a');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "test",
+        test_name: "test_parse"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib2",
+        test_name: "test_something"
+    }));
+}
+
+#[test]
+fn test_expr_kind_partial() {
+    let graph = load_graph();
+    let expr = FilteringExpr::parse("kind(~tes)", &graph).unwrap();
+    println!("{:?}", expr);
+
+    let pid_a = mk_pid('a');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "test",
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse"
+    }));
+}
+
+#[test]
 fn test_expr_test() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("test(parse)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(expr.matches(&mk_pid('b'), "test_parse"));
-    assert!(!expr.matches(&mk_pid('a'), "test_run"));
+
+    let pid_a = mk_pid('a');
+    let pid_b = mk_pid('b');
+
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_b,
+        kind: "lib",
+        test_name: "test_parse"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_run"
+    }));
 }
 
 #[test]
@@ -138,60 +307,110 @@ fn test_expr_test_not() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("not test(parse)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(!expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(expr.matches(&mk_pid('a'), "test_run"));
+
+    let pid_a = mk_pid('a');
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_run"
+    }));
 }
 
 #[test]
-fn test_expr_test_union() {
+fn test_expr_binary() {
     let graph = load_graph();
-    let expr = FilteringExpr::parse("test(parse) + test(run)", &graph).unwrap();
+    let expr = FilteringExpr::parse("not test(parse)", &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(expr.matches(&mk_pid('a'), "test_run"));
-    assert!(!expr.matches(&mk_pid('a'), "test_build"));
 
-    let expr = FilteringExpr::parse("test(parse) | test(run)", &graph).unwrap();
-    println!("{:?}", expr);
-    assert!(expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(expr.matches(&mk_pid('a'), "test_run"));
-    assert!(!expr.matches(&mk_pid('a'), "test_build"));
-
-    let expr = FilteringExpr::parse("test(parse) or test(run)", &graph).unwrap();
-    println!("{:?}", expr);
-    assert!(expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(expr.matches(&mk_pid('a'), "test_run"));
-    assert!(!expr.matches(&mk_pid('a'), "test_build"));
+    let pid_a = mk_pid('a');
+    assert!(!expr.matches(&FilteringSetQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse"
+    }));
+    assert!(expr.matches(&FilteringSetQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_run"
+    }));
 }
 
-#[test]
-fn test_expr_test_difference() {
+#[test_case("test(parse) + test(run)"; "with plus")]
+#[test_case("test(parse) | test(run)"; "with pipe")]
+#[test_case("test(parse) or test(run)"; "with or")]
+fn test_expr_test_union(input: &str) {
     let graph = load_graph();
-    let expr = FilteringExpr::parse("test(parse) - test(expr)", &graph).unwrap();
+    let expr = FilteringExpr::parse(input, &graph).unwrap();
     println!("{:?}", expr);
-    assert!(expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(expr.matches(&mk_pid('a'), "test_parse_set"));
-    assert!(!expr.matches(&mk_pid('a'), "test_parse_expr"));
 
-    let expr = FilteringExpr::parse("test(parse) & not test(expr)", &graph).unwrap();
-    println!("{:?}", expr);
-    assert!(expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(expr.matches(&mk_pid('a'), "test_parse_set"));
-    assert!(!expr.matches(&mk_pid('a'), "test_parse_expr"));
+    let pid_a = mk_pid('a');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_run"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_build"
+    }));
 }
 
-#[test]
-fn test_expr_test_intersect() {
+#[test_case("test(parse) - test(expr)"; "with minus")]
+#[test_case("test(parse) and not test(expr)"; "with and not")]
+fn test_expr_test_difference(input: &str) {
     let graph = load_graph();
-    let expr = FilteringExpr::parse("test(parse) & test(expr)", &graph).unwrap();
+    let expr = FilteringExpr::parse(input, &graph).unwrap();
     println!("{:?}", expr);
-    assert!(!expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(!expr.matches(&mk_pid('a'), "test_expr"));
-    assert!(expr.matches(&mk_pid('a'), "test_parse_expr"));
 
-    let expr = FilteringExpr::parse("test(parse) and test(expr)", &graph).unwrap();
+    let pid_a = mk_pid('a');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse_set"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse_expr"
+    }));
+}
+
+#[test_case("test(parse) & test(expr)"; "with ampersand")]
+#[test_case("test(parse) and test(expr)"; "with and")]
+fn test_expr_test_intersect(input: &str) {
+    let graph = load_graph();
+    let expr = FilteringExpr::parse(input, &graph).unwrap();
     println!("{:?}", expr);
-    assert!(!expr.matches(&mk_pid('a'), "test_parse"));
-    assert!(!expr.matches(&mk_pid('a'), "test_expr"));
-    assert!(expr.matches(&mk_pid('a'), "test_parse_expr"));
+    let pid_a = mk_pid('a');
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_expr"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        test_name: "test_parse_expr"
+    }));
 }
