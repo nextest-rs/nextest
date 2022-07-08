@@ -15,7 +15,7 @@ use crate::{
     partition::{Partitioner, PartitionerBuilder},
 };
 use aho_corasick::AhoCorasick;
-use nextest_filtering::FilteringExpr;
+use nextest_filtering::{FilteringExpr, FilteringExprQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use std::{fmt, str::FromStr};
 
@@ -238,14 +238,14 @@ impl<'filter> TestFilter<'filter> {
         test_binary: &RustTestArtifact<'_>,
         test_name: &str,
     ) -> FilterNameMatch {
+        let query = FilteringExprQuery {
+            package_id: test_binary.package.id(),
+            kind: test_binary.kind.as_str(),
+            test_name,
+        };
         if self.builder.exprs.is_empty() {
             FilterNameMatch::MatchEmptyPatterns
-        } else if self
-            .builder
-            .exprs
-            .iter()
-            .any(|expr| expr.matches(test_binary.package.id(), test_name))
-        {
+        } else if self.builder.exprs.iter().any(|expr| expr.matches(&query)) {
             FilterNameMatch::MatchWithPatterns
         } else {
             FilterNameMatch::Mismatch(MismatchReason::Expression)

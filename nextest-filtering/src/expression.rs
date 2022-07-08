@@ -40,6 +40,8 @@ impl Eq for NameMatcher {}
 pub enum FilteringSet {
     /// All tests in packages
     Packages(HashSet<PackageId>),
+    /// All tests present in this kind of binary.
+    Kind(NameMatcher, SourceSpan),
     /// All tests matching a name
     Test(NameMatcher, SourceSpan),
     /// All tests
@@ -47,6 +49,19 @@ pub enum FilteringSet {
     /// No tests
     None,
     // Possible addition: Binary(NameMatcher)
+}
+
+/// A query passed into [`FilteringExpr::matches`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct FilteringExprQuery<'a> {
+    /// The package ID.
+    pub package_id: &'a PackageId,
+
+    /// The kind of binary this test is (lib, test etc).
+    pub kind: &'a str,
+
+    /// The name of the test.
+    pub test_name: &'a str,
 }
 
 /// Filtering expression
@@ -75,12 +90,13 @@ impl NameMatcher {
 }
 
 impl FilteringSet {
-    fn matches(&self, package_id: &PackageId, name: &str) -> bool {
+    fn matches(&self, query: &FilteringExprQuery<'_>) -> bool {
         match self {
             Self::All => true,
             Self::None => false,
-            Self::Test(matcher, _) => matcher.is_match(name),
-            Self::Packages(packages) => packages.contains(package_id),
+            Self::Test(matcher, _) => matcher.is_match(query.test_name),
+            Self::Kind(matcher, _) => matcher.is_match(query.kind),
+            Self::Packages(packages) => packages.contains(query.package_id),
         }
     }
 }
@@ -128,16 +144,12 @@ impl FilteringExpr {
     }
 
     /// Returns true if the given test is accepted by this filter
-    pub fn matches(&self, package_id: &PackageId, name: &str) -> bool {
+    pub fn matches(&self, query: &FilteringExprQuery<'_>) -> bool {
         match self {
-            Self::Set(set) => set.matches(package_id, name),
-            Self::Not(expr) => !expr.matches(package_id, name),
-            Self::Union(expr_1, expr_2) => {
-                expr_1.matches(package_id, name) || expr_2.matches(package_id, name)
-            }
-            Self::Intersection(expr_1, expr_2) => {
-                expr_1.matches(package_id, name) && expr_2.matches(package_id, name)
-            }
+            Self::Set(set) => set.matches(query),
+            Self::Not(expr) => !expr.matches(query),
+            Self::Union(expr_1, expr_2) => expr_1.matches(query) || expr_2.matches(query),
+            Self::Intersection(expr_1, expr_2) => expr_1.matches(query) && expr_2.matches(query),
         }
     }
 

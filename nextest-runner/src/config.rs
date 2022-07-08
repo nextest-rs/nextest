@@ -12,8 +12,8 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
-use guppy::{graph::PackageGraph, PackageId};
-use nextest_filtering::FilteringExpr;
+use guppy::graph::PackageGraph;
+use nextest_filtering::{FilteringExpr, FilteringExprQuery};
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration};
 
@@ -240,11 +240,11 @@ impl<'cfg> NextestProfile<'cfg> {
     }
 
     /// Returns override settings for individual tests.
-    pub fn overrides_for(&self, package_id: &PackageId, test_name: &str) -> ProfileOverrides {
+    pub fn overrides_for(&self, query: &FilteringExprQuery<'_>) -> ProfileOverrides {
         let mut retries = None;
 
         for &override_ in &self.overrides {
-            if !override_.expr.matches(package_id, test_name) {
+            if !override_.expr.matches(query) {
                 continue;
             }
             if retries.is_none() && override_.data.retries.is_some() {
@@ -874,10 +874,15 @@ mod tests {
         let package_id = graph.workspace().iter().next().unwrap().id();
 
         let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None).unwrap();
+        let query = FilteringExprQuery {
+            package_id,
+            kind: "lib",
+            test_name: "my_test",
+        };
         let overrides_for = config
             .profile("ci")
             .expect("ci profile is defined")
-            .overrides_for(package_id, "my_test");
+            .overrides_for(&query);
         assert_eq!(
             overrides_for.retries(),
             retries,

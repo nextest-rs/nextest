@@ -14,6 +14,7 @@ use crate::{
     target_runner::TargetRunner,
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
+use nextest_filtering::FilteringExprQuery;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
@@ -235,9 +236,12 @@ impl<'a> TestRunner<'a> {
                     return;
                 }
 
-                let overrides = self
-                    .profile
-                    .overrides_for(test_instance.bin_info.package.id(), test_instance.name);
+                let query = FilteringExprQuery {
+                    package_id: test_instance.bin_info.package.id(),
+                    kind: test_instance.bin_info.kind.as_str(),
+                    test_name: test_instance.name,
+                };
+                let overrides = self.profile.overrides_for(&query);
                 let total_attempts =
                     match (self.ignore_overrides.ignore_retries(), overrides.retries()) {
                         (true, _) | (false, None) => self.global_tries,

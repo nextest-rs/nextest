@@ -9,4 +9,4 @@ pub mod errors;
 mod expression;
 mod parsing;
 
-pub use expression::{FilteringExpr, FilteringSet, NameMatcher};
+pub use expression::{FilteringExpr, FilteringExprQuery, FilteringSet, NameMatcher};
