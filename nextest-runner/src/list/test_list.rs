@@ -17,7 +17,7 @@ use guppy::{
 };
 use nextest_metadata::{
     BuildPlatform, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
-    RustTestCaseSummary, RustTestSuiteSummary, TestListSummary,
+    RustTestCaseSummary, RustTestSuiteStatusSummary, RustTestSuiteSummary, TestListSummary,
 };
 use once_cell::sync::{Lazy, OnceCell};
 use owo_colors::OwoColorize;
@@ -150,37 +150,6 @@ pub struct TestList<'g> {
     skip_count: OnceCell<usize>,
 }
 
-/// A suite of tests within a single Rust test binary.
-///
-/// This is a representation of [`nextest_metadata::RustTestSuiteSummary`] used internally by the runner.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RustTestSuite<'g> {
-    /// A unique identifier for this binary.
-    pub binary_id: String,
-
-    /// Package metadata.
-    pub package: PackageMetadata<'g>,
-
-    /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
-    pub binary_name: String,
-
-    /// The kind of Rust test binary this is.
-    pub kind: RustTestBinaryKind,
-
-    /// The working directory that this test binary will be executed in. If None, the current directory
-    /// will not be changed.
-    pub cwd: Utf8PathBuf,
-
-    /// The platform the test suite is for (host or target).
-    pub build_platform: BuildPlatform,
-
-    /// Non-test binaries corresponding to this test suite (name, path).
-    pub non_test_binaries: BTreeSet<(String, Utf8PathBuf)>,
-
-    /// Test case names and other information about them.
-    pub testcases: BTreeMap<String, RustTestCaseSummary>,
-}
-
 impl<'g> TestList<'g> {
     /// Creates a new test list by running the given command and applying the specified filter.
     pub fn new(
@@ -207,7 +176,7 @@ impl<'g> TestList<'g> {
                     non_ignored.as_str(),
                     ignored.as_str(),
                 )?;
-                test_count += info.testcases.len();
+                test_count += info.status.test_count();
                 Ok((bin, info))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
@@ -222,7 +191,8 @@ impl<'g> TestList<'g> {
     }
 
     /// Creates a new test list with the given binary names and outputs.
-    pub fn new_with_outputs(
+    #[cfg(test)]
+    fn new_with_outputs(
         test_bin_outputs: impl IntoIterator<
             Item = (RustTestArtifact<'g>, impl AsRef<str>, impl AsRef<str>),
         >,
@@ -242,7 +212,7 @@ impl<'g> TestList<'g> {
                     non_ignored.as_ref(),
                     ignored.as_ref(),
                 )?;
-                test_count += info.testcases.len();
+                test_count += info.status.test_count();
                 Ok((bin, info))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
@@ -308,6 +278,7 @@ impl<'g> TestList<'g> {
                 } else {
                     BuildPlatform::Target
                 };
+                let (status, test_cases) = info.status.to_summary();
                 let testsuite = RustTestSuiteSummary {
                     package_name: info.package.name().to_owned(),
                     binary: RustTestBinarySummary {
@@ -319,7 +290,8 @@ impl<'g> TestList<'g> {
                         build_platform: platform,
                     },
                     cwd: info.cwd.clone(),
-                    testcases: info.testcases.clone(),
+                    status,
+                    test_cases,
                 };
                 (info.binary_id.clone(), testsuite)
             })
@@ -356,10 +328,13 @@ impl<'g> TestList<'g> {
 
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
-        self.rust_suites.iter().flat_map(|(test_bin, bin_info)| {
-            bin_info.testcases.iter().map(move |(name, test_info)| {
-                TestInstance::new(name, test_bin, bin_info, test_info)
-            })
+        self.rust_suites.iter().flat_map(|(test_bin, test_suite)| {
+            test_suite
+                .status
+                .test_cases()
+                .map(move |(name, test_info)| {
+                    TestInstance::new(name, test_bin, test_suite, test_info)
+                })
         })
     }
 
@@ -427,13 +402,13 @@ impl<'g> TestList<'g> {
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
     ) -> Result<(Utf8PathBuf, RustTestSuite<'g>), CreateTestListError> {
-        let mut tests = BTreeMap::new();
+        let mut test_cases = BTreeMap::new();
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
         // based on one doesn't affect the other.
         let mut non_ignored_filter = filter.build();
         for test_name in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
-            tests.insert(
+            test_cases.insert(
                 test_name.into(),
                 RustTestCaseSummary {
                     ignored: false,
@@ -448,7 +423,7 @@ impl<'g> TestList<'g> {
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
             // Adding ignored tests after non-ignored ones makes everything resolve correctly.
-            tests.insert(
+            test_cases.insert(
                 test_name.into(),
                 RustTestCaseSummary {
                     ignored: true,
@@ -476,9 +451,9 @@ impl<'g> TestList<'g> {
                 binary_name,
                 kind,
                 non_test_binaries,
-                testcases: tests,
                 cwd,
                 build_platform: platform,
+                status: RustTestSuiteStatus::Listed { test_cases },
             },
         ))
     }
@@ -539,20 +514,61 @@ impl<'g> TestList<'g> {
 
             let mut indented = indent_write::io::IndentWriter::new("    ", &mut writer);
 
-            if info.testcases.is_empty() {
-                writeln!(indented, "(no tests)")?;
-            } else {
-                for (name, info) in &info.testcases {
-                    write_test_name(name, &styles, &mut indented)?;
-                    if !info.filter_match.is_match() {
-                        write!(indented, " (skipped)")?;
+            match &info.status {
+                RustTestSuiteStatus::Listed { test_cases } => {
+                    if test_cases.is_empty() {
+                        writeln!(indented, "(no tests)")?;
+                    } else {
+                        for (name, info) in test_cases {
+                            write_test_name(name, &styles, &mut indented)?;
+                            if !info.filter_match.is_match() {
+                                write!(indented, " (skipped)")?;
+                            }
+                            writeln!(indented)?;
+                        }
                     }
-                    writeln!(indented)?;
+                }
+                RustTestSuiteStatus::Skipped => {
+                    writeln!(
+                        indented,
+                        "(test binary did not match filter expressions, skipped)"
+                    )?;
                 }
             }
         }
         Ok(())
     }
+}
+
+/// A suite of tests within a single Rust test binary.
+///
+/// This is a representation of [`nextest_metadata::RustTestSuiteSummary`] used internally by the runner.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustTestSuite<'g> {
+    /// A unique identifier for this binary.
+    pub binary_id: String,
+
+    /// Package metadata.
+    pub package: PackageMetadata<'g>,
+
+    /// The unique binary name defined in `Cargo.toml` or inferred by the filename.
+    pub binary_name: String,
+
+    /// The kind of Rust test binary this is.
+    pub kind: RustTestBinaryKind,
+
+    /// The working directory that this test binary will be executed in. If None, the current directory
+    /// will not be changed.
+    pub cwd: Utf8PathBuf,
+
+    /// The platform the test suite is for (host or target).
+    pub build_platform: BuildPlatform,
+
+    /// Non-test binaries corresponding to this test suite (name, path).
+    pub non_test_binaries: BTreeSet<(String, Utf8PathBuf)>,
+
+    /// Test suite status and test case names.
+    pub status: RustTestSuiteStatus,
 }
 
 impl<'g> RustTestArtifact<'g> {
@@ -620,6 +636,60 @@ impl<'g> RustTestArtifact<'g> {
                 error,
             )
         })
+    }
+}
+
+/// Serializable information about the status of and test cases within a test suite.
+///
+/// Part of a [`RustTestSuiteSummary`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RustTestSuiteStatus {
+    /// The test suite was executed with `--list` and the list of test cases was obtained.
+    Listed {
+        /// The test cases contained within this test suite.
+        test_cases: BTreeMap<String, RustTestCaseSummary>,
+    },
+
+    /// The test suite was not executed.
+    Skipped,
+}
+
+static EMPTY_TEST_CASE_MAP: Lazy<BTreeMap<String, RustTestCaseSummary>> =
+    Lazy::new(BTreeMap::new);
+
+impl RustTestSuiteStatus {
+    /// Returns the number of test cases within this suite.
+    pub fn test_count(&self) -> usize {
+        match self {
+            RustTestSuiteStatus::Listed { test_cases } => test_cases.len(),
+            RustTestSuiteStatus::Skipped => 0,
+        }
+    }
+
+    /// Returns the list of test cases within this suite.
+    pub fn test_cases(&self) -> impl Iterator<Item = (&str, &RustTestCaseSummary)> + '_ {
+        match self {
+            RustTestSuiteStatus::Listed { test_cases } => test_cases.iter(),
+            RustTestSuiteStatus::Skipped => {
+                // Return an empty test case.
+                // TODO: implement this
+                EMPTY_TEST_CASE_MAP.iter()
+            }
+        }
+        .map(|(name, case)| (name.as_str(), case))
+    }
+
+    /// Converts this status to its serializable form.
+    pub fn to_summary(
+        &self,
+    ) -> (
+        RustTestSuiteStatusSummary,
+        BTreeMap<String, RustTestCaseSummary>,
+    ) {
+        match self {
+            Self::Listed { test_cases } => (RustTestSuiteStatusSummary::LISTED, test_cases.clone()),
+            Self::Skipped => (RustTestSuiteStatusSummary::SKIPPED, BTreeMap::new()),
+        }
     }
 }
 
@@ -861,30 +931,32 @@ mod tests {
             test_list.rust_suites,
             btreemap! {
                 "/fake/binary".into() => RustTestSuite {
-                    testcases: btreemap! {
-                        "tests::foo::test_bar".to_owned() => RustTestCaseSummary {
-                            ignored: false,
-                            filter_match: FilterMatch::Matches,
-                        },
-                        "tests::baz::test_quux".to_owned() => RustTestCaseSummary {
-                            ignored: false,
-                            filter_match: FilterMatch::Matches,
-                        },
-                        "benches::bench_foo".to_owned() => RustTestCaseSummary {
-                            ignored: false,
-                            filter_match: FilterMatch::Matches,
-                        },
-                        "tests::ignored::test_bar".to_owned() => RustTestCaseSummary {
-                            ignored: true,
-                            filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
-                        },
-                        "tests::baz::test_ignored".to_owned() => RustTestCaseSummary {
-                            ignored: true,
-                            filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
-                        },
-                        "benches::ignored_bench_foo".to_owned() => RustTestCaseSummary {
-                            ignored: true,
-                            filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                    status: RustTestSuiteStatus::Listed {
+                        test_cases: btreemap! {
+                            "tests::foo::test_bar".to_owned() => RustTestCaseSummary {
+                                ignored: false,
+                                filter_match: FilterMatch::Matches,
+                            },
+                            "tests::baz::test_quux".to_owned() => RustTestCaseSummary {
+                                ignored: false,
+                                filter_match: FilterMatch::Matches,
+                            },
+                            "benches::bench_foo".to_owned() => RustTestCaseSummary {
+                                ignored: false,
+                                filter_match: FilterMatch::Matches,
+                            },
+                            "tests::ignored::test_bar".to_owned() => RustTestCaseSummary {
+                                ignored: true,
+                                filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                            },
+                            "tests::baz::test_ignored".to_owned() => RustTestCaseSummary {
+                                ignored: true,
+                                filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                            },
+                            "benches::ignored_bench_foo".to_owned() => RustTestCaseSummary {
+                                ignored: true,
+                                filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                            },
                         },
                     },
                     cwd: fake_cwd,
@@ -939,6 +1011,7 @@ mod tests {
                   "binary-path": "/fake/binary",
                   "build-platform": "target",
                   "cwd": "/fake/cwd",
+                  "status": "listed",
                   "testcases": {
                     "benches::bench_foo": {
                       "ignored": false,

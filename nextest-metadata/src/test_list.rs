@@ -344,8 +344,56 @@ pub struct RustTestSuiteSummary {
     /// The working directory that tests within this package are run in.
     pub cwd: Utf8PathBuf,
 
-    /// Test case names and other information about them.
-    pub testcases: BTreeMap<String, RustTestCaseSummary>,
+    /// Status of this test suite.
+    ///
+    /// Introduced in cargo-nextest 0.9.25. Older versions always imply
+    /// [`LISTED`](RustTestSuiteStatusSummary::LISTED).
+    #[serde(default = "listed_status")]
+    pub status: RustTestSuiteStatusSummary,
+
+    /// Test cases within this test suite.
+    #[serde(rename = "testcases")]
+    pub test_cases: BTreeMap<String, RustTestCaseSummary>,
+}
+
+fn listed_status() -> RustTestSuiteStatusSummary {
+    RustTestSuiteStatusSummary::LISTED
+}
+
+/// Information about whether a test suite was listed or skipped.
+///
+/// This is part of [`RustTestSuiteSummary`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct RustTestSuiteStatusSummary(pub Cow<'static, str>);
+
+impl RustTestSuiteStatusSummary {
+    /// Creates a new `RustNonTestBinaryKind` from a string.
+    #[inline]
+    pub fn new(kind: impl Into<Cow<'static, str>>) -> Self {
+        Self(kind.into())
+    }
+
+    /// Creates a new `RustNonTestBinaryKind` from a static string.
+    #[inline]
+    pub const fn new_const(kind: &'static str) -> Self {
+        Self(Cow::Borrowed(kind))
+    }
+
+    /// Returns the kind as a string.
+    pub fn as_str(&self) -> &str {
+        &*self.0
+    }
+
+    /// The "listed" kind, which means that the test binary was executed with `--list` to gather the
+    /// list of tests in it.
+    pub const LISTED: Self = Self::new_const("listed");
+
+    /// The "skipped" kind, which indicates that the test binary was not executed because it didn't
+    /// match any expression filters.
+    ///
+    /// If this is "skipped", the contents of `RustTestSuiteSummary::test_cases` is empty.
+    pub const SKIPPED: Self = Self::new_const("skipped");
 }
 
 /// Serializable information about an individual test case within a Rust test suite.
