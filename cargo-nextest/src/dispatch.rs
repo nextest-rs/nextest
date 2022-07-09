@@ -870,22 +870,18 @@ struct App {
     target_runner: OnceCell<TargetRunner>,
 }
 
-fn check_experimental_filtering(build_filter: &TestBuildFilter) -> Result<()> {
+// (_output is not used, but must be passed in to ensure that the output is properly initialized
+// before calling this method)
+fn check_experimental_filtering(_output: OutputContext) {
     const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
-    let enabled = std::env::var(EXPERIMENTAL_ENV).is_ok();
-    if !build_filter.filter_expr.is_empty() && !enabled {
-        Err(ExpectedError::experimental_feature_error(
-            "expression filtering",
-            EXPERIMENTAL_ENV,
-        ))
-    } else {
-        Ok(())
+    if std::env::var(EXPERIMENTAL_ENV).is_ok() {
+        log::warn!("filter expressions are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set");
     }
 }
 
 impl App {
     fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
-        check_experimental_filtering(&build_filter)?;
+        check_experimental_filtering(base.output);
 
         Ok(Self {
             base,
