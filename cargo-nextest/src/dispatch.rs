@@ -380,8 +380,16 @@ struct TestBuildFilter {
     #[clap(long)]
     partition: Option<PartitionerBuilder>,
 
-    /// Filter test binaries by build platform
-    #[clap(long, arg_enum, value_name = "PLATFORM", default_value_t)]
+    /// Filter test binaries by build platform (DEPRECATED)
+    ///
+    /// Instead, use -E with 'platform(host)' or 'platform(target)'.
+    #[clap(
+        long,
+        hide_short_help = true,
+        arg_enum,
+        value_name = "PLATFORM",
+        default_value_t
+    )]
     pub(crate) platform_filter: PlatformFilterOpts,
 
     /// Test filter expression (see {n}<https://nexte.st/book/filter-expressions>)
