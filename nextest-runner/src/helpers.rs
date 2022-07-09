@@ -32,6 +32,15 @@ pub(crate) fn write_test_name(
     Ok(())
 }
 
+pub(crate) fn convert_build_platform(
+    platform: nextest_metadata::BuildPlatform,
+) -> guppy::graph::cargo::BuildPlatform {
+    match platform {
+        nextest_metadata::BuildPlatform::Target => guppy::graph::cargo::BuildPlatform::Target,
+        nextest_metadata::BuildPlatform::Host => guppy::graph::cargo::BuildPlatform::Host,
+    }
+}
+
 // ---
 // Functions below copied from cargo-util to avoid pulling in a bunch of dependencies
 // ---

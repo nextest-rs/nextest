@@ -11,6 +11,7 @@
 
 use crate::{
     errors::RunIgnoredParseError,
+    helpers::convert_build_platform,
     list::RustTestArtifact,
     partition::{Partitioner, PartitionerBuilder},
 };
@@ -241,6 +242,7 @@ impl<'filter> TestFilter<'filter> {
         let query = FilteringExprQuery {
             package_id: test_binary.package.id(),
             kind: test_binary.kind.as_str(),
+            platform: convert_build_platform(test_binary.build_platform),
             test_name,
         };
         if self.builder.exprs.is_empty() {

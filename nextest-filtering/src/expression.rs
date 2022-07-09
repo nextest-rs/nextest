@@ -5,7 +5,10 @@ use crate::{
     errors::{FilterExpressionParseErrors, ParseSingleError, State},
     parsing::{parse, ParsedExpr, Span},
 };
-use guppy::{graph::PackageGraph, PackageId};
+use guppy::{
+    graph::{cargo::BuildPlatform, PackageGraph},
+    PackageId,
+};
 use miette::SourceSpan;
 use std::{cell::RefCell, collections::HashSet};
 
@@ -42,6 +45,8 @@ pub enum FilteringSet {
     Packages(HashSet<PackageId>),
     /// All tests present in this kind of binary.
     Kind(NameMatcher, SourceSpan),
+    /// The platform a test is built for.
+    Platform(BuildPlatform, SourceSpan),
     /// All tests matching a name
     Test(NameMatcher, SourceSpan),
     /// All tests
@@ -59,6 +64,9 @@ pub struct FilteringExprQuery<'a> {
 
     /// The kind of binary this test is (lib, test etc).
     pub kind: &'a str,
+
+    /// The platform this test is built for.
+    pub platform: BuildPlatform,
 
     /// The name of the test.
     pub test_name: &'a str,
@@ -95,6 +103,7 @@ impl FilteringSet {
             Self::All => true,
             Self::None => false,
             Self::Test(matcher, _) => matcher.is_match(query.test_name),
+            Self::Platform(platform, _) => query.platform == *platform,
             Self::Kind(matcher, _) => matcher.is_match(query.kind),
             Self::Packages(packages) => packages.contains(query.package_id),
         }

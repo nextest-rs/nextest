@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use guppy::PackageId;
+use guppy::{graph::cargo::BuildPlatform, PackageId};
 use nextest_filtering::{
     errors::{FilterExpressionParseErrors, ParseSingleError},
     FilteringExpr, FilteringExprQuery,
@@ -36,16 +36,19 @@ fn test_expr_package_contains() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
 }
@@ -62,16 +65,19 @@ fn test_expr_package_equal() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
 }
@@ -88,16 +94,19 @@ fn test_expr_package_regex() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
 }
@@ -119,21 +128,25 @@ fn test_expr_deps() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_d,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
 
@@ -141,16 +154,19 @@ fn test_expr_deps() {
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_e,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_f,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_g,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
 }
@@ -172,16 +188,19 @@ fn test_expr_rdeps() {
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
 
@@ -189,21 +208,25 @@ fn test_expr_rdeps() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_d,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_e,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_f,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_g,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
 }
@@ -243,16 +266,57 @@ fn test_expr_kind() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "test",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib2",
+        platform: BuildPlatform::Target,
+        test_name: "test_something"
+    }));
+}
+
+#[test]
+fn test_expr_platform() {
+    let graph = load_graph();
+    let expr = FilteringExpr::parse("platform(host)", &graph).unwrap();
+    println!("{:?}", expr);
+
+    let pid_a = mk_pid('a');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        platform: BuildPlatform::Host,
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        platform: BuildPlatform::Target,
+        test_name: "test_something"
+    }));
+
+    let expr = FilteringExpr::parse("platform(target)", &graph).unwrap();
+    println!("{:?}", expr);
+
+    let pid_a = mk_pid('a');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        platform: BuildPlatform::Target,
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        platform: BuildPlatform::Host,
         test_name: "test_something"
     }));
 }
@@ -267,11 +331,13 @@ fn test_expr_kind_partial() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "test",
+        platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
 }
@@ -288,16 +354,19 @@ fn test_expr_test() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_run"
     }));
 }
@@ -312,11 +381,13 @@ fn test_expr_test_not() {
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_run"
     }));
 }
@@ -331,11 +402,13 @@ fn test_expr_binary() {
     assert!(!expr.matches(&FilteringSetQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringSetQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_run"
     }));
 }
@@ -352,16 +425,19 @@ fn test_expr_test_union(input: &str) {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_run"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_build"
     }));
 }
@@ -377,16 +453,19 @@ fn test_expr_test_difference(input: &str) {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse_set"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse_expr"
     }));
 }
@@ -401,16 +480,19 @@ fn test_expr_test_intersect(input: &str) {
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_expr"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        platform: BuildPlatform::Target,
         test_name: "test_parse_expr"
     }));
 }

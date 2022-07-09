@@ -7,6 +7,7 @@
 
 use crate::{
     config::{NextestProfile, TestThreads},
+    helpers::convert_build_platform,
     list::{TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
     signal::{SignalEvent, SignalHandler},
@@ -239,6 +240,7 @@ impl<'a> TestRunner<'a> {
                 let query = FilteringExprQuery {
                     package_id: test_instance.bin_info.package.id(),
                     kind: test_instance.bin_info.kind.as_str(),
+                    platform: convert_build_platform(test_instance.bin_info.build_platform),
                     test_name: test_instance.name,
                 };
                 let overrides = self.profile.overrides_for(&query);

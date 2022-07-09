@@ -644,7 +644,7 @@ struct JunitImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use guppy::MetadataCommand;
+    use guppy::{graph::cargo::BuildPlatform, MetadataCommand};
     use indoc::indoc;
     use std::{io::Write, path::PathBuf, process::Command};
     use tempfile::tempdir;
@@ -877,6 +877,7 @@ mod tests {
         let query = FilteringExprQuery {
             package_id,
             kind: "lib",
+            platform: BuildPlatform::Target,
             test_name: "my_test",
         };
         let overrides_for = config
