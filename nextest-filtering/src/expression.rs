@@ -57,9 +57,25 @@ pub enum FilteringSet {
     None,
 }
 
-/// A query passed into [`FilteringExpr::matches`].
+/// A query for a binary, passed into [`FilteringExpr::matches_binary`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct FilteringExprQuery<'a> {
+pub struct BinaryQuery<'a> {
+    /// The package ID.
+    pub package_id: &'a PackageId,
+
+    /// The name of the binary.
+    pub binary_name: &'a str,
+
+    /// The kind of binary this test is (lib, test etc).
+    pub kind: &'a str,
+
+    /// The platform this test is built for.
+    pub platform: BuildPlatform,
+}
+
+/// A query for a specific test, passed into [`FilteringExpr::matches_test`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct TestQuery<'a> {
     /// The package ID.
     pub package_id: &'a PackageId,
 
@@ -102,7 +118,7 @@ impl NameMatcher {
 }
 
 impl FilteringSet {
-    fn matches(&self, query: &FilteringExprQuery<'_>) -> bool {
+    fn matches_test(&self, query: &TestQuery<'_>) -> bool {
         match self {
             Self::All => true,
             Self::None => false,
@@ -111,6 +127,18 @@ impl FilteringSet {
             Self::Platform(platform, _) => query.platform == *platform,
             Self::Kind(matcher, _) => matcher.is_match(query.kind),
             Self::Packages(packages) => packages.contains(query.package_id),
+        }
+    }
+
+    fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
+        match self {
+            Self::All => Logic::top(),
+            Self::None => Logic::bottom(),
+            Self::Test(_, _) => None,
+            Self::Binary(matcher, _) => Some(matcher.is_match(query.binary_name)),
+            Self::Platform(platform, _) => Some(query.platform == *platform),
+            Self::Kind(matcher, _) => Some(matcher.is_match(query.kind)),
+            Self::Packages(packages) => Some(packages.contains(query.package_id)),
         }
     }
 }
@@ -157,13 +185,35 @@ impl FilteringExpr {
         }
     }
 
-    /// Returns true if the given test is accepted by this filter
-    pub fn matches(&self, query: &FilteringExprQuery<'_>) -> bool {
+    /// Returns a value indicating if the given binary is accepted by this filter expression.
+    ///
+    /// The value is:
+    /// * `Some(true)` if this binary is definitely accepted by this filter expression.
+    /// * `Some(false)` if this binary is definitely not accepted.
+    /// * `None` if this binary might or might not be accepted.
+    pub fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
         match self {
-            Self::Set(set) => set.matches(query),
-            Self::Not(expr) => !expr.matches(query),
-            Self::Union(expr_1, expr_2) => expr_1.matches(query) || expr_2.matches(query),
-            Self::Intersection(expr_1, expr_2) => expr_1.matches(query) && expr_2.matches(query),
+            Self::Set(set) => set.matches_binary(query),
+            Self::Not(expr) => expr.matches_binary(query).logic_not(),
+            // TODO: or_else/and_then?
+            Self::Union(expr_1, expr_2) => expr_1
+                .matches_binary(query)
+                .logic_or(expr_2.matches_binary(query)),
+            Self::Intersection(expr_1, expr_2) => expr_1
+                .matches_binary(query)
+                .logic_and(expr_2.matches_binary(query)),
+        }
+    }
+
+    /// Returns true if the given test is accepted by this filter expression.
+    pub fn matches_test(&self, query: &TestQuery<'_>) -> bool {
+        match self {
+            Self::Set(set) => set.matches_test(query),
+            Self::Not(expr) => !expr.matches_test(query),
+            Self::Union(expr_1, expr_2) => expr_1.matches_test(query) || expr_2.matches_test(query),
+            Self::Intersection(expr_1, expr_2) => {
+                expr_1.matches_test(query) && expr_2.matches_test(query)
+            }
         }
     }
 
@@ -171,5 +221,99 @@ impl FilteringExpr {
     pub fn needs_deps(raw_expr: &str) -> bool {
         // the expression needs dependencies expression if it uses deps(..) or rdeps(..)
         raw_expr.contains("deps")
+    }
+}
+
+/// A propositional logic used to evaluate `Expression` instances.
+///
+/// An `Expression` consists of some predicates and the `any`, `all` and `not` operators. An
+/// implementation of `Logic` defines how the `any`, `all` and `not` operators should be evaluated.
+trait Logic {
+    /// The result of an `all` operation with no operands, akin to Boolean `true`.
+    fn top() -> Self;
+
+    /// The result of an `any` operation with no operands, akin to Boolean `false`.
+    fn bottom() -> Self;
+
+    /// `AND`, which corresponds to the `all` operator.
+    fn logic_and(self, other: Self) -> Self;
+
+    /// `OR`, which corresponds to the `any` operator.
+    fn logic_or(self, other: Self) -> Self;
+
+    /// `NOT`, which corresponds to the `not` operator.
+    fn logic_not(self) -> Self;
+}
+
+/// A boolean logic.
+impl Logic for bool {
+    #[inline]
+    fn top() -> Self {
+        true
+    }
+
+    #[inline]
+    fn bottom() -> Self {
+        false
+    }
+
+    #[inline]
+    fn logic_and(self, other: Self) -> Self {
+        self && other
+    }
+
+    #[inline]
+    fn logic_or(self, other: Self) -> Self {
+        self || other
+    }
+
+    #[inline]
+    fn logic_not(self) -> Self {
+        !self
+    }
+}
+
+/// A three-valued logic -- `None` stands for the value being unknown.
+///
+/// The truth tables for this logic are described on
+/// [Wikipedia](https://en.wikipedia.org/wiki/Three-valued_logic#Kleene_and_Priest_logics).
+impl Logic for Option<bool> {
+    #[inline]
+    fn top() -> Self {
+        Some(true)
+    }
+
+    #[inline]
+    fn bottom() -> Self {
+        Some(false)
+    }
+
+    #[inline]
+    fn logic_and(self, other: Self) -> Self {
+        match (self, other) {
+            // If either is false, the expression is false.
+            (Some(false), _) | (_, Some(false)) => Some(false),
+            // If both are true, the expression is true.
+            (Some(true), Some(true)) => Some(true),
+            // One or both are unknown -- the result is unknown.
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn logic_or(self, other: Self) -> Self {
+        match (self, other) {
+            // If either is true, the expression is true.
+            (Some(true), _) | (_, Some(true)) => Some(true),
+            // If both are false, the expression is false.
+            (Some(false), Some(false)) => Some(false),
+            // One or both are unknown -- the result is unknown.
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn logic_not(self) -> Self {
+        self.map(|v| !v)
     }
 }

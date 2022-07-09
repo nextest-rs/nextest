@@ -15,7 +15,7 @@ use crate::{
     target_runner::TargetRunner,
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
-use nextest_filtering::FilteringExprQuery;
+use nextest_filtering::TestQuery;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
@@ -189,7 +189,7 @@ impl<'a> TestRunner<'a> {
                     return;
                 }
 
-                let query = FilteringExprQuery {
+                let query = TestQuery {
                     package_id: test_instance.bin_info.package.id(),
                     kind: test_instance.bin_info.kind.as_str(),
                     binary_name: &test_instance.bin_info.binary_name,
