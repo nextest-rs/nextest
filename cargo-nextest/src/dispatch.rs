@@ -1455,7 +1455,9 @@ mod tests {
             // ---
             // unsupported
             // ---
-            ("foo -- --exact", "unsupported"),
+            ("foo -- --bar", "unsupported"),
+            ("foo -- --exact", "unsupported\n(hint: use a filter expression instead: <https://nexte.st/book/filter-expressions>)"),
+            ("foo -- --skip", "unsupported\n(hint: use a filter expression instead: <https://nexte.st/book/filter-expressions>)"),
         ];
 
         for (a, b) in valid {
