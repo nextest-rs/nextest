@@ -10,7 +10,7 @@ use nextest_runner::{
     config::NextestConfig,
     list::BinaryList,
     reporter::heuristic_extract_description,
-    runner::{ExecutionDescription, ExecutionResult, IgnoreOverrides, TestRunnerBuilder},
+    runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
     signal::SignalHandler,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -290,18 +290,14 @@ fn test_name_match_without_filter_expr() -> Result<()> {
 }
 
 #[test_case(
-    IgnoreOverrides::default()
-    ; "no overrides ignored"
+    None
+    ; "retry overrides obeyed"
 )]
 #[test_case(
-    {
-        let mut ignore_overrides = IgnoreOverrides::default();
-        ignore_overrides.add_retries();
-        ignore_overrides
-    }
+    Some(2)
     ; "retry overrides ignored"
 )]
-fn test_retries(ignore_overrides: IgnoreOverrides) -> Result<()> {
+fn test_retries(retries: Option<usize>) -> Result<()> {
     set_rustflags();
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
@@ -312,11 +308,13 @@ fn test_retries(ignore_overrides: IgnoreOverrides) -> Result<()> {
         .profile("with-retries")
         .expect("with-retries config is valid");
 
-    let retries = profile.retries();
-    assert_eq!(retries, 2, "retries set in with-retries profile");
+    let profile_retries = profile.retries();
+    assert_eq!(profile_retries, 2, "retries set in with-retries profile");
 
     let mut builder = TestRunnerBuilder::default();
-    builder.set_ignore_overrides(ignore_overrides.clone());
+    if let Some(retries) = retries {
+        builder.set_retries(retries);
+    }
     let runner = builder.build(
         &test_list,
         profile,
@@ -339,8 +337,8 @@ fn test_retries(ignore_overrides: IgnoreOverrides) -> Result<()> {
                 InstanceStatus::Finished(run_statuses) => {
                     let expected_len = match fixture.status {
                         FixtureStatus::Flaky { pass_attempt } => {
-                            if ignore_overrides.ignore_retries() {
-                                pass_attempt.min(retries + 1)
+                            if retries.is_some() {
+                                pass_attempt.min(profile_retries + 1)
                             } else {
                                 pass_attempt
                             }
@@ -348,7 +346,7 @@ fn test_retries(ignore_overrides: IgnoreOverrides) -> Result<()> {
                         FixtureStatus::Pass => 1,
                         // Note that currently only the flaky test fixtures are controlled by overrides.
                         // If more tests are controlled by retry overrides, this may need to be updated.
-                        FixtureStatus::Fail | FixtureStatus::Segfault => retries + 1,
+                        FixtureStatus::Fail | FixtureStatus::Segfault => profile_retries + 1,
                         FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail => {
                             unreachable!("ignored tests should be skipped")
                         }

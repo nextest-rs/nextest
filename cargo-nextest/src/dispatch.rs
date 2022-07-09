@@ -21,7 +21,7 @@ use nextest_runner::{
     partition::PartitionerBuilder,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
-    runner::{IgnoreOverrides, TestRunnerBuilder},
+    runner::TestRunnerBuilder,
     signal::SignalHandler,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -579,12 +579,6 @@ pub struct TestRunnerOpts {
     /// Run all tests regardless of failure
     #[clap(long, overrides_with = "fail-fast")]
     no_fail_fast: bool,
-
-    /// Disable overrides configured in nextest.toml
-    ///
-    /// If --ignore-overrides is passed in without any arguments, all values will be ignored.
-    #[clap(long, arg_enum, value_name = "OVERRIDES", use_value_delimiter = true)]
-    ignore_overrides: Vec<IgnoreOverridesOpt>,
 }
 
 impl TestRunnerOpts {
@@ -602,16 +596,6 @@ impl TestRunnerOpts {
         if let Some(test_threads) = self.test_threads {
             builder.set_test_threads(test_threads);
         }
-
-        let mut overrides = IgnoreOverrides::default();
-        for override_ in &self.ignore_overrides {
-            match override_ {
-                IgnoreOverridesOpt::Retries => overrides.add_retries(),
-                IgnoreOverridesOpt::All => overrides.add_all(),
-            };
-        }
-
-        builder.set_ignore_overrides(overrides);
 
         builder
     }

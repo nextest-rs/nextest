@@ -36,7 +36,6 @@ pub struct TestRunnerBuilder {
     retries: Option<usize>,
     fail_fast: Option<bool>,
     test_threads: Option<TestThreads>,
-    ignore_overrides: IgnoreOverrides,
 }
 
 impl TestRunnerBuilder {
@@ -66,12 +65,6 @@ impl TestRunnerBuilder {
         self
     }
 
-    /// Sets which profile overrides to ignore.
-    pub fn set_ignore_overrides(&mut self, ignore_overrides: IgnoreOverrides) -> &mut Self {
-        self.ignore_overrides = ignore_overrides;
-        self
-    }
-
     /// Creates a new test runner.
     pub fn build<'a>(
         self,
@@ -87,16 +80,19 @@ impl TestRunnerBuilder {
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
         };
-        let retries = self.retries.unwrap_or_else(|| profile.retries());
+        let (retries, ignore_retry_overrides) = match self.retries {
+            Some(retries) => (retries, true),
+            None => (profile.retries(), false),
+        };
         let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
         let slow_timeout = profile.slow_timeout();
 
         TestRunner {
             no_capture: self.no_capture,
             profile,
-            ignore_overrides: self.ignore_overrides,
             // The number of tries = retries + 1.
             global_tries: retries + 1,
+            ignore_retry_overrides,
             fail_fast,
             slow_timeout,
             test_list,
@@ -117,58 +113,14 @@ impl TestRunnerBuilder {
     }
 }
 
-/// Which profile overrides to ignore.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum IgnoreOverrides {
-    /// Ignore all profile overrides.
-    All,
-
-    /// Ignore these specific profile overrides.
-    Overrides {
-        /// Ignore retries.
-        retries: bool,
-    },
-}
-
-impl IgnoreOverrides {
-    /// Add "all" to the set of ignore overrides.
-    pub fn add_all(&mut self) -> &mut Self {
-        *self = Self::All;
-        self
-    }
-
-    /// Add retries to the set of ignore overrides.
-    pub fn add_retries(&mut self) -> &mut Self {
-        match self {
-            Self::All => {}
-            Self::Overrides { retries } => *retries = true,
-        }
-        self
-    }
-
-    /// Returns true if retry overrides should be ignored.
-    pub fn ignore_retries(&self) -> bool {
-        match self {
-            Self::All => true,
-            Self::Overrides { retries } => *retries,
-        }
-    }
-}
-
-impl Default for IgnoreOverrides {
-    fn default() -> Self {
-        Self::Overrides { retries: false }
-    }
-}
-
 /// Context for running tests.
 ///
 /// Created using [`TestRunnerBuilder::build`].
 pub struct TestRunner<'a> {
     no_capture: bool,
     profile: NextestProfile<'a>,
-    ignore_overrides: IgnoreOverrides,
     global_tries: usize,
+    ignore_retry_overrides: bool,
     fail_fast: bool,
     slow_timeout: crate::config::SlowTimeout,
     test_list: &'a TestList<'a>,
@@ -245,11 +197,10 @@ impl<'a> TestRunner<'a> {
                     test_name: test_instance.name,
                 };
                 let overrides = self.profile.overrides_for(&query);
-                let total_attempts =
-                    match (self.ignore_overrides.ignore_retries(), overrides.retries()) {
-                        (true, _) | (false, None) => self.global_tries,
-                        (false, Some(retries)) => retries + 1,
-                    };
+                let total_attempts = match (self.ignore_retry_overrides, overrides.retries()) {
+                    (true, _) | (false, None) => self.global_tries,
+                    (false, Some(retries)) => retries + 1,
+                };
 
                 let this_run_sender = run_sender.clone();
                 run_scope.spawn(move |_| {
