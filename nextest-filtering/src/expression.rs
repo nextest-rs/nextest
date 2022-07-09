@@ -47,13 +47,14 @@ pub enum FilteringSet {
     Kind(NameMatcher, SourceSpan),
     /// The platform a test is built for.
     Platform(BuildPlatform, SourceSpan),
+    /// All binaries matching a name
+    Binary(NameMatcher, SourceSpan),
     /// All tests matching a name
     Test(NameMatcher, SourceSpan),
     /// All tests
     All,
     /// No tests
     None,
-    // Possible addition: Binary(NameMatcher)
 }
 
 /// A query passed into [`FilteringExpr::matches`].
@@ -61,6 +62,9 @@ pub enum FilteringSet {
 pub struct FilteringExprQuery<'a> {
     /// The package ID.
     pub package_id: &'a PackageId,
+
+    /// The name of the binary.
+    pub binary_name: &'a str,
 
     /// The kind of binary this test is (lib, test etc).
     pub kind: &'a str,
@@ -103,6 +107,7 @@ impl FilteringSet {
             Self::All => true,
             Self::None => false,
             Self::Test(matcher, _) => matcher.is_match(query.test_name),
+            Self::Binary(matcher, _) => matcher.is_match(query.binary_name),
             Self::Platform(platform, _) => query.platform == *platform,
             Self::Kind(matcher, _) => matcher.is_match(query.kind),
             Self::Packages(packages) => packages.contains(query.package_id),

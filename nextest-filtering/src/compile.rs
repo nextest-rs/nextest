@@ -108,6 +108,7 @@ fn compile_set_def(
             errors,
         )),
         SetDef::Kind(matcher, span) => FilteringSet::Kind(matcher.clone(), *span),
+        SetDef::Binary(matcher, span) => FilteringSet::Binary(matcher.clone(), *span),
         SetDef::Platform(platform, span) => FilteringSet::Platform(*platform, *span),
         SetDef::Test(matcher, span) => FilteringSet::Test(matcher.clone(), *span),
         SetDef::All => FilteringSet::All,
