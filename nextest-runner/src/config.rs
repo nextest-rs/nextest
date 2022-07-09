@@ -13,7 +13,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
 use guppy::graph::PackageGraph;
-use nextest_filtering::{FilteringExpr, FilteringExprQuery};
+use nextest_filtering::{FilteringExpr, TestQuery};
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration};
 
@@ -240,11 +240,11 @@ impl<'cfg> NextestProfile<'cfg> {
     }
 
     /// Returns override settings for individual tests.
-    pub fn overrides_for(&self, query: &FilteringExprQuery<'_>) -> ProfileOverrides {
+    pub fn overrides_for(&self, query: &TestQuery<'_>) -> ProfileOverrides {
         let mut retries = None;
 
         for &override_ in &self.overrides {
-            if !override_.expr.matches(query) {
+            if !override_.expr.matches_test(query) {
                 continue;
             }
             if retries.is_none() && override_.data.retries.is_some() {
@@ -874,7 +874,7 @@ mod tests {
         let package_id = graph.workspace().iter().next().unwrap().id();
 
         let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None).unwrap();
-        let query = FilteringExprQuery {
+        let query = TestQuery {
             package_id,
             kind: "lib",
             binary_name: "my-binary",
