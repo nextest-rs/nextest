@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.4] - 2022-07-13
+
+### Added
+
+- `RustTestSuiteSummary` has a new field `status`, which is a newtype over strings:
+  - `"listed"`: the test binary was executed with `--list` to gather the list of tests in it.
+  - `"skipped"`: the test binary was not executed because it didn't match any expression filters.
+
 ## [0.4.3] - 2022-06-26
 
 ### Added
@@ -80,6 +88,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.4.4]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.4
 [0.4.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.3
 [0.4.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.2
 [0.4.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.1

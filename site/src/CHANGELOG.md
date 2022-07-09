@@ -3,6 +3,59 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.25] - 2022-07-13
+
+This is a major release with several new features.
+
+### Filter expressions
+
+[Filter expressions](https://nexte.st/book/filter-expressions) are now ready for production. For example, to run all tests in `nextest-runner` and all its transitive dependencies within the workspace:
+
+```
+cargo nextest run -E 'deps(nextest-runner)'
+```
+
+This release includes a number of additions and changes to filter expressions.
+
+#### Added
+
+* The expression language supports several new [predicates](https://nexte.st/book/filter-expressions#basic-predicates):
+  - `kind(name-matcher)`: include all tests in binary kinds (e.g. `lib`, `test`, `bench`) matching `name-matcher`.
+  - `binary(name-matcher)`: include all tests in binary names matching `name-matcher`.
+  - `platform(host)` or `platform(target)`: include all tests that are [built for the host or target platform](running.md#filtering-by-build-platform), respectively.
+
+#### Changed
+
+* If a filter expression is guaranteed not to match a particular binary, it will not be listed by nextest. (This allows `platform(host)` and `platform(target)` to work correctly.)
+
+* If both filter expressions and standard substring filters are passed in, a test must match filter expressions AND substring filters to be executed. For example:
+
+```
+cargo nextest run -E 'package(nextest-runner)' test_foo test_bar
+```
+
+This will execute only the tests in `nextest-runner` that match `test_foo` or `test_bar`.
+
+### Per-test overrides
+
+Nextest now supports [per-test overrides](https://nexte.st/book/per-test-overrides). These overrides let you customize settings for subsets of tests. For example, to retry tests that contain the substring `test_e2e` 3 times:
+
+```toml
+[[profile.default.overrides]]
+filter = "test(test_e2e)"
+retries = 3
+```
+
+Currently, only `retries` are supported. In the future, more kinds of customization will be added.
+
+### Other changes
+
+- A new environment variable `NEXTEST_RETRIES` controls the number of retries tests are run with. In terms of precedence, this slots in between the command-line `--retries` option and per-test overrides for retries.
+- `cargo nextest list` now hides skipped tests and binaries by default. To print out skipped tests and binaries, use `cargo nextest list --verbose`.
+- The [Machine-readable output](https://nexte.st/book/machine-readable) for `cargo nextest list` now contains a new `"status"` key. By default, this is set to `"listed"`, and for binaries that aren't run because they don't match expression filters this is set to `"skipped"`.
+- The `--platform-filter` option is deprecated, though it will keep working for all versions within the nextest 0.9 series. Use `-E 'platform(host)'` or `-E 'platform(target)'` instead.
+- `cargo nextest run -- --skip` and `--exact` now suggest using a filter expression instead.
+
 ## [0.9.24] - 2022-07-01
 
 ### Added
@@ -333,6 +386,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.25]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.25
 [0.9.24]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.24
 [0.9.23]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.23
 [0.9.22]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.22

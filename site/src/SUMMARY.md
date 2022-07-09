@@ -14,6 +14,7 @@
   - [Running tests](book/running.md)
   - [Listing tests](book/listing.md)
   - [Retries and flaky tests](book/retries.md)
+  - [Filter expressions](book/filter-expressions.md)
   - [Archiving and reusing builds](book/reusing-builds.md)
   - [Partitioning test runs in CI](book/partitioning.md)
   - [Target runners](book/target-runners.md)
@@ -21,12 +22,12 @@
   - [Environment variables](book/env-vars.md)
 - [Machine-readable output](book/machine-readable.md)
 - [Configuration](book/configuration.md)
+  - [Per-test overrides](book/per-test-overrides.md)
 - [JUnit support](book/junit.md)
 - [Test coverage](book/test-coverage.md)
 ---
 - [Stability policy](book/stability.md)
 - [Experimental features](book/experimental-features.md)
-  - [Filter expressions](book/filter-expressions.md)
 ---
 - [How nextest works](book/how-it-works.md)
   - [Benchmarks](book/benchmarks.md)
