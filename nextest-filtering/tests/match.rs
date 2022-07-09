@@ -36,18 +36,21 @@ fn test_expr_package_contains() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -65,18 +68,21 @@ fn test_expr_package_equal() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -94,18 +100,21 @@ fn test_expr_package_regex() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -128,24 +137,28 @@ fn test_expr_deps() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_d,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -154,18 +167,21 @@ fn test_expr_deps() {
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_e,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_f,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_g,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -188,18 +204,21 @@ fn test_expr_rdeps() {
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_c,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -208,24 +227,28 @@ fn test_expr_rdeps() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_d,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_e,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_f,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_g,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -266,18 +289,51 @@ fn test_expr_kind() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "test",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib2",
+        binary_name: "my-binary",
+        platform: BuildPlatform::Target,
+        test_name: "test_something"
+    }));
+}
+
+#[test]
+fn test_expr_binary() {
+    let graph = load_graph();
+    let expr = FilteringExpr::parse("binary(my-binary)", &graph).unwrap();
+    println!("{:?}", expr);
+
+    let pid_a = mk_pid('a');
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib",
+        binary_name: "my-binary",
+        platform: BuildPlatform::Target,
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "test",
+        binary_name: "my-binary2",
+        platform: BuildPlatform::Target,
+        test_name: "test_parse"
+    }));
+    assert!(expr.matches(&FilteringExprQuery {
+        package_id: &pid_a,
+        kind: "lib2",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -293,12 +349,14 @@ fn test_expr_platform() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Host,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
@@ -310,12 +368,14 @@ fn test_expr_platform() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Host,
         test_name: "test_something"
     }));
@@ -331,12 +391,14 @@ fn test_expr_kind_partial() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "test",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_something"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
@@ -354,18 +416,21 @@ fn test_expr_test() {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_b,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_run"
     }));
@@ -381,33 +446,14 @@ fn test_expr_test_not() {
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
-        platform: BuildPlatform::Target,
-        test_name: "test_run"
-    }));
-}
-
-#[test]
-fn test_expr_binary() {
-    let graph = load_graph();
-    let expr = FilteringExpr::parse("not test(parse)", &graph).unwrap();
-    println!("{:?}", expr);
-
-    let pid_a = mk_pid('a');
-    assert!(!expr.matches(&FilteringSetQuery {
-        package_id: &pid_a,
-        kind: "lib",
-        platform: BuildPlatform::Target,
-        test_name: "test_parse"
-    }));
-    assert!(expr.matches(&FilteringSetQuery {
-        package_id: &pid_a,
-        kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_run"
     }));
@@ -425,18 +471,21 @@ fn test_expr_test_union(input: &str) {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_run"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_build"
     }));
@@ -453,18 +502,21 @@ fn test_expr_test_difference(input: &str) {
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse_set"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse_expr"
     }));
@@ -480,18 +532,21 @@ fn test_expr_test_intersect(input: &str) {
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse"
     }));
     assert!(!expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_expr"
     }));
     assert!(expr.matches(&FilteringExprQuery {
         package_id: &pid_a,
         kind: "lib",
+        binary_name: "my-binary",
         platform: BuildPlatform::Target,
         test_name: "test_parse_expr"
     }));

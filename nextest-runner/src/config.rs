@@ -877,6 +877,7 @@ mod tests {
         let query = FilteringExprQuery {
             package_id,
             kind: "lib",
+            binary_name: "my-binary",
             platform: BuildPlatform::Target,
             test_name: "my_test",
         };
