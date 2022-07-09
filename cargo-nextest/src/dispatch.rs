@@ -456,6 +456,7 @@ impl TestBuildFilter {
         let mut ignore_filters = Vec::new();
         let mut read_trailing_filters = false;
 
+        let mut skip_exact = Vec::new();
         let mut unsupported_args = Vec::new();
 
         patterns.extend(
@@ -472,6 +473,9 @@ impl TestBuildFilter {
                         false
                     } else if s == "--" {
                         read_trailing_filters = true;
+                        false
+                    } else if s == "--skip" || s == "--exact" {
+                        skip_exact.push(s.clone());
                         false
                     } else {
                         unsupported_args.push(s.clone());
@@ -497,6 +501,13 @@ impl TestBuildFilter {
             } else {
                 *run_ignored = Some(f);
             }
+        }
+
+        if !skip_exact.is_empty() {
+            return Err(ExpectedError::test_binary_args_parse_error(
+                "unsupported\n(hint: use a filter expression instead: <https://nexte.st/book/filter-expressions>)",
+                skip_exact,
+            ));
         }
 
         if !unsupported_args.is_empty() {

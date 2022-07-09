@@ -40,6 +40,17 @@ cargo nextest run <test-name1> <test-name2>...
 
 This is different from `cargo test`, where you have to specify a `--`, for example: `cargo test -- <test-name1> <test-name2>...`.
 
+### `--skip` and `--exact`
+
+Nextest does not support `--skip` and `--exact` directly; instead, it supports more powerful [filter expressions](filter-expressions.md) which supersede these options.
+
+Here are some examples:
+
+|                Cargo test command               |                     Nextest command                     |
+|:-----------------------------------------------:|:-------------------------------------------------------:|
+| `cargo test -- --skip skip1 --skip skip2 test3` | `cargo nextest run -E 'test(test3) - test(/skip[12]/)'` |
+| `cargo test -- --exact test1 test2`             |   `cargo nextest run -E 'test(=test1) + test(=test2)'`  |
+
 ### Filtering by build platform
 
 While cross-compiling code, some tests (e.g. proc-macro tests) may need to be run on the host platform. To filter tests based on the build platform they're for, nextest accepts the `--platform-filter` option with values `target`, `host` or `any` (default).
