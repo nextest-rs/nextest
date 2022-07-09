@@ -81,6 +81,10 @@ pub enum ParseSingleError {
     #[error("operator didn't match any packages")]
     NoPackageMatch(#[label("no packages matched this")] SourceSpan),
 
+    /// Expected "host" or "target" for a `platform()` predicate.
+    #[error("invalid argument for platform")]
+    InvalidPlatformArgument(#[label("expected \"target\" or \"host\"")] SourceSpan),
+
     /// An unknown parsing error occurred.
     #[error("unknown parsing error")]
     Unknown,

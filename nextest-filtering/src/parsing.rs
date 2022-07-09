@@ -13,6 +13,7 @@
 //!     - return an error/none variant of the expected result type
 //!     - push an error in the parsing state (in span.extra)
 
+use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
 use nom::{
     branch::alt,
@@ -44,6 +45,7 @@ pub(crate) enum SetDef {
     Deps(NameMatcher, SourceSpan),
     Rdeps(NameMatcher, SourceSpan),
     Kind(NameMatcher, SourceSpan),
+    Platform(BuildPlatform, SourceSpan),
     Test(NameMatcher, SourceSpan),
     All,
     None,
@@ -374,6 +376,38 @@ fn unary_set_def(
     }
 }
 
+fn platform_def(i: Span) -> IResult<Option<SetDef>> {
+    let (i, _) = tag("platform")(i)?;
+    let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
+    let start = i.location_offset();
+    // Try parsing the argument as a string for better error messages.
+    let (i, res) = ws(parse_matcher_text)(i)?;
+    let end = i.location_offset();
+    let (i, _) = recover_unexpected_comma(i)?;
+    let (i, _) = expect_char(')', ParseSingleError::ExpectedCloseParenthesis)(i)?;
+
+    // The returned string will include leading and trailing whitespace.
+    let platform = match res.as_deref().map(|res| res.trim()) {
+        Some("host") => Some(BuildPlatform::Host),
+        Some("target") => Some(BuildPlatform::Target),
+        Some(_) => {
+            i.extra
+                .report_error(ParseSingleError::InvalidPlatformArgument(
+                    (start, end - start).into(),
+                ));
+            None
+        }
+        None => {
+            // This was already reported above.
+            None
+        }
+    };
+    Ok((
+        i,
+        platform.map(|platform| SetDef::Platform(platform, (start, end - start).into())),
+    ))
+}
+
 #[tracable_parser]
 fn parse_set_def(input: Span) -> IResult<Option<SetDef>> {
     ws(alt((
@@ -382,6 +416,7 @@ fn parse_set_def(input: Span) -> IResult<Option<SetDef>> {
         unary_set_def("rdeps", NameMatcher::Equal, SetDef::Rdeps),
         unary_set_def("kind", NameMatcher::Equal, SetDef::Kind),
         unary_set_def("test", NameMatcher::Contains, SetDef::Test),
+        platform_def,
         nullary_set_def("all", || SetDef::All),
         nullary_set_def("none", || SetDef::None),
     )))(input)
@@ -693,6 +728,17 @@ mod tests {
             Test,
             NameMatcher::Contains("something".to_string())
         );
+        assert_set_def!(parse_set("platform(host)"), Platform, BuildPlatform::Host);
+        assert_set_def!(
+            parse_set("platform(target)"),
+            Platform,
+            BuildPlatform::Target
+        );
+        assert_set_def!(
+            parse_set("platform(    host    )"),
+            Platform,
+            BuildPlatform::Host
+        );
     }
 
     #[track_caller]
@@ -876,6 +922,21 @@ mod tests {
         };
         assert_eq!(span, (12, 1).into(), "span matches");
         assert_eq!(message, "unclosed group");
+    }
+
+    #[test]
+    fn test_invalid_platform() {
+        let src = "platform(foo)";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidPlatformArgument, 9, 3);
+
+        let src = "platform(   bar\\t)";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidPlatformArgument, 9, 8);
     }
 
     #[test]
