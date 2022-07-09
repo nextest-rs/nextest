@@ -61,7 +61,7 @@ fn test_list_tests() -> Result<()> {
             .remove(&test_binary.binary_id)
             .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary_path));
         let tests: Vec<_> = info
-            .testcases
+            .test_cases
             .iter()
             .map(|(name, info)| (name.as_str(), info.filter_match))
             .collect();

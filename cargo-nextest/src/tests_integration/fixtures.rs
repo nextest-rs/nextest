@@ -4,7 +4,9 @@
 use super::temp_project::TempProject;
 use crate::{dispatch::CargoNextestApp, OutputWriter};
 use clap::StructOpt;
-use nextest_metadata::{BinaryListSummary, BuildPlatform, TestListSummary};
+use nextest_metadata::{
+    BinaryListSummary, BuildPlatform, RustTestSuiteStatusSummary, TestListSummary,
+};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::process::Command;
@@ -211,14 +213,20 @@ pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
             _ => panic!("Missing binary: {}", test.id),
         };
 
+        if entry.status != RustTestSuiteStatusSummary::LISTED {
+            panic!(
+                "for {}, test case expected to be listed, was {:?} instead",
+                test.id, entry.status
+            );
+        }
         assert_eq!(
             test.test_cases.len(),
-            entry.testcases.len(),
+            entry.test_cases.len(),
             "testcase lengths match for {}",
             test.id
         );
         for case in &test.test_cases {
-            let e = entry.testcases.get(case.0);
+            let e = entry.test_cases.get(case.0);
             let e = match e {
                 Some(e) => e,
                 _ => panic!("Missing test case '{}' in '{}'", case.0, test.id),
