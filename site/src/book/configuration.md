@@ -29,13 +29,23 @@ After checking the profile into `.config/nextest.toml`, use `cargo nextest --pro
 
 ## Hierarchical configuration
 
+For this example:
+
 Configuration is resolved in the following order:
 1. Command-line arguments. For example, if `--retries=3` is specified on the command line, failing tests are retried up to 3 times.
-2. Profile-specific configuration. For example, if `--profile ci` is selected in the example above, failing tests are retried up to 2 times.
-3. Repository-specific configuration for the `default` profile. For example, if the repository-specific configuration looks like:
+2. Environment variables. For example, if `NEXTEST_RETRIES=4` is specified on the command line, failing tests are retried up to 4 times.
+3. [Per-test overrides](per-test-overrides.md), if they're supported for this configuration variable.
+4. Profile-specific configuration. For example, if the repository-specific configuration looks like:
+    ```toml
+    [profile.ci]
+    retries = 2
+    ```
+
+    then, if `--profile ci` is selected, failing tests are retried up to 2 times.
+5. Repository-specific configuration for the `default` profile. For example, if the repository-specific configuration looks like:
     ```toml
     [profile.default]
     retries = 5
     ```
     then failing tests are retried up to 5 times.
-4. The default configuration listed above, which is that tests are never retried.
+6. The default configuration listed above, which is that tests are never retried.

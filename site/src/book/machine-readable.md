@@ -23,11 +23,12 @@ To produce a list of tests in the JSON output format `cargo nextest list --messa
       "package-name": "tokio-util",
       "binary-id": "tokio-util",
       "binary-name": "tokio-util",
-      "package-id": "tokio-util 0.7.0 (path+file:///home/rain/dev/tokio/tokio-util)",
+      "package-id": "tokio-util 0.7.3 (path+file:///home/rain/dev/tokio/tokio-util)",
       "kind": "lib",
-      "binary-path": "/home/me/dev/tokio/target/debug/deps/tokio_util-ab2fb640a9e5e856",
+      "binary-path": "/home/me/dev/tokio/target/debug/deps/tokio_util-9dd5cbf268a3ffb4",
       "build-platform": "target",
-      "cwd": "/home/rain/dev/tokio/tokio-util",
+      "cwd": "/home/me/dev/tokio/tokio-util",
+      "status": "listed",
       "testcases": {
         "either::tests::either_is_async_read": {
           "ignored": false,
