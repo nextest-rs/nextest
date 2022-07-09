@@ -42,7 +42,7 @@ This is different from `cargo test`, where you have to specify a `--`, for examp
 
 ### `--skip` and `--exact`
 
-Nextest does not support `--skip` and `--exact` directly; instead, it supports more powerful [filter expressions](filter-expressions.md) which supersede these options.
+Nextest does not support `--skip` and `--exact` directly; instead, it supports more powerful [filter expressions] which supersede these options.
 
 Here are some examples:
 
@@ -53,13 +53,15 @@ Here are some examples:
 
 ### Filtering by build platform
 
-While cross-compiling code, some tests (e.g. proc-macro tests) may need to be run on the host platform. To filter tests based on the build platform they're for, nextest accepts the `--platform-filter` option with values `target`, `host` or `any` (default).
+While cross-compiling code, some tests (e.g. proc-macro tests) may need to be run on the host platform. To filter tests based on the build platform they're for, nextest's filter expressions accept the `platform()` set with values `target` and `host`.
 
 For example, to only run tests for the host platform:
 
 ```
-cargo nextest run --platform-filter host
+cargo nextest run -E 'platform(host)'
 ```
+
+[filter expressions]: filter-expressions.md
 
 ## Displaying live test output
 

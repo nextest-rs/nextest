@@ -72,7 +72,7 @@ While cross-compiling code, some tests may need to be run on the host platform. 
 
 1. Build and run host-only tests:
    ```
-   cargo nextest run --target <TARGET> --platform-filter host
+   cargo nextest run --target <TARGET> -E 'platform(host)'
    ```
 2. Archive tests:
     ```
@@ -85,13 +85,13 @@ While cross-compiling code, some tests may need to be run on the host platform. 
 1. Check out the project repository to a path `<REPO-PATH>`, to the same revision as the build machine.
 2. List target-only tests:
     ```
-    cargo nextest list --platform-filter target \
+    cargo nextest list -E 'platform(target)' \
         --archive-file my-archive.tar.zst \
         --workspace-remap <REPO-PATH>
     ```
 3. Run target-only tests:
     ```
-    cargo nextest run --platform-filter target \
+    cargo nextest run -E 'platform(target)' \
         --archive-file my-archive.tar.zst \
         --workspace-remap <REPO-PATH>
     ```

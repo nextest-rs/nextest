@@ -207,8 +207,8 @@ fn test_list_host_after_build() {
         p.binaries_metadata_path().as_str(),
         "--message-format",
         "json",
-        "--platform-filter",
-        "host",
+        "-E",
+        "platform(host)",
     ]);
 
     let mut output = OutputWriter::new_test();
@@ -234,8 +234,8 @@ fn test_list_target_after_build() {
         p.binaries_metadata_path().as_str(),
         "--message-format",
         "json",
-        "--platform-filter",
-        "target",
+        "-E",
+        "platform(target)",
     ]);
 
     let mut output = OutputWriter::new_test();

@@ -181,25 +181,12 @@ pub fn build_tests(p: &TempProject) {
 pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
     let result: TestListSummary = serde_json::from_slice(stdout).unwrap();
 
-    let host_binaries_count = 1;
     let test_suite = &*EXPECTED_LIST;
-    match platform {
-        Some(BuildPlatform::Host) => assert_eq!(
-            host_binaries_count,
-            result.rust_suites.len(),
-            "host suite counts match"
-        ),
-        Some(BuildPlatform::Target) => assert_eq!(
-            test_suite.len() - host_binaries_count,
-            result.rust_suites.len(),
-            "target suite counts match",
-        ),
-        None => assert_eq!(
-            test_suite.len(),
-            result.rust_suites.len(),
-            "test suite counts match"
-        ),
-    }
+    assert_eq!(
+        test_suite.len(),
+        result.rust_suites.len(),
+        "test suite counts match"
+    );
 
     for test in test_suite {
         match platform {
@@ -213,12 +200,29 @@ pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
             _ => panic!("Missing binary: {}", test.id),
         };
 
-        if entry.status != RustTestSuiteStatusSummary::LISTED {
-            panic!(
-                "for {}, test case expected to be listed, was {:?} instead",
-                test.id, entry.status
-            );
+        if let Some(platform) = platform {
+            if entry.binary.build_platform != platform {
+                // The binary should be marked as skipped.
+                assert_eq!(
+                    entry.status,
+                    RustTestSuiteStatusSummary::SKIPPED,
+                    "for {}, test suite expected to be skipped because of platform mismatch",
+                    test.id
+                );
+                assert!(
+                    entry.test_cases.is_empty(),
+                    "skipped test binaries should have no test cases"
+                );
+                continue;
+            }
         }
+
+        assert_eq!(
+            entry.status,
+            RustTestSuiteStatusSummary::LISTED,
+            "for {}, test suite expected to be listed",
+            test.id
+        );
         assert_eq!(
             test.test_cases.len(),
             entry.test_cases.len(),
