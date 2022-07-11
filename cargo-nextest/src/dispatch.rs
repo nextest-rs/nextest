@@ -581,7 +581,7 @@ pub struct TestRunnerOpts {
     test_threads: Option<TestThreads>,
 
     /// Number of retries for failing tests [default: from profile]
-    #[clap(long)]
+    #[clap(long, env = "NEXTEST_RETRIES")]
     retries: Option<usize>,
 
     /// Cancel test run on the first failure
