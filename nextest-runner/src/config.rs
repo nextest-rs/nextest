@@ -646,6 +646,7 @@ mod tests {
     use super::*;
     use guppy::{graph::cargo::BuildPlatform, MetadataCommand};
     use indoc::indoc;
+    use nextest_filtering::BinaryQuery;
     use std::{io::Write, path::PathBuf, process::Command};
     use tempfile::tempdir;
     use test_case::test_case;
@@ -875,10 +876,12 @@ mod tests {
 
         let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None).unwrap();
         let query = TestQuery {
-            package_id,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
             test_name: "my_test",
         };
         let overrides_for = config
