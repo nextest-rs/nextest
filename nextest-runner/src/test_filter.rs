@@ -164,7 +164,6 @@ impl TestFilterBuilder {
         for expr in &self.exprs {
             // If this is a definite or probable match, then we should run this binary
             if expr.matches_binary(&query).unwrap_or(true) {
-                println!("matches {expr:?}");
                 return true;
             }
         }
