@@ -15,7 +15,7 @@ use crate::{
     target_runner::TargetRunner,
 };
 use crossbeam_channel::{RecvTimeoutError, Sender};
-use nextest_filtering::TestQuery;
+use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
@@ -190,10 +190,12 @@ impl<'a> TestRunner<'a> {
                 }
 
                 let query = TestQuery {
-                    package_id: test_instance.bin_info.package.id(),
-                    kind: test_instance.bin_info.kind.as_str(),
-                    binary_name: &test_instance.bin_info.binary_name,
-                    platform: convert_build_platform(test_instance.bin_info.build_platform),
+                    binary_query: BinaryQuery {
+                        package_id: test_instance.bin_info.package.id(),
+                        kind: test_instance.bin_info.kind.as_str(),
+                        binary_name: &test_instance.bin_info.binary_name,
+                        platform: convert_build_platform(test_instance.bin_info.build_platform),
+                    },
                     test_name: test_instance.name,
                 };
                 let overrides = self.profile.overrides_for(&query);

@@ -76,17 +76,8 @@ pub struct BinaryQuery<'a> {
 /// A query for a specific test, passed into [`FilteringExpr::matches_test`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TestQuery<'a> {
-    /// The package ID.
-    pub package_id: &'a PackageId,
-
-    /// The name of the binary.
-    pub binary_name: &'a str,
-
-    /// The kind of binary this test is (lib, test etc).
-    pub kind: &'a str,
-
-    /// The platform this test is built for.
-    pub platform: BuildPlatform,
+    /// The binary query.
+    pub binary_query: BinaryQuery<'a>,
 
     /// The name of the test.
     pub test_name: &'a str,
@@ -123,10 +114,10 @@ impl FilteringSet {
             Self::All => true,
             Self::None => false,
             Self::Test(matcher, _) => matcher.is_match(query.test_name),
-            Self::Binary(matcher, _) => matcher.is_match(query.binary_name),
-            Self::Platform(platform, _) => query.platform == *platform,
-            Self::Kind(matcher, _) => matcher.is_match(query.kind),
-            Self::Packages(packages) => packages.contains(query.package_id),
+            Self::Binary(matcher, _) => matcher.is_match(query.binary_query.binary_name),
+            Self::Platform(platform, _) => query.binary_query.platform == *platform,
+            Self::Kind(matcher, _) => matcher.is_match(query.binary_query.kind),
+            Self::Packages(packages) => packages.contains(query.binary_query.package_id),
         }
     }
 

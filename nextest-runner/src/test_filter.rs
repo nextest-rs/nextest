@@ -266,10 +266,12 @@ impl<'filter> TestFilter<'filter> {
         test_name: &str,
     ) -> FilterNameMatch {
         let query = TestQuery {
-            package_id: test_binary.package.id(),
-            kind: test_binary.kind.as_str(),
-            binary_name: &test_binary.binary_name,
-            platform: convert_build_platform(test_binary.build_platform),
+            binary_query: BinaryQuery {
+                package_id: test_binary.package.id(),
+                kind: test_binary.kind.as_str(),
+                binary_name: &test_binary.binary_name,
+                platform: convert_build_platform(test_binary.build_platform),
+            },
             test_name,
         };
         if self.builder.exprs.is_empty() {
