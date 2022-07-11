@@ -152,6 +152,15 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
     },
 );
 
+pub(crate) fn get_expected_test(binary_id: &str, test_name: &str) -> &'static TestFixture {
+    let v = EXPECTED_TESTS
+        .get(binary_id)
+        .unwrap_or_else(|| panic!("binary id {binary_id} not found"));
+    v.iter()
+        .find(|fixture| fixture.name == test_name)
+        .unwrap_or_else(|| panic!("for binary id {binary_id}, test name {test_name} not found"))
+}
+
 pub(crate) static EXPECTED_BINARY_LIST: [(&str, &str, bool); 8] = [
     (
         "nextest-derive::proc-macro/nextest-derive",

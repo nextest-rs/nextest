@@ -5,7 +5,7 @@ use crate::fixtures::*;
 use cfg_if::cfg_if;
 use color_eyre::eyre::Result;
 use nextest_filtering::FilteringExpr;
-use nextest_metadata::BuildPlatform;
+use nextest_metadata::{BuildPlatform, FilterMatch, MismatchReason};
 use nextest_runner::{
     config::NextestConfig,
     list::BinaryList,
@@ -228,9 +228,71 @@ fn test_run_ignored() -> Result<()> {
     Ok(())
 }
 
-/// Test that filter expressions without name matches behave as expected.
+/// Test that filter expressions with regular substring filters behave as expected.
 #[test]
-fn test_filter_expr_without_name_matches() -> Result<()> {
+fn test_filter_expr_with_string_filters() -> Result<()> {
+    set_rustflags();
+
+    let expr = FilteringExpr::parse(
+        "test(test_multiply_two) | test(=tests::call_dylib_add_two)",
+        &*PACKAGE_GRAPH,
+    )
+    .expect("filter expression is valid");
+
+    let test_filter = TestFilterBuilder::new(
+        RunIgnored::Default,
+        None,
+        ["call_dylib_add_two", "test_flaky_mod_4"],
+        vec![expr],
+    );
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
+    for test in test_list.iter_tests() {
+        if test.name == "tests::call_dylib_add_two" {
+            assert!(
+                test.test_info.filter_match.is_match(),
+                "expected test {test:?} to be a match, but it isn't"
+            );
+        } else if test.name.contains("test_multiply_two") {
+            assert_eq!(
+                test.test_info.filter_match,
+                FilterMatch::Mismatch {
+                    reason: MismatchReason::String,
+                },
+                "expected test {test:?} to mismatch due to string filters"
+            )
+        } else if test.name.contains("test_flaky_mod_4") {
+            assert_eq!(
+                test.test_info.filter_match,
+                FilterMatch::Mismatch {
+                    reason: MismatchReason::Expression,
+                },
+                "expected test {test:?} to mismatch due to expression filters"
+            )
+        } else {
+            // Mismatch both string and expression filters. nextest-runner returns:
+            // * first, ignored
+            // * then, expression
+            // * then, for string
+            let expected_test = get_expected_test(&test.bin_info.binary_id, test.name);
+            let reason = if expected_test.status.is_ignored() {
+                MismatchReason::Ignored
+            } else {
+                MismatchReason::Expression
+            };
+            assert_eq!(
+                test.test_info.filter_match,
+                FilterMatch::Mismatch { reason },
+                "expected test {test:?} to mismatch due to {reason}"
+            )
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that filter expressions without regular substring filters behave as expected.
+#[test]
+fn test_filter_expr_without_string_filters() -> Result<()> {
     set_rustflags();
 
     let expr = FilteringExpr::parse(
@@ -260,7 +322,7 @@ fn test_filter_expr_without_name_matches() -> Result<()> {
 }
 
 #[test]
-fn test_name_match_without_filter_expr() -> Result<()> {
+fn test_string_filters_without_filter_expr() -> Result<()> {
     set_rustflags();
 
     let test_filter = TestFilterBuilder::new(
