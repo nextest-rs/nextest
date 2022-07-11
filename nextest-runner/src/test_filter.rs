@@ -202,20 +202,40 @@ impl<'filter> TestFilter<'filter> {
     ) -> FilterMatch {
         self.filter_ignored_mismatch(ignored)
             .or_else(|| {
+                // ---
+                // NOTE
+                // ---
+                //
+                // Previously, if either expression OR string filters matched, we'd run the tests.
+                // The current (stable) implementation is that *both* the expression AND the string
+                // filters should match.
+                //
+                // This is because we try and skip running test binaries which don't match
+                // expression filters. So for example:
+                //
+                //     cargo nextest run -E 'binary(foo)' test_bar
+                //
+                // would not even get to the point of enumerating the tests not in binary(foo), thus
+                // not running any test_bars in the workspace. But, with the OR semantics:
+                //
+                //     cargo nextest run -E 'binary(foo) or test(test_foo)' test_bar
+                //
+                // would run all the test_bars in the repo. This is inconsistent, so nextest must
+                // use AND semantics.
                 use FilterNameMatch::*;
                 match (
                     self.filter_name_match(test_name),
                     self.filter_expression_match(test_binary, test_name),
                 ) {
-                    // if accepted by at least one filtering strategy => accepted
-                    (MatchEmptyPatterns, MatchEmptyPatterns)
-                    | (MatchWithPatterns, _)
-                    | (_, MatchWithPatterns) => None,
-                    // if rejected by both filtering strategies, or if one match is empty and is
-                    // rejected by the other match => rejected
-                    (MatchEmptyPatterns, Mismatch(reason))
-                    | (Mismatch(reason), MatchEmptyPatterns)
-                    | (Mismatch(reason), Mismatch(_)) => Some(FilterMatch::Mismatch { reason }),
+                    // Tests must be accepted by both expressions and filters.
+                    (
+                        MatchEmptyPatterns | MatchWithPatterns,
+                        MatchEmptyPatterns | MatchWithPatterns,
+                    ) => None,
+                    // If rejected by at least one of the filtering strategies, the test is rejected
+                    (_, Mismatch(reason)) | (Mismatch(reason), _) => {
+                        Some(FilterMatch::Mismatch { reason })
+                    }
                 }
             })
             // Note that partition-based filtering MUST come after all other kinds of filtering,
