@@ -71,11 +71,11 @@ This section contains the full set of operators supported by the DSL.
 >     cargo nextest list -E 'platform(host)'
 >
 > will not execute any test binaries built for the target platform. This is generally what you want,
-> but if you would like to list predicates anyway, include a `test()` predicate. For example, to
+> but if you would like to list tests anyway, include a `test()` predicate. For example, to
 > list test binaries for the target platform (using, for example, a [target
 > runner](target-runners.md)), but skip running them:
 >
->     cargo nextest list -E 'platform(host) + not test(/.*/)'
+>     cargo nextest list -E 'platform(host) + not test(/.*/)' --verbose
 
 ### Name matchers
 
