@@ -2,6 +2,16 @@
 # Don't fail fast in CI to run the full test suite.
 fail-fast = false
 
+[[profile.ci.overrides]]
+# In CI, and only in CI, some time on 2022-07-10, the integration tests started
+# to be flaky on Windows -- the cdylib-link fixture sometimes exits with code
+# -1073741515 (0xc0000135; STATUS_DLL_NOT_FOUND). This is flaky, so retry these
+# tests a few times.
+#
+# TODO: restrict these tests to Windows.
+filter = '(package(nextest-runner) & binary(integration)) | (package(cargo-nextest) & test(/^tests_integration::/))'
+retries = 9
+
 [profile.test-slow]
 # This is a test profile with a quick slow timeout.
 slow-timeout = "1s"
