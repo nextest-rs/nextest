@@ -48,13 +48,11 @@ CARGO OPTIONS:
                                     for details
 
 FILTER OPTIONS:
-        --run-ignored <WHICH>           Run ignored tests [possible values: default, ignored-only,
-                                        all]
-        --partition <PARTITION>         Test partition, e.g. hash:1/2 or count:2/3
-        --platform-filter <PLATFORM>    Filter test binaries by build platform [default: any]
-                                        [possible values: target, host, any]
-    -E, --filter-expr <EXPRESSION>      Test filter expression (see
-                                        <https://nexte.st/book/filter-expressions>)
+        --run-ignored <WHICH>         Run ignored tests [possible values: default, ignored-only,
+                                      all]
+        --partition <PARTITION>       Test partition, e.g. hash:1/2 or count:2/3
+    -E, --filter-expr <EXPRESSION>    Test filter expression (see
+                                      <https://nexte.st/book/filter-expressions>)
 
 OUTPUT OPTIONS:
     -T, --message-format <FMT>    Output format [default: human] [possible values: human, json,
