@@ -76,7 +76,7 @@ libc = "0.2.126"
 windows = { version = "0.38.0", features = ["Win32_Foundation"] }
 
 [dev-dependencies]
-color-eyre = { version = "0.6.1", default-features = false }
+color-eyre = { version = "0.6.2", default-features = false }
 indoc = "1.0.6"
 maplit = "1.0.2"
 pathdiff = { version = "0.2.1", features = ["camino"] }
