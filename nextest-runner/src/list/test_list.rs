@@ -516,6 +516,17 @@ impl<'g> TestList<'g> {
         }
 
         for (test_bin, info) in &self.rust_suites {
+            // Skip this binary if there are no tests within it that will be run, and this isn't
+            // verbose output.
+            if !verbose
+                && info
+                    .status
+                    .test_cases()
+                    .all(|(_, test_case)| !test_case.filter_match.is_match())
+            {
+                continue;
+            }
+
             writeln!(writer, "{}:", info.binary_id.style(styles.binary_id))?;
             if verbose {
                 writeln!(writer, "  {} {}", "bin:".style(styles.field), test_bin)?;
@@ -536,11 +547,19 @@ impl<'g> TestList<'g> {
                         writeln!(indented, "(no tests)")?;
                     } else {
                         for (name, info) in test_cases {
-                            write_test_name(name, &styles, &mut indented)?;
-                            if !info.filter_match.is_match() {
-                                write!(indented, " (skipped)")?;
+                            match (verbose, info.filter_match.is_match()) {
+                                (_, true) => {
+                                    write_test_name(name, &styles, &mut indented)?;
+                                    writeln!(indented)?;
+                                }
+                                (true, false) => {
+                                    write_test_name(name, &styles, &mut indented)?;
+                                    writeln!(indented, " (skipped)")?;
+                                }
+                                (false, false) => {
+                                    // Skip printing this test entirely if it isn't a match.
+                                }
                             }
-                            writeln!(indented)?;
                         }
                     }
                 }
@@ -1027,13 +1046,8 @@ mod tests {
         static EXPECTED_HUMAN: &str = indoc! {"
         fake-package::fake-binary:
             benches::bench_foo
-            benches::ignored_bench_foo (skipped)
-            tests::baz::test_ignored (skipped)
             tests::baz::test_quux
             tests::foo::test_bar
-            tests::ignored::test_bar (skipped)
-        fake-package::skipped-binary:
-            (test binary did not match filter expressions, skipped)
         "};
         static EXPECTED_HUMAN_VERBOSE: &str = indoc! {"
             fake-package::fake-binary:

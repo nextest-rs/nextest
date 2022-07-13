@@ -187,6 +187,10 @@ enum Command {
     /// List tests in workspace
     ///
     /// This command builds test binaries and queries them for the tests they contain.
+    ///
+    /// Use --verbose to get more information about tests, including test binary paths and skipped
+    /// tests.
+    ///
     /// Use --message-format json to get machine-readable output.
     ///
     /// For more information, see <https://nexte.st/book/listing>.
