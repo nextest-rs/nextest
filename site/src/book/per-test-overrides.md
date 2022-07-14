@@ -24,7 +24,7 @@ like `my_module::test_network_`) up to 4 times. Other tests will be retried up t
 
 ## Override precedence
 
-Overrides are applied in the following order. For a given test T:
+Overrides are configured as an ordered list. They're are applied in the following order. For a given test T:
 1. If nextest is run with `--profile my-profile`, the first override within `profile.my-profile.overrides` that matches T.
 2. The first override within `profile.default.overrides` that matches T.
 3. If nextest is run with `--profile my-profile`, the global configuration for that profile.
