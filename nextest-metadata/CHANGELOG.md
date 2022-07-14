@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0] - 2022-07-14
+
+(This change was included in 0.4.4, which should have been a breaking change.)
+
+### Changed
+
+- `RustTestSuiteSummary::testcases` renamed to `test_cases`.
+
 ## [0.4.4] - 2022-07-13
 
 ### Added
