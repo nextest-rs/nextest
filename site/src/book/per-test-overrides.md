@@ -15,12 +15,12 @@ Overrides are set via the `[[profile.<name>.overrides]]` list. Each override con
 retries = 1
 
 [[profile.ci.overrides]]
-filter = 'test(/\Wtest_network_/)'
+filter = 'test(/\btest_network_/)'
 retries = 4
 ```
 
 This configuration will retry all test names that start with `test_network_` (including test names
-like `::test_network_`) up to 4 times. Other tests will be retried up to one time.
+like `my_module::test_network_`) up to 4 times. Other tests will be retried up to one time.
 
 ## Override precedence
 
