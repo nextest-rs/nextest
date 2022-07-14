@@ -29,3 +29,19 @@ For sufficiently large numbers of tests, hashed sharding produces roughly the sa
 ## Example: Use in GitHub Actions
 
 See [this working example](https://github.com/nextest-rs/reuse-build-partition-example/blob/main/.github/workflows/ci.yml) for how to [reuse builds](reusing-builds.md) and partition test runs on GitHub Actions.
+
+## Example: Use in GitLab CI
+
+GitLab can [parallelize the job](https://docs.gitlab.com/ee/ci/yaml/#parallel) between runners. This ability neatly plays with `--partition`.
+
+```yaml
+test:
+  stage:                           test
+  parallel: 3
+  script:
+    - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
+    - time cargo nextest run --workspace --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+```
+
+This creates three jobs in a pipeline: `test 1/3`, `test 2/3` and `test 3/3`.
+It's recommended to use caching or [archiving](reusing-builds.md) to avoid having all three jobs building the same code before actual testing.
