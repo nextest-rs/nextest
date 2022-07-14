@@ -15,7 +15,7 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.66", features = ["gimli-symbolize", "std"] }
-clap = { version = "3.2.11", features = ["atty", "clap_derive", "color", "derive", "env", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
+clap = { version = "3.2.12", features = ["atty", "clap_derive", "color", "derive", "env", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
 console = { version = "0.15.0", features = ["ansi-parsing", "regex", "unicode-width"] }
 either = { version = "1.7.0", features = ["use_std"] }
 indexmap = { version = "1.9.1", default-features = false, features = ["std"] }
@@ -53,7 +53,7 @@ libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-winapi = { version = "0.3.9", default-features = false, features = ["consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "minwinbase", "minwindef", "mswsock", "namedpipeapi", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "shlobj", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi = { version = "0.3.9", default-features = false, features = ["consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "shlobj", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 windows-sys = { version = "0.36.1", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_WindowsProgramming"] }
 
 ### END HAKARI SECTION

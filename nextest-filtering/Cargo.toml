@@ -28,6 +28,6 @@ thiserror = "1.0.31"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-clap = { version = "3.2.11", features = ["derive"] }
+clap = { version = "3.2.12", features = ["derive"] }
 camino = "1.0.9"
 test-case = "2.1.0"
