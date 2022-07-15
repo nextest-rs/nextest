@@ -161,6 +161,13 @@ fn test_slow_timeout() {
 }
 
 #[test]
+#[ignore]
+fn test_slow_timeout_2() {
+    // There's a per-test override for the with-termination profile for this test: it is set to 1 second.
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+}
+
+#[test]
 fn test_result_failure() -> Result<(), std::io::Error> {
     Err(std::io::Error::new(
         std::io::ErrorKind::InvalidData,

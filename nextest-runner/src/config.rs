@@ -242,6 +242,7 @@ impl<'cfg> NextestProfile<'cfg> {
     /// Returns override settings for individual tests.
     pub fn overrides_for(&self, query: &TestQuery<'_>) -> ProfileOverrides {
         let mut retries = None;
+        let mut slow_timeout = None;
 
         for &override_ in &self.overrides {
             if !override_.expr.matches_test(query) {
@@ -250,9 +251,15 @@ impl<'cfg> NextestProfile<'cfg> {
             if retries.is_none() && override_.data.retries.is_some() {
                 retries = override_.data.retries;
             }
+            if slow_timeout.is_none() && override_.data.slow_timeout.is_some() {
+                slow_timeout = override_.data.slow_timeout;
+            }
         }
 
-        ProfileOverrides { retries }
+        ProfileOverrides {
+            retries,
+            slow_timeout,
+        }
     }
 
     /// Returns the JUnit configuration for this profile.
@@ -280,12 +287,18 @@ impl<'cfg> NextestProfile<'cfg> {
 #[derive(Clone, Debug)]
 pub struct ProfileOverrides {
     retries: Option<usize>,
+    slow_timeout: Option<SlowTimeout>,
 }
 
 impl ProfileOverrides {
     /// Returns the number of retries for this test.
     pub fn retries(&self) -> Option<usize> {
         self.retries
+    }
+
+    /// Returns the slow timeout for this test.
+    pub fn slow_timeout(&self) -> Option<SlowTimeout> {
+        self.slow_timeout
     }
 }
 
@@ -554,7 +567,10 @@ struct ProfileOverrideSource {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct ProfileOverrideData {
+    #[serde(default)]
     retries: Option<usize>,
+    #[serde(default, deserialize_with = "deserialize_slow_timeout")]
+    slow_timeout: Option<SlowTimeout>,
 }
 
 #[derive(Clone, Debug, Default)]
