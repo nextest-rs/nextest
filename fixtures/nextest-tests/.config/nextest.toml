@@ -21,6 +21,11 @@ retries = 4
 [profile.with-termination]
 slow-timeout = { period = "1s", terminate-after = 2 }
 
+[[profile.with-termination.overrides]]
+filter = 'test(=test_slow_timeout_2)'
+# This is set to 1 second
+slow-timeout = { period = "500ms", terminate-after = 2 }
+
 [profile.with-junit]
 retries = 2
 

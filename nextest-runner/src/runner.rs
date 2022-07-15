@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestRunner`].
 
 use crate::{
-    config::{NextestProfile, TestThreads},
+    config::{NextestProfile, ProfileOverrides, TestThreads},
     helpers::convert_build_platform,
     list::{TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
@@ -229,7 +229,7 @@ impl<'a> TestRunner<'a> {
                         let attempt = run_statuses.len() + 1;
 
                         let run_status = self
-                            .run_test(test_instance, attempt, &this_run_sender)
+                            .run_test(test_instance, attempt, &overrides, &this_run_sender)
                             .into_external(attempt, total_attempts);
 
                         if run_status.result.is_success() {
@@ -347,11 +347,12 @@ impl<'a> TestRunner<'a> {
         &self,
         test: TestInstance<'a>,
         attempt: usize,
+        overrides: &ProfileOverrides,
         run_sender: &Sender<InternalTestEvent<'a>>,
     ) -> InternalExecuteStatus {
         let stopwatch = StopwatchStart::now();
 
-        match self.run_test_inner(test, attempt, &stopwatch, run_sender) {
+        match self.run_test_inner(test, attempt, &stopwatch, overrides, run_sender) {
             Ok(run_status) => run_status,
             Err(_) => InternalExecuteStatus {
                 // TODO: can we return more information in stdout/stderr? investigate this
@@ -369,6 +370,7 @@ impl<'a> TestRunner<'a> {
         test: TestInstance<'a>,
         attempt: usize,
         stopwatch: &StopwatchStart,
+        overrides: &ProfileOverrides,
         run_sender: &Sender<InternalTestEvent<'a>>,
     ) -> std::io::Result<InternalExecuteStatus> {
         let cmd = test
@@ -387,6 +389,7 @@ impl<'a> TestRunner<'a> {
         let handle = cmd.start()?;
 
         let mut status: Option<ExecutionResult> = None;
+        let slow_timeout = overrides.slow_timeout().unwrap_or(self.slow_timeout);
         let mut is_slow = false;
 
         self.wait_pool.in_place_scope(|s| {
@@ -405,7 +408,7 @@ impl<'a> TestRunner<'a> {
 
             // Continue waiting for the test to finish with a timeout, logging at slow-timeout
             // intervals
-            while let Err(error) = receiver.recv_timeout(self.slow_timeout.period) {
+            while let Err(error) = receiver.recv_timeout(slow_timeout.period) {
                 match error {
                     RecvTimeoutError::Timeout => {
                         is_slow = true;
@@ -415,10 +418,10 @@ impl<'a> TestRunner<'a> {
                             test_instance: test,
                             // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
                             // slightly longer.
-                            elapsed: timeout_hit * self.slow_timeout.period,
+                            elapsed: timeout_hit * slow_timeout.period,
                         });
 
-                        if let Some(terminate_after) = self.slow_timeout.terminate_after {
+                        if let Some(terminate_after) = slow_timeout.terminate_after {
                             if NonZeroUsize::new(timeout_hit as usize)
                                 .expect("timeout_hit cannot be non-zero")
                                 >= terminate_after

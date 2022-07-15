@@ -482,7 +482,7 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
 fn test_termination() -> Result<()> {
     set_rustflags();
 
-    let expr = FilteringExpr::parse("test(=test_slow_timeout)", &*PACKAGE_GRAPH).unwrap();
+    let expr = FilteringExpr::parse("test(/^test_slow_timeout/)", &*PACKAGE_GRAPH).unwrap();
     let test_filter = TestFilterBuilder::new(
         RunIgnored::IgnoredOnly,
         None,
@@ -505,29 +505,31 @@ fn test_termination() -> Result<()> {
     );
 
     let (instance_statuses, run_stats) = execute_collect(&runner);
-    assert_eq!(run_stats.timed_out, 1, "1 test timed out");
-    let (_, instance_value) = instance_statuses
-        .iter()
-        .find(|(&(_, name), _)| name == "test_slow_timeout")
-        .expect("test_slow_timeout should be present");
-    let valid = match &instance_value.status {
-        InstanceStatus::Skipped(_) => panic!("test_slow_timeout should have been run"),
-        InstanceStatus::Finished(run_statuses) => {
-            // This test should not have been retried since retries aren't configured.
-            assert_eq!(
-                run_statuses.len(),
-                1,
-                "test_slow_timeout should have been run exactly once",
+    assert_eq!(run_stats.timed_out, 2, "2 tests timed out");
+    for test_name in ["test_slow_timeout", "test_slow_timeout_2"] {
+        let (_, instance_value) = instance_statuses
+            .iter()
+            .find(|(&(_, name), _)| name == test_name)
+            .unwrap_or_else(|| panic!("{test_name} should be present"));
+        let valid = match &instance_value.status {
+            InstanceStatus::Skipped(_) => panic!("{test_name} should have been run"),
+            InstanceStatus::Finished(run_statuses) => {
+                // This test should not have been retried since retries aren't configured.
+                assert_eq!(
+                    run_statuses.len(),
+                    1,
+                    "{test_name} should have been run exactly once",
+                );
+                let run_status = run_statuses.last_status();
+                run_status.result == ExecutionResult::Timeout
+            }
+        };
+        if !valid {
+            panic!(
+                "for test_slow_timeout, mismatch in status: expected timeout, actual {:?}",
+                instance_value.status
             );
-            let run_status = run_statuses.last_status();
-            run_status.result == ExecutionResult::Timeout
         }
-    };
-    if !valid {
-        panic!(
-            "for test_slow_timeout, mismatch in status: expected timeout, actual {:?}",
-            instance_value.status
-        );
     }
 
     Ok(())
