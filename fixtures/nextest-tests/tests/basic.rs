@@ -174,3 +174,30 @@ fn test_result_failure() -> Result<(), std::io::Error> {
         "this is an error",
     ))
 }
+
+#[cfg(any(unix, windows))]
+#[test]
+fn test_subprocess_doesnt_exit() {
+    let mut cmd = sleep_cmd(120);
+    cmd.spawn().unwrap();
+}
+
+#[cfg(windows)]
+fn sleep_cmd(secs: usize) -> std::process::Command {
+    // Apparently, this is the most reliable way to sleep for a bit on Windows.
+    // * "timeout" doesn't work in a non-console context such as GitHub Actions runners.
+    // * "waitfor" requires uniquely-named signals.
+    // * "ping" just works.
+    let mut cmd = std::process::Command::new("ping");
+    // secs + 1 because the first attempt happens at the start.
+    let secs_str = format!("{}", secs + 1);
+    cmd.args(["/n", secs_str.as_str(), "127.0.0.1"]);
+    cmd
+}
+
+#[cfg(unix)]
+fn sleep_cmd(secs: usize) -> std::process::Command {
+    let mut cmd = std::process::Command::new("sleep");
+    cmd.arg(&format!("{secs}"));
+    cmd
+}
