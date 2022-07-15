@@ -7,6 +7,7 @@
 
 use crate::{
     config::{NextestProfile, ProfileOverrides, TestThreads},
+    errors::TestRunnerBuildError,
     helpers::convert_build_platform,
     list::{TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
@@ -14,10 +15,10 @@ use crate::{
     stopwatch::{StopwatchEnd, StopwatchStart},
     target_runner::TargetRunner,
 };
-use crossbeam_channel::{RecvTimeoutError, Sender};
+use async_scoped::TokioScope;
+use futures::prelude::*;
 use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
-use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     convert::Infallible,
     marker::PhantomData,
@@ -28,6 +29,7 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
+use tokio::{runtime::Runtime, sync::mpsc::UnboundedSender};
 
 /// Test runner options.
 #[derive(Debug, Default)]
@@ -72,7 +74,7 @@ impl TestRunnerBuilder {
         profile: NextestProfile<'a>,
         handler: SignalHandler,
         target_runner: TargetRunner,
-    ) -> TestRunner<'a> {
+    ) -> Result<TestRunner<'a>, TestRunnerBuildError> {
         let test_threads = match self.no_capture {
             true => 1,
             false => self
@@ -87,46 +89,33 @@ impl TestRunnerBuilder {
         let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
         let slow_timeout = profile.slow_timeout();
 
-        TestRunner {
-            no_capture: self.no_capture,
-            profile,
-            // The number of tries = retries + 1.
-            global_tries: retries + 1,
-            ignore_retry_overrides,
-            fail_fast,
-            slow_timeout,
-            test_list,
-            target_runner,
-            run_pool: ThreadPoolBuilder::new()
-                // The main run_pool closure will need its own thread.
-                .num_threads(test_threads + 1)
-                .thread_name(|idx| format!("testrunner-run-{}", idx))
-                .build()
-                .expect("run pool built"),
-            wait_pool: ThreadPoolBuilder::new()
-                .num_threads(test_threads)
-                .thread_name(|idx| format!("testrunner-wait-{}", idx))
-                .build()
-                .expect("run pool built"),
+        let runtime = Runtime::new().map_err(TestRunnerBuildError::TokioRuntimeCreate)?;
+
+        Ok(TestRunner {
+            inner: TestRunnerInner {
+                no_capture: self.no_capture,
+                profile,
+                test_threads,
+                // The number of tries = retries + 1.
+                global_tries: retries + 1,
+                ignore_retry_overrides,
+                fail_fast,
+                slow_timeout,
+                test_list,
+                target_runner,
+                runtime,
+            },
             handler,
-        }
+        })
     }
 }
 
 /// Context for running tests.
 ///
 /// Created using [`TestRunnerBuilder::build`].
+#[derive(Debug)]
 pub struct TestRunner<'a> {
-    no_capture: bool,
-    profile: NextestProfile<'a>,
-    global_tries: usize,
-    ignore_retry_overrides: bool,
-    fail_fast: bool,
-    slow_timeout: crate::config::SlowTimeout,
-    test_list: &'a TestList<'a>,
-    target_runner: TargetRunner,
-    run_pool: ThreadPool,
-    wait_pool: ThreadPool,
+    inner: TestRunnerInner<'a>,
     handler: SignalHandler,
 }
 
@@ -134,7 +123,7 @@ impl<'a> TestRunner<'a> {
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.
-    pub fn execute<F>(&self, mut callback: F) -> RunStats
+    pub fn execute<F>(&mut self, mut callback: F) -> RunStats
     where
         F: FnMut(TestEvent<'a>) + Send,
     {
@@ -149,14 +138,40 @@ impl<'a> TestRunner<'a> {
     ///
     /// Accepts a callback that is called with the results of each test. If the callback returns an
     /// error, the test run terminates and the callback is no longer called.
-    pub fn try_execute<E, F>(&self, callback: F) -> Result<RunStats, E>
+    pub fn try_execute<E, F>(&mut self, callback: F) -> Result<RunStats, E>
+    where
+        F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
+        E: Send,
+    {
+        self.inner.try_execute(&mut self.handler, callback)
+    }
+}
+
+#[derive(Debug)]
+struct TestRunnerInner<'a> {
+    no_capture: bool,
+    profile: NextestProfile<'a>,
+    test_threads: usize,
+    global_tries: usize,
+    ignore_retry_overrides: bool,
+    fail_fast: bool,
+    slow_timeout: crate::config::SlowTimeout,
+    test_list: &'a TestList<'a>,
+    target_runner: TargetRunner,
+    runtime: Runtime,
+}
+
+impl<'a> TestRunnerInner<'a> {
+    fn try_execute<E, F>(
+        &self,
+        signal_handler: &mut SignalHandler,
+        callback: F,
+    ) -> Result<RunStats, E>
     where
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
     {
         // TODO: add support for other test-running approaches, measure performance.
-
-        let (run_sender, run_receiver) = crossbeam_channel::unbounded();
 
         // This is move so that sender is moved into it. When the scope finishes the sender is
         // dropped, and the receiver below completes iteration.
@@ -177,151 +192,160 @@ impl<'a> TestRunner<'a> {
         let ctx_mut = &mut ctx;
         let first_error_mut = &mut first_error;
 
-        // ---
-        // Spawn the test threads.
-        // ---
-        // XXX rayon requires its scope callback to be Send, there's no good reason for it but
-        // there's also no other well-maintained scoped threadpool :(
-        self.run_pool.scope(move |run_scope| {
-            self.test_list.iter_tests().for_each(|test_instance| {
-                if canceled_ref.load(Ordering::Acquire) {
-                    // Check for test cancellation.
-                    return;
-                }
+        let _guard = self.runtime.enter();
 
-                let query = TestQuery {
-                    binary_query: BinaryQuery {
-                        package_id: test_instance.bin_info.package.id(),
-                        kind: test_instance.bin_info.kind.as_str(),
-                        binary_name: &test_instance.bin_info.binary_name,
-                        platform: convert_build_platform(test_instance.bin_info.build_platform),
-                    },
-                    test_name: test_instance.name,
-                };
-                let overrides = self.profile.overrides_for(&query);
-                let total_attempts = match (self.ignore_retry_overrides, overrides.retries()) {
-                    (true, _) | (false, None) => self.global_tries,
-                    (false, Some(retries)) => retries + 1,
-                };
+        TokioScope::scope_and_block(move |scope| {
+            let (run_sender, mut run_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-                let this_run_sender = run_sender.clone();
-                run_scope.spawn(move |_| {
-                    if canceled_ref.load(Ordering::Acquire) {
-                        // Check for test cancellation.
-                        return;
-                    }
+            let run_fut = futures::stream::iter(self.test_list.iter_tests())
+                .map(move |test_instance| {
+                    let this_run_sender = run_sender.clone();
 
-                    if let FilterMatch::Mismatch { reason } = test_instance.test_info.filter_match {
-                        // Failure to send means the receiver was dropped.
-                        let _ = this_run_sender.send(InternalTestEvent::Skipped {
-                            test_instance,
-                            reason,
-                        });
-                        return;
-                    }
-
-                    // Failure to send means the receiver was dropped.
-                    let _ = this_run_sender.send(InternalTestEvent::Started { test_instance });
-
-                    let mut run_statuses = vec![];
-
-                    loop {
-                        let attempt = run_statuses.len() + 1;
-
-                        let run_status = self
-                            .run_test(test_instance, attempt, &overrides, &this_run_sender)
-                            .into_external(attempt, total_attempts);
-
-                        if run_status.result.is_success() {
-                            // The test succeeded.
-                            run_statuses.push(run_status);
-                            break;
-                        } else if attempt < total_attempts {
-                            // Retry this test: send a retry event, then retry the loop.
-                            let _ = this_run_sender.send(InternalTestEvent::Retry {
-                                test_instance,
-                                run_status: run_status.clone(),
-                            });
-                            run_statuses.push(run_status);
-                        } else {
-                            // This test failed and is out of retries.
-                            run_statuses.push(run_status);
-                            break;
+                    async move {
+                        if canceled_ref.load(Ordering::Acquire) {
+                            // Check for test cancellation.
+                            return;
                         }
-                    }
 
-                    // At this point, either:
-                    // * the test has succeeded, or
-                    // * the test has failed and we've run out of retries.
-                    // In either case, the test is finished.
-                    let _ = this_run_sender.send(InternalTestEvent::Finished {
-                        test_instance,
-                        run_statuses: ExecutionStatuses::new(run_statuses),
-                    });
-                })
-            });
+                        let query = TestQuery {
+                            binary_query: BinaryQuery {
+                                package_id: test_instance.bin_info.package.id(),
+                                kind: test_instance.bin_info.kind.as_str(),
+                                binary_name: &test_instance.bin_info.binary_name,
+                                platform: convert_build_platform(
+                                    test_instance.bin_info.build_platform,
+                                ),
+                            },
+                            test_name: test_instance.name,
+                        };
+                        let overrides = self.profile.overrides_for(&query);
+                        let total_attempts =
+                            match (self.ignore_retry_overrides, overrides.retries()) {
+                                (true, _) | (false, None) => self.global_tries,
+                                (false, Some(retries)) => retries + 1,
+                            };
 
-            drop(run_sender);
+                        if let FilterMatch::Mismatch { reason } =
+                            test_instance.test_info.filter_match
+                        {
+                            // Failure to send means the receiver was dropped.
+                            let _ = this_run_sender.send(InternalTestEvent::Skipped {
+                                test_instance,
+                                reason,
+                            });
+                            return;
+                        }
 
-            loop {
-                let internal_event = crossbeam_channel::select! {
-                    recv(run_receiver) -> internal_event => {
-                        match internal_event {
-                            Ok(event) => InternalEvent::Test(event),
-                            Err(_) => {
-                                // All runs have been completed.
+                        // Failure to send means the receiver was dropped.
+                        let _ = this_run_sender.send(InternalTestEvent::Started { test_instance });
+
+                        let mut run_statuses = vec![];
+
+                        loop {
+                            let attempt = run_statuses.len() + 1;
+
+                            let run_status = self
+                                .run_test(test_instance, attempt, &overrides, &this_run_sender)
+                                .await
+                                .into_external(attempt, total_attempts);
+
+                            if run_status.result.is_success() {
+                                // The test succeeded.
+                                run_statuses.push(run_status);
+                                break;
+                            } else if attempt < total_attempts {
+                                // Retry this test: send a retry event, then retry the loop.
+                                let _ = this_run_sender.send(InternalTestEvent::Retry {
+                                    test_instance,
+                                    run_status: run_status.clone(),
+                                });
+                                run_statuses.push(run_status);
+                            } else {
+                                // This test failed and is out of retries.
+                                run_statuses.push(run_status);
                                 break;
                             }
                         }
-                    },
-                    recv(self.handler.receiver) -> internal_event => {
-                        match internal_event {
-                            Ok(event) => InternalEvent::Signal(event),
-                            Err(_) => {
-                                // Ignore the signal thread being dropped. This is done for
-                                // noop signal handlers.
-                                continue;
-                            }
-                        }
-                    },
-                };
 
-                match ctx_mut.handle_event(internal_event) {
-                    Ok(()) => {}
-                    Err(err) => {
-                        // If an error happens, it is because either the callback failed or
-                        // a cancellation notice was received. If the callback failed, we need
-                        // to send a further cancellation notice as well.
-                        canceled_ref.store(true, Ordering::Release);
+                        // At this point, either:
+                        // * the test has succeeded, or
+                        // * the test has failed and we've run out of retries.
+                        // In either case, the test is finished.
+                        let _ = this_run_sender.send(InternalTestEvent::Finished {
+                            test_instance,
+                            run_statuses: ExecutionStatuses::new(run_statuses),
+                        });
+                    }
+                })
+                // buffer_unordered means tests are spawned in order but returned in any order.
+                .buffer_unordered(self.test_threads)
+                .collect();
 
-                        match err {
-                            InternalError::Error(err) => {
-                                // Ignore errors that happen during error cancellation.
-                                if first_error_mut.is_none() {
-                                    *first_error_mut = Some(err);
+            // Run the stream to completion.
+            scope.spawn_cancellable(run_fut, || ());
+
+            let exec_fut = async move {
+                loop {
+                    let internal_event = tokio::select! {
+                        internal_event = signal_handler.receiver.recv() => {
+                            match internal_event {
+                                Some(event) => InternalEvent::Signal(event),
+                                None => {
+                                    // Ignore the signal thread being dropped. This is done for
+                                    // noop signal handlers.
+                                    continue;
                                 }
-                                let _ = ctx_mut.begin_cancel(CancelReason::ReportError);
                             }
-                            InternalError::TestFailureCanceled(None)
-                            | InternalError::SignalCanceled(None) => {
-                                // Cancellation has begun and no error was returned during that.
-                                // Continue to handle events.
+                        },
+                        internal_event = run_receiver.recv() => {
+                            match internal_event {
+                                Some(event) => InternalEvent::Test(event),
+                                None => {
+                                    // All runs have been completed.
+                                    break;
+                                }
                             }
-                            InternalError::TestFailureCanceled(Some(err))
-                            | InternalError::SignalCanceled(Some(err)) => {
-                                // Cancellation has begun and an error was received during
-                                // cancellation.
-                                if first_error_mut.is_none() {
-                                    *first_error_mut = Some(err);
+                        },
+                    };
+
+                    match ctx_mut.handle_event(internal_event) {
+                        Ok(()) => {}
+                        Err(err) => {
+                            // If an error happens, it is because either the callback failed or
+                            // a cancellation notice was received. If the callback failed, we need
+                            // to send a further cancellation notice as well.
+                            canceled_ref.store(true, Ordering::Release);
+
+                            match err {
+                                InternalError::Error(err) => {
+                                    // Ignore errors that happen during error cancellation.
+                                    if first_error_mut.is_none() {
+                                        *first_error_mut = Some(err);
+                                    }
+                                    let _ = ctx_mut.begin_cancel(CancelReason::ReportError);
+                                }
+                                InternalError::TestFailureCanceled(None)
+                                | InternalError::SignalCanceled(None) => {
+                                    // Cancellation has begun and no error was returned during that.
+                                    // Continue to handle events.
+                                }
+                                InternalError::TestFailureCanceled(Some(err))
+                                | InternalError::SignalCanceled(Some(err)) => {
+                                    // Cancellation has begun and an error was received during
+                                    // cancellation.
+                                    if first_error_mut.is_none() {
+                                        *first_error_mut = Some(err);
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
+            };
 
-            Ok(())
-        })?;
+            // Read events from the receiver to completion.
+            scope.spawn_cancellable(exec_fut, || ());
+        });
 
         match ctx.run_finished() {
             Ok(()) => {}
@@ -343,16 +367,19 @@ impl<'a> TestRunner<'a> {
     // ---
 
     /// Run an individual test in its own process.
-    fn run_test(
+    async fn run_test(
         &self,
         test: TestInstance<'a>,
         attempt: usize,
         overrides: &ProfileOverrides,
-        run_sender: &Sender<InternalTestEvent<'a>>,
+        run_sender: &UnboundedSender<InternalTestEvent<'a>>,
     ) -> InternalExecuteStatus {
         let stopwatch = StopwatchStart::now();
 
-        match self.run_test_inner(test, attempt, &stopwatch, overrides, run_sender) {
+        match self
+            .run_test_inner(test, attempt, &stopwatch, overrides, run_sender)
+            .await
+        {
             Ok(run_status) => run_status,
             Err(_) => InternalExecuteStatus {
                 // TODO: can we return more information in stdout/stderr? investigate this
@@ -365,13 +392,13 @@ impl<'a> TestRunner<'a> {
         }
     }
 
-    fn run_test_inner(
+    async fn run_test_inner(
         &self,
         test: TestInstance<'a>,
         attempt: usize,
         stopwatch: &StopwatchStart,
         overrides: &ProfileOverrides,
-        run_sender: &Sender<InternalTestEvent<'a>>,
+        run_sender: &UnboundedSender<InternalTestEvent<'a>>,
     ) -> std::io::Result<InternalExecuteStatus> {
         let cmd = test
             .make_expression(self.test_list, &self.target_runner)
@@ -386,95 +413,98 @@ impl<'a> TestRunner<'a> {
             cmd.stdout_capture().stderr_capture()
         };
 
-        let handle = cmd.start()?;
+        let handle = Arc::new(cmd.start()?);
 
         let mut status: Option<ExecutionResult> = None;
         let slow_timeout = overrides.slow_timeout().unwrap_or(self.slow_timeout);
         let mut is_slow = false;
 
-        self.wait_pool.in_place_scope(|s| {
-            let (sender, receiver) = crossbeam_channel::bounded::<()>(1);
-            let wait_handle = &handle;
-
-            // Spawn a task on the threadpool that waits for the test to finish.
-            s.spawn(move |_| {
-                // This thread is just waiting for the test to finish, we'll handle the output in the main thread
-                let _ = wait_handle.wait();
-                // We don't care if the receiver got the message or not
-                let _ = sender.send(());
-            });
-
-            let mut timeout_hit = 0;
-
-            // Continue waiting for the test to finish with a timeout, logging at slow-timeout
-            // intervals
-            while let Err(error) = receiver.recv_timeout(slow_timeout.period) {
-                match error {
-                    RecvTimeoutError::Timeout => {
-                        is_slow = true;
-                        timeout_hit += 1;
-
-                        let _ = run_sender.send(InternalTestEvent::Slow {
-                            test_instance: test,
-                            // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
-                            // slightly longer.
-                            elapsed: timeout_hit * slow_timeout.period,
-                        });
-
-                        if let Some(terminate_after) = slow_timeout.terminate_after {
-                            if NonZeroUsize::new(timeout_hit as usize)
-                                .expect("timeout_hit cannot be non-zero")
-                                >= terminate_after
-                            {
-                                // attempt to terminate the slow test.
-                                // as there is a race between shutting down a slow test and its own completion
-                                // we silently ignore errors to avoid printing false warnings.
-
-                                #[cfg(unix)]
-                                let exited = {
-                                    use duct::unix::HandleExt;
-                                    use libc::SIGTERM;
-
-                                    let _ = handle.send_signal(SIGTERM);
-
-                                    let mut i = 0;
-
-                                    // give the process a grace period of 10s
-                                    loop {
-                                        match ((0..100).contains(&i), handle.try_wait()) {
-                                            (_, Ok(Some(_))) => break true,
-                                            (true, Ok(None)) => (),
-                                            (false, Ok(None)) => break false,
-                                            // in case of an error we'll send SIGKILL nonetheless
-                                            (_, Err(_)) => break false,
-                                        }
-
-                                        i += 1;
-                                        std::thread::sleep(Duration::from_millis(100));
-                                    }
-                                };
-
-                                #[cfg(not(unix))]
-                                let exited = false;
-
-                                if !exited {
-                                    let _ = handle.kill();
-                                }
-
-                                status = Some(ExecutionResult::Timeout);
-
-                                break;
-                            }
-                        }
-                    }
-                    RecvTimeoutError::Disconnected => {
-                        unreachable!("Waiting thread should never drop the sender")
-                    }
-                }
-            }
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let wait_handle = handle.clone();
+        tokio::task::spawn_blocking(move || {
+            // This task is just waiting for the test to finish, we'll handle the output in the main task
+            let _ = wait_handle.wait();
+            // We don't care if the receiver got the message or not.
+            let _ = sender.send(());
         });
 
-        let output = handle.into_output()?;
+        let mut interval = tokio::time::interval(slow_timeout.period);
+        // The first tick is immediate.
+        interval.tick().await;
+
+        let mut timeout_hit = 0;
+
+        loop {
+            tokio::select! {
+                biased;
+
+                _ = receiver.recv() => {
+                    // The test run finished.
+                    break;
+                }
+                _ = interval.tick(), if status.is_none() => {
+                    is_slow = true;
+                    timeout_hit += 1;
+
+                    let _ = run_sender.send(InternalTestEvent::Slow {
+                        test_instance: test,
+                        // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
+                        // slightly longer.
+                        elapsed: timeout_hit * slow_timeout.period,
+                    });
+
+                    if let Some(terminate_after) = slow_timeout.terminate_after {
+                        if NonZeroUsize::new(timeout_hit as usize)
+                            .expect("timeout_hit cannot be non-zero")
+                            >= terminate_after
+                        {
+                            // attempt to terminate the slow test.
+                            // as there is a race between shutting down a slow test and its own completion
+                            // we silently ignore errors to avoid printing false warnings.
+
+                            #[cfg(unix)]
+                            let exited = {
+                                use duct::unix::HandleExt;
+                                use libc::SIGTERM;
+
+                                let _ = handle.send_signal(SIGTERM);
+
+                                // give the process a grace period of 10s
+                                let sleep = tokio::time::sleep(Duration::from_secs(10));
+                                tokio::select! {
+                                    biased;
+
+                                    _ = receiver.recv() => {
+                                        // The process exited.
+                                        true
+                                    }
+                                    _ = sleep => {
+                                        // The process didn't exit -- need to do a hard shutdown.
+                                        false
+                                    }
+                                }
+                            };
+
+                            #[cfg(not(unix))]
+                            let exited = false;
+
+                            if !exited {
+                                let _ = handle.kill();
+                            }
+
+                            status = Some(ExecutionResult::Timeout);
+                            // Don't break here to give the wait task a chance to finish. This is
+                            // required because we want just one reference to the Arc to remain for
+                            // the try_unwrap call below.
+                        }
+                    }
+                }
+            };
+        }
+
+        let output = Arc::try_unwrap(handle)
+            .expect("at this point just one handle should remain")
+            .into_output()?;
 
         let status = status.unwrap_or_else(|| {
             if output.status.success() {
@@ -1004,18 +1034,11 @@ mod tests {
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
         let handler = SignalHandler::noop();
-        let runner = builder.build(&test_list, profile, handler, TargetRunner::empty());
-        assert!(runner.no_capture, "no_capture is true");
-        assert_eq!(
-            runner.run_pool.current_num_threads(),
-            2,
-            "tests run serially => run pool has 1 + 1 = 2 threads"
-        );
-        assert_eq!(
-            runner.wait_pool.current_num_threads(),
-            1,
-            "tests run serially => wait pool has 1 thread"
-        );
+        let runner = builder
+            .build(&test_list, profile, handler, TargetRunner::empty())
+            .unwrap();
+        assert!(runner.inner.no_capture, "no_capture is true");
+        assert_eq!(runner.inner.test_threads, 1, "tests run serially");
     }
 
     #[test]

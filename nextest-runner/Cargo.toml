@@ -12,16 +12,17 @@ rust-version = "1.59"
 [dependencies]
 atomicwrites = "0.3.1"
 aho-corasick = "0.7.18"
+async-scoped = { version = "0.7.0", features = ["use-tokio"] }
 camino = { version = "1.0.9", features = ["serde1"] }
 config = { version = "0.13.1", default-features = false, features = ["toml"] }
 cargo_metadata = "0.14.2"
 cfg-if = "1.0.0"
 chrono = "0.4.19"
-crossbeam-channel = "0.5.5"
 ctrlc = { version = "3.2.2", features = ["termination"] }
 debug-ignore = "1.0.2"
 duct = "0.13.5"
 either = "1.7.0"
+futures = "0.3.21"
 guppy = "0.14.2"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
@@ -35,7 +36,6 @@ log = "0.4.17"
 once_cell = "1.13.0"
 owo-colors = "3.4.0"
 num_cpus = "1.13.1"
-rayon = "1.5.3"
 regex = "1.6.0"
 semver = "1.0.12"
 serde = { version = "1.0.139", features = ["derive"] }
@@ -49,6 +49,12 @@ target-spec = "1.0.2"
 tempfile = "3.3.0"
 thiserror = "1.0.31"
 # For parsing of .cargo/config.toml files
+tokio = { version = "1.20.0", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+] }
 toml = "0.5.9"
 twox-hash = { version = "1.6.3", default-features = false }
 zstd = { version = "0.11.2", features = ["zstdmt"] }
