@@ -256,6 +256,7 @@ fn test_run_with_target_runner() -> Result<()> {
                             if fixture.status == FixtureStatus::Segfault {
                                 expected_status = nextest_runner::runner::ExecutionResult::Fail {
                                     abort_status: None,
+                                    leaked: false,
                                 };
                             }
                         }

@@ -411,7 +411,7 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
                                 pass_attempt
                             }
                         }
-                        FixtureStatus::Pass => 1,
+                        FixtureStatus::Pass | FixtureStatus::Leak => 1,
                         // Note that currently only the flaky test fixtures are controlled by overrides.
                         // If more tests are controlled by retry overrides, this may need to be updated.
                         FixtureStatus::Fail | FixtureStatus::Segfault => profile_retries + 1,
@@ -429,7 +429,11 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
 
                     match run_statuses.describe() {
                         ExecutionDescription::Success { single_status } => {
-                            single_status.result == ExecutionResult::Pass
+                            if fixture.status == FixtureStatus::Leak {
+                                single_status.result == ExecutionResult::Leak
+                            } else {
+                                single_status.result == ExecutionResult::Pass
+                            }
                         }
                         ExecutionDescription::Flaky {
                             last_status,
@@ -461,12 +465,18 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
                             );
                             for retry in retries {
                                 assert!(
-                                    matches!(retry.result, ExecutionResult::Fail { .. }),
-                                    "retry {} should be fail",
+                                    matches!(
+                                        retry.result,
+                                        ExecutionResult::Fail { .. } | ExecutionResult::Leak
+                                    ),
+                                    "retry {} should be fail or leak",
                                     retry.attempt
                                 );
                             }
-                            matches!(first_status.result, ExecutionResult::Fail { .. })
+                            matches!(
+                                first_status.result,
+                                ExecutionResult::Fail { .. } | ExecutionResult::Leak
+                            )
                         }
                     }
                 }

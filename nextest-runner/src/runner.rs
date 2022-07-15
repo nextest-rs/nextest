@@ -437,7 +437,7 @@ impl<'a> TestRunnerInner<'a> {
         let mut stdout = bytes::BytesMut::with_capacity(4096);
         let mut stderr = bytes::BytesMut::with_capacity(4096);
 
-        let (res, _leaked) = {
+        let (res, leaked) = {
             // Set up futures for reading from stdout and stderr.
             let stdout_fut = async {
                 if let Some(mut child_stdout) = child_stdout {
@@ -586,7 +586,11 @@ impl<'a> TestRunnerInner<'a> {
 
         let status = status.unwrap_or_else(|| {
             if exit_status.success() {
-                ExecutionResult::Pass
+                if leaked {
+                    ExecutionResult::Leak
+                } else {
+                    ExecutionResult::Pass
+                }
             } else {
                 cfg_if::cfg_if! {
                     if #[cfg(unix)] {
@@ -602,7 +606,10 @@ impl<'a> TestRunnerInner<'a> {
                         let abort_status = None;
                     }
                 }
-                ExecutionResult::Fail { abort_status }
+                ExecutionResult::Fail {
+                    abort_status,
+                    leaked,
+                }
             }
         });
 
@@ -717,7 +724,13 @@ impl<'a> ExecutionDescription<'a> {
     /// Returns the status level for this `ExecutionDescription`.
     pub fn status_level(&self) -> StatusLevel {
         match self {
-            ExecutionDescription::Success { .. } => StatusLevel::Pass,
+            ExecutionDescription::Success { single_status } => {
+                if single_status.result == ExecutionResult::Leak {
+                    StatusLevel::Leak
+                } else {
+                    StatusLevel::Pass
+                }
+            }
             // A flaky test implies that we print out retry information for it.
             ExecutionDescription::Flaky { .. } => StatusLevel::Retry,
             ExecutionDescription::Failure { .. } => StatusLevel::Fail,
@@ -728,8 +741,11 @@ impl<'a> ExecutionDescription<'a> {
     pub fn final_status_level(&self) -> FinalStatusLevel {
         match self {
             ExecutionDescription::Success { single_status, .. } => {
+                // Slow is higher priority than leaky, so return slow first here.
                 if single_status.is_slow {
                     FinalStatusLevel::Slow
+                } else if single_status.result == ExecutionResult::Leak {
+                    FinalStatusLevel::Leak
                 } else {
                     FinalStatusLevel::Pass
                 }
@@ -816,7 +832,7 @@ pub struct RunStats {
     /// The total number of tests that finished running.
     pub finished_count: usize,
 
-    /// The number of tests that passed. Includes `flaky`.
+    /// The number of tests that passed. Includes `flaky` and `leaky`.
     pub passed: usize,
 
     /// The number of tests that passed on retry.
@@ -827,6 +843,9 @@ pub struct RunStats {
 
     /// The number of tests that timed out.
     pub timed_out: usize,
+
+    /// The number of tests that passed but leaked handles.
+    pub leaky: usize,
 
     /// The number of tests that encountered an execution failure.
     pub exec_failed: usize,
@@ -872,6 +891,13 @@ impl RunStats {
         match last_status.result {
             ExecutionResult::Pass => {
                 self.passed += 1;
+                if run_statuses.len() > 1 {
+                    self.flaky += 1;
+                }
+            }
+            ExecutionResult::Leak => {
+                self.passed += 1;
+                self.leaky += 1;
                 if run_statuses.len() > 1 {
                     self.flaky += 1;
                 }
@@ -1060,10 +1086,21 @@ enum InternalError<E> {
 pub enum ExecutionResult {
     /// The test passed.
     Pass,
+    /// The test passed but leaked handles. This usually indicates that
+    /// a subprocess that inherit standard IO was created, but it didn't shut down when
+    /// the test failed.
+    ///
+    /// This is treated as a pass.
+    Leak,
     /// The test failed.
     Fail {
         /// The abort status of the test, if any (for example, the signal on Unix).
         abort_status: Option<AbortStatus>,
+
+        /// Whether a test leaked handles. If set to true, this usually indicates that
+        /// a subprocess that inherit standard IO was created, but it didn't shut down when
+        /// the test failed.
+        leaked: bool,
     },
     /// An error occurred while executing the test.
     ExecFail,
@@ -1075,7 +1112,7 @@ impl ExecutionResult {
     /// Returns true if the test was successful.
     pub fn is_success(self) -> bool {
         match self {
-            ExecutionResult::Pass => true,
+            ExecutionResult::Pass | ExecutionResult::Leak => true,
             ExecutionResult::Fail { .. } | ExecutionResult::ExecFail | ExecutionResult::Timeout => {
                 false
             }

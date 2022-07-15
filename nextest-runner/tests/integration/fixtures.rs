@@ -40,6 +40,7 @@ pub(crate) enum FixtureStatus {
     Pass,
     Fail,
     Flaky { pass_attempt: usize },
+    Leak,
     Segfault,
     IgnoredPass,
     IgnoredFail,
@@ -53,7 +54,10 @@ impl FixtureStatus {
                 if pass_attempt <= total_attempts {
                     ExecutionResult::Pass
                 } else {
-                    ExecutionResult::Fail { abort_status: None }
+                    ExecutionResult::Fail {
+                        abort_status: None,
+                        leaked: false,
+                    }
                 }
             }
             FixtureStatus::Segfault => {
@@ -70,11 +74,16 @@ impl FixtureStatus {
                         let abort_status = None;
                     }
                 }
-                ExecutionResult::Fail { abort_status }
+                ExecutionResult::Fail {
+                    abort_status,
+                    leaked: false,
+                }
             }
-            FixtureStatus::Fail | FixtureStatus::IgnoredFail => {
-                ExecutionResult::Fail { abort_status: None }
-            }
+            FixtureStatus::Fail | FixtureStatus::IgnoredFail => ExecutionResult::Fail {
+                abort_status: None,
+                leaked: false,
+            },
+            FixtureStatus::Leak => ExecutionResult::Leak,
         }
     }
 
@@ -104,7 +113,7 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
                 TestFixture { name: "test_result_failure", status: FixtureStatus::Fail },
                 TestFixture { name: "test_slow_timeout", status: FixtureStatus::IgnoredPass },
                 TestFixture { name: "test_slow_timeout_2", status: FixtureStatus::IgnoredPass },
-                TestFixture { name: "test_subprocess_doesnt_exit", status: FixtureStatus::Pass },
+                TestFixture { name: "test_subprocess_doesnt_exit", status: FixtureStatus::Leak },
                 TestFixture { name: "test_success", status: FixtureStatus::Pass },
                 TestFixture { name: "test_success_should_panic", status: FixtureStatus::Pass },
             ],
