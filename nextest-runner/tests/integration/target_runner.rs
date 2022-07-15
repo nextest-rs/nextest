@@ -8,7 +8,7 @@ use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
     runner::TestRunnerBuilder,
-    signal::SignalHandler,
+    signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
 };
@@ -216,7 +216,7 @@ fn test_run_with_target_runner() -> Result<()> {
 
     let runner = TestRunnerBuilder::default();
     let mut runner = runner
-        .build(&test_list, profile, SignalHandler::noop(), target_runner)
+        .build(&test_list, profile, SignalHandlerKind::Noop, target_runner)
         .unwrap();
 
     let (instance_statuses, run_stats) = execute_collect(&mut runner);

@@ -22,7 +22,7 @@ use nextest_runner::{
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::TestRunnerBuilder,
-    signal::SignalHandler,
+    signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
 };
@@ -1031,7 +1031,7 @@ impl App {
             reporter.colorize();
         }
 
-        let handler = SignalHandler::new()?;
+        let handler = SignalHandlerKind::Standard;
         let runner_builder = runner_opts.to_builder(no_capture);
         let mut runner =
             runner_builder.build(&test_list, profile, handler, target_runner.clone())?;
