@@ -325,13 +325,15 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *25 tests run: 17 passed, 8 failed, 4 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *25 tests run: 17 passed \(1 leaky\), 8 failed, 4 skipped")
+            .unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *25 tests run: 18 passed, 7 failed, 4 skipped").unwrap()
+        Regex::new(r"Summary \[.*\] *25 tests run: 18 passed \(1 leaky\), 7 failed, 4 skipped")
+            .unwrap()
     };
     assert!(
         summary_reg.is_match(&output),
-        "summary didn't match (actual output: {})",
+        "summary didn't match (actual output: {}, relocated: {relocated})",
         output
     );
 }

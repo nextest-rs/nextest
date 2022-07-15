@@ -122,6 +122,9 @@ pub enum StatusLevel {
     /// Output information about slow tests, and all variants above.
     Slow,
 
+    /// Output information about leaky tests, and all variants above.
+    Leak,
+
     /// Output passing tests in addition to all variants above.
     Pass,
 
@@ -135,7 +138,9 @@ pub enum StatusLevel {
 impl StatusLevel {
     /// Returns string representations of all known variants.
     pub fn variants() -> &'static [&'static str] {
-        &["none", "fail", "retry", "slow", "pass", "skip", "all"]
+        &[
+            "none", "fail", "retry", "slow", "leak", "pass", "skip", "all",
+        ]
     }
 }
 
@@ -148,6 +153,7 @@ impl FromStr for StatusLevel {
             "fail" => StatusLevel::Fail,
             "retry" => StatusLevel::Retry,
             "slow" => StatusLevel::Slow,
+            "leak" => StatusLevel::Leak,
             "pass" => StatusLevel::Pass,
             "skip" => StatusLevel::Skip,
             "all" => StatusLevel::All,
@@ -164,6 +170,7 @@ impl fmt::Display for StatusLevel {
             StatusLevel::Fail => write!(f, "fail"),
             StatusLevel::Retry => write!(f, "retry"),
             StatusLevel::Slow => write!(f, "slow"),
+            StatusLevel::Leak => write!(f, "leak"),
             StatusLevel::Pass => write!(f, "pass"),
             StatusLevel::Skip => write!(f, "skip"),
             StatusLevel::All => write!(f, "all"),
@@ -197,6 +204,9 @@ pub enum FinalStatusLevel {
 
     /// Output skipped tests in addition to all variants above.
     Skip,
+
+    /// Output leaky tests in addition to all variants above.
+    Leak,
 
     /// Output passing tests in addition to all variants above.
     Pass,
@@ -505,13 +515,23 @@ fn progress_bar_msg(current_stats: &RunStats, running: usize, styles: &Styles) -
 fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) -> fmt::Result {
     write!(out, "{} passed", run_stats.passed.style(styles.pass))?;
 
-    if run_stats.flaky > 0 {
-        write!(
-            out,
-            " ({} {})",
-            run_stats.flaky.style(styles.count),
-            "flaky".style(styles.skip),
-        )?;
+    if run_stats.flaky > 0 || run_stats.leaky > 0 {
+        let mut text = Vec::with_capacity(2);
+        if run_stats.flaky > 0 {
+            text.push(format!(
+                "{} {}",
+                run_stats.flaky.style(styles.count),
+                "flaky".style(styles.skip),
+            ));
+        }
+        if run_stats.leaky > 0 {
+            text.push(format!(
+                "{} {}",
+                run_stats.leaky.style(styles.count),
+                "leaky".style(styles.skip),
+            ));
+        }
+        write!(out, " ({})", text.join(", "))?;
     }
     write!(out, ", ")?;
 
@@ -838,7 +858,11 @@ impl<'a> TestReporterImpl<'a> {
         let last_status = describe.last_status();
         match describe {
             ExecutionDescription::Success { .. } => {
-                write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+                if last_status.result == ExecutionResult::Leak {
+                    write!(writer, "{:>12} ", "LEAK".style(self.styles.skip))?;
+                } else {
+                    write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+                }
             }
             ExecutionDescription::Flaky { .. } => {
                 // Use the skip color to also represent a flaky test.
@@ -878,6 +902,7 @@ impl<'a> TestReporterImpl<'a> {
         #[cfg(windows)]
         if let ExecutionResult::Fail {
             abort_status: Some(AbortStatus::WindowsNtStatus(nt_status)),
+            leaked: _,
         } = last_status.result
         {
             self.write_windows_message_line(nt_status, writer)?;
@@ -895,10 +920,19 @@ impl<'a> TestReporterImpl<'a> {
         let last_status = describe.last_status();
         match describe {
             ExecutionDescription::Success { .. } => {
-                if last_status.is_slow {
-                    write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
-                } else {
-                    write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+                match (last_status.is_slow, last_status.result) {
+                    (true, ExecutionResult::Leak) => {
+                        write!(writer, "{:>12} ", "SLOW + LEAK".style(self.styles.skip))?;
+                    }
+                    (true, _) => {
+                        write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
+                    }
+                    (false, ExecutionResult::Leak) => {
+                        write!(writer, "{:>12} ", "LEAK".style(self.styles.skip))?;
+                    }
+                    (false, _) => {
+                        write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+                    }
                 }
             }
             ExecutionDescription::Flaky { .. } => {
@@ -943,6 +977,7 @@ impl<'a> TestReporterImpl<'a> {
         #[cfg(windows)]
         if let ExecutionResult::Fail {
             abort_status: Some(AbortStatus::WindowsNtStatus(nt_status)),
+            leaked: _,
         } = last_status.result
         {
             self.write_windows_message_line(nt_status, writer)?;
@@ -1108,6 +1143,7 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
         #[cfg(unix)]
         ExecutionResult::Fail {
             abort_status: Some(AbortStatus::UnixSignal(sig)),
+            leaked: _,
         } => match crate::helpers::signal_str(sig) {
             Some(s) => format!("SIG{s}").into(),
             None => format!("ABORT SIG {sig}").into(),
@@ -1115,14 +1151,23 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
         #[cfg(windows)]
         ExecutionResult::Fail {
             abort_status: Some(AbortStatus::WindowsNtStatus(_)),
+            leaked: _,
         } => {
             // Going to print out the full error message on the following line -- just "ABORT" will
             // do for now.
             "ABORT".into()
         }
-        ExecutionResult::Fail { abort_status: None } => "FAIL".into(),
+        ExecutionResult::Fail {
+            abort_status: None,
+            leaked: true,
+        } => "FAIL + LEAK".into(),
+        ExecutionResult::Fail {
+            abort_status: None,
+            leaked: false,
+        } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
         ExecutionResult::Pass => "PASS".into(),
+        ExecutionResult::Leak => "LEAK".into(),
         ExecutionResult::Timeout => "TIMEOUT".into(),
     }
 }
@@ -1133,6 +1178,7 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         #[cfg(unix)]
         ExecutionResult::Fail {
             abort_status: Some(AbortStatus::UnixSignal(sig)),
+            leaked: _,
         } => match crate::helpers::signal_str(sig) {
             Some(s) => s.into(),
             None => format!("SIG {sig}").into(),
@@ -1140,14 +1186,19 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         #[cfg(windows)]
         ExecutionResult::Fail {
             abort_status: Some(AbortStatus::WindowsNtStatus(_)),
+            leaked: _,
         } => {
             // Going to print out the full error message on the following line -- just "ABORT" will
             // do for now.
             "ABORT".into()
         }
-        ExecutionResult::Fail { abort_status: None } => "FAIL".into(),
+        ExecutionResult::Fail {
+            abort_status: None,
+            leaked: _,
+        } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
         ExecutionResult::Pass => "PASS".into(),
+        ExecutionResult::Leak => "LEAK".into(),
         ExecutionResult::Timeout => "TMT".into(),
     }
 }

@@ -76,17 +76,39 @@ impl<'cfg> MetadataJunit<'cfg> {
                     match run_status.result {
                         ExecutionResult::Fail {
                             abort_status: Some(_),
+                            leaked: true,
+                        } => (
+                            NonSuccessKind::Failure,
+                            "test abort with leaked handles".into(),
+                        ),
+                        ExecutionResult::Fail {
+                            abort_status: Some(_),
+                            leaked: false,
                         } => (NonSuccessKind::Failure, "test abort".into()),
-                        ExecutionResult::Fail { abort_status: None } => {
-                            (NonSuccessKind::Failure, "test failure".into())
-                        }
+                        ExecutionResult::Fail {
+                            abort_status: None,
+                            leaked: true,
+                        } => (
+                            NonSuccessKind::Failure,
+                            "test failure with leaked handles".into(),
+                        ),
+                        ExecutionResult::Fail {
+                            abort_status: None,
+                            leaked: false,
+                        } => (NonSuccessKind::Failure, "test failure".into()),
                         ExecutionResult::Timeout => {
                             (NonSuccessKind::Failure, "test timeout".into())
                         }
                         ExecutionResult::ExecFail => {
                             (NonSuccessKind::Error, "execution failure".into())
                         }
-                        ExecutionResult::Pass => unreachable!("this is a failure status"),
+                        ExecutionResult::Leak => (
+                            NonSuccessKind::Error,
+                            "test passed but leaked handles".into(),
+                        ),
+                        ExecutionResult::Pass => {
+                            unreachable!("this is a failure status")
+                        }
                     }
                 }
 
@@ -241,24 +263,38 @@ pub fn heuristic_extract_description<'a>(
     #[cfg(unix)]
     if let ExecutionResult::Fail {
         abort_status: Some(AbortStatus::UnixSignal(sig)),
+        leaked,
     } = exec_result
     {
         let signal_str = match crate::helpers::signal_str(sig) {
             Some(signal_str) => format!(" SIG{signal_str}"),
             None => String::new(),
         };
-        return Some(format!("Test aborted with signal{signal_str} (code {sig})"));
+        return Some(format!(
+            "Test aborted with signal{signal_str} (code {sig}){}",
+            if leaked {
+                ", and also leaked handles"
+            } else {
+                ""
+            }
+        ));
     }
 
     #[cfg(windows)]
     if let ExecutionResult::Fail {
         abort_status: Some(AbortStatus::WindowsNtStatus(exception)),
+        leaked,
     } = exec_result
     {
         return Some(
             format!(
-                "Test aborted with code {}",
+                "Test aborted with code {}{}",
                 crate::helpers::display_nt_status(exception),
+                if leaked {
+                    ", and also leaked handles"
+                } else {
+                    ""
+                }
             )
             .into(),
         );
