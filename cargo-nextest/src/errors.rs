@@ -124,6 +124,11 @@ pub enum ExpectedError {
         command: String,
         exit_code: Option<i32>,
     },
+    #[error("building test runner failed")]
+    TestRunnerBuildError {
+        #[from]
+        err: TestRunnerBuildError,
+    },
     #[error("writing test list to output failed")]
     WriteTestListError {
         #[from]
@@ -289,6 +294,7 @@ impl ExpectedError {
             | Self::ArchiveExtractError { .. }
             | Self::PathMapperConstructError { .. }
             | Self::ArgumentJsonParseError { .. }
+            | Self::TestRunnerBuildError { .. }
             | Self::CargoMetadataParseError { .. }
             | Self::TestBinaryArgsParseError { .. }
             | Self::DialoguerError { .. }
@@ -492,6 +498,10 @@ impl ExpectedError {
                 );
 
                 None
+            }
+            Self::TestRunnerBuildError { err } => {
+                log::error!("failed to build test runner");
+                Some(err as &dyn Error)
             }
             Self::WriteTestListError { err } => {
                 log::error!("failed to write test list to output");
