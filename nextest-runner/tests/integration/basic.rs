@@ -105,8 +105,6 @@ fn test_run() -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(&mut runner);
 
-    println!("collected?");
-
     for (binary_id, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts

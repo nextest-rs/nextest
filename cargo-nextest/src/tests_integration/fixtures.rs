@@ -178,7 +178,6 @@ pub fn build_tests(p: &TempProject) {
     std::fs::write(p.binaries_metadata_path(), output.stdout().unwrap()).unwrap();
 }
 
-#[track_caller]
 pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
     let result: TestListSummary = serde_json::from_slice(stdout).unwrap();
 
