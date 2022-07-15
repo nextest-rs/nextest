@@ -1070,6 +1070,7 @@ dependencies = [
  "aho-corasick",
  "async-scoped",
  "atomicwrites",
+ "bytes",
  "camino",
  "cargo_metadata",
  "cfg-if",

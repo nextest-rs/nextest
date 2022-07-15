@@ -13,6 +13,7 @@ rust-version = "1.59"
 atomicwrites = "0.3.1"
 aho-corasick = "0.7.18"
 async-scoped = { version = "0.7.0", features = ["use-tokio"] }
+bytes = "1.1.0"
 camino = { version = "1.0.9", features = ["serde1"] }
 config = { version = "0.13.1", default-features = false, features = ["toml"] }
 cargo_metadata = "0.14.2"
@@ -50,10 +51,12 @@ thiserror = "1.0.31"
 # For parsing of .cargo/config.toml files
 tokio = { version = "1.20.0", features = [
     "macros",
+    "process",
     "rt",
     "rt-multi-thread",
     "signal",
     "sync",
+    "time",
 ] }
 toml = "0.5.9"
 twox-hash = { version = "1.6.3", default-features = false }

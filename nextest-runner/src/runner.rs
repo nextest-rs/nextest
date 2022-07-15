@@ -29,7 +29,11 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-use tokio::{runtime::Runtime, sync::mpsc::UnboundedSender};
+use tokio::{
+    io::{AsyncReadExt, BufReader},
+    runtime::Runtime,
+    sync::mpsc::UnboundedSender,
+};
 
 /// Test runner options.
 #[derive(Debug, Default)]
@@ -405,33 +409,22 @@ impl<'a> TestRunnerInner<'a> {
         overrides: &ProfileOverrides,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
     ) -> std::io::Result<InternalExecuteStatus> {
-        let cmd = test
-            .make_expression(self.test_list, &self.target_runner)
-            .unchecked()
-            // Debug environment variable for testing.
-            .env("__NEXTEST_ATTEMPT", format!("{}", attempt));
+        let mut cmd = test.make_expression(self.test_list, &self.target_runner);
 
-        let cmd = if self.no_capture {
-            cmd
-        } else {
+        // Debug environment variable for testing.
+        cmd.env("__NEXTEST_ATTEMPT", format!("{}", attempt));
+
+        if !self.no_capture {
             // Capture stdout and stderr.
-            cmd.stdout_capture().stderr_capture()
+            cmd.stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped());
         };
 
-        let handle = Arc::new(cmd.start()?);
+        let mut child = cmd.spawn()?;
 
         let mut status: Option<ExecutionResult> = None;
         let slow_timeout = overrides.slow_timeout().unwrap_or(self.slow_timeout);
         let mut is_slow = false;
-
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let wait_handle = handle.clone();
-        tokio::task::spawn_blocking(move || {
-            // This task is just waiting for the test to finish, we'll handle the output in the main task
-            let _ = wait_handle.wait();
-            // We don't care if the receiver got the message or not.
-            let _ = sender.send(());
-        });
 
         let mut interval = tokio::time::interval(slow_timeout.period);
         // The first tick is immediate.
@@ -439,89 +432,169 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        loop {
-            tokio::select! {
-                biased;
+        let child_stdout = child.stdout.take().map(BufReader::new);
+        let child_stderr = child.stderr.take().map(BufReader::new);
+        let mut stdout = bytes::BytesMut::with_capacity(4096);
+        let mut stderr = bytes::BytesMut::with_capacity(4096);
 
-                _ = receiver.recv() => {
-                    // The test run finished.
-                    break;
-                }
-                _ = interval.tick(), if status.is_none() => {
-                    is_slow = true;
-                    timeout_hit += 1;
-
-                    let _ = run_sender.send(InternalTestEvent::Slow {
-                        test_instance: test,
-                        // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
-                        // slightly longer.
-                        elapsed: timeout_hit * slow_timeout.period,
-                    });
-
-                    if let Some(terminate_after) = slow_timeout.terminate_after {
-                        if NonZeroUsize::new(timeout_hit as usize)
-                            .expect("timeout_hit cannot be non-zero")
-                            >= terminate_after
-                        {
-                            // attempt to terminate the slow test.
-                            // as there is a race between shutting down a slow test and its own completion
-                            // we silently ignore errors to avoid printing false warnings.
-
-                            #[cfg(unix)]
-                            let exited = {
-                                use duct::unix::HandleExt;
-                                use libc::SIGTERM;
-
-                                let _ = handle.send_signal(SIGTERM);
-
-                                // give the process a grace period of 10s
-                                let sleep = tokio::time::sleep(Duration::from_secs(10));
-                                tokio::select! {
-                                    biased;
-
-                                    _ = receiver.recv() => {
-                                        // The process exited.
-                                        true
-                                    }
-                                    _ = sleep => {
-                                        // The process didn't exit -- need to do a hard shutdown.
-                                        false
-                                    }
-                                }
-                            };
-
-                            #[cfg(not(unix))]
-                            let exited = false;
-
-                            if !exited {
-                                let _ = handle.kill();
-                            }
-
-                            status = Some(ExecutionResult::Timeout);
-                            // Don't break here to give the wait task a chance to finish. This is
-                            // required because we want just one reference to the Arc to remain for
-                            // the try_unwrap call below.
+        let (res, _leaked) = {
+            // Set up futures for reading from stdout and stderr.
+            let stdout_fut = async {
+                if let Some(mut child_stdout) = child_stdout {
+                    loop {
+                        stdout.reserve(4096);
+                        let bytes_read = child_stdout.read_buf(&mut stdout).await?;
+                        if bytes_read == 0 {
+                            break;
                         }
                     }
                 }
+                Ok::<_, std::io::Error>(())
             };
-        }
+            tokio::pin!(stdout_fut);
+            let mut stdout_done = false;
 
-        let output = Arc::try_unwrap(handle)
-            .expect("at this point just one handle should remain")
-            .into_output()?;
+            let stderr_fut = async {
+                if let Some(mut child_stderr) = child_stderr {
+                    loop {
+                        stderr.reserve(4096);
+                        let bytes_read = child_stderr.read_buf(&mut stderr).await?;
+                        if bytes_read == 0 {
+                            break;
+                        }
+                    }
+                }
+                Ok::<_, std::io::Error>(())
+            };
+            tokio::pin!(stderr_fut);
+            let mut stderr_done = false;
+
+            let res = loop {
+                tokio::select! {
+                    res = &mut stdout_fut, if !stdout_done => {
+                        stdout_done = true;
+                        res?;
+                    }
+                    res = &mut stderr_fut, if !stderr_done => {
+                        stderr_done = true;
+                        res?;
+                    }
+                    res = child.wait() => {
+                        // The test finished executing.
+                        break res;
+                    }
+                    _ = interval.tick(), if status.is_none() => {
+                        is_slow = true;
+                        timeout_hit += 1;
+
+                        let _ = run_sender.send(InternalTestEvent::Slow {
+                            test_instance: test,
+                            // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
+                            // slightly longer.
+                            elapsed: timeout_hit * slow_timeout.period,
+                        });
+
+                        if let Some(terminate_after) = slow_timeout.terminate_after {
+                            if NonZeroUsize::new(timeout_hit as usize)
+                                .expect("timeout_hit cannot be non-zero")
+                                >= terminate_after
+                            {
+                                // attempt to terminate the slow test.
+                                // as there is a race between shutting down a slow test and its own completion
+                                // we silently ignore errors to avoid printing false warnings.
+
+                                #[cfg(unix)]
+                                let exited = {
+                                    use libc::SIGTERM;
+
+                                    match child.id() {
+                                        Some(pid) => {
+                                            let pid = pid as i32;
+                                            unsafe { libc::kill(pid, SIGTERM) };
+
+                                            // give the process a grace period of 10s
+                                            let sleep = tokio::time::sleep(Duration::from_secs(10));
+                                            tokio::select! {
+                                                biased;
+
+                                                _ = child.wait() => {
+                                                    // The process exited.
+                                                    true
+                                                }
+                                                _ = sleep => {
+                                                    // The process didn't exit -- need to do a hard shutdown.
+                                                    false
+                                                }
+                                            }
+
+                                        }
+                                        None => {
+                                            // This means that the process has already exited.
+                                            true
+                                        }
+                                    }
+                                };
+
+                                #[cfg(not(unix))]
+                                let exited = false;
+
+                                if !exited {
+                                    let _ = child.start_kill();
+                                }
+
+                                status = Some(ExecutionResult::Timeout);
+                                // Don't break here to give the wait task a chance to finish. This is
+                                // required because we want just one reference to the Arc to remain for
+                                // the try_unwrap call below.
+                            }
+                        }
+                    }
+                };
+            };
+
+            // Once the process is done executing, wait up to 100ms for the pipes to shut down.
+            // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
+            // didn't shut down properly. Now, this detects those cases and marks them as leaked.
+            let leaked = loop {
+                let sleep = tokio::time::sleep(Duration::from_millis(100));
+
+                tokio::select! {
+                    res = &mut stdout_fut, if !stdout_done => {
+                        stdout_done = true;
+                        res?;
+                    }
+                    res = &mut stderr_fut, if !stderr_done => {
+                        stderr_done = true;
+                        res?;
+                    }
+                    () = sleep, if !(stdout_done && stderr_done) => {
+                        // stdout and/or stderr haven't completed yet. In this case, break the loop
+                        // and mark this as leaked.
+                        break true;
+                    }
+                    else => {
+                        break false;
+                    }
+                }
+            };
+
+            (res, leaked)
+        };
+
+        let output = res?;
+        let exit_status = output;
 
         let status = status.unwrap_or_else(|| {
-            if output.status.success() {
+            if exit_status.success() {
                 ExecutionResult::Pass
             } else {
                 cfg_if::cfg_if! {
                     if #[cfg(unix)] {
                         // On Unix, extract the signal if it's found.
                         use std::os::unix::process::ExitStatusExt;
-                        let abort_status = output.status.signal().map(AbortStatus::UnixSignal);
+                        let abort_status = exit_status.signal().map(AbortStatus::UnixSignal);
                     } else if #[cfg(windows)] {
-                        let abort_status = output.status.code().and_then(|code| {
+                        let abort_status = exit_status.code().and_then(|code| {
                             let exception = windows::Win32::Foundation::NTSTATUS(code);
                             exception.is_err().then(|| AbortStatus::WindowsNtStatus(exception))
                         });
@@ -534,8 +607,9 @@ impl<'a> TestRunnerInner<'a> {
         });
 
         Ok(InternalExecuteStatus {
-            stdout: output.stdout,
-            stderr: output.stderr,
+            // TODO: replace with Bytes
+            stdout: stdout.to_vec(),
+            stderr: stderr.to_vec(),
             result: status,
             stopwatch_end: stopwatch.end(),
             is_slow,
@@ -722,7 +796,7 @@ impl InternalExecuteStatus {
         ExecuteStatus {
             attempt,
             total_attempts,
-            stdout_stderr: Arc::new((self.stdout, self.stderr)),
+            stdout_stderr: std::sync::Arc::new((self.stdout, self.stderr)),
             result: self.result,
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,
