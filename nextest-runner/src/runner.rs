@@ -11,7 +11,7 @@ use crate::{
     helpers::convert_build_platform,
     list::{TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
-    signal::{SignalEvent, SignalHandler},
+    signal::{SignalEvent, SignalHandler, SignalHandlerKind},
     stopwatch::{StopwatchEnd, StopwatchStart},
     target_runner::TargetRunner,
 };
@@ -72,7 +72,7 @@ impl TestRunnerBuilder {
         self,
         test_list: &'a TestList,
         profile: NextestProfile<'a>,
-        handler: SignalHandler,
+        handler_kind: SignalHandlerKind,
         target_runner: TargetRunner,
     ) -> Result<TestRunner<'a>, TestRunnerBuildError> {
         let test_threads = match self.no_capture {
@@ -90,6 +90,10 @@ impl TestRunnerBuilder {
         let slow_timeout = profile.slow_timeout();
 
         let runtime = Runtime::new().map_err(TestRunnerBuildError::TokioRuntimeCreate)?;
+        let _guard = runtime.enter();
+
+        // This must be called from within the guard.
+        let handler = handler_kind.build()?;
 
         Ok(TestRunner {
             inner: TestRunnerInner {
@@ -285,14 +289,15 @@ impl<'a> TestRunnerInner<'a> {
             scope.spawn_cancellable(run_fut, || ());
 
             let exec_fut = async move {
+                let mut signals_done = false;
+
                 loop {
                     let internal_event = tokio::select! {
-                        internal_event = signal_handler.receiver.recv() => {
+                        internal_event = signal_handler.recv(), if !signals_done => {
                             match internal_event {
                                 Some(event) => InternalEvent::Signal(event),
                                 None => {
-                                    // Ignore the signal thread being dropped. This is done for
-                                    // noop signal handlers.
+                                    signals_done = true;
                                     continue;
                                 }
                             }
@@ -1033,9 +1038,9 @@ mod tests {
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
-        let handler = SignalHandler::noop();
+        let handler_kind = SignalHandlerKind::Noop;
         let runner = builder
-            .build(&test_list, profile, handler, TargetRunner::empty())
+            .build(&test_list, profile, handler_kind, TargetRunner::empty())
             .unwrap();
         assert!(runner.inner.no_capture, "no_capture is true");
         assert_eq!(runner.inner.test_threads, 1, "tests run serially");

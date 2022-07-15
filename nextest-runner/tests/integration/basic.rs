@@ -11,7 +11,7 @@ use nextest_runner::{
     list::BinaryList,
     reporter::heuristic_extract_description,
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
-    signal::SignalHandler,
+    signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
 };
@@ -98,7 +98,7 @@ fn test_run() -> Result<()> {
         .build(
             &test_list,
             profile,
-            SignalHandler::noop(),
+            SignalHandlerKind::Noop,
             TargetRunner::empty(),
         )
         .unwrap();
@@ -192,7 +192,7 @@ fn test_run_ignored() -> Result<()> {
         .build(
             &test_list,
             profile,
-            SignalHandler::noop(),
+            SignalHandlerKind::Noop,
             TargetRunner::empty(),
         )
         .unwrap();
@@ -387,7 +387,7 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
         .build(
             &test_list,
             profile,
-            SignalHandler::noop(),
+            SignalHandlerKind::Noop,
             TargetRunner::empty(),
         )
         .unwrap();
@@ -509,7 +509,7 @@ fn test_termination() -> Result<()> {
         .build(
             &test_list,
             profile,
-            SignalHandler::noop(),
+            SignalHandlerKind::Noop,
             TargetRunner::empty(),
         )
         .unwrap();

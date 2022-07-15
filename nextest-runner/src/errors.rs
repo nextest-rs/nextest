@@ -427,6 +427,10 @@ pub enum TestRunnerBuildError {
     /// An error occurred while creating the Tokio runtime.
     #[error("error creating Tokio runtime")]
     TokioRuntimeCreate(#[source] std::io::Error),
+
+    /// An error occurred while setting up signals.
+    #[error("error setting up signals")]
+    SignalHandlerSetupError(#[from] SignalHandlerSetupError),
 }
 
 /// Represents an unknown archive format.
@@ -778,8 +782,8 @@ pub enum TargetRunnerError {
 
 /// An error that occurred while setting up the signal handler.
 #[derive(Debug, Error)]
-#[error(transparent)]
-pub struct SignalHandlerSetupError(#[from] ctrlc::Error);
+#[error("error setting up signal handler")]
+pub struct SignalHandlerSetupError(#[from] std::io::Error);
 
 #[cfg(feature = "self-update")]
 mod self_update_errors {
