@@ -94,14 +94,18 @@ fn test_run() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let runner = TestRunnerBuilder::default().build(
-        &test_list,
-        profile,
-        SignalHandler::noop(),
-        TargetRunner::empty(),
-    );
+    let mut runner = TestRunnerBuilder::default()
+        .build(
+            &test_list,
+            profile,
+            SignalHandler::noop(),
+            TargetRunner::empty(),
+        )
+        .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&runner);
+    let (instance_statuses, run_stats) = execute_collect(&mut runner);
+
+    println!("collected?");
 
     for (binary_id, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
@@ -184,14 +188,16 @@ fn test_run_ignored() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
 
-    let runner = TestRunnerBuilder::default().build(
-        &test_list,
-        profile,
-        SignalHandler::noop(),
-        TargetRunner::empty(),
-    );
+    let mut runner = TestRunnerBuilder::default()
+        .build(
+            &test_list,
+            profile,
+            SignalHandler::noop(),
+            TargetRunner::empty(),
+        )
+        .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&runner);
+    let (instance_statuses, run_stats) = execute_collect(&mut runner);
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
@@ -377,14 +383,16 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
     if let Some(retries) = retries {
         builder.set_retries(retries);
     }
-    let runner = builder.build(
-        &test_list,
-        profile,
-        SignalHandler::noop(),
-        TargetRunner::empty(),
-    );
+    let mut runner = builder
+        .build(
+            &test_list,
+            profile,
+            SignalHandler::noop(),
+            TargetRunner::empty(),
+        )
+        .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&runner);
+    let (instance_statuses, run_stats) = execute_collect(&mut runner);
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
@@ -497,14 +505,16 @@ fn test_termination() -> Result<()> {
         .profile("with-termination")
         .expect("with-termination config is valid");
 
-    let runner = TestRunnerBuilder::default().build(
-        &test_list,
-        profile,
-        SignalHandler::noop(),
-        TargetRunner::empty(),
-    );
+    let mut runner = TestRunnerBuilder::default()
+        .build(
+            &test_list,
+            profile,
+            SignalHandler::noop(),
+            TargetRunner::empty(),
+        )
+        .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&runner);
+    let (instance_statuses, run_stats) = execute_collect(&mut runner);
     assert_eq!(run_stats.timed_out, 2, "2 tests timed out");
     for test_name in ["test_slow_timeout", "test_slow_timeout_2"] {
         let (_, instance_value) = instance_statuses

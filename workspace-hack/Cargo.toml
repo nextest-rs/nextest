@@ -18,6 +18,8 @@ backtrace = { version = "0.3.66", features = ["gimli-symbolize", "std"] }
 clap = { version = "3.2.12", features = ["atty", "clap_derive", "color", "derive", "env", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
 console = { version = "0.15.0", features = ["ansi-parsing", "regex", "unicode-width"] }
 either = { version = "1.7.0", features = ["use_std"] }
+futures-channel = { version = "0.3.21", features = ["alloc", "futures-sink", "sink", "std"] }
+futures-sink = { version = "0.3.21", default-features = false, features = ["alloc", "std"] }
 indexmap = { version = "1.9.1", default-features = false, features = ["std"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
@@ -41,18 +43,27 @@ regex-syntax = { version = "0.6.27", features = ["unicode", "unicode-age", "unic
 syn = { version = "1.0.98", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
+futures-core = { version = "0.3.21", features = ["alloc", "std"] }
+futures-sink = { version = "0.3.21" }
 libc = { version = "0.2.126", features = ["extra_traits", "std"] }
+tokio = { version = "1.20.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "rt", "rt-multi-thread", "socket2", "sync", "time", "tokio-macros"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-apple-darwin.dependencies]
+futures-core = { version = "0.3.21", features = ["alloc", "std"] }
+futures-sink = { version = "0.3.21" }
 libc = { version = "0.2.126", features = ["extra_traits", "std"] }
+tokio = { version = "1.20.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "rt", "rt-multi-thread", "socket2", "sync", "time", "tokio-macros"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 libc = { version = "0.2.126", features = ["extra_traits", "std"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
+futures-core = { version = "0.3.21", features = ["alloc", "std"] }
+futures-sink = { version = "0.3.21" }
+tokio = { version = "1.20.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "rt", "rt-multi-thread", "socket2", "sync", "time", "tokio-macros", "winapi"] }
 winapi = { version = "0.3.9", default-features = false, features = ["consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "shlobj", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 windows-sys = { version = "0.36.1", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_WindowsProgramming"] }
 

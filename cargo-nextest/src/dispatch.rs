@@ -1033,7 +1033,8 @@ impl App {
 
         let handler = SignalHandler::new()?;
         let runner_builder = runner_opts.to_builder(no_capture);
-        let runner = runner_builder.build(&test_list, profile, handler, target_runner.clone());
+        let mut runner =
+            runner_builder.build(&test_list, profile, handler, target_runner.clone())?;
 
         let run_stats = runner.try_execute(|event| {
             // Write and flush the event.

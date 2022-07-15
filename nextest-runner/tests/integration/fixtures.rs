@@ -327,7 +327,7 @@ impl fmt::Debug for InstanceStatus {
 }
 
 pub(crate) fn execute_collect<'a>(
-    runner: &TestRunner<'a>,
+    runner: &mut TestRunner<'a>,
 ) -> (
     HashMap<(&'a Utf8Path, &'a str), InstanceValue<'a>>,
     RunStats,

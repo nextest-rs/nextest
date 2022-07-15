@@ -4,7 +4,7 @@
 //! Support for handling signals in nextest.
 
 use crate::errors::SignalHandlerSetupError;
-use crossbeam_channel::Receiver;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 /// A receiver that generates signals if ctrl-c is pressed.
 ///
@@ -12,7 +12,7 @@ use crossbeam_channel::Receiver;
 /// [`TestRunnerBuilder::build`](crate::runner::TestRunnerBuilder::build).
 #[derive(Debug)]
 pub struct SignalHandler {
-    pub(crate) receiver: Receiver<SignalEvent>,
+    pub(crate) receiver: UnboundedReceiver<SignalEvent>,
 }
 
 impl SignalHandler {
@@ -21,7 +21,8 @@ impl SignalHandler {
     /// Errors if a signal handler has already been registered in this process. Only one signal
     /// handler can be registered for a process at any given time.
     pub fn new() -> Result<Self, SignalHandlerSetupError> {
-        let (sender, receiver) = crossbeam_channel::unbounded();
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        // TODO: replace with tokio's signal handling?
         ctrlc::set_handler(move || {
             let _ = sender.send(SignalEvent::Interrupted);
         })?;
@@ -31,7 +32,7 @@ impl SignalHandler {
 
     /// Creates a new `SignalReceiver` that does nothing.
     pub fn noop() -> Self {
-        let (_sender, receiver) = crossbeam_channel::bounded(1);
+        let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         Self { receiver }
     }
 }

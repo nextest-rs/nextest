@@ -215,9 +215,11 @@ fn test_run_with_target_runner() -> Result<()> {
         .expect("default config is valid");
 
     let runner = TestRunnerBuilder::default();
-    let runner = runner.build(&test_list, profile, SignalHandler::noop(), target_runner);
+    let mut runner = runner
+        .build(&test_list, profile, SignalHandler::noop(), target_runner)
+        .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&runner);
+    let (instance_statuses, run_stats) = execute_collect(&mut runner);
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS

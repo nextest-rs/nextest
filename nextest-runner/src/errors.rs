@@ -420,6 +420,15 @@ pub enum WriteTestListError {
     Json(#[source] serde_json::Error),
 }
 
+/// An error that occurs while building the test runner.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum TestRunnerBuildError {
+    /// An error occurred while creating the Tokio runtime.
+    #[error("error creating Tokio runtime")]
+    TokioRuntimeCreate(#[source] std::io::Error),
+}
+
 /// Represents an unknown archive format.
 ///
 /// Returned by [`ArchiveFormat::autodetect`].
