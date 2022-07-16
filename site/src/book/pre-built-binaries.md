@@ -61,6 +61,14 @@ If you have [cargo-binstall](https://github.com/ryankurte/cargo-binstall) availa
 cargo binstall cargo-nextest --secure
 ```
 
+### Using Homebrew
+
+If you have [Homebrew](https://brew.sh/) available, you can install nextest with:
+
+```
+brew install cargo-nextest
+```
+
 ## Using pre-built binaries in CI
 
 Pre-built binaries can be used in continuous integration to speed up test runs.
