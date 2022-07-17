@@ -1083,7 +1083,7 @@ impl ExecutionResult {
     }
 }
 
-/// A signal or other abort status for a test.
+/// A regular exit code or Windows NT abort status for a test.
 ///
 /// Returned as part of the [`ExecutionResult::Fail`] variant.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

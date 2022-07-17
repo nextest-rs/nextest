@@ -285,6 +285,7 @@ impl FixtureTargets {
             self.rust_build_meta.clone(),
             test_filter,
             target_runner,
+            num_cpus::get(),
         )
         .expect("test list successfully created")
     }

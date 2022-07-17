@@ -1,12 +1,13 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::list::Styles;
+use crate::{list::Styles, runner::AbortStatus};
 use camino::{Utf8Path, Utf8PathBuf};
 use owo_colors::OwoColorize;
 use std::{
     io::{self, Write},
     path::PathBuf,
+    process::ExitStatus,
     time::Duration,
 };
 
@@ -123,6 +124,46 @@ pub(crate) fn format_duration(duration: Duration) -> String {
         format!("{}m {:.2}s", duration as u32 / 60, duration % 60.0)
     } else {
         format!("{:.2}s", duration)
+    }
+}
+
+/// Extract the abort status from an exit status.
+pub(crate) fn extract_abort_status(exit_status: ExitStatus) -> Option<AbortStatus> {
+    cfg_if::cfg_if! {
+        if #[cfg(unix)] {
+            // On Unix, extract the signal if it's found.
+            use std::os::unix::process::ExitStatusExt;
+            exit_status.signal().map(AbortStatus::UnixSignal)
+        } else if #[cfg(windows)] {
+            exit_status.code().and_then(|code| {
+                let exception = windows::Win32::Foundation::NTSTATUS(code);
+                exception.is_err().then(|| AbortStatus::WindowsNtStatus(exception))
+            })
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(unix)]
+pub(crate) fn signal_str(signal: i32) -> Option<&'static str> {
+    // These signal numbers are the same on at least Linux, macOS and FreeBSD.
+    match signal {
+        1 => Some("HUP"),
+        2 => Some("INT"),
+        5 => Some("TRAP"),
+        6 => Some("ABRT"),
+        8 => Some("FPE"),
+        9 => Some("KILL"),
+        11 => Some("SEGV"),
+        13 => Some("PIPE"),
+        14 => Some("ALRM"),
+        15 => Some("TERM"),
+        24 => Some("XCPU"),
+        25 => Some("XFSZ"),
+        26 => Some("VTALRM"),
+        27 => Some("PROF"),
+        _ => None,
     }
 }
 

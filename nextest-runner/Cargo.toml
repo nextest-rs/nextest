@@ -20,7 +20,6 @@ cargo_metadata = "0.14.2"
 cfg-if = "1.0.0"
 chrono = "0.4.19"
 debug-ignore = "1.0.2"
-duct = "0.13.5"
 either = "1.7.0"
 futures = "0.3.21"
 guppy = "0.14.2"
@@ -86,6 +85,7 @@ windows = { version = "0.38.0", features = ["Win32_Foundation"] }
 
 [dev-dependencies]
 color-eyre = { version = "0.6.2", default-features = false }
+duct = "0.13.5"
 indoc = "1.0.6"
 maplit = "1.0.2"
 pathdiff = { version = "0.2.1", features = ["camino"] }
