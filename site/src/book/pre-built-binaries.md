@@ -49,7 +49,7 @@ If you have access to a Unix shell, `curl` and `tar` *natively* on Windows (for 
 curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
 ```
 
-> NOTE: Windows Subsystem for Linux (WSL) users should follow the [Linux x86_64 instructions](#linux-x86_64).
+> **Note:** Windows Subsystem for Linux (WSL) users should follow the [Linux x86_64 instructions](#linux-x86_64).
 >
 > If you're a Windows expert who can come up with a better way to do this, please [add a suggestion to this issue](https://github.com/nextest-rs/nextest/issues/31)!
 
@@ -61,9 +61,13 @@ If you have [cargo-binstall](https://github.com/ryankurte/cargo-binstall) availa
 cargo binstall cargo-nextest --secure
 ```
 
+## Community-maintained binaries
+
+These binaries are not supported by the nextest team. They are maintained by the community.
+
 ### Using Homebrew
 
-If you have [Homebrew](https://brew.sh/) available, you can install nextest with:
+If you have [Homebrew](https://brew.sh/) available, install nextest with:
 
 ```
 brew install cargo-nextest
