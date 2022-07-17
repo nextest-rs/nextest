@@ -100,6 +100,23 @@ pub(crate) fn convert_rel_path_to_forward_slash(rel_path: &Utf8Path) -> Utf8Path
     rel_path.to_path_buf()
 }
 
+/// On Windows, convert relative paths to use the main separator.
+#[cfg(windows)]
+pub(crate) fn convert_rel_path_to_main_sep(rel_path: &Utf8Path) -> Utf8PathBuf {
+    if !rel_path.is_relative() {
+        panic!(
+            "path for conversion to backslash '{}' is not relative",
+            rel_path
+        );
+    }
+    rel_path.as_str().replace('/', "\\").into()
+}
+
+#[cfg(not(windows))]
+pub(crate) fn convert_rel_path_to_main_sep(rel_path: &Utf8Path) -> Utf8PathBuf {
+    rel_path.to_path_buf()
+}
+
 pub(crate) fn format_duration(duration: Duration) -> String {
     let duration = duration.as_secs_f64();
     if duration > 60.0 {

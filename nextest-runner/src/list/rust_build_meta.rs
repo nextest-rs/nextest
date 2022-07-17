@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    helpers::convert_rel_path_to_main_sep,
     list::{BinaryListState, TestListState},
     reuse_build::PathMapper,
 };
@@ -91,9 +92,17 @@ impl RustBuildMeta<TestListState> {
         // Cargo puts linked paths before base output directories.
         self.linked_paths
             .keys()
-            .map(|rel_path| self.target_directory.join(rel_path))
+            .filter_map(|rel_path| {
+                let join_path = self
+                    .target_directory
+                    .join(convert_rel_path_to_main_sep(rel_path));
+                // Only add the directory to the path if it exists on disk.
+                join_path.exists().then(|| join_path)
+            })
             .chain(self.base_output_directories.iter().flat_map(|base_output| {
-                let abs_base = self.target_directory.join(base_output);
+                let abs_base = self
+                    .target_directory
+                    .join(convert_rel_path_to_main_sep(base_output));
                 let with_deps = abs_base.join("deps");
                 // This is the order paths are added in by Cargo.
                 [with_deps, abs_base]
