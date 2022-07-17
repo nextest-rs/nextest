@@ -1,3 +1,6 @@
+[profile.default]
+final-status-level = "slow"
+
 [profile.ci]
 # Don't fail fast in CI to run the full test suite.
 fail-fast = false
