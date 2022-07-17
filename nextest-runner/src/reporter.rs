@@ -1108,7 +1108,7 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
         #[cfg(unix)]
         ExecutionResult::Fail {
             abort_status: Some(AbortStatus::UnixSignal(sig)),
-        } => match signal_str(sig) {
+        } => match crate::helpers::signal_str(sig) {
             Some(s) => format!("SIG{s}").into(),
             None => format!("ABORT SIG {sig}").into(),
         },
@@ -1133,7 +1133,7 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         #[cfg(unix)]
         ExecutionResult::Fail {
             abort_status: Some(AbortStatus::UnixSignal(sig)),
-        } => match signal_str(sig) {
+        } => match crate::helpers::signal_str(sig) {
             Some(s) => s.into(),
             None => format!("SIG {sig}").into(),
         },
@@ -1149,28 +1149,6 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         ExecutionResult::ExecFail => "XFAIL".into(),
         ExecutionResult::Pass => "PASS".into(),
         ExecutionResult::Timeout => "TMT".into(),
-    }
-}
-
-#[cfg(unix)]
-fn signal_str(signal: i32) -> Option<&'static str> {
-    // These signal numbers are the same on at least Linux, macOS and FreeBSD.
-    match signal {
-        1 => Some("HUP"),
-        2 => Some("INT"),
-        5 => Some("TRAP"),
-        6 => Some("ABRT"),
-        8 => Some("FPE"),
-        9 => Some("KILL"),
-        11 => Some("SEGV"),
-        13 => Some("PIPE"),
-        14 => Some("ALRM"),
-        15 => Some("TERM"),
-        24 => Some("XCPU"),
-        25 => Some("XFSZ"),
-        26 => Some("VTALRM"),
-        27 => Some("PROF"),
-        _ => None,
     }
 }
 

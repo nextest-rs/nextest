@@ -243,7 +243,7 @@ pub fn heuristic_extract_description<'a>(
         abort_status: Some(AbortStatus::UnixSignal(sig)),
     } = exec_result
     {
-        let signal_str = match super::signal_str(sig) {
+        let signal_str = match crate::helpers::signal_str(sig) {
             Some(signal_str) => format!(" SIG{signal_str}"),
             None => String::new(),
         };

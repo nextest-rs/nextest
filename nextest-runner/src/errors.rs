@@ -5,9 +5,10 @@
 
 use crate::{
     cargo_config::TargetTriple,
-    helpers::dylib_path_envvar,
+    helpers::{dylib_path_envvar, extract_abort_status},
     reporter::{StatusLevel, TestOutputDisplay},
     reuse_build::ArchiveFormat,
+    runner::AbortStatus,
     target_runner::PlatformRunnerSource,
     test_filter::RunIgnored,
 };
@@ -15,7 +16,7 @@ use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use itertools::Itertools;
 use nextest_filtering::errors::FilterExpressionParseErrors;
-use std::{borrow::Cow, env::JoinPathsError, fmt};
+use std::{borrow::Cow, env::JoinPathsError, fmt, process::ExitStatus};
 use thiserror::Error;
 
 /// An error that occurred while parsing the config.
@@ -331,12 +332,12 @@ pub enum CreateTestListError {
         cwd: Utf8PathBuf,
     },
 
-    /// Running a command to gather the list of tests failed.
+    /// Running a command to gather the list of tests failed to execute.
     #[error(
-        "for `{binary_id}`, running command `{}` failed",
+        "for `{binary_id}`, running command `{}` failed to execute",
         shell_words::join(command)
     )]
-    Command {
+    CommandExecFail {
         /// The binary ID for which gathering the list of tests failed.
         binary_id: String,
 
@@ -346,6 +347,52 @@ pub enum CreateTestListError {
         /// The underlying error.
         #[source]
         error: std::io::Error,
+    },
+
+    /// Running a command to gather the list of tests failed failed with a non-zero exit code.
+    #[error(
+        "for `{binary_id}`, command `{}` exited with {}\n--- stdout:\n{}\n--- stderr:\n{}\n---",
+        shell_words::join(command),
+        display_exit_status(*exit_status),
+        String::from_utf8_lossy(stdout),
+        String::from_utf8_lossy(stderr),
+    )]
+    CommandFail {
+        /// The binary ID for which gathering the list of tests failed.
+        binary_id: String,
+
+        /// The command that was run.
+        command: Vec<String>,
+
+        /// The exit status with which the command failed.
+        exit_status: ExitStatus,
+
+        /// Standard output for the command.
+        stdout: Vec<u8>,
+
+        /// Standard error for the command.
+        stderr: Vec<u8>,
+    },
+
+    /// Running a command to gather the list of tests produced a non-UTF-8 standard output.
+    #[error(
+        "for `{binary_id}`, command `{}` produced non-UTF-8 output: {}\n--- stdout:\n{}\n--- stderr:\n{}\n---",
+        shell_words::join(command),
+        String::from_utf8_lossy(stdout),
+        String::from_utf8_lossy(stderr),
+    )]
+    CommandNonUtf8 {
+        /// The binary ID for which gathering the list of tests failed.
+        binary_id: String,
+
+        /// The command that was run.
+        command: Vec<String>,
+
+        /// Standard output for the command.
+        stdout: Vec<u8>,
+
+        /// Standard error for the command.
+        stderr: Vec<u8>,
     },
 
     /// An error occurred while parsing a line in the test output.
@@ -375,21 +422,13 @@ pub enum CreateTestListError {
         #[source]
         error: JoinPathsError,
     },
+
+    /// Creating a Tokio runtime failed.
+    #[error("error creating Tokio runtime")]
+    TokioRuntimeCreate(#[source] std::io::Error),
 }
 
 impl CreateTestListError {
-    pub(crate) fn command(
-        binary_id: impl Into<String>,
-        command: impl IntoIterator<Item = impl Into<String>>,
-        error: std::io::Error,
-    ) -> Self {
-        Self::Command {
-            binary_id: binary_id.into(),
-            command: command.into_iter().map(|s| s.into()).collect(),
-            error,
-        }
-    }
-
     pub(crate) fn parse_line(
         binary_id: impl Into<String>,
         message: impl Into<Cow<'static, str>>,
@@ -404,6 +443,30 @@ impl CreateTestListError {
 
     pub(crate) fn dylib_join_paths(new_paths: Vec<Utf8PathBuf>, error: JoinPathsError) -> Self {
         Self::DylibJoinPaths { new_paths, error }
+    }
+}
+
+fn display_exit_status(exit_status: ExitStatus) -> String {
+    match extract_abort_status(exit_status) {
+        #[cfg(unix)]
+        Some(AbortStatus::UnixSignal(sig)) => match crate::helpers::signal_str(sig) {
+            Some(s) => {
+                format!("signal {sig} (SIG{s})")
+            }
+            None => {
+                format!("signal {sig}")
+            }
+        },
+        #[cfg(windows)]
+        Some(AbortStatus::WindowsNtStatus(nt_status)) => {
+            format!("code {}", crate::helpers::display_nt_status(nt_status))
+        }
+        None => match exit_status.code() {
+            Some(code) => {
+                format!("code {code}")
+            }
+            None => "an unknown error".to_owned(),
+        },
     }
 }
 

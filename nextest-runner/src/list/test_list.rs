@@ -10,6 +10,7 @@ use crate::{
     test_filter::TestFilterBuilder,
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use futures::prelude::*;
 use guppy::{
     graph::{PackageGraph, PackageMetadata},
     PackageId,
@@ -28,6 +29,7 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
+use tokio::runtime::Runtime;
 
 /// A Rust test binary built by Cargo. This artifact hasn't been run yet so there's no information
 /// about the tests within it.
@@ -180,13 +182,17 @@ pub struct TestList<'g> {
 
 impl<'g> TestList<'g> {
     /// Creates a new test list by running the given command and applying the specified filter.
-    pub fn new(
-        test_artifacts: impl IntoIterator<Item = RustTestArtifact<'g>>,
+    pub fn new<I>(
+        test_artifacts: I,
         rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
         runner: &TargetRunner,
-    ) -> Result<Self, CreateTestListError> {
-        let mut test_count = 0;
+        list_threads: usize,
+    ) -> Result<Self, CreateTestListError>
+    where
+        I: IntoIterator<Item = RustTestArtifact<'g>>,
+        I::IntoIter: Send,
+    {
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
         log::debug!(
             "updated {}: {}",
@@ -194,29 +200,37 @@ impl<'g> TestList<'g> {
             updated_dylib_path.to_string_lossy(),
         );
 
-        let test_artifacts = test_artifacts
-            .into_iter()
-            .map(|test_binary| {
+        let runtime = Runtime::new().map_err(CreateTestListError::TokioRuntimeCreate)?;
+
+        let stream = futures::stream::iter(test_artifacts.into_iter()).map(|test_binary| {
+            async {
                 if filter.should_obtain_test_list_from_binary(&test_binary) {
                     // Run the binary to obtain the test list.
-                    let (non_ignored, ignored) = test_binary.exec(&updated_dylib_path, runner)?;
+                    let (non_ignored, ignored) =
+                        test_binary.exec(&updated_dylib_path, runner).await?;
                     let (bin, info) = Self::process_output(
                         test_binary,
                         filter,
                         non_ignored.as_str(),
                         ignored.as_str(),
                     )?;
-                    test_count += info.status.test_count();
-                    Ok((bin, info))
+                    Ok::<_, CreateTestListError>((bin, info))
                 } else {
                     // Skipped means no tests, so test_count doesn't need to be modified.
                     Ok(Self::process_skipped(test_binary))
                 }
-            })
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
+            }
+        });
+        let fut = stream.buffer_unordered(list_threads).try_collect();
+
+        let rust_suites: BTreeMap<_, _> = runtime.block_on(fut)?;
+        let test_count = rust_suites
+            .values()
+            .map(|suite| suite.status.test_count())
+            .sum();
 
         Ok(Self {
-            rust_suites: test_artifacts,
+            rust_suites,
             rust_build_meta,
             updated_dylib_path,
             test_count,
@@ -607,7 +621,7 @@ pub struct RustTestSuite<'g> {
 
 impl<'g> RustTestArtifact<'g> {
     /// Run this binary with and without --ignored and get the corresponding outputs.
-    fn exec(
+    async fn exec(
         &self,
         dylib_path: &OsStr,
         runner: &TargetRunner,
@@ -622,12 +636,14 @@ impl<'g> RustTestArtifact<'g> {
         }
         let platform_runner = runner.for_build_platform(self.build_platform);
 
-        let non_ignored = self.exec_single(false, dylib_path, platform_runner)?;
-        let ignored = self.exec_single(true, dylib_path, platform_runner)?;
-        Ok((non_ignored, ignored))
+        let non_ignored = self.exec_single(false, dylib_path, platform_runner);
+        let ignored = self.exec_single(true, dylib_path, platform_runner);
+
+        let (non_ignored_out, ignored_out) = futures::future::join(non_ignored, ignored).await;
+        Ok((non_ignored_out?, ignored_out?))
     }
 
-    fn exec_single(
+    async fn exec_single(
         &self,
         ignored: bool,
         dylib_path: &OsStr,
@@ -653,23 +669,47 @@ impl<'g> RustTestArtifact<'g> {
             argv.push("--ignored");
         }
 
-        let cmd = make_test_expression(
+        let mut cmd = make_test_command(
             program.clone(),
             &argv,
             &self.cwd,
             &self.package,
             dylib_path,
             &self.non_test_binaries,
-        )
-        .stdout_capture();
-
-        cmd.read().map_err(|error| {
-            CreateTestListError::command(
-                &self.binary_id,
-                std::iter::once(program).chain(argv.iter().map(|&s| s.to_owned())),
+        );
+        match cmd.output().await {
+            Ok(output) => {
+                if output.status.success() {
+                    String::from_utf8(output.stdout).map_err(|err| {
+                        CreateTestListError::CommandNonUtf8 {
+                            binary_id: self.binary_id.clone(),
+                            command: std::iter::once(program)
+                                .chain(argv.iter().map(|&s| s.to_owned()))
+                                .collect(),
+                            stdout: err.into_bytes(),
+                            stderr: output.stderr,
+                        }
+                    })
+                } else {
+                    Err(CreateTestListError::CommandFail {
+                        binary_id: self.binary_id.clone(),
+                        command: std::iter::once(program)
+                            .chain(argv.iter().map(|&s| s.to_owned()))
+                            .collect(),
+                        exit_status: output.status,
+                        stdout: output.stdout,
+                        stderr: output.stderr,
+                    })
+                }
+            }
+            Err(error) => Err(CreateTestListError::CommandExecFail {
+                binary_id: self.binary_id.clone(),
+                command: std::iter::once(program)
+                    .chain(argv.iter().map(|&s| s.to_owned()))
+                    .collect(),
                 error,
-            )
-        })
+            }),
+        }
     }
 }
 
@@ -798,119 +838,6 @@ impl<'a> TestInstance<'a> {
             &self.bin_info.non_test_binaries,
         )
     }
-}
-
-/// Create a duct Expression for a test binary with the given arguments, using the specified [`PackageMetadata`].
-pub(crate) fn make_test_expression(
-    program: String,
-    args: impl IntoIterator<Item = impl Into<OsString>>,
-    cwd: &Utf8PathBuf,
-    package: &PackageMetadata<'_>,
-    dylib_path: &OsStr,
-    non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
-) -> duct::Expression {
-    // This is a workaround for a macOS SIP issue:
-    // https://github.com/nextest-rs/nextest/pull/84
-    //
-    // Basically, if SIP is enabled, macOS removes any environment variables that start with
-    // "LD_" or "DYLD_" when spawning system-protected processes. This unfortunately includes
-    // processes like bash -- this means that if nextest invokes a shell script, paths might
-    // end up getting sanitized.
-    //
-    // This is particularly relevant for target runners, which are often shell scripts.
-    //
-    // To work around this, re-export any variables that begin with LD_ or DYLD_ as "NEXTEST_LD_"
-    // or "NEXTEST_DYLD_". Do this on all platforms for uniformity.
-    //
-    // Nextest never changes these environment variables within its own process, so caching them is
-    // valid.
-    fn is_sip_sanitized(var: &str) -> bool {
-        // Look for variables starting with LD_ or DYLD_.
-        // https://briandfoy.github.io/macos-s-system-integrity-protection-sanitizes-your-environment/
-        var.starts_with("LD_") || var.starts_with("DYLD_")
-    }
-
-    static LD_DYLD_ENV_VARS: Lazy<HashMap<String, OsString>> = Lazy::new(|| {
-        std::env::vars_os()
-            .filter_map(|(k, v)| match k.into_string() {
-                Ok(k) => is_sip_sanitized(&k).then(|| (k, v)),
-                Err(_) => None,
-            })
-            .collect()
-    });
-
-    let mut cmd = duct::cmd(program, args);
-    cmd = cmd
-        .dir(cwd)
-        // This environment variable is set to indicate that tests are being run under nextest.
-        .env("NEXTEST", "1")
-        // This environment variable is set to indicate that each test is being run in its own process.
-        .env("NEXTEST_EXECUTION_MODE", "process-per-test")
-        // These environment variables are set at runtime by cargo test:
-        // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
-        .env(
-            "CARGO_MANIFEST_DIR",
-            // CARGO_MANIFEST_DIR is set to the *new* cwd after path mapping.
-            cwd,
-        )
-        .env(
-            "__NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR",
-            // This is a test-only environment variable set to the *old* cwd. Not part of the
-            // public API.
-            package.manifest_path().parent().unwrap(),
-        )
-        .env("CARGO_PKG_VERSION", format!("{}", package.version()))
-        .env(
-            "CARGO_PKG_VERSION_MAJOR",
-            format!("{}", package.version().major),
-        )
-        .env(
-            "CARGO_PKG_VERSION_MINOR",
-            format!("{}", package.version().minor),
-        )
-        .env(
-            "CARGO_PKG_VERSION_PATCH",
-            format!("{}", package.version().patch),
-        )
-        .env(
-            "CARGO_PKG_VERSION_PRE",
-            format!("{}", package.version().pre),
-        )
-        .env("CARGO_PKG_AUTHORS", package.authors().join(":"))
-        .env("CARGO_PKG_NAME", package.name())
-        .env(
-            "CARGO_PKG_DESCRIPTION",
-            package.description().unwrap_or_default(),
-        )
-        .env("CARGO_PKG_HOMEPAGE", package.homepage().unwrap_or_default())
-        .env("CARGO_PKG_LICENSE", package.license().unwrap_or_default())
-        .env(
-            "CARGO_PKG_LICENSE_FILE",
-            package.license_file().unwrap_or_else(|| "".as_ref()),
-        )
-        .env(
-            "CARGO_PKG_REPOSITORY",
-            package.repository().unwrap_or_default(),
-        )
-        .env(dylib_path_envvar(), dylib_path);
-
-    for (k, v) in &*LD_DYLD_ENV_VARS {
-        if k != dylib_path_envvar() {
-            cmd = cmd.env("NEXTEST_".to_owned() + k, v);
-        }
-    }
-    // Also add the dylib path envvar under the NEXTEST_ prefix.
-    if is_sip_sanitized(dylib_path_envvar()) {
-        cmd = cmd.env("NEXTEST_".to_owned() + dylib_path_envvar(), dylib_path);
-    }
-
-    // Expose paths to non-test binaries at runtime so that relocated paths work.
-    // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.
-    for (name, path) in non_test_binaries {
-        cmd = cmd.env(format!("NEXTEST_BIN_EXE_{}", name), &path);
-    }
-
-    cmd
 }
 
 /// Create a duct Expression for a test binary with the given arguments, using the specified [`PackageMetadata`].
