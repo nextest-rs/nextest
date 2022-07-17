@@ -439,6 +439,8 @@ impl TestBuildFilter {
             rust_build_meta,
             &test_filter_builder,
             runner,
+            // TODO: do we need to allow customizing this?
+            num_cpus::get(),
         )
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }
