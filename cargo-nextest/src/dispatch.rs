@@ -21,7 +21,7 @@ use nextest_runner::{
     partition::PartitionerBuilder,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
-    runner::TestRunnerBuilder,
+    runner::{configure_handle_inheritance, TestRunnerBuilder},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -1038,6 +1038,7 @@ impl App {
         let mut runner =
             runner_builder.build(&test_list, profile, handler, target_runner.clone())?;
 
+        configure_handle_inheritance(no_capture)?;
         let run_stats = runner.try_execute(|event| {
             // Write and flush the event.
             reporter.report_event(event)

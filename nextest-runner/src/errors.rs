@@ -483,6 +483,17 @@ pub enum WriteTestListError {
     Json(#[source] serde_json::Error),
 }
 
+/// An error occurred while configuring handles.
+///
+/// Only relevant on Windows.
+#[derive(Debug, Error)]
+pub enum ConfigureHandleInheritanceError {
+    /// An error occurred. This can only happen on Windows.
+    #[cfg(windows)]
+    #[error("error configuring handle inheritance")]
+    WindowsError(#[from] windows::core::Error),
+}
+
 /// An error that occurs while building the test runner.
 #[derive(Debug, Error)]
 #[non_exhaustive]

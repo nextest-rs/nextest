@@ -139,6 +139,11 @@ pub enum ExpectedError {
         #[from]
         err: WriteEventError,
     },
+    #[error(transparent)]
+    ConfigureHandleInheritanceError {
+        #[from]
+        err: ConfigureHandleInheritanceError,
+    },
     #[error("test run failed")]
     TestRunFailed,
     #[cfg(feature = "self-update")]
@@ -295,6 +300,7 @@ impl ExpectedError {
             | Self::PathMapperConstructError { .. }
             | Self::ArgumentJsonParseError { .. }
             | Self::TestRunnerBuildError { .. }
+            | Self::ConfigureHandleInheritanceError { .. }
             | Self::CargoMetadataParseError { .. }
             | Self::TestBinaryArgsParseError { .. }
             | Self::DialoguerError { .. }
@@ -502,6 +508,10 @@ impl ExpectedError {
             Self::TestRunnerBuildError { err } => {
                 log::error!("failed to build test runner");
                 Some(err as &dyn Error)
+            }
+            Self::ConfigureHandleInheritanceError { err } => {
+                log::error!("{err}");
+                err.source()
             }
             Self::WriteTestListError { err } => {
                 log::error!("failed to write test list to output");
