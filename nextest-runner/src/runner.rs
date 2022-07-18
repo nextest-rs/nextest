@@ -7,7 +7,7 @@
 
 use crate::{
     config::{NextestProfile, ProfileOverrides, TestThreads},
-    errors::TestRunnerBuildError,
+    errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
     helpers::convert_build_platform,
     list::{TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
@@ -1132,6 +1132,68 @@ pub enum AbortStatus {
     /// The test was determined to have aborted because the high bit was set on Windows.
     #[cfg(windows)]
     WindowsNtStatus(windows::Win32::Foundation::NTSTATUS),
+}
+
+/// Configures stdout, stdin and stderr inheritance by test processes on Windows.
+///
+/// With Rust on Windows, these handles can be held open by tests (and therefore by grandchild processes)
+/// even if we run the tests with `Stdio::inherit`. This can cause problems with leaky tests.
+///
+/// This changes global state on the Win32 side, so the application must manage mutual exclusion
+/// around it. Call this right before [`TestRunner::try_execute`].
+///
+/// This is a no-op on non-Windows platforms.
+///
+/// See [this issue on the Rust repository](https://github.com/rust-lang/rust/issues/54760) for more
+/// discussion.
+pub fn configure_handle_inheritance(
+    no_capture: bool,
+) -> Result<(), ConfigureHandleInheritanceError> {
+    configure_handle_inheritance_impl(no_capture)
+}
+
+#[cfg(windows)]
+fn configure_handle_inheritance_impl(
+    no_capture: bool,
+) -> Result<(), ConfigureHandleInheritanceError> {
+    use windows::Win32::{
+        Foundation::{SetHandleInformation, HANDLE, HANDLE_FLAGS, HANDLE_FLAG_INHERIT},
+        System::Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
+    };
+
+    fn set_handle_inherit(handle: HANDLE, inherit: bool) -> windows::core::Result<()> {
+        let flags = if inherit { HANDLE_FLAG_INHERIT.0 } else { 0 };
+        unsafe {
+            if SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(flags)).as_bool() {
+                Ok(())
+            } else {
+                Err(windows::core::Error::from_win32())
+            }
+        }
+    }
+
+    unsafe {
+        let stdin = GetStdHandle(STD_INPUT_HANDLE)?;
+        // Never inherit stdin.
+        set_handle_inherit(stdin, false)?;
+
+        // Inherit stdout and stderr if and only if no_capture is true.
+
+        let stdout = GetStdHandle(STD_OUTPUT_HANDLE)?;
+        set_handle_inherit(stdout, no_capture)?;
+        let stderr = GetStdHandle(STD_ERROR_HANDLE)?;
+        set_handle_inherit(stderr, no_capture)?;
+    }
+
+    Ok(())
+}
+
+// This is a no-op on other platforms.
+#[cfg(not(windows))]
+fn configure_handle_inheritance_impl(
+    _no_capture: bool,
+) -> Result<(), ConfigureHandleInheritanceError> {
+    Ok(())
 }
 
 #[cfg(test)]
