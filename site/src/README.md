@@ -8,7 +8,7 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
 * **Clean, beautiful user interface.** Nextest presents its results concisely so you can see which tests passed and failed at a glance.
 * **[Up to 60% faster](book/benchmarks.md) than cargo test.** Nextest uses a [state-of-the-art execution model](book/how-it-works.md) for faster, more reliable test runs.
-* **Identify slow tests.** Use nextest to detect tests that take a long time to run, and identify bottlenecks during test execution.
+* **Identify [slow](book/slow-tests.md) and [leaky](book/leaky-tests.md) tests.** Use nextest to detect misbehaving tests, identify bottlenecks during test execution, and optionally terminate tests if they take too long.
 * **Filter tests using an embedded language.** Use powerful [filter expressions](book/filter-expressions.md) to specify granular subsets of tests on the command-line, and to enable [per-test overrides](book/per-test-overrides.md).
 * **Designed for CI.** Nextest addresses real-world pain points in continuous integration scenarios:
   * Use **[pre-built binaries](book/pre-built-binaries.md)** for quick installation.
