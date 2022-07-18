@@ -61,6 +61,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
                 ("test_result_failure", false),
                 ("test_slow_timeout", true),
                 ("test_slow_timeout_2", true),
+                ("test_stdin_closed", false),
                 ("test_subprocess_doesnt_exit", false),
                 ("test_success", false),
                 ("test_success_should_panic", false),
@@ -302,6 +303,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
         (false, "nextest-tests::basic test_result_failure"),
         (true, "nextest-tests::basic test_success_should_panic"),
         (false, "nextest-tests::basic test_failure_assert"),
+        (true, "nextest-tests::basic test_stdin_closed"),
         (false, "nextest-tests::basic test_flaky_mod_6"),
         (cwd_pass, "nextest-tests::basic test_cwd"),
         (
@@ -325,10 +327,10 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *25 tests run: 17 passed \(1 leaky\), 8 failed, 4 skipped")
+        Regex::new(r"Summary \[.*\] *26 tests run: 18 passed \(1 leaky\), 8 failed, 4 skipped")
             .unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *25 tests run: 18 passed \(1 leaky\), 7 failed, 4 skipped")
+        Regex::new(r"Summary \[.*\] *26 tests run: 19 passed \(1 leaky\), 7 failed, 4 skipped")
             .unwrap()
     };
     assert!(

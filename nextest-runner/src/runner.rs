@@ -23,6 +23,7 @@ use std::{
     convert::Infallible,
     marker::PhantomData,
     num::NonZeroUsize,
+    process::Stdio,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -413,6 +414,7 @@ impl<'a> TestRunnerInner<'a> {
 
         // Debug environment variable for testing.
         cmd.env("__NEXTEST_ATTEMPT", format!("{}", attempt));
+        cmd.stdin(Stdio::null());
 
         if !self.no_capture {
             // Capture stdout and stderr.
