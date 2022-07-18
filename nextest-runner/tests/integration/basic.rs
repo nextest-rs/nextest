@@ -147,8 +147,8 @@ fn test_run() -> Result<()> {
 
                         if can_extract_description {
                             // Check that stderr can be parsed heuristically.
-                            let stdout = String::from_utf8_lossy(run_status.stdout());
-                            let stderr = String::from_utf8_lossy(run_status.stderr());
+                            let stdout = String::from_utf8_lossy(&run_status.stdout);
+                            let stderr = String::from_utf8_lossy(&run_status.stderr);
                             let description =
                                 heuristic_extract_description(run_status.result, &stdout, &stderr);
                             assert!(

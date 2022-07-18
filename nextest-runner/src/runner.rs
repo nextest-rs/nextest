@@ -16,6 +16,7 @@ use crate::{
     target_runner::TargetRunner,
 };
 use async_scoped::TokioScope;
+use bytes::Bytes;
 use futures::prelude::*;
 use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
@@ -24,10 +25,7 @@ use std::{
     marker::PhantomData,
     num::NonZeroUsize,
     process::Stdio,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::{Duration, SystemTime},
 };
 use tokio::{
@@ -396,8 +394,8 @@ impl<'a> TestRunnerInner<'a> {
             Ok(run_status) => run_status,
             Err(_) => InternalExecuteStatus {
                 // TODO: can we return more information in stdout/stderr? investigate this
-                stdout: vec![],
-                stderr: vec![],
+                stdout: Bytes::new(),
+                stderr: Bytes::new(),
                 result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.end(),
                 is_slow: false,
@@ -621,8 +619,8 @@ impl<'a> TestRunnerInner<'a> {
 
         Ok(InternalExecuteStatus {
             // TODO: replace with Bytes
-            stdout: stdout.to_vec(),
-            stderr: stderr.to_vec(),
+            stdout: stdout.freeze(),
+            stderr: stderr.freeze(),
             result: status,
             stopwatch_end: stopwatch.end(),
             is_slow,
@@ -781,8 +779,10 @@ pub struct ExecuteStatus {
     pub attempt: usize,
     /// The total number of times this test can be run. Equal to `1 + retries`.
     pub total_attempts: usize,
-    /// Standard output and standard error for this test.
-    pub stdout_stderr: Arc<(Vec<u8>, Vec<u8>)>,
+    /// Standard output for this test.
+    pub stdout: Bytes,
+    /// Standard error for this test.
+    pub stderr: Bytes,
     /// The result of execution this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
@@ -793,21 +793,9 @@ pub struct ExecuteStatus {
     pub is_slow: bool,
 }
 
-impl ExecuteStatus {
-    /// Returns the standard output.
-    pub fn stdout(&self) -> &[u8] {
-        &self.stdout_stderr.0
-    }
-
-    /// Returns the standard error.
-    pub fn stderr(&self) -> &[u8] {
-        &self.stdout_stderr.1
-    }
-}
-
 struct InternalExecuteStatus {
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
+    stdout: Bytes,
+    stderr: Bytes,
     result: ExecutionResult,
     stopwatch_end: StopwatchEnd,
     is_slow: bool,
@@ -818,7 +806,8 @@ impl InternalExecuteStatus {
         ExecuteStatus {
             attempt,
             total_attempts,
-            stdout_stderr: std::sync::Arc::new((self.stdout, self.stderr)),
+            stdout: self.stdout,
+            stderr: self.stderr,
             result: self.result,
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,

@@ -1065,7 +1065,7 @@ impl<'a> TestReporterImpl<'a> {
             (self.styles.fail, self.styles.fail_output)
         };
 
-        if !run_status.stdout().is_empty() {
+        if !run_status.stdout.is_empty() {
             write!(writer, "\n{}", "--- ".style(header_style))?;
             let out_len = self.write_attempt(run_status, header_style, writer)?;
             // The width is to align test instances.
@@ -1078,10 +1078,10 @@ impl<'a> TestReporterImpl<'a> {
             self.write_instance(*test_instance, writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_output(run_status.stdout(), writer)?;
+            self.write_test_output(&run_status.stdout, writer)?;
         }
 
-        if !run_status.stderr().is_empty() {
+        if !run_status.stderr.is_empty() {
             write!(writer, "\n{}", "--- ".style(header_style))?;
             let out_len = self.write_attempt(run_status, header_style, writer)?;
             // The width is to align test instances.
@@ -1094,7 +1094,7 @@ impl<'a> TestReporterImpl<'a> {
             self.write_instance(*test_instance, writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_output(run_status.stderr(), writer)?;
+            self.write_test_output(&run_status.stderr, writer)?;
         }
 
         writeln!(writer)
