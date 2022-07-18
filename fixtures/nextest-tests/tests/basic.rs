@@ -1,5 +1,5 @@
 // Copyright (c) The nextest Contributors
-use std::{env, path::Path};
+use std::{env, io::Read, path::Path};
 
 #[test]
 fn test_success() {}
@@ -200,4 +200,16 @@ fn sleep_cmd(secs: usize) -> std::process::Command {
     let mut cmd = std::process::Command::new("sleep");
     cmd.arg(&format!("{secs}"));
     cmd
+}
+
+#[test]
+fn test_stdin_closed() {
+    let mut buf = [0u8; 8];
+    // This should succeed with 0 because it's attached to /dev/null or its Windows equivalent.
+    assert_eq!(
+        0,
+        std::io::stdin()
+            .read(&mut buf)
+            .expect("reading from /dev/null succeeded")
+    );
 }
