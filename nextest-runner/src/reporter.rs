@@ -513,10 +513,22 @@ fn progress_bar_msg(current_stats: &RunStats, running: usize, styles: &Styles) -
 }
 
 fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) -> fmt::Result {
-    write!(out, "{} passed", run_stats.passed.style(styles.pass))?;
+    write!(
+        out,
+        "{} {}",
+        run_stats.passed.style(styles.count),
+        "passed".style(styles.pass)
+    )?;
 
-    if run_stats.flaky > 0 || run_stats.leaky > 0 {
-        let mut text = Vec::with_capacity(2);
+    if run_stats.passed_slow > 0 || run_stats.flaky > 0 || run_stats.leaky > 0 {
+        let mut text = Vec::with_capacity(3);
+        if run_stats.passed_slow > 0 {
+            text.push(format!(
+                "{} {}",
+                run_stats.passed_slow.style(styles.count),
+                "slow".style(styles.skip),
+            ));
+        }
         if run_stats.flaky > 0 {
             text.push(format!(
                 "{} {}",

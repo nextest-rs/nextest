@@ -838,14 +838,20 @@ pub struct RunStats {
     /// The total number of tests that finished running.
     pub finished_count: usize,
 
-    /// The number of tests that passed. Includes `flaky` and `leaky`.
+    /// The number of tests that passed. Includes `passed_slow`, `flaky` and `leaky`.
     pub passed: usize,
+
+    /// The number of slow tests that passed.
+    pub passed_slow: usize,
 
     /// The number of tests that passed on retry.
     pub flaky: usize,
 
     /// The number of tests that failed.
     pub failed: usize,
+
+    /// The number of failed tests that were slow.
+    pub failed_slow: usize,
 
     /// The number of tests that timed out.
     pub timed_out: usize,
@@ -897,6 +903,9 @@ impl RunStats {
         match last_status.result {
             ExecutionResult::Pass => {
                 self.passed += 1;
+                if last_status.is_slow {
+                    self.passed_slow += 1;
+                }
                 if run_statuses.len() > 1 {
                     self.flaky += 1;
                 }
@@ -904,11 +913,19 @@ impl RunStats {
             ExecutionResult::Leak => {
                 self.passed += 1;
                 self.leaky += 1;
+                if last_status.is_slow {
+                    self.passed_slow += 1;
+                }
                 if run_statuses.len() > 1 {
                     self.flaky += 1;
                 }
             }
-            ExecutionResult::Fail { .. } => self.failed += 1,
+            ExecutionResult::Fail { .. } => {
+                self.failed += 1;
+                if last_status.is_slow {
+                    self.failed_slow += 1;
+                }
+            }
             ExecutionResult::Timeout => self.timed_out += 1,
             ExecutionResult::ExecFail => self.exec_failed += 1,
         }
