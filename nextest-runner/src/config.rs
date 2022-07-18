@@ -204,6 +204,14 @@ impl<'cfg> NextestProfile<'cfg> {
             .unwrap_or(self.default_profile.slow_timeout)
     }
 
+    /// Returns the time after which a child process that hasn't closed its handles is marked as
+    /// leaky.
+    pub fn leak_timeout(&self) -> Duration {
+        self.custom_profile
+            .and_then(|profile| profile.leak_timeout)
+            .unwrap_or(self.default_profile.leak_timeout)
+    }
+
     /// Returns the test status level.
     pub fn status_level(&self) -> StatusLevel {
         self.custom_profile
@@ -243,6 +251,7 @@ impl<'cfg> NextestProfile<'cfg> {
     pub fn overrides_for(&self, query: &TestQuery<'_>) -> ProfileOverrides {
         let mut retries = None;
         let mut slow_timeout = None;
+        let mut leak_timeout = None;
 
         for &override_ in &self.overrides {
             if !override_.expr.matches_test(query) {
@@ -254,11 +263,15 @@ impl<'cfg> NextestProfile<'cfg> {
             if slow_timeout.is_none() && override_.data.slow_timeout.is_some() {
                 slow_timeout = override_.data.slow_timeout;
             }
+            if leak_timeout.is_none() && override_.data.leak_timeout.is_some() {
+                leak_timeout = override_.data.leak_timeout;
+            }
         }
 
         ProfileOverrides {
             retries,
             slow_timeout,
+            leak_timeout,
         }
     }
 
@@ -288,6 +301,7 @@ impl<'cfg> NextestProfile<'cfg> {
 pub struct ProfileOverrides {
     retries: Option<usize>,
     slow_timeout: Option<SlowTimeout>,
+    leak_timeout: Option<Duration>,
 }
 
 impl ProfileOverrides {
@@ -299,6 +313,11 @@ impl ProfileOverrides {
     /// Returns the slow timeout for this test.
     pub fn slow_timeout(&self) -> Option<SlowTimeout> {
         self.slow_timeout
+    }
+
+    /// Returns the leak timeout for this test.
+    pub fn leak_timeout(&self) -> Option<Duration> {
+        self.leak_timeout
     }
 }
 
@@ -376,6 +395,8 @@ struct DefaultProfileImpl {
     fail_fast: bool,
     #[serde(deserialize_with = "require_deserialize_slow_timeout")]
     slow_timeout: SlowTimeout,
+    #[serde(with = "humantime_serde")]
+    leak_timeout: Duration,
     #[serde(default)]
     overrides: Vec<ProfileOverrideSource>,
     junit: DefaultJunitImpl,
@@ -547,6 +568,8 @@ struct CustomProfileImpl {
     fail_fast: Option<bool>,
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
+    #[serde(default, with = "humantime_serde::option")]
+    leak_timeout: Option<Duration>,
     #[serde(default)]
     overrides: Vec<ProfileOverrideSource>,
     #[serde(default)]
@@ -571,6 +594,8 @@ struct ProfileOverrideData {
     retries: Option<usize>,
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
+    #[serde(default)]
+    leak_timeout: Option<Duration>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -93,6 +93,7 @@ impl TestRunnerBuilder {
         };
         let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
         let slow_timeout = profile.slow_timeout();
+        let leak_timeout = profile.leak_timeout();
 
         let runtime = Runtime::new().map_err(TestRunnerBuildError::TokioRuntimeCreate)?;
         let _guard = runtime.enter();
@@ -110,6 +111,7 @@ impl TestRunnerBuilder {
                 ignore_retry_overrides,
                 fail_fast,
                 slow_timeout,
+                leak_timeout,
                 test_list,
                 target_runner,
                 runtime,
@@ -165,6 +167,7 @@ struct TestRunnerInner<'a> {
     ignore_retry_overrides: bool,
     fail_fast: bool,
     slow_timeout: crate::config::SlowTimeout,
+    leak_timeout: Duration,
     test_list: &'a TestList<'a>,
     target_runner: TargetRunner,
     runtime: Runtime,
@@ -426,6 +429,7 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut status: Option<ExecutionResult> = None;
         let slow_timeout = overrides.slow_timeout().unwrap_or(self.slow_timeout);
+        let leak_timeout = overrides.leak_timeout().unwrap_or(self.leak_timeout);
         let mut is_slow = false;
 
         let mut interval = tokio::time::interval(slow_timeout.period);
@@ -558,7 +562,7 @@ impl<'a> TestRunnerInner<'a> {
             // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
             // didn't shut down properly. Now, this detects those cases and marks them as leaked.
             let leaked = loop {
-                let sleep = tokio::time::sleep(Duration::from_millis(100));
+                let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
                     res = &mut stdout_fut, if !stdout_done => {
