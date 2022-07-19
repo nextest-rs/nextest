@@ -3,6 +3,38 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.27] - 2022-07-22
+
+This is a major architectural rework of nextest. We've tested it thoroughly to the best of our ability, but if you see regressions please [report them](https://github.com/nextest-rs/nextest/issues/new)!
+
+If you encounter a regression, you can temporarily pin nextest to the previous version in CI. If you're on GitHub Actions and are using `taiki-e/install-action`, use this instead:
+
+```yaml
+- uses: taiki-e/install-action@v1
+- with:
+    tool: nextest
+    version: 0.9.26
+```
+
+### Added
+
+- Nextest now works with [the Miri interpreter](https://nexte.st/book/miri). Use `cargo miri nextest run` to run your tests with Miri.
+- Nextest now detects some situations where tests [leak subprocesses](https://nexte.st/book/leaky-tests). Previously, these situations would cause nextest to hang.
+- [Per-test overrides](https://nexte.st/book/per-test-overrides) now support `slow-timeout` and the new `leak-timeout` config parameter.
+- A new option `--tool-config-file` allows tools that wrap nextest to specify custom config settings, while still prioritizing repository-specific configuration.
+
+### Changed
+
+- Major internal change: The nextest list and run steps now use [Tokio](https://tokio.rs/). This change enables the leak detection described above.
+- The list step now runs list commands in parallel. This should result in speedups in most cases.
+
+### Fixed
+
+- Nextest now redirects standard input during test runs to `/dev/null` (or `NUL` on Windows). Most tests do not read from standard input, but if a test does, it will no longer cause nextest to hang.
+- On Windows, nextest configures standard input, standard output and standard error to [not be inherited](https://github.com/nextest-rs/nextest/commit/0c109db35a5315d7d8c9121e36a9e706e7393049). This prevents some kinds of test hangs on Windows.
+- If a [dynamic library link path](https://nexte.st/book/env-vars.html#dynamic-library-paths) doesn't exist, nextest no longer adds it to `LD_LIBRARY_PATH` or equivalent. This should have no practical effect.
+- Archiving tests now works even if the target directory is not called `"target"`.
+
 ## [0.9.26] - 2022-07-14
 
 This is a quick hotfix release to update the version of nextest-metadata, to which a breaking change was accidentally committed.
@@ -390,6 +422,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.27]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.27
 [0.9.26]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.26
 [0.9.25]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.25
 [0.9.24]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.24
