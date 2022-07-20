@@ -169,9 +169,12 @@ impl<'a, W: Write> Archiver<'a, W> {
         for binary in &self.binary_list.rust_binaries {
             let rel_path = binary
                 .path
-                .strip_prefix(target_dir.parent().expect("target dir cannot be the root"))
+                .strip_prefix(target_dir)
                 .expect("binary paths must be within target directory");
-            let rel_path = convert_rel_path_to_forward_slash(rel_path);
+            // The target directory might not be called "target", so strip all of it then add
+            // "target" to the beginning.
+            let rel_path = Utf8Path::new("target").join(rel_path);
+            let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
             self.append_path(&binary.path, &rel_path)?;
         }

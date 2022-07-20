@@ -375,6 +375,8 @@ fn test_run_from_archive() {
         "--archive-file",
         archive_file.as_str(),
         "--workspace",
+        "--target-dir",
+        p.target_dir().as_str(),
         "--all-targets",
     ]);
 
