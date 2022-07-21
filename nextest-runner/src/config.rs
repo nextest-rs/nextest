@@ -48,6 +48,9 @@ impl NextestConfig {
     /// The name of the default profile.
     pub const DEFAULT_PROFILE: &'static str = "default";
 
+    /// The name of the default profile used for miri.
+    pub const DEFAULT_MIRI_PROFILE: &'static str = "default-miri";
+
     /// Reads the nextest config from the given file, or if not specified from `.config/nextest.toml`
     /// in the workspace root.
     ///

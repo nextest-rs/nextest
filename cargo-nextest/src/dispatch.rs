@@ -937,8 +937,17 @@ impl App {
         profile_name: Option<&str>,
         config: &'cfg NextestConfig,
     ) -> Result<NextestProfile<'cfg>> {
+        let profile_name = profile_name.unwrap_or_else(|| {
+            // The "official" way to detect a miri environment is with MIRI_SYSROOT.
+            // https://github.com/rust-lang/miri/pull/2398#issuecomment-1190747685
+            if std::env::var_os("MIRI_SYSROOT").is_some() {
+                NextestConfig::DEFAULT_MIRI_PROFILE
+            } else {
+                NextestConfig::DEFAULT_PROFILE
+            }
+        });
         let profile = config
-            .profile(profile_name.unwrap_or(NextestConfig::DEFAULT_PROFILE))
+            .profile(profile_name)
             .map_err(ExpectedError::profile_not_found)?;
         let store_dir = profile.store_dir();
         std::fs::create_dir_all(&store_dir).map_err(|err| ExpectedError::StoreDirCreateError {
