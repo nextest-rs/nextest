@@ -36,6 +36,8 @@ crate has reached 1.x, any MSRV bump will be accompanied with a new minor versio
 
 See the [CONTRIBUTING](CONTRIBUTING.md) file for how to help out.
 
+> Looking to contribute to nextest and don't know where to get started? Check out the list of [good first issues](https://github.com/nextest-rs/nextest/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22good+first+issue%22).
+
 ## License
 
 This project is available under the terms of either the [Apache 2.0 license](LICENSE-APACHE) or the [MIT
