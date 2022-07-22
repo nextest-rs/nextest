@@ -6,7 +6,7 @@
 use crate::{
     errors::{
         ConfigParseError, ConfigParseErrorKind, ConfigParseOverrideError, ProfileNotFound,
-        TestThreadsParseError,
+        TestThreadsParseError, ToolConfigFileParseError,
     },
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
@@ -54,17 +54,29 @@ impl NextestConfig {
     /// Reads the nextest config from the given file, or if not specified from `.config/nextest.toml`
     /// in the workspace root.
     ///
-    /// If the file isn't specified and the directory doesn't have `.config/nextest.toml`, uses the
+    /// `tool_config_files` are lower priority than `config_file` but higher priority than the
+    /// default config. Files in `tool_config_files` that come earlier are higher priority than those
+    /// that come later.
+    ///
+    /// If no config files are specified and this file doesn't have `.config/nextest.toml`, uses the
     /// default config options.
-    pub fn from_sources(
+    pub fn from_sources<'a, I>(
         workspace_root: impl Into<Utf8PathBuf>,
         graph: &PackageGraph,
         config_file: Option<&Utf8Path>,
-    ) -> Result<Self, ConfigParseError> {
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
         let workspace_root = workspace_root.into();
-        let (config_file, config) = Self::read_from_sources(&workspace_root, config_file)?;
+        let tool_config_files_rev = tool_config_files.into_iter().rev();
+        let (config_file, config) =
+            Self::read_from_sources(&workspace_root, config_file, tool_config_files_rev)?;
         let inner: NextestConfigImpl =
             serde_path_to_error::deserialize(config).map_err(|error| {
+                // TODO: now that lowpri configs exist, we need better attribution for the exact path at which
+                // an error occurred.
                 ConfigParseError::new(
                     config_file.clone(),
                     ConfigParseErrorKind::DeserializeError(error),
@@ -109,12 +121,22 @@ impl NextestConfig {
     // Helper methods
     // ---
 
-    fn read_from_sources(
+    fn read_from_sources<'a>(
         workspace_root: &Utf8Path,
         file: Option<&Utf8Path>,
+        tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
     ) -> Result<(Utf8PathBuf, Config), ConfigParseError> {
         // First, get the default config.
-        let builder = Self::make_default_config();
+        let mut builder = Self::make_default_config();
+
+        // Next, merge in tool configs.
+        for ToolConfigFile {
+            config_file,
+            tool: _,
+        } in tool_config_files_rev
+        {
+            builder = builder.add_source(File::new(config_file.as_str(), FileFormat::Toml));
+        }
 
         // Next, merge in the config from the given file.
         let (builder, config_path) = match file {
@@ -166,6 +188,54 @@ impl NextestConfig {
             custom_profile,
             overrides,
         })
+    }
+}
+
+/// A tool-specific config file.
+///
+/// Tool-specific config files are lower priority than repository configs, but higher priority than
+/// the default config shipped with nextest.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolConfigFile {
+    /// The name of the tool.
+    pub tool: String,
+
+    /// The path to the config file.
+    pub config_file: Utf8PathBuf,
+}
+
+impl FromStr for ToolConfigFile {
+    type Err = ToolConfigFileParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input.split_once(':') {
+            Some((tool, config_file)) => {
+                if tool.is_empty() {
+                    Err(ToolConfigFileParseError::EmptyToolName {
+                        input: input.to_owned(),
+                    })
+                } else if config_file.is_empty() {
+                    Err(ToolConfigFileParseError::EmptyConfigFile {
+                        input: input.to_owned(),
+                    })
+                } else {
+                    let config_file = Utf8Path::new(config_file);
+                    if config_file.is_absolute() {
+                        Ok(Self {
+                            tool: tool.to_owned(),
+                            config_file: Utf8PathBuf::from(config_file),
+                        })
+                    } else {
+                        Err(ToolConfigFileParseError::ConfigFileNotAbsolute {
+                            config_file: config_file.to_owned(),
+                        })
+                    }
+                }
+            }
+            None => Err(ToolConfigFileParseError::InvalidFormat {
+                input: input.to_owned(),
+            }),
+        }
     }
 }
 
@@ -790,7 +860,7 @@ mod tests {
         let graph = temp_workspace(workspace_path, config_contents);
 
         let nextest_config_result =
-            NextestConfig::from_sources(graph.workspace().root(), &graph, None);
+            NextestConfig::from_sources(graph.workspace().root(), &graph, None, []);
 
         match expected_default {
             Ok(expected_default) => {
@@ -918,7 +988,8 @@ mod tests {
         let graph = temp_workspace(workspace_path, config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
 
-        let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None).unwrap();
+        let config =
+            NextestConfig::from_sources(graph.workspace().root(), &graph, None, []).unwrap();
         let query = TestQuery {
             binary_query: BinaryQuery {
                 package_id,
@@ -937,6 +1008,99 @@ mod tests {
             retries,
             "actual retries don't match expected retries"
         );
+    }
+
+    #[test]
+    fn parse_tool_config_file() {
+        cfg_if::cfg_if! {
+            if #[cfg(windows)] {
+                let valid = ["tool:C:\\foo\\bar", "tool:\\\\?\\C:\\foo\\bar"];
+                let invalid = ["C:\\foo\\bar", "tool:\\foo\\bar", "tool:", ":/foo/bar"];
+            } else {
+                let valid = ["tool:/foo/bar"];
+                let invalid = ["/foo/bar", "tool:", ":/foo/bar", "tool:foo/bar"];
+            }
+        }
+
+        for valid_input in valid {
+            valid_input.parse::<ToolConfigFile>().unwrap_or_else(|err| {
+                panic!("valid input {valid_input} should parse correctly: {err}")
+            });
+        }
+
+        for invalid_input in invalid {
+            invalid_input
+                .parse::<ToolConfigFile>()
+                .expect_err(&format!("invalid input {invalid_input} should error out"));
+        }
+    }
+
+    #[test]
+    fn lowpri_config() {
+        let config_contents = r#"
+        [profile.default]
+        retries = 3
+        "#;
+
+        let lowpri1_config_contents = r#"
+        [profile.default]
+        retries = 4
+
+        [profile.lowpri]
+        retries = 12
+        "#;
+
+        let lowpri2_config_contents = r#"
+        [profile.default]
+        retries = 5
+
+        [profile.lowpri]
+        retries = 16
+
+        [profile.lowpri2]
+        retries = 18
+        "#;
+
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+        let workspace_root = graph.workspace().root();
+        let lowpri1_path = workspace_root.join(".config/lowpri1.toml");
+        let lowpri2_path = workspace_root.join(".config/lowpri2.toml");
+        std::fs::write(&lowpri1_path, lowpri1_config_contents).unwrap();
+        std::fs::write(&lowpri2_path, lowpri2_config_contents).unwrap();
+
+        let config = NextestConfig::from_sources(
+            workspace_root,
+            &graph,
+            None,
+            &[
+                ToolConfigFile {
+                    tool: "lowpri1".to_owned(),
+                    config_file: lowpri1_path,
+                },
+                ToolConfigFile {
+                    tool: "lowpri2".to_owned(),
+                    config_file: lowpri2_path,
+                },
+            ],
+        )
+        .expect("parsing config failed");
+
+        let default_profile = config
+            .profile(NextestConfig::DEFAULT_PROFILE)
+            .expect("default profile is present");
+        // This is present in .config/nextest.toml and is the highest priority
+        assert_eq!(default_profile.retries(), 3);
+
+        let lowpri_profile = config.profile("lowpri").expect("lowpri profile is present");
+        assert_eq!(lowpri_profile.retries(), 12);
+
+        let lowpri2_profile = config
+            .profile("lowpri2")
+            .expect("lowpri2 profile is present");
+        assert_eq!(lowpri2_profile.retries(), 18);
     }
 
     fn temp_workspace(temp_dir: &Utf8Path, config_contents: &str) -> PackageGraph {

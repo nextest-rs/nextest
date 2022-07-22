@@ -136,13 +136,48 @@ impl StatusLevelParseError {
     }
 }
 
+/// Error returned while parsing a [`ToolConfigFile`](crate::config::ToolConfigFile) value.
+#[derive(Clone, Debug, Error)]
+pub enum ToolConfigFileParseError {
+    #[error(
+        "tool-config-file has invalid format: {input}\n(hint: tool configs must be in the format <tool-name>:<path>)"
+    )]
+    /// The input was not in the format "tool:path".
+    InvalidFormat {
+        /// The input that failed to parse.
+        input: String,
+    },
+
+    /// The tool name was empty.
+    #[error("tool-config-file has empty tool name: {input}")]
+    EmptyToolName {
+        /// The input that failed to parse.
+        input: String,
+    },
+
+    /// The config file path was empty.
+    #[error("tool-config-file has empty config file path: {input}")]
+    EmptyConfigFile {
+        /// The input that failed to parse.
+        input: String,
+    },
+
+    /// The config file was not an absolute path.
+    #[error("tool-config-file is not an absolute path: {config_file}")]
+    ConfigFileNotAbsolute {
+        /// The file name that wasn't absolute.
+        config_file: Utf8PathBuf,
+    },
+}
+
 /// Error returned while parsing a [`TestThreads`](crate::config::TestThreads) value.
 #[derive(Clone, Debug, Error)]
 #[error(
-    "unrecognized value for test-threads: {input}\n(expected either an integer or \"num-cpus\")"
+    "unrecognized value for test-threads: {input}\n(hint: expected either an integer or \"num-cpus\")"
 )]
 pub struct TestThreadsParseError {
-    input: String,
+    /// The input that failed to parse.
+    pub input: String,
 }
 
 impl TestThreadsParseError {

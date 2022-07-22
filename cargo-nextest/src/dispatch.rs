@@ -15,7 +15,7 @@ use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
-    config::{NextestConfig, NextestProfile, TestThreads},
+    config::{NextestConfig, NextestProfile, TestThreads, ToolConfigFile},
     errors::WriteTestListError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
@@ -164,10 +164,27 @@ impl AppOpts {
 }
 
 #[derive(Debug, Args)]
+#[clap(next_help_heading = "CONFIG OPTIONS")]
 struct ConfigOpts {
     /// Config file [default: workspace-root/.config/nextest.toml]
     #[clap(long, global = true, value_name = "PATH")]
     pub config_file: Option<Utf8PathBuf>,
+
+    /// Tool-specific config files
+    ///
+    /// Some tools on top of nextest may want to set up their own default configuration but
+    /// prioritize user configuration on top. Use this argument to insert configuration
+    /// that's lower than --config-file in priority but above the default config shipped with
+    /// nextest.
+    ///
+    /// Arguments are specified in the format "tool:abs_path", for example
+    /// "my-tool:/path/to/nextest.toml" (or "my-tool:C:\\path\\to\\nextest.toml" on Windows).
+    /// Paths must be absolute.
+    ///
+    /// This argument may be specified multiple times. Files that come later are lower priority
+    /// than those that come earlier.
+    #[clap(long = "tool-config-file", global = true, value_name = "TOOL:ABS_PATH")]
+    pub tool_config_files: Vec<ToolConfigFile>,
 }
 
 impl ConfigOpts {
@@ -177,8 +194,13 @@ impl ConfigOpts {
         workspace_root: &Utf8Path,
         graph: &PackageGraph,
     ) -> Result<NextestConfig> {
-        NextestConfig::from_sources(workspace_root, graph, self.config_file.as_deref())
-            .map_err(ExpectedError::config_parse_error)
+        NextestConfig::from_sources(
+            workspace_root,
+            graph,
+            self.config_file.as_deref(),
+            &self.tool_config_files,
+        )
+        .map_err(ExpectedError::config_parse_error)
     }
 }
 

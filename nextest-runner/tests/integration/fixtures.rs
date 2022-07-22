@@ -8,6 +8,7 @@ use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
+    config::NextestConfig,
     list::{BinaryList, RustBuildMeta, RustTestArtifact, TestList, TestListState},
     reporter::TestEvent,
     reuse_build::PathMapper,
@@ -207,6 +208,11 @@ pub(crate) fn workspace_root() -> Utf8PathBuf {
         .parent()
         .unwrap()
         .join("fixtures/nextest-tests")
+}
+
+pub(crate) fn load_config() -> NextestConfig {
+    NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None, [])
+        .expect("loaded fixture config")
 }
 
 pub(crate) static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {

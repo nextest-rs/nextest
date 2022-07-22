@@ -208,8 +208,7 @@ fn test_run_with_target_runner() -> Result<()> {
 
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &target_runner);
 
-    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
-        .expect("loaded fixture config");
+    let config = load_config();
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
