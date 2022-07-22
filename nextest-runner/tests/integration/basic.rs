@@ -88,8 +88,7 @@ fn test_run() -> Result<()> {
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
-    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
-        .expect("loaded fixture config");
+    let config = load_config();
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
@@ -180,8 +179,7 @@ fn test_run_ignored() -> Result<()> {
 
     let test_filter = TestFilterBuilder::any(RunIgnored::IgnoredOnly);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
-    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
-        .expect("loaded fixture config");
+    let config = load_config();
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
@@ -368,8 +366,7 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
-    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
-        .expect("loaded fixture config");
+    let config = load_config();
     let profile = config
         .profile("with-retries")
         .expect("with-retries config is valid");
@@ -507,8 +504,7 @@ fn test_termination() -> Result<()> {
     );
 
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
-    let config = NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None)
-        .expect("loaded fixture config");
+    let config = load_config();
     let profile = config
         .profile("with-termination")
         .expect("with-termination config is valid");
