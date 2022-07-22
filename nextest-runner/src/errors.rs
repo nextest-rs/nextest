@@ -21,18 +21,27 @@ use thiserror::Error;
 
 /// An error that occurred while parsing the config.
 #[derive(Debug, Error)]
-#[error("failed to parse nextest config at `{config_file}`")]
+#[error(
+    "failed to parse nextest config at `{config_file}`{}",
+    provided_by_tool(tool.as_deref())
+)]
 #[non_exhaustive]
 pub struct ConfigParseError {
     config_file: Utf8PathBuf,
+    tool: Option<String>,
     #[source]
     kind: ConfigParseErrorKind,
 }
 
 impl ConfigParseError {
-    pub(crate) fn new(config_file: impl Into<Utf8PathBuf>, kind: ConfigParseErrorKind) -> Self {
+    pub(crate) fn new(
+        config_file: impl Into<Utf8PathBuf>,
+        tool: Option<&str>,
+        kind: ConfigParseErrorKind,
+    ) -> Self {
         Self {
             config_file: config_file.into(),
+            tool: tool.map(|s| s.to_owned()),
             kind,
         }
     }
@@ -45,6 +54,13 @@ impl ConfigParseError {
     /// Returns the kind of error this is.
     pub fn kind(&self) -> &ConfigParseErrorKind {
         &self.kind
+    }
+}
+
+fn provided_by_tool(tool: Option<&str>) -> String {
+    match tool {
+        Some(tool) => format!(" provided by tool `{tool}`"),
+        None => String::new(),
     }
 }
 
