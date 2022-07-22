@@ -25,7 +25,7 @@ You may need to specify the toolchain to run as, using `cargo +nightly-YYYY-MM-D
 
 ## Configuring nextest running under Miri
 
-If nextest detects a Miri environment, it uses the `default-miri` profile by default. For miri-specific configuration, add it to this profile. For example, to [terminate tests](slow-tests.md#terminating-tests-after-a-timeout) after 2 minutes, add this to `.config/nextest.toml`:
+If nextest detects a Miri environment, it uses the `default-miri` profile by default. Add repository-specific Miri configuration to this profile. For example, to [terminate tests](slow-tests.md#terminating-tests-after-a-timeout) after 2 minutes, add this to `.config/nextest.toml`:
 
 ```toml
 [profile.default-miri]
