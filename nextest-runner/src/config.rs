@@ -11,7 +11,7 @@ use crate::{
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat};
+use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
 use guppy::graph::PackageGraph;
 use nextest_filtering::{FilteringExpr, TestQuery};
 use serde::{de::IntoDeserializer, Deserialize};
@@ -71,21 +71,17 @@ impl NextestConfig {
     {
         let workspace_root = workspace_root.into();
         let tool_config_files_rev = tool_config_files.into_iter().rev();
-        let (config_file, config) =
-            Self::read_from_sources(&workspace_root, config_file, tool_config_files_rev)?;
+        let (config_file, config, overrides) =
+            Self::read_from_sources(graph, &workspace_root, config_file, tool_config_files_rev)?;
         let inner: NextestConfigImpl =
             serde_path_to_error::deserialize(config).map_err(|error| {
-                // TODO: now that lowpri configs exist, we need better attribution for the exact path at which
+                // TODO: now that tool configs exist, we need better attribution for the exact path at which
                 // an error occurred.
                 ConfigParseError::new(
                     config_file.clone(),
                     ConfigParseErrorKind::DeserializeError(error),
                 )
             })?;
-
-        // Compile all the overrides and gather the errors.
-        let overrides = NextestOverridesImpl::new(graph, &inner)
-            .map_err(|kind| ConfigParseError::new(config_file, kind))?;
 
         Ok(Self {
             workspace_root,
@@ -122,12 +118,17 @@ impl NextestConfig {
     // ---
 
     fn read_from_sources<'a>(
+        graph: &PackageGraph,
         workspace_root: &Utf8Path,
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
-    ) -> Result<(Utf8PathBuf, Config), ConfigParseError> {
+    ) -> Result<(Utf8PathBuf, Config, NextestOverridesImpl), ConfigParseError> {
         // First, get the default config.
-        let mut builder = Self::make_default_config();
+        let mut composite_builder = Self::make_default_config();
+
+        // Overrides are handled additively.
+        // Note that they're stored in reverse order here, and are flipped over at the end.
+        let mut overrides_impl = NextestOverridesImpl::default();
 
         // Next, merge in tool configs.
         for ToolConfigFile {
@@ -135,30 +136,78 @@ impl NextestConfig {
             tool: _,
         } in tool_config_files_rev
         {
-            builder = builder.add_source(File::new(config_file.as_str(), FileFormat::Toml));
+            let source = File::new(config_file.as_str(), FileFormat::Toml);
+            Self::deserialize_individual_config(
+                graph,
+                config_file,
+                source.clone(),
+                &mut overrides_impl,
+            )?;
+
+            // This is the final, composite builder used at the end.
+            composite_builder = composite_builder.add_source(source);
         }
 
         // Next, merge in the config from the given file.
-        let (builder, config_path) = match file {
-            Some(file) => (
-                builder.add_source(File::new(file.as_str(), FileFormat::Toml)),
-                file.to_owned(),
-            ),
+        let (config_file, source) = match file {
+            Some(file) => (file.to_owned(), File::new(file.as_str(), FileFormat::Toml)),
             None => {
-                let config_path = workspace_root.join(Self::CONFIG_PATH);
-                (
-                    builder.add_source(
-                        File::new(config_path.as_str(), FileFormat::Toml).required(false),
-                    ),
-                    config_path,
-                )
+                let config_file = workspace_root.join(Self::CONFIG_PATH);
+                let source = File::new(config_file.as_str(), FileFormat::Toml).required(false);
+                (config_file, source)
             }
         };
 
-        let config = builder.build().map_err(|err| {
-            ConfigParseError::new(&config_path, ConfigParseErrorKind::BuildError(err))
+        Self::deserialize_individual_config(
+            graph,
+            &config_file,
+            source.clone(),
+            &mut overrides_impl,
+        )?;
+
+        composite_builder = composite_builder.add_source(source);
+
+        let config = composite_builder.build().map_err(|err| {
+            ConfigParseError::new(&config_file, ConfigParseErrorKind::BuildError(err))
         })?;
-        Ok((config_path, config))
+
+        // Reverse all the overrides at the end.
+        overrides_impl.default.reverse();
+        for override_ in overrides_impl.other.values_mut() {
+            override_.reverse();
+        }
+
+        Ok((config_file, config, overrides_impl))
+    }
+
+    fn deserialize_individual_config(
+        graph: &PackageGraph,
+        config_file: &Utf8Path,
+        source: File<FileSourceFile, FileFormat>,
+        overrides_impl: &mut NextestOverridesImpl,
+    ) -> Result<(), ConfigParseError> {
+        // Try building default builder + this file to get good error attribution and handle
+        // overrides additively.
+        let default_builder = Self::make_default_config();
+        let this_builder = default_builder.add_source(source);
+        let this_config = Self::build_and_deserialize_config(config_file, &this_builder)?;
+        // Compile the overrides for this file.
+        let this_overrides = NextestOverridesImpl::new(graph, &this_config)
+            .map_err(|kind| ConfigParseError::new(config_file, kind))?;
+
+        // Grab the overrides for this config. Add them in reversed order (we'll flip it around at the end).
+        overrides_impl
+            .default
+            .extend(this_overrides.default.into_iter().rev());
+        for (name, overrides) in this_overrides.other {
+            overrides_impl
+                .other
+                .entry(name)
+                .or_default()
+                .extend(overrides.into_iter().rev());
+        }
+
+        Ok(())
     }
 
     fn make_default_config() -> ConfigBuilder<DefaultState> {
@@ -187,6 +236,24 @@ impl NextestConfig {
             default_profile: &self.inner.profiles.default,
             custom_profile,
             overrides,
+        })
+    }
+
+    fn build_and_deserialize_config(
+        config_file: &Utf8Path,
+        builder: &ConfigBuilder<DefaultState>,
+    ) -> Result<NextestConfigImpl, ConfigParseError> {
+        let config = builder.build_cloned().map_err(|err| {
+            ConfigParseError::new(config_file, ConfigParseErrorKind::BuildError(err))
+        })?;
+
+        serde_path_to_error::deserialize(config).map_err(|error| {
+            // TODO: now that tool configs exist, we need better attribution for the exact path at which
+            // an error occurred.
+            ConfigParseError::new(
+                config_file.clone(),
+                ConfigParseErrorKind::DeserializeError(error),
+            )
         })
     }
 }
@@ -1040,25 +1107,53 @@ mod tests {
         let config_contents = r#"
         [profile.default]
         retries = 3
+
+        [[profile.default.overrides]]
+        filter = 'test(test_foo)'
+        retries = 20
         "#;
 
         let lowpri1_config_contents = r#"
         [profile.default]
         retries = 4
 
+        [[profile.default.overrides]]
+        filter = 'test(test_bar)'
+        retries = 21
+
         [profile.lowpri]
         retries = 12
+
+        [[profile.lowpri.overrides]]
+        filter = 'test(test_baz)'
+        retries = 22
         "#;
 
         let lowpri2_config_contents = r#"
         [profile.default]
         retries = 5
 
+        [[profile.default.overrides]]
+        filter = 'test(test_)'
+        retries = 23
+
         [profile.lowpri]
         retries = 16
 
+        [[profile.lowpri.overrides]]
+        filter = 'test(test_ba)'
+        retries = 24
+
+        [[profile.lowpri.overrides]]
+        filter = 'test(test_)'
+        retries = 25
+
         [profile.lowpri2]
         retries = 18
+
+        [[profile.lowpri2.overrides]]
+        filter = 'all()'
+        retries = 26
         "#;
 
         let workspace_dir = tempdir().unwrap();
@@ -1094,13 +1189,89 @@ mod tests {
         // This is present in .config/nextest.toml and is the highest priority
         assert_eq!(default_profile.retries(), 3);
 
+        let package_id = graph.workspace().iter().next().unwrap().id();
+
+        let test_foo_query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
+            test_name: "test_foo",
+        };
+        let test_bar_query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
+            test_name: "test_bar",
+        };
+        let test_baz_query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
+            test_name: "test_baz",
+        };
+
+        assert_eq!(
+            default_profile.overrides_for(&test_foo_query).retries(),
+            Some(20),
+            "retries for test_foo/default profile"
+        );
+        assert_eq!(
+            default_profile.overrides_for(&test_bar_query).retries(),
+            Some(21),
+            "retries for test_bar/default profile"
+        );
+        assert_eq!(
+            default_profile.overrides_for(&test_baz_query).retries(),
+            Some(23),
+            "retries for test_baz/default profile"
+        );
+
         let lowpri_profile = config.profile("lowpri").expect("lowpri profile is present");
         assert_eq!(lowpri_profile.retries(), 12);
+        assert_eq!(
+            lowpri_profile.overrides_for(&test_foo_query).retries(),
+            Some(25),
+            "retries for test_foo/default profile"
+        );
+        assert_eq!(
+            lowpri_profile.overrides_for(&test_bar_query).retries(),
+            Some(24),
+            "retries for test_bar/default profile"
+        );
+        assert_eq!(
+            lowpri_profile.overrides_for(&test_baz_query).retries(),
+            Some(22),
+            "retries for test_baz/default profile"
+        );
 
         let lowpri2_profile = config
             .profile("lowpri2")
             .expect("lowpri2 profile is present");
         assert_eq!(lowpri2_profile.retries(), 18);
+        assert_eq!(
+            lowpri2_profile.overrides_for(&test_foo_query).retries(),
+            Some(26),
+            "retries for test_foo/default profile"
+        );
+        assert_eq!(
+            lowpri2_profile.overrides_for(&test_bar_query).retries(),
+            Some(26),
+            "retries for test_bar/default profile"
+        );
+        assert_eq!(
+            lowpri2_profile.overrides_for(&test_baz_query).retries(),
+            Some(26),
+            "retries for test_baz/default profile"
+        );
     }
 
     fn temp_workspace(temp_dir: &Utf8Path, config_contents: &str) -> PackageGraph {
