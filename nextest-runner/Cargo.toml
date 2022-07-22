@@ -49,6 +49,7 @@ tempfile = "3.3.0"
 thiserror = "1.0.31"
 # For parsing of .cargo/config.toml files
 tokio = { version = "1.20.0", features = [
+    "io-util",
     "macros",
     "process",
     "rt",
