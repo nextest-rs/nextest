@@ -13,7 +13,6 @@ OPTIONS:
     -v, --verbose                 Verbose output [env: NEXTEST_VERBOSE=]
         --color <WHEN>            Produce color output: auto, always, never [env: CARGO_TERM_COLOR=]
                                   [default: auto]
-        --config-file <PATH>      Config file [default: workspace-root/.config/nextest.toml]
     -h, --help                    Print help information
 
 CARGO OPTIONS:
@@ -73,3 +72,10 @@ REUSE BUILD OPTIONS:
         --workspace-remap <PATH>      Remapping for the workspace root
         --binaries-metadata <PATH>    Path to binaries-metadata JSON
         --target-dir-remap <PATH>     Remapping for the target directory
+
+CONFIG OPTIONS:
+        --config-file <PATH>
+            Config file [default: workspace-root/.config/nextest.toml]
+
+        --tool-config-file <TOOL:ABS_PATH>
+            Tool-specific config files

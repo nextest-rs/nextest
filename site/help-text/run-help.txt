@@ -14,7 +14,6 @@ OPTIONS:
     -v, --verbose                 Verbose output [env: NEXTEST_VERBOSE=]
         --color <WHEN>            Produce color output: auto, always, never [env: CARGO_TERM_COLOR=]
                                   [default: auto]
-        --config-file <PATH>      Config file [default: workspace-root/.config/nextest.toml]
     -h, --help                    Print help information
 
 RUNNER OPTIONS:
@@ -72,7 +71,8 @@ REPORTER OPTIONS:
                                         NEXTEST_SUCCESS_OUTPUT=] [possible values: immediate,
                                         immediate-final, final, never]
         --status-level <LEVEL>          Test statuses to output [env: NEXTEST_STATUS_LEVEL=]
-                                        [possible values: none, fail, retry, slow, pass, skip, all]
+                                        [possible values: none, fail, retry, slow, leak, pass, skip,
+                                        all]
         --final-status-level <LEVEL>    Test statuses to output at the end of the run [env:
                                         NEXTEST_FINAL_STATUS_LEVEL=] [possible values: none, fail,
                                         flaky, slow, skip, pass, all]
@@ -90,3 +90,10 @@ REUSE BUILD OPTIONS:
         --workspace-remap <PATH>      Remapping for the workspace root
         --binaries-metadata <PATH>    Path to binaries-metadata JSON
         --target-dir-remap <PATH>     Remapping for the target directory
+
+CONFIG OPTIONS:
+        --config-file <PATH>
+            Config file [default: workspace-root/.config/nextest.toml]
+
+        --tool-config-file <TOOL:ABS_PATH>
+            Tool-specific config files
