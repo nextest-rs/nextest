@@ -71,18 +71,8 @@ impl NextestConfig {
     {
         let workspace_root = workspace_root.into();
         let tool_config_files_rev = tool_config_files.into_iter().rev();
-        let (config_file, config, overrides) =
+        let (inner, overrides) =
             Self::read_from_sources(graph, &workspace_root, config_file, tool_config_files_rev)?;
-        let inner: NextestConfigImpl =
-            serde_path_to_error::deserialize(config).map_err(|error| {
-                // TODO: now that tool configs exist, we need better attribution for the exact path at which
-                // an error occurred.
-                ConfigParseError::new(
-                    config_file.clone(),
-                    ConfigParseErrorKind::DeserializeError(error),
-                )
-            })?;
-
         Ok(Self {
             workspace_root,
             inner,
@@ -122,7 +112,7 @@ impl NextestConfig {
         workspace_root: &Utf8Path,
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
-    ) -> Result<(Utf8PathBuf, Config, NextestOverridesImpl), ConfigParseError> {
+    ) -> Result<(NextestConfigImpl, NextestOverridesImpl), ConfigParseError> {
         // First, get the default config.
         let mut composite_builder = Self::make_default_config();
 
@@ -131,15 +121,12 @@ impl NextestConfig {
         let mut overrides_impl = NextestOverridesImpl::default();
 
         // Next, merge in tool configs.
-        for ToolConfigFile {
-            config_file,
-            tool: _,
-        } in tool_config_files_rev
-        {
+        for ToolConfigFile { config_file, tool } in tool_config_files_rev {
             let source = File::new(config_file.as_str(), FileFormat::Toml);
             Self::deserialize_individual_config(
                 graph,
                 config_file,
+                Some(tool),
                 source.clone(),
                 &mut overrides_impl,
             )?;
@@ -161,15 +148,15 @@ impl NextestConfig {
         Self::deserialize_individual_config(
             graph,
             &config_file,
+            None,
             source.clone(),
             &mut overrides_impl,
         )?;
 
         composite_builder = composite_builder.add_source(source);
 
-        let config = composite_builder.build().map_err(|err| {
-            ConfigParseError::new(&config_file, ConfigParseErrorKind::BuildError(err))
-        })?;
+        let config = Self::build_and_deserialize_config(&composite_builder)
+            .map_err(|kind| ConfigParseError::new(config_file, None, kind))?;
 
         // Reverse all the overrides at the end.
         overrides_impl.default.reverse();
@@ -177,12 +164,13 @@ impl NextestConfig {
             override_.reverse();
         }
 
-        Ok((config_file, config, overrides_impl))
+        Ok((config, overrides_impl))
     }
 
     fn deserialize_individual_config(
         graph: &PackageGraph,
         config_file: &Utf8Path,
+        tool: Option<&str>,
         source: File<FileSourceFile, FileFormat>,
         overrides_impl: &mut NextestOverridesImpl,
     ) -> Result<(), ConfigParseError> {
@@ -190,10 +178,11 @@ impl NextestConfig {
         // overrides additively.
         let default_builder = Self::make_default_config();
         let this_builder = default_builder.add_source(source);
-        let this_config = Self::build_and_deserialize_config(config_file, &this_builder)?;
+        let this_config = Self::build_and_deserialize_config(&this_builder)
+            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
         // Compile the overrides for this file.
         let this_overrides = NextestOverridesImpl::new(graph, &this_config)
-            .map_err(|kind| ConfigParseError::new(config_file, kind))?;
+            .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
 
         // Grab the overrides for this config. Add them in reversed order (we'll flip it around at the end).
         overrides_impl
@@ -240,21 +229,13 @@ impl NextestConfig {
     }
 
     fn build_and_deserialize_config(
-        config_file: &Utf8Path,
         builder: &ConfigBuilder<DefaultState>,
-    ) -> Result<NextestConfigImpl, ConfigParseError> {
-        let config = builder.build_cloned().map_err(|err| {
-            ConfigParseError::new(config_file, ConfigParseErrorKind::BuildError(err))
-        })?;
+    ) -> Result<NextestConfigImpl, ConfigParseErrorKind> {
+        let config = builder
+            .build_cloned()
+            .map_err(ConfigParseErrorKind::BuildError)?;
 
-        serde_path_to_error::deserialize(config).map_err(|error| {
-            // TODO: now that tool configs exist, we need better attribution for the exact path at which
-            // an error occurred.
-            ConfigParseError::new(
-                config_file.clone(),
-                ConfigParseErrorKind::DeserializeError(error),
-            )
-        })
+        serde_path_to_error::deserialize(config).map_err(ConfigParseErrorKind::DeserializeError)
     }
 }
 
