@@ -27,7 +27,7 @@ fail-fast = false
 
 After checking the profile into `.config/nextest.toml`, use `cargo nextest --profile ci` in your CI runs.
 
-> **Note:** Nextest's embedded configuration may define new profiles whose names start with `default` in the future. To avoid backwards compatibility issues, do not name custom profiles starting with `default`.
+> **Note:** Nextest's embedded configuration may define new profiles whose names start with `default-` in the future. To avoid backwards compatibility issues, do not name custom profiles starting with `default-`.
 
 ## Hierarchical configuration
 
