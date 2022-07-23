@@ -10,7 +10,7 @@ Miri can be very taxing on most computers. If nextest is run under Miri, it conf
 
 ## Requirements
 
-- cargo-nextest 0.9.27 or above
+- cargo-nextest 0.9.28 or above
 - Miri from [master](https://github.com/rust-lang/miri) (a new Rust nightly with support for miri + nextest should come out soon)
 
 ## Usage
