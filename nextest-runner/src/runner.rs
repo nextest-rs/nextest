@@ -204,96 +204,114 @@ impl<'a> TestRunnerInner<'a> {
         let first_error_mut = &mut first_error;
 
         let _guard = self.runtime.enter();
+        // Hold a receiver open so there are no spurious SendErrors on the sender.
+        let (forward_sender, _forward_receiver) =
+            tokio::sync::broadcast::channel::<SignalForwardEvent>(4);
+        let forward_sender_ref = &forward_sender;
 
         TokioScope::scope_and_block(move |scope| {
             let (run_sender, mut run_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-            let run_fut = futures::stream::iter(self.test_list.iter_tests())
-                .map(move |test_instance| {
-                    let this_run_sender = run_sender.clone();
+            {
+                let run_fut = futures::stream::iter(self.test_list.iter_tests())
+                    .map(move |test_instance| {
+                        let this_run_sender = run_sender.clone();
 
-                    async move {
-                        if canceled_ref.load(Ordering::Acquire) {
-                            // Check for test cancellation.
-                            return;
-                        }
+                        async move {
+                            // Subscribe to the receiver *before* checking canceled_ref. The ordering is
+                            // important to avoid race conditions with the code that first sets
+                            // canceled_ref and then sends the notification.
+                            let mut this_forward_receiver = forward_sender_ref.subscribe();
 
-                        let query = TestQuery {
-                            binary_query: BinaryQuery {
-                                package_id: test_instance.bin_info.package.id(),
-                                kind: test_instance.bin_info.kind.as_str(),
-                                binary_name: &test_instance.bin_info.binary_name,
-                                platform: convert_build_platform(
-                                    test_instance.bin_info.build_platform,
-                                ),
-                            },
-                            test_name: test_instance.name,
-                        };
-                        let overrides = self.profile.overrides_for(&query);
-                        let total_attempts =
-                            match (self.ignore_retry_overrides, overrides.retries()) {
-                                (true, _) | (false, None) => self.global_tries,
-                                (false, Some(retries)) => retries + 1,
-                            };
-
-                        if let FilterMatch::Mismatch { reason } =
-                            test_instance.test_info.filter_match
-                        {
-                            // Failure to send means the receiver was dropped.
-                            let _ = this_run_sender.send(InternalTestEvent::Skipped {
-                                test_instance,
-                                reason,
-                            });
-                            return;
-                        }
-
-                        // Failure to send means the receiver was dropped.
-                        let _ = this_run_sender.send(InternalTestEvent::Started { test_instance });
-
-                        let mut run_statuses = vec![];
-
-                        loop {
-                            let attempt = run_statuses.len() + 1;
-
-                            let run_status = self
-                                .run_test(test_instance, attempt, &overrides, &this_run_sender)
-                                .await
-                                .into_external(attempt, total_attempts);
-
-                            if run_status.result.is_success() {
-                                // The test succeeded.
-                                run_statuses.push(run_status);
-                                break;
-                            } else if attempt < total_attempts {
-                                // Retry this test: send a retry event, then retry the loop.
-                                let _ = this_run_sender.send(InternalTestEvent::Retry {
-                                    test_instance,
-                                    run_status: run_status.clone(),
-                                });
-                                run_statuses.push(run_status);
-                            } else {
-                                // This test failed and is out of retries.
-                                run_statuses.push(run_status);
-                                break;
+                            if canceled_ref.load(Ordering::Acquire) {
+                                // Check for test cancellation.
+                                return;
                             }
+
+                            let query = TestQuery {
+                                binary_query: BinaryQuery {
+                                    package_id: test_instance.bin_info.package.id(),
+                                    kind: test_instance.bin_info.kind.as_str(),
+                                    binary_name: &test_instance.bin_info.binary_name,
+                                    platform: convert_build_platform(
+                                        test_instance.bin_info.build_platform,
+                                    ),
+                                },
+                                test_name: test_instance.name,
+                            };
+                            let overrides = self.profile.overrides_for(&query);
+                            let total_attempts =
+                                match (self.ignore_retry_overrides, overrides.retries()) {
+                                    (true, _) | (false, None) => self.global_tries,
+                                    (false, Some(retries)) => retries + 1,
+                                };
+
+                            if let FilterMatch::Mismatch { reason } =
+                                test_instance.test_info.filter_match
+                            {
+                                // Failure to send means the receiver was dropped.
+                                let _ = this_run_sender.send(InternalTestEvent::Skipped {
+                                    test_instance,
+                                    reason,
+                                });
+                                return;
+                            }
+
+                            // Failure to send means the receiver was dropped.
+                            let _ =
+                                this_run_sender.send(InternalTestEvent::Started { test_instance });
+
+                            let mut run_statuses = vec![];
+
+                            loop {
+                                let attempt = run_statuses.len() + 1;
+
+                                let run_status = self
+                                    .run_test(
+                                        test_instance,
+                                        attempt,
+                                        &overrides,
+                                        &this_run_sender,
+                                        &mut this_forward_receiver,
+                                    )
+                                    .await
+                                    .into_external(attempt, total_attempts);
+
+                                if run_status.result.is_success() {
+                                    // The test succeeded.
+                                    run_statuses.push(run_status);
+                                    break;
+                                } else if attempt < total_attempts {
+                                    // Retry this test: send a retry event, then retry the loop.
+                                    let _ = this_run_sender.send(InternalTestEvent::Retry {
+                                        test_instance,
+                                        run_status: run_status.clone(),
+                                    });
+                                    run_statuses.push(run_status);
+                                } else {
+                                    // This test failed and is out of retries.
+                                    run_statuses.push(run_status);
+                                    break;
+                                }
+                            }
+
+                            // At this point, either:
+                            // * the test has succeeded, or
+                            // * the test has failed and we've run out of retries.
+                            // In either case, the test is finished.
+                            let _ = this_run_sender.send(InternalTestEvent::Finished {
+                                test_instance,
+                                run_statuses: ExecutionStatuses::new(run_statuses),
+                            });
                         }
+                    })
+                    // buffer_unordered means tests are spawned in order but returned in any order.
+                    .buffer_unordered(self.test_threads)
+                    .collect();
 
-                        // At this point, either:
-                        // * the test has succeeded, or
-                        // * the test has failed and we've run out of retries.
-                        // In either case, the test is finished.
-                        let _ = this_run_sender.send(InternalTestEvent::Finished {
-                            test_instance,
-                            run_statuses: ExecutionStatuses::new(run_statuses),
-                        });
-                    }
-                })
-                // buffer_unordered means tests are spawned in order but returned in any order.
-                .buffer_unordered(self.test_threads)
-                .collect();
-
-            // Run the stream to completion.
-            scope.spawn_cancellable(run_fut, || ());
+                // Run the stream to completion.
+                scope.spawn_cancellable(run_fut, || ());
+            }
 
             let exec_fut = async move {
                 let mut signals_done = false;
@@ -326,6 +344,9 @@ impl<'a> TestRunnerInner<'a> {
                             // If an error happens, it is because either the callback failed or
                             // a cancellation notice was received. If the callback failed, we need
                             // to send a further cancellation notice as well.
+                            //
+                            // Also note the ordering here: canceled_ref is set *before*
+                            // notifications are broadcast. This prevents race conditions.
                             canceled_ref.store(true, Ordering::Release);
 
                             match err {
@@ -336,18 +357,24 @@ impl<'a> TestRunnerInner<'a> {
                                     }
                                     let _ = ctx_mut.begin_cancel(CancelReason::ReportError);
                                 }
-                                InternalError::TestFailureCanceled(None)
-                                | InternalError::SignalCanceled(None) => {
-                                    // Cancellation has begun and no error was returned during that.
-                                    // Continue to handle events.
-                                }
-                                InternalError::TestFailureCanceled(Some(err))
-                                | InternalError::SignalCanceled(Some(err)) => {
-                                    // Cancellation has begun and an error was received during
-                                    // cancellation.
+                                InternalError::TestFailureCanceled(err) => {
+                                    // A test failure has caused cancellation to begin.
                                     if first_error_mut.is_none() {
-                                        *first_error_mut = Some(err);
+                                        *first_error_mut = err;
                                     }
+                                }
+                                InternalError::SignalCanceled(forward_event, err) => {
+                                    // A signal has caused cancellation to begin.
+                                    if first_error_mut.is_none() {
+                                        *first_error_mut = err;
+                                    }
+                                    // Let all the child processes know about the signal, and
+                                    // continue to handle events.
+                                    //
+                                    // Ignore errors here: if there are no receivers to cancel, so
+                                    // be it. Also note the ordering here: canceled_ref is set
+                                    // *before* this is sent.
+                                    let _ = forward_sender_ref.send(forward_event);
                                 }
                             }
                         }
@@ -385,11 +412,19 @@ impl<'a> TestRunnerInner<'a> {
         attempt: usize,
         overrides: &ProfileOverrides,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
+        forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
     ) -> InternalExecuteStatus {
         let stopwatch = StopwatchStart::now();
 
         match self
-            .run_test_inner(test, attempt, &stopwatch, overrides, run_sender)
+            .run_test_inner(
+                test,
+                attempt,
+                &stopwatch,
+                overrides,
+                run_sender,
+                forward_receiver,
+            )
             .await
         {
             Ok(run_status) => run_status,
@@ -411,6 +446,7 @@ impl<'a> TestRunnerInner<'a> {
         stopwatch: &StopwatchStart,
         overrides: &ProfileOverrides,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
+        forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
     ) -> std::io::Result<InternalExecuteStatus> {
         let mut cmd = test.make_expression(self.test_list, &self.target_runner);
 
@@ -509,11 +545,19 @@ impl<'a> TestRunnerInner<'a> {
                                 // attempt to terminate the slow test.
                                 // as there is a race between shutting down a slow test and its own completion
                                 // we silently ignore errors to avoid printing false warnings.
-                                terminate_child(&mut child).await;
+                                terminate_child(&mut child, TerminateMode::Timeout, forward_receiver).await;
                                 status = Some(ExecutionResult::Timeout);
                                 // Don't break here to give the wait task a chance to finish.
                             }
                         }
+                    }
+                    recv = forward_receiver.recv() => {
+                        // The sender stays open longer than the whole loop, and the buffer is big
+                        // enough for all messages ever sent through this channel, so a RecvError
+                        // should never happen.
+                        let forward_event = recv.expect("a RecvError should never happen here");
+
+                        terminate_child(&mut child, TerminateMode::Signal(forward_event), forward_receiver).await;
                     }
                 };
             };
@@ -883,6 +927,27 @@ impl RunStats {
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+enum SignalCount {
+    Once,
+    Twice,
+}
+
+impl SignalCount {
+    fn to_forward_event(self, event: SignalEvent) -> SignalForwardEvent {
+        match self {
+            Self::Once => SignalForwardEvent::Once(event),
+            Self::Twice => SignalForwardEvent::Twice,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum SignalForwardEvent {
+    Once(SignalEvent),
+    Twice,
+}
+
 struct CallbackContext<F, E> {
     callback: F,
     stopwatch: StopwatchStart,
@@ -890,6 +955,7 @@ struct CallbackContext<F, E> {
     fail_fast: bool,
     running: usize,
     cancel_state: Option<CancelReason>,
+    signal_count: Option<SignalCount>,
     phantom: PhantomData<E>,
 }
 
@@ -908,6 +974,7 @@ where
             fail_fast,
             running: 0,
             cancel_state: None,
+            signal_count: None,
             phantom: PhantomData,
         }
     }
@@ -983,17 +1050,35 @@ where
                 })
                 .map_err(InternalError::Error)
             }
-            InternalEvent::Signal(SignalEvent::Interrupted) => {
-                if self.cancel_state == Some(CancelReason::Signal) {
-                    // Ctrl-C was pressed twice -- panic in this case.
-                    panic!("Ctrl-C pressed twice, exiting immediately");
-                }
+            InternalEvent::Signal(event) => {
+                let signal_count = self.increment_signal_count();
+                let forward_event = signal_count.to_forward_event(event);
+
+                let cancel_reason = match event {
+                    #[cfg(unix)]
+                    SignalEvent::Hangup | SignalEvent::Term => CancelReason::Signal,
+                    SignalEvent::Interrupt => CancelReason::Interrupt,
+                };
 
                 Err(InternalError::SignalCanceled(
-                    self.begin_cancel(CancelReason::Signal).err(),
+                    forward_event,
+                    self.begin_cancel(cancel_reason).err(),
                 ))
             }
         }
+    }
+
+    fn increment_signal_count(&mut self) -> SignalCount {
+        let new_count = match self.signal_count {
+            None => SignalCount::Once,
+            Some(SignalCount::Once) => SignalCount::Twice,
+            Some(SignalCount::Twice) => {
+                // The process was signaled 3 times. Time to panic.
+                panic!("Signaled 3 times, exiting immediately");
+            }
+        };
+        self.signal_count = Some(new_count);
+        new_count
     }
 
     /// Begin cancellation of a test run. Report it if the current cancel state is less than
@@ -1052,7 +1137,7 @@ enum InternalTestEvent<'a> {
 enum InternalError<E> {
     Error(E),
     TestFailureCanceled(Option<E>),
-    SignalCanceled(Option<E>),
+    SignalCanceled(SignalForwardEvent, Option<E>),
 }
 
 /// Whether a test passed, failed or an error occurred while executing the test.
@@ -1188,18 +1273,40 @@ fn cmd_pre_exec(cmd: &mut tokio::process::Command) {
     };
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminateMode {
+    Timeout,
+    Signal(SignalForwardEvent),
+}
+
 #[cfg(unix)]
-async fn terminate_child(child: &mut Child) {
-    use libc::{SIGKILL, SIGTERM};
+async fn terminate_child(
+    child: &mut Child,
+    mode: TerminateMode,
+    forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+) {
+    use libc::{SIGHUP, SIGINT, SIGKILL, SIGTERM};
 
     match child.id() {
         Some(pid) => {
             let pid = pid as i32;
+            let term_signal = match mode {
+                TerminateMode::Timeout => SIGTERM,
+                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Hangup)) => SIGHUP,
+                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Term)) => SIGTERM,
+                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Interrupt)) => SIGINT,
+                TerminateMode::Signal(SignalForwardEvent::Twice) => SIGKILL,
+            };
             unsafe {
                 // We set up a process group in cmd_pre_exec -- now
                 // send a signal to that group.
-                libc::kill(-pid, SIGTERM)
+                libc::kill(-pid, term_signal)
             };
+
+            if term_signal == SIGKILL {
+                // SIGKILL guarantees the process group is dead.
+                return;
+            }
 
             // give the process a grace period of 10s
             let sleep = tokio::time::sleep(Duration::from_secs(10));
@@ -1209,14 +1316,24 @@ async fn terminate_child(child: &mut Child) {
                 _ = child.wait() => {
                     // The process exited.
                 }
+                recv = forward_receiver.recv() => {
+                    // The sender stays open longer than the whole loop, and the buffer is big
+                    // enough for all messages ever sent through this channel, so a RecvError
+                    // should never happen.
+                    let _ = recv.expect("a RecvError should never happen here");
+
+                    // Receiving a signal while in this state always means kill immediately.
+                    unsafe {
+                        // Send SIGKILL to the entire process group.
+                        libc::kill(-pid, SIGKILL);
+                    }
+                }
                 _ = sleep => {
                     // The process didn't exit -- need to do a hard shutdown.
                     unsafe {
                         // Send SIGKILL to the entire process group.
                         libc::kill(-pid, SIGKILL);
                     }
-                    // start_kill does SIGKILL under the hood, so we
-                    // don't need to call it down below.
                 }
             }
         }
@@ -1227,7 +1344,11 @@ async fn terminate_child(child: &mut Child) {
 }
 
 #[cfg(not(unix))]
-async fn terminate_child(child: &mut Child) {
+async fn terminate_child(
+    child: &mut Child,
+    _mode: TerminateMode,
+    _forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+) {
     let _ = child.start_kill();
 }
 

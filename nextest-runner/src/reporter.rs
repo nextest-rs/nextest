@@ -742,6 +742,7 @@ impl<'a> TestReporterImpl<'a> {
                     CancelReason::TestFailure => "test failure",
                     CancelReason::ReportError => "error",
                     CancelReason::Signal => "signal",
+                    CancelReason::Interrupt => "interrupt",
                 };
 
                 writeln!(
@@ -1325,8 +1326,11 @@ pub enum CancelReason {
     /// An error occurred while reporting results.
     ReportError,
 
-    /// A termination signal was received.
+    /// A termination signal (on Unix, SIGTERM or SIGHUP) was received.
     Signal,
+
+    /// An interrupt (on Unix, Ctrl-C) was received.
+    Interrupt,
 }
 
 #[derive(Debug, Default)]
