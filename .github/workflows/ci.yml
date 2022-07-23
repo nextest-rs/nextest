@@ -116,6 +116,8 @@ jobs:
         with:
           command: test
           args: --doc ${{ matrix.features }}
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
       - name: Test with locally built nextest
         uses: actions-rs/cargo@v1
         with:
