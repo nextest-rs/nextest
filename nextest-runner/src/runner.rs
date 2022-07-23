@@ -30,6 +30,7 @@ use std::{
 };
 use tokio::{
     io::{AsyncReadExt, BufReader},
+    process::Child,
     runtime::Runtime,
     sync::mpsc::UnboundedSender,
 };
@@ -416,6 +417,8 @@ impl<'a> TestRunnerInner<'a> {
         // Debug environment variable for testing.
         cmd.env("__NEXTEST_ATTEMPT", format!("{}", attempt));
         cmd.stdin(Stdio::null());
+        #[cfg(unix)]
+        cmd_pre_exec(&mut cmd);
 
         if !self.no_capture {
             // Capture stdout and stderr.
@@ -506,50 +509,9 @@ impl<'a> TestRunnerInner<'a> {
                                 // attempt to terminate the slow test.
                                 // as there is a race between shutting down a slow test and its own completion
                                 // we silently ignore errors to avoid printing false warnings.
-
-                                #[cfg(unix)]
-                                let exited = {
-                                    use libc::SIGTERM;
-
-                                    match child.id() {
-                                        Some(pid) => {
-                                            let pid = pid as i32;
-                                            unsafe { libc::kill(pid, SIGTERM) };
-
-                                            // give the process a grace period of 10s
-                                            let sleep = tokio::time::sleep(Duration::from_secs(10));
-                                            tokio::select! {
-                                                biased;
-
-                                                _ = child.wait() => {
-                                                    // The process exited.
-                                                    true
-                                                }
-                                                _ = sleep => {
-                                                    // The process didn't exit -- need to do a hard shutdown.
-                                                    false
-                                                }
-                                            }
-
-                                        }
-                                        None => {
-                                            // This means that the process has already exited.
-                                            true
-                                        }
-                                    }
-                                };
-
-                                #[cfg(not(unix))]
-                                let exited = false;
-
-                                if !exited {
-                                    let _ = child.start_kill();
-                                }
-
+                                terminate_child(&mut child).await;
                                 status = Some(ExecutionResult::Timeout);
-                                // Don't break here to give the wait task a chance to finish. This is
-                                // required because we want just one reference to the Arc to remain for
-                                // the try_unwrap call below.
+                                // Don't break here to give the wait task a chance to finish.
                             }
                         }
                     }
@@ -1206,6 +1168,67 @@ fn configure_handle_inheritance_impl(
     _no_capture: bool,
 ) -> Result<(), ConfigureHandleInheritanceError> {
     Ok(())
+}
+
+/// Pre-execution configuration on Unix.
+///
+/// This sets up the process group ID for now.
+#[cfg(unix)]
+fn cmd_pre_exec(cmd: &mut tokio::process::Command) {
+    unsafe {
+        cmd.pre_exec(|| {
+            let pid = libc::getpid();
+            if libc::setpgid(pid, pid) == 0 {
+                Ok(())
+            } else {
+                // This is an error.
+                Err(std::io::Error::last_os_error())
+            }
+        })
+    };
+}
+
+#[cfg(unix)]
+async fn terminate_child(child: &mut Child) {
+    use libc::{SIGKILL, SIGTERM};
+
+    match child.id() {
+        Some(pid) => {
+            let pid = pid as i32;
+            unsafe {
+                // We set up a process group in cmd_pre_exec -- now
+                // send a signal to that group.
+                libc::kill(-pid, SIGTERM)
+            };
+
+            // give the process a grace period of 10s
+            let sleep = tokio::time::sleep(Duration::from_secs(10));
+            tokio::select! {
+                biased;
+
+                _ = child.wait() => {
+                    // The process exited.
+                }
+                _ = sleep => {
+                    // The process didn't exit -- need to do a hard shutdown.
+                    unsafe {
+                        // Send SIGKILL to the entire process group.
+                        libc::kill(-pid, SIGKILL);
+                    }
+                    // start_kill does SIGKILL under the hood, so we
+                    // don't need to call it down below.
+                }
+            }
+        }
+        None => {
+            // This means that the process has already exited.
+        }
+    }
+}
+
+#[cfg(not(unix))]
+async fn terminate_child(child: &mut Child) {
+    let _ = child.start_kill();
 }
 
 #[cfg(test)]
