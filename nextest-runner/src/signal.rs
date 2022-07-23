@@ -88,19 +88,19 @@ mod imp {
                 tokio::select! {
                     recv = self.sigint.signal.recv(), if !self.sigint.done => {
                         match recv {
-                            Some(()) => break Some(SignalEvent::Interrupted),
+                            Some(()) => break Some(SignalEvent::Interrupt),
                             None => self.sigint.done = true,
                         }
                     }
                     recv = self.sighup.signal.recv(), if !self.sighup.done => {
                         match recv {
-                            Some(()) => break Some(SignalEvent::Interrupted),
+                            Some(()) => break Some(SignalEvent::Hangup),
                             None => self.sighup.done = true,
                         }
                     }
                     recv = self.sigterm.signal.recv(), if !self.sigterm.done => {
                         match recv {
-                            Some(()) => break Some(SignalEvent::Interrupted),
+                            Some(()) => break Some(SignalEvent::Term),
                             None => self.sigterm.done = true,
                         }
                     }
@@ -155,7 +155,7 @@ mod imp {
             }
 
             match self.ctrl_c.recv().await {
-                Some(()) => Some(SignalEvent::Interrupted),
+                Some(()) => Some(SignalEvent::Interrupt),
                 None => {
                     self.ctrl_c_done = true;
                     None
@@ -166,7 +166,11 @@ mod imp {
 }
 
 // Just a single-valued enum for now, might have more information in the future.
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SignalEvent {
-    Interrupted,
+    #[cfg(unix)]
+    Hangup,
+    #[cfg(unix)]
+    Term,
+    Interrupt,
 }
