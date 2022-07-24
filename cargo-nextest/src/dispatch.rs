@@ -914,11 +914,13 @@ impl App {
     fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
         check_experimental_filtering(base.output);
 
+        let cargo_configs = CargoConfigs::new(&base.cargo_opts.config)
+            .map_err(|err| ExpectedError::CargoConfigsConstructError { err })?;
+
         Ok(Self {
             base,
             build_filter,
-            cargo_configs: CargoConfigs::new()
-                .map_err(|err| ExpectedError::CargoConfigsConstructError { err })?,
+            cargo_configs,
             target_triple: OnceCell::new(),
             target_runner: OnceCell::new(),
         })
@@ -1321,6 +1323,7 @@ mod tests {
             "cargo nextest list --archive-file my-archive.tar.zst --extract-to my-path --extract-overwrite",
             "cargo nextest list --archive-file my-archive.tar.zst --persist-extract-tempdir",
             "cargo nextest list --archive-file my-archive.tar.zst --workspace-remap foo",
+            "cargo nextest list --archive-file my-archive.tar.zst --config target.'cfg(all())'.runner=\"my-runner\"",
             // ---
             // Filter expressions
             // ---

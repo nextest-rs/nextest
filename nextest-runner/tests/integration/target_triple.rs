@@ -42,7 +42,12 @@ fn parses_cargo_env() {
 // TODO: tests involving Cargo configs -- ensure the current dir is used for that.
 
 fn target_triple(target_cli_option: Option<&str>) -> Result<Option<TargetTriple>> {
-    let configs = CargoConfigs::new_with_isolation(&workspace_root(), &workspace_root()).unwrap();
+    let configs = CargoConfigs::new_with_isolation(
+        Vec::<String>::new(),
+        &workspace_root(),
+        &workspace_root(),
+    )
+    .unwrap();
     let triple = TargetTriple::find(&configs, target_cli_option)?;
     Ok(triple)
 }

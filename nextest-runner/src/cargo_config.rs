@@ -71,12 +71,12 @@ impl TargetTriple {
     }
 
     fn from_cargo_configs(cargo_configs: &CargoConfigs) -> Result<Option<Self>, TargetTripleError> {
-        for (path, config) in cargo_configs.discovered_configs()? {
+        for (source, config) in cargo_configs.discovered_configs()? {
             if let Some(triple) = &config.build.target {
                 return Ok(Some(TargetTriple {
                     triple: triple.to_owned(),
                     source: TargetTripleSource::CargoConfig {
-                        path: path.to_owned(),
+                        source: source.clone(),
                     },
                 }));
             }
@@ -97,10 +97,11 @@ pub enum TargetTripleSource {
     /// The target triple was defined by the `CARGO_BUILD_TARGET` env var.
     Env,
 
-    /// The platform runner was defined through a `.cargo/config.toml` or `.cargo/config` file.
+    /// The platform runner was defined through a `.cargo/config.toml` or `.cargo/config` file, or a
+    /// `--config` CLI option.
     CargoConfig {
-        /// The path to the configuration file.
-        path: Utf8PathBuf,
+        /// The source of the configuration.
+        source: CargoConfigSource,
     },
 }
 
@@ -113,11 +114,32 @@ impl fmt::Display for TargetTripleSource {
             Self::Env => {
                 write!(f, "environment variable `CARGO_BUILD_TARGET`")
             }
-            Self::CargoConfig { path } => {
+            Self::CargoConfig {
+                source: CargoConfigSource::CliOption,
+            } => {
+                write!(f, "`build.target` specified by `--config`")
+            }
+
+            Self::CargoConfig {
+                source: CargoConfigSource::File(path),
+            } => {
                 write!(f, "`build.target` within `{path}`")
             }
         }
     }
+}
+
+/// The source of a Cargo config.
+///
+/// A Cargo config can be specified as a CLI option (unstable) or a `.cargo/config.toml` file on
+/// disk.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CargoConfigSource {
+    /// A Cargo config provided as a CLI option.
+    CliOption,
+
+    /// A Cargo config provided as a file on disk.
+    File(Utf8PathBuf),
 }
 
 /// A store for Cargo config files discovered from disk.
@@ -126,21 +148,27 @@ impl fmt::Display for TargetTripleSource {
 /// discovery.
 #[derive(Debug)]
 pub struct CargoConfigs {
+    cli_configs: Vec<(CargoConfigSource, CargoConfig)>,
     start_search_at: Utf8PathBuf,
     terminate_search_at: Option<Utf8PathBuf>,
-    discovered: OnceCell<Vec<(Utf8PathBuf, CargoConfig)>>,
+    discovered: OnceCell<Vec<(CargoConfigSource, CargoConfig)>>,
 }
 
 impl CargoConfigs {
     /// Discover Cargo config files using the same algorithm that Cargo uses.
-    pub fn new() -> Result<Self, CargoConfigsConstructError> {
+    pub fn new(
+        cli_configs: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Result<Self, CargoConfigsConstructError> {
+        let cli_configs = parse_cli_configs(cli_configs.into_iter())?;
         let start_search_at = std::env::current_dir()
             .map_err(CargoConfigsConstructError::GetCurrentDir)
             .and_then(|cwd| {
                 Utf8PathBuf::try_from(cwd)
                     .map_err(CargoConfigsConstructError::CurrentDirInvalidUtf8)
             })?;
+
         Ok(Self {
+            cli_configs,
             start_search_at,
             terminate_search_at: None,
             discovered: OnceCell::new(),
@@ -152,10 +180,14 @@ impl CargoConfigs {
     /// Not part of the public API, for testing only.
     #[doc(hidden)]
     pub fn new_with_isolation(
+        cli_configs: impl IntoIterator<Item = impl AsRef<str>>,
         start_search_at: &Utf8Path,
         terminate_search_at: &Utf8Path,
-    ) -> Result<Self, CargoConfigSearchError> {
+    ) -> Result<Self, CargoConfigsConstructError> {
+        let cli_configs = parse_cli_configs(cli_configs.into_iter())?;
+
         Ok(Self {
+            cli_configs,
             start_search_at: start_search_at.to_owned(),
             terminate_search_at: Some(terminate_search_at.to_owned()),
             discovered: OnceCell::new(),
@@ -165,24 +197,43 @@ impl CargoConfigs {
     pub(crate) fn discovered_configs(
         &self,
     ) -> Result<
-        impl Iterator<Item = (&Utf8Path, &CargoConfig)> + DoubleEndedIterator + '_,
+        impl Iterator<Item = &(CargoConfigSource, CargoConfig)> + DoubleEndedIterator + '_,
         CargoConfigSearchError,
     > {
-        let iter = self
+        let cli_iter = self.cli_configs.iter();
+        let file_iter = self
             .discovered
             .get_or_try_init(|| {
                 discover_impl(&self.start_search_at, self.terminate_search_at.as_deref())
             })?
-            .iter()
-            .map(|(path, config)| (path.as_path(), config));
-        Ok(iter)
+            .iter();
+        Ok(cli_iter.chain(file_iter))
     }
+}
+
+fn parse_cli_configs(
+    cli_configs: impl Iterator<Item = impl AsRef<str>>,
+) -> Result<Vec<(CargoConfigSource, CargoConfig)>, CargoConfigsConstructError> {
+    cli_configs
+        .into_iter()
+        .map(|config_str| {
+            // Each cargo config is expected to be a valid TOML file.
+            let config_str = config_str.as_ref();
+            let config = toml::from_str(config_str).map_err(|error| {
+                CargoConfigsConstructError::CliConfigParseError {
+                    config_str: config_str.to_owned(),
+                    error,
+                }
+            })?;
+            Ok((CargoConfigSource::CliOption, config))
+        })
+        .collect()
 }
 
 fn discover_impl(
     start_search_at: &Utf8Path,
     terminate_search_at: Option<&Utf8Path>,
-) -> Result<Vec<(Utf8PathBuf, CargoConfig)>, CargoConfigSearchError> {
+) -> Result<Vec<(CargoConfigSource, CargoConfig)>, CargoConfigSearchError> {
     fn read_config_dir(dir: &mut Utf8PathBuf) -> Option<Utf8PathBuf> {
         // Check for config before config.toml, same as cargo does
         dir.push("config");
@@ -263,7 +314,7 @@ fn discover_impl(
                     error,
                 }
             })?;
-            Ok((path, config))
+            Ok((CargoConfigSource::File(path), config))
         })
         .collect::<Result<Vec<_>, CargoConfigSearchError>>()?;
 
@@ -310,26 +361,58 @@ mod tests {
         let dir_foo_bar_path = dir_foo_path.join("bar");
 
         assert_eq!(
-            find_target_triple(&dir_foo_bar_path, &dir_path),
+            find_target_triple(&[], &dir_foo_bar_path, &dir_path),
             Some(TargetTriple {
                 triple: "x86_64-unknown-linux-gnu".into(),
                 source: TargetTripleSource::CargoConfig {
-                    path: dir_path.join("foo/bar/.cargo/config.toml"),
+                    source: CargoConfigSource::File(dir_path.join("foo/bar/.cargo/config.toml")),
                 },
             }),
         );
 
         assert_eq!(
-            find_target_triple(&dir_foo_path, &dir_path),
+            find_target_triple(&[], &dir_foo_path, &dir_path),
             Some(TargetTriple {
                 triple: "x86_64-pc-windows-msvc".into(),
                 source: TargetTripleSource::CargoConfig {
-                    path: dir_path.join("foo/.cargo/config"),
+                    source: CargoConfigSource::File(dir_path.join("foo/.cargo/config")),
                 },
             }),
         );
 
-        assert_eq!(find_target_triple(&dir_path, &dir_path), None);
+        assert_eq!(
+            find_target_triple(
+                &["build.target=\"aarch64-unknown-linux-gnu\""],
+                &dir_foo_bar_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                triple: "aarch64-unknown-linux-gnu".into(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                },
+            })
+        );
+
+        // --config arguments are followed left to right.
+        assert_eq!(
+            find_target_triple(
+                &[
+                    "build.target=\"aarch64-unknown-linux-gnu\"",
+                    "build.target=\"x86_64-unknown-linux-musl\""
+                ],
+                &dir_foo_bar_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                triple: "aarch64-unknown-linux-gnu".into(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                },
+            })
+        );
+
+        assert_eq!(find_target_triple(&[], &dir_path, &dir_path), None);
     }
 
     fn setup_temp_dir() -> Result<TempDir> {
@@ -357,11 +440,13 @@ mod tests {
     }
 
     fn find_target_triple(
+        cli_configs: &[&str],
         start_search_at: &Utf8Path,
         terminate_search_at: &Utf8Path,
     ) -> Option<TargetTriple> {
         let configs =
-            CargoConfigs::new_with_isolation(start_search_at, terminate_search_at).unwrap();
+            CargoConfigs::new_with_isolation(cli_configs, start_search_at, terminate_search_at)
+                .unwrap();
         TargetTriple::from_cargo_configs(&configs).unwrap()
     }
 
