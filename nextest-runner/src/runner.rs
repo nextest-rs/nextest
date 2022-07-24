@@ -1346,6 +1346,8 @@ mod imp {
     /// This sets up the process group ID for now.
     pub(super) fn cmd_pre_exec(cmd: &mut tokio::process::Command) {
         unsafe {
+            // TODO: replace with process_group once Rust 1.64 is out -- that will let this use the
+            // posix_spawn fast path, which is significantly faster (0.5 seconds vs 1.5 on clap).
             cmd.pre_exec(|| {
                 let pid = libc::getpid();
                 if libc::setpgid(pid, pid) == 0 {
