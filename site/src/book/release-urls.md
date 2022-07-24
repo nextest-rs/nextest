@@ -20,6 +20,7 @@ The `{platform}` identifier is:
 For convenience, the following shortcuts are defined:
 
 * `linux` points to `x86_64-unknown-linux-gnu.tar.gz`
+* `linux-arm` points to `aarch64-unknown-linux-gnu.tar.gz`
 * `mac` points to `universal-apple-darwin.tar.gz`
 * `windows` points to `x86_64-pc-windows-msvc.zip`
 * `windows-tar` points to `x86_64-pc-windows-msvc.tar.gz`
