@@ -22,7 +22,12 @@ fn default() -> &'static target_spec::Platform {
 }
 
 fn runner_for_target(triple: Option<&str>) -> Result<TargetRunner> {
-    let configs = CargoConfigs::new_with_isolation(&workspace_root(), &workspace_root()).unwrap();
+    let configs = CargoConfigs::new_with_isolation(
+        Vec::<String>::new(),
+        &workspace_root(),
+        &workspace_root(),
+    )
+    .unwrap();
     let triple = TargetTriple::find(&configs, triple)?;
     Ok(TargetRunner::new(&configs, triple.as_ref())?)
 }
@@ -77,7 +82,9 @@ fn parse_triple(triple: &'static str) -> target_spec::Platform {
 fn parses_cargo_config_exact() {
     let workspace_root = workspace_root();
     let windows = parse_triple("x86_64-pc-windows-gnu");
-    let configs = CargoConfigs::new_with_isolation(&workspace_root, &workspace_root).unwrap();
+    let configs =
+        CargoConfigs::new_with_isolation(Vec::<String>::new(), &workspace_root, &workspace_root)
+            .unwrap();
     let runner = PlatformRunner::find_config(&configs, windows)
         .unwrap()
         .unwrap();
@@ -90,7 +97,9 @@ fn parses_cargo_config_exact() {
 fn disregards_non_matching() {
     let workspace_root = workspace_root();
     let windows = parse_triple("x86_64-unknown-linux-gnu");
-    let configs = CargoConfigs::new_with_isolation(&workspace_root, &workspace_root).unwrap();
+    let configs =
+        CargoConfigs::new_with_isolation(Vec::<String>::new(), &workspace_root, &workspace_root)
+            .unwrap();
     assert!(PlatformRunner::find_config(&configs, windows)
         .unwrap()
         .is_none());
@@ -100,7 +109,9 @@ fn disregards_non_matching() {
 fn parses_cargo_config_cfg() {
     let workspace_root = workspace_root();
     let android = parse_triple("aarch64-linux-android");
-    let configs = CargoConfigs::new_with_isolation(&workspace_root, &workspace_root).unwrap();
+    let configs =
+        CargoConfigs::new_with_isolation(Vec::<String>::new(), &workspace_root, &workspace_root)
+            .unwrap();
     let runner = PlatformRunner::find_config(&configs, android)
         .unwrap()
         .unwrap();

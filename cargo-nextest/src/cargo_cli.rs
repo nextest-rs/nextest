@@ -125,9 +125,11 @@ pub(crate) struct CargoOptions {
     #[clap(long, group = "cargo-opts")]
     offline: bool,
 
+    // NOTE: this does not conflict with reuse build opts since we let target.runner be specified
+    // this way
     /// Override a configuration value (unstable)
-    #[clap(long, value_name = "KEY=VALUE", group = "cargo-opts")]
-    config: Vec<String>,
+    #[clap(long, value_name = "KEY=VALUE")]
+    pub(crate) config: Vec<String>,
 
     /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
     #[clap(short = 'Z', value_name = "FLAG", group = "cargo-opts")]

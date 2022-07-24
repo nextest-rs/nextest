@@ -4,7 +4,7 @@
 //! Support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 
 use crate::{
-    cargo_config::{CargoConfigs, Runner, TargetTriple},
+    cargo_config::{CargoConfigSource, CargoConfigs, Runner, TargetTriple},
     errors::TargetRunnerError,
 };
 use camino::Utf8PathBuf;
@@ -147,14 +147,14 @@ impl PlatformRunner {
         // a runner that matches our target triple, we need to actually find
         // all the matches, but in reverse order as the closer the config is
         // to our current working directory, the higher precedence it has
-        'config: for (path, config) in configs.discovered_configs()?.into_iter().rev() {
+        'config: for (source, config) in configs.discovered_configs()?.into_iter().rev() {
             if let Some(targets) = &config.target {
                 // First lookup by the exact triple, as that one always takes precedence
                 if let Some(parent) = targets.get(target.triple_str()) {
                     if let Some(runner) = &parent.runner {
                         target_runner = Some(Self::parse_runner(
                             PlatformRunnerSource::CargoConfig {
-                                path: path.to_owned(),
+                                source: source.clone(),
                                 target_table: target.triple_str().into(),
                             },
                             runner.clone(),
@@ -180,7 +180,7 @@ impl PlatformRunner {
                     if expr.eval(&target) == Some(true) {
                         target_runner = Some(Self::parse_runner(
                             PlatformRunnerSource::CargoConfig {
-                                path: path.to_owned(),
+                                source: source.clone(),
                                 target_table: cfg.clone(),
                             },
                             runner.clone(),
@@ -266,10 +266,11 @@ pub enum PlatformRunnerSource {
     /// The platform runner was defined by this environment variable.
     Env(String),
 
-    /// The platform runner was defined through a `.cargo/config.toml` or `.cargo/config` file.
+    /// The platform runner was defined through a `.cargo/config.toml` or `.cargo/config` file, or
+    /// via `--config` (unstable).
     CargoConfig {
-        /// The path to the configuration file.
-        path: Utf8PathBuf,
+        /// The configuration source.
+        source: CargoConfigSource,
 
         /// The table name within `target` that was used.
         ///
@@ -286,7 +287,16 @@ impl fmt::Display for PlatformRunnerSource {
             Self::Env(var) => {
                 write!(f, "environment variable `{var}`")
             }
-            Self::CargoConfig { path, target_table } => {
+            Self::CargoConfig {
+                source: CargoConfigSource::CliOption,
+                target_table,
+            } => {
+                write!(f, "`target.{target_table}.runner` specified by `--config`")
+            }
+            Self::CargoConfig {
+                source: CargoConfigSource::File(path),
+                target_table,
+            } => {
                 write!(f, "`target.{target_table}.runner` within `{path}`")
             }
         }
@@ -314,6 +324,7 @@ mod tests {
         assert_eq!(
             find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &[],
                 &dir_foo_bar_path,
                 &dir_path,
             ),
@@ -321,7 +332,7 @@ mod tests {
                 runner_binary: "wine".into(),
                 args: vec!["--test-arg".into()],
                 source: PlatformRunnerSource::CargoConfig {
-                    path: dir_path.join("foo/bar/.cargo/config.toml"),
+                    source: CargoConfigSource::File(dir_path.join("foo/bar/.cargo/config.toml")),
                     target_table: "x86_64-pc-windows-msvc".into()
                 },
             }),
@@ -330,6 +341,7 @@ mod tests {
         assert_eq!(
             find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
+                &[],
                 &dir_foo_bar_path,
                 &dir_path,
             ),
@@ -337,7 +349,7 @@ mod tests {
                 runner_binary: "wine2".into(),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
-                    path: dir_path.join("foo/bar/.cargo/config.toml"),
+                    source: CargoConfigSource::File(dir_path.join("foo/bar/.cargo/config.toml")),
                     target_table: "cfg(windows)".into()
                 },
             }),
@@ -346,6 +358,7 @@ mod tests {
         assert_eq!(
             find_config(
                 Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
+                &[],
                 &dir_foo_bar_path,
                 &dir_path,
             ),
@@ -353,7 +366,7 @@ mod tests {
                 runner_binary: "unix-runner".into(),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
-                    path: dir_path.join(".cargo/config"),
+                    source: CargoConfigSource::File(dir_path.join(".cargo/config")),
                     target_table: "cfg(unix)".into()
                 },
             }),
@@ -365,6 +378,7 @@ mod tests {
         assert_eq!(
             find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &[],
                 &dir_foo_path,
                 &dir_path,
             ),
@@ -372,7 +386,7 @@ mod tests {
                 runner_binary: "parent-wine".into(),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
-                    path: dir_path.join(".cargo/config"),
+                    source: CargoConfigSource::File(dir_path.join(".cargo/config")),
                     target_table: "x86_64-pc-windows-msvc".into()
                 },
             }),
@@ -381,6 +395,7 @@ mod tests {
         assert_eq!(
             find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
+                &[],
                 &dir_foo_path,
                 &dir_path,
             ),
@@ -393,6 +408,7 @@ mod tests {
         assert_eq!(
             find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &[],
                 &dir_path,
                 &dir_path,
             ),
@@ -400,7 +416,7 @@ mod tests {
                 runner_binary: "parent-wine".into(),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
-                    path: dir_path.join(".cargo/config"),
+                    source: CargoConfigSource::File(dir_path.join(".cargo/config")),
                     target_table: "x86_64-pc-windows-msvc".into()
                 },
             }),
@@ -409,10 +425,117 @@ mod tests {
         assert_eq!(
             find_config(
                 Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
+                &[],
                 &dir_path,
                 &dir_path,
             ),
             None,
+        );
+
+        // ---
+        // CLI configs
+        // ---
+        assert_eq!(
+            find_config(
+                Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &["target.'cfg(windows)'.runner='windows-runner'"],
+                &dir_path,
+                &dir_path,
+            ),
+            Some(PlatformRunner {
+                runner_binary: "windows-runner".into(),
+                args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                    target_table: "cfg(windows)".into()
+                },
+            }),
+        );
+
+        assert_eq!(
+            find_config(
+                Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
+                &["target.'cfg(windows)'.runner='windows-runner'"],
+                &dir_path,
+                &dir_path,
+            ),
+            Some(PlatformRunner {
+                runner_binary: "windows-runner".into(),
+                args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                    target_table: "cfg(windows)".into()
+                },
+            }),
+        );
+
+        // cfg(unix) doesn't match this platform.
+        assert_eq!(
+            find_config(
+                Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &["target.'cfg(unix)'.runner='unix-runner'"],
+                &dir_path,
+                &dir_path,
+            ),
+            Some(PlatformRunner {
+                runner_binary: "parent-wine".into(),
+                args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    source: CargoConfigSource::File(dir_path.join(".cargo/config")),
+                    target_table: "x86_64-pc-windows-msvc".into()
+                },
+            }),
+        );
+
+        assert_eq!(
+            find_config(
+                Platform::new("x86_64-pc-windows-gnu", TargetFeatures::Unknown).unwrap(),
+                &["target.'cfg(unix)'.runner='unix-runner'"],
+                &dir_path,
+                &dir_path,
+            ),
+            None,
+        );
+
+        // Config is followed from left to right.
+        assert_eq!(
+            find_config(
+                Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &[
+                    "target.'cfg(windows)'.runner='windows-runner'",
+                    "target.'cfg(all())'.runner='all-runner'"
+                ],
+                &dir_path,
+                &dir_path,
+            ),
+            Some(PlatformRunner {
+                runner_binary: "windows-runner".into(),
+                args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                    target_table: "cfg(windows)".into()
+                },
+            }),
+        );
+
+        assert_eq!(
+            find_config(
+                Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
+                &[
+                    "target.'cfg(all())'.runner='all-runner'",
+                    "target.'cfg(windows)'.runner='windows-runner'",
+                ],
+                &dir_path,
+                &dir_path,
+            ),
+            Some(PlatformRunner {
+                runner_binary: "all-runner".into(),
+                args: vec![],
+                source: PlatformRunnerSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                    target_table: "cfg(all())".into()
+                },
+            }),
         );
     }
 
@@ -439,11 +562,13 @@ mod tests {
 
     fn find_config(
         platform: Platform,
+        cli_configs: &[&str],
         start_search_at: &Utf8Path,
         terminate_search_at: &Utf8Path,
     ) -> Option<PlatformRunner> {
         let configs =
-            CargoConfigs::new_with_isolation(start_search_at, terminate_search_at).unwrap();
+            CargoConfigs::new_with_isolation(cli_configs, start_search_at, terminate_search_at)
+                .unwrap();
         PlatformRunner::find_config(&configs, platform).unwrap()
     }
 

@@ -795,6 +795,17 @@ pub enum CargoConfigsConstructError {
     /// The current directory was invalid UTF-8.
     #[error("current directory is invalid UTF-8")]
     CurrentDirInvalidUtf8(#[source] FromPathBufError),
+
+    /// Parsing a CLI config option failed.
+    #[error("failed to parse --config option `{config_str}` as TOML")]
+    CliConfigParseError {
+        /// The CLI config option.
+        config_str: String,
+
+        /// The error that occurred trying to deserialize the config.
+        #[source]
+        error: toml::de::Error,
+    },
 }
 
 /// An error occurred while looking for Cargo configuration files.
