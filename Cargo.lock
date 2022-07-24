@@ -1121,6 +1121,7 @@ dependencies = [
  "tokio",
  "toml",
  "twox-hash",
+ "win32job",
  "windows",
  "zstd",
 ]
@@ -2408,6 +2409,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1c760f0d366a6c24a02ed7816e23e691f5d92291f94d15e836006fd11b04daf"
 dependencies = [
  "webpki",
+]
+
+[[package]]
+name = "win32job"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b2a14136f6c8be9146ac6345774ab32cb93e7985319b4a1b42abb663bd64235"
+dependencies = [
+ "thiserror",
+ "winapi",
 ]
 
 [[package]]

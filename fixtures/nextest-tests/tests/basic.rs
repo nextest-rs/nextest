@@ -167,6 +167,17 @@ fn test_slow_timeout_2() {
     std::thread::sleep(std::time::Duration::from_millis(1500));
 }
 
+#[cfg(any(unix, windows))]
+#[test]
+#[ignore]
+fn test_slow_timeout_subprocess() {
+    // Set a time greater than 5 seconds (that's the maximum amount the with_termination tests
+    // thinks tests should run for). Without job objects on Windows, the test wouldn't return until
+    // the sleep command exits.
+    let mut cmd = sleep_cmd(15);
+    cmd.output().unwrap();
+}
+
 #[test]
 fn test_result_failure() -> Result<(), std::io::Error> {
     Err(std::io::Error::new(
