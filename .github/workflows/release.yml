@@ -101,6 +101,8 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-18.04
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-18.04
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-18.04
           - target: x86_64-pc-windows-msvc
@@ -138,6 +140,7 @@ jobs:
           fi
     outputs:
       x86_64-linux-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu-tar }}
+      x86_64-linux-musl-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-musl-tar }}
       aarch64-linux-tar: ${{ steps.archive-output.outputs.aarch64-unknown-linux-gnu-tar }}
       windows-tar: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-tar }}
       windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
@@ -189,6 +192,7 @@ jobs:
             --release-url "https://github.com/nextest-rs/nextest/releases/${{ github.ref_name }}" \
             --archive-prefix "https://github.com/nextest-rs/nextest/releases/download/${{ github.ref_name }}" \
             --archive x86_64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-tar }} \
+            --archive x86_64-unknown-linux-musl:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-musl-tar }} \
             --archive aarch64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-linux-tar }} \
             --archive x86_64-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.windows-tar }} \
             --archive x86_64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.windows-zip }} \
@@ -198,6 +202,7 @@ jobs:
           mkdir out-dir
           ~/bin/mukti-bin generate-netlify out-dir \
             --alias linux=x86_64-unknown-linux-gnu:tar.gz \
+            --alias linux-musl=x86_64-unknown-linux-musl:tar.gz \
             --alias linux-arm=aarch64-unknown-linux-gnu:tar.gz \
             --alias windows=x86_64-pc-windows-msvc:zip \
             --alias windows-tar=x86_64-pc-windows-msvc:tar.gz \
