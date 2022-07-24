@@ -17,7 +17,7 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 - Nextest can now parse Cargo configs specified via the unstable `--config` option.
 
-- Nextest now publishes binaries for `aarch64-unknown-linux-gnu` and `x86_64-unknown-linux-musl`.
+- Nextest now publishes binaries for `aarch64-unknown-linux-gnu` ([#398]) and `x86_64-unknown-linux-musl` ([#399]). Thanks [messense] and [Teymour] for your first contributions!
 
 ### Fixed
 
@@ -25,6 +25,10 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 [process group]: https://en.wikipedia.org/wiki/Process_group
 [job object]: https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects
+[#398]: https://github.com/nextest-rs/nextest/pull/398
+[#399]: https://github.com/nextest-rs/nextest/pull/399
+[messense]: https://github.com/messense
+[Teymour]: https://github.com/teymour-aldridge
 
 ## [0.9.29-rc.1] - 2022-07-24
 
