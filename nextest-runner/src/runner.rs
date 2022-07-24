@@ -453,8 +453,11 @@ impl<'a> TestRunnerInner<'a> {
         // Debug environment variable for testing.
         cmd.env("__NEXTEST_ATTEMPT", format!("{}", attempt));
         cmd.stdin(Stdio::null());
-        #[cfg(unix)]
-        cmd_pre_exec(&mut cmd);
+        imp::cmd_pre_exec(&mut cmd);
+
+        // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
+        // best-effort thing.
+        let job = imp::Job::new().ok();
 
         if !self.no_capture {
             // Capture stdout and stderr.
@@ -463,6 +466,10 @@ impl<'a> TestRunnerInner<'a> {
         };
 
         let mut child = cmd.spawn()?;
+
+        // If assigning the child to the job fails, ignore this. This can happen if the process has
+        // exited.
+        let _ = imp::assign_process_to_job(&child, job.as_ref());
 
         let mut status: Option<ExecutionResult> = None;
         let slow_timeout = overrides.slow_timeout().unwrap_or(self.slow_timeout);
@@ -545,7 +552,7 @@ impl<'a> TestRunnerInner<'a> {
                                 // attempt to terminate the slow test.
                                 // as there is a race between shutting down a slow test and its own completion
                                 // we silently ignore errors to avoid printing false warnings.
-                                terminate_child(&mut child, TerminateMode::Timeout, forward_receiver).await;
+                                imp::terminate_child(&mut child, TerminateMode::Timeout, forward_receiver, job.as_ref()).await;
                                 status = Some(ExecutionResult::Timeout);
                                 // Don't break here to give the wait task a chance to finish.
                             }
@@ -557,7 +564,7 @@ impl<'a> TestRunnerInner<'a> {
                         // should never happen.
                         let forward_event = recv.expect("a RecvError should never happen here");
 
-                        terminate_child(&mut child, TerminateMode::Signal(forward_event), forward_receiver).await;
+                        imp::terminate_child(&mut child, TerminateMode::Signal(forward_event), forward_receiver, job.as_ref()).await;
                     }
                 };
             };
@@ -1208,148 +1215,234 @@ pub enum AbortStatus {
 pub fn configure_handle_inheritance(
     no_capture: bool,
 ) -> Result<(), ConfigureHandleInheritanceError> {
-    configure_handle_inheritance_impl(no_capture)
+    imp::configure_handle_inheritance_impl(no_capture)
 }
 
 #[cfg(windows)]
-fn configure_handle_inheritance_impl(
-    no_capture: bool,
-) -> Result<(), ConfigureHandleInheritanceError> {
+mod imp {
+    use super::*;
+    use win32job::JobError;
     use windows::Win32::{
         Foundation::{SetHandleInformation, HANDLE, HANDLE_FLAGS, HANDLE_FLAG_INHERIT},
-        System::Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
+        System::{
+            Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
+            JobObjects::TerminateJobObject,
+        },
     };
 
-    fn set_handle_inherit(handle: HANDLE, inherit: bool) -> windows::core::Result<()> {
-        let flags = if inherit { HANDLE_FLAG_INHERIT.0 } else { 0 };
-        unsafe {
-            if SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(flags)).as_bool() {
-                Ok(())
-            } else {
-                Err(windows::core::Error::from_win32())
+    pub(super) fn configure_handle_inheritance_impl(
+        no_capture: bool,
+    ) -> Result<(), ConfigureHandleInheritanceError> {
+        fn set_handle_inherit(handle: HANDLE, inherit: bool) -> windows::core::Result<()> {
+            let flags = if inherit { HANDLE_FLAG_INHERIT.0 } else { 0 };
+            unsafe {
+                if SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(flags))
+                    .as_bool()
+                {
+                    Ok(())
+                } else {
+                    Err(windows::core::Error::from_win32())
+                }
             }
+        }
+
+        unsafe {
+            let stdin = GetStdHandle(STD_INPUT_HANDLE)?;
+            // Never inherit stdin.
+            set_handle_inherit(stdin, false)?;
+
+            // Inherit stdout and stderr if and only if no_capture is true.
+
+            let stdout = GetStdHandle(STD_OUTPUT_HANDLE)?;
+            set_handle_inherit(stdout, no_capture)?;
+            let stderr = GetStdHandle(STD_ERROR_HANDLE)?;
+            set_handle_inherit(stderr, no_capture)?;
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn cmd_pre_exec(_cmd: &mut tokio::process::Command) {
+        // TODO: set process group on Windows for better ctrl-C handling.
+    }
+
+    /// Wrapper around a Job that implements Send and Sync.
+    #[derive(Debug)]
+    pub(super) struct Job {
+        inner: win32job::Job,
+    }
+
+    impl Job {
+        pub(super) fn new() -> Result<Self, JobError> {
+            Ok(Self {
+                inner: win32job::Job::create()?,
+            })
         }
     }
 
-    unsafe {
-        let stdin = GetStdHandle(STD_INPUT_HANDLE)?;
-        // Never inherit stdin.
-        set_handle_inherit(stdin, false)?;
+    // https://github.com/ohadravid/win32job-rs/issues/1
+    unsafe impl Send for Job {}
+    unsafe impl Sync for Job {}
 
-        // Inherit stdout and stderr if and only if no_capture is true.
+    pub(super) fn assign_process_to_job(
+        child: &tokio::process::Child,
+        job: Option<&Job>,
+    ) -> Result<(), JobError> {
+        // NOTE: Ideally we'd suspend the process before using ResumeThread for this, but that's currently
+        // not possible due to https://github.com/rust-lang/rust/issues/96723 not being stable.
+        if let Some(job) = job {
+            let handle = match child.raw_handle() {
+                Some(handle) => handle,
+                None => {
+                    // If the handle is missing, the child has exited. Ignore this.
+                    return Ok(());
+                }
+            };
 
-        let stdout = GetStdHandle(STD_OUTPUT_HANDLE)?;
-        set_handle_inherit(stdout, no_capture)?;
-        let stderr = GetStdHandle(STD_ERROR_HANDLE)?;
-        set_handle_inherit(stderr, no_capture)?;
+            job.inner.assign_process(handle)?;
+        }
+
+        Ok(())
     }
 
-    Ok(())
-}
-
-// This is a no-op on other platforms.
-#[cfg(not(windows))]
-fn configure_handle_inheritance_impl(
-    _no_capture: bool,
-) -> Result<(), ConfigureHandleInheritanceError> {
-    Ok(())
-}
-
-/// Pre-execution configuration on Unix.
-///
-/// This sets up the process group ID for now.
-#[cfg(unix)]
-fn cmd_pre_exec(cmd: &mut tokio::process::Command) {
-    unsafe {
-        cmd.pre_exec(|| {
-            let pid = libc::getpid();
-            if libc::setpgid(pid, pid) == 0 {
-                Ok(())
-            } else {
-                // This is an error.
-                Err(std::io::Error::last_os_error())
+    pub(super) async fn terminate_child(
+        child: &mut Child,
+        mode: TerminateMode,
+        _forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+        job: Option<&Job>,
+    ) {
+        // Ignore signal events since Windows propagates them to child processes (this may change if
+        // we start assigning processes to groups on Windows).
+        if mode != TerminateMode::Timeout {
+            return;
+        }
+        if let Some(job) = job {
+            let handle = job.inner.handle();
+            unsafe {
+                // Ignore the error here -- it's likely due to the process exiting.
+                // Note: 1 is the exit code returned by Windows.
+                TerminateJobObject(HANDLE(handle as isize), 1);
             }
-        })
-    };
+        }
+        // Start killing the process directly for good measure.
+        let _ = child.start_kill();
+    }
+}
+
+#[cfg(unix)]
+mod imp {
+    use super::*;
+    use libc::{SIGHUP, SIGINT, SIGKILL, SIGTERM};
+
+    // This is a no-op on non-windows platforms.
+    pub(super) fn configure_handle_inheritance_impl(
+        _no_capture: bool,
+    ) -> Result<(), ConfigureHandleInheritanceError> {
+        Ok(())
+    }
+
+    /// Pre-execution configuration on Unix.
+    ///
+    /// This sets up the process group ID for now.
+    pub(super) fn cmd_pre_exec(cmd: &mut tokio::process::Command) {
+        unsafe {
+            cmd.pre_exec(|| {
+                let pid = libc::getpid();
+                if libc::setpgid(pid, pid) == 0 {
+                    Ok(())
+                } else {
+                    // This is an error.
+                    Err(std::io::Error::last_os_error())
+                }
+            })
+        };
+    }
+
+    #[derive(Debug)]
+    pub(super) struct Job(());
+
+    impl Job {
+        pub(super) fn new() -> Result<Self, Infallible> {
+            Ok(Self(()))
+        }
+    }
+
+    pub(super) fn assign_process_to_job(
+        _child: &tokio::process::Child,
+        _job: Option<&Job>,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+
+    pub(super) async fn terminate_child(
+        child: &mut Child,
+        mode: TerminateMode,
+        forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+        _job: Option<&Job>,
+    ) {
+        match child.id() {
+            Some(pid) => {
+                let pid = pid as i32;
+                let term_signal = match mode {
+                    TerminateMode::Timeout => SIGTERM,
+                    TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Hangup)) => SIGHUP,
+                    TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Term)) => SIGTERM,
+                    TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Interrupt)) => {
+                        SIGINT
+                    }
+                    TerminateMode::Signal(SignalForwardEvent::Twice) => SIGKILL,
+                };
+                unsafe {
+                    // We set up a process group in cmd_pre_exec -- now
+                    // send a signal to that group.
+                    libc::kill(-pid, term_signal)
+                };
+
+                if term_signal == SIGKILL {
+                    // SIGKILL guarantees the process group is dead.
+                    return;
+                }
+
+                // give the process a grace period of 10s
+                let sleep = tokio::time::sleep(Duration::from_secs(10));
+                tokio::select! {
+                    biased;
+
+                    _ = child.wait() => {
+                        // The process exited.
+                    }
+                    recv = forward_receiver.recv() => {
+                        // The sender stays open longer than the whole loop, and the buffer is big
+                        // enough for all messages ever sent through this channel, so a RecvError
+                        // should never happen.
+                        let _ = recv.expect("a RecvError should never happen here");
+
+                        // Receiving a signal while in this state always means kill immediately.
+                        unsafe {
+                            // Send SIGKILL to the entire process group.
+                            libc::kill(-pid, SIGKILL);
+                        }
+                    }
+                    _ = sleep => {
+                        // The process didn't exit -- need to do a hard shutdown.
+                        unsafe {
+                            // Send SIGKILL to the entire process group.
+                            libc::kill(-pid, SIGKILL);
+                        }
+                    }
+                }
+            }
+            None => {
+                // This means that the process has already exited.
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TerminateMode {
     Timeout,
     Signal(SignalForwardEvent),
-}
-
-#[cfg(unix)]
-async fn terminate_child(
-    child: &mut Child,
-    mode: TerminateMode,
-    forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
-) {
-    use libc::{SIGHUP, SIGINT, SIGKILL, SIGTERM};
-
-    match child.id() {
-        Some(pid) => {
-            let pid = pid as i32;
-            let term_signal = match mode {
-                TerminateMode::Timeout => SIGTERM,
-                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Hangup)) => SIGHUP,
-                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Term)) => SIGTERM,
-                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Interrupt)) => SIGINT,
-                TerminateMode::Signal(SignalForwardEvent::Twice) => SIGKILL,
-            };
-            unsafe {
-                // We set up a process group in cmd_pre_exec -- now
-                // send a signal to that group.
-                libc::kill(-pid, term_signal)
-            };
-
-            if term_signal == SIGKILL {
-                // SIGKILL guarantees the process group is dead.
-                return;
-            }
-
-            // give the process a grace period of 10s
-            let sleep = tokio::time::sleep(Duration::from_secs(10));
-            tokio::select! {
-                biased;
-
-                _ = child.wait() => {
-                    // The process exited.
-                }
-                recv = forward_receiver.recv() => {
-                    // The sender stays open longer than the whole loop, and the buffer is big
-                    // enough for all messages ever sent through this channel, so a RecvError
-                    // should never happen.
-                    let _ = recv.expect("a RecvError should never happen here");
-
-                    // Receiving a signal while in this state always means kill immediately.
-                    unsafe {
-                        // Send SIGKILL to the entire process group.
-                        libc::kill(-pid, SIGKILL);
-                    }
-                }
-                _ = sleep => {
-                    // The process didn't exit -- need to do a hard shutdown.
-                    unsafe {
-                        // Send SIGKILL to the entire process group.
-                        libc::kill(-pid, SIGKILL);
-                    }
-                }
-            }
-        }
-        None => {
-            // This means that the process has already exited.
-        }
-    }
-}
-
-#[cfg(not(unix))]
-async fn terminate_child(
-    child: &mut Child,
-    _mode: TerminateMode,
-    _forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
-) {
-    let _ = child.start_kill();
 }
 
 #[cfg(test)]

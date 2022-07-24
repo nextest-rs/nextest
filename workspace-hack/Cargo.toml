@@ -64,6 +64,6 @@ libc = { version = "0.2.126", features = ["std"] }
 futures-core = { version = "0.3.21", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.21" }
 tokio = { version = "1.20.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros", "winapi"] }
-winapi = { version = "0.3.9", default-features = false, features = ["consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "shlobj", "std", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi = { version = "0.3.9", default-features = false, features = ["basetsd", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "jobapi2", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "psapi", "shlobj", "std", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 
 ### END HAKARI SECTION

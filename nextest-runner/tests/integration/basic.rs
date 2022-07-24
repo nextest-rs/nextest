@@ -16,7 +16,7 @@ use nextest_runner::{
     test_filter::{RunIgnored, TestFilterBuilder},
 };
 use pretty_assertions::assert_eq;
-use std::io::Cursor;
+use std::{io::Cursor, time::Duration};
 use test_case::test_case;
 
 #[test]
@@ -177,7 +177,14 @@ fn test_run() -> Result<()> {
 fn test_run_ignored() -> Result<()> {
     set_rustflags();
 
-    let test_filter = TestFilterBuilder::any(RunIgnored::IgnoredOnly);
+    let expr = FilteringExpr::parse("not test(test_slow_timeout)", &*PACKAGE_GRAPH).unwrap();
+
+    let test_filter = TestFilterBuilder::new(
+        RunIgnored::IgnoredOnly,
+        None,
+        Vec::<String>::new(),
+        vec![expr],
+    );
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config = load_config();
     let profile = config
@@ -201,6 +208,10 @@ fn test_run_ignored() -> Result<()> {
             .get(*name)
             .unwrap_or_else(|| panic!("unexpected test name {}", name));
         for fixture in expected {
+            if fixture.name.contains("test_slow_timeout") {
+                // These tests are filtered out by the expression above.
+                continue;
+            }
             let instance_value =
                 &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
             let valid = match &instance_value.status {
@@ -519,8 +530,12 @@ fn test_termination() -> Result<()> {
         .unwrap();
 
     let (instance_statuses, run_stats) = execute_collect(&mut runner);
-    assert_eq!(run_stats.timed_out, 2, "2 tests timed out");
-    for test_name in ["test_slow_timeout", "test_slow_timeout_2"] {
+    assert_eq!(run_stats.timed_out, 3, "3 tests timed out");
+    for test_name in [
+        "test_slow_timeout",
+        "test_slow_timeout_2",
+        "test_slow_timeout_subprocess",
+    ] {
         let (_, instance_value) = instance_statuses
             .iter()
             .find(|(&(_, name), _)| name == test_name)
@@ -535,6 +550,14 @@ fn test_termination() -> Result<()> {
                     "{test_name} should have been run exactly once",
                 );
                 let run_status = run_statuses.last_status();
+                // The test should have taken less than 5 seconds (most relevant for
+                // test_slow_timeout_subprocess -- without job objects it gets stuck on Windows
+                // until the subprocess exits.)
+                assert!(
+                    run_status.time_taken < Duration::from_secs(5),
+                    "{test_name} should have taken less than 5 seconds, actually took {:?}",
+                    run_status.time_taken
+                );
                 run_status.result == ExecutionResult::Timeout
             }
         };
