@@ -178,7 +178,9 @@ fn test_result_failure() -> Result<(), std::io::Error> {
 #[cfg(any(unix, windows))]
 #[test]
 fn test_subprocess_doesnt_exit() {
-    let mut cmd = sleep_cmd(120);
+    // Note: setting a high value here can cause large delays with the GitHub Actions runner on
+    // Windows.
+    let mut cmd = sleep_cmd(5);
     cmd.spawn().unwrap();
 }
 
