@@ -4,14 +4,14 @@ Nextest works with the [Miri interpreter](https://github.com/rust-lang/miri) for
 
 ## Benefits
 
-The main benefit of using nextest with Miri is that each test runs in its own process. This means that it's easier to [identify memory leaks](https://github.com/rust-lang/miri/issues/1481).
+The main benefit of using nextest with Miri is that each test runs in its own process. This means that it's easier to [identify memory leaks](https://github.com/rust-lang/miri/issues/1481), for example.
 
 Miri can be very taxing on most computers. If nextest is run under Miri, it configures itself to use 1 thread by default. This mirrors `cargo miri test`. You can customize this with the `--test-threads`/`-j` option.
 
 ## Requirements
 
-- cargo-nextest 0.9.28 or above
-- Miri from [master](https://github.com/rust-lang/miri) (a new Rust nightly with support for miri + nextest should come out soon)
+- cargo-nextest 0.9.29 or above
+- Miri from Rust nightly 2022-07-24 or after
 
 ## Usage
 

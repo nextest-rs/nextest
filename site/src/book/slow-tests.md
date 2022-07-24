@@ -73,11 +73,14 @@ running 1 test
 
 ### How nextest terminates tests
 
-On Unix platforms, nextest attempts a graceful shutdown: it first sends the [SIGTERM](https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html) signal to the test, then waits 10 seconds for it to shut down. If the test doesn't shut itself down within that time, nextest sends SIGKILL (`kill -9`) to the test to terminate it immediately.
+On Unix platforms, nextest creates a [process group] for each test. On timing out, nextest attempts a graceful shutdown: it first sends the [SIGTERM](https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html) signal to the process group, then waits 10 seconds for it to shut down. If the test doesn't shut itself down within that time, nextest sends SIGKILL (`kill -9`) to the process group to terminate it immediately.
 
-On other platforms including Windows, nextest terminates the test immediately in a manner akin to SIGKILL.
+On other platforms including Windows, nextest terminates the test immediately in a manner akin to SIGKILL. (On Windows, nextest uses [job objects] to kill the test process and all its descendants.)
 
 > **Note:** The behavior described in this subsection is not part of the [stability guarantees](stability.md), and is subject to change.
+
+[process group]: https://en.wikipedia.org/wiki/Process_group
+[job objects]: https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects
 
 ## Per-test overrides
 

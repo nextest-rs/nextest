@@ -3,6 +3,29 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.29] - 2022-07-24
+
+### Added
+
+- On Unix, each test process is now put into its own [process group]. If a test times out or Ctrl-C is pressed, the entire process group is signaled. This means that most subprocesses spawned by tests are also killed.
+
+  However, because process groups aren't nested, if a test creates a process group itself, those groups won't be signaled. This is a relatively uncommon situation.
+
+- On Windows, each test process is now associated with a [job object]. On timeouts, the entire job object is terminated. Since job objects *are* nested in recent versions of Windows, this should result in all subprocesses spawned by tests being killed.
+
+  (On Windows, the Ctrl-C behavior hasn't changed. Nextest also doesn't do graceful shutdowns on Windows yet, though this may change in the future.)
+
+- Nextest can now parse Cargo configs specified via the unstable `--config` option.
+
+- Nextest now publishes binaries for `aarch64-unknown-linux-gnu` and `x86_64-unknown-linux-musl`.
+
+### Fixed
+
+- Per-test overrides are now additive across configuration files (including tool-specific configuration files).
+
+[process group]: https://en.wikipedia.org/wiki/Process_group
+[job object]: https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects
+
 ## [0.9.29-rc.1] - 2022-07-24
 
 This is a test release to ensure that releasing Linux aarch64 and musl binaries works well.
@@ -431,6 +454,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.29]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29-rc.1
 [0.9.29-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29-rc.1
 [0.9.28]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.28
 [0.9.27]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.27
