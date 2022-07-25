@@ -669,7 +669,7 @@ impl<'g> RustTestArtifact<'g> {
             argv.push("--ignored");
         }
 
-        let mut cmd = make_test_command(
+        let cmd = make_test_command(
             program.clone(),
             &argv,
             &self.cwd,
@@ -677,6 +677,7 @@ impl<'g> RustTestArtifact<'g> {
             dylib_path,
             &self.non_test_binaries,
         );
+        let mut cmd = tokio::process::Command::from(cmd);
         match cmd.output().await {
             Ok(output) => {
                 if output.status.success() {
@@ -809,7 +810,7 @@ impl<'a> TestInstance<'a> {
         &self,
         test_list: &TestList<'_>,
         target_runner: &TargetRunner,
-    ) -> tokio::process::Command {
+    ) -> std::process::Command {
         let platform_runner = target_runner.for_build_platform(self.bin_info.build_platform);
         // TODO: non-rust tests
 
@@ -848,7 +849,7 @@ pub(crate) fn make_test_command(
     package: &PackageMetadata<'_>,
     dylib_path: &OsStr,
     non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
-) -> tokio::process::Command {
+) -> std::process::Command {
     // This is a workaround for a macOS SIP issue:
     // https://github.com/nextest-rs/nextest/pull/84
     //
@@ -879,7 +880,7 @@ pub(crate) fn make_test_command(
             .collect()
     });
 
-    let mut cmd = tokio::process::Command::new(program);
+    let mut cmd = std::process::Command::new(program);
 
     cmd.args(args)
         .current_dir(cwd)

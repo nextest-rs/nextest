@@ -465,6 +465,7 @@ impl<'a> TestRunnerInner<'a> {
                 .stderr(std::process::Stdio::piped());
         };
 
+        let mut cmd = tokio::process::Command::from(cmd);
         let mut child = cmd.spawn()?;
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
@@ -1333,6 +1334,7 @@ mod imp {
 mod imp {
     use super::*;
     use libc::{SIGHUP, SIGINT, SIGKILL, SIGTERM};
+    use std::os::unix::process::CommandExt;
 
     // This is a no-op on non-windows platforms.
     pub(super) fn configure_handle_inheritance_impl(
@@ -1343,8 +1345,17 @@ mod imp {
 
     /// Pre-execution configuration on Unix.
     ///
-    /// This sets up the process group ID for now.
-    pub(super) fn cmd_pre_exec(cmd: &mut tokio::process::Command) {
+    /// This sets up just the process group ID.
+    #[cfg(process_group)]
+    pub(super) fn cmd_pre_exec(cmd: &mut std::process::Command) {
+        cmd.process_group(0);
+    }
+
+    /// Pre-execution configuration on Unix.
+    ///
+    /// This sets up just the process group ID.
+    #[cfg(not(process_group))]
+    pub(super) fn cmd_pre_exec(cmd: &mut std::process::Command) {
         unsafe {
             // TODO: replace with process_group once Rust 1.64 is out -- that will let this use the
             // posix_spawn fast path, which is significantly faster (0.5 seconds vs 1.5 on clap).
