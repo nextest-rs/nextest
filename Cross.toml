@@ -1,0 +1,3 @@
+# Temporary hack until Rust 1.64 comes out (temp-process-group-hack)
+[target.aarch64-unknown-linux-gnu.env]
+passthrough = ["RUSTC_BOOTSTRAP", "RUSTFLAGS"]

@@ -128,7 +128,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_PROFILE_RELEASE_LTO: true
-          # Temporary hack until Rust 1.64 is stabilized.
+          # Temporary hack until Rust 1.64 is out (temp-process-group-hack)
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: --cfg process_group --cfg process_group_bootstrap_hack
       - name: Set archive output variable
@@ -167,7 +167,7 @@ jobs:
         run: |
           ./scripts/release-mac-build.sh cargo-nextest "${{ github.ref_name }}"
         env:
-          # Temporary hack until Rust 1.64 is stabilized.
+          # Temporary hack until Rust 1.64 is out (temp-process-group-hack)
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: --cfg process_group --cfg process_group_bootstrap_hack
       - uses: svenstaro/upload-release-action@2.2.1
