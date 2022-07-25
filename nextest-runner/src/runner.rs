@@ -1263,7 +1263,7 @@ mod imp {
         Ok(())
     }
 
-    pub(super) fn cmd_pre_exec(_cmd: &mut tokio::process::Command) {
+    pub(super) fn cmd_pre_exec(_cmd: &mut std::process::Command) {
         // TODO: set process group on Windows for better ctrl-C handling.
     }
 
