@@ -3,9 +3,19 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.30-rc.3] - 2022-07-25
+## [0.9.30] - 2022-07-25
 
-This is a test release.
+### Fixed
+
+- Fixed target runners specified as relative paths.
+- On Unix, cargo-nextest's performance had regressed (by 3x on [clap](https://github.com/clap-rs/clap)) due to the change introduced in version 0.9.29 to put each test process into its own process group. In this version, this regression has been fixed, but only if you're using the pre-built binaries or building on Rust 1.64+ (currently in nightly).
+
+  > Note to distributors: to fix this regression while building with stable Rust 1.62, set the following environment variables:
+  >
+  > - `RUSTC_BOOTSTRAP=1`
+  > - `RUSTFLAGS='--cfg process_group --cfg process_group_bootstrap_hack'`
+  >
+  > This is temporary until [the `process_set_process_group` feature is stabilized](https://github.com/rust-lang/rust/issues/93857) in Rust 1.64.
 
 ## [0.9.29] - 2022-07-24
 
@@ -462,7 +472,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.30-rc.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.30-rc.3
+[0.9.30]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.30
 [0.9.29]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29
 [0.9.29-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29-rc.1
 [0.9.28]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.28
