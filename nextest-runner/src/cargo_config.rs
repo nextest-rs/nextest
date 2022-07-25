@@ -149,7 +149,7 @@ pub enum CargoConfigSource {
 #[derive(Debug)]
 pub struct CargoConfigs {
     cli_configs: Vec<(CargoConfigSource, CargoConfig)>,
-    start_search_at: Utf8PathBuf,
+    cwd: Utf8PathBuf,
     terminate_search_at: Option<Utf8PathBuf>,
     discovered: OnceCell<Vec<(CargoConfigSource, CargoConfig)>>,
 }
@@ -160,7 +160,7 @@ impl CargoConfigs {
         cli_configs: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Result<Self, CargoConfigsConstructError> {
         let cli_configs = parse_cli_configs(cli_configs.into_iter())?;
-        let start_search_at = std::env::current_dir()
+        let cwd = std::env::current_dir()
             .map_err(CargoConfigsConstructError::GetCurrentDir)
             .and_then(|cwd| {
                 Utf8PathBuf::try_from(cwd)
@@ -169,7 +169,7 @@ impl CargoConfigs {
 
         Ok(Self {
             cli_configs,
-            start_search_at,
+            cwd,
             terminate_search_at: None,
             discovered: OnceCell::new(),
         })
@@ -181,17 +181,21 @@ impl CargoConfigs {
     #[doc(hidden)]
     pub fn new_with_isolation(
         cli_configs: impl IntoIterator<Item = impl AsRef<str>>,
-        start_search_at: &Utf8Path,
+        cwd: &Utf8Path,
         terminate_search_at: &Utf8Path,
     ) -> Result<Self, CargoConfigsConstructError> {
         let cli_configs = parse_cli_configs(cli_configs.into_iter())?;
 
         Ok(Self {
             cli_configs,
-            start_search_at: start_search_at.to_owned(),
+            cwd: cwd.to_owned(),
             terminate_search_at: Some(terminate_search_at.to_owned()),
             discovered: OnceCell::new(),
         })
+    }
+
+    pub(crate) fn cwd(&self) -> &Utf8Path {
+        &self.cwd
     }
 
     pub(crate) fn discovered_configs(
@@ -203,9 +207,7 @@ impl CargoConfigs {
         let cli_iter = self.cli_configs.iter();
         let file_iter = self
             .discovered
-            .get_or_try_init(|| {
-                discover_impl(&self.start_search_at, self.terminate_search_at.as_deref())
-            })?
+            .get_or_try_init(|| discover_impl(&self.cwd, self.terminate_search_at.as_deref()))?
             .iter();
         Ok(cli_iter.chain(file_iter))
     }
