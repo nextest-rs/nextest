@@ -7,7 +7,7 @@ use crate::{
     cargo_config::{CargoConfigSource, CargoConfigs, Runner, TargetTriple},
     errors::TargetRunnerError,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use nextest_metadata::BuildPlatform;
 use std::fmt;
 use target_spec::Platform;
@@ -107,19 +107,24 @@ impl PlatformRunner {
 
         // Check if we have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
         // set, and if so use that, as it takes precedence over the static config(:?.toml)?
-        if let Some(tr) = Self::from_env(Self::runner_env_var(&target))? {
+        if let Some(tr) = Self::from_env(Self::runner_env_var(&target), configs.cwd())? {
             return Ok(Some(tr));
         }
 
         Self::find_config(configs, target)
     }
 
-    fn from_env(env_key: String) -> Result<Option<Self>, TargetRunnerError> {
+    fn from_env(env_key: String, cwd: &Utf8Path) -> Result<Option<Self>, TargetRunnerError> {
         if let Some(runner_var) = std::env::var_os(&env_key) {
             let runner = runner_var
                 .into_string()
                 .map_err(|_osstr| TargetRunnerError::InvalidEnvironmentVar(env_key.clone()))?;
-            Self::parse_runner(PlatformRunnerSource::Env(env_key), Runner::Simple(runner)).map(Some)
+            Self::parse_runner(
+                PlatformRunnerSource::Env(env_key),
+                Runner::Simple(runner),
+                cwd,
+            )
+            .map(Some)
         } else {
             Ok(None)
         }
@@ -158,6 +163,7 @@ impl PlatformRunner {
                                 target_table: target.triple_str().into(),
                             },
                             runner.clone(),
+                            configs.cwd(),
                         )?);
                         continue;
                     }
@@ -184,6 +190,7 @@ impl PlatformRunner {
                                 target_table: cfg.clone(),
                             },
                             runner.clone(),
+                            configs.cwd(),
                         )?);
                         continue 'config;
                     }
@@ -197,6 +204,7 @@ impl PlatformRunner {
     fn parse_runner(
         source: PlatformRunnerSource,
         runner: Runner,
+        cwd: &Utf8Path,
     ) -> Result<Self, TargetRunnerError> {
         let (runner_binary, args) = match runner {
             Runner::Simple(value) => {
@@ -212,7 +220,10 @@ impl PlatformRunner {
                             value: value.clone(),
                         })?;
                 let args = runner_iter.map(String::from).collect();
-                (runner_binary.into(), args)
+                (
+                    Self::normalize_runner(runner_binary, source.root(cwd)),
+                    args,
+                )
             }
             Runner::List(mut values) => {
                 if values.is_empty() {
@@ -222,7 +233,10 @@ impl PlatformRunner {
                     });
                 } else {
                     let runner_binary = values.remove(0);
-                    (runner_binary.into(), values)
+                    (
+                        Self::normalize_runner(&runner_binary, source.root(cwd)),
+                        values,
+                    )
                 }
             }
         };
@@ -232,6 +246,18 @@ impl PlatformRunner {
             args,
             source,
         })
+    }
+
+    // https://github.com/rust-lang/cargo/blob/40b674cd1115299034fafa34e7db3a9140b48a49/src/cargo/util/config/mod.rs#L735-L743
+    fn normalize_runner(runner_binary: &str, root: &Utf8Path) -> Utf8PathBuf {
+        let is_path =
+            runner_binary.contains('/') || (cfg!(windows) && runner_binary.contains('\\'));
+        if is_path {
+            root.join(runner_binary)
+        } else {
+            // A pathless name.
+            runner_binary.into()
+        }
     }
 
     /// Gets the runner binary path.
@@ -279,6 +305,32 @@ pub enum PlatformRunnerSource {
         /// If `target.'cfg(target_os = "linux")'.runner` is used, this is `cfg(target_os = "linux")`.
         target_table: String,
     },
+}
+
+impl PlatformRunnerSource {
+    // https://github.com/rust-lang/cargo/blob/3959f87158ea4f8733e2fcbe032b8a50ae0b6834/src/cargo/util/config/value.rs#L66-L75
+    fn root<'a>(&'a self, cwd: &'a Utf8Path) -> &'a Utf8Path {
+        match self {
+            Self::Env(_)
+            | Self::CargoConfig {
+                source: CargoConfigSource::CliOption,
+                ..
+            } => {
+                // Use the cwd as specified.
+                cwd
+            }
+            Self::CargoConfig {
+                source: CargoConfigSource::File(file),
+                ..
+            } => {
+                // The file is e.g. .cargo/config.toml -- go up two levels.
+                file.parent()
+                    .expect("got to .cargo")
+                    .parent()
+                    .expect("got to cwd")
+            }
+        }
+    }
 }
 
 impl fmt::Display for PlatformRunnerSource {
@@ -363,7 +415,7 @@ mod tests {
                 &dir_path,
             ),
             Some(PlatformRunner {
-                runner_binary: "unix-runner".into(),
+                runner_binary: dir_path.join("unix-runner"),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
                     source: CargoConfigSource::File(dir_path.join(".cargo/config")),
@@ -383,7 +435,7 @@ mod tests {
                 &dir_path,
             ),
             Some(PlatformRunner {
-                runner_binary: "parent-wine".into(),
+                runner_binary: dir_path.join("../parent-wine"),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
                     source: CargoConfigSource::File(dir_path.join(".cargo/config")),
@@ -413,7 +465,7 @@ mod tests {
                 &dir_path,
             ),
             Some(PlatformRunner {
-                runner_binary: "parent-wine".into(),
+                runner_binary: dir_path.join("../parent-wine"),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
                     source: CargoConfigSource::File(dir_path.join(".cargo/config")),
@@ -478,7 +530,7 @@ mod tests {
                 &dir_path,
             ),
             Some(PlatformRunner {
-                runner_binary: "parent-wine".into(),
+                runner_binary: dir_path.join("../parent-wine"),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
                     source: CargoConfigSource::File(dir_path.join(".cargo/config")),
@@ -522,14 +574,14 @@ mod tests {
             find_config(
                 Platform::new("x86_64-pc-windows-msvc", TargetFeatures::Unknown).unwrap(),
                 &[
-                    "target.'cfg(all())'.runner='all-runner'",
+                    "target.'cfg(all())'.runner='./all-runner'",
                     "target.'cfg(windows)'.runner='windows-runner'",
                 ],
                 &dir_path,
                 &dir_path,
             ),
             Some(PlatformRunner {
-                runner_binary: "all-runner".into(),
+                runner_binary: dir_path.join("all-runner"),
                 args: vec![],
                 source: PlatformRunnerSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
@@ -563,21 +615,20 @@ mod tests {
     fn find_config(
         platform: Platform,
         cli_configs: &[&str],
-        start_search_at: &Utf8Path,
+        cwd: &Utf8Path,
         terminate_search_at: &Utf8Path,
     ) -> Option<PlatformRunner> {
         let configs =
-            CargoConfigs::new_with_isolation(cli_configs, start_search_at, terminate_search_at)
-                .unwrap();
+            CargoConfigs::new_with_isolation(cli_configs, cwd, terminate_search_at).unwrap();
         PlatformRunner::find_config(&configs, platform).unwrap()
     }
 
     static CARGO_CONFIG_CONTENTS: &str = r#"
     [target.x86_64-pc-windows-msvc]
-    runner = "parent-wine"
+    runner = "../parent-wine"
 
     [target.'cfg(unix)']
-    runner = "unix-runner"
+    runner = "./unix-runner"
     "#;
 
     static FOO_BAR_CARGO_CONFIG_CONTENTS: &str = r#"
