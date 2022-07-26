@@ -35,3 +35,27 @@ cargo nextest run --target x86_64-pc-windows-msvc
 While cross-compiling code, some tests may need to be run on the host platform. (See the note about [Filtering by build platform](running.md#filtering-by-build-platform) for more.)
 
 For tests that run on the host platform, nextest uses the target runner defined for the host. For example, if cross-compiling from `x86_64-unknown-linux-gnu` to `x86_64-pc-windows-msvc`, nextest will use the `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER` for proc-macro and other host-only tests, and `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER` for other tests.
+
+## Debugging output
+
+Nextest invokes target runners during both the list and run phases. During the list phase, nextest has [stringent rules] for the contents of standard output.
+
+If a target runner produces debugging or any other kind of output itself, it MUST NOT go to standard output. You can produce output to standard error, to a file on disk, etc.
+
+For example, this target runner will not work:
+
+```bash
+#!/bin/bash
+echo "This is some debugging output"
+$@
+```
+
+Instead, redirect debugging output [to standard error](https://stackoverflow.com/questions/2990414/echo-that-outputs-to-stderr):
+
+```bash
+#!/bin/bash
+echo "This is some debugging output" >&2
+$@
+```
+
+[stringent rules]: https://nexte.st/book/custom-test-harnesses.html#manually-implementing-a-test-harness
