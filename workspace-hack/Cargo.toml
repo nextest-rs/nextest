@@ -36,7 +36,7 @@ textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unic
 [build-dependencies]
 cc = { version = "1.0.73", default-features = false, features = ["jobserver", "parallel"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
-proc-macro2 = { version = "1.0.41", features = ["proc-macro"] }
+proc-macro2 = { version = "1.0.42", features = ["proc-macro"] }
 quote = { version = "1.0.20", features = ["proc-macro"] }
 regex = { version = "1.6.0", features = ["aho-corasick", "memchr", "perf", "perf-cache", "perf-dfa", "perf-inline", "perf-literal", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 regex-syntax = { version = "0.6.27", features = ["unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
@@ -46,7 +46,7 @@ syn = { version = "1.0.98", features = ["clone-impls", "derive", "extra-traits",
 futures-core = { version = "0.3.21", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.21" }
 libc = { version = "0.2.126", features = ["std"] }
-tokio = { version = "1.20.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
+tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 libc = { version = "0.2.126", features = ["std"] }
@@ -55,7 +55,7 @@ libc = { version = "0.2.126", features = ["std"] }
 futures-core = { version = "0.3.21", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.21" }
 libc = { version = "0.2.126", features = ["std"] }
-tokio = { version = "1.20.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
+tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 libc = { version = "0.2.126", features = ["std"] }
@@ -63,7 +63,7 @@ libc = { version = "0.2.126", features = ["std"] }
 [target.x86_64-pc-windows-msvc.dependencies]
 futures-core = { version = "0.3.21", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.21" }
-tokio = { version = "1.20.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros", "winapi"] }
+tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros", "winapi"] }
 winapi = { version = "0.3.9", default-features = false, features = ["basetsd", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "jobapi2", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "psapi", "shlobj", "std", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 
 ### END HAKARI SECTION
