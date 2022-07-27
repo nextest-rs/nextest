@@ -32,3 +32,4 @@ members = [
 
 [dependencies]
 dylib-test = { path = "dylib-test" }
+uuid = "1.1.2"
