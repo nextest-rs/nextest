@@ -1,6 +1,7 @@
 # Miri and nextest
 
 Nextest works with the [Miri interpreter](https://github.com/rust-lang/miri) for Rust. This interpreter can check for certain classes of undefined behavior.
+It can also run your tests for (almost) arbitrary targets.
 
 ## Benefits
 
@@ -22,6 +23,14 @@ cargo miri nextest run
 ```
 
 You may need to specify the toolchain to run as, using `cargo +nightly-YYYY-MM-DD miri nextest run`.
+
+Miri supports cross-interpretation, so e.g. to run your tests on a big-endian target, run:
+
+```
+cargo miri nextest run --target mips64-unknown-linux-gnuabi64
+```
+
+This does not require installing any special toolchain, and will work even if you are using macOS or Windows.
 
 > **Note:** [Archiving and reusing builds](reusing-builds.md) is not supported under Miri.
 
