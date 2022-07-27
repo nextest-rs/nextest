@@ -123,6 +123,11 @@ fn test_cargo_env_vars() {
         Ok("1"),
         "NEXTEST environment variable set to 1"
     );
+    std::env::var("NEXTEST_RUN_ID")
+        .expect("NEXTEST_RUN_ID must be set")
+        .parse::<uuid::Uuid>()
+        .expect("NEXTEST_RUN_ID must be a UUID");
+
     assert_eq!(
         std::env::var("NEXTEST_EXECUTION_MODE").as_deref(),
         Ok("process-per-test"),

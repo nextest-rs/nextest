@@ -34,6 +34,7 @@ use tokio::{
     runtime::Runtime,
     sync::mpsc::UnboundedSender,
 };
+use uuid::Uuid;
 
 /// Test runner options.
 #[derive(Debug, Default)]
@@ -114,6 +115,7 @@ impl TestRunnerBuilder {
                 test_list,
                 target_runner,
                 runtime,
+                run_id: Uuid::new_v4(),
             },
             handler,
         })
@@ -170,6 +172,7 @@ struct TestRunnerInner<'a> {
     test_list: &'a TestList<'a>,
     target_runner: TargetRunner,
     runtime: Runtime,
+    run_id: Uuid,
 }
 
 impl<'a> TestRunnerInner<'a> {
@@ -452,6 +455,7 @@ impl<'a> TestRunnerInner<'a> {
 
         // Debug environment variable for testing.
         cmd.env("__NEXTEST_ATTEMPT", format!("{}", attempt));
+        cmd.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
         cmd.stdin(Stdio::null());
         imp::cmd_pre_exec(&mut cmd);
 
