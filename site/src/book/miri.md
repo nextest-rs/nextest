@@ -1,6 +1,6 @@
 # Miri and nextest
 
-Nextest works with the [Miri interpreter](https://github.com/rust-lang/miri) for Rust. This interpreter can check for certain classes of undefined behavior.
+Nextest works with the [Miri interpreter](https://github.com/rust-lang/miri) for Rust. This interpreter can check for certain classes of [undefined behavior](https://doc.rust-lang.org/reference/behavior-considered-undefined.html).
 It can also run your tests for (almost) arbitrary targets.
 
 ## Benefits
