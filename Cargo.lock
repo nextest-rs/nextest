@@ -1139,6 +1139,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-sink",
+ "getrandom",
  "indexmap",
  "libc",
  "log",

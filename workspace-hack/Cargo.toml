@@ -20,6 +20,7 @@ console = { version = "0.15.0", features = ["ansi-parsing", "regex", "unicode-wi
 either = { version = "1.7.0", features = ["use_std"] }
 futures-channel = { version = "0.3.21", features = ["alloc", "futures-sink", "sink", "std"] }
 futures-sink = { version = "0.3.21", default-features = false, features = ["alloc", "std"] }
+getrandom = { version = "0.2.7", default-features = false, features = ["std"] }
 indexmap = { version = "1.9.1", default-features = false, features = ["std"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
