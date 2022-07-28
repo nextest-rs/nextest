@@ -1,30 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="nextest-run" tests="3" failures="1" errors="0" timestamp="2022-02-10T20:09:34.393+00:00" time="0.003">
+<testsuites name="nextest-run" tests="3" failures="1" errors="0" uuid="9ea8d2ee-e485-4e5b-8dba-4985c12081f7" timestamp="2022-07-28T01:09:27.584+00:00" time="0.007">
     <testsuite name="nextest-tests::basic" tests="3" disabled="0" errors="0" failures="1">
-        <testcase name="test_cwd" classname="nextest-tests::basic" timestamp="2022-02-10T20:09:34.393+00:00" time="0.001">
+        <testcase name="test_cwd" classname="nextest-tests::basic" timestamp="2022-07-28T01:09:27.584+00:00" time="0.002">
         </testcase>
-        <testcase name="test_flaky_mod_4" classname="nextest-tests::basic" timestamp="2022-02-10T20:09:34.394+00:00" time="0.001">
-            <flakyFailure timestamp="2022-02-10T20:09:34.393+00:00" time="0.001" type="test failure">
-                <system-out>
-running 1 test
-test test_flaky_mod_4 ... FAILED
-
-failures:
-
-failures:
-    test_flaky_mod_4
-
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
-
-</system-out>
-                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 1 % 2 != 0&apos;, tests/basic.rs:33:9
+        <testcase name="test_failure_assert" classname="nextest-tests::basic" timestamp="2022-07-28T01:09:27.585+00:00" time="0.002">
+            <failure type="test failure">thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
+  left: `4`,
+ right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</failure>
+            <rerunFailure timestamp="2022-07-28T01:09:27.586+00:00" time="0.002" type="test failure">thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
+  left: `4`,
+ right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-</system-err>
-            </flakyFailure>
-        </testcase>
-        <testcase name="test_failure_assert" classname="nextest-tests::basic" timestamp="2022-02-10T20:09:34.393+00:00" time="0.001">
-            <failure type="test failure"/>
-            <rerunFailure timestamp="2022-02-10T20:09:34.395+00:00" time="0.001" type="test failure">
                 <system-out>
 running 1 test
 test test_failure_assert ... FAILED
@@ -34,7 +21,7 @@ failures:
 failures:
     test_failure_assert
 
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
 
 </system-out>
                 <system-err>thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
@@ -43,7 +30,10 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out;
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 </system-err>
             </rerunFailure>
-            <rerunFailure timestamp="2022-02-10T20:09:34.396+00:00" time="0.001" type="test failure">
+            <rerunFailure timestamp="2022-07-28T01:09:27.588+00:00" time="0.002" type="test failure">thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
+  left: `4`,
+ right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
                 <system-out>
 running 1 test
 test test_failure_assert ... FAILED
@@ -53,7 +43,7 @@ failures:
 failures:
     test_failure_assert
 
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
 
 </system-out>
                 <system-err>thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
@@ -71,7 +61,7 @@ failures:
 failures:
     test_failure_assert
 
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
 
 </system-out>
             <system-err>thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
@@ -79,6 +69,44 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out;
  right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 </system-err>
+        </testcase>
+        <testcase name="test_flaky_mod_4" classname="nextest-tests::basic" timestamp="2022-07-28T01:09:27.589+00:00" time="0.001">
+            <flakyFailure timestamp="2022-07-28T01:09:27.586+00:00" time="0.002" type="test failure">thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 1 % 4 != 0&apos;, tests/basic.rs:33:9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+                <system-out>
+running 1 test
+test test_flaky_mod_4 ... FAILED
+
+failures:
+
+failures:
+    test_flaky_mod_4
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+</system-out>
+                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 1 % 4 != 0&apos;, tests/basic.rs:33:9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+</system-err>
+            </flakyFailure>
+            <flakyFailure timestamp="2022-07-28T01:09:27.587+00:00" time="0.002" type="test failure">thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 2 % 4 != 0&apos;, tests/basic.rs:33:9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+                <system-out>
+running 1 test
+test test_flaky_mod_4 ... FAILED
+
+failures:
+
+failures:
+    test_flaky_mod_4
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+</system-out>
+                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 2 % 4 != 0&apos;, tests/basic.rs:33:9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+</system-err>
+            </flakyFailure>
         </testcase>
     </testsuite>
 </testsuites>
