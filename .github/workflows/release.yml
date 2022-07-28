@@ -107,6 +107,8 @@ jobs:
             os: ubuntu-18.04
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+          - target: i686-pc-windows-msvc
+            os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
@@ -135,7 +137,7 @@ jobs:
         id: archive-output
         shell: bash
         run: |
-          if [[ ${{ matrix.target }} == "x86_64-pc-windows-msvc" ]]; then
+          if [[ ${{ matrix.target }} == "x86_64-pc-windows-msvc" || ${{ matrix.target }} == "i686-pc-windows-msvc" ]]; then
             echo "::set-output name=${{ matrix.target }}-tar::${{ github.ref_name }}-${{ matrix.target }}".tar.gz
             echo "::set-output name=${{ matrix.target }}-zip::${{ github.ref_name }}-${{ matrix.target }}".zip
           else
@@ -145,8 +147,10 @@ jobs:
       x86_64-linux-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu-tar }}
       x86_64-linux-musl-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-musl-tar }}
       aarch64-linux-tar: ${{ steps.archive-output.outputs.aarch64-unknown-linux-gnu-tar }}
-      windows-tar: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-tar }}
-      windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
+      x86_64-windows-tar: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-tar }}
+      x86_64-windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
+      i686-windows-tar: ${{ steps.archive-output.outputs.i686-pc-windows-msvc-tar }}
+      i686-windows-zip: ${{ steps.archive-output.outputs.i686-pc-windows-msvc-zip }}
 
   build-cargo-nextest-binaries-mac:
     name: Build universal cargo-nextest binary for Mac
@@ -201,8 +205,10 @@ jobs:
             --archive x86_64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-tar }} \
             --archive x86_64-unknown-linux-musl:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-musl-tar }} \
             --archive aarch64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-linux-tar }} \
-            --archive x86_64-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.windows-tar }} \
-            --archive x86_64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.windows-zip }} \
+            --archive x86_64-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-tar }} \
+            --archive x86_64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-zip }} \
+            --archive i686-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-tar }} \
+            --archive i686-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-zip }} \
             --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries-mac.outputs.mac-tar }}
       - name: Generate netlify redirects
         run: |
@@ -213,6 +219,8 @@ jobs:
             --alias linux-arm=aarch64-unknown-linux-gnu:tar.gz \
             --alias windows=x86_64-pc-windows-msvc:zip \
             --alias windows-tar=x86_64-pc-windows-msvc:tar.gz \
+            --alias windows-x86=i686-pc-windows-msvc:zip \
+            --alias windows-x86-tar=i686-pc-windows-msvc:tar.gz \
             --alias mac=universal-apple-darwin:tar.gz \
       - name: Update releases.json on main branch
         run: |
