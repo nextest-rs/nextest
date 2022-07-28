@@ -3,6 +3,16 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.31] - 2022-07-27
+
+### Added
+
+- Nextest sets a new `NEXTEST_RUN_ID` environment variable with a UUID for a test run. All tests run
+  within a single invocation of `cargo nextest run` will set the same run ID. Thanks [mitsuhiko] for
+  your first contribution!
+
+[mitsuhiko]: https://github.com/mitsuhiko
+
 ## [0.9.30] - 2022-07-25
 
 ### Fixed
@@ -472,6 +482,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.31]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.31
 [0.9.30]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.30
 [0.9.29]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29
 [0.9.29-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29-rc.1

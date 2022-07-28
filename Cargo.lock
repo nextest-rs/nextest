@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-nextest"
-version = "0.9.30"
+version = "0.9.31"
 dependencies = [
  "camino",
  "cfg-if",
@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-runner"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "aho-corasick",
  "async-scoped",
@@ -1472,7 +1472,7 @@ checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
 name = "quick-junit"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "goldenfile",

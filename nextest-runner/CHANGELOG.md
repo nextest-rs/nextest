@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.21.0] - 2022-07-27
+
+### Changed
+
+See the changelog for [cargo-nextest 0.9.31](https://nexte.st/CHANGELOG.html#0931---2022-07-27).
+
 ## [0.20.0] - 2022-07-25
 
 ### Changed

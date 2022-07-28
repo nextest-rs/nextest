@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0] - 2022-07-27
+
+### Added
+
+- `Report` contains a new `uuid` field with a unique identifier for a particular run. This is an extension to the JUnit spec.
+
 ## [0.2.0] - 2022-06-21
 
 ### Changed
@@ -44,6 +50,7 @@
 
 - Initial version.
 
+[0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.0
 [0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.2.0
 [0.1.5]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.1.5
 [0.1.4]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.1.4

@@ -30,6 +30,7 @@ Nextest delegates to Cargo for the build, which recognizes a number of environme
 Nextest exposes these environment variables to your tests *at runtime only*. They are not set at build time because cargo-nextest may reuse builds done outside of the nextest environment.
 
 * `NEXTEST` — always set to `"1"`.
+* `NEXTEST_RUN_ID` — A UUID corresponding to a particular nextest run. All tests run via a particular invocation of `cargo nextest run` will have the same UUID.
 * `NEXTEST_EXECUTION_MODE` — currently, always set to `process-per-test`. More options may be added in the future if nextest gains the ability to run all tests within the same process ([#27]).
 * `NEXTEST_BIN_EXE_<name>` — The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.
   * Binaries are automatically built when the test is built, unless the binary has required features that are not enabled.
