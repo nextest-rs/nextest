@@ -5,12 +5,18 @@ use crate::{serialize::serialize_report, SerializeError};
 use chrono::{DateTime, FixedOffset};
 use indexmap::map::IndexMap;
 use std::{io, iter, time::Duration};
+use uuid::Uuid;
 
 /// The root element of a JUnit report.
 #[derive(Clone, Debug)]
 pub struct Report {
     /// The name of this report.
     pub name: String,
+
+    /// A unique identifier associated with this report.
+    ///
+    /// This is an extension to the spec that's used by nextest.
+    pub uuid: Option<Uuid>,
 
     /// The time at which the first test in this report began execution.
     ///
@@ -40,6 +46,7 @@ impl Report {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            uuid: None,
             timestamp: None,
             time: None,
             tests: 0,
@@ -47,6 +54,14 @@ impl Report {
             errors: 0,
             test_suites: vec![],
         }
+    }
+
+    /// Sets a unique ID for this `Report`.
+    ///
+    /// This is an extension that's used by nextest.
+    pub fn set_uuid(&mut self, uuid: Uuid) -> &mut Self {
+        self.uuid = Some(uuid);
+        self
     }
 
     /// Sets the start timestamp for the report.

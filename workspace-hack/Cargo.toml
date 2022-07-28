@@ -33,6 +33,7 @@ regex-syntax = { version = "0.6.27", features = ["unicode", "unicode-age", "unic
 serde = { version = "1.0.140", features = ["derive", "serde_derive", "std"] }
 serde_json = { version = "1.0.82", features = ["std", "unbounded_depth"] }
 textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unicode-width"] }
+uuid = { version = "1.1.2", features = ["private_getrandom", "rng", "std", "v4"] }
 
 [build-dependencies]
 cc = { version = "1.0.73", default-features = false, features = ["jobserver", "parallel"] }

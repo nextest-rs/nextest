@@ -1157,6 +1157,7 @@ dependencies = [
  "syn 1.0.98",
  "textwrap",
  "tokio",
+ "uuid",
  "winapi",
 ]
 
@@ -1480,6 +1481,7 @@ dependencies = [
  "owo-colors",
  "quick-xml 0.23.0",
  "thiserror",
+ "uuid",
 ]
 
 [[package]]

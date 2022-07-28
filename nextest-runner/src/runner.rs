@@ -193,7 +193,12 @@ impl<'a> TestRunnerInner<'a> {
         let canceled = AtomicBool::new(false);
         let canceled_ref = &canceled;
 
-        let mut ctx = CallbackContext::new(callback, self.test_list.run_count(), self.fail_fast);
+        let mut ctx = CallbackContext::new(
+            callback,
+            self.run_id,
+            self.test_list.run_count(),
+            self.fail_fast,
+        );
 
         // Send the initial event.
         // (Don't need to set the canceled atomic if this fails because the run hasn't started
@@ -962,6 +967,7 @@ enum SignalForwardEvent {
 
 struct CallbackContext<F, E> {
     callback: F,
+    run_id: Uuid,
     stopwatch: StopwatchStart,
     run_stats: RunStats,
     fail_fast: bool,
@@ -975,9 +981,10 @@ impl<'a, F, E> CallbackContext<F, E>
 where
     F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
 {
-    fn new(callback: F, initial_run_count: usize, fail_fast: bool) -> Self {
+    fn new(callback: F, run_id: Uuid, initial_run_count: usize, fail_fast: bool) -> Self {
         Self {
             callback,
+            run_id,
             stopwatch: StopwatchStart::now(),
             run_stats: RunStats {
                 initial_run_count,
@@ -992,7 +999,10 @@ where
     }
 
     fn run_started(&mut self, test_list: &'a TestList) -> Result<(), E> {
-        (self.callback)(TestEvent::RunStarted { test_list })
+        (self.callback)(TestEvent::RunStarted {
+            test_list,
+            run_id: self.run_id,
+        })
     }
 
     fn handle_event(&mut self, event: InternalEvent<'a>) -> Result<(), InternalError<E>> {
@@ -1110,6 +1120,7 @@ where
         let stopwatch_end = self.stopwatch.end();
         (self.callback)(TestEvent::RunFinished {
             start_time: stopwatch_end.start_time,
+            run_id: self.run_id,
             elapsed: stopwatch_end.duration,
             run_stats: self.run_stats,
         })

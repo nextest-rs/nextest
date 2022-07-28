@@ -195,6 +195,7 @@ impl<'cfg> MetadataJunit<'cfg> {
             }
             TestEvent::RunBeginCancel { .. } => {}
             TestEvent::RunFinished {
+                run_id,
                 start_time,
                 elapsed,
                 ..
@@ -202,6 +203,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 // Write out the report to the given file.
                 let mut report = Report::new(self.config.report_name());
                 report
+                    .set_uuid(run_id)
                     .set_timestamp(to_datetime(start_time))
                     .set_time(elapsed)
                     .add_test_suites(self.test_suites.drain().map(|(_, testsuite)| testsuite));

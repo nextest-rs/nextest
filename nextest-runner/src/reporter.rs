@@ -7,6 +7,7 @@
 
 mod aggregator;
 pub use aggregator::heuristic_extract_description;
+use uuid::Uuid;
 
 use crate::{
     config::NextestProfile,
@@ -618,7 +619,7 @@ impl<'a> TestReporterImpl<'a> {
         writer: &mut impl Write,
     ) -> io::Result<()> {
         match event {
-            TestEvent::RunStarted { test_list } => {
+            TestEvent::RunStarted { test_list, .. } => {
                 write!(writer, "{:>12} ", "Starting".style(self.styles.pass))?;
 
                 let count_style = self.styles.count;
@@ -757,6 +758,7 @@ impl<'a> TestReporterImpl<'a> {
                 start_time: _start_time,
                 elapsed,
                 run_stats,
+                ..
             } => {
                 let summary_style = if run_stats.any_failed() {
                     self.styles.fail
@@ -1225,8 +1227,11 @@ pub enum TestEvent<'a> {
     RunStarted {
         /// The list of tests that will be run.
         ///
-        /// The methods on the test list indicate the number of
+        /// The methods on the test list indicate the number of tests that will be run.
         test_list: &'a TestList<'a>,
+
+        /// The UUID for this run.
+        run_id: Uuid,
     },
 
     // TODO: add events for BinaryStarted and BinaryFinished? May want a slightly different way to
@@ -1305,6 +1310,9 @@ pub enum TestEvent<'a> {
 
     /// The test run finished.
     RunFinished {
+        /// The unique ID for this run.
+        run_id: Uuid,
+
         /// The time at which the run was started.
         start_time: SystemTime,
 
