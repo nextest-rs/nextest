@@ -3,6 +3,7 @@
 The quickest way to get going with nextest is to download a pre-built binary for your platform. The latest nextest release is available at:
 * [**get.nexte.st/latest/linux**](https://get.nexte.st/latest/linux) for Linux x86_64, including Windows Subsystem for Linux (WSL)
 * [**get.nexte.st/latest/linux-arm**](https://get.nexte.st/latest/linux-arm) for Linux aarch64
+* [**get.nexte.st/latest/linux-musl**](https://get.nexte.st/latest/linux-musl) for Linux with musl libc
 * [**get.nexte.st/latest/mac**](https://get.nexte.st/latest/mac) for macOS, both x86_64 and Apple Silicon
 * [**get.nexte.st/latest/windows**](https://get.nexte.st/latest/windows) for Windows x86_64
 
