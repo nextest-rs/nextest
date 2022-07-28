@@ -593,32 +593,40 @@ impl CargoOptions {
 #[derive(Debug, Default, Args)]
 #[clap(next_help_heading = "RUNNER OPTIONS")]
 pub struct TestRunnerOpts {
+    /// Compile, but don't run tests
+    #[clap(long)]
+    no_run: bool,
+
     /// Number of tests to run simultaneously [possible values: integer or "num-cpus"]
     #[clap(
         long,
         short = 'j',
         visible_alias = "jobs",
         value_name = "THREADS",
-        conflicts_with = "no-capture",
+        conflicts_with_all = &["no-capture", "no-run"],
         env = "NEXTEST_TEST_THREADS"
     )]
     test_threads: Option<TestThreads>,
 
     /// Number of retries for failing tests [default: from profile]
-    #[clap(long, env = "NEXTEST_RETRIES")]
+    #[clap(long, env = "NEXTEST_RETRIES", conflicts_with = "no-run")]
     retries: Option<usize>,
 
     /// Cancel test run on the first failure
-    #[clap(long)]
+    #[clap(long, conflicts_with = "no-run")]
     fail_fast: bool,
 
     /// Run all tests regardless of failure
-    #[clap(long, overrides_with = "fail-fast")]
+    #[clap(long, conflicts_with = "no-run", overrides_with = "fail-fast")]
     no_fail_fast: bool,
 }
 
 impl TestRunnerOpts {
-    fn to_builder(&self, no_capture: bool) -> TestRunnerBuilder {
+    fn to_builder(&self, no_capture: bool) -> Option<TestRunnerBuilder> {
+        if self.no_run {
+            return None;
+        }
+
         let mut builder = TestRunnerBuilder::default();
         builder.set_no_capture(no_capture);
         if let Some(retries) = self.retries {
@@ -633,7 +641,7 @@ impl TestRunnerOpts {
             builder.set_test_threads(test_threads);
         }
 
-        builder
+        Some(builder)
     }
 }
 
@@ -650,7 +658,7 @@ struct TestReporterOpts {
     #[clap(
         long,
         possible_values = TestOutputDisplay::variants(),
-        conflicts_with = "no-capture",
+        conflicts_with_all = &["no-capture", "no-run"],
         value_name = "WHEN",
         env = "NEXTEST_FAILURE_OUTPUT",
     )]
@@ -660,7 +668,7 @@ struct TestReporterOpts {
     #[clap(
         long,
         possible_values = TestOutputDisplay::variants(),
-        conflicts_with = "no-capture",
+        conflicts_with_all = &["no-capture", "no-run"],
         value_name = "WHEN",
         env = "NEXTEST_SUCCESS_OUTPUT",
     )]
@@ -671,6 +679,7 @@ struct TestReporterOpts {
     #[clap(
         long,
         possible_values = StatusLevel::variants(),
+        conflicts_with = "no-run",
         value_name = "LEVEL",
         env = "NEXTEST_STATUS_LEVEL",
     )]
@@ -680,6 +689,7 @@ struct TestReporterOpts {
     #[clap(
         long,
         arg_enum,
+        conflicts_with = "no-run",
         value_name = "LEVEL",
         env = "NEXTEST_FINAL_STATUS_LEVEL"
     )]
@@ -1067,7 +1077,14 @@ impl App {
         }
 
         let handler = SignalHandlerKind::Standard;
-        let runner_builder = runner_opts.to_builder(no_capture);
+        let runner_builder = match runner_opts.to_builder(no_capture) {
+            Some(runner_builder) => runner_builder,
+            None => {
+                // This means --no-run was passed in. Exit.
+                return Ok(());
+            }
+        };
+
         let mut runner =
             runner_builder.build(&test_list, profile, handler, target_runner.clone())?;
 
@@ -1299,6 +1316,7 @@ mod tests {
             "cargo nextest run --status-level=all",
             "cargo nextest run --no-capture",
             "cargo nextest run --nocapture",
+            "cargo nextest run --no-run",
             "cargo nextest run --final-status-level flaky",
             // retry is an alias for flaky -- ensure that it parses
             "cargo nextest run --final-status-level retry",
@@ -1349,6 +1367,32 @@ mod tests {
             ),
             (
                 "cargo nextest run --no-capture --success-output=final",
+                ArgumentConflict,
+            ),
+            // ---
+            // --no-run and these options conflict
+            // ---
+            ("cargo nextest run --no-run -j8", ArgumentConflict),
+            ("cargo nextest run --no-run --retries 3", ArgumentConflict),
+            ("cargo nextest run --no-run --fail-fast", ArgumentConflict),
+            (
+                "cargo nextest run --no-run --no-fail-fast",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --no-run --failure-output immediate",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --no-run --success-output never",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --no-run --status-level pass",
+                ArgumentConflict,
+            ),
+            (
+                "cargo nextest run --no-run --final-status-level skip",
                 ArgumentConflict,
             ),
             // ---
