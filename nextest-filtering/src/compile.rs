@@ -11,6 +11,7 @@ use guppy::{
     PackageId,
 };
 use miette::SourceSpan;
+use recursion::Collapse;
 use std::collections::HashSet;
 
 pub(crate) fn compile(
@@ -133,18 +134,13 @@ fn compile_expr(
     cache: &mut DependsCache,
     errors: &mut Vec<ParseSingleError>,
 ) -> FilteringExpr {
-    match expr {
-        Expr::Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache, errors)),
-        Expr::Not(expr) => {
-            FilteringExpr::Not(Box::new(compile_expr(expr, packages, cache, errors)))
+    use crate::expression::ExprLayer::*;
+    expr.collapse_layers(|layer: ExprLayer<&SetDef, FilteringExpr>| match layer {
+        Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache, errors)),
+        Not(expr) => FilteringExpr::Not(Box::new(expr)),
+        Union(expr_1, expr_2) => FilteringExpr::Union(Box::new(expr_1), Box::new(expr_2)),
+        Intersection(expr_1, expr_2) => {
+            FilteringExpr::Intersection(Box::new(expr_1), Box::new(expr_2))
         }
-        Expr::Union(expr_1, expr_2) => FilteringExpr::Union(
-            Box::new(compile_expr(expr_1, packages, cache, errors)),
-            Box::new(compile_expr(expr_2, packages, cache, errors)),
-        ),
-        Expr::Intersection(expr_1, expr_2) => FilteringExpr::Intersection(
-            Box::new(compile_expr(expr_1, packages, cache, errors)),
-            Box::new(compile_expr(expr_2, packages, cache, errors)),
-        ),
-    }
+    })
 }

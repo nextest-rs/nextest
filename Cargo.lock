@@ -1048,6 +1048,7 @@ dependencies = [
  "nom 7.1.1",
  "nom-tracable",
  "nom_locate 4.0.0",
+ "recursion",
  "regex",
  "regex-syntax",
  "test-case",
@@ -1557,6 +1558,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
  "rand_core",
+]
+
+[[package]]
+name = "recursion"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cdf8bd39c5d724798ac5d5f9b669fbb674667a2094e5267a24c82593f35d1ad"
+dependencies = [
+ "futures",
 ]
 
 [[package]]
