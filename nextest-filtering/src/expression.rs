@@ -3,13 +3,17 @@
 
 use crate::{
     errors::{FilterExpressionParseErrors, ParseSingleError, State},
-    parsing::{parse, ParsedExpr, Span},
+    parsing::{parse, Expr, ParsedExpr, SetDef, Span},
 };
 use guppy::{
     graph::{cargo::BuildPlatform, PackageGraph},
     PackageId,
 };
 use miette::SourceSpan;
+use recursion::{
+    map_layer::{MapLayer, Project},
+    Collapse,
+};
 use std::{cell::RefCell, collections::HashSet};
 
 /// Matcher for name
@@ -183,29 +187,27 @@ impl FilteringExpr {
     /// * `Some(false)` if this binary is definitely not accepted.
     /// * `None` if this binary might or might not be accepted.
     pub fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
-        match self {
-            Self::Set(set) => set.matches_binary(query),
-            Self::Not(expr) => expr.matches_binary(query).logic_not(),
-            // TODO: or_else/and_then?
-            Self::Union(expr_1, expr_2) => expr_1
-                .matches_binary(query)
-                .logic_or(expr_2.matches_binary(query)),
-            Self::Intersection(expr_1, expr_2) => expr_1
-                .matches_binary(query)
-                .logic_and(expr_2.matches_binary(query)),
-        }
+        use ExprLayer::*;
+        self.collapse_layers(|layer: ExprLayer<&FilteringSet, Option<bool>>| {
+            match layer {
+                Set(set) => set.matches_binary(query),
+                Not(a) => a.logic_not(),
+                // TODO: or_else/and_then?
+                Union(a, b) => a.logic_or(b),
+                Intersection(a, b) => a.logic_and(b),
+            }
+        })
     }
 
     /// Returns true if the given test is accepted by this filter expression.
     pub fn matches_test(&self, query: &TestQuery<'_>) -> bool {
-        match self {
-            Self::Set(set) => set.matches_test(query),
-            Self::Not(expr) => !expr.matches_test(query),
-            Self::Union(expr_1, expr_2) => expr_1.matches_test(query) || expr_2.matches_test(query),
-            Self::Intersection(expr_1, expr_2) => {
-                expr_1.matches_test(query) && expr_2.matches_test(query)
-            }
-        }
+        use ExprLayer::*;
+        self.collapse_layers(|layer: ExprLayer<&FilteringSet, bool>| match layer {
+            Set(set) => set.matches_test(query),
+            Not(a) => !a,
+            Union(a, b) => a || b,
+            Intersection(a, b) => a && b,
+        })
     }
 
     /// Returns true if the given expression needs dependencies information to work
@@ -306,5 +308,56 @@ impl Logic for Option<bool> {
     #[inline]
     fn logic_not(self) -> Self {
         self.map(|v| !v)
+    }
+}
+
+/// Haskell madness here:
+pub enum ExprLayer<Set, A> {
+    Not(A),
+    Union(A, A),
+    Intersection(A, A),
+    Set(Set),
+}
+
+impl<A, Set, B> MapLayer<B> for ExprLayer<Set, A> {
+    type Unwrapped = A;
+
+    type To = ExprLayer<Set, B>;
+
+    #[inline(always)]
+    fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, mut f: F) -> Self::To {
+        use ExprLayer::*;
+        match self {
+            Not(a) => Not(f(a)),
+            Union(a, b) => Union(f(a), f(b)),
+            Intersection(a, b) => Intersection(f(a), f(b)),
+            Set(f) => Set(f),
+        }
+    }
+}
+
+impl<'a> Project for &'a FilteringExpr {
+    type To = ExprLayer<&'a FilteringSet, &'a FilteringExpr>;
+
+    fn project(self) -> Self::To {
+        match self {
+            FilteringExpr::Not(a) => ExprLayer::Not(a.as_ref()),
+            FilteringExpr::Union(a, b) => ExprLayer::Union(a.as_ref(), b.as_ref()),
+            FilteringExpr::Intersection(a, b) => ExprLayer::Intersection(a.as_ref(), b.as_ref()),
+            FilteringExpr::Set(f) => ExprLayer::Set(f),
+        }
+    }
+}
+
+impl<'a> Project for &'a Expr {
+    type To = ExprLayer<&'a SetDef, &'a Expr>;
+
+    fn project(self) -> Self::To {
+        match self {
+            Expr::Not(a) => ExprLayer::Not(a.as_ref()),
+            Expr::Union(a, b) => ExprLayer::Union(a.as_ref(), b.as_ref()),
+            Expr::Intersection(a, b) => ExprLayer::Intersection(a.as_ref(), b.as_ref()),
+            Expr::Set(f) => ExprLayer::Set(f),
+        }
     }
 }
