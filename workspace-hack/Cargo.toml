@@ -16,7 +16,7 @@ publish = false
 [dependencies]
 backtrace = { version = "0.3.66", features = ["gimli-symbolize", "std"] }
 clap = { version = "3.2.15", features = ["atty", "clap_derive", "color", "derive", "env", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
-console = { version = "0.15.0", features = ["ansi-parsing", "regex", "unicode-width"] }
+console = { version = "0.15.1", features = ["ansi-parsing", "regex", "unicode-width"] }
 either = { version = "1.7.0", features = ["use_std"] }
 futures-channel = { version = "0.3.21", features = ["alloc", "futures-sink", "sink", "std"] }
 futures-sink = { version = "0.3.21", default-features = false, features = ["alloc", "std"] }
