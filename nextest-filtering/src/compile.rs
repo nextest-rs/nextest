@@ -135,7 +135,7 @@ fn compile_expr(
     errors: &mut Vec<ParseSingleError>,
 ) -> FilteringExpr {
     use crate::expression::ExprLayer::*;
-    expr.collapse_layers(|layer: ExprLayer<&SetDef, FilteringExpr>| match layer {
+    Wrapped(expr).collapse_layers(|layer: ExprLayer<&SetDef, FilteringExpr>| match layer {
         Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache, errors)),
         Not(expr) => FilteringExpr::Not(Box::new(expr)),
         Union(expr_1, expr_2) => FilteringExpr::Union(Box::new(expr_1), Box::new(expr_2)),
