@@ -329,10 +329,6 @@ impl TestReporterBuilder {
                 let test_count_width = format!("{}", test_list.test_count()).len();
                 // Create the template using the width as input. This is a little confusing -- {{foo}}
                 // is what's passed into the ProgressBar, while {bar} is inserted by the format!() statement.
-                //
-                // Note: ideally we'd use the same format as our other duration displays for the elapsed time,
-                // but that isn't possible due to https://github.com/console-rs/indicatif/issues/440. Use
-                // {{elapsed_precise}} as an OK tradeoff here.
                 let template = format!(
                     "{{prefix:>12}} [{{elapsed_precise:>9}}] [{{wide_bar}}] \
                     {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}     "
@@ -340,16 +336,16 @@ impl TestReporterBuilder {
                 progress_bar.set_style(
                     ProgressStyle::default_bar()
                         .progress_chars("=> ")
-                        .template(&template),
+                        .template(&template)
+                        .expect("template is valid"),
                 );
-                // Since we only update the progress bar on a steady tick (below), there's no need
-                // to buffer in ProgressDrawTarget.
+                // Set a refresh rate of 2x the steady tick rate.
                 //
                 // NOTE: set_draw_target must be called before enable_steady_tick to avoid a
                 // spurious extra line from being printed as the draw target changes.
-                progress_bar.set_draw_target(ProgressDrawTarget::stderr_nohz());
+                progress_bar.set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
                 // Enable a steady tick 10 times a second.
-                progress_bar.enable_steady_tick(100);
+                progress_bar.enable_steady_tick(Duration::from_millis(100));
                 ReporterStderrImpl::TerminalWithBar(progress_bar)
             }
             (ReporterStderr::Terminal, true) => {
