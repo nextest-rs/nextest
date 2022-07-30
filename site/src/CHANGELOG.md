@@ -3,6 +3,17 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.32] - 2022-07-30
+
+### Added
+
+- `cargo nextest run` now has a new `--no-run` feature to build but not run tests. (This was previously achievable with `cargo nextest list -E 'none()'`, but is more intuitive this way.)
+- Pre-built binaries are now available for i686 Windows. Thanks [Guiguiprim](https://github.com/Guiguiprim)!
+
+### Internal improvements
+
+- Filter expression evaluation now uses a stack machine via the [recursion](https://crates.io/crates/recursion) crate. Thanks [Inanna](https://github.com/inanna-malick) for your first contribution!
+
 ## [0.9.31] - 2022-07-27
 
 ### Added
@@ -482,6 +493,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.32]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.32
 [0.9.31]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.31
 [0.9.30]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.30
 [0.9.29]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29

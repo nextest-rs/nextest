@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.22.0] - 2022-07-30
+
+### Changed
+
+- Progress bar library `indicatif` updated to 0.17.0.
+
 ## [0.21.0] - 2022-07-27
 
 ### Changed
@@ -255,7 +261,9 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
-[0.20.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.19.0
+[0.22.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.22.0
+[0.21.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.21.0
+[0.20.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.20.0
 [0.19.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.19.0
 [0.18.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.18.0
 [0.17.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.17.0
