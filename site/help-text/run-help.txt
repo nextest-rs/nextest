@@ -17,6 +17,7 @@ OPTIONS:
     -h, --help                    Print help information
 
 RUNNER OPTIONS:
+        --no-run                    Compile, but don't run tests
     -j, --test-threads <THREADS>    Number of tests to run simultaneously [possible values: integer
                                     or "num-cpus"] [env: NEXTEST_TEST_THREADS=] [aliases: jobs]
         --retries <RETRIES>         Number of retries for failing tests [default: from profile]
