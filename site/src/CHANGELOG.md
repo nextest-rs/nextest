@@ -3,6 +3,12 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.33] - 2022-07-31
+
+### Fixed
+
+- Fixed regression in cargo-nextest 0.9.32 where it no longer produced any output if stderr wasn't a terminal.
+
 ## [0.9.32] - 2022-07-30
 
 ### Added
@@ -493,6 +499,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.33]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.33
 [0.9.32]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.32
 [0.9.31]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.31
 [0.9.30]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.30

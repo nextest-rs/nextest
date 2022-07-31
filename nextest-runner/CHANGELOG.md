@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.22.1] - 2022-07-31
+
+### Fixed
+
+- Reverted `indicatif` to 0.16.2 to fix regression where nextest no longer produced any output if stderr wasn't a terminal.
+
 ## [0.22.0] - 2022-07-30
 
 ### Changed
@@ -261,6 +267,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.22.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.22.1
 [0.22.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.22.0
 [0.21.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.21.0
 [0.20.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.20.0
