@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-nextest"
-version = "0.9.32"
+version = "0.9.33"
 dependencies = [
  "camino",
  "cfg-if",
@@ -843,17 +843,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indicatif"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc42b206e70d86ec03285b123e65a5458c92027d1fb2ae3555878b8113b3ddf"
-dependencies = [
- "console",
- "number_prefix",
- "unicode-width",
-]
-
-[[package]]
 name = "indoc"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1077,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-runner"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "aho-corasick",
  "async-scoped",
@@ -1098,7 +1087,7 @@ dependencies = [
  "http",
  "humantime-serde",
  "indent_write",
- "indicatif 0.17.0",
+ "indicatif",
  "indoc",
  "itertools",
  "libc",
@@ -1736,7 +1725,7 @@ dependencies = [
  "either",
  "flate2",
  "hyper",
- "indicatif 0.16.2",
+ "indicatif",
  "log",
  "quick-xml 0.22.0",
  "regex",
