@@ -579,7 +579,7 @@ impl<'a> TestRunnerInner<'a> {
                 };
             };
 
-            // Once the process is done executing, wait up to 100ms for the pipes to shut down.
+            // Once the process is done executing, wait up to leak_timeout for the pipes to shut down.
             // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
             // didn't shut down properly. Now, this detects those cases and marks them as leaked.
             let leaked = loop {
