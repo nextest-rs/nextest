@@ -212,7 +212,9 @@ impl<'a> TestRunnerInner<'a> {
         let first_error_mut = &mut first_error;
 
         let _guard = self.runtime.enter();
-        // Hold a receiver open so there are no spurious SendErrors on the sender.
+
+        // 4 is greater than the number of messages that will ever be sent over this channel.
+        // Also, hold a receiver open so there are no spurious SendErrors on the sender.
         let (forward_sender, _forward_receiver) =
             tokio::sync::broadcast::channel::<SignalForwardEvent>(4);
         let forward_sender_ref = &forward_sender;
@@ -326,21 +328,21 @@ impl<'a> TestRunnerInner<'a> {
 
                 loop {
                     let internal_event = tokio::select! {
-                        internal_event = signal_handler.recv(), if !signals_done => {
-                            match internal_event {
-                                Some(event) => InternalEvent::Signal(event),
-                                None => {
-                                    signals_done = true;
-                                    continue;
-                                }
-                            }
-                        },
                         internal_event = run_receiver.recv() => {
                             match internal_event {
                                 Some(event) => InternalEvent::Test(event),
                                 None => {
                                     // All runs have been completed.
                                     break;
+                                }
+                            }
+                        },
+                        internal_event = signal_handler.recv(), if !signals_done => {
+                            match internal_event {
+                                Some(event) => InternalEvent::Signal(event),
+                                None => {
+                                    signals_done = true;
+                                    continue;
                                 }
                             }
                         },
