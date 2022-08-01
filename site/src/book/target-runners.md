@@ -40,7 +40,7 @@ For tests that run on the host platform, nextest uses the target runner defined 
 
 Nextest invokes target runners during both the list and run phases. During the list phase, nextest has [stringent rules] for the contents of standard output.
 
-If a target runner produces debugging or any other kind of output itself, it MUST NOT go to standard output. You can produce output to standard error, to a file on disk, etc.
+If a target runner produces debugging or any other kind of output, it MUST NOT go to standard output. You can produce output to standard error, to a file on disk, etc.
 
 For example, this target runner will not work:
 
