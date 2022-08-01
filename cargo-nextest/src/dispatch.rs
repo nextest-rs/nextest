@@ -1133,7 +1133,7 @@ enum SelfCommand {
         yes: bool,
 
         /// Force downgrades and reinstalls
-        #[clap(long)]
+        #[clap(short, long)]
         force: bool,
 
         /// URL to download releases.json from
