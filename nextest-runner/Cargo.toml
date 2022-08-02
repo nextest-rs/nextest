@@ -93,7 +93,7 @@ win32job = "1.0.1"
 [dev-dependencies]
 color-eyre = { version = "0.6.2", default-features = false }
 duct = "0.13.5"
-indoc = "1.0.6"
+indoc = "1.0.7"
 maplit = "1.0.2"
 pathdiff = { version = "0.2.1", features = ["camino"] }
 pretty_assertions = "1.2.1"
