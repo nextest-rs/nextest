@@ -15,7 +15,7 @@ aho-corasick = "0.7.18"
 async-scoped = { version = "0.7.0", features = ["use-tokio"] }
 bytes = "1.2.1"
 camino = { version = "1.0.9", features = ["serde1"] }
-config = { version = "0.13.1", default-features = false, features = ["toml"] }
+config = { version = "0.13.2", default-features = false, features = ["toml"] }
 cargo_metadata = "0.14.2"
 cfg-if = "1.0.0"
 chrono = "0.4.19"
