@@ -12,7 +12,7 @@ edition = "2021"
 rust-version = "1.59"
 
 [dependencies]
-chrono = "0.4.19"
+chrono = "0.4.20"
 indexmap = "1.9.1"
 quick-xml = "0.23.0"
 thiserror = "1.0.32"
