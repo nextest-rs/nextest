@@ -599,8 +599,7 @@ impl<'de> Deserialize<'de> for TestThreads {
 }
 
 /// Type for the slow-timeout config key.
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[cfg_attr(test, derive(PartialEq))]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct SlowTimeout {
     #[serde(with = "humantime_serde")]
