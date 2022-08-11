@@ -51,7 +51,7 @@ pub(crate) struct OutputContext {
     pub(crate) color: Color,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, ArgEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ArgEnum)]
 #[must_use]
 pub enum Color {
     Auto,

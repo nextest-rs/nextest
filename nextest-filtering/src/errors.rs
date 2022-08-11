@@ -27,7 +27,7 @@ impl FilterExpressionParseErrors {
 }
 
 /// An individual error that occurred while parsing a filter expression.
-#[derive(Clone, Debug, Error, Diagnostic, PartialEq)]
+#[derive(Clone, Debug, Error, Diagnostic, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseSingleError {
     /// An invalid regex was encountered.
