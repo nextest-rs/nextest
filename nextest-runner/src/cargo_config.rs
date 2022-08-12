@@ -6,10 +6,7 @@
 //! Since `cargo config get` is not stable as of Rust 1.61, nextest must do its own config file
 //! search.
 
-use crate::errors::{
-    CargoConfigSearchError, CargoConfigsConstructError, InvalidCargoCliConfigReason,
-    TargetTripleError,
-};
+use crate::errors::{CargoConfigError, InvalidCargoCliConfigReason, TargetTripleError};
 use camino::{Utf8Path, Utf8PathBuf};
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
@@ -162,13 +159,12 @@ impl CargoConfigs {
     /// Discover Cargo config files using the same algorithm that Cargo uses.
     pub fn new(
         cli_configs: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> Result<Self, CargoConfigsConstructError> {
+    ) -> Result<Self, CargoConfigError> {
         let cli_configs = parse_cli_configs(cli_configs.into_iter())?;
         let cwd = std::env::current_dir()
-            .map_err(CargoConfigsConstructError::GetCurrentDir)
+            .map_err(CargoConfigError::GetCurrentDir)
             .and_then(|cwd| {
-                Utf8PathBuf::try_from(cwd)
-                    .map_err(CargoConfigsConstructError::CurrentDirInvalidUtf8)
+                Utf8PathBuf::try_from(cwd).map_err(CargoConfigError::CurrentDirInvalidUtf8)
             })?;
 
         Ok(Self {
@@ -187,7 +183,7 @@ impl CargoConfigs {
         cli_configs: impl IntoIterator<Item = impl AsRef<str>>,
         cwd: &Utf8Path,
         terminate_search_at: &Utf8Path,
-    ) -> Result<Self, CargoConfigsConstructError> {
+    ) -> Result<Self, CargoConfigError> {
         let cli_configs = parse_cli_configs(cli_configs.into_iter())?;
 
         Ok(Self {
@@ -206,7 +202,7 @@ impl CargoConfigs {
         &self,
     ) -> Result<
         impl Iterator<Item = &(CargoConfigSource, CargoConfig)> + DoubleEndedIterator + '_,
-        CargoConfigSearchError,
+        CargoConfigError,
     > {
         let cli_iter = self.cli_configs.iter();
         let file_iter = self
@@ -219,7 +215,7 @@ impl CargoConfigs {
 
 fn parse_cli_configs(
     cli_configs: impl Iterator<Item = impl AsRef<str>>,
-) -> Result<Vec<(CargoConfigSource, CargoConfig)>, CargoConfigsConstructError> {
+) -> Result<Vec<(CargoConfigSource, CargoConfig)>, CargoConfigError> {
     cli_configs
         .into_iter()
         .map(|config_str| {
@@ -231,7 +227,7 @@ fn parse_cli_configs(
         .collect()
 }
 
-fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigsConstructError> {
+fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
     // This implementation is copied over from https://github.com/rust-lang/cargo/pull/10176.
 
     // We only want to allow "dotted key" (see https://toml.io/en/v1.0.0#keys)
@@ -242,7 +238,7 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigsConstru
     let doc: toml_edit::Document =
         config_str
             .parse()
-            .map_err(|error| CargoConfigsConstructError::CliConfigParseError {
+            .map_err(|error| CargoConfigError::CliConfigParseError {
                 config_str: config_str.to_owned(),
                 error,
             })?;
@@ -267,7 +263,7 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigsConstru
                     if table.key_decor(k).map_or(false, non_empty_decor)
                         || non_empty_decor(nt.decor())
                     {
-                        return Err(CargoConfigsConstructError::InvalidCliConfig {
+                        return Err(CargoConfigError::InvalidCliConfig {
                             config_str: config_str.to_owned(),
                             reason: InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration,
                         })?;
@@ -275,14 +271,14 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigsConstru
                     table = nt;
                 }
                 Item::Value(v) if v.is_inline_table() => {
-                    return Err(CargoConfigsConstructError::InvalidCliConfig {
+                    return Err(CargoConfigError::InvalidCliConfig {
                         config_str: config_str.to_owned(),
                         reason: InvalidCargoCliConfigReason::SetsValueToInlineTable,
                     })?;
                 }
                 Item::Value(v) => {
                     if non_empty_decor(v.decor()) {
-                        return Err(CargoConfigsConstructError::InvalidCliConfig {
+                        return Err(CargoConfigError::InvalidCliConfig {
                             config_str: config_str.to_owned(),
                             reason: InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration,
                         })?;
@@ -291,13 +287,13 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigsConstru
                     break;
                 }
                 Item::ArrayOfTables(_) => {
-                    return Err(CargoConfigsConstructError::InvalidCliConfig {
+                    return Err(CargoConfigError::InvalidCliConfig {
                         config_str: config_str.to_owned(),
                         reason: InvalidCargoCliConfigReason::SetsValueToArrayOfTables,
                     })?;
                 }
                 Item::None => {
-                    return Err(CargoConfigsConstructError::InvalidCliConfig {
+                    return Err(CargoConfigError::InvalidCliConfig {
                         config_str: config_str.to_owned(),
                         reason: InvalidCargoCliConfigReason::DoesntProvideValue,
                     })?;
@@ -307,14 +303,14 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigsConstru
         got_to_value
     };
     if !ok {
-        return Err(CargoConfigsConstructError::InvalidCliConfig {
+        return Err(CargoConfigError::InvalidCliConfig {
             config_str: config_str.to_owned(),
             reason: InvalidCargoCliConfigReason::NotDottedKv,
         })?;
     }
 
     let cargo_config: CargoConfig = toml_edit::easy::from_document(doc).map_err(|error| {
-        CargoConfigsConstructError::CliConfigDeError {
+        CargoConfigError::CliConfigDeError {
             config_str: config_str.to_owned(),
             error,
         }
@@ -325,7 +321,7 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigsConstru
 fn discover_impl(
     start_search_at: &Utf8Path,
     terminate_search_at: Option<&Utf8Path>,
-) -> Result<Vec<(CargoConfigSource, CargoConfig)>, CargoConfigSearchError> {
+) -> Result<Vec<(CargoConfigSource, CargoConfig)>, CargoConfigError> {
     fn read_config_dir(dir: &mut Utf8PathBuf) -> Option<Utf8PathBuf> {
         // Check for config before config.toml, same as cargo does
         dir.push("config");
@@ -345,7 +341,7 @@ fn discover_impl(
     }
 
     let mut dir = start_search_at.canonicalize_utf8().map_err(|error| {
-        CargoConfigSearchError::FailedPathCanonicalization {
+        CargoConfigError::FailedPathCanonicalization {
             path: start_search_at.to_owned(),
             error,
         }
@@ -377,10 +373,8 @@ fn discover_impl(
         // Attempt lookup the $CARGO_HOME directory from the cwd, as that can
         // contain a default config.toml
         let mut cargo_home_path = home::cargo_home_with_cwd(start_search_at.as_std_path())
-            .map_err(CargoConfigSearchError::GetCargoHome)
-            .and_then(|home| {
-                Utf8PathBuf::try_from(home).map_err(CargoConfigSearchError::NonUtf8Path)
-            })?;
+            .map_err(CargoConfigError::GetCargoHome)
+            .and_then(|home| Utf8PathBuf::try_from(home).map_err(CargoConfigError::NonUtf8Path))?;
 
         if let Some(home_config) = read_config_dir(&mut cargo_home_path) {
             // Ensure we don't add a duplicate if the current directory is underneath
@@ -395,21 +389,21 @@ fn discover_impl(
         .into_iter()
         .map(|path| {
             let config_contents = std::fs::read_to_string(&path).map_err(|error| {
-                CargoConfigSearchError::ConfigReadError {
+                CargoConfigError::ConfigReadError {
                     path: path.clone(),
                     error,
                 }
             })?;
             let config: CargoConfig =
                 toml_edit::easy::from_str(&config_contents).map_err(|error| {
-                    CargoConfigSearchError::ConfigParseError {
+                    CargoConfigError::ConfigParseError {
                         path: path.clone(),
                         error,
                     }
                 })?;
             Ok((CargoConfigSource::File(path), config))
         })
-        .collect::<Result<Vec<_>, CargoConfigSearchError>>()?;
+        .collect::<Result<Vec<_>, CargoConfigError>>()?;
 
     Ok(configs)
 }
@@ -502,7 +496,7 @@ mod tests {
         // Disallow inline tables
         let err = parse_cli_config(arg).unwrap_err();
         let actual_reason = match err {
-            CargoConfigsConstructError::InvalidCliConfig { reason, .. } => reason,
+            CargoConfigError::InvalidCliConfig { reason, .. } => reason,
             other => panic!(
                 "expected input {arg} to fail with InvalidCliConfig, actual failure: {other}"
             ),

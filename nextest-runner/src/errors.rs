@@ -787,7 +787,7 @@ pub enum WriteEventError {
 /// instance.
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum CargoConfigsConstructError {
+pub enum CargoConfigError {
     /// Failed to retrieve the current directory.
     #[error("failed to retrieve current directory")]
     GetCurrentDir(#[source] std::io::Error),
@@ -830,39 +830,7 @@ pub enum CargoConfigsConstructError {
         #[source]
         reason: InvalidCargoCliConfigReason,
     },
-}
 
-/// The reason an invalid CLI config failed.
-///
-/// Part of [`CargoConfigsConstructError::InvalidCliConfig`].
-#[derive(Copy, Clone, Debug, Error, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum InvalidCargoCliConfigReason {
-    /// The argument is not a TOML dotted key expression.
-    #[error("was not a TOML dotted key expression (such as `build.jobs = 2`)")]
-    NotDottedKv,
-
-    /// The argument includes non-whitespace decoration.
-    #[error("includes non-whitespace decoration")]
-    IncludesNonWhitespaceDecoration,
-
-    /// The argument sets a value to an inline table.
-    #[error("sets a value to an inline table, which is not accepted")]
-    SetsValueToInlineTable,
-
-    /// The argument sets a value to an array of tables.
-    #[error("sets a value to an array of tables, which is not accepted")]
-    SetsValueToArrayOfTables,
-
-    /// The argument doesn't provide a value.
-    #[error("doesn't provide a value")]
-    DoesntProvideValue,
-}
-
-/// An error occurred while looking for Cargo configuration files.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum CargoConfigSearchError {
     /// A non-UTF-8 path was encountered.
     #[error("non-UTF-8 path encountered")]
     NonUtf8Path(#[source] FromPathBufError),
@@ -905,6 +873,33 @@ pub enum CargoConfigSearchError {
     },
 }
 
+/// The reason an invalid CLI config failed.
+///
+/// Part of [`CargoConfigError::InvalidCliConfig`].
+#[derive(Copy, Clone, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum InvalidCargoCliConfigReason {
+    /// The argument is not a TOML dotted key expression.
+    #[error("was not a TOML dotted key expression (such as `build.jobs = 2`)")]
+    NotDottedKv,
+
+    /// The argument includes non-whitespace decoration.
+    #[error("includes non-whitespace decoration")]
+    IncludesNonWhitespaceDecoration,
+
+    /// The argument sets a value to an inline table.
+    #[error("sets a value to an inline table, which is not accepted")]
+    SetsValueToInlineTable,
+
+    /// The argument sets a value to an array of tables.
+    #[error("sets a value to an array of tables, which is not accepted")]
+    SetsValueToArrayOfTables,
+
+    /// The argument doesn't provide a value.
+    #[error("doesn't provide a value")]
+    DoesntProvideValue,
+}
+
 /// An error occurred while determining the cross-compiling target triple.
 #[derive(Debug, Error)]
 pub enum TargetTripleError {
@@ -920,7 +915,7 @@ pub enum TargetTripleError {
     CargoConfigSearchError(
         #[from]
         #[source]
-        CargoConfigSearchError,
+        CargoConfigError,
     ),
 }
 
@@ -963,7 +958,7 @@ pub enum TargetRunnerError {
     CargoConfigSearchError(
         #[from]
         #[source]
-        CargoConfigSearchError,
+        CargoConfigError,
     ),
 }
 
