@@ -1248,6 +1248,7 @@ dependencies = [
  "once_cell",
  "owo-colors",
  "pathdiff",
+ "pin-project-lite",
  "pretty_assertions",
  "proptest",
  "proptest-derive",

@@ -12,7 +12,7 @@ use crate::{
     helpers::convert_build_platform,
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
-    signal::{SignalEvent, SignalHandler, SignalHandlerKind},
+    signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
     time::{StopwatchEnd, StopwatchStart},
 };
@@ -290,10 +290,13 @@ impl<'a> TestRunnerInner<'a> {
 
         let _guard = self.runtime.enter();
 
-        // 4 is greater than the number of messages that will ever be sent over this channel.
-        // Also, hold a receiver open so there are no spurious SendErrors on the sender.
+        // Messages sent over this channel include:
+        // - SIGSTOP/SIGCONT
+        // - Shutdown signals (once)
+        // - Signals twice
+        // 32 should be more than enough.
         let (forward_sender, _forward_receiver) =
-            tokio::sync::broadcast::channel::<SignalForwardEvent>(4);
+            tokio::sync::broadcast::channel::<SignalForwardEvent>(32);
         let forward_sender_ref = &forward_sender;
 
         TokioScope::scope_and_block(move |scope| {
@@ -433,8 +436,27 @@ impl<'a> TestRunnerInner<'a> {
                                 test_instance,
                                 run_statuses: ExecutionStatuses::new(run_statuses),
                             });
-                        };
 
+                            // Drain the forward receiver of any messages, including those that are
+                            // related to SIGTSTP.
+                            loop {
+                                let message = this_forward_receiver.try_recv();
+                                match message {
+                                    #[cfg(unix)]
+                                    Ok(SignalForwardEvent::Stop(sender)) => {
+                                        // The receiver being dead isn't really important.
+                                        let _ = sender.send(()).await;
+                                    }
+                                    Err(
+                                        tokio::sync::broadcast::error::TryRecvError::Empty
+                                        | tokio::sync::broadcast::error::TryRecvError::Closed,
+                                    ) => {
+                                        break;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        };
                         (threads_required, fut)
                     })
                     // buffer_unordered_weighted means tests are spawned in order but returned in
@@ -471,7 +493,56 @@ impl<'a> TestRunnerInner<'a> {
                     };
 
                     match ctx_mut.handle_event(internal_event) {
-                        Ok(()) => {}
+                        #[cfg(unix)]
+                        Ok(Some(JobControlEvent::Stop)) => {
+                            // There are test_threads or fewer tests running so this buffer is
+                            // big enough.
+                            let (sender, mut receiver) =
+                                tokio::sync::mpsc::channel(self.test_threads);
+                            let mut running_tests = forward_sender_ref
+                                .send(SignalForwardEvent::Stop(sender))
+                                .expect(
+                                "at least one receiver stays open so this should never error out",
+                            );
+                            // One event to account for the receiver held open at the top.
+                            running_tests -= 1;
+
+                            // There's a possibility of a race condition between a test exiting and
+                            // sending the message to the receiver. For that reason, don't wait more
+                            // than 100ms on children to stop.
+                            let sleep = tokio::time::sleep(Duration::from_millis(100));
+                            tokio::pin!(sleep);
+
+                            loop {
+                                tokio::select! {
+                                    _ = receiver.recv(), if running_tests > 0 => {
+                                        running_tests -= 1;
+                                        log::debug!(
+                                            "stopping tests: running tests down to {running_tests}"
+                                        );
+                                    }
+                                    _ = &mut sleep => {
+                                        break;
+                                    }
+                                    else => {
+                                        break;
+                                    }
+                                };
+                            }
+
+                            // Now stop nextest itself.
+                            imp::raise_stop();
+                        }
+                        #[cfg(unix)]
+                        Ok(Some(JobControlEvent::Continue)) => {
+                            // Nextest has been resumed. Resume all the tests as well.
+                            let _ = forward_sender_ref.send(SignalForwardEvent::Continue);
+                        }
+                        #[cfg(not(unix))]
+                        Ok(Some(_)) => {
+                            crate::helpers::statically_unreachable();
+                        }
+                        Ok(None) => {}
                         Err(err) => {
                             // If an error happens, it is because either the callback failed or
                             // a cancellation notice was received. If the callback failed, we need
@@ -506,7 +577,8 @@ impl<'a> TestRunnerInner<'a> {
                                     // Ignore errors here: if there are no receivers to cancel, so
                                     // be it. Also note the ordering here: canceled_ref is set
                                     // *before* this is sent.
-                                    let _ = forward_sender_ref.send(forward_event);
+                                    let _ = forward_sender_ref
+                                        .send(SignalForwardEvent::Shutdown(forward_event));
                                 }
                             }
                         }
@@ -547,13 +619,13 @@ impl<'a> TestRunnerInner<'a> {
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
         delay_before_start: Duration,
     ) -> InternalExecuteStatus {
-        let stopwatch = crate::time::stopwatch();
+        let mut stopwatch = crate::time::stopwatch();
 
         match self
             .run_test_inner(
                 test,
                 retry_data,
-                &stopwatch,
+                &mut stopwatch,
                 overrides,
                 run_sender,
                 forward_receiver,
@@ -579,7 +651,7 @@ impl<'a> TestRunnerInner<'a> {
         &self,
         test: TestInstance<'a>,
         retry_data: RetryData,
-        stopwatch: &StopwatchStart,
+        stopwatch: &mut StopwatchStart,
         overrides: &ProfileOverrides,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
@@ -620,9 +692,10 @@ impl<'a> TestRunnerInner<'a> {
         let leak_timeout = overrides.leak_timeout().unwrap_or(self.leak_timeout);
         let mut is_slow = false;
 
-        let mut interval = tokio::time::interval(slow_timeout.period);
-        // The first tick is immediate.
-        interval.tick().await;
+        // Use a pausable_sleep rather than an interval here because it's much harder to pause and
+        // resume an interval.
+        let interval_sleep = crate::time::pausable_sleep(slow_timeout.period);
+        tokio::pin!(interval_sleep);
 
         let mut timeout_hit = 0;
 
@@ -680,7 +753,7 @@ impl<'a> TestRunnerInner<'a> {
                         // The test finished executing.
                         break res;
                     }
-                    _ = interval.tick(), if status.is_none() => {
+                    _ = &mut interval_sleep, if status.is_none() => {
                         is_slow = true;
                         timeout_hit += 1;
                         let will_terminate = if let Some(terminate_after) = slow_timeout.terminate_after {
@@ -703,17 +776,18 @@ impl<'a> TestRunnerInner<'a> {
                         }
 
                         if will_terminate {
-                                // attempt to terminate the slow test.
-                                // as there is a race between shutting down a slow test and its own completion
-                                // we silently ignore errors to avoid printing false warnings.
-                                imp::terminate_child(&mut child, TerminateMode::Timeout(slow_timeout.grace_period), forward_receiver, job.as_ref()).await;
-                                status = Some(ExecutionResult::Timeout);
-                                if slow_timeout.grace_period.is_zero() {
-                                    break child.wait().await;
-                                }
-                                // Don't break here to give the wait task a chance to finish.
+                            // attempt to terminate the slow test.
+                            // as there is a race between shutting down a slow test and its own completion
+                            // we silently ignore errors to avoid printing false warnings.
+                            imp::terminate_child(&mut child, TerminateMode::Timeout(slow_timeout.grace_period), forward_receiver, job.as_ref()).await;
+                            status = Some(ExecutionResult::Timeout);
+                            if slow_timeout.grace_period.is_zero() {
+                                break child.wait().await;
+                            }
+                            // Don't break here to give the wait task a chance to finish.
+                        } else {
+                            interval_sleep.as_mut().reset_original_duration();
                         }
-
                     }
                     recv = forward_receiver.recv() => {
                         // The sender stays open longer than the whole loop, and the buffer is big
@@ -721,7 +795,33 @@ impl<'a> TestRunnerInner<'a> {
                         // should never happen.
                         let forward_event = recv.expect("a RecvError should never happen here");
 
-                        imp::terminate_child(&mut child, TerminateMode::Signal(forward_event), forward_receiver, job.as_ref()).await;
+                        match forward_event {
+                            #[cfg(unix)]
+                            SignalForwardEvent::Stop(sender) => {
+                                // It isn't possible to receive a stop event twice since it gets
+                                // debounced in the main signal handler.
+                                stopwatch.pause();
+                                interval_sleep.as_mut().pause();
+                                imp::job_control_child(&child, JobControlEvent::Stop);
+                                // The receiver being dead probably means the main thread panicked
+                                // or similar.
+                                let _ = sender.send(()).await;
+                            }
+                            #[cfg(unix)]
+                            SignalForwardEvent::Continue => {
+                                // It's possible to receive a resume event right at the beginning of
+                                // test execution, so debounce it.
+                                if stopwatch.is_paused() {
+                                    stopwatch.resume();
+                                    interval_sleep.as_mut().resume();
+                                    imp::job_control_child(&child, JobControlEvent::Continue);
+                                }
+                            }
+                            SignalForwardEvent::Shutdown(event) => {
+                                imp::terminate_child(&mut child, TerminateMode::Signal(event), forward_receiver, job.as_ref()).await;
+                            }
+                        }
+
                     }
                 };
             };
@@ -730,6 +830,8 @@ impl<'a> TestRunnerInner<'a> {
             // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
             // didn't shut down properly. Now, this detects those cases and marks them as leaked.
             let leaked = loop {
+                // Ignore stop and continue events here since the leak timeout should be very small.
+                // TODO: we may want to consider them.
                 let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
@@ -1113,17 +1215,27 @@ enum SignalCount {
 }
 
 impl SignalCount {
-    fn to_forward_event(self, event: SignalEvent) -> SignalForwardEvent {
+    fn to_forward_event(self, event: ShutdownEvent) -> ShutdownForwardEvent {
         match self {
-            Self::Once => SignalForwardEvent::Once(event),
-            Self::Twice => SignalForwardEvent::Twice,
+            Self::Once => ShutdownForwardEvent::Once(event),
+            Self::Twice => ShutdownForwardEvent::Twice,
         }
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 enum SignalForwardEvent {
-    Once(SignalEvent),
+    // The mpsc sender is used by each test to indicate that the stop signal has been sent.
+    #[cfg(unix)]
+    Stop(tokio::sync::mpsc::Sender<()>),
+    #[cfg(unix)]
+    Continue,
+    Shutdown(ShutdownForwardEvent),
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum ShutdownForwardEvent {
+    Once(ShutdownEvent),
     Twice,
 }
 
@@ -1167,48 +1279,55 @@ where
         })
     }
 
-    fn handle_event(&mut self, event: InternalEvent<'a>) -> Result<(), InternalError<E>> {
+    fn callback(
+        &mut self,
+        test_event: TestEvent<'a>,
+    ) -> Result<Option<JobControlEvent>, InternalError<E>> {
+        (self.callback)(test_event).map_err(InternalError::Error)?;
+        Ok(None)
+    }
+
+    fn handle_event(
+        &mut self,
+        event: InternalEvent<'a>,
+    ) -> Result<Option<JobControlEvent>, InternalError<E>> {
         match event {
             InternalEvent::Test(InternalTestEvent::Started { test_instance }) => {
                 self.running += 1;
-                (self.callback)(TestEvent::TestStarted {
+                self.callback(TestEvent::TestStarted {
                     test_instance,
                     current_stats: self.run_stats,
                     running: self.running,
                     cancel_state: self.cancel_state,
                 })
-                .map_err(InternalError::Error)
             }
             InternalEvent::Test(InternalTestEvent::Slow {
                 test_instance,
                 retry_data,
                 elapsed,
                 will_terminate,
-            }) => (self.callback)(TestEvent::TestSlow {
+            }) => self.callback(TestEvent::TestSlow {
                 test_instance,
                 retry_data,
                 elapsed,
                 will_terminate,
-            })
-            .map_err(InternalError::Error),
+            }),
             InternalEvent::Test(InternalTestEvent::AttemptFailedWillRetry {
                 test_instance,
                 run_status,
                 delay_before_next_attempt,
-            }) => (self.callback)(TestEvent::TestAttemptFailedWillRetry {
+            }) => self.callback(TestEvent::TestAttemptFailedWillRetry {
                 test_instance,
                 run_status,
                 delay_before_next_attempt,
-            })
-            .map_err(InternalError::Error),
+            }),
             InternalEvent::Test(InternalTestEvent::RetryStarted {
                 test_instance,
                 retry_data,
-            }) => (self.callback)(TestEvent::TestRetryStarted {
+            }) => self.callback(TestEvent::TestRetryStarted {
                 test_instance,
                 retry_data,
-            })
-            .map_err(InternalError::Error),
+            }),
             InternalEvent::Test(InternalTestEvent::Finished {
                 test_instance,
                 run_statuses,
@@ -1219,14 +1338,13 @@ where
                 // should this run be canceled because of a failure?
                 let fail_cancel = self.fail_fast && !run_statuses.last_status().result.is_success();
 
-                (self.callback)(TestEvent::TestFinished {
+                self.callback(TestEvent::TestFinished {
                     test_instance,
                     run_statuses,
                     current_stats: self.run_stats,
                     running: self.running,
                     cancel_state: self.cancel_state,
-                })
-                .map_err(InternalError::Error)?;
+                })?;
 
                 if fail_cancel {
                     // A test failed: start cancellation.
@@ -1234,7 +1352,7 @@ where
                         self.begin_cancel(CancelReason::TestFailure).err(),
                     ))
                 } else {
-                    Ok(())
+                    Ok(None)
                 }
             }
             InternalEvent::Test(InternalTestEvent::Skipped {
@@ -1242,26 +1360,51 @@ where
                 reason,
             }) => {
                 self.run_stats.skipped += 1;
-                (self.callback)(TestEvent::TestSkipped {
+                self.callback(TestEvent::TestSkipped {
                     test_instance,
                     reason,
                 })
-                .map_err(InternalError::Error)
             }
-            InternalEvent::Signal(event) => {
+            InternalEvent::Signal(SignalEvent::Shutdown(event)) => {
                 let signal_count = self.increment_signal_count();
                 let forward_event = signal_count.to_forward_event(event);
 
                 let cancel_reason = match event {
                     #[cfg(unix)]
-                    SignalEvent::Hangup | SignalEvent::Term => CancelReason::Signal,
-                    SignalEvent::Interrupt => CancelReason::Interrupt,
+                    ShutdownEvent::Hangup | ShutdownEvent::Term => CancelReason::Signal,
+                    ShutdownEvent::Interrupt => CancelReason::Interrupt,
                 };
 
                 Err(InternalError::SignalCanceled(
                     forward_event,
                     self.begin_cancel(cancel_reason).err(),
                 ))
+            }
+            #[cfg(unix)]
+            InternalEvent::Signal(SignalEvent::JobControl(JobControlEvent::Stop)) => {
+                // Debounce stop signals.
+                if !self.stopwatch.is_paused() {
+                    self.callback(TestEvent::RunPaused {
+                        running: self.running,
+                    })?;
+                    self.stopwatch.pause();
+                    Ok(Some(JobControlEvent::Stop))
+                } else {
+                    Ok(None)
+                }
+            }
+            #[cfg(unix)]
+            InternalEvent::Signal(SignalEvent::JobControl(JobControlEvent::Continue)) => {
+                // Debounce continue signals.
+                if self.stopwatch.is_paused() {
+                    self.stopwatch.resume();
+                    self.callback(TestEvent::RunContinued {
+                        running: self.running,
+                    })?;
+                    Ok(Some(JobControlEvent::Continue))
+                } else {
+                    Ok(None)
+                }
             }
         }
     }
@@ -1344,7 +1487,7 @@ enum InternalTestEvent<'a> {
 enum InternalError<E> {
     Error(E),
     TestFailureCanceled(Option<E>),
-    SignalCanceled(SignalForwardEvent, Option<E>),
+    SignalCanceled(ShutdownForwardEvent, Option<E>),
 }
 
 /// Whether a test passed, failed or an error occurred while executing the test.
@@ -1515,7 +1658,7 @@ mod imp {
 #[cfg(unix)]
 mod imp {
     use super::*;
-    use libc::{SIGHUP, SIGINT, SIGKILL, SIGTERM};
+    use libc::{SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGSTOP, SIGTERM, SIGTSTP};
     use std::os::unix::process::CommandExt;
 
     // This is a no-op on non-windows platforms.
@@ -1569,6 +1712,30 @@ mod imp {
         Ok(())
     }
 
+    pub(super) fn job_control_child(child: &Child, event: JobControlEvent) {
+        if let Some(pid) = child.id() {
+            let pid = pid as i32;
+            // Send the signal to the process group.
+            let signal = match event {
+                JobControlEvent::Stop => SIGTSTP,
+                JobControlEvent::Continue => SIGCONT,
+            };
+            unsafe {
+                // We set up a process group in cmd_pre_exec -- now
+                // send a signal to that group.
+                libc::kill(-pid, signal);
+            }
+        } else {
+            // The child exited already -- don't send a signal.
+        }
+    }
+
+    // Note this is SIGSTOP rather than SIGTSTP to avoid triggering our signal handler.
+    pub(super) fn raise_stop() {
+        // This can never error out because SIGSTOP is a valid signal.
+        unsafe { libc::raise(SIGSTOP) };
+    }
+
     pub(super) async fn terminate_child(
         child: &mut Child,
         mode: TerminateMode,
@@ -1587,10 +1754,12 @@ mod imp {
                         SIGTERM
                     }
                 }
-                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Hangup)) => SIGHUP,
-                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Term)) => SIGTERM,
-                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Interrupt)) => SIGINT,
-                TerminateMode::Signal(SignalForwardEvent::Twice) => SIGKILL,
+                TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Hangup)) => SIGHUP,
+                TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Term)) => SIGTERM,
+                TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Interrupt)) => {
+                    SIGINT
+                }
+                TerminateMode::Signal(ShutdownForwardEvent::Twice) => SIGKILL,
             };
             unsafe {
                 // We set up a process group in cmd_pre_exec -- now
@@ -1603,36 +1772,54 @@ mod imp {
                 return;
             }
 
-            // give the process a grace period of 10s
-            let sleep = tokio::time::sleep(grace_period);
-            tokio::select! {
-                biased;
-
-                _ = child.wait() => {
-                    // The process exited.
-                }
-                recv = forward_receiver.recv() => {
-                    // The sender stays open longer than the whole loop, and the buffer is big
-                    // enough for all messages ever sent through this channel, so a RecvError
-                    // should never happen.
-                    let _ = recv.expect("a RecvError should never happen here");
-
-                    // Receiving a signal while in this state always means kill immediately.
-                    unsafe {
-                        // Send SIGKILL to the entire process group.
-                        libc::kill(-pid, SIGKILL);
+            let sleep = crate::time::pausable_sleep(grace_period);
+            tokio::pin!(sleep);
+            loop {
+                tokio::select! {
+                    _ = child.wait() => {
+                        // The process exited.
+                        break;
                     }
-                }
-                _ = sleep => {
-                    // The process didn't exit -- need to do a hard shutdown.
-                    unsafe {
-                        // Send SIGKILL to the entire process group.
-                        libc::kill(-pid, SIGKILL);
+                    recv = forward_receiver.recv() => {
+                        // The sender stays open longer than the whole loop, and the buffer is big
+                        // enough for all messages ever sent through this channel, so a RecvError
+                        // should never happen.
+                        let forward_event = recv.expect("a RecvError should never happen here");
+
+                        match forward_event {
+                            SignalForwardEvent::Stop(sender) => {
+                                sleep.as_mut().pause();
+                                imp::job_control_child(child, JobControlEvent::Stop);
+                                let _ = sender.send(()).await;
+                            }
+                            SignalForwardEvent::Continue => {
+                                // Possible to receive a Continue at the beginning of execution.
+                                if !sleep.is_paused() {
+                                    sleep.as_mut().resume();
+                                }
+                                imp::job_control_child(child, JobControlEvent::Continue);
+                            }
+                            SignalForwardEvent::Shutdown(_) => {
+                                // Receiving a shutdown signal while in this state always means kill
+                                // immediately.
+                                unsafe {
+                                    // Send SIGKILL to the entire process group.
+                                    libc::kill(-pid, SIGKILL);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    _ = &mut sleep => {
+                        // The process didn't exit -- need to do a hard shutdown.
+                        unsafe {
+                            // Send SIGKILL to the entire process group.
+                            libc::kill(-pid, SIGKILL);
+                        }
+                        break;
                     }
                 }
             }
-        } else {
-            // This means that the process has already exited.
         }
     }
 }
@@ -1640,7 +1827,7 @@ mod imp {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TerminateMode {
     Timeout(Duration),
-    Signal(SignalForwardEvent),
+    Signal(ShutdownForwardEvent),
 }
 
 #[cfg(test)]
