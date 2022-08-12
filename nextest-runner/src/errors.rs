@@ -797,8 +797,19 @@ pub enum CargoConfigsConstructError {
     CurrentDirInvalidUtf8(#[source] FromPathBufError),
 
     /// Parsing a CLI config option failed.
-    #[error("failed to parse --config option `{config_str}` as TOML")]
+    #[error("failed to parse --config argument `{config_str}` as TOML")]
     CliConfigParseError {
+        /// The CLI config option.
+        config_str: String,
+
+        /// The error that occurred trying to parse the config.
+        #[source]
+        error: toml_edit::TomlError,
+    },
+
+    /// Deserializing a CLI config option into domain types failed.
+    #[error("failed to deserialize --config argument `{config_str}` as TOML")]
+    CliConfigDeError {
         /// The CLI config option.
         config_str: String,
 
@@ -806,6 +817,46 @@ pub enum CargoConfigsConstructError {
         #[source]
         error: toml_edit::easy::de::Error,
     },
+
+    /// A CLI config option is not in the dotted key format.
+    #[error(
+        "invalid format for --config argument `{config_str}` (should be a dotted key expression)"
+    )]
+    InvalidCliConfig {
+        /// The CLI config option.
+        config_str: String,
+
+        /// The reason why this Cargo CLI config is invalid.
+        #[source]
+        reason: InvalidCargoCliConfigReason,
+    },
+}
+
+/// The reason an invalid CLI config failed.
+///
+/// Part of [`CargoConfigsConstructError::InvalidCliConfig`].
+#[derive(Copy, Clone, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum InvalidCargoCliConfigReason {
+    /// The argument is not a TOML dotted key expression.
+    #[error("was not a TOML dotted key expression (such as `build.jobs = 2`)")]
+    NotDottedKv,
+
+    /// The argument includes non-whitespace decoration.
+    #[error("includes non-whitespace decoration")]
+    IncludesNonWhitespaceDecoration,
+
+    /// The argument sets a value to an inline table.
+    #[error("sets a value to an inline table, which is not accepted")]
+    SetsValueToInlineTable,
+
+    /// The argument sets a value to an array of tables.
+    #[error("sets a value to an array of tables, which is not accepted")]
+    SetsValueToArrayOfTables,
+
+    /// The argument doesn't provide a value.
+    #[error("doesn't provide a value")]
+    DoesntProvideValue,
 }
 
 /// An error occurred while looking for Cargo configuration files.

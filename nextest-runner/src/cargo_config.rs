@@ -6,11 +6,15 @@
 //! Since `cargo config get` is not stable as of Rust 1.61, nextest must do its own config file
 //! search.
 
-use crate::errors::{CargoConfigSearchError, CargoConfigsConstructError, TargetTripleError};
+use crate::errors::{
+    CargoConfigSearchError, CargoConfigsConstructError, InvalidCargoCliConfigReason,
+    TargetTripleError,
+};
 use camino::{Utf8Path, Utf8PathBuf};
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::{collections::BTreeMap, fmt};
+use toml_edit::Item;
 
 /// Represents a target triple that's being cross-compiled against.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -221,15 +225,101 @@ fn parse_cli_configs(
         .map(|config_str| {
             // Each cargo config is expected to be a valid TOML file.
             let config_str = config_str.as_ref();
-            let config = toml_edit::easy::from_str(config_str).map_err(|error| {
-                CargoConfigsConstructError::CliConfigParseError {
-                    config_str: config_str.to_owned(),
-                    error,
-                }
-            })?;
+            let config = parse_cli_config(config_str)?;
             Ok((CargoConfigSource::CliOption, config))
         })
         .collect()
+}
+
+fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigsConstructError> {
+    // This implementation is copied over from https://github.com/rust-lang/cargo/pull/10176.
+
+    // We only want to allow "dotted key" (see https://toml.io/en/v1.0.0#keys)
+    // expressions followed by a value that's not an "inline table"
+    // (https://toml.io/en/v1.0.0#inline-table). Easiest way to check for that is to
+    // parse the value as a toml_edit::Document, and check that the (single)
+    // inner-most table is set via dotted keys.
+    let doc: toml_edit::Document =
+        config_str
+            .parse()
+            .map_err(|error| CargoConfigsConstructError::CliConfigParseError {
+                config_str: config_str.to_owned(),
+                error,
+            })?;
+
+    fn non_empty_decor(d: &toml_edit::Decor) -> bool {
+        d.prefix().map_or(false, |p| !p.trim().is_empty())
+            || d.suffix().map_or(false, |s| !s.trim().is_empty())
+    }
+
+    let ok = {
+        let mut got_to_value = false;
+        let mut table = doc.as_table();
+        let mut is_root = true;
+        while table.is_dotted() || is_root {
+            is_root = false;
+            if table.len() != 1 {
+                break;
+            }
+            let (k, n) = table.iter().next().expect("len() == 1 above");
+            match n {
+                Item::Table(nt) => {
+                    if table.key_decor(k).map_or(false, non_empty_decor)
+                        || non_empty_decor(nt.decor())
+                    {
+                        return Err(CargoConfigsConstructError::InvalidCliConfig {
+                            config_str: config_str.to_owned(),
+                            reason: InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration,
+                        })?;
+                    }
+                    table = nt;
+                }
+                Item::Value(v) if v.is_inline_table() => {
+                    return Err(CargoConfigsConstructError::InvalidCliConfig {
+                        config_str: config_str.to_owned(),
+                        reason: InvalidCargoCliConfigReason::SetsValueToInlineTable,
+                    })?;
+                }
+                Item::Value(v) => {
+                    if non_empty_decor(v.decor()) {
+                        return Err(CargoConfigsConstructError::InvalidCliConfig {
+                            config_str: config_str.to_owned(),
+                            reason: InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration,
+                        })?;
+                    }
+                    got_to_value = true;
+                    break;
+                }
+                Item::ArrayOfTables(_) => {
+                    return Err(CargoConfigsConstructError::InvalidCliConfig {
+                        config_str: config_str.to_owned(),
+                        reason: InvalidCargoCliConfigReason::SetsValueToArrayOfTables,
+                    })?;
+                }
+                Item::None => {
+                    return Err(CargoConfigsConstructError::InvalidCliConfig {
+                        config_str: config_str.to_owned(),
+                        reason: InvalidCargoCliConfigReason::DoesntProvideValue,
+                    })?;
+                }
+            }
+        }
+        got_to_value
+    };
+    if !ok {
+        return Err(CargoConfigsConstructError::InvalidCliConfig {
+            config_str: config_str.to_owned(),
+            reason: InvalidCargoCliConfigReason::NotDottedKv,
+        })?;
+    }
+
+    let cargo_config: CargoConfig = toml_edit::easy::from_document(doc).map_err(|error| {
+        CargoConfigsConstructError::CliConfigDeError {
+            config_str: config_str.to_owned(),
+            error,
+        }
+    })?;
+    Ok(cargo_config)
 }
 
 fn discover_impl(
@@ -342,7 +432,7 @@ pub(crate) struct CargoConfigRunner {
     pub(crate) runner: Option<Runner>,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, Eq, PartialEq)]
 #[serde(untagged)]
 pub(crate) enum Runner {
     Simple(String),
@@ -355,6 +445,74 @@ mod tests {
     use camino::Utf8Path;
     use color_eyre::eyre::{Context, Result};
     use tempfile::TempDir;
+    use test_case::test_case;
+
+    #[test]
+    fn test_cli_kv_accepted() {
+        // These dotted key expressions should all be fine.
+        let config = parse_cli_config("build.target=\"aarch64-unknown-linux-gnu\"")
+            .expect("dotted config should parse correctly");
+        assert_eq!(
+            config.build.target.as_deref(),
+            Some("aarch64-unknown-linux-gnu")
+        );
+
+        let config = parse_cli_config(" target.\"aarch64-unknown-linux-gnu\".runner = 'test' ")
+            .expect("dotted config should parse correctly");
+        assert_eq!(
+            config.target.as_ref().unwrap()["aarch64-unknown-linux-gnu"].runner,
+            Some(Runner::Simple("test".to_owned()))
+        );
+
+        // But anything that's not a dotted key expression should be disallowed.
+        let _ = parse_cli_config("[a] foo=true").unwrap_err();
+        let _ = parse_cli_config("a = true\nb = true").unwrap_err();
+
+        // We also disallow overwriting with tables since it makes merging unclear.
+        let _ = parse_cli_config("a = { first = true, second = false }").unwrap_err();
+        let _ = parse_cli_config("a = { first = true }").unwrap_err();
+    }
+
+    #[test_case(
+        "",
+        InvalidCargoCliConfigReason::NotDottedKv
+
+        ; "empty input")]
+    #[test_case(
+        "a.b={c = \"d\"}",
+        InvalidCargoCliConfigReason::SetsValueToInlineTable
+
+        ; "no inline table value")]
+    #[test_case(
+        "[[a.b]]\nc = \"d\"",
+        InvalidCargoCliConfigReason::NotDottedKv
+
+        ; "no array of tables")]
+    #[test_case(
+        "a.b = \"c\" # exactly",
+        InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration
+
+        ; "no comments after")]
+    #[test_case(
+        "# exactly\na.b = \"c\"",
+        InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration
+
+        ; "no comments before")]
+    fn test_invalid_cli_config_reason(arg: &str, expected_reason: InvalidCargoCliConfigReason) {
+        // Disallow inline tables
+        let err = parse_cli_config(arg).unwrap_err();
+        let actual_reason = match err {
+            CargoConfigsConstructError::InvalidCliConfig { reason, .. } => reason,
+            other => panic!(
+                "expected input {arg} to fail with InvalidCliConfig, actual failure: {other}"
+            ),
+        };
+
+        assert_eq!(
+            expected_reason, actual_reason,
+            "expected reason for failure doesn't match actual reason"
+        );
+    }
 
     #[test]
     fn test_find_target_triple() {
