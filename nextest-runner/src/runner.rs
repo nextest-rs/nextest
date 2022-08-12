@@ -470,7 +470,7 @@ impl<'a> TestRunnerInner<'a> {
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
         // best-effort thing.
-        let job = imp::Job::new().ok();
+        let job = imp::Job::create().ok();
 
         if !self.no_capture {
             // Capture stdout and stderr.
@@ -1241,6 +1241,7 @@ pub fn configure_handle_inheritance(
 #[cfg(windows)]
 mod imp {
     use super::*;
+    pub(super) use win32job::Job;
     use win32job::JobError;
     use windows::Win32::{
         Foundation::{SetHandleInformation, HANDLE, HANDLE_FLAGS, HANDLE_FLAG_INHERIT},
@@ -1286,24 +1287,6 @@ mod imp {
         // TODO: set process group on Windows for better ctrl-C handling.
     }
 
-    /// Wrapper around a Job that implements Send and Sync.
-    #[derive(Debug)]
-    pub(super) struct Job {
-        inner: win32job::Job,
-    }
-
-    impl Job {
-        pub(super) fn new() -> Result<Self, JobError> {
-            Ok(Self {
-                inner: win32job::Job::create()?,
-            })
-        }
-    }
-
-    // https://github.com/ohadravid/win32job-rs/issues/1
-    unsafe impl Send for Job {}
-    unsafe impl Sync for Job {}
-
     pub(super) fn assign_process_to_job(
         child: &tokio::process::Child,
         job: Option<&Job>,
@@ -1319,7 +1302,7 @@ mod imp {
                 }
             };
 
-            job.inner.assign_process(handle)?;
+            job.assign_process(handle)?;
         }
 
         Ok(())
@@ -1337,7 +1320,7 @@ mod imp {
             return;
         }
         if let Some(job) = job {
-            let handle = job.inner.handle();
+            let handle = job.handle();
             unsafe {
                 // Ignore the error here -- it's likely due to the process exiting.
                 // Note: 1 is the exit code returned by Windows.
@@ -1394,7 +1377,7 @@ mod imp {
     pub(super) struct Job(());
 
     impl Job {
-        pub(super) fn new() -> Result<Self, Infallible> {
+        pub(super) fn create() -> Result<Self, Infallible> {
             Ok(Self(()))
         }
     }
