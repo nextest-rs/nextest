@@ -291,7 +291,9 @@ impl<'a> TestRunnerInner<'a> {
                                     // The test succeeded.
                                     run_statuses.push(run_status);
                                     break;
-                                } else if attempt < total_attempts {
+                                } else if attempt < total_attempts
+                                    && !canceled_ref.load(Ordering::Acquire)
+                                {
                                     // Retry this test: send a retry event, then retry the loop.
                                     let _ = this_run_sender.send(InternalTestEvent::Retry {
                                         test_instance,
