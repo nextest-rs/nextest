@@ -3,6 +3,18 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.34] - 2022-08-12
+
+### Added
+
+- For `cargo nextest self update`, added `-f` as a short-form alias for `--force`.
+
+### Fixed
+
+- Tests are no longer retried after a run is canceled. Thanks [iskyzh] for your contribution!
+
+[iskyzh]: https://github.com/iskyzh
+
 ## [0.9.33] - 2022-07-31
 
 ### Fixed
