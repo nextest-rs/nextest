@@ -221,7 +221,7 @@ fn parse_cli_configs(
         .map(|config_str| {
             // Each cargo config is expected to be a valid TOML file.
             let config_str = config_str.as_ref();
-            let config = toml::from_str(config_str).map_err(|error| {
+            let config = toml_edit::easy::from_str(config_str).map_err(|error| {
                 CargoConfigsConstructError::CliConfigParseError {
                     config_str: config_str.to_owned(),
                     error,
@@ -310,12 +310,13 @@ fn discover_impl(
                     error,
                 }
             })?;
-            let config: CargoConfig = toml::from_str(&config_contents).map_err(|error| {
-                CargoConfigSearchError::ConfigParseError {
-                    path: path.clone(),
-                    error,
-                }
-            })?;
+            let config: CargoConfig =
+                toml_edit::easy::from_str(&config_contents).map_err(|error| {
+                    CargoConfigSearchError::ConfigParseError {
+                        path: path.clone(),
+                        error,
+                    }
+                })?;
             Ok((CargoConfigSource::File(path), config))
         })
         .collect::<Result<Vec<_>, CargoConfigSearchError>>()?;

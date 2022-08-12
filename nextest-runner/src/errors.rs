@@ -804,7 +804,7 @@ pub enum CargoConfigsConstructError {
 
         /// The error that occurred trying to deserialize the config.
         #[source]
-        error: toml::de::Error,
+        error: toml_edit::easy::de::Error,
     },
 }
 
@@ -850,7 +850,7 @@ pub enum CargoConfigSearchError {
 
         /// The error that occurred trying to deserialize the config file
         #[source]
-        error: toml::de::Error,
+        error: toml_edit::easy::de::Error,
     },
 }
 
