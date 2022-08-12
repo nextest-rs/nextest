@@ -924,8 +924,7 @@ impl App {
     fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
         check_experimental_filtering(base.output);
 
-        let cargo_configs = CargoConfigs::new(&base.cargo_opts.config)
-            .map_err(|err| ExpectedError::CargoConfigsConstructError { err })?;
+        let cargo_configs = CargoConfigs::new(&base.cargo_opts.config)?;
 
         Ok(Self {
             base,

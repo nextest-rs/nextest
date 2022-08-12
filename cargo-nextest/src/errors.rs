@@ -49,10 +49,10 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
-    #[error("cargo configs construction error")]
-    CargoConfigsConstructError {
+    #[error("cargo config error")]
+    CargoConfigError {
         #[from]
-        err: CargoConfigsConstructError,
+        err: CargoConfigError,
     },
     #[error("config parse error")]
     ConfigParseError {
@@ -292,7 +292,7 @@ impl ExpectedError {
             Self::ProfileNotFound { .. }
             | Self::StoreDirCreateError { .. }
             | Self::RootManifestNotFound { .. }
-            | Self::CargoConfigsConstructError { .. }
+            | Self::CargoConfigError { .. }
             | Self::ConfigParseError { .. }
             | Self::ArgumentFileReadError { .. }
             | Self::UnknownArchiveFormat { .. }
@@ -376,7 +376,7 @@ impl ExpectedError {
                 );
                 Some(err as &dyn Error)
             }
-            Self::CargoConfigsConstructError { err } => {
+            Self::CargoConfigError { err } => {
                 log::error!("{}", err);
                 err.source()
             }
