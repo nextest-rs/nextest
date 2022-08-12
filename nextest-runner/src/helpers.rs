@@ -184,3 +184,17 @@ pub(crate) fn display_nt_status(nt_status: windows::Win32::Foundation::NTSTATUS)
         io::Error::from_raw_os_error(win32_code as i32)
     );
 }
+
+// From https://twitter.com/8051Enthusiast/status/1571909110009921538
+extern "C" {
+    fn __nextest_external_symbol_that_does_not_exist();
+}
+
+#[inline]
+#[allow(dead_code)]
+pub(crate) fn statically_unreachable() -> ! {
+    unsafe {
+        __nextest_external_symbol_that_does_not_exist();
+    }
+    unreachable!("linker symbol above cannot be resolved")
+}

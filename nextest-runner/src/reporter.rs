@@ -769,7 +769,24 @@ impl<'a> TestReporterImpl<'a> {
                     running.style(self.styles.count)
                 )?;
             }
-
+            TestEvent::RunPaused { running } => {
+                writeln!(
+                    writer,
+                    "{:>12} {} running tests due to {}",
+                    "Pausing".style(self.styles.pass),
+                    running.style(self.styles.count),
+                    "signal".style(self.styles.count),
+                )?;
+            }
+            TestEvent::RunContinued { running } => {
+                writeln!(
+                    writer,
+                    "{:>12} {} running tests due to {}",
+                    "Continuing".style(self.styles.pass),
+                    running.style(self.styles.count),
+                    "signal".style(self.styles.count),
+                )?;
+            }
             TestEvent::RunFinished {
                 start_time: _start_time,
                 elapsed,
@@ -1349,6 +1366,18 @@ pub enum TestEvent<'a> {
 
         /// The reason this run was canceled.
         reason: CancelReason,
+    },
+
+    /// A SIGTSTP event was received and the run was paused.
+    RunPaused {
+        /// The number of tests currently running.
+        running: usize,
+    },
+
+    /// A SIGCONT event was received and the run is being continued.
+    RunContinued {
+        /// The number of tests that will be started up again.
+        running: usize,
     },
 
     /// The test run finished.

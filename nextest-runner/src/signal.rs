@@ -68,6 +68,8 @@ mod imp {
         sigint: SignalWithDone,
         sighup: SignalWithDone,
         sigterm: SignalWithDone,
+        sigtstp: SignalWithDone,
+        sigcont: SignalWithDone,
     }
 
     impl Signals {
@@ -75,11 +77,15 @@ mod imp {
             let sigint = SignalWithDone::new(SignalKind::interrupt())?;
             let sighup = SignalWithDone::new(SignalKind::hangup())?;
             let sigterm = SignalWithDone::new(SignalKind::terminate())?;
+            let sigtstp = SignalWithDone::new(SignalKind::from_raw(libc::SIGTSTP))?;
+            let sigcont = SignalWithDone::new(SignalKind::from_raw(libc::SIGCONT))?;
 
             Ok(Self {
                 sigint,
                 sighup,
                 sigterm,
+                sigtstp,
+                sigcont,
             })
         }
 
@@ -88,20 +94,32 @@ mod imp {
                 tokio::select! {
                     recv = self.sigint.signal.recv(), if !self.sigint.done => {
                         match recv {
-                            Some(()) => break Some(SignalEvent::Interrupt),
+                            Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Interrupt)),
                             None => self.sigint.done = true,
                         }
                     }
                     recv = self.sighup.signal.recv(), if !self.sighup.done => {
                         match recv {
-                            Some(()) => break Some(SignalEvent::Hangup),
+                            Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Hangup)),
                             None => self.sighup.done = true,
                         }
                     }
                     recv = self.sigterm.signal.recv(), if !self.sigterm.done => {
                         match recv {
-                            Some(()) => break Some(SignalEvent::Term),
+                            Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Term)),
                             None => self.sigterm.done = true,
+                        }
+                    }
+                    recv = self.sigtstp.signal.recv(), if !self.sigtstp.done => {
+                        match recv {
+                            Some(()) => break Some(SignalEvent::JobControl(JobControlEvent::Stop)),
+                            None => self.sigtstp.done = true,
+                        }
+                    }
+                    recv = self.sigcont.signal.recv(), if !self.sigcont.done => {
+                        match recv {
+                            Some(()) => break Some(SignalEvent::JobControl(JobControlEvent::Continue)),
+                            None => self.sigcont.done = true,
                         }
                     }
                     else => {
@@ -155,7 +173,7 @@ mod imp {
             }
 
             match self.ctrl_c.recv().await {
-                Some(()) => Some(SignalEvent::Interrupt),
+                Some(()) => Some(SignalEvent::Shutdown(ShutdownEvent::Interrupt)),
                 None => {
                     self.ctrl_c_done = true;
                     None
@@ -165,9 +183,25 @@ mod imp {
     }
 }
 
-// Just a single-valued enum for now, might have more information in the future.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SignalEvent {
+    #[cfg(unix)]
+    JobControl(JobControlEvent),
+    Shutdown(ShutdownEvent),
+}
+
+// A job-control related signal event.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum JobControlEvent {
+    #[cfg(unix)]
+    Stop,
+    #[cfg(unix)]
+    Continue,
+}
+
+// A signal event that should cause a shutdown to happen.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ShutdownEvent {
     #[cfg(unix)]
     Hangup,
     #[cfg(unix)]

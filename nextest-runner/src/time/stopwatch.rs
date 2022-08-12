@@ -18,6 +18,8 @@ pub(crate) fn stopwatch() -> StopwatchStart {
 pub(crate) struct StopwatchStart {
     start_time: SystemTime,
     instant: Instant,
+    paused_time: Duration,
+    pause_state: StopwatchPauseState,
 }
 
 impl StopwatchStart {
@@ -27,13 +29,44 @@ impl StopwatchStart {
             // enough for our purposes.
             start_time: SystemTime::now(),
             instant: Instant::now(),
+            paused_time: Duration::ZERO,
+            pause_state: StopwatchPauseState::Running,
+        }
+    }
+
+    pub(crate) fn is_paused(&self) -> bool {
+        matches!(self.pause_state, StopwatchPauseState::Paused { .. })
+    }
+
+    pub(crate) fn pause(&mut self) {
+        match &self.pause_state {
+            StopwatchPauseState::Running => {
+                self.pause_state = StopwatchPauseState::Paused {
+                    paused_at: Instant::now(),
+                };
+            }
+            StopwatchPauseState::Paused { .. } => {
+                panic!("illegal state transition: pause() called while stopwatch was paused")
+            }
+        }
+    }
+
+    pub(crate) fn resume(&mut self) {
+        match &self.pause_state {
+            StopwatchPauseState::Paused { paused_at } => {
+                self.paused_time += paused_at.elapsed();
+                self.pause_state = StopwatchPauseState::Running;
+            }
+            StopwatchPauseState::Running => {
+                panic!("illegal state transition: resume() called while stopwatch was running")
+            }
         }
     }
 
     pub(crate) fn end(&self) -> StopwatchEnd {
         StopwatchEnd {
             start_time: self.start_time,
-            duration: self.instant.elapsed(),
+            duration: self.instant.elapsed() - self.paused_time,
         }
     }
 }
@@ -42,4 +75,43 @@ impl StopwatchStart {
 pub(crate) struct StopwatchEnd {
     pub(crate) start_time: SystemTime,
     pub(crate) duration: Duration,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum StopwatchPauseState {
+    Running,
+    Paused { paused_at: Instant },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stopwatch_pause() {
+        let mut start = stopwatch();
+        let unpaused_start = start.clone();
+
+        start.pause();
+        std::thread::sleep(Duration::from_millis(250));
+        start.resume();
+
+        start.pause();
+        std::thread::sleep(Duration::from_millis(300));
+        start.resume();
+
+        let end = start.end();
+        let unpaused_end = unpaused_start.end();
+
+        // The total time we've paused is 550ms. We can assume that unpaused_end is at least 550ms
+        // greater than end. Add a a fudge factor of 100ms.
+        //
+        // (Previously, this used to cap the difference at 650ms, but empirically, the test would
+        // sometimes fail on GitHub CI. Just setting a minimum bound is enough.)
+        let difference = unpaused_end.duration - end.duration;
+        assert!(
+            difference > Duration::from_millis(450),
+            "difference between unpaused_end and end ({difference:?}) is at least 450ms"
+        )
+    }
 }

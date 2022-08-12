@@ -61,7 +61,9 @@ impl<'cfg> MetadataJunit<'cfg> {
 
     pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
         match event {
-            TestEvent::RunStarted { .. } => {}
+            TestEvent::RunStarted { .. }
+            | TestEvent::RunPaused { .. }
+            | TestEvent::RunContinued { .. } => {}
             TestEvent::TestStarted { .. } => {}
             TestEvent::TestSlow { .. } => {}
             TestEvent::TestAttemptFailedWillRetry { .. } | TestEvent::TestRetryStarted { .. } => {
