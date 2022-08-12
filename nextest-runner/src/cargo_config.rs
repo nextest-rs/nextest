@@ -160,12 +160,12 @@ impl CargoConfigs {
     pub fn new(
         cli_configs: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Result<Self, CargoConfigError> {
-        let cli_configs = parse_cli_configs(cli_configs.into_iter())?;
         let cwd = std::env::current_dir()
             .map_err(CargoConfigError::GetCurrentDir)
             .and_then(|cwd| {
                 Utf8PathBuf::try_from(cwd).map_err(CargoConfigError::CurrentDirInvalidUtf8)
             })?;
+        let cli_configs = parse_cli_configs(&cwd, cli_configs.into_iter())?;
 
         Ok(Self {
             cli_configs,
@@ -184,7 +184,7 @@ impl CargoConfigs {
         cwd: &Utf8Path,
         terminate_search_at: &Utf8Path,
     ) -> Result<Self, CargoConfigError> {
-        let cli_configs = parse_cli_configs(cli_configs.into_iter())?;
+        let cli_configs = parse_cli_configs(cwd, cli_configs.into_iter())?;
 
         Ok(Self {
             cli_configs,
@@ -214,6 +214,7 @@ impl CargoConfigs {
 }
 
 fn parse_cli_configs(
+    cwd: &Utf8Path,
     cli_configs: impl Iterator<Item = impl AsRef<str>>,
 ) -> Result<Vec<(CargoConfigSource, CargoConfig)>, CargoConfigError> {
     cli_configs
@@ -221,8 +222,15 @@ fn parse_cli_configs(
         .map(|config_str| {
             // Each cargo config is expected to be a valid TOML file.
             let config_str = config_str.as_ref();
-            let config = parse_cli_config(config_str)?;
-            Ok((CargoConfigSource::CliOption, config))
+
+            let as_path = cwd.join(config_str);
+            if as_path.exists() {
+                // Read this config as a file.
+                load_file(as_path)
+            } else {
+                let config = parse_cli_config(config_str)?;
+                Ok((CargoConfigSource::CliOption, config))
+            }
         })
         .collect()
 }
@@ -387,25 +395,29 @@ fn discover_impl(
 
     let configs = config_paths
         .into_iter()
-        .map(|path| {
-            let config_contents = std::fs::read_to_string(&path).map_err(|error| {
-                CargoConfigError::ConfigReadError {
-                    path: path.clone(),
-                    error,
-                }
-            })?;
-            let config: CargoConfig =
-                toml_edit::easy::from_str(&config_contents).map_err(|error| {
-                    CargoConfigError::ConfigParseError {
-                        path: path.clone(),
-                        error,
-                    }
-                })?;
-            Ok((CargoConfigSource::File(path), config))
-        })
+        .map(load_file)
         .collect::<Result<Vec<_>, CargoConfigError>>()?;
 
     Ok(configs)
+}
+
+fn load_file(
+    path: impl Into<Utf8PathBuf>,
+) -> Result<(CargoConfigSource, CargoConfig), CargoConfigError> {
+    let path = path.into();
+
+    let config_contents =
+        std::fs::read_to_string(&path).map_err(|error| CargoConfigError::ConfigReadError {
+            path: path.clone(),
+            error,
+        })?;
+    let config: CargoConfig = toml_edit::easy::from_str(&config_contents).map_err(|error| {
+        CargoConfigError::ConfigParseError {
+            path: path.clone(),
+            error,
+        }
+    })?;
+    Ok((CargoConfigSource::File(path), config))
 }
 
 #[derive(Deserialize, Debug)]
@@ -567,6 +579,56 @@ mod tests {
             })
         );
 
+        // --config <path> should be parsed correctly.
+        assert_eq!(
+            find_target_triple(
+                &[
+                    "extra-config.toml",
+                    "build.target=\"x86_64-unknown-linux-musl\"",
+                ],
+                &dir_foo_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                triple: "aarch64-unknown-linux-gnu".into(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::File(dir_foo_path.join("extra-config.toml")),
+                },
+            })
+        );
+        assert_eq!(
+            find_target_triple(
+                &[
+                    "../extra-config.toml",
+                    "build.target=\"x86_64-unknown-linux-musl\"",
+                ],
+                &dir_foo_bar_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                triple: "aarch64-unknown-linux-gnu".into(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::File(dir_foo_bar_path.join("../extra-config.toml")),
+                },
+            })
+        );
+        assert_eq!(
+            find_target_triple(
+                &[
+                    "build.target=\"x86_64-unknown-linux-musl\"",
+                    "extra-config.toml",
+                ],
+                &dir_foo_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                triple: "x86_64-unknown-linux-musl".into(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                },
+            })
+        );
+
         assert_eq!(find_target_triple(&[], &dir_path, &dir_path), None);
     }
 
@@ -590,6 +652,11 @@ mod tests {
             FOO_BAR_CARGO_CONFIG_CONTENTS,
         )
         .wrap_err("error writing foo/bar/.cargo/config.toml")?;
+        std::fs::write(
+            dir.path().join("foo/extra-config.toml"),
+            FOO_EXTRA_CONFIG_CONTENTS,
+        )
+        .wrap_err("error writing foo/extra-config.toml")?;
 
         Ok(dir)
     }
@@ -613,5 +680,10 @@ mod tests {
     static FOO_BAR_CARGO_CONFIG_CONTENTS: &str = r#"
     [build]
     target = "x86_64-unknown-linux-gnu"
+    "#;
+
+    static FOO_EXTRA_CONFIG_CONTENTS: &str = r#"
+    [build]
+    target = "aarch64-unknown-linux-gnu"
     "#;
 }
