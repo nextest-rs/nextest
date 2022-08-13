@@ -269,7 +269,8 @@ impl FixtureTargets {
     fn new() -> Self {
         let graph = &*PACKAGE_GRAPH;
         let binary_list = Arc::new(
-            BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph).unwrap(),
+            BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
+                .unwrap(),
         );
         let rust_build_meta = binary_list.rust_build_meta.clone();
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    cargo_config::TargetTriple,
     helpers::convert_rel_path_to_main_sep,
     list::{BinaryListState, TestListState},
     reuse_build::PathMapper,
@@ -35,18 +36,25 @@ pub struct RustBuildMeta<State> {
     /// requested them. We might consider adding a new field with metadata about that.
     pub linked_paths: BTreeMap<Utf8PathBuf, BTreeSet<String>>,
 
+    /// The target triple used while compiling the artifacts
+    pub target_triple: Option<TargetTriple>,
+
     state: PhantomData<State>,
 }
 
 impl RustBuildMeta<BinaryListState> {
     /// Creates a new [`RustBuildMeta`].
-    pub fn new(target_directory: impl Into<Utf8PathBuf>) -> Self {
+    pub fn new(
+        target_directory: impl Into<Utf8PathBuf>,
+        target_triple: Option<TargetTriple>,
+    ) -> Self {
         Self {
             target_directory: target_directory.into(),
             base_output_directories: BTreeSet::new(),
             non_test_binaries: BTreeMap::new(),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
+            target_triple,
         }
     }
 
@@ -62,6 +70,7 @@ impl RustBuildMeta<BinaryListState> {
             non_test_binaries: self.non_test_binaries.clone(),
             linked_paths: self.linked_paths.clone(),
             state: PhantomData,
+            target_triple: self.target_triple.clone(),
         }
     }
 }
@@ -76,6 +85,7 @@ impl RustBuildMeta<TestListState> {
             non_test_binaries: BTreeMap::new(),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
+            target_triple: None,
         }
     }
 
@@ -124,6 +134,7 @@ impl<State> RustBuildMeta<State> {
                 .map(|linked_path| (linked_path, BTreeSet::new()))
                 .collect(),
             state: PhantomData,
+            target_triple: TargetTriple::deserialize(summary.target_triple),
         }
     }
 
@@ -134,6 +145,7 @@ impl<State> RustBuildMeta<State> {
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
             linked_paths: self.linked_paths.keys().cloned().collect(),
+            target_triple: TargetTriple::serialize(self.target_triple.as_ref()),
         }
     }
 }
