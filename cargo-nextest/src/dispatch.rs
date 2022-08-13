@@ -562,6 +562,7 @@ impl CargoOptions {
         graph: &PackageGraph,
         manifest_path: Option<&Utf8Path>,
         output: OutputContext,
+        target_triple: Option<TargetTriple>,
     ) -> Result<BinaryList> {
         // Don't use the manifest path from the graph to ensure that if the user cd's into a
         // particular crate and runs cargo nextest, then it behaves identically to cargo test.
@@ -584,7 +585,8 @@ impl CargoOptions {
             ));
         }
 
-        let test_binaries = BinaryList::from_messages(Cursor::new(output.stdout), graph)?;
+        let test_binaries =
+            BinaryList::from_messages(Cursor::new(output.stdout), graph, target_triple)?;
         Ok(test_binaries)
     }
 }
@@ -753,6 +755,9 @@ struct BaseApp {
     reuse_build: ReuseBuildInfo,
     cargo_opts: CargoOptions,
     config_opts: ConfigOpts,
+
+    cargo_configs: CargoConfigs,
+    target_runner: OnceCell<TargetRunner>,
 }
 
 impl BaseApp {
@@ -823,6 +828,8 @@ impl BaseApp {
             });
         }
 
+        let cargo_configs = CargoConfigs::new(&cargo_opts.config)?;
+
         Ok(Self {
             output,
             graph_data,
@@ -831,7 +838,15 @@ impl BaseApp {
             manifest_path,
             cargo_opts,
             config_opts,
+            cargo_configs,
+
+            target_runner: OnceCell::new(),
         })
+    }
+
+    fn load_runner(&self, triple: Option<&TargetTriple>) -> &TargetRunner {
+        self.target_runner
+            .get_or_init(|| runner_for_target(&self.cargo_configs, triple))
     }
 
     fn exec_archive(
@@ -887,11 +902,16 @@ impl BaseApp {
                     })?;
                 Arc::new(BinaryList::from_summary(binary_list))
             }
-            None => Arc::new(self.cargo_opts.compute_binary_list(
-                self.graph(),
-                self.manifest_path.as_deref(),
-                self.output,
-            )?),
+            None => {
+                let target_triple =
+                    discover_target_triple(&self.cargo_configs, self.cargo_opts.target.as_deref());
+                Arc::new(self.cargo_opts.compute_binary_list(
+                    self.graph(),
+                    self.manifest_path.as_deref(),
+                    self.output,
+                    target_triple,
+                )?)
+            }
         };
         Ok(binary_list)
     }
@@ -906,9 +926,6 @@ impl BaseApp {
 struct App {
     base: BaseApp,
     build_filter: TestBuildFilter,
-    cargo_configs: CargoConfigs,
-    target_triple: OnceCell<Option<TargetTriple>>,
-    target_runner: OnceCell<TargetRunner>,
 }
 
 // (_output is not used, but must be passed in to ensure that the output is properly initialized
@@ -924,15 +941,7 @@ impl App {
     fn new(base: BaseApp, build_filter: TestBuildFilter) -> Result<Self> {
         check_experimental_filtering(base.output);
 
-        let cargo_configs = CargoConfigs::new(&base.cargo_opts.config)?;
-
-        Ok(Self {
-            base,
-            build_filter,
-            cargo_configs,
-            target_triple: OnceCell::new(),
-            target_runner: OnceCell::new(),
-        })
+        Ok(Self { base, build_filter })
     }
 
     fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
@@ -990,20 +999,6 @@ impl App {
         Ok(profile)
     }
 
-    fn load_triple(&self) -> Option<&TargetTriple> {
-        self.target_triple
-            .get_or_init(|| {
-                discover_target_triple(&self.cargo_configs, self.base.cargo_opts.target.as_deref())
-            })
-            .as_ref()
-    }
-
-    fn load_runner(&self) -> &TargetRunner {
-        let triple = self.load_triple();
-        self.target_runner
-            .get_or_init(|| runner_for_target(&self.cargo_configs, triple))
-    }
-
     fn exec_list(
         &self,
         message_format: MessageFormatOpts,
@@ -1026,7 +1021,9 @@ impl App {
                 writer.flush().map_err(WriteTestListError::Io)?;
             }
             ListType::Full => {
-                let target_runner = self.load_runner();
+                let target_runner = self
+                    .base
+                    .load_runner(binary_list.rust_build_meta.target_triple.as_ref());
                 let test_list =
                     self.build_test_list(binary_list, test_filter_builder, target_runner)?;
 
@@ -1056,12 +1053,13 @@ impl App {
             .make_config(&self.base.workspace_root, self.base.graph())?;
         let profile = self.load_profile(profile_name, &config)?;
 
-        let target_runner = self.load_runner();
-
         let filter_exprs = self.build_filtering_expressions()?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
+        let target_runner = self
+            .base
+            .load_runner(binary_list.rust_build_meta.target_triple.as_ref());
 
         let test_list = self.build_test_list(binary_list, test_filter_builder, target_runner)?;
 

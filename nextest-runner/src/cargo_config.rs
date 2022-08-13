@@ -11,6 +11,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::{collections::BTreeMap, fmt};
+use target_spec::Platform;
 use toml_edit::Item;
 
 /// Represents a target triple that's being cross-compiled against.
@@ -24,6 +25,39 @@ pub struct TargetTriple {
 }
 
 impl TargetTriple {
+    /// Converts a target triple to a `String` that can be stored in the build-metadata.
+    /// cargo-nextest represents the host triple with `None` during runtime.
+    /// However the build-metadata might be used on a system with a different host triple.
+    /// Therefore the host triple is detected if `target_triple` is `None`
+    pub fn serialize(target_triple: Option<&TargetTriple>) -> String {
+        if let Some(target) = &target_triple {
+            target.triple.clone()
+        } else {
+            match Platform::current() {
+                Ok(host) => host.triple_str().to_owned(),
+                Err(err) => {
+                    log::warn!(
+                        "failed to detect host target: {err}!\n cargo nextest may use the wrong test runner for this archive."
+                    );
+                    String::new()
+                }
+            }
+        }
+    }
+
+    /// Converts a `String` that was output by `TargetTriple::serialize` back to a target triple.
+    /// This target triple is assumed to orginiate from a build-metadata config.
+    pub fn deserialize(target_triple: String) -> Option<TargetTriple> {
+        if target_triple.is_empty() {
+            None
+        } else {
+            Some(TargetTriple {
+                triple: target_triple,
+                source: TargetTripleSource::Metadata,
+            })
+        }
+    }
+
     /// Find the target triple being built.
     ///
     /// This does so by looking at, in order:
@@ -104,6 +138,10 @@ pub enum TargetTripleSource {
         /// The source of the configuration.
         source: CargoConfigSource,
     },
+
+    /// The platform runner was defined trough a metadata file provided using the --archive-file or
+    /// the `--binaries-metadata` CLI option
+    Metadata,
 }
 
 impl fmt::Display for TargetTripleSource {
@@ -125,6 +163,9 @@ impl fmt::Display for TargetTripleSource {
                 source: CargoConfigSource::File(path),
             } => {
                 write!(f, "`build.target` within `{path}`")
+            }
+            Self::Metadata => {
+                write!(f, "--binaries-metadata option")
             }
         }
     }

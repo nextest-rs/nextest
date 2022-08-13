@@ -958,7 +958,11 @@ pub(crate) fn make_test_command(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{list::SerializableFormat, test_filter::RunIgnored};
+    use crate::{
+        cargo_config::{TargetTriple, TargetTripleSource},
+        list::SerializableFormat,
+        test_filter::RunIgnored,
+    };
     use guppy::CargoMetadata;
     use indoc::indoc;
     use maplit::btreemap;
@@ -1017,7 +1021,12 @@ mod tests {
             build_platform: BuildPlatform::Host,
         };
 
-        let rust_build_meta = RustBuildMeta::new("/fake").map_paths(&PathMapper::noop());
+        let fake_triple = TargetTriple {
+            triple: "fake-triple".to_owned(),
+            source: TargetTripleSource::CliOption,
+        };
+        let rust_build_meta =
+            RustBuildMeta::new("/fake", Some(fake_triple)).map_paths(&PathMapper::noop());
         let test_list = TestList::new_with_outputs(
             [
                 (test_binary, &non_ignored_output, &ignored_output),
@@ -1114,7 +1123,8 @@ mod tests {
                 "target-directory": "/fake",
                 "base-output-directories": [],
                 "non-test-binaries": {},
-                "linked-paths": []
+                "linked-paths": [],
+                "target-triple": "fake-triple"
               },
               "test-count": 6,
               "rust-suites": {

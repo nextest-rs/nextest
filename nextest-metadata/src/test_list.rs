@@ -271,6 +271,9 @@ pub struct RustBuildMetaSummary {
 
     /// Linked paths, relative to the target directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
+
+    /// The target triple used while compiling the Rust artifacts
+    pub target_triple: String,
 }
 
 /// A non-test Rust binary. Used to set the correct environment

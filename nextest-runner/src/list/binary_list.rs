@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    cargo_config::TargetTriple,
     errors::{FromMessagesError, WriteTestListError},
     helpers::convert_rel_path_to_forward_slash,
     list::{BinaryListState, OutputFormat, RustBuildMeta, Styles},
@@ -49,8 +50,9 @@ impl BinaryList {
     pub fn from_messages(
         reader: impl io::BufRead,
         graph: &PackageGraph,
+        target_triple: Option<TargetTriple>,
     ) -> Result<Self, FromMessagesError> {
-        let mut state = BinaryListBuildState::new(graph);
+        let mut state = BinaryListBuildState::new(graph, target_triple);
 
         for message in Message::parse_stream(reader) {
             let message = message.map_err(FromMessagesError::ReadMessages)?;
@@ -159,13 +161,13 @@ struct BinaryListBuildState<'g> {
 }
 
 impl<'g> BinaryListBuildState<'g> {
-    fn new(graph: &'g PackageGraph) -> Self {
+    fn new(graph: &'g PackageGraph, target_triple: Option<TargetTriple>) -> Self {
         let rust_target_dir = graph.workspace().target_directory().to_path_buf();
 
         Self {
             graph,
             rust_binaries: vec![],
-            rust_build_meta: RustBuildMeta::new(rust_target_dir),
+            rust_build_meta: RustBuildMeta::new(rust_target_dir, target_triple),
         }
     }
 
@@ -361,7 +363,7 @@ impl<'g> BinaryListBuildState<'g> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::list::SerializableFormat;
+    use crate::{cargo_config::TargetTripleSource, list::SerializableFormat};
     use indoc::indoc;
     use maplit::btreeset;
     use pretty_assertions::assert_eq;
@@ -387,7 +389,11 @@ mod tests {
             build_platform: BuildPlatform::Host,
         };
 
-        let mut rust_build_meta = RustBuildMeta::new("/fake/target");
+        let fake_triple = TargetTriple {
+            triple: "fake-triple".to_owned(),
+            source: TargetTripleSource::CliOption,
+        };
+        let mut rust_build_meta = RustBuildMeta::new("/fake/target", Some(fake_triple));
         rust_build_meta
             .base_output_directories
             .insert("my-profile".into());
@@ -456,7 +462,8 @@ mod tests {
                 }
               ]
             },
-            "linked-paths": []
+            "linked-paths": [],
+            "target-triple": "fake-triple"
           },
           "rust-binaries": {
             "fake-macro::proc-macro/fake-macro": {
