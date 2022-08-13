@@ -165,7 +165,7 @@ impl fmt::Display for TargetTripleSource {
                 write!(f, "`build.target` within `{path}`")
             }
             Self::Metadata => {
-                write!(f, "--binaries-metadata option")
+                write!(f, "--archive-file or --binaries-metadata option")
             }
         }
     }
