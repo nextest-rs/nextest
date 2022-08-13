@@ -12,7 +12,7 @@ As mentioned in [*How nextest works*](how-it-works.md), cargo-nextest has a much
 
 ## libtest-mimic (recommended)
 
-Nextest is compatible with custom test harnesses based on [libtest-mimic](https://github.com/LukasKalbertodt/libtest-mimic), version 0.4.0 or above. Using this crate is recommended.
+Nextest is compatible with custom test harnesses based on [libtest-mimic](https://github.com/LukasKalbertodt/libtest-mimic), version 0.4.0 (but [not version 0.5.0 or 0.5.1](https://github.com/nextest-rs/datatest-stable/pull/5)). Using this crate is recommended.
 
 For a test harness based on libtest-mimic, see [datatest-stable](https://github.com/nextest-rs/datatest-stable). This harness implements *data-driven tests*.
 * datatest-stable can be used out of the box if each test is specified by a file within a particular directory on disk. For example, it is used by the [Move smart contract language](https://github.com/move-language/move) for many of its internal tests. With [these tests](https://github.com/move-language/move/tree/dfd7cf14a32f8182ddd9f39e9da086c29cb20b7b/language/move-ir-compiler/transactional-tests/tests/bytecode-generation/declarations), the harness is used to verify that each `.mvir` input results in the `.exp` output.
