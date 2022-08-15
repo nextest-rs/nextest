@@ -47,3 +47,9 @@ This project is derived from [diem-devtools](https://github.com/diem/diem-devtoo
 source code is used under the terms of the [Apache 2.0
 license](https://github.com/diem/diem-devtools/blob/main/LICENSE-APACHE) and the [MIT
 license](https://github.com/diem/diem-devtools/blob/main/LICENSE-MIT).
+
+## macOS support
+
+macOS is supported through the MacStadium Open Source Developer Program.
+
+![image](https://uploads-ssl.webflow.com/5ac3c046c82724970fc60918/5c019d917bba312af7553b49_MacStadium-developerlogo.png)
