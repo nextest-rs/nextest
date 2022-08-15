@@ -4,7 +4,9 @@
 //! Support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 
 use crate::{
-    cargo_config::{CargoConfigSource, CargoConfigs, Runner, TargetTriple},
+    cargo_config::{
+        CargoConfig, CargoConfigSource, CargoConfigs, DiscoveredConfig, Runner, TargetTriple,
+    },
     errors::TargetRunnerError,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -105,13 +107,95 @@ impl PlatformRunner {
             None => Platform::current().map_err(TargetRunnerError::UnknownHostPlatform)?,
         };
 
-        // Check if we have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
-        // set, and if so use that, as it takes precedence over the static config(:?.toml)?
-        if let Some(tr) = Self::from_env(Self::runner_env_var(&target), configs.cwd())? {
-            return Ok(Some(tr));
+        Self::find_config(configs, target)
+    }
+
+    /// Attempts to find a target runner for the specified target from a
+    /// [cargo config](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
+    ///
+    /// Not part of the public API. For testing only.
+    #[doc(hidden)]
+    pub fn find_config(
+        configs: &CargoConfigs,
+        target: target_spec::Platform,
+    ) -> Result<Option<Self>, TargetRunnerError> {
+        // Now that we've found all of the config files that could declare
+        // a runner that matches our target triple, we need to actually find
+        // all the matches, but in reverse order as the closer the config is
+        // to our current working directory, the higher precedence it has
+        for discovered_config in configs.discovered_configs()? {
+            match discovered_config {
+                DiscoveredConfig::CliOption { config, source }
+                | DiscoveredConfig::File { config, source } => {
+                    if let Some(runner) =
+                        Self::from_cli_option_or_file(&target, config, source, configs.cwd())?
+                    {
+                        return Ok(Some(runner));
+                    }
+                }
+                DiscoveredConfig::Env => {
+                    // Check if we have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
+                    // set, and if so use that.
+                    if let Some(tr) = Self::from_env(Self::runner_env_var(&target), configs.cwd())?
+                    {
+                        return Ok(Some(tr));
+                    }
+                }
+            }
         }
 
-        Self::find_config(configs, target)
+        Ok(None)
+    }
+
+    fn from_cli_option_or_file(
+        target: &target_spec::Platform,
+        config: &CargoConfig,
+        source: &CargoConfigSource,
+        cwd: &Utf8Path,
+    ) -> Result<Option<Self>, TargetRunnerError> {
+        if let Some(targets) = &config.target {
+            // First lookup by the exact triple, as that one always takes precedence
+            if let Some(parent) = targets.get(target.triple_str()) {
+                if let Some(runner) = &parent.runner {
+                    return Ok(Some(Self::parse_runner(
+                        PlatformRunnerSource::CargoConfig {
+                            source: source.clone(),
+                            target_table: target.triple_str().into(),
+                        },
+                        runner.clone(),
+                        cwd,
+                    )?));
+                }
+            }
+
+            // Next check if there are target.'cfg(..)' expressions that match
+            // the target. cargo states that it is not allowed for more than
+            // 1 cfg runner to match the target, but we let cargo handle that
+            // error itself, we just use the first one that matches
+            for (cfg, runner) in targets.iter().filter_map(|(k, v)| match &v.runner {
+                Some(runner) if k.starts_with("cfg(") => Some((k, runner)),
+                _ => None,
+            }) {
+                // Treat these as non-fatal, but would be good to log maybe
+                let expr = match target_spec::TargetExpression::new(cfg) {
+                    Ok(expr) => expr,
+                    Err(_err) => continue,
+                };
+
+                if expr.eval(target) == Some(true) {
+                    return Ok(Some(Self::parse_runner(
+                        PlatformRunnerSource::CargoConfig {
+                            source: source.clone(),
+                            target_table: cfg.clone(),
+                        },
+                        runner.clone(),
+                        cwd,
+                    )?));
+                }
+            }
+        }
+
+        Ok(None)
     }
 
     fn from_env(env_key: String, cwd: &Utf8Path) -> Result<Option<Self>, TargetRunnerError> {
@@ -135,70 +219,6 @@ impl PlatformRunner {
     pub fn runner_env_var(target: &Platform) -> String {
         let triple_str = target.triple_str().to_ascii_uppercase().replace('-', "_");
         format!("CARGO_TARGET_{}_RUNNER", triple_str)
-    }
-
-    /// Attempts to find a target runner for the specified target from a
-    /// [cargo config](https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure)
-    ///
-    /// Not part of the public API. For testing only.
-    #[doc(hidden)]
-    pub fn find_config(
-        configs: &CargoConfigs,
-        target: target_spec::Platform,
-    ) -> Result<Option<Self>, TargetRunnerError> {
-        let mut target_runner = None;
-
-        // Now that we've found all of the config files that could declare
-        // a runner that matches our target triple, we need to actually find
-        // all the matches, but in reverse order as the closer the config is
-        // to our current working directory, the higher precedence it has
-        'config: for (source, config) in configs.discovered_configs()?.into_iter().rev() {
-            if let Some(targets) = &config.target {
-                // First lookup by the exact triple, as that one always takes precedence
-                if let Some(parent) = targets.get(target.triple_str()) {
-                    if let Some(runner) = &parent.runner {
-                        target_runner = Some(Self::parse_runner(
-                            PlatformRunnerSource::CargoConfig {
-                                source: source.clone(),
-                                target_table: target.triple_str().into(),
-                            },
-                            runner.clone(),
-                            configs.cwd(),
-                        )?);
-                        continue;
-                    }
-                }
-
-                // Next check if there are target.'cfg(..)' expressions that match
-                // the target. cargo states that it is not allowed for more than
-                // 1 cfg runner to match the target, but we let cargo handle that
-                // error itself, we just use the first one that matches
-                for (cfg, runner) in targets.iter().filter_map(|(k, v)| match &v.runner {
-                    Some(runner) if k.starts_with("cfg(") => Some((k, runner)),
-                    _ => None,
-                }) {
-                    // Treat these as non-fatal, but would be good to log maybe
-                    let expr = match target_spec::TargetExpression::new(cfg) {
-                        Ok(expr) => expr,
-                        Err(_err) => continue,
-                    };
-
-                    if expr.eval(&target) == Some(true) {
-                        target_runner = Some(Self::parse_runner(
-                            PlatformRunnerSource::CargoConfig {
-                                source: source.clone(),
-                                target_table: cfg.clone(),
-                            },
-                            runner.clone(),
-                            configs.cwd(),
-                        )?);
-                        continue 'config;
-                    }
-                }
-            }
-        }
-
-        Ok(target_runner)
     }
 
     fn parse_runner(

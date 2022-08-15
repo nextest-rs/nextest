@@ -79,11 +79,6 @@ impl TargetTriple {
             }));
         }
 
-        // Next, look at the CARGO_BUILD_TARGET env var.
-        if let Some(triple) = Self::from_env()? {
-            return Ok(Some(triple));
-        }
-
         // Finally, look at the cargo configs.
         Self::from_cargo_configs(cargo_configs)
     }
@@ -106,14 +101,25 @@ impl TargetTriple {
     }
 
     fn from_cargo_configs(cargo_configs: &CargoConfigs) -> Result<Option<Self>, TargetTripleError> {
-        for (source, config) in cargo_configs.discovered_configs()? {
-            if let Some(triple) = &config.build.target {
-                return Ok(Some(TargetTriple {
-                    triple: triple.to_owned(),
-                    source: TargetTripleSource::CargoConfig {
-                        source: source.clone(),
-                    },
-                }));
+        for discovered_config in cargo_configs.discovered_configs()? {
+            match discovered_config {
+                DiscoveredConfig::CliOption { config, source }
+                | DiscoveredConfig::File { config, source } => {
+                    if let Some(triple) = &config.build.target {
+                        return Ok(Some(TargetTriple {
+                            triple: triple.to_owned(),
+                            source: TargetTripleSource::CargoConfig {
+                                source: source.clone(),
+                            },
+                        }));
+                    }
+                }
+                DiscoveredConfig::Env => {
+                    // Look at the CARGO_BUILD_TARGET env var.
+                    if let Some(triple) = Self::from_env()? {
+                        return Ok(Some(triple));
+                    }
+                }
             }
         }
 
@@ -242,16 +248,46 @@ impl CargoConfigs {
     pub(crate) fn discovered_configs(
         &self,
     ) -> Result<
-        impl Iterator<Item = &(CargoConfigSource, CargoConfig)> + DoubleEndedIterator + '_,
+        impl Iterator<Item = DiscoveredConfig<'_>> + DoubleEndedIterator + '_,
         CargoConfigError,
     > {
-        let cli_iter = self.cli_configs.iter();
-        let file_iter = self
+        // TODO/NOTE: https://github.com/rust-lang/cargo/issues/10992 means that currently
+        // environment variables are privileged over files passed in over the CLI. Once this
+        // behavior is fixed in upstream cargo, it should also be fixed here.
+        let cli_option_iter = self.cli_configs.iter().filter_map(|(source, config)| {
+            matches!(source, CargoConfigSource::CliOption)
+                .then(|| DiscoveredConfig::CliOption { config, source })
+        });
+
+        let cli_file_iter = self.cli_configs.iter().filter_map(|(source, config)| {
+            matches!(source, CargoConfigSource::File(_))
+                .then(|| DiscoveredConfig::File { config, source })
+        });
+
+        let cargo_config_file_iter = self
             .discovered
             .get_or_try_init(|| discover_impl(&self.cwd, self.terminate_search_at.as_deref()))?
-            .iter();
-        Ok(cli_iter.chain(file_iter))
+            .iter()
+            .map(|(source, config)| DiscoveredConfig::File { config, source });
+
+        Ok(cli_option_iter
+            .chain(std::iter::once(DiscoveredConfig::Env))
+            .chain(cli_file_iter)
+            .chain(cargo_config_file_iter))
     }
+}
+
+pub(crate) enum DiscoveredConfig<'a> {
+    CliOption {
+        config: &'a CargoConfig,
+        source: &'a CargoConfigSource,
+    },
+    // Sentinel value to indicate to users that they should look up their config in the environment.
+    Env,
+    File {
+        config: &'a CargoConfig,
+        source: &'a CargoConfigSource,
+    },
 }
 
 fn parse_cli_configs(
@@ -569,7 +605,7 @@ mod tests {
         let dir_foo_bar_path = dir_foo_path.join("bar");
 
         assert_eq!(
-            find_target_triple(&[], &dir_foo_bar_path, &dir_path),
+            find_target_triple(&[], None, &dir_foo_bar_path, &dir_path),
             Some(TargetTriple {
                 triple: "x86_64-unknown-linux-gnu".into(),
                 source: TargetTripleSource::CargoConfig {
@@ -579,7 +615,7 @@ mod tests {
         );
 
         assert_eq!(
-            find_target_triple(&[], &dir_foo_path, &dir_path),
+            find_target_triple(&[], None, &dir_foo_path, &dir_path),
             Some(TargetTriple {
                 triple: "x86_64-pc-windows-msvc".into(),
                 source: TargetTripleSource::CargoConfig {
@@ -591,6 +627,7 @@ mod tests {
         assert_eq!(
             find_target_triple(
                 &["build.target=\"aarch64-unknown-linux-gnu\""],
+                None,
                 &dir_foo_bar_path,
                 &dir_path
             ),
@@ -609,6 +646,7 @@ mod tests {
                     "build.target=\"aarch64-unknown-linux-gnu\"",
                     "build.target=\"x86_64-unknown-linux-musl\""
                 ],
+                None,
                 &dir_foo_bar_path,
                 &dir_path
             ),
@@ -620,16 +658,40 @@ mod tests {
             })
         );
 
-        // --config <path> should be parsed correctly.
+        // --config is preferred over the environment.
         assert_eq!(
             find_target_triple(
-                &[
-                    "extra-config.toml",
-                    "build.target=\"x86_64-unknown-linux-musl\"",
-                ],
-                &dir_foo_path,
+                &["build.target=\"aarch64-unknown-linux-gnu\"",],
+                Some("aarch64-pc-windows-msvc"),
+                &dir_foo_bar_path,
                 &dir_path
             ),
+            Some(TargetTriple {
+                triple: "aarch64-unknown-linux-gnu".into(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                },
+            })
+        );
+
+        // The environment is preferred over local paths.
+        assert_eq!(
+            find_target_triple(
+                &[],
+                Some("aarch64-pc-windows-msvc"),
+                &dir_foo_bar_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                triple: "aarch64-pc-windows-msvc".into(),
+                source: TargetTripleSource::Env,
+            })
+        );
+
+        // --config <path> should be parsed correctly. Config files currently come after
+        // keys and values passed in via --config, and after the environment.
+        assert_eq!(
+            find_target_triple(&["extra-config.toml"], None, &dir_foo_path, &dir_path),
             Some(TargetTriple {
                 triple: "aarch64-unknown-linux-gnu".into(),
                 source: TargetTripleSource::CargoConfig {
@@ -639,17 +701,30 @@ mod tests {
         );
         assert_eq!(
             find_target_triple(
+                &["extra-config.toml"],
+                Some("aarch64-pc-windows-msvc"),
+                &dir_foo_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                triple: "aarch64-pc-windows-msvc".into(),
+                source: TargetTripleSource::Env,
+            })
+        );
+        assert_eq!(
+            find_target_triple(
                 &[
                     "../extra-config.toml",
                     "build.target=\"x86_64-unknown-linux-musl\"",
                 ],
+                None,
                 &dir_foo_bar_path,
                 &dir_path
             ),
             Some(TargetTriple {
-                triple: "aarch64-unknown-linux-gnu".into(),
+                triple: "x86_64-unknown-linux-musl".into(),
                 source: TargetTripleSource::CargoConfig {
-                    source: CargoConfigSource::File(dir_foo_bar_path.join("../extra-config.toml")),
+                    source: CargoConfigSource::CliOption,
                 },
             })
         );
@@ -659,6 +734,7 @@ mod tests {
                     "build.target=\"x86_64-unknown-linux-musl\"",
                     "extra-config.toml",
                 ],
+                None,
                 &dir_foo_path,
                 &dir_path
             ),
@@ -670,7 +746,7 @@ mod tests {
             })
         );
 
-        assert_eq!(find_target_triple(&[], &dir_path, &dir_path), None);
+        assert_eq!(find_target_triple(&[], None, &dir_path, &dir_path), None);
     }
 
     fn setup_temp_dir() -> Result<TempDir> {
@@ -704,13 +780,19 @@ mod tests {
 
     fn find_target_triple(
         cli_configs: &[&str],
+        env: Option<&str>,
         start_search_at: &Utf8Path,
         terminate_search_at: &Utf8Path,
     ) -> Option<TargetTriple> {
         let configs =
             CargoConfigs::new_with_isolation(cli_configs, start_search_at, terminate_search_at)
                 .unwrap();
-        TargetTriple::from_cargo_configs(&configs).unwrap()
+        if let Some(env) = env {
+            std::env::set_var("CARGO_BUILD_TARGET", env);
+        }
+        let ret = TargetTriple::from_cargo_configs(&configs).unwrap();
+        std::env::remove_var("CARGO_BUILD_TARGET");
+        ret
     }
 
     static FOO_CARGO_CONFIG_CONTENTS: &str = r#"
