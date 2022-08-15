@@ -41,7 +41,7 @@ quote = { version = "1.0.21", features = ["proc-macro"] }
 syn = { version = "1.0.99", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-futures-core = { version = "0.3.21", features = ["alloc", "std"] }
+futures-core = { version = "0.3.23", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.21" }
 libc = { version = "0.2.131", features = ["std"] }
 tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
@@ -50,7 +50,7 @@ tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", 
 libc = { version = "0.2.131", features = ["std"] }
 
 [target.x86_64-apple-darwin.dependencies]
-futures-core = { version = "0.3.21", features = ["alloc", "std"] }
+futures-core = { version = "0.3.23", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.21" }
 libc = { version = "0.2.131", features = ["std"] }
 tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
@@ -59,7 +59,7 @@ tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", 
 libc = { version = "0.2.131", features = ["std"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-futures-core = { version = "0.3.21", features = ["alloc", "std"] }
+futures-core = { version = "0.3.23", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.21" }
 tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros", "winapi"] }
 winapi = { version = "0.3.9", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "jobapi2", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "objbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "shlobj", "std", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
