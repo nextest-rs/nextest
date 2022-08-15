@@ -14,11 +14,11 @@ atomicwrites = "0.3.1"
 aho-corasick = "0.7.18"
 async-scoped = { version = "0.7.0", features = ["use-tokio"] }
 bytes = "1.2.1"
-camino = { version = "1.1.0", features = ["serde1"] }
+camino = { version = "1.1.1", features = ["serde1"] }
 config = { version = "0.13.2", default-features = false, features = ["toml"] }
 cargo_metadata = "0.14.2"
 cfg-if = "1.0.0"
-chrono = "0.4.21"
+chrono = "0.4.22"
 debug-ignore = "1.0.2"
 either = "1.7.0"
 futures = "0.3.21"
