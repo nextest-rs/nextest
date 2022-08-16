@@ -136,6 +136,7 @@ jobs:
       - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
       - name: Install wine
         run: |
+          sudo apt-get update
           sudo apt-get install wine
       - name: Build cargo-nextest
         uses: actions-rs/cargo@v1
