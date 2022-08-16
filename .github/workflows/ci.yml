@@ -134,19 +134,18 @@ jobs:
           toolchain: stable
           override: true
       - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
-      - name: Install wine
+      - name: Install wine and gcc-mingw-w64-x86-64-win32
         run: |
           sudo apt-get update
-          sudo apt-get install wine
+          sudo apt-get install wine gcc-mingw-w64-x86-64-win32
       - name: Build cargo-nextest
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --package cargo-nextest --no-default-features
+          args: --package cargo-nextest
       - name: Archive test fixtures
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
           command: local-nt
           args: archive --manifest-path fixtures/nextest-tests/Cargo.toml --target x86_64-pc-windows-gnu --archive-file target/fixture-archive.tar.zst --package cdylib-example --package nextest-derive
       - name: Run test fixtures
