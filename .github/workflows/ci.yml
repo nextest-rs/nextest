@@ -130,10 +130,18 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - Name: Install host toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
+          profile: minimal
+      - Name: Install x86_64-pc-windows-gnu toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-gnu
+          profile: minimal
       - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
       - name: Install wine and gcc-mingw-w64-x86-64-win32
         run: |
