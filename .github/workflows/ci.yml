@@ -130,13 +130,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v2
-      - Name: Install host toolchain
+      - name: Install host toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
           profile: minimal
-      - Name: Install x86_64-pc-windows-gnu toolchain
+      - name: Install x86_64-pc-windows-gnu toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
