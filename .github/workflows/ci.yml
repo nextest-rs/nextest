@@ -126,26 +126,35 @@ jobs:
 
   test-archive-target-runner:
     name: Test archives with a target runner
-    runs-on: ubuntu-latest
+    # gcc-mingw-w64-x86-64-win32 requires Ubuntu 22.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install host toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.rust-version }}
+          toolchain: stable
           override: true
+          profile: minimal
+      - name: Install x86_64-pc-windows-gnu toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-gnu
+          profile: minimal
       - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
-      - name: Install wine
+      - name: Install wine and gcc-mingw-w64-x86-64-win32
         run: |
-          sudo apt-get install wine
+          sudo apt-get update
+          sudo apt-get install wine gcc-mingw-w64-x86-64-win32
       - name: Build cargo-nextest
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --package cargo-nextest --no-default-features
+          args: --package cargo-nextest
       - name: Archive test fixtures
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
           command: local-nt
           args: archive --manifest-path fixtures/nextest-tests/Cargo.toml --target x86_64-pc-windows-gnu --archive-file target/fixture-archive.tar.zst --package cdylib-example --package nextest-derive
       - name: Run test fixtures
