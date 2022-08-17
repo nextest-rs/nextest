@@ -20,8 +20,8 @@ cargo_metadata = "0.14.2"
 cfg-if = "1.0.0"
 chrono = "0.4.22"
 debug-ignore = "1.0.2"
-either = "1.7.0"
-futures = "0.3.21"
+either = "1.8.0"
+futures = "0.3.23"
 guppy = "0.14.2"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
@@ -80,7 +80,7 @@ uuid = { version = "1.1.2", features = ["v4"] }
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.131"
+libc = "0.2.132"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.39.0", features = [
