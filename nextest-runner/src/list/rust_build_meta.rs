@@ -134,7 +134,7 @@ impl<State> RustBuildMeta<State> {
                 .map(|linked_path| (linked_path, BTreeSet::new()))
                 .collect(),
             state: PhantomData,
-            target_triple: TargetTriple::deserialize(summary.target_triple),
+            target_triple: TargetTriple::deserialize(summary.target_platform),
         }
     }
 
@@ -145,7 +145,7 @@ impl<State> RustBuildMeta<State> {
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
             linked_paths: self.linked_paths.keys().cloned().collect(),
-            target_triple: TargetTriple::serialize(self.target_triple.as_ref()),
+            target_platform: TargetTriple::serialize(self.target_triple.as_ref()),
         }
     }
 }

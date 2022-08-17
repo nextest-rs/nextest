@@ -463,7 +463,7 @@ mod tests {
               ]
             },
             "linked-paths": [],
-            "target-triple": "fake-triple"
+            "target-platform": "fake-triple"
           },
           "rust-binaries": {
             "fake-macro::proc-macro/fake-macro": {

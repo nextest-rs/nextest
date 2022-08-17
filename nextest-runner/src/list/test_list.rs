@@ -1124,7 +1124,7 @@ mod tests {
                 "base-output-directories": [],
                 "non-test-binaries": {},
                 "linked-paths": [],
-                "target-triple": "fake-triple"
+                "target-platform": "fake-triple"
               },
               "test-count": 6,
               "rust-suites": {
