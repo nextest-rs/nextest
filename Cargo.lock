@@ -1102,6 +1102,7 @@ dependencies = [
  "nextest-workspace-hack",
  "serde",
  "serde_json",
+ "test-case",
 ]
 
 [[package]]

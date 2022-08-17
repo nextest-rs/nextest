@@ -273,7 +273,8 @@ pub struct RustBuildMetaSummary {
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
     /// The target triple used while compiling the Rust artifacts
-    pub target_triple: String,
+    #[serde(default)]
+    pub target_triple: Option<String>,
 }
 
 /// A non-test Rust binary. Used to set the correct environment
@@ -465,5 +466,32 @@ impl fmt::Display for MismatchReason {
             }
             MismatchReason::Partition => write!(f, "is in a different partition"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test_case(r#"{
+        "target-directory": "/foo",
+        "base-output-directories": [],
+        "non-test-binaries": {},
+        "linked-paths": []
+    }"#, RustBuildMetaSummary {
+        target_directory: "/foo".into(),
+        base_output_directories: BTreeSet::new(),
+        non_test_binaries: BTreeMap::new(),
+        linked_paths: BTreeSet::new(),
+        target_triple: None,
+    }; "no target triple")]
+    fn test_deserialize_old_rust_build_meta(input: &str, expected: RustBuildMetaSummary) {
+        let build_meta: RustBuildMetaSummary =
+            serde_json::from_str(input).expect("input deserialized correctly");
+        assert_eq!(
+            build_meta, expected,
+            "deserialized input matched expected output"
+        );
     }
 }
