@@ -272,9 +272,9 @@ pub struct RustBuildMetaSummary {
     /// Linked paths, relative to the target directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
-    /// The target triple used while compiling the Rust artifacts
+    /// The target platform used while compiling the Rust artifacts
     #[serde(default)]
-    pub target_triple: Option<String>,
+    pub target_platform: Option<String>,
 }
 
 /// A non-test Rust binary. Used to set the correct environment
@@ -484,8 +484,8 @@ mod tests {
         base_output_directories: BTreeSet::new(),
         non_test_binaries: BTreeMap::new(),
         linked_paths: BTreeSet::new(),
-        target_triple: None,
-    }; "no target triple")]
+        target_platform: None,
+    }; "no target platform")]
     fn test_deserialize_old_rust_build_meta(input: &str, expected: RustBuildMetaSummary) {
         let build_meta: RustBuildMetaSummary =
             serde_json::from_str(input).expect("input deserialized correctly");
