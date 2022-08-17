@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0] - 2022-08-17
+
+### Added
+
+- `RustBuildMetaSummary` has a new `target-platform` field which records the target platform. (This
+  field is optional, which means that the minimum supported nextest version hasn't been bumped with
+  this release.)
+
 ## [0.5.0] - 2022-07-14
 
 (This change was included in 0.4.4, which should have been a breaking change.)
@@ -96,6 +104,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.6.0
 [0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.5.0
 [0.4.4]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.4
 [0.4.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.4.3

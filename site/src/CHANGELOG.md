@@ -3,6 +3,19 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.35] - 2022-08-17
+
+### Added
+
+- Support for the `--config` argument, stabilized in Rust 1.63. This option is used to configure
+  Cargo, not nextest. This argument is passed through to Cargo, and is also used by nextest to
+  determine e.g. [the target runner](https://nexte.st/book/target-runners.html) for a platform.
+
+  `--config` is also how [Miri](https://nexte.st/book/miri.html) communicates with nextest.
+- [Target runners](https://nexte.st/book/target-runners.html) for cross-compilation now work with
+  [build archives](https://nexte.st/book/reusing-builds.html). Thanks [Pascal
+  Kuthe](https://github.com/pascalkuthe) for your first contribution!
+
 ## [0.9.34] - 2022-08-12
 
 ### Added
@@ -511,6 +524,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.35]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.35
 [0.9.34]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.34
 [0.9.33]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.33
 [0.9.32]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.32
