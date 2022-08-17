@@ -29,17 +29,17 @@ impl TargetTriple {
     /// cargo-nextest represents the host triple with `None` during runtime.
     /// However the build-metadata might be used on a system with a different host triple.
     /// Therefore the host triple is detected if `target_triple` is `None`
-    pub fn serialize(target_triple: Option<&TargetTriple>) -> String {
+    pub fn serialize(target_triple: Option<&TargetTriple>) -> Option<String> {
         if let Some(target) = &target_triple {
-            target.triple.clone()
+            Some(target.triple.clone())
         } else {
             match Platform::current() {
-                Ok(host) => host.triple_str().to_owned(),
+                Ok(host) => Some(host.triple_str().to_owned()),
                 Err(err) => {
                     log::warn!(
                         "failed to detect host target: {err}!\n cargo nextest may use the wrong test runner for this archive."
                     );
-                    String::new()
+                    None
                 }
             }
         }
@@ -47,15 +47,11 @@ impl TargetTriple {
 
     /// Converts a `String` that was output by `TargetTriple::serialize` back to a target triple.
     /// This target triple is assumed to orginiate from a build-metadata config.
-    pub fn deserialize(target_triple: String) -> Option<TargetTriple> {
-        if target_triple.is_empty() {
-            None
-        } else {
-            Some(TargetTriple {
-                triple: target_triple,
-                source: TargetTripleSource::Metadata,
-            })
-        }
+    pub fn deserialize(target_triple: Option<String>) -> Option<TargetTriple> {
+        Some(TargetTriple {
+            triple: target_triple?,
+            source: TargetTripleSource::Metadata,
+        })
     }
 
     /// Find the target triple being built.
