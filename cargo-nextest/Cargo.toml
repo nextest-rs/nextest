@@ -31,7 +31,7 @@ nextest-runner = { version = "=0.23.0", path = "../nextest-runner" }
 nextest-metadata = { version = "=0.6.0", path = "../nextest-metadata" }
 num_cpus = "1.13.1"
 once_cell = "1.13.1"
-owo-colors = { version = "3.4.0", features = ["supports-colors"] }
+owo-colors = { version = "3.5.0", features = ["supports-colors"] }
 pathdiff = { version = "0.2.1", features = ["camino"] }
 semver = "1.0.13"
 shell-words = "1.1.0"
