@@ -2010,9 +2010,9 @@ checksum = "c02424087780c9b71cc96799eaeddff35af2bc513278cda5c99fc1f5d026d3c1"
 
 [[package]]
 name = "target-spec"
-version = "1.0.2"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "462215968f204588ef2d3499333d07729b692aa01f79f9b0925071127b3b353f"
+checksum = "5e57e26b3160d2b7a45f5110cdccbef33ec1b9bb96cdad91ebc0368ed947ff4d"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
