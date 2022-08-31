@@ -19,7 +19,7 @@ clap = { version = "3.2.18", features = ["atty", "clap_derive", "color", "derive
 console = { version = "0.15.1", features = ["ansi-parsing", "unicode-width"] }
 either = { version = "1.8.0", features = ["use_std"] }
 futures-channel = { version = "0.3.23", features = ["alloc", "futures-sink", "sink", "std"] }
-futures-sink = { version = "0.3.23", default-features = false, features = ["alloc", "std"] }
+futures-sink = { version = "0.3.24", default-features = false, features = ["alloc", "std"] }
 getrandom = { version = "0.2.7", default-features = false, features = ["std"] }
 indexmap = { version = "1.9.1", default-features = false, features = ["std"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
