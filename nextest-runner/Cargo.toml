@@ -19,9 +19,9 @@ config = { version = "0.13.2", default-features = false, features = ["toml"] }
 cargo_metadata = "0.14.2"
 cfg-if = "1.0.0"
 chrono = "0.4.22"
-debug-ignore = "1.0.2"
+debug-ignore = "1.0.3"
 either = "1.8.0"
-futures = "0.3.23"
+futures = "0.3.24"
 guppy = "0.14.2"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
@@ -44,9 +44,9 @@ shell-words = "1.1.0"
 strip-ansi-escapes = "0.1.1"
 tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
-target-spec = "1.0.2"
+target-spec = "1.1.0"
 tempfile = "3.3.0"
-thiserror = "1.0.32"
+thiserror = "1.0.33"
 # For parsing of .cargo/config.toml files
 tokio = { version = "1.20.1", features = [
     "io-util",
@@ -96,7 +96,7 @@ duct = "0.13.5"
 indoc = "1.0.7"
 maplit = "1.0.2"
 pathdiff = { version = "0.2.1", features = ["camino"] }
-pretty_assertions = "1.2.1"
+pretty_assertions = "1.3.0"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 test-case = "2.2.1"

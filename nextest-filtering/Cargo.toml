@@ -25,10 +25,10 @@ nom_locate = "4.0.0"
 recursion = "0.1.0"
 regex = "1.6.0"
 regex-syntax = "0.6.27"
-thiserror = "1.0.32"
+thiserror = "1.0.33"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-clap = { version = "3.2.18", features = ["derive"] }
+clap = { version = "3.2.19", features = ["derive"] }
 camino = "1.1.1"
 test-case = "2.2.1"
