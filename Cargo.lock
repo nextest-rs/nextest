@@ -1122,6 +1122,7 @@ dependencies = [
  "indent_write",
  "indicatif",
  "indoc",
+ "is_ci",
  "itertools",
  "libc",
  "log",
