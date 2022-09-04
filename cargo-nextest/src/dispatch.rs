@@ -696,6 +696,16 @@ struct TestReporterOpts {
         env = "NEXTEST_FINAL_STATUS_LEVEL"
     )]
     final_status_level: Option<FinalStatusLevelOpt>,
+
+    /// Visibility of the progress bar.
+    #[clap(
+        long,
+        possible_values = &["true", "false"],
+        conflicts_with_all = &["no-capture", "no-run"],
+        value_name = "HIDE",
+        env = "NEXTEST_HIDE_PROGRESS_BAR"
+    )]
+    hide_progress_bar: Option<bool>,
 }
 
 impl TestReporterOpts {
@@ -713,6 +723,9 @@ impl TestReporterOpts {
         }
         if let Some(final_status_level) = self.final_status_level {
             builder.set_final_status_level(final_status_level.into_final_status_level());
+        }
+        if let Some(hide_progress_bar) = self.hide_progress_bar {
+            builder.set_hide_progress_bar(hide_progress_bar);
         }
         builder
     }

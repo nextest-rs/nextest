@@ -238,6 +238,7 @@ pub struct TestReporterBuilder {
     status_level: Option<StatusLevel>,
     final_status_level: Option<FinalStatusLevel>,
     verbose: bool,
+    hide_progress_bar: bool,
 }
 
 impl TestReporterBuilder {
@@ -277,6 +278,13 @@ impl TestReporterBuilder {
     /// Sets verbose output.
     pub fn set_verbose(&mut self, verbose: bool) -> &mut Self {
         self.verbose = verbose;
+        self
+    }
+
+    /// Sets visibility of the progress bar.
+    /// The progress bar is also hidden if `no_capture` is set.
+    pub fn set_hide_progress_bar(&mut self, hide_progress_bar: bool) -> &mut Self {
+        self.hide_progress_bar = hide_progress_bar;
         self
     }
 }
@@ -322,43 +330,8 @@ impl TestReporterBuilder {
                 .unwrap_or_else(|| profile.success_output()),
         };
 
-        let stderr = match (output, self.no_capture) {
-            (ReporterStderr::Terminal, false) => {
-                // Some CI environments appear to pretend to be a terminal. Disable the progress bar
-                // in these environments.
-                if is_ci::uncached() {
-                    ReporterStderrImpl::TerminalWithoutBar
-                } else {
-                    let progress_bar = ProgressBar::new(test_list.test_count() as u64);
-                    // Emulate Cargo's style.
-                    let test_count_width = format!("{}", test_list.test_count()).len();
-                    // Create the template using the width as input. This is a little confusing -- {{foo}}
-                    // is what's passed into the ProgressBar, while {bar} is inserted by the format!() statement.
-                    //
-                    // Note: ideally we'd use the same format as our other duration displays for the elapsed time,
-                    // but that isn't possible due to https://github.com/console-rs/indicatif/issues/440. Use
-                    // {{elapsed_precise}} as an OK tradeoff here.
-                    let template = format!(
-                        "{{prefix:>12}} [{{elapsed_precise:>9}}] [{{wide_bar}}] \
-                        {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}     "
-                    );
-                    progress_bar.set_style(
-                        ProgressStyle::default_bar()
-                            .progress_chars("=> ")
-                            .template(&template),
-                    );
-                    // Since we only update the progress bar on a steady tick (below), there's no need
-                    // to buffer in ProgressDrawTarget.
-                    //
-                    // NOTE: set_draw_target must be called before enable_steady_tick to avoid a
-                    // spurious extra line from being printed as the draw target changes.
-                    progress_bar.set_draw_target(ProgressDrawTarget::stderr_nohz());
-                    // Enable a steady tick 10 times a second.
-                    progress_bar.enable_steady_tick(100);
-                    ReporterStderrImpl::TerminalWithBar(progress_bar)
-                }
-            }
-            (ReporterStderr::Terminal, true) => {
+        let stderr = match output {
+            ReporterStderr::Terminal if self.no_capture => {
                 // Do not use a progress bar if --no-capture is passed in. This is required since we
                 // pass down stderr to the child process.
                 //
@@ -369,7 +342,45 @@ impl TestReporterBuilder {
                 // gain.
                 ReporterStderrImpl::TerminalWithoutBar
             }
-            (ReporterStderr::Buffer(buf), _) => ReporterStderrImpl::Buffer(buf),
+            ReporterStderr::Terminal if is_ci::uncached() => {
+                // Some CI environments appear to pretend to be a terminal. Disable the progress bar
+                // in these environments.
+                ReporterStderrImpl::TerminalWithoutBar
+            }
+            ReporterStderr::Terminal if self.hide_progress_bar => {
+                ReporterStderrImpl::TerminalWithoutBar
+            }
+
+            ReporterStderr::Terminal => {
+                let progress_bar = ProgressBar::new(test_list.test_count() as u64);
+                // Emulate Cargo's style.
+                let test_count_width = format!("{}", test_list.test_count()).len();
+                // Create the template using the width as input. This is a little confusing -- {{foo}}
+                // is what's passed into the ProgressBar, while {bar} is inserted by the format!() statement.
+                //
+                // Note: ideally we'd use the same format as our other duration displays for the elapsed time,
+                // but that isn't possible due to https://github.com/console-rs/indicatif/issues/440. Use
+                // {{elapsed_precise}} as an OK tradeoff here.
+                let template = format!(
+                    "{{prefix:>12}} [{{elapsed_precise:>9}}] [{{wide_bar}}] \
+                    {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}     "
+                );
+                progress_bar.set_style(
+                    ProgressStyle::default_bar()
+                        .progress_chars("=> ")
+                        .template(&template),
+                );
+                // Since we only update the progress bar on a steady tick (below), there's no need
+                // to buffer in ProgressDrawTarget.
+                //
+                // NOTE: set_draw_target must be called before enable_steady_tick to avoid a
+                // spurious extra line from being printed as the draw target changes.
+                progress_bar.set_draw_target(ProgressDrawTarget::stderr_nohz());
+                // Enable a steady tick 10 times a second.
+                progress_bar.enable_steady_tick(100);
+                ReporterStderrImpl::TerminalWithBar(progress_bar)
+            }
+            ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
         };
 
         TestReporter {
