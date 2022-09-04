@@ -36,7 +36,7 @@ test-threads = "num-cpus"
 status-level = "pass"
 
 # Similar to status-level, show these test statuses at the end of the run.
-final-status-level = "none"
+final-status-level = "flaky"
 
 # "failure-output" defines when standard output and standard error for failing tests are produced.
 # Accepted values are
