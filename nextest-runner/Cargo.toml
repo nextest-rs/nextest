@@ -11,7 +11,7 @@ rust-version = "1.59"
 
 [dependencies]
 atomicwrites = "0.3.1"
-aho-corasick = "0.7.18"
+aho-corasick = "0.7.19"
 async-scoped = { version = "0.7.0", features = ["use-tokio"] }
 bytes = "1.2.1"
 camino = { version = "1.1.1", features = ["serde1"] }
