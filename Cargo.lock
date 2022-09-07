@@ -875,6 +875,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "indicatif"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc42b206e70d86ec03285b123e65a5458c92027d1fb2ae3555878b8113b3ddf"
+dependencies = [
+ "console",
+ "number_prefix",
+ "unicode-width",
+]
+
+[[package]]
 name = "indoc"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1120,7 +1131,7 @@ dependencies = [
  "http",
  "humantime-serde",
  "indent_write",
- "indicatif",
+ "indicatif 0.16.2",
  "indoc",
  "is_ci",
  "itertools",
@@ -1752,14 +1763,14 @@ dependencies = [
 
 [[package]]
 name = "self_update"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88c865d17fb512577be02a09fd2fd96c31c7e46fe649205d84feefd8b2a332da"
+checksum = "b05ab948d728a6439b9da58a94c9df77d421a8bf558145681f908e170232f120"
 dependencies = [
  "either",
  "flate2",
  "hyper",
- "indicatif",
+ "indicatif 0.17.0",
  "log",
  "quick-xml 0.22.0",
  "regex",
