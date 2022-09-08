@@ -3,6 +3,20 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.36] - 2022-09-07
+
+### Added
+
+- A new `--hide-progress-bar` option (environment variable `NEXTEST_HIDE_PROGRESS_BAR`) forces the
+  progress bar to be hidden. Thanks [Remo Senekowitsch](https://github.com/remlse) for your first
+  contribution!
+
+### Changed
+
+- Nextest now prints out a list of failing and flaky tests at the end of output by default (the
+  `final-status-level` config is set to `flaky`).
+- The progress bar is now hidden if a CI environment is detected.
+
 ## [0.9.35] - 2022-08-17
 
 ### Added
@@ -524,6 +538,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.36]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.36
 [0.9.35]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.35
 [0.9.34]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.34
 [0.9.33]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.33

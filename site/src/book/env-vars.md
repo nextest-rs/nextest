@@ -9,6 +9,7 @@ Nextest reads some of its command-line options as environment variables. In all 
 * `NEXTEST_PROFILE` — [Nextest profile](configuration.md#profiles) to use while running tests.
 * `NEXTEST_TEST_THREADS` — Number of tests to run simultaneously.
 * `NEXTEST_RETRIES` — Number of times to retry running tests.
+* `NEXTEST_HIDE_PROGRESS_BAR` — If set to "1", always hide the progress bar.
 * `NEXTEST_FAILURE_OUTPUT` and `NEXTEST_SUCCESS_OUTPUT` — When standard output and standard error are displayed for failing and passing tests, respectively. See [Reporter options](other-options.md#reporter-options) for possible values.
 * `NEXTEST_STATUS_LEVEL` — Which test statuses (**PASS**, **FAIL** etc) to display. See [Reporter options](other-options.md#reporter-options) for possible values.
 * `NEXTEST_FINAL_STATUS_LEVEL` — Which test statuses (**PASS**, **FAIL** etc) to display at the end of a test run. See [Reporter options](other-options.md#reporter-options) for possible values.
