@@ -368,16 +368,17 @@ impl TestReporterBuilder {
                 progress_bar.set_style(
                     ProgressStyle::default_bar()
                         .progress_chars("=> ")
-                        .template(&template),
+                        .template(&template)
+                        .expect("template is known to be valid"),
                 );
-                // Since we only update the progress bar on a steady tick (below), there's no need
-                // to buffer in ProgressDrawTarget.
-                //
                 // NOTE: set_draw_target must be called before enable_steady_tick to avoid a
                 // spurious extra line from being printed as the draw target changes.
-                progress_bar.set_draw_target(ProgressDrawTarget::stderr_nohz());
+                //
+                // This used to be unbuffered, but that option went away from indicatif 0.17.0. The
+                // refresh rate is now 20hz so that it's double the steady tick rate.
+                progress_bar.set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
                 // Enable a steady tick 10 times a second.
-                progress_bar.enable_steady_tick(100);
+                progress_bar.enable_steady_tick(Duration::from_millis(100));
                 ReporterStderrImpl::TerminalWithBar(progress_bar)
             }
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
@@ -438,8 +439,11 @@ impl<'a> TestReporter<'a> {
                 self.inner
                     .write_event_impl(&event, &mut buf)
                     .map_err(WriteEventError::Io)?;
-                let s = String::from_utf8_lossy(&buf);
-                progress_bar.println(&s);
+                // ProgressBar::println doesn't print status lines if the bar is hidden. The suspend
+                // method prints it in both cases.
+                progress_bar.suspend(|| {
+                    _ = std::io::stderr().write_all(&buf);
+                });
 
                 update_progress_bar(&event, &self.inner.styles, progress_bar);
             }
