@@ -594,6 +594,7 @@ impl CargoOptions {
 /// Test runner options.
 #[derive(Debug, Default, Args)]
 #[clap(next_help_heading = "RUNNER OPTIONS")]
+#[clap(allow_negative_numbers = true)]
 pub struct TestRunnerOpts {
     /// Compile, but don't run tests
     #[clap(long)]
@@ -1578,5 +1579,22 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_negative_test_threads() {
+        let neg_j = "cargo nextest run --jobs -3";
+        let _app =
+            CargoNextestApp::try_parse_from(shell_words::split(neg_j).expect("valid command line"))
+                .unwrap();
+
+        let pos_j = "cargo nextest run --jobs 3";
+        let _app =
+            CargoNextestApp::try_parse_from(shell_words::split(pos_j).expect("valid command line"))
+                .unwrap();
+
+        let zero_j = "cargo nextest run --jobs 0";
+
+        assert!(CargoNextestApp::try_parse_from(shell_words::split(zero_j).unwrap()).is_err());
     }
 }
