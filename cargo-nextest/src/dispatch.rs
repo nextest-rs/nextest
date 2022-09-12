@@ -599,7 +599,8 @@ pub struct TestRunnerOpts {
     #[clap(long)]
     no_run: bool,
 
-    /// Number of tests to run simultaneously [possible values: integer or "num-cpus"]
+    /// Number of tests to run simultaneously 
+    /// [possible values: integer or "num-cpus"] [default: from profile]
     #[clap(
         long,
         short = 'j',
