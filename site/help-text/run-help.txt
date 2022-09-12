@@ -79,6 +79,8 @@ REPORTER OPTIONS:
         --final-status-level <LEVEL>    Test statuses to output at the end of the run [env:
                                         NEXTEST_FINAL_STATUS_LEVEL=] [possible values: none, fail,
                                         flaky, slow, skip, pass, all]
+        --hide-progress-bar             Do not display the progress bar [env:
+                                        NEXTEST_HIDE_PROGRESS_BAR=]
 
 REUSE BUILD OPTIONS:
         --archive-file <PATH>         Path to nextest archive

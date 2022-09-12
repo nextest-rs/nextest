@@ -842,16 +842,17 @@ impl<'a> TestReporterImpl<'a> {
                                     false => self.failure_output,
                                 };
 
-                                if self.final_status_level >= final_status_level {
+                                // Print out the final status line so that status lines are shown
+                                // for tests that e.g. failed due to signals.
+                                if self.final_status_level >= final_status_level
+                                    || test_output_display.is_final()
+                                {
                                     self.write_final_status_line(
                                         *test_instance,
                                         run_statuses.describe(),
                                         writer,
                                     )?;
                                 }
-                                // This was previously gated on "if self.status_level >= StatusLevel::Fail"
-                                // but that seems incorrect -- the test output display and status level
-                                // controls are independent of each other.
                                 if test_output_display.is_final() {
                                     self.write_stdout_stderr(
                                         test_instance,
