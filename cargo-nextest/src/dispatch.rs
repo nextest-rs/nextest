@@ -594,7 +594,6 @@ impl CargoOptions {
 /// Test runner options.
 #[derive(Debug, Default, Args)]
 #[clap(next_help_heading = "RUNNER OPTIONS")]
-#[clap(allow_negative_numbers = true)]
 pub struct TestRunnerOpts {
     /// Compile, but don't run tests
     #[clap(long)]
@@ -607,7 +606,8 @@ pub struct TestRunnerOpts {
         visible_alias = "jobs",
         value_name = "THREADS",
         conflicts_with_all = &["no-capture", "no-run"],
-        env = "NEXTEST_TEST_THREADS"
+        env = "NEXTEST_TEST_THREADS",
+	allow_hyphen_values = true
     )]
     test_threads: Option<TestThreads>,
 
@@ -1354,6 +1354,9 @@ mod tests {
             // Test binary arguments
             // ---
             "cargo nextest run -- --a an arbitary arg",
+		// Test negative test threads
+		"cargo nextest run --jobs -3",
+		"cargo nextest run --jobs 3",
         ];
 
         let invalid: &[(&'static str, ErrorKind)] = &[
@@ -1468,6 +1471,8 @@ mod tests {
                 "cargo nextest run --archive-file foo --target-dir-remap bar",
                 ArgumentConflict,
             ),
+            // Invalid test threads: 0
+            ("cargo nextest run --jobs 0", ValueValidation),
         ];
 
         for valid_args in valid {
@@ -1579,22 +1584,5 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn test_negative_test_threads() {
-        let neg_j = "cargo nextest run --jobs -3";
-        let _app =
-            CargoNextestApp::try_parse_from(shell_words::split(neg_j).expect("valid command line"))
-                .unwrap();
-
-        let pos_j = "cargo nextest run --jobs 3";
-        let _app =
-            CargoNextestApp::try_parse_from(shell_words::split(pos_j).expect("valid command line"))
-                .unwrap();
-
-        let zero_j = "cargo nextest run --jobs 0";
-
-        assert!(CargoNextestApp::try_parse_from(shell_words::split(zero_j).unwrap()).is_err());
     }
 }

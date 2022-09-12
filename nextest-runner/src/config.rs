@@ -15,7 +15,9 @@ use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, Fil
 use guppy::graph::PackageGraph;
 use nextest_filtering::{FilteringExpr, TestQuery};
 use serde::{de::IntoDeserializer, Deserialize};
-use std::{collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration};
+use std::{
+    cmp::Ordering, collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration,
+};
 
 /// Overall configuration for nextest.
 ///
@@ -597,17 +599,15 @@ impl<'de> Deserialize<'de> for TestThreads {
             where
                 E: serde::de::Error,
             {
-                if v > 0 {
-                    Ok(TestThreads::Count(v as usize))
-                } else if v < 0 {
-                    Ok(TestThreads::Count(
+                match v.cmp(&0) {
+                    Ordering::Greater => Ok(TestThreads::Count(v as usize)),
+                    Ordering::Less => Ok(TestThreads::Count(
                         (num_cpus::get() as i64 + v).max(1) as usize
-                    ))
-                } else {
-                    Err(serde::de::Error::invalid_value(
+                    )),
+                    Ordering::Equal => Err(serde::de::Error::invalid_value(
                         serde::de::Unexpected::Signed(v),
                         &self,
-                    ))
+                    )),
                 }
             }
         }
