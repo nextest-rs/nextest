@@ -15,7 +15,9 @@ use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, Fil
 use guppy::graph::PackageGraph;
 use nextest_filtering::{FilteringExpr, TestQuery};
 use serde::{de::IntoDeserializer, Deserialize};
-use std::{collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration};
+use std::{
+    cmp::Ordering, collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration,
+};
 
 /// Overall configuration for nextest.
 ///
@@ -548,11 +550,18 @@ impl FromStr for TestThreads {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "num-cpus" {
-            Ok(Self::NumCpus)
-        } else if let Ok(threads) = s.parse::<usize>() {
-            Ok(Self::Count(threads))
-        } else {
-            Err(TestThreadsParseError::new(s))
+            return Ok(Self::NumCpus);
+        }
+
+        match s.parse::<isize>() {
+            Err(e) => Err(TestThreadsParseError::new(format!(
+                "Error: {e} parsing {s}"
+            ))),
+            Ok(0) => Err(TestThreadsParseError::new("jobs may not be 0")),
+            Ok(j) if j < 0 => Ok(TestThreads::Count(
+                (num_cpus::get() as isize + j).max(1) as usize
+            )),
+            Ok(j) => Ok(TestThreads::Count(j as usize)),
         }
     }
 }
@@ -590,7 +599,16 @@ impl<'de> Deserialize<'de> for TestThreads {
             where
                 E: serde::de::Error,
             {
-                Ok(TestThreads::Count(v as usize))
+                match v.cmp(&0) {
+                    Ordering::Greater => Ok(TestThreads::Count(v as usize)),
+                    Ordering::Less => Ok(TestThreads::Count(
+                        (num_cpus::get() as i64 + v).max(1) as usize
+                    )),
+                    Ordering::Equal => Err(serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Signed(v),
+                        &self,
+                    )),
+                }
             }
         }
 
@@ -1252,6 +1270,69 @@ mod tests {
             Some(26),
             "retries for test_baz/default profile"
         );
+    }
+
+    #[test_case(
+        indoc! {r#"
+            [profile.custom]
+            test-threads = -1
+        "#},
+        None
+
+        ; "negative_j"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.custom]
+            test-threads = 2
+        "#},
+        Some(2)
+
+        ; "positive_j"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.custom]
+            test-threads = 0
+        "#},
+        Some(0)
+
+        ; "zero_j"
+    )]
+    fn parse_test_threads_negative_jobs(config_contents: &str, n_threads: Option<usize>) {
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+
+        let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None, []);
+        match n_threads {
+            Some(0) => assert!(config.is_err()),
+            Some(j) => assert_eq!(
+                config
+                    .unwrap()
+                    .profile("custom")
+                    .unwrap()
+                    .custom_profile
+                    .unwrap()
+                    .test_threads
+                    .unwrap()
+                    .compute(),
+                j
+            ),
+            None => assert_eq!(
+                config
+                    .unwrap()
+                    .profile("custom")
+                    .unwrap()
+                    .custom_profile
+                    .unwrap()
+                    .test_threads
+                    .unwrap()
+                    .compute(),
+                num_cpus::get() - 1
+            ),
+        }
     }
 
     fn temp_workspace(temp_dir: &Utf8Path, config_contents: &str) -> PackageGraph {

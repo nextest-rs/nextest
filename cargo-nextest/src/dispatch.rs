@@ -606,7 +606,8 @@ pub struct TestRunnerOpts {
         visible_alias = "jobs",
         value_name = "THREADS",
         conflicts_with_all = &["no-capture", "no-run"],
-        env = "NEXTEST_TEST_THREADS"
+        env = "NEXTEST_TEST_THREADS",
+	allow_hyphen_values = true
     )]
     test_threads: Option<TestThreads>,
 
@@ -1353,6 +1354,9 @@ mod tests {
             // Test binary arguments
             // ---
             "cargo nextest run -- --a an arbitary arg",
+		// Test negative test threads
+		"cargo nextest run --jobs -3",
+		"cargo nextest run --jobs 3",
         ];
 
         let invalid: &[(&'static str, ErrorKind)] = &[
@@ -1467,6 +1471,8 @@ mod tests {
                 "cargo nextest run --archive-file foo --target-dir-remap bar",
                 ArgumentConflict,
             ),
+            // Invalid test threads: 0
+            ("cargo nextest run --jobs 0", ValueValidation),
         ];
 
         for valid_args in valid {
