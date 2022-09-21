@@ -2,7 +2,7 @@
 // Copyright (c) The cargo-guppy Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use clap::{ArgEnum, Args};
+use clap::{Args, ValueEnum};
 use env_logger::fmt::Formatter;
 use log::{Level, LevelFilter, Record};
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
@@ -18,13 +18,13 @@ use supports_color::Stream;
 #[must_use]
 pub(crate) struct OutputOpts {
     /// Verbose output
-    #[clap(long, short, global = true, env = "NEXTEST_VERBOSE")]
+    #[arg(long, short, global = true, env = "NEXTEST_VERBOSE")]
     pub(crate) verbose: bool,
     // TODO: quiet?
     /// Produce color output: auto, always, never
-    #[clap(
+    #[arg(
         long,
-        arg_enum,
+        value_enum,
         default_value_t,
         hide_possible_values = true,
         global = true,
@@ -51,7 +51,7 @@ pub(crate) struct OutputContext {
     pub(crate) color: Color,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, ArgEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 #[must_use]
 pub enum Color {
     Auto,

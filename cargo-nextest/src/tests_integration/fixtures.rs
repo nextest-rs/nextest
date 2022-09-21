@@ -3,7 +3,7 @@
 
 use super::temp_project::TempProject;
 use crate::{dispatch::CargoNextestApp, OutputWriter};
-use clap::StructOpt;
+use clap::Parser;
 use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustTestSuiteStatusSummary, TestListSummary,
 };

@@ -15,7 +15,7 @@
 
 use crate::{dispatch::CargoNextestApp, ExpectedError, OutputWriter};
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::StructOpt;
+use clap::Parser;
 use nextest_metadata::{BuildPlatform, TestListSummary};
 
 mod fixtures;

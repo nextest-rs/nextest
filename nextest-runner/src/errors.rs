@@ -6,11 +6,9 @@
 use crate::{
     cargo_config::TargetTriple,
     helpers::{dylib_path_envvar, extract_abort_status},
-    reporter::{StatusLevel, TestOutputDisplay},
     reuse_build::ArchiveFormat,
     runner::AbortStatus,
     target_runner::PlatformRunnerSource,
-    test_filter::RunIgnored,
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
@@ -116,42 +114,6 @@ impl ProfileNotFound {
     }
 }
 
-/// Error returned while parsing a [`TestOutputDisplay`] value from a string.
-#[derive(Clone, Debug, Error)]
-#[error(
-    "unrecognized value for test output display: {input}\n(known values: {})",
-    TestOutputDisplay::variants().join(", "),
-)]
-pub struct TestOutputDisplayParseError {
-    input: String,
-}
-
-impl TestOutputDisplayParseError {
-    pub(crate) fn new(input: impl Into<String>) -> Self {
-        Self {
-            input: input.into(),
-        }
-    }
-}
-
-/// Error returned while parsing a [`StatusLevel`] value from a string.
-#[derive(Clone, Debug, Error)]
-#[error(
-    "unrecognized value for status-level: {input}\n(known values: {})",
-    StatusLevel::variants().join(", "),
-)]
-pub struct StatusLevelParseError {
-    input: String,
-}
-
-impl StatusLevelParseError {
-    pub(crate) fn new(input: impl Into<String>) -> Self {
-        Self {
-            input: input.into(),
-        }
-    }
-}
-
 /// Error returned while parsing a [`ToolConfigFile`](crate::config::ToolConfigFile) value.
 #[derive(Clone, Debug, Error)]
 pub enum ToolConfigFileParseError {
@@ -197,25 +159,6 @@ pub struct TestThreadsParseError {
 }
 
 impl TestThreadsParseError {
-    pub(crate) fn new(input: impl Into<String>) -> Self {
-        Self {
-            input: input.into(),
-        }
-    }
-}
-
-/// An error that occurs while parsing a [`RunIgnored`] value from a string.
-#[derive(Clone, Debug, Error)]
-#[error(
-    "unrecognized value for run-ignored: {input}\n(known values: {})",
-    RunIgnored::variants().join(", "),
-)]
-
-pub struct RunIgnoredParseError {
-    input: String,
-}
-
-impl RunIgnoredParseError {
     pub(crate) fn new(input: impl Into<String>) -> Self {
         Self {
             input: input.into(),

@@ -8,7 +8,7 @@ use crate::{
     ExpectedError, Result, ReuseBuildKind,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{ArgEnum, Args, Parser, Subcommand};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
@@ -40,7 +40,7 @@ use supports_color::Stream;
 /// This binary should typically be invoked as `cargo nextest` (in which case
 /// this message will not be seen), not `cargo-nextest`.
 #[derive(Debug, Parser)]
-#[clap(version, bin_name = "cargo")]
+#[command(version, bin_name = "cargo")]
 pub struct CargoNextestApp {
     #[clap(subcommand)]
     subcommand: NextestSubcommand,
@@ -61,10 +61,10 @@ enum NextestSubcommand {
 }
 
 #[derive(Debug, Args)]
-#[clap(version)]
+#[command(version)]
 struct AppOpts {
     /// Path to Cargo.toml
-    #[clap(long, global = true, value_name = "PATH")]
+    #[arg(long, global = true, value_name = "PATH")]
     manifest_path: Option<Utf8PathBuf>,
 
     #[clap(flatten)]
@@ -164,10 +164,10 @@ impl AppOpts {
 }
 
 #[derive(Debug, Args)]
-#[clap(next_help_heading = "CONFIG OPTIONS")]
+#[command(next_help_heading = "Config options")]
 struct ConfigOpts {
     /// Config file [default: workspace-root/.config/nextest.toml]
-    #[clap(long, global = true, value_name = "PATH")]
+    #[arg(long, global = true, value_name = "PATH")]
     pub config_file: Option<Utf8PathBuf>,
 
     /// Tool-specific config files
@@ -183,7 +183,7 @@ struct ConfigOpts {
     ///
     /// This argument may be specified multiple times. Files that come later are lower priority
     /// than those that come earlier.
-    #[clap(long = "tool-config-file", global = true, value_name = "TOOL:ABS_PATH")]
+    #[arg(long = "tool-config-file", global = true, value_name = "TOOL:ABS_PATH")]
     pub tool_config_files: Vec<ToolConfigFile>,
 }
 
@@ -224,22 +224,22 @@ enum Command {
         build_filter: TestBuildFilter,
 
         /// Output format
-        #[clap(
+        #[arg(
             short = 'T',
             long,
-            arg_enum,
+            value_enum,
             default_value_t,
-            help_heading = "OUTPUT OPTIONS",
+            help_heading = "Output options",
             value_name = "FMT"
         )]
         message_format: MessageFormatOpts,
 
         /// Type of listing
-        #[clap(
+        #[arg(
             long,
-            arg_enum,
+            value_enum,
             default_value_t,
-            help_heading = "OUTPUT OPTIONS",
+            help_heading = "Output options",
             value_name = "TYPE"
         )]
         list_type: ListType,
@@ -255,14 +255,15 @@ enum Command {
     /// For more information, see <https://nexte.st/book/running>.
     Run {
         /// Nextest profile to use
-        #[clap(long, short = 'P', env = "NEXTEST_PROFILE")]
+        #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
         profile: Option<String>,
 
         /// Run tests serially and do not capture output
-        #[clap(
+        #[arg(
             long,
+            name = "no-capture",
             alias = "nocapture",
-            help_heading = "RUNNER OPTIONS",
+            help_heading = "Runner options",
             display_order = 100
         )]
         no_capture: bool,
@@ -294,26 +295,31 @@ enum Command {
         cargo_options: CargoOptions,
 
         /// File to write archive to
-        #[clap(long, help_heading = "ARCHIVE OPTIONS", value_name = "PATH")]
+        #[arg(
+            long,
+            name = "archive-file",
+            help_heading = "Archive options",
+            value_name = "PATH"
+        )]
         archive_file: Utf8PathBuf,
 
         /// Archive format
         ///
         /// `auto` uses the file extension to determine the archive format. Currently supported is
         /// `.tar.zst`.
-        #[clap(
+        #[arg(
             long,
-            arg_enum,
-            help_heading = "ARCHIVE OPTIONS",
+            value_enum,
+            help_heading = "Archive options",
             value_name = "FORMAT",
             default_value_t
         )]
         archive_format: ArchiveFormatOpt,
 
         /// Zstandard compression level (-7 to 22, higher is more compressed + slower)
-        #[clap(
+        #[arg(
             long,
-            help_heading = "ARCHIVE OPTIONS",
+            help_heading = "Archive options",
             value_name = "LEVEL",
             default_value_t = 0,
             allow_hyphen_values = true
@@ -329,7 +335,7 @@ enum Command {
     },
 }
 
-#[derive(Copy, Clone, Debug, ArgEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum)]
 pub(crate) enum PlatformFilterOpts {
     Target,
     Host,
@@ -352,7 +358,7 @@ impl From<PlatformFilterOpts> for Option<BuildPlatform> {
     }
 }
 
-#[derive(Copy, Clone, Debug, ArgEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum)]
 enum ListType {
     Full,
     BinariesOnly,
@@ -364,7 +370,7 @@ impl Default for ListType {
     }
 }
 
-#[derive(Copy, Clone, Debug, ArgEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum)]
 enum MessageFormatOpts {
     Human,
     Json,
@@ -388,48 +394,44 @@ impl Default for MessageFormatOpts {
 }
 
 #[derive(Debug, Args)]
-#[clap(next_help_heading = "FILTER OPTIONS")]
+#[command(next_help_heading = "Filter options")]
 struct TestBuildFilter {
     /// Run ignored tests
-    #[clap(
-        long,
-        possible_values = RunIgnored::variants(),
-        value_name = "WHICH",
-    )]
-    run_ignored: Option<RunIgnored>,
+    #[arg(long, value_enum, value_name = "WHICH")]
+    run_ignored: Option<RunIgnoredOpt>,
 
     /// Test partition, e.g. hash:1/2 or count:2/3
-    #[clap(long)]
+    #[arg(long)]
     partition: Option<PartitionerBuilder>,
 
     /// Filter test binaries by build platform (DEPRECATED)
     ///
     /// Instead, use -E with 'platform(host)' or 'platform(target)'.
-    #[clap(
+    #[arg(
         long,
         hide_short_help = true,
-        arg_enum,
+        value_enum,
         value_name = "PLATFORM",
         default_value_t
     )]
     pub(crate) platform_filter: PlatformFilterOpts,
 
     /// Test filter expression (see {n}<https://nexte.st/book/filter-expressions>)
-    #[clap(
+    #[arg(
         long,
         short = 'E',
         value_name = "EXPRESSION",
-        multiple_occurrences(true)
+        action(ArgAction::Append)
     )]
     filter_expr: Vec<String>,
 
     // TODO: add regex-based filtering in the future?
     /// Test name filter
-    #[clap(name = "FILTERS", help_heading = None)]
+    #[arg(name = "FILTERS", help_heading = None)]
     filter: Vec<String>,
 
     /// Emulated cargo test binary arguments (partially supported)
-    #[clap(help_heading = None, value_name = "TEST-BINARY-ARGS", last = true)]
+    #[arg(help_heading = None, value_name = "TEST-BINARY-ARGS", last = true)]
     test_binary_args: Vec<String>,
 }
 
@@ -472,7 +474,7 @@ impl TestBuildFilter {
         filter_exprs: Vec<FilteringExpr>,
     ) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
-        let mut run_ignored = self.run_ignored;
+        let mut run_ignored = self.run_ignored.map(Into::into);
         let mut patterns = self.filter.clone();
         self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
 
@@ -556,6 +558,23 @@ impl TestBuildFilter {
     }
 }
 
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum RunIgnoredOpt {
+    Default,
+    IgnoredOnly,
+    All,
+}
+
+impl From<RunIgnoredOpt> for RunIgnored {
+    fn from(opt: RunIgnoredOpt) -> Self {
+        match opt {
+            RunIgnoredOpt::Default => RunIgnored::Default,
+            RunIgnoredOpt::IgnoredOnly => RunIgnored::IgnoredOnly,
+            RunIgnoredOpt::All => RunIgnored::All,
+        }
+    }
+}
+
 impl CargoOptions {
     fn compute_binary_list(
         &self,
@@ -593,15 +612,15 @@ impl CargoOptions {
 
 /// Test runner options.
 #[derive(Debug, Default, Args)]
-#[clap(next_help_heading = "RUNNER OPTIONS")]
+#[command(next_help_heading = "Runner options")]
 pub struct TestRunnerOpts {
     /// Compile, but don't run tests
-    #[clap(long)]
+    #[arg(long, name = "no-run")]
     no_run: bool,
 
     /// Number of tests to run simultaneously [possible values: integer or "num-cpus"]
     /// [default: from profile]
-    #[clap(
+    #[arg(
         long,
         short = 'j',
         visible_alias = "jobs",
@@ -613,15 +632,15 @@ pub struct TestRunnerOpts {
     test_threads: Option<TestThreads>,
 
     /// Number of retries for failing tests [default: from profile]
-    #[clap(long, env = "NEXTEST_RETRIES", conflicts_with = "no-run")]
+    #[arg(long, env = "NEXTEST_RETRIES", conflicts_with = "no-run")]
     retries: Option<usize>,
 
     /// Cancel test run on the first failure
-    #[clap(long, conflicts_with = "no-run")]
+    #[arg(long, name = "fail-fast", conflicts_with = "no-run")]
     fail_fast: bool,
 
     /// Run all tests regardless of failure
-    #[clap(long, conflicts_with = "no-run", overrides_with = "fail-fast")]
+    #[arg(long, conflicts_with = "no-run", overrides_with = "fail-fast")]
     no_fail_fast: bool,
 }
 
@@ -649,50 +668,50 @@ impl TestRunnerOpts {
     }
 }
 
-#[derive(Clone, Copy, Debug, ArgEnum)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 enum IgnoreOverridesOpt {
     Retries,
     All,
 }
 
 #[derive(Debug, Default, Args)]
-#[clap(next_help_heading = "REPORTER OPTIONS")]
+#[command(next_help_heading = "Reporter options")]
 struct TestReporterOpts {
     /// Output stdout and stderr on failure
-    #[clap(
+    #[arg(
         long,
-        possible_values = TestOutputDisplay::variants(),
+        value_enum,
         conflicts_with_all = &["no-capture", "no-run"],
         value_name = "WHEN",
         env = "NEXTEST_FAILURE_OUTPUT",
     )]
-    failure_output: Option<TestOutputDisplay>,
+    failure_output: Option<TestOutputDisplayOpt>,
 
     /// Output stdout and stderr on success
-    #[clap(
+    #[arg(
         long,
-        possible_values = TestOutputDisplay::variants(),
+        value_enum,
         conflicts_with_all = &["no-capture", "no-run"],
         value_name = "WHEN",
         env = "NEXTEST_SUCCESS_OUTPUT",
     )]
-    success_output: Option<TestOutputDisplay>,
+    success_output: Option<TestOutputDisplayOpt>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output
-    #[clap(
+    #[arg(
         long,
-        possible_values = StatusLevel::variants(),
+        value_enum,
         conflicts_with = "no-run",
         value_name = "LEVEL",
-        env = "NEXTEST_STATUS_LEVEL",
+        env = "NEXTEST_STATUS_LEVEL"
     )]
-    status_level: Option<StatusLevel>,
+    status_level: Option<StatusLevelOpt>,
 
     /// Test statuses to output at the end of the run.
-    #[clap(
+    #[arg(
         long,
-        arg_enum,
+        value_enum,
         conflicts_with = "no-run",
         value_name = "LEVEL",
         env = "NEXTEST_FINAL_STATUS_LEVEL"
@@ -700,7 +719,7 @@ struct TestReporterOpts {
     final_status_level: Option<FinalStatusLevelOpt>,
 
     /// Do not display the progress bar
-    #[clap(long, env = "NEXTEST_HIDE_PROGRESS_BAR")]
+    #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR")]
     hide_progress_bar: bool,
 }
 
@@ -709,24 +728,70 @@ impl TestReporterOpts {
         let mut builder = TestReporterBuilder::default();
         builder.set_no_capture(no_capture);
         if let Some(failure_output) = self.failure_output {
-            builder.set_failure_output(failure_output);
+            builder.set_failure_output(failure_output.into());
         }
         if let Some(success_output) = self.success_output {
-            builder.set_success_output(success_output);
+            builder.set_success_output(success_output.into());
         }
         if let Some(status_level) = self.status_level {
-            builder.set_status_level(status_level);
+            builder.set_status_level(status_level.into());
         }
         if let Some(final_status_level) = self.final_status_level {
-            builder.set_final_status_level(final_status_level.into_final_status_level());
+            builder.set_final_status_level(final_status_level.into());
         }
         builder.set_hide_progress_bar(self.hide_progress_bar);
         builder
     }
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum TestOutputDisplayOpt {
+    Immediate,
+    ImmediateFinal,
+    Final,
+    Never,
+}
+
+impl From<TestOutputDisplayOpt> for TestOutputDisplay {
+    fn from(opt: TestOutputDisplayOpt) -> Self {
+        match opt {
+            TestOutputDisplayOpt::Immediate => TestOutputDisplay::Immediate,
+            TestOutputDisplayOpt::ImmediateFinal => TestOutputDisplay::ImmediateFinal,
+            TestOutputDisplayOpt::Final => TestOutputDisplay::Final,
+            TestOutputDisplayOpt::Never => TestOutputDisplay::Never,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum StatusLevelOpt {
+    None,
+    Fail,
+    Retry,
+    Slow,
+    Leak,
+    Pass,
+    Skip,
+    All,
+}
+
+impl From<StatusLevelOpt> for StatusLevel {
+    fn from(opt: StatusLevelOpt) -> Self {
+        match opt {
+            StatusLevelOpt::None => StatusLevel::None,
+            StatusLevelOpt::Fail => StatusLevel::Fail,
+            StatusLevelOpt::Retry => StatusLevel::Retry,
+            StatusLevelOpt::Slow => StatusLevel::Slow,
+            StatusLevelOpt::Leak => StatusLevel::Leak,
+            StatusLevelOpt::Pass => StatusLevel::Pass,
+            StatusLevelOpt::Skip => StatusLevel::Skip,
+            StatusLevelOpt::All => StatusLevel::All,
+        }
+    }
+}
+
 /// This is copied from `FinalStatusLevel` except it also has a retry option.
-#[derive(Clone, Copy, Debug, ArgEnum)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 enum FinalStatusLevelOpt {
     None,
     Fail,
@@ -738,16 +803,16 @@ enum FinalStatusLevelOpt {
     All,
 }
 
-impl FinalStatusLevelOpt {
-    fn into_final_status_level(self) -> FinalStatusLevel {
-        match self {
-            Self::None => FinalStatusLevel::None,
-            Self::Fail => FinalStatusLevel::Fail,
-            Self::Flaky => FinalStatusLevel::Flaky,
-            Self::Slow => FinalStatusLevel::Slow,
-            Self::Skip => FinalStatusLevel::Skip,
-            Self::Pass => FinalStatusLevel::Pass,
-            Self::All => FinalStatusLevel::All,
+impl From<FinalStatusLevelOpt> for FinalStatusLevel {
+    fn from(opt: FinalStatusLevelOpt) -> FinalStatusLevel {
+        match opt {
+            FinalStatusLevelOpt::None => FinalStatusLevel::None,
+            FinalStatusLevelOpt::Fail => FinalStatusLevel::Fail,
+            FinalStatusLevelOpt::Flaky => FinalStatusLevel::Flaky,
+            FinalStatusLevelOpt::Slow => FinalStatusLevel::Slow,
+            FinalStatusLevelOpt::Skip => FinalStatusLevel::Skip,
+            FinalStatusLevelOpt::Pass => FinalStatusLevel::Pass,
+            FinalStatusLevelOpt::All => FinalStatusLevel::All,
         }
     }
 }
@@ -1122,26 +1187,26 @@ enum SelfCommand {
     )]
     Update {
         /// Version or version range to download
-        #[clap(long, default_value = "latest")]
+        #[arg(long, default_value = "latest")]
         version: String,
 
         /// Check for updates rather than downloading them
         ///
         /// If no update is available, exits with code 0. If an update is available, exits with code
         /// 80 (UPDATE_AVAILABLE).
-        #[clap(short = 'n', long)]
+        #[arg(short = 'n', long)]
         check: bool,
 
         /// Do not prompt for confirmation
-        #[clap(short = 'y', long, conflicts_with = "check")]
+        #[arg(short = 'y', long, conflicts_with = "check")]
         yes: bool,
 
         /// Force downgrades and reinstalls
-        #[clap(short, long)]
+        #[arg(short, long)]
         force: bool,
 
         /// URL to download releases.json from
-        #[clap(long)]
+        #[arg(long)]
         releases_url: Option<String>,
     },
 }
@@ -1301,7 +1366,7 @@ mod tests {
 
     #[test]
     fn test_argument_parsing() {
-        use clap::ErrorKind::{self, *};
+        use clap::error::ErrorKind::{self, *};
 
         let valid: &[&'static str] = &[
             // ---

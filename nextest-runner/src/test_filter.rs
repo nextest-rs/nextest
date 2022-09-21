@@ -10,7 +10,6 @@
 // result
 
 use crate::{
-    errors::RunIgnoredParseError,
     helpers::convert_build_platform,
     list::RustTestArtifact,
     partition::{Partitioner, PartitionerBuilder},
@@ -18,7 +17,6 @@ use crate::{
 use aho_corasick::AhoCorasick;
 use nextest_filtering::{BinaryQuery, FilteringExpr, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
-use std::{fmt, str::FromStr};
 
 /// Whether to run ignored tests.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -35,40 +33,9 @@ pub enum RunIgnored {
     All,
 }
 
-impl RunIgnored {
-    /// String representations of all known variants.
-    pub fn variants() -> &'static [&'static str] {
-        &["default", "ignored-only", "all"]
-    }
-}
-
 impl Default for RunIgnored {
     fn default() -> Self {
         RunIgnored::Default
-    }
-}
-
-impl fmt::Display for RunIgnored {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RunIgnored::Default => write!(f, "default"),
-            RunIgnored::IgnoredOnly => write!(f, "ignored-only"),
-            RunIgnored::All => write!(f, "all"),
-        }
-    }
-}
-
-impl FromStr for RunIgnored {
-    type Err = RunIgnoredParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val = match s {
-            "default" => RunIgnored::Default,
-            "ignored-only" => RunIgnored::IgnoredOnly,
-            "all" => RunIgnored::All,
-            other => return Err(RunIgnoredParseError::new(other)),
-        };
-        Ok(val)
     }
 }
 
