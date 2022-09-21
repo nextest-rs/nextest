@@ -607,7 +607,7 @@ pub struct TestRunnerOpts {
         value_name = "THREADS",
         conflicts_with_all = &["no-capture", "no-run"],
         env = "NEXTEST_TEST_THREADS",
-	allow_hyphen_values = true
+        allow_hyphen_values = true,
     )]
     test_threads: Option<TestThreads>,
 
