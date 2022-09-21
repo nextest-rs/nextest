@@ -3,7 +3,7 @@
 
 use crate::{output::OutputContext, ExpectedError, OutputWriter, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{ArgEnum, Args};
+use clap::{Args, ValueEnum};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
     errors::PathMapperConstructKind,
@@ -16,8 +16,8 @@ use owo_colors::Stream;
 use std::io::Write;
 
 #[derive(Debug, Default, Args)]
-#[clap(
-    next_help_heading = "REUSE BUILD OPTIONS",
+#[command(
+    next_help_heading = "Reuse build options",
     // These groups define data sources for various aspects of reuse-build inputs
     group = clap::ArgGroup::new("cargo-metadata-sources"),
     group = clap::ArgGroup::new("binaries-metadata-sources"),
@@ -25,56 +25,56 @@ use std::io::Write;
 )]
 pub(crate) struct ReuseBuildOpts {
     /// Path to nextest archive
-    #[clap(
+    #[arg(
         long,
         groups = &["cargo-metadata-sources", "binaries-metadata-sources", "target-dir-remap-sources"],
-        conflicts_with_all = &["cargo-opts", "binaries-metadata", "cargo-metadata"],
+        conflicts_with_all = &["cargo-opts", "binaries_metadata", "cargo_metadata"],
         value_name = "PATH",
     )]
     pub(crate) archive_file: Option<Utf8PathBuf>,
 
     /// Archive format
-    #[clap(
+    #[arg(
         long,
-        arg_enum,
+        value_enum,
         default_value_t,
-        requires = "archive-file",
+        requires = "archive_file",
         value_name = "FORMAT"
     )]
     pub(crate) archive_format: ArchiveFormatOpt,
 
     /// Destination directory to extract archive to [default: temporary directory]
-    #[clap(
+    #[arg(
         long,
         conflicts_with = "cargo-opts",
-        requires = "archive-file",
+        requires = "archive_file",
         value_name = "DIR"
     )]
     pub(crate) extract_to: Option<Utf8PathBuf>,
 
     /// Overwrite files in destination directory while extracting archive
-    #[clap(long, conflicts_with = "cargo-opts", requires_all = &["archive-file", "extract-to"])]
+    #[arg(long, conflicts_with = "cargo-opts", requires_all = &["archive_file", "extract_to"])]
     pub(crate) extract_overwrite: bool,
 
     /// Persist temporary directory destination is extracted to
-    #[clap(long, conflicts_with_all = &["cargo-opts", "extract-to"], requires = "archive-file")]
+    #[arg(long, conflicts_with_all = &["cargo-opts", "extract_to"], requires = "archive_file")]
     pub(crate) persist_extract_tempdir: bool,
 
     /// Path to cargo metadata JSON
-    #[clap(
+    #[arg(
         long,
         group = "cargo-metadata-sources",
-        conflicts_with = "manifest-path",
+        conflicts_with = "manifest_path",
         value_name = "PATH"
     )]
     pub(crate) cargo_metadata: Option<Utf8PathBuf>,
 
     /// Remapping for the workspace root
-    #[clap(long, requires = "cargo-metadata-sources", value_name = "PATH")]
+    #[arg(long, requires = "cargo-metadata-sources", value_name = "PATH")]
     pub(crate) workspace_remap: Option<Utf8PathBuf>,
 
     /// Path to binaries-metadata JSON
-    #[clap(
+    #[arg(
         long,
         group = "binaries-metadata-sources",
         conflicts_with = "cargo-opts",
@@ -83,12 +83,12 @@ pub(crate) struct ReuseBuildOpts {
     pub(crate) binaries_metadata: Option<Utf8PathBuf>,
 
     /// Remapping for the target directory
-    #[clap(
+    #[arg(
         long,
         group = "target-dir-remap-sources",
         // Note: --target-dir-remap is incompatible with --archive, hence this requires
         // binaries-metadata and not binaries-metadata-sources.
-        requires = "binaries-metadata",
+        requires = "binaries_metadata",
         value_name = "PATH"
     )]
     pub(crate) target_dir_remap: Option<Utf8PathBuf>,
@@ -162,7 +162,7 @@ impl ReuseBuildOpts {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ArgEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ArchiveFormatOpt {
     Auto,
     #[clap(alias = "tar-zstd")]

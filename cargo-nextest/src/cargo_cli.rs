@@ -5,130 +5,129 @@
 
 use crate::output::OutputContext;
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{AppSettings, Args};
+use clap::Args;
 use std::path::PathBuf;
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
-#[clap(
-    next_help_heading = "CARGO OPTIONS",
+#[command(
+    next_help_heading = "Cargo options",
     group = clap::ArgGroup::new("cargo-opts").multiple(true),
-    setting = AppSettings::DeriveDisplayOrder,
 )]
 pub(crate) struct CargoOptions {
     /// Test only this package's library unit tests
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     lib: bool,
 
     /// Test only the specified binary
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     bin: Vec<String>,
 
     /// Test all binaries
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     bins: bool,
 
     /// Test only the specified test target
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     test: Vec<String>,
 
     /// Test all targets
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     tests: bool,
 
     /// Test only the specified bench target
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     bench: Vec<String>,
 
     /// Test all benches
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     benches: bool,
 
     /// Test all targets
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     all_targets: bool,
 
     //  TODO: doc?
     // no-run is handled by test runner
     /// Package to test
-    #[clap(short = 'p', long = "package", group = "cargo-opts")]
+    #[arg(short = 'p', long = "package", group = "cargo-opts")]
     packages: Vec<String>,
 
     /// Build all packages in the workspace
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     workspace: bool,
 
     /// Exclude packages from the test
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     exclude: Vec<String>,
 
     /// Alias for workspace (deprecated)
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     all: bool,
 
     // jobs is handled by test runner
     /// Build artifacts in release mode, with optimizations
-    #[clap(long, short = 'r', group = "cargo-opts")]
+    #[arg(long, short = 'r', group = "cargo-opts")]
     release: bool,
 
     /// Build artifacts with the specified Cargo profile
-    #[clap(long, value_name = "NAME", group = "cargo-opts")]
+    #[arg(long, value_name = "NAME", group = "cargo-opts")]
     cargo_profile: Option<String>,
 
     /// Number of build jobs to run
-    #[clap(long, value_name = "JOBS", group = "cargo-opts")]
+    #[arg(long, value_name = "JOBS", group = "cargo-opts")]
     build_jobs: Option<String>,
 
     /// Space or comma separated list of features to activate
-    #[clap(long, short = 'F', group = "cargo-opts")]
+    #[arg(long, short = 'F', group = "cargo-opts")]
     features: Vec<String>,
 
     /// Activate all available features
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     all_features: bool,
 
     /// Do not activate the `default` feature
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     no_default_features: bool,
 
     /// Build for the target triple
-    #[clap(long, value_name = "TRIPLE", group = "cargo-opts")]
+    #[arg(long, value_name = "TRIPLE", group = "cargo-opts")]
     pub(crate) target: Option<String>,
 
     /// Directory for all generated artifacts
-    #[clap(long, value_name = "DIR", group = "cargo-opts")]
+    #[arg(long, value_name = "DIR", group = "cargo-opts")]
     pub(crate) target_dir: Option<Utf8PathBuf>,
 
     /// Ignore `rust-version` specification in packages
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     ignore_rust_version: bool,
     // --message-format is captured by nextest
     /// Output build graph in JSON (unstable)
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     unit_graph: bool,
 
     /// Outputs a future incompatibility report at the end of the build
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     future_incompat_report: bool,
 
     // --verbose is not currently supported
     // --color is handled by runner
     /// Require Cargo.lock and cache are up to date
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     frozen: bool,
 
     /// Require Cargo.lock is up to date
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     locked: bool,
 
     /// Run without accessing the network
-    #[clap(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts")]
     offline: bool,
 
     // NOTE: this does not conflict with reuse build opts since we let target.runner be specified
     // this way
     /// Override a configuration value
-    #[clap(long, value_name = "KEY=VALUE")]
+    #[arg(long, value_name = "KEY=VALUE")]
     pub(crate) config: Vec<String>,
 
     /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details

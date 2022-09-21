@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     config::NextestProfile,
-    errors::{StatusLevelParseError, TestOutputDisplayParseError, WriteEventError},
+    errors::WriteEventError,
     helpers::write_test_name,
     list::{TestInstance, TestList},
     reporter::aggregator::EventAggregator,
@@ -31,7 +31,6 @@ use std::{
     fmt::{self, Write as _},
     io,
     io::{BufWriter, Write},
-    str::FromStr,
     time::{Duration, SystemTime},
 };
 
@@ -55,11 +54,6 @@ pub enum TestOutputDisplay {
 }
 
 impl TestOutputDisplay {
-    /// String representations of all known variants.
-    pub fn variants() -> &'static [&'static str] {
-        &["immediate", "immediate-final", "final", "never"]
-    }
-
     /// Returns true if test output is shown immediately.
     pub fn is_immediate(self) -> bool {
         match self {
@@ -73,32 +67,6 @@ impl TestOutputDisplay {
         match self {
             TestOutputDisplay::Final | TestOutputDisplay::ImmediateFinal => true,
             TestOutputDisplay::Immediate | TestOutputDisplay::Never => false,
-        }
-    }
-}
-
-impl FromStr for TestOutputDisplay {
-    type Err = TestOutputDisplayParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val = match s {
-            "immediate" => TestOutputDisplay::Immediate,
-            "immediate-final" => TestOutputDisplay::ImmediateFinal,
-            "final" => TestOutputDisplay::Final,
-            "never" => TestOutputDisplay::Never,
-            other => return Err(TestOutputDisplayParseError::new(other)),
-        };
-        Ok(val)
-    }
-}
-
-impl fmt::Display for TestOutputDisplay {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TestOutputDisplay::Immediate => write!(f, "immediate"),
-            TestOutputDisplay::ImmediateFinal => write!(f, "immediate-final"),
-            TestOutputDisplay::Final => write!(f, "final"),
-            TestOutputDisplay::Never => write!(f, "never"),
         }
     }
 }
@@ -134,49 +102,6 @@ pub enum StatusLevel {
 
     /// Currently has the same meaning as [`Skip`](Self::Skip).
     All,
-}
-
-impl StatusLevel {
-    /// Returns string representations of all known variants.
-    pub fn variants() -> &'static [&'static str] {
-        &[
-            "none", "fail", "retry", "slow", "leak", "pass", "skip", "all",
-        ]
-    }
-}
-
-impl FromStr for StatusLevel {
-    type Err = StatusLevelParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val = match s {
-            "none" => StatusLevel::None,
-            "fail" => StatusLevel::Fail,
-            "retry" => StatusLevel::Retry,
-            "slow" => StatusLevel::Slow,
-            "leak" => StatusLevel::Leak,
-            "pass" => StatusLevel::Pass,
-            "skip" => StatusLevel::Skip,
-            "all" => StatusLevel::All,
-            other => return Err(StatusLevelParseError::new(other)),
-        };
-        Ok(val)
-    }
-}
-
-impl fmt::Display for StatusLevel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StatusLevel::None => write!(f, "none"),
-            StatusLevel::Fail => write!(f, "fail"),
-            StatusLevel::Retry => write!(f, "retry"),
-            StatusLevel::Slow => write!(f, "slow"),
-            StatusLevel::Leak => write!(f, "leak"),
-            StatusLevel::Pass => write!(f, "pass"),
-            StatusLevel::Skip => write!(f, "skip"),
-            StatusLevel::All => write!(f, "all"),
-        }
-    }
 }
 
 /// Status level to show at the end of test runs in the reporter output.

@@ -1,103 +1,82 @@
-cargo-nextest-run 
 Build and run tests
 
-USAGE:
-    cargo nextest run [OPTIONS] [FILTERS]... [-- <TEST-BINARY-ARGS>...]
+Usage: cargo nextest run [OPTIONS] [FILTERS]... [-- <TEST-BINARY-ARGS>...]
 
-ARGS:
-    <FILTERS>...             Test name filter
-    <TEST-BINARY-ARGS>...    Emulated cargo test binary arguments (partially supported)
+Arguments:
+  [FILTERS]...           Test name filter
+  [TEST-BINARY-ARGS]...  Emulated cargo test binary arguments (partially supported)
 
-OPTIONS:
-        --manifest-path <PATH>    Path to Cargo.toml
-    -P, --profile <PROFILE>       Nextest profile to use [env: NEXTEST_PROFILE=]
-    -v, --verbose                 Verbose output [env: NEXTEST_VERBOSE=]
-        --color <WHEN>            Produce color output: auto, always, never [env: CARGO_TERM_COLOR=]
-                                  [default: auto]
-    -h, --help                    Print help information
+Options:
+      --manifest-path <PATH>  Path to Cargo.toml
+  -P, --profile <PROFILE>     Nextest profile to use [env: NEXTEST_PROFILE=]
+  -v, --verbose               Verbose output [env: NEXTEST_VERBOSE=]
+      --color <WHEN>          Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
+  -h, --help                  Print help information (use `--help` for more detail)
 
-RUNNER OPTIONS:
-        --no-run                    Compile, but don't run tests
-    -j, --test-threads <THREADS>    Number of tests to run simultaneously [possible values:
-                                    integer or "num-cpus"] [default: from profile] [env:
-                                    NEXTEST_TEST_THREADS=] [aliases: jobs]
-        --retries <RETRIES>         Number of retries for failing tests [default: from profile]
-                                    [env: NEXTEST_RETRIES=]
-        --fail-fast                 Cancel test run on the first failure
-        --no-fail-fast              Run all tests regardless of failure
-        --no-capture                Run tests serially and do not capture output
+Runner options:
+      --no-run                  Compile, but don't run tests
+  -j, --test-threads <THREADS>  Number of tests to run simultaneously [possible values: integer or "num-cpus"] [default: from profile] [env: NEXTEST_TEST_THREADS=] [aliases: jobs]
+      --retries <RETRIES>       Number of retries for failing tests [default: from profile] [env: NEXTEST_RETRIES=]
+      --fail-fast               Cancel test run on the first failure
+      --no-fail-fast            Run all tests regardless of failure
+      --no-capture              Run tests serially and do not capture output
 
-CARGO OPTIONS:
-        --lib                       Test only this package's library unit tests
-        --bin <BIN>                 Test only the specified binary
-        --bins                      Test all binaries
-        --test <TEST>               Test only the specified test target
-        --tests                     Test all targets
-        --bench <BENCH>             Test only the specified bench target
-        --benches                   Test all benches
-        --all-targets               Test all targets
-    -p, --package <PACKAGES>        Package to test
-        --workspace                 Build all packages in the workspace
-        --exclude <EXCLUDE>         Exclude packages from the test
-        --all                       Alias for workspace (deprecated)
-    -r, --release                   Build artifacts in release mode, with optimizations
-        --cargo-profile <NAME>      Build artifacts with the specified Cargo profile
-        --build-jobs <JOBS>         Number of build jobs to run
-    -F, --features <FEATURES>       Space or comma separated list of features to activate
-        --all-features              Activate all available features
-        --no-default-features       Do not activate the `default` feature
-        --target <TRIPLE>           Build for the target triple
-        --target-dir <DIR>          Directory for all generated artifacts
-        --ignore-rust-version       Ignore `rust-version` specification in packages
-        --unit-graph                Output build graph in JSON (unstable)
-        --future-incompat-report    Outputs a future incompatibility report at the end of the build
-        --frozen                    Require Cargo.lock and cache are up to date
-        --locked                    Require Cargo.lock is up to date
-        --offline                   Run without accessing the network
-        --config <KEY=VALUE>        Override a configuration value
-    -Z <FLAG>                       Unstable (nightly-only) flags to Cargo, see 'cargo -Z help'
-                                    for details
+Cargo options:
+      --lib                     Test only this package's library unit tests
+      --bin <BIN>               Test only the specified binary
+      --bins                    Test all binaries
+      --test <TEST>             Test only the specified test target
+      --tests                   Test all targets
+      --bench <BENCH>           Test only the specified bench target
+      --benches                 Test all benches
+      --all-targets             Test all targets
+  -p, --package <PACKAGES>      Package to test
+      --workspace               Build all packages in the workspace
+      --exclude <EXCLUDE>       Exclude packages from the test
+      --all                     Alias for workspace (deprecated)
+  -r, --release                 Build artifacts in release mode, with optimizations
+      --cargo-profile <NAME>    Build artifacts with the specified Cargo profile
+      --build-jobs <JOBS>       Number of build jobs to run
+  -F, --features <FEATURES>     Space or comma separated list of features to activate
+      --all-features            Activate all available features
+      --no-default-features     Do not activate the `default` feature
+      --target <TRIPLE>         Build for the target triple
+      --target-dir <DIR>        Directory for all generated artifacts
+      --ignore-rust-version     Ignore `rust-version` specification in packages
+      --unit-graph              Output build graph in JSON (unstable)
+      --future-incompat-report  Outputs a future incompatibility report at the end of the build
+      --frozen                  Require Cargo.lock and cache are up to date
+      --locked                  Require Cargo.lock is up to date
+      --offline                 Run without accessing the network
+      --config <KEY=VALUE>      Override a configuration value
+  -Z <FLAG>                     Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
 
-FILTER OPTIONS:
-        --run-ignored <WHICH>         Run ignored tests [possible values: default, ignored-only,
-                                      all]
-        --partition <PARTITION>       Test partition, e.g. hash:1/2 or count:2/3
-    -E, --filter-expr <EXPRESSION>    Test filter expression (see
-                                      <https://nexte.st/book/filter-expressions>)
+Filter options:
+      --run-ignored <WHICH>       Run ignored tests [possible values: default, ignored-only, all]
+      --partition <PARTITION>     Test partition, e.g. hash:1/2 or count:2/3
+  -E, --filter-expr <EXPRESSION>  Test filter expression (see 
+                                  <https://nexte.st/book/filter-expressions>)
 
-REPORTER OPTIONS:
-        --failure-output <WHEN>         Output stdout and stderr on failure [env:
-                                        NEXTEST_FAILURE_OUTPUT=] [possible values: immediate,
-                                        immediate-final, final, never]
-        --success-output <WHEN>         Output stdout and stderr on success [env:
-                                        NEXTEST_SUCCESS_OUTPUT=] [possible values: immediate,
-                                        immediate-final, final, never]
-        --status-level <LEVEL>          Test statuses to output [env: NEXTEST_STATUS_LEVEL=]
-                                        [possible values: none, fail, retry, slow, leak, pass, skip,
-                                        all]
-        --final-status-level <LEVEL>    Test statuses to output at the end of the run [env:
-                                        NEXTEST_FINAL_STATUS_LEVEL=] [possible values: none, fail,
-                                        flaky, slow, skip, pass, all]
-        --hide-progress-bar             Do not display the progress bar [env:
-                                        NEXTEST_HIDE_PROGRESS_BAR=]
+Reporter options:
+      --failure-output <WHEN>       Output stdout and stderr on failure [env: NEXTEST_FAILURE_OUTPUT=] [possible values: immediate, immediate-final, final, never]
+      --success-output <WHEN>       Output stdout and stderr on success [env: NEXTEST_SUCCESS_OUTPUT=] [possible values: immediate, immediate-final, final, never]
+      --status-level <LEVEL>        Test statuses to output [env: NEXTEST_STATUS_LEVEL=] [possible values: none, fail, retry, slow, leak, pass, skip, all]
+      --final-status-level <LEVEL>  Test statuses to output at the end of the run [env: NEXTEST_FINAL_STATUS_LEVEL=] [possible values: none, fail, flaky, slow, skip, pass, all]
+      --hide-progress-bar           Do not display the progress bar [env: NEXTEST_HIDE_PROGRESS_BAR=]
 
-REUSE BUILD OPTIONS:
-        --archive-file <PATH>         Path to nextest archive
-        --archive-format <FORMAT>     Archive format [default: auto] [possible values: auto,
-                                      tar-zst]
-        --extract-to <DIR>            Destination directory to extract archive to [default:
-                                      temporary directory]
-        --extract-overwrite           Overwrite files in destination directory while extracting
-                                      archive
-        --persist-extract-tempdir     Persist temporary directory destination is extracted to
-        --cargo-metadata <PATH>       Path to cargo metadata JSON
-        --workspace-remap <PATH>      Remapping for the workspace root
-        --binaries-metadata <PATH>    Path to binaries-metadata JSON
-        --target-dir-remap <PATH>     Remapping for the target directory
+Reuse build options:
+      --archive-file <PATH>       Path to nextest archive
+      --archive-format <FORMAT>   Archive format [default: auto] [possible values: auto, tar-zst]
+      --extract-to <DIR>          Destination directory to extract archive to [default: temporary directory]
+      --extract-overwrite         Overwrite files in destination directory while extracting archive
+      --persist-extract-tempdir   Persist temporary directory destination is extracted to
+      --cargo-metadata <PATH>     Path to cargo metadata JSON
+      --workspace-remap <PATH>    Remapping for the workspace root
+      --binaries-metadata <PATH>  Path to binaries-metadata JSON
+      --target-dir-remap <PATH>   Remapping for the target directory
 
-CONFIG OPTIONS:
-        --config-file <PATH>
-            Config file [default: workspace-root/.config/nextest.toml]
-
-        --tool-config-file <TOOL:ABS_PATH>
-            Tool-specific config files
+Config options:
+      --config-file <PATH>
+          Config file [default: workspace-root/.config/nextest.toml]
+      --tool-config-file <TOOL:ABS_PATH>
+          Tool-specific config files
