@@ -1027,7 +1027,7 @@ impl<'a> TestReporterImpl<'a> {
             writer,
             "{:>width$} ",
             instance
-                .bin_info
+                .suite_info
                 .binary_id
                 .style(self.styles.list_styles.binary_id),
             width = self.binary_id_width

@@ -310,11 +310,11 @@ impl<'a> TestRunnerInner<'a> {
 
                             let query = TestQuery {
                                 binary_query: BinaryQuery {
-                                    package_id: test_instance.bin_info.package.id(),
-                                    kind: test_instance.bin_info.kind.as_str(),
-                                    binary_name: &test_instance.bin_info.binary_name,
+                                    package_id: test_instance.suite_info.package.id(),
+                                    kind: test_instance.suite_info.kind.as_str(),
+                                    binary_name: &test_instance.suite_info.binary_name,
                                     platform: convert_build_platform(
-                                        test_instance.bin_info.build_platform,
+                                        test_instance.suite_info.build_platform,
                                     ),
                                 },
                                 test_name: test_instance.name,

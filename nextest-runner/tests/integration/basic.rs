@@ -286,7 +286,7 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
             // * first, ignored
             // * then, expression
             // * then, for string
-            let expected_test = get_expected_test(&test.bin_info.binary_id, test.name);
+            let expected_test = get_expected_test(&test.suite_info.binary_id, test.name);
             let reason = if expected_test.status.is_ignored() {
                 MismatchReason::Ignored
             } else {
