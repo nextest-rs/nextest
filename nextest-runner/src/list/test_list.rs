@@ -776,8 +776,8 @@ pub struct TestInstance<'a> {
     /// The test binary.
     pub binary: &'a Utf8Path,
 
-    /// Information about the binary.
-    pub bin_info: &'a RustTestSuite<'a>,
+    /// Information about the test suite.
+    pub suite_info: &'a RustTestSuite<'a>,
 
     /// Information about the test.
     pub test_info: &'a RustTestCaseSummary,
@@ -788,13 +788,13 @@ impl<'a> TestInstance<'a> {
     pub(crate) fn new(
         name: &'a (impl AsRef<str> + ?Sized),
         binary: &'a (impl AsRef<Utf8Path> + ?Sized),
-        bin_info: &'a RustTestSuite,
+        suite_info: &'a RustTestSuite,
         test_info: &'a RustTestCaseSummary,
     ) -> Self {
         Self {
             name: name.as_ref(),
             binary: binary.as_ref(),
-            bin_info,
+            suite_info,
             test_info,
         }
     }
@@ -802,7 +802,7 @@ impl<'a> TestInstance<'a> {
     /// Return a reasonable key for sorting. This is (binary ID, test name).
     #[inline]
     pub(crate) fn sort_key(&self) -> (&'a str, &'a str) {
-        (&self.bin_info.binary_id, self.name)
+        (&self.suite_info.binary_id, self.name)
     }
 
     /// Creates the command expression for this test instance.
@@ -811,7 +811,7 @@ impl<'a> TestInstance<'a> {
         test_list: &TestList<'_>,
         target_runner: &TargetRunner,
     ) -> std::process::Command {
-        let platform_runner = target_runner.for_build_platform(self.bin_info.build_platform);
+        let platform_runner = target_runner.for_build_platform(self.suite_info.build_platform);
         // TODO: non-rust tests
 
         let mut args = Vec::new();
@@ -833,10 +833,10 @@ impl<'a> TestInstance<'a> {
         make_test_command(
             program,
             args,
-            &self.bin_info.cwd,
-            &self.bin_info.package,
+            &self.suite_info.cwd,
+            &self.suite_info.package,
             test_list.updated_dylib_path(),
-            &self.bin_info.non_test_binaries,
+            &self.suite_info.non_test_binaries,
         )
     }
 }

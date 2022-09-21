@@ -374,8 +374,8 @@ pub(crate) fn execute_collect<'a>(
         instance_statuses.insert(
             (test_instance.binary, test_instance.name),
             InstanceValue {
-                binary_id: test_instance.bin_info.binary_id.as_str(),
-                cwd: test_instance.bin_info.cwd.as_path(),
+                binary_id: test_instance.suite_info.binary_id.as_str(),
+                cwd: test_instance.suite_info.cwd.as_path(),
                 status,
             },
         );
