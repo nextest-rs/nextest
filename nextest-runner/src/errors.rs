@@ -427,7 +427,7 @@ pub enum CreateTestListError {
 
     /// Running a command to gather the list of tests produced a non-UTF-8 standard output.
     #[error(
-        "for `{binary_id}`, command `{}` produced non-UTF-8 output: {}\n--- stdout:\n{}\n--- stderr:\n{}\n---",
+        "for `{binary_id}`, command `{}` produced non-UTF-8 output:\n--- stdout:\n{}\n--- stderr:\n{}\n---",
         shell_words::join(command),
         String::from_utf8_lossy(stdout),
         String::from_utf8_lossy(stderr),

@@ -1395,61 +1395,56 @@ mod imp {
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
         _job: Option<&Job>,
     ) {
-        match child.id() {
-            Some(pid) => {
-                let pid = pid as i32;
-                let term_signal = match mode {
-                    TerminateMode::Timeout => SIGTERM,
-                    TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Hangup)) => SIGHUP,
-                    TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Term)) => SIGTERM,
-                    TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Interrupt)) => {
-                        SIGINT
-                    }
-                    TerminateMode::Signal(SignalForwardEvent::Twice) => SIGKILL,
-                };
-                unsafe {
-                    // We set up a process group in cmd_pre_exec -- now
-                    // send a signal to that group.
-                    libc::kill(-pid, term_signal)
-                };
+        if let Some(pid) = child.id() {
+            let pid = pid as i32;
+            let term_signal = match mode {
+                TerminateMode::Timeout => SIGTERM,
+                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Hangup)) => SIGHUP,
+                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Term)) => SIGTERM,
+                TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Interrupt)) => SIGINT,
+                TerminateMode::Signal(SignalForwardEvent::Twice) => SIGKILL,
+            };
+            unsafe {
+                // We set up a process group in cmd_pre_exec -- now
+                // send a signal to that group.
+                libc::kill(-pid, term_signal)
+            };
 
-                if term_signal == SIGKILL {
-                    // SIGKILL guarantees the process group is dead.
-                    return;
+            if term_signal == SIGKILL {
+                // SIGKILL guarantees the process group is dead.
+                return;
+            }
+
+            // give the process a grace period of 10s
+            let sleep = tokio::time::sleep(Duration::from_secs(10));
+            tokio::select! {
+                biased;
+
+                _ = child.wait() => {
+                    // The process exited.
                 }
+                recv = forward_receiver.recv() => {
+                    // The sender stays open longer than the whole loop, and the buffer is big
+                    // enough for all messages ever sent through this channel, so a RecvError
+                    // should never happen.
+                    let _ = recv.expect("a RecvError should never happen here");
 
-                // give the process a grace period of 10s
-                let sleep = tokio::time::sleep(Duration::from_secs(10));
-                tokio::select! {
-                    biased;
-
-                    _ = child.wait() => {
-                        // The process exited.
+                    // Receiving a signal while in this state always means kill immediately.
+                    unsafe {
+                        // Send SIGKILL to the entire process group.
+                        libc::kill(-pid, SIGKILL);
                     }
-                    recv = forward_receiver.recv() => {
-                        // The sender stays open longer than the whole loop, and the buffer is big
-                        // enough for all messages ever sent through this channel, so a RecvError
-                        // should never happen.
-                        let _ = recv.expect("a RecvError should never happen here");
-
-                        // Receiving a signal while in this state always means kill immediately.
-                        unsafe {
-                            // Send SIGKILL to the entire process group.
-                            libc::kill(-pid, SIGKILL);
-                        }
-                    }
-                    _ = sleep => {
-                        // The process didn't exit -- need to do a hard shutdown.
-                        unsafe {
-                            // Send SIGKILL to the entire process group.
-                            libc::kill(-pid, SIGKILL);
-                        }
+                }
+                _ = sleep => {
+                    // The process didn't exit -- need to do a hard shutdown.
+                    unsafe {
+                        // Send SIGKILL to the entire process group.
+                        libc::kill(-pid, SIGKILL);
                     }
                 }
             }
-            None => {
-                // This means that the process has already exited.
-            }
+        } else {
+            // This means that the process has already exited.
         }
     }
 }
