@@ -42,7 +42,7 @@ final-status-level = "flaky"
 # Accepted values are
 # * "immediate": output failures as soon as they happen
 # * "final": output failures at the end of the test run
-# * "immediate-final": output failures as soon as they happen and at the end of
+# * "immediate-final": output failures as soon as they happen and at the end of, combination of "immediate" and "final"
 #   the test run
 # * "never": don't output failures at all
 #
