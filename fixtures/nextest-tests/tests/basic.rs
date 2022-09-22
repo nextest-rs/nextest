@@ -155,7 +155,7 @@ fn test_cargo_env_vars() {
     // CARGO_BIN_EXE is missing at runtime
     // CARGO_PRIMARY_PACKAGE is missing at runtime
     // CARGO_TARGET_TMPDIR is missing at runtime
-    // TODO: dynamic library paths?
+    // Dynamic library paths are tested by actually executing the tests -- they depend on the dynamic library.
 }
 
 #[test]
