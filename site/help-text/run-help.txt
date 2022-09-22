@@ -18,10 +18,9 @@ OPTIONS:
 
 RUNNER OPTIONS:
         --no-run                    Compile, but don't run tests
-    -j, --test-threads <THREADS>    Number of tests to run simultaneously [possible values: integer or "num-cpus". 
-                                    If value is negative, it is set to the number of logical CPUs plus provided value.
-                                    Zero givers an error] 
-                                    [env: NEXTEST_TEST_THREADS=] [aliases: jobs]
+    -j, --test-threads <THREADS>    Number of tests to run simultaneously [possible values:
+                                    integer or "num-cpus"] [default: from profile] [env:
+                                    NEXTEST_TEST_THREADS=] [aliases: jobs]
         --retries <RETRIES>         Number of retries for failing tests [default: from profile]
                                     [env: NEXTEST_RETRIES=]
         --fail-fast                 Cancel test run on the first failure
