@@ -21,7 +21,7 @@ use test_case::test_case;
 
 #[test]
 fn test_list_binaries() -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let graph = &*PACKAGE_GRAPH;
     let binary_list =
@@ -45,7 +45,7 @@ fn test_list_binaries() -> Result<()> {
 
 #[test]
 fn test_list_tests() -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
@@ -84,7 +84,7 @@ fn test_list_tests() -> Result<()> {
 
 #[test]
 fn test_run() -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
@@ -175,7 +175,7 @@ fn test_run() -> Result<()> {
 
 #[test]
 fn test_run_ignored() -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let expr = FilteringExpr::parse("not test(test_slow_timeout)", &*PACKAGE_GRAPH).unwrap();
 
@@ -244,7 +244,7 @@ fn test_run_ignored() -> Result<()> {
 /// Test that filter expressions with regular substring filters behave as expected.
 #[test]
 fn test_filter_expr_with_string_filters() -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let expr = FilteringExpr::parse(
         "test(test_multiply_two) | test(=tests::call_dylib_add_two)",
@@ -306,7 +306,7 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
 /// Test that filter expressions without regular substring filters behave as expected.
 #[test]
 fn test_filter_expr_without_string_filters() -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let expr = FilteringExpr::parse(
         "test(test_multiply_two) | test(=tests::call_dylib_add_two)",
@@ -336,7 +336,7 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
 
 #[test]
 fn test_string_filters_without_filter_expr() -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let test_filter = TestFilterBuilder::new(
         RunIgnored::Default,
@@ -373,7 +373,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
     ; "retry overrides ignored"
 )]
 fn test_retries(retries: Option<usize>) -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
@@ -504,7 +504,7 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
 
 #[test]
 fn test_termination() -> Result<()> {
-    set_rustflags();
+    set_env_vars();
 
     let expr = FilteringExpr::parse("test(/^test_slow_timeout/)", &*PACKAGE_GRAPH).unwrap();
     let test_filter = TestFilterBuilder::new(
