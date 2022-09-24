@@ -198,7 +198,7 @@ pub(crate) static EXPECTED_BINARY_LIST: [(&str, &str, bool); 8] = [
 ];
 
 #[track_caller]
-pub(crate) fn set_rustflags() {
+pub(crate) fn set_env_vars() {
     // The dynamic library tests require this flag.
     std::env::set_var("RUSTFLAGS", "-C prefer-dynamic");
 }
