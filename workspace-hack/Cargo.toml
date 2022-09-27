@@ -43,20 +43,20 @@ syn = { version = "1.0.99", features = ["clone-impls", "derive", "extra-traits",
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.24", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.24" }
-libc = { version = "0.2.132", features = ["std"] }
+libc = { version = "0.2.133", features = ["std"] }
 tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-libc = { version = "0.2.132", features = ["std"] }
+libc = { version = "0.2.133", features = ["std"] }
 
 [target.x86_64-apple-darwin.dependencies]
 futures-core = { version = "0.3.24", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.24" }
-libc = { version = "0.2.132", features = ["std"] }
+libc = { version = "0.2.133", features = ["std"] }
 tokio = { version = "1.20.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
-libc = { version = "0.2.132", features = ["std"] }
+libc = { version = "0.2.133", features = ["std"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 futures-core = { version = "0.3.24", features = ["alloc", "std"] }
