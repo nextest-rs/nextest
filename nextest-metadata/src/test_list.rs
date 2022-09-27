@@ -3,7 +3,7 @@
 
 use crate::CommandError;
 use camino::{Utf8Path, Utf8PathBuf};
-use serde::{Deserialize, Serialize};
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize};
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
@@ -272,9 +272,44 @@ pub struct RustBuildMetaSummary {
     /// Linked paths, relative to the target directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
-    /// The target platform used while compiling the Rust artifacts
-    #[serde(default)]
-    pub target_platform: Option<String>,
+    /// The target platforms used while compiling the Rust artifacts
+    #[serde(
+        default,
+        rename = "target-platform",
+        deserialize_with = "deserialize_target_platforms"
+    )]
+    pub target_platforms: Vec<String>,
+}
+
+fn deserialize_target_platforms<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct DeVisitor;
+
+    impl<'de2> Visitor<'de2> for DeVisitor {
+        type Value = Vec<String>;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "a string or a list of strings")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(vec![v.to_owned()])
+        }
+
+        fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de2>,
+        {
+            Vec::<String>::deserialize(serde::de::value::SeqAccessDeserializer::new(seq))
+        }
+    }
+
+    deserializer.deserialize_any(DeVisitor)
 }
 
 /// A non-test Rust binary. Used to set the correct environment
@@ -484,8 +519,34 @@ mod tests {
         base_output_directories: BTreeSet::new(),
         non_test_binaries: BTreeMap::new(),
         linked_paths: BTreeSet::new(),
-        target_platform: None,
+        target_platforms: vec![],
     }; "no target platform")]
+    #[test_case(r#"{
+        "target-directory": "/foo",
+        "base-output-directories": [],
+        "non-test-binaries": {},
+        "linked-paths": [],
+        "target-platform": "x86_64-unknown-linux-gnu"
+    }"#, RustBuildMetaSummary {
+        target_directory: "/foo".into(),
+        base_output_directories: BTreeSet::new(),
+        non_test_binaries: BTreeMap::new(),
+        linked_paths: BTreeSet::new(),
+        target_platforms: vec!["x86_64-unknown-linux-gnu".to_owned()],
+    }; "target platform as string")]
+    #[test_case(r#"{
+        "target-directory": "/foo",
+        "base-output-directories": [],
+        "non-test-binaries": {},
+        "linked-paths": [],
+        "target-platform": ["x86_64-unknown-linux-gnu", "i686-unknown-linux-gnu"],
+    }"#, RustBuildMetaSummary {
+        target_directory: "/foo".into(),
+        base_output_directories: BTreeSet::new(),
+        non_test_binaries: BTreeMap::new(),
+        linked_paths: BTreeSet::new(),
+        target_platforms: vec!["x86_64-unknown-linux-gnu".to_owned(), "i686-unknown-linux-gnu".to_owned()],
+    }; "target platforms as vec")]
     fn test_deserialize_old_rust_build_meta(input: &str, expected: RustBuildMetaSummary) {
         let build_meta: RustBuildMetaSummary =
             serde_json::from_str(input).expect("input deserialized correctly");

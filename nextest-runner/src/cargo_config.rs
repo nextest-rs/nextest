@@ -47,11 +47,11 @@ impl TargetTriple {
 
     /// Converts a `String` that was output by `TargetTriple::serialize` back to a target triple.
     /// This target triple is assumed to orginiate from a build-metadata config.
-    pub fn deserialize(target_triple: Option<String>) -> Option<TargetTriple> {
-        Some(TargetTriple {
-            triple: target_triple?,
+    pub fn deserialize(target_triple: String) -> Self {
+        Self {
+            triple: target_triple,
             source: TargetTripleSource::Metadata,
-        })
+        }
     }
 
     /// Find the target triple being built.
