@@ -15,7 +15,7 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.66", features = ["gimli-symbolize", "std"] }
-clap = { version = "3.2.20", features = ["atty", "clap_derive", "color", "derive", "env", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
+clap = { version = "3.2.21", features = ["atty", "clap_derive", "color", "derive", "env", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
 console = { version = "0.15.1", features = ["ansi-parsing", "unicode-width"] }
 either = { version = "1.8.0", features = ["use_std"] }
 futures-channel = { version = "0.3.24", features = ["alloc", "futures-sink", "sink", "std"] }
@@ -30,7 +30,7 @@ num-traits = { version = "0.2.15", default-features = false, features = ["std"] 
 owo-colors = { version = "3.5.0", default-features = false, features = ["supports-color", "supports-colors"] }
 serde = { version = "1.0.144", features = ["derive", "serde_derive", "std"] }
 serde_json = { version = "1.0.85", features = ["std", "unbounded_depth"] }
-textwrap = { version = "0.15.0", features = ["smawk", "unicode-linebreak", "unicode-width"] }
+textwrap = { version = "0.15.1", features = ["smawk", "unicode-linebreak", "unicode-width"] }
 uuid = { version = "1.1.2", features = ["private_getrandom", "rng", "std", "v4"] }
 
 [build-dependencies]
