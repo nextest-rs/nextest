@@ -874,7 +874,7 @@ pub(crate) fn make_test_command(
     static LD_DYLD_ENV_VARS: Lazy<HashMap<String, OsString>> = Lazy::new(|| {
         std::env::vars_os()
             .filter_map(|(k, v)| match k.into_string() {
-                Ok(k) => is_sip_sanitized(&k).then(|| (k, v)),
+                Ok(k) => is_sip_sanitized(&k).then_some((k, v)),
                 Err(_) => None,
             })
             .collect()

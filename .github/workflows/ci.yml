@@ -70,8 +70,8 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
-        # 1.59 is the MSRV
-        rust-version: [ 1.59, stable ]
+        # 1.62 is the MSRV
+        rust-version: [ 1.62, stable ]
         # no-default-features means no self-update, all-features means
         # with self-update
         features: [ --no-default-features, --all-features ]

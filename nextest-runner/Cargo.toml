@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://docs.rs/nextest-runner"
 edition = "2021"
-rust-version = "1.59"
+rust-version = "1.62"
 
 [dependencies]
 atomicwrites = "0.3.1"

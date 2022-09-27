@@ -107,7 +107,7 @@ impl RustBuildMeta<TestListState> {
                     .target_directory
                     .join(convert_rel_path_to_main_sep(rel_path));
                 // Only add the directory to the path if it exists on disk.
-                join_path.exists().then(|| join_path)
+                join_path.exists().then_some(join_path)
             })
             .chain(self.base_output_directories.iter().flat_map(|base_output| {
                 let abs_base = self
