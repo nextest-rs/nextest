@@ -1599,9 +1599,9 @@ dependencies = [
 
 [[package]]
 name = "recursion"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cdf8bd39c5d724798ac5d5f9b669fbb674667a2094e5267a24c82593f35d1ad"
+checksum = "88b80e57dd3cc5af3d2a6b7aaa204207e2e7b3076d8a2e1f7af23ec0c2d93ca4"
 dependencies = [
  "futures",
 ]
