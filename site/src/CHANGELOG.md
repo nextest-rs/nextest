@@ -3,6 +3,22 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.37] - 2022-09-30
+
+### Added
+
+- Support for a negative value for `--test-threads`/`-j`, matching support in recent versions of
+  Cargo. A value of -1 means the number of logical CPUs minus 1, and so on. Thanks [Onigbinde
+  Oluwamuyiwa Elijah](https://github.com/OLUWAMUYIWA) for your first contribution!
+- Add a note to the help text for `--test-threads` indicating that its default value is obtained
+  from the profile. Thanks [jiangying](https://github.com/jiangying000) for your first contribution!
+
+### Changed
+
+- Internal dependency target-spec bumped to 1.2.0 -- this means that newer versions of the windows
+  crate are now supported.
+- MSRV updated to Rust 1.62.
+
 ## [0.9.36] - 2022-09-07
 
 ### Added
