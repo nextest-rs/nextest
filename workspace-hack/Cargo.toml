@@ -16,7 +16,7 @@ publish = false
 [dependencies]
 backtrace = { version = "0.3.66", features = ["gimli-symbolize", "std"] }
 clap = { version = "3.2.22", features = ["atty", "clap_derive", "color", "derive", "env", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
-console = { version = "0.15.1", features = ["ansi-parsing", "unicode-width"] }
+console = { version = "0.15.2", features = ["ansi-parsing", "unicode-width"] }
 either = { version = "1.8.0", features = ["use_std"] }
 futures-channel = { version = "0.3.24", features = ["alloc", "futures-sink", "sink", "std"] }
 futures-sink = { version = "0.3.24", default-features = false, features = ["alloc", "std"] }
@@ -38,32 +38,32 @@ uuid = { version = "1.1.2", features = ["private_getrandom", "rng", "std", "v4"]
 cc = { version = "1.0.73", default-features = false, features = ["jobserver", "parallel"] }
 hashbrown = { version = "0.12.3", features = ["ahash", "inline-more", "raw"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
-proc-macro2 = { version = "1.0.44", features = ["proc-macro"] }
+proc-macro2 = { version = "1.0.46", features = ["proc-macro"] }
 quote = { version = "1.0.21", features = ["proc-macro"] }
 syn = { version = "1.0.101", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.24", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.24" }
-libc = { version = "0.2.133", features = ["std"] }
+libc = { version = "0.2.134", features = ["std"] }
 once_cell = { version = "1.15.0", features = ["alloc", "race", "std"] }
 tokio = { version = "1.21.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 getrandom = { version = "0.2.7", default-features = false, features = ["std"] }
-libc = { version = "0.2.133", features = ["std"] }
+libc = { version = "0.2.134", features = ["std"] }
 once_cell = { version = "1.15.0", features = ["alloc", "race", "std"] }
 
 [target.x86_64-apple-darwin.dependencies]
 futures-core = { version = "0.3.24", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.24" }
-libc = { version = "0.2.133", features = ["std"] }
+libc = { version = "0.2.134", features = ["std"] }
 once_cell = { version = "1.15.0", features = ["alloc", "race", "std"] }
 tokio = { version = "1.21.1", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "time", "tokio-macros"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 getrandom = { version = "0.2.7", default-features = false, features = ["std"] }
-libc = { version = "0.2.133", features = ["std"] }
+libc = { version = "0.2.134", features = ["std"] }
 once_cell = { version = "1.15.0", features = ["alloc", "race", "std"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]

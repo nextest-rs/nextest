@@ -22,7 +22,7 @@ chrono = "0.4.22"
 debug-ignore = "1.0.3"
 either = "1.8.0"
 futures = "0.3.24"
-guppy = "0.14.2"
+guppy = "0.14.3"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home = "0.5.3"
@@ -45,7 +45,7 @@ shell-words = "1.1.0"
 strip-ansi-escapes = "0.1.1"
 tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
-target-spec = "1.1.0"
+target-spec = "1.2.0"
 tempfile = "3.3.0"
 thiserror = "1.0.37"
 # For parsing of .cargo/config.toml files
@@ -81,7 +81,7 @@ uuid = { version = "1.1.2", features = ["v4"] }
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.133"
+libc = "0.2.134"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.39.0", features = [
