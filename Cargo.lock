@@ -1122,6 +1122,7 @@ dependencies = [
  "guppy",
  "home",
  "http",
+ "humantime",
  "humantime-serde",
  "indent_write",
  "indicatif",
