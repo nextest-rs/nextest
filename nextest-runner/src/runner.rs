@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestRunner`].
 
 use crate::{
-    config::{NextestProfile, ProfileOverrides, TestThreads},
+    config::{Backoff, NextestProfile, ProfileOverrides, RetryPolicy, TestThreads},
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
     helpers::convert_build_platform,
     list::{TestInstance, TestList},
@@ -20,7 +20,9 @@ use bytes::Bytes;
 use futures::prelude::*;
 use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
+use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
+    cmp::min,
     convert::Infallible,
     marker::PhantomData,
     num::NonZeroUsize,
@@ -33,14 +35,84 @@ use tokio::{
     process::Child,
     runtime::Runtime,
     sync::mpsc::UnboundedSender,
+    time::sleep,
 };
 use uuid::Uuid;
+
+#[derive(Debug)]
+struct BackoffIter {
+    backoff: Backoff,
+    current_factor: f64,
+    jitter: bool,
+    delay: Duration,
+    max_delay: Option<Duration>,
+    max_retries: usize,
+}
+
+impl BackoffIter {
+    fn new(
+        RetryPolicy {
+            backoff,
+            count,
+            delay,
+            jitter,
+            max_delay,
+        }: RetryPolicy,
+    ) -> Self {
+        Self {
+            backoff,
+            max_retries: count,
+            delay,
+            jitter,
+            max_delay,
+            current_factor: 1.,
+        }
+    }
+
+    fn jitter(duration: Duration) -> Duration {
+        let jitter: f64 = thread_rng().sample(OpenClosed01);
+        let secs = (duration.as_secs() as f64) * jitter;
+        let nanos = (duration.subsec_nanos() as f64) * jitter;
+        let millis = (secs * 1_000_f64) + (nanos / 1_000_000_f64);
+        Duration::from_millis(millis as u64)
+    }
+}
+
+const BACKOFF_EXPONENT: f64 = 2.;
+impl Iterator for BackoffIter {
+    type Item = Duration;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.max_retries > 0 {
+            let factor = match self.backoff {
+                Backoff::Fixed => self.current_factor,
+                Backoff::Exponential => {
+                    let factor = self.current_factor;
+                    let next_factor = self.current_factor * BACKOFF_EXPONENT;
+                    self.current_factor = next_factor;
+                    factor
+                }
+            };
+
+            let mut delay = self.delay.mul_f64(factor);
+            if self.jitter {
+                delay = Self::jitter(delay);
+            }
+            if let Some(max_delay) = self.max_delay {
+                delay = min(delay, max_delay);
+            }
+            self.max_retries -= 1;
+
+            return Some(delay);
+        }
+        None
+    }
+}
 
 /// Test runner options.
 #[derive(Debug, Default)]
 pub struct TestRunnerBuilder {
     no_capture: bool,
-    retries: Option<usize>,
+    retries: Option<RetryPolicy>,
     fail_fast: Option<bool>,
     test_threads: Option<TestThreads>,
 }
@@ -55,7 +127,7 @@ impl TestRunnerBuilder {
     }
 
     /// Sets the number of retries for this test runner.
-    pub fn set_retries(&mut self, retries: usize) -> &mut Self {
+    pub fn set_retries(&mut self, retries: RetryPolicy) -> &mut Self {
         self.retries = Some(retries);
         self
     }
@@ -106,8 +178,7 @@ impl TestRunnerBuilder {
                 no_capture: self.no_capture,
                 profile,
                 test_threads,
-                // The number of tries = retries + 1.
-                global_tries: retries + 1,
+                global_retries: retries,
                 ignore_retry_overrides,
                 fail_fast,
                 slow_timeout,
@@ -164,7 +235,7 @@ struct TestRunnerInner<'a> {
     no_capture: bool,
     profile: NextestProfile<'a>,
     test_threads: usize,
-    global_tries: usize,
+    global_retries: RetryPolicy,
     ignore_retry_overrides: bool,
     fail_fast: bool,
     slow_timeout: crate::config::SlowTimeout,
@@ -250,11 +321,12 @@ impl<'a> TestRunnerInner<'a> {
                                 test_name: test_instance.name,
                             };
                             let overrides = self.profile.overrides_for(&query);
-                            let total_attempts =
-                                match (self.ignore_retry_overrides, overrides.retries()) {
-                                    (true, _) | (false, None) => self.global_tries,
-                                    (false, Some(retries)) => retries + 1,
-                                };
+                            let retries = match (self.ignore_retry_overrides, overrides.retries()) {
+                                (true, _) | (false, None) => self.global_retries,
+                                (false, Some(retries)) => retries,
+                            };
+                            let total_attempts = retries.count + 1;
+                            let mut backoff_iter = BackoffIter::new(retries);
 
                             if let FilterMatch::Mismatch { reason } =
                                 test_instance.test_info.filter_match
@@ -300,6 +372,10 @@ impl<'a> TestRunnerInner<'a> {
                                         run_status: run_status.clone(),
                                     });
                                     run_statuses.push(run_status);
+                                    let delay = backoff_iter
+                                        .next()
+                                        .expect("backoff delay must be non-empty");
+                                    sleep(delay).await; // TODO: cancellation
                                 } else {
                                     // This test failed and is out of retries.
                                     run_statuses.push(run_status);

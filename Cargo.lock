@@ -1143,6 +1143,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "quick-junit",
+ "rand",
  "regex",
  "self_update",
  "semver",

@@ -307,7 +307,7 @@ impl<'cfg> NextestProfile<'cfg> {
     }
 
     /// Returns the retry count for this profile.
-    pub fn retries(&self) -> usize {
+    pub fn retries(&self) -> RetryPolicy {
         self.custom_profile
             .and_then(|profile| profile.retries)
             .unwrap_or(self.default_profile.retries)
@@ -422,14 +422,14 @@ impl<'cfg> NextestProfile<'cfg> {
 /// Returned by
 #[derive(Clone, Debug)]
 pub struct ProfileOverrides {
-    retries: Option<usize>,
+    retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<Duration>,
 }
 
 impl ProfileOverrides {
     /// Returns the number of retries for this test.
-    pub fn retries(&self) -> Option<usize> {
+    pub fn retries(&self) -> Option<RetryPolicy> {
         self.retries
     }
 
@@ -510,7 +510,8 @@ impl NextestProfilesImpl {
 #[serde(rename_all = "kebab-case")]
 struct DefaultProfileImpl {
     test_threads: TestThreads,
-    retries: usize,
+    #[serde(default, deserialize_with = "deserialize_retry_policy_or_default")]
+    retries: RetryPolicy,
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
     failure_output: TestOutputDisplay,
@@ -679,6 +680,117 @@ where
     deserializer.deserialize_any(V)
 }
 
+/// Fixed or exponential backoff strategy.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Backoff {
+    /// Wait fixed delay before next attempt.
+    #[default]
+    Fixed,
+    /// Double the wait time on every failed attempt. Consider limiting with [RetryPolicy::max_delay].
+    Exponential,
+}
+
+/// Type for the retry config key.
+#[derive(Debug, Copy, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct RetryPolicy {
+    /// Backoff strategy.
+    #[serde(default)]
+    pub backoff: Backoff,
+    /// Max retry count.
+    /// Example:
+    /// `backoff = "exponential"`
+    /// `backoff = "fixed"`
+    pub count: usize,
+    /// Delay between retries.
+    /// Example:
+    /// `delay = "1s"`
+    #[serde(default, with = "humantime_serde")]
+    pub delay: Duration,
+    /// If set to true, randomness will be added to [delay](Self::delay) on each retry attempt.
+    #[serde(default)]
+    pub jitter: bool,
+    /// If set, limits the delay between retries. Useful with [Backoff::Exponential].
+    /// Use `max-delay` property in nextest.toml .
+    /// Example:
+    /// `max-delay="4s"`
+    #[serde(default, with = "humantime_serde")]
+    pub max_delay: Option<Duration>,
+}
+
+impl RetryPolicy {
+    /// Create new policy with no delay between retries.
+    pub fn new_without_delay(count: usize) -> Self {
+        Self {
+            backoff: Backoff::Fixed,
+            count,
+            delay: Duration::ZERO,
+            jitter: false,
+            max_delay: None,
+        }
+    }
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self::new_without_delay(0)
+    }
+}
+
+fn deserialize_retry_policy_or_default<'de, D>(deserializer: D) -> Result<RetryPolicy, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match deserialize_retry_policy(deserializer) {
+        Ok(None) => Ok(Default::default()),
+        Err(e) => Err(e),
+        Ok(Some(st)) => Ok(st),
+    }
+}
+
+fn deserialize_retry_policy<'de, D>(deserializer: D) -> Result<Option<RetryPolicy>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct V;
+
+    impl<'de2> serde::de::Visitor<'de2> for V {
+        type Value = Option<RetryPolicy>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(
+                formatter,
+                "a table ({{ count = 5, backoff = \"exponential\", delay = \"1s\", max-delay = \"10s\", jitter = true }}) or a number (5)"
+            )
+        }
+
+        // Note that TOML uses i64, not u64.
+        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            match v.cmp(&0) {
+                Ordering::Greater => Ok(Some(RetryPolicy::new_without_delay(v as usize))),
+                Ordering::Less => Err(serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Signed(v),
+                    &self,
+                )),
+                Ordering::Equal => Ok(None),
+            }
+        }
+
+        fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de2>,
+        {
+            RetryPolicy::deserialize(serde::de::value::MapAccessDeserializer::new(map)).map(Some)
+        }
+    }
+
+    deserializer.deserialize_any(V)
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct DefaultJunitImpl {
@@ -690,8 +802,8 @@ struct DefaultJunitImpl {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct CustomProfileImpl {
-    #[serde(default)]
-    retries: Option<usize>,
+    #[serde(default, deserialize_with = "deserialize_retry_policy")]
+    retries: Option<RetryPolicy>,
     #[serde(default)]
     test_threads: Option<TestThreads>,
     #[serde(default)]
@@ -728,8 +840,8 @@ struct ProfileOverrideSource {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct ProfileOverrideData {
-    #[serde(default)]
-    retries: Option<usize>,
+    #[serde(default, deserialize_with = "deserialize_retry_policy")]
+    retries: Option<RetryPolicy>,
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
     #[serde(default)]
@@ -970,7 +1082,7 @@ mod tests {
 
             [profile.ci]
         "#},
-        Some(2)
+        Some(RetryPolicy::new_without_delay(2))
 
         ; "my_test matches exactly"
     )]
@@ -1009,7 +1121,7 @@ mod tests {
 
             [profile.ci]
         "#},
-        Some(2)
+        Some(RetryPolicy::new_without_delay(2))
 
         ; "earlier configs override later ones"
     )]
@@ -1025,7 +1137,7 @@ mod tests {
             filter = "test(=my_test)"
             retries = 3
         "#},
-        Some(3)
+        Some(RetryPolicy::new_without_delay(3))
 
         ; "profile-specific configs override default ones"
     )]
@@ -1041,12 +1153,12 @@ mod tests {
             filter = "!test(=my_test_2)"
             retries = 3
         "#},
-        Some(3)
+        Some(RetryPolicy::new_without_delay(3))
 
         ; "no overrides match my_test exactly"
     )]
 
-    fn overrides_retries(config_contents: &str, retries: Option<usize>) {
+    fn overrides_retries(config_contents: &str, retries: Option<RetryPolicy>) {
         let workspace_dir = tempdir().unwrap();
         let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
@@ -1073,6 +1185,90 @@ mod tests {
             retries,
             "actual retries don't match expected retries"
         );
+    }
+
+    #[test]
+    fn parse_retries_valid() {
+        let config_contents = indoc! {r#"
+            [profile.default]
+            retries = { backoff = "fixed", count = 3 }
+
+            [profile.fixed-with-delay]
+            retries = { backoff = "fixed", count = 3, delay = "1s" }
+
+            [profile.exp]
+            retries = { backoff = "exponential", count = 4, delay = "2s" }
+
+            [profile.exp-with-max-delay]
+            retries = { backoff = "exponential", count = 5, delay = "3s", jitter = true, max-delay = "10s" }
+        "#};
+
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+
+        let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None, [])
+            .expect("config is valid");
+        assert_eq!(
+            config
+                .profile("default")
+                .expect("default profile exists")
+                .retries(),
+            RetryPolicy {
+                backoff: Backoff::Fixed,
+                count: 3,
+                delay: Duration::ZERO,
+                jitter: false,
+                max_delay: None,
+            },
+            "default retries matches"
+        );
+
+        assert_eq!(
+            config
+                .profile("fixed-with-delay")
+                .expect("profile exists")
+                .retries(),
+            RetryPolicy {
+                backoff: Backoff::Fixed,
+                count: 3,
+                delay: Duration::from_secs(1),
+                jitter: false,
+                max_delay: None,
+            },
+            "fixed-with-delay retries matches"
+        );
+
+        assert_eq!(
+            config.profile("exp").expect("profile exists").retries(),
+            RetryPolicy {
+                backoff: Backoff::Exponential,
+                count: 4,
+                delay: Duration::from_secs(2),
+                jitter: false,
+                max_delay: None,
+            },
+            "exp retries matches"
+        );
+
+        assert_eq!(
+            config
+                .profile("exp-with-max-delay")
+                .expect("profile exists")
+                .retries(),
+            RetryPolicy {
+                backoff: Backoff::Exponential,
+                count: 5,
+                delay: Duration::from_secs(3),
+                jitter: true,
+                max_delay: Some(Duration::from_secs(10)),
+            },
+            "exp-with-max-delay retries matches"
+        );
+
+        // TODO: do not let max-delay be specified
+        // TODO: add tests for invalid
     }
 
     #[test]
@@ -1185,7 +1381,7 @@ mod tests {
             .profile(NextestConfig::DEFAULT_PROFILE)
             .expect("default profile is present");
         // This is present in .config/nextest.toml and is the highest priority
-        assert_eq!(default_profile.retries(), 3);
+        assert_eq!(default_profile.retries(), RetryPolicy::new_without_delay(3));
 
         let package_id = graph.workspace().iter().next().unwrap().id();
 
@@ -1219,55 +1415,58 @@ mod tests {
 
         assert_eq!(
             default_profile.overrides_for(&test_foo_query).retries(),
-            Some(20),
+            Some(RetryPolicy::new_without_delay(20)),
             "retries for test_foo/default profile"
         );
         assert_eq!(
             default_profile.overrides_for(&test_bar_query).retries(),
-            Some(21),
+            Some(RetryPolicy::new_without_delay(21)),
             "retries for test_bar/default profile"
         );
         assert_eq!(
             default_profile.overrides_for(&test_baz_query).retries(),
-            Some(23),
+            Some(RetryPolicy::new_without_delay(23)),
             "retries for test_baz/default profile"
         );
 
         let lowpri_profile = config.profile("lowpri").expect("lowpri profile is present");
-        assert_eq!(lowpri_profile.retries(), 12);
+        assert_eq!(lowpri_profile.retries(), RetryPolicy::new_without_delay(12));
         assert_eq!(
             lowpri_profile.overrides_for(&test_foo_query).retries(),
-            Some(25),
+            Some(RetryPolicy::new_without_delay(25)),
             "retries for test_foo/default profile"
         );
         assert_eq!(
             lowpri_profile.overrides_for(&test_bar_query).retries(),
-            Some(24),
+            Some(RetryPolicy::new_without_delay(24)),
             "retries for test_bar/default profile"
         );
         assert_eq!(
             lowpri_profile.overrides_for(&test_baz_query).retries(),
-            Some(22),
+            Some(RetryPolicy::new_without_delay(22)),
             "retries for test_baz/default profile"
         );
 
         let lowpri2_profile = config
             .profile("lowpri2")
             .expect("lowpri2 profile is present");
-        assert_eq!(lowpri2_profile.retries(), 18);
+        assert_eq!(
+            lowpri2_profile.retries(),
+            RetryPolicy::new_without_delay(18)
+        );
         assert_eq!(
             lowpri2_profile.overrides_for(&test_foo_query).retries(),
-            Some(26),
+            Some(RetryPolicy::new_without_delay(26)),
             "retries for test_foo/default profile"
         );
         assert_eq!(
             lowpri2_profile.overrides_for(&test_bar_query).retries(),
-            Some(26),
+            Some(RetryPolicy::new_without_delay(26)),
             "retries for test_bar/default profile"
         );
         assert_eq!(
             lowpri2_profile.overrides_for(&test_baz_query).retries(),
-            Some(26),
+            Some(RetryPolicy::new_without_delay(26)),
             "retries for test_baz/default profile"
         );
     }
