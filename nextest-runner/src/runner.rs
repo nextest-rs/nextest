@@ -344,7 +344,7 @@ impl<'a> TestRunnerInner<'a> {
                                 this_run_sender.send(InternalTestEvent::Started { test_instance });
 
                             let mut run_statuses = vec![];
-
+                            let mut delay = Duration::ZERO;
                             loop {
                                 let attempt = run_statuses.len() + 1;
 
@@ -355,6 +355,7 @@ impl<'a> TestRunnerInner<'a> {
                                         &overrides,
                                         &this_run_sender,
                                         &mut this_forward_receiver,
+                                        delay,
                                     )
                                     .await
                                     .into_external(attempt, total_attempts);
@@ -367,14 +368,15 @@ impl<'a> TestRunnerInner<'a> {
                                     && !canceled_ref.load(Ordering::Acquire)
                                 {
                                     // Retry this test: send a retry event, then retry the loop.
+                                    delay = backoff_iter
+                                        .next()
+                                        .expect("backoff delay must be non-empty");
                                     let _ = this_run_sender.send(InternalTestEvent::Retry {
                                         test_instance,
                                         run_status: run_status.clone(),
+                                        delay_before_next_attempt: delay,
                                     });
                                     run_statuses.push(run_status);
-                                    let delay = backoff_iter
-                                        .next()
-                                        .expect("backoff delay must be non-empty");
                                     sleep(delay).await; // TODO: cancellation
                                 } else {
                                     // This test failed and is out of retries.
@@ -501,6 +503,7 @@ impl<'a> TestRunnerInner<'a> {
         overrides: &ProfileOverrides,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+        delay_before_start: Duration,
     ) -> InternalExecuteStatus {
         let stopwatch = StopwatchStart::now();
 
@@ -512,6 +515,7 @@ impl<'a> TestRunnerInner<'a> {
                 overrides,
                 run_sender,
                 forward_receiver,
+                delay_before_start,
             )
             .await
         {
@@ -523,10 +527,12 @@ impl<'a> TestRunnerInner<'a> {
                 result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.end(),
                 is_slow: false,
+                delay_before_start,
             },
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn run_test_inner(
         &self,
         test: TestInstance<'a>,
@@ -535,6 +541,7 @@ impl<'a> TestRunnerInner<'a> {
         overrides: &ProfileOverrides,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+        delay_before_start: Duration,
     ) -> std::io::Result<InternalExecuteStatus> {
         let mut cmd = test.make_expression(self.test_list, &self.target_runner);
 
@@ -734,6 +741,7 @@ impl<'a> TestRunnerInner<'a> {
             result: status,
             stopwatch_end: stopwatch.end(),
             is_slow,
+            delay_before_start,
         })
     }
 }
@@ -901,6 +909,8 @@ pub struct ExecuteStatus {
     pub time_taken: Duration,
     /// Whether this test counts as slow.
     pub is_slow: bool,
+    /// The delay will be non-zero if this is a retry and delay was specified.
+    pub delay_before_start: Duration,
 }
 
 struct InternalExecuteStatus {
@@ -909,6 +919,7 @@ struct InternalExecuteStatus {
     result: ExecutionResult,
     stopwatch_end: StopwatchEnd,
     is_slow: bool,
+    delay_before_start: Duration,
 }
 
 impl InternalExecuteStatus {
@@ -922,6 +933,7 @@ impl InternalExecuteStatus {
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,
             is_slow: self.is_slow,
+            delay_before_start: self.delay_before_start,
         }
     }
 }
@@ -1115,9 +1127,11 @@ where
             InternalEvent::Test(InternalTestEvent::Retry {
                 test_instance,
                 run_status,
+                delay_before_next_attempt,
             }) => (self.callback)(TestEvent::TestRetry {
                 test_instance,
                 run_status,
+                delay_before_next_attempt,
             })
             .map_err(InternalError::Error),
             InternalEvent::Test(InternalTestEvent::Finished {
@@ -1214,6 +1228,7 @@ where
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum InternalEvent<'a> {
     Test(InternalTestEvent<'a>),
@@ -1232,6 +1247,7 @@ enum InternalTestEvent<'a> {
     Retry {
         test_instance: TestInstance<'a>,
         run_status: ExecuteStatus,
+        delay_before_next_attempt: Duration,
     },
     Finished {
         test_instance: TestInstance<'a>,

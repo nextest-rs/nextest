@@ -686,10 +686,15 @@ impl<'a> TestReporterImpl<'a> {
             TestEvent::TestRetry {
                 test_instance,
                 run_status,
+                delay_before_next_attempt,
             } => {
                 if self.status_level >= StatusLevel::Retry {
-                    let retry_string =
-                        format!("{}/{} RETRY", run_status.attempt, run_status.total_attempts);
+                    let retry_string = format!(
+                        "{}/{} RETRY in {}",
+                        run_status.attempt,
+                        run_status.total_attempts,
+                        humantime::Duration::from(*delay_before_next_attempt)
+                    );
                     write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
 
                     // Next, print the time taken.
@@ -1292,6 +1297,9 @@ pub enum TestEvent<'a> {
 
         /// The status of this attempt to run the test. Will never be success.
         run_status: ExecuteStatus,
+
+        /// The delay before the next attempt to run the test.
+        delay_before_next_attempt: Duration,
     },
 
     /// A test finished running.
