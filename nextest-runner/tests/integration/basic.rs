@@ -7,7 +7,7 @@ use color_eyre::eyre::Result;
 use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BuildPlatform, FilterMatch, MismatchReason};
 use nextest_runner::{
-    config::NextestConfig,
+    config::{NextestConfig, RetryPolicy},
     list::BinaryList,
     reporter::heuristic_extract_description,
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
@@ -369,10 +369,10 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
     ; "retry overrides obeyed"
 )]
 #[test_case(
-    Some(2)
+    Some(RetryPolicy::new_without_delay(2))
     ; "retry overrides ignored"
 )]
-fn test_retries(retries: Option<usize>) -> Result<()> {
+fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     set_env_vars();
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
@@ -383,7 +383,11 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
         .expect("with-retries config is valid");
 
     let profile_retries = profile.retries();
-    assert_eq!(profile_retries, 2, "retries set in with-retries profile");
+    assert_eq!(
+        profile_retries,
+        RetryPolicy::new_without_delay(2),
+        "retries set in with-retries profile"
+    );
 
     let mut builder = TestRunnerBuilder::default();
     if let Some(retries) = retries {
@@ -414,7 +418,7 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
                     let expected_len = match fixture.status {
                         FixtureStatus::Flaky { pass_attempt } => {
                             if retries.is_some() {
-                                pass_attempt.min(profile_retries + 1)
+                                pass_attempt.min(profile_retries.count + 1)
                             } else {
                                 pass_attempt
                             }
@@ -422,7 +426,7 @@ fn test_retries(retries: Option<usize>) -> Result<()> {
                         FixtureStatus::Pass | FixtureStatus::Leak => 1,
                         // Note that currently only the flaky test fixtures are controlled by overrides.
                         // If more tests are controlled by retry overrides, this may need to be updated.
-                        FixtureStatus::Fail | FixtureStatus::Segfault => profile_retries + 1,
+                        FixtureStatus::Fail | FixtureStatus::Segfault => profile_retries.count + 1,
                         FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail => {
                             unreachable!("ignored tests should be skipped")
                         }

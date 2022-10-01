@@ -12,6 +12,10 @@ dir = "target/nextest"
 # "retries" defines the number of times a test should be retried. If set to a
 # non-zero value, tests that succeed on a subsequent attempt will be marked as
 # non-flaky. Can be overridden through the `--retries` option.
+# Examples
+# * retries = 3
+# * retries = { backoff = "fixed", count = 2, delay = "1s" }
+# * retries = { backoff = "exponential", count = 10, delay = "1s", jitter = true, max-delay = "10s" }
 retries = 0
 
 # The number of threads to run tests with. Supported values are either an integer or

@@ -15,7 +15,7 @@ use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
-    config::{NextestConfig, NextestProfile, TestThreads, ToolConfigFile},
+    config::{NextestConfig, NextestProfile, RetryPolicy, TestThreads, ToolConfigFile},
     errors::WriteTestListError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
@@ -634,7 +634,7 @@ impl TestRunnerOpts {
         let mut builder = TestRunnerBuilder::default();
         builder.set_no_capture(no_capture);
         if let Some(retries) = self.retries {
-            builder.set_retries(retries);
+            builder.set_retries(RetryPolicy::new_without_delay(retries));
         }
         if self.no_fail_fast {
             builder.set_fail_fast(false);
