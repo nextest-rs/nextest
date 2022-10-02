@@ -35,7 +35,6 @@ use tokio::{
     process::Child,
     runtime::Runtime,
     sync::mpsc::UnboundedSender,
-    time::sleep,
 };
 use uuid::Uuid;
 
@@ -292,12 +291,13 @@ impl<'a> TestRunnerInner<'a> {
 
         TokioScope::scope_and_block(move |scope| {
             let (run_sender, mut run_receiver) = tokio::sync::mpsc::unbounded_channel();
-
+            let (cancellation_sender, _cancellation_receiver) = tokio::sync::broadcast::channel(1);
             {
+                let cancellation_sender = cancellation_sender.clone();
                 let run_fut = futures::stream::iter(self.test_list.iter_tests())
                     .map(move |test_instance| {
                         let this_run_sender = run_sender.clone();
-
+                        let mut cancellation_receiver = cancellation_sender.subscribe();
                         async move {
                             // Subscribe to the receiver *before* checking canceled_ref. The ordering is
                             // important to avoid race conditions with the code that first sets
@@ -377,7 +377,11 @@ impl<'a> TestRunnerInner<'a> {
                                         delay_before_next_attempt: delay,
                                     });
                                     run_statuses.push(run_status);
-                                    sleep(delay).await; // TODO: cancellation
+                                    tokio::select! {
+                                        _ = tokio::time::sleep(delay) => {}
+                                        // Cancel the sleep if the run is cancelled.
+                                        _ = cancellation_receiver.recv() => {}
+                                    }
                                 } else {
                                     // This test failed and is out of retries.
                                     run_statuses.push(run_status);
@@ -402,7 +406,6 @@ impl<'a> TestRunnerInner<'a> {
                 // Run the stream to completion.
                 scope.spawn_cancellable(run_fut, || ());
             }
-
             let exec_fut = async move {
                 let mut signals_done = false;
 
@@ -438,7 +441,7 @@ impl<'a> TestRunnerInner<'a> {
                             // Also note the ordering here: canceled_ref is set *before*
                             // notifications are broadcast. This prevents race conditions.
                             canceled_ref.store(true, Ordering::Release);
-
+                            let _ = cancellation_sender.send(());
                             match err {
                                 InternalError::Error(err) => {
                                     // Ignore errors that happen during error cancellation.
