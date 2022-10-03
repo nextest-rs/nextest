@@ -100,7 +100,7 @@ pathdiff = { version = "0.2.1", features = ["camino"] }
 pretty_assertions = "1.3.0"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
-test-case = "2.2.1"
+test-case = "2.2.2"
 
 
 [[bin]]
