@@ -23,6 +23,7 @@ use futures::{
 };
 use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
+use scopeguard::guard;
 use std::{
     convert::Infallible,
     marker::PhantomData,
@@ -582,11 +583,14 @@ impl<'a> TestRunnerInner<'a> {
             // Once the process is done executing, wait up to leak_timeout for the pipes to shut down.
             // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
             // didn't shut down properly. Now, this detects those cases and marks them as leaked.
-            self.runtime.spawn(async move {
-                tokio::time::sleep(leak_timeout).await;
-                // Request for cancellation
-                cancellation_token.cancel();
-            });
+            let _abort_on_drop = guard(
+                self.runtime.spawn(async move {
+                    tokio::time::sleep(leak_timeout).await;
+                    // Request for cancellation
+                    cancellation_token.cancel();
+                }),
+                |join_handle| join_handle.abort(),
+            );
 
             // Collects output.
             //
