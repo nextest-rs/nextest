@@ -35,7 +35,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tokio::{
-    io::{AsyncRead, AsyncReadExt, BufReader},
+    io::{AsyncRead, AsyncReadExt},
     process::Child,
     runtime::Runtime,
     sync::mpsc::UnboundedSender,
