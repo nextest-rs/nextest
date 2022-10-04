@@ -17,7 +17,10 @@ use crate::{
 };
 use async_scoped::TokioScope;
 use bytes::Bytes;
-use futures::prelude::*;
+use futures::{
+    future::{pending, try_join},
+    prelude::*,
+};
 use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use std::{
@@ -25,15 +28,20 @@ use std::{
     marker::PhantomData,
     num::NonZeroUsize,
     process::Stdio,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, SystemTime},
 };
 use tokio::{
-    io::{AsyncReadExt, BufReader},
+    io::{AsyncRead, AsyncReadExt, BufReader},
     process::Child,
     runtime::Runtime,
     sync::mpsc::UnboundedSender,
+    task::JoinHandle,
 };
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 /// Test runner options.
@@ -498,50 +506,38 @@ impl<'a> TestRunnerInner<'a> {
 
         let child_stdout = child.stdout.take().map(BufReader::new);
         let child_stderr = child.stderr.take().map(BufReader::new);
-        let mut stdout = bytes::BytesMut::with_capacity(4096);
-        let mut stderr = bytes::BytesMut::with_capacity(4096);
+
+        let mut stdout = Bytes::from_static(b"");
+        let mut stderr = Bytes::from_static(b"");
 
         let (res, leaked) = {
-            // Set up futures for reading from stdout and stderr.
-            let stdout_fut = async {
-                if let Some(mut child_stdout) = child_stdout {
-                    loop {
-                        stdout.reserve(4096);
-                        let bytes_read = child_stdout.read_buf(&mut stdout).await?;
-                        if bytes_read == 0 {
-                            break;
-                        }
-                    }
-                }
-                Ok::<_, std::io::Error>(())
-            };
-            tokio::pin!(stdout_fut);
-            let mut stdout_done = false;
+            // Records whether stdout/stderr quit before consuming
+            // all incoming data.
+            let cancelled = Arc::new(AtomicBool::new(false));
 
-            let stderr_fut = async {
-                if let Some(mut child_stderr) = child_stderr {
-                    loop {
-                        stderr.reserve(4096);
-                        let bytes_read = child_stderr.read_buf(&mut stderr).await?;
-                        if bytes_read == 0 {
-                            break;
-                        }
-                    }
-                }
-                Ok::<_, std::io::Error>(())
-            };
-            tokio::pin!(stderr_fut);
-            let mut stderr_done = false;
+            // Request for cancellation
+            let cancellation_token = CancellationToken::new();
+
+            let mut stdout_task = ReadTask::new(
+                &self.runtime,
+                child_stdout,
+                cancellation_token.clone(),
+                cancelled.clone(),
+            );
+            let mut stderr_task = ReadTask::new(
+                &self.runtime,
+                child_stderr,
+                cancellation_token.clone(),
+                cancelled.clone(),
+            );
 
             let res = loop {
                 tokio::select! {
-                    res = &mut stdout_fut, if !stdout_done => {
-                        stdout_done = true;
-                        res?;
+                    err = stdout_task.wait_for_err() => {
+                        return Err(err);
                     }
-                    res = &mut stderr_fut, if !stderr_done => {
-                        stderr_done = true;
-                        res?;
+                    err = stderr_task.wait_for_err() => {
+                        return Err(err);
                     }
                     res = child.wait() => {
                         // The test finished executing.
@@ -586,28 +582,34 @@ impl<'a> TestRunnerInner<'a> {
             // Once the process is done executing, wait up to leak_timeout for the pipes to shut down.
             // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
             // didn't shut down properly. Now, this detects those cases and marks them as leaked.
-            let leaked = loop {
-                let sleep = tokio::time::sleep(leak_timeout);
+            self.runtime.spawn(async move {
+                tokio::time::sleep(leak_timeout).await;
+                // Request for cancellation
+                cancellation_token.cancel();
+            });
 
-                tokio::select! {
-                    res = &mut stdout_fut, if !stdout_done => {
-                        stdout_done = true;
-                        res?;
-                    }
-                    res = &mut stderr_fut, if !stderr_done => {
-                        stderr_done = true;
-                        res?;
-                    }
-                    () = sleep, if !(stdout_done && stderr_done) => {
-                        // stdout and/or stderr haven't completed yet. In this case, break the loop
-                        // and mark this as leaked.
-                        break true;
-                    }
-                    else => {
-                        break false;
-                    }
-                }
-            };
+            // Collects output.
+            //
+            // After leak_timeout, the read tasks would receive cancellation
+            // requests and setting cancelled to true before quitting.
+            try_join(
+                async {
+                    stdout = stdout_task.wait_for_res().await?;
+                    Ok::<_, std::io::Error>(())
+                },
+                async {
+                    stderr = stderr_task.wait_for_res().await?;
+                    Ok::<_, std::io::Error>(())
+                },
+            )
+            .await?;
+
+            // Now that all read task is done, cancelled will not
+            // be modified anymore.
+            //
+            // If true, then stdout and/or stderr haven't completed yet,
+            // but is forced to quit and leak the fd.
+            let leaked = cancelled.load(Ordering::Relaxed);
 
             (res, leaked)
         };
@@ -645,9 +647,8 @@ impl<'a> TestRunnerInner<'a> {
         });
 
         Ok(InternalExecuteStatus {
-            // TODO: replace with Bytes
-            stdout: stdout.freeze(),
-            stderr: stderr.freeze(),
+            stdout,
+            stderr,
             result: status,
             stopwatch_end: stopwatch.end(),
             is_slow,
@@ -1128,6 +1129,137 @@ where
             elapsed: stopwatch_end.duration,
             run_stats: self.run_stats,
         })
+    }
+}
+
+#[derive(Debug)]
+struct ReadTask {
+    handle: Option<JoinHandle<std::io::Result<Bytes>>>,
+    bytes: Option<Bytes>,
+}
+
+impl ReadTask {
+    fn new<T>(
+        runtime: &Runtime,
+        reader: Option<T>,
+        token: CancellationToken,
+        cancelled: Arc<AtomicBool>,
+    ) -> Self
+    where
+        T: AsyncRead + Unpin + Send + 'static,
+    {
+        async fn inner(
+            mut reader: &mut (dyn AsyncRead + Unpin + Send + 'static),
+            token: CancellationToken,
+            cancelled: Arc<AtomicBool>,
+        ) -> std::io::Result<Bytes> {
+            // Reborrow it since AsyncReadExt expects Sized self
+            let reader = &mut reader;
+
+            let mut buffer = bytes::BytesMut::with_capacity(4096);
+
+            loop {
+                tokio::select! {
+                    res = reader.read_buf(&mut buffer) => {
+                        let bytes_read = res?;
+                        if bytes_read == 0 {
+                            break;
+                        }
+                    }
+                    () = token.cancelled() => {
+                        cancelled.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                }
+                buffer.reserve(4096);
+            }
+
+            Ok(buffer.freeze())
+        }
+
+        Self {
+            // If there's no reader, then set bytes to default value
+            bytes: reader.is_none().then(|| Bytes::from_static(b"")),
+            handle: reader.map(|mut reader| {
+                runtime.spawn(async move { inner(&mut reader, token, cancelled).await })
+            }),
+        }
+    }
+
+    /// This method is cancel safe.
+    async fn wait_inner(&mut self) -> std::io::Result<()> {
+        if let Some(handle) = &mut self.handle {
+            // This await is cancel safe
+            self.bytes = Some(handle.await??);
+        }
+
+        Ok(())
+    }
+
+    /// This method is cancel safe.
+    ///
+    /// It returns `Err` if the task failed, or `Ok`
+    /// if the task succeeded or the task has already been
+    /// awaited and consumed.
+    async fn wait(&mut self) -> std::io::Result<()> {
+        let res = self.wait_inner().await;
+
+        // Once we reach this stage, we are certain that wait_inner
+        // is not cancelled and is executed to end.
+        //
+        // Now, either self.handle was None before wait_inner, or
+        // self.handle was Some and now contains an already-polled future.
+        //
+        // In the later case, we need to take that handle so that we won't
+        // await on it ever again.
+        //
+        // For the former case, taking it does not change the value.
+        self.handle.take();
+
+        res
+    }
+
+    /// This method is cancel safe.
+    async fn wait_for_err(&mut self) -> std::io::Error {
+        // wait is cancel safe
+        if let Err(err) = self.wait().await {
+            err
+        } else {
+            // Trivally cancel safe as it has no state and always returns
+            // Poll::Pending.
+            pending().await
+        }
+    }
+
+    /// This method is cancel safe.
+    ///
+    /// If the task has finished and it has not be awaited (or previous
+    /// calls to wait_for_res is cancelled), then this function will
+    /// return the result.
+    ///
+    /// In the case where the `reader` passed to `Self::new` is `None`,
+    /// this function would return an empty `Bytes` on the first call.
+    ///
+    /// Otherwise, this function would return `Poll::Pending` forever.
+    async fn wait_for_res(&mut self) -> std::io::Result<Bytes> {
+        // This method is cancel safe
+        self.wait().await?;
+
+        if let Some(bytes) = self.bytes.take() {
+            Ok(bytes)
+        } else {
+            // Trivally cancel safe as it has no state and always returns
+            // Poll::Pending.
+            pending().await
+        }
+    }
+}
+
+impl Drop for ReadTask {
+    fn drop(&mut self) {
+        if let Some(handle) = &mut self.handle {
+            handle.abort();
+        }
     }
 }
 
