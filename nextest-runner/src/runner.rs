@@ -1167,15 +1167,17 @@ impl ReadTask {
 
             loop {
                 tokio::select! {
+                    biased;
+
+                    () = &mut cancelled_fut => {
+                        cancelled.store(true, Ordering::Relaxed);
+                        break;
+                    }
                     res = reader.read_buf(&mut buffer) => {
                         let bytes_read = res?;
                         if bytes_read == 0 {
                             break;
                         }
-                    }
-                    () = &mut cancelled_fut => {
-                        cancelled.store(true, Ordering::Relaxed);
-                        break;
                     }
                 }
                 buffer.reserve(4096);
