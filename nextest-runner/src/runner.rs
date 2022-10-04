@@ -1220,6 +1220,9 @@ impl ReadTask {
     }
 
     /// This method is cancel safe.
+    ///
+    /// Once this method returns, you must not call this method
+    /// or [`Self::wait_for_res`].
     async fn wait_for_err(&mut self) -> std::io::Error {
         // wait is cancel safe
         if let Err(err) = self.wait().await {
