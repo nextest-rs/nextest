@@ -1241,17 +1241,11 @@ impl ReadTask {
     /// this function would return an empty `Bytes` on the first call.
     ///
     /// Otherwise, this function would return `Poll::Pending` forever.
-    async fn wait_for_res(&mut self) -> std::io::Result<Bytes> {
+    async fn wait_for_res(mut self) -> std::io::Result<Bytes> {
         // This method is cancel safe
         self.wait().await?;
 
-        if let Some(bytes) = self.bytes.take() {
-            Ok(bytes)
-        } else {
-            // Trivally cancel safe as it has no state and always returns
-            // Poll::Pending.
-            pending().await
-        }
+        Ok(self.bytes.take().unwrap())
     }
 }
 
