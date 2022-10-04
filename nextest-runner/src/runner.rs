@@ -1162,6 +1162,9 @@ impl ReadTask {
 
             let mut buffer = bytes::BytesMut::with_capacity(4096);
 
+            let cancelled_fut = token.cancelled();
+            tokio::pin!(cancelled_fut);
+
             loop {
                 tokio::select! {
                     res = reader.read_buf(&mut buffer) => {
@@ -1170,7 +1173,7 @@ impl ReadTask {
                             break;
                         }
                     }
-                    () = token.cancelled() => {
+                    () = &mut cancelled_fut => {
                         cancelled.store(true, Ordering::Relaxed);
                         break;
                     }
