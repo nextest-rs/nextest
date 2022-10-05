@@ -418,7 +418,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                     let expected_len = match fixture.status {
                         FixtureStatus::Flaky { pass_attempt } => {
                             if retries.is_some() {
-                                pass_attempt.min(profile_retries.count + 1)
+                                pass_attempt.min(profile_retries.count() + 1)
                             } else {
                                 pass_attempt
                             }
@@ -426,7 +426,9 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                         FixtureStatus::Pass | FixtureStatus::Leak => 1,
                         // Note that currently only the flaky test fixtures are controlled by overrides.
                         // If more tests are controlled by retry overrides, this may need to be updated.
-                        FixtureStatus::Fail | FixtureStatus::Segfault => profile_retries.count + 1,
+                        FixtureStatus::Fail | FixtureStatus::Segfault => {
+                            profile_retries.count() + 1
+                        }
                         FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail => {
                             unreachable!("ignored tests should be skipped")
                         }

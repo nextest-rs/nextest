@@ -680,61 +680,67 @@ where
     deserializer.deserialize_any(V)
 }
 
-/// Fixed or exponential backoff strategy.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum Backoff {
-    /// Wait fixed delay before next attempt.
-    #[default]
-    Fixed,
-    /// Double the wait time on every failed attempt. Consider limiting with [RetryPolicy::max_delay].
-    Exponential,
-}
-
 /// Type for the retry config key.
 #[derive(Debug, Copy, Clone, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct RetryPolicy {
-    /// Backoff strategy.
-    #[serde(default)]
-    pub backoff: Backoff,
-    /// Max retry count.
-    /// Example:
-    /// `backoff = "exponential"`
-    /// `backoff = "fixed"`
-    pub count: usize,
-    /// Delay between retries.
-    /// Example:
-    /// `delay = "1s"`
-    #[serde(default, with = "humantime_serde")]
-    pub delay: Duration,
-    /// If set to true, randomness will be added to [delay](Self::delay) on each retry attempt.
-    #[serde(default)]
-    pub jitter: bool,
-    /// If set, limits the delay between retries. Useful with [Backoff::Exponential].
-    /// Use `max-delay` property in nextest.toml .
-    /// Example:
-    /// `max-delay="4s"`
-    #[serde(default, with = "humantime_serde")]
-    pub max_delay: Option<Duration>,
+#[serde(tag = "backoff", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum RetryPolicy {
+    /// Fixed backoff.
+    #[serde(rename_all = "kebab-case")]
+    Fixed {
+        /// Maximum retry count.
+        count: usize,
+
+        /// Delay between retries.
+        #[serde(default, with = "humantime_serde")]
+        delay: Duration,
+
+        /// If set to true, randomness will be added to the delay on each retry attempt.
+        #[serde(default)]
+        jitter: bool,
+    },
+
+    /// Exponential backoff.
+    #[serde(rename_all = "kebab-case")]
+    Exponential {
+        /// Maximum retry count.
+        count: usize,
+
+        /// Delay between retries. Not optional for exponential backoff.
+        #[serde(with = "humantime_serde")]
+        delay: Duration,
+
+        /// If set to true, randomness will be added to the delay on each retry attempt.
+        #[serde(default)]
+        jitter: bool,
+
+        /// If set, limits the delay between retries.
+        #[serde(default, with = "humantime_serde")]
+        max_delay: Option<Duration>,
+    },
+}
+
+impl Default for RetryPolicy {
+    #[inline]
+    fn default() -> Self {
+        Self::new_without_delay(0)
+    }
 }
 
 impl RetryPolicy {
     /// Create new policy with no delay between retries.
     pub fn new_without_delay(count: usize) -> Self {
-        Self {
-            backoff: Backoff::Fixed,
+        Self::Fixed {
             count,
             delay: Duration::ZERO,
             jitter: false,
-            max_delay: None,
         }
     }
-}
 
-impl Default for RetryPolicy {
-    fn default() -> Self {
-        Self::new_without_delay(0)
+    /// Returns the number of retries.
+    pub fn count(&self) -> usize {
+        match self {
+            Self::Fixed { count, .. } | Self::Exponential { count, .. } => *count,
+        }
     }
 }
 
@@ -788,7 +794,58 @@ where
         }
     }
 
-    deserializer.deserialize_any(V)
+    // Post-deserialize validation of retry policy.
+    let retry_policy = deserializer.deserialize_any(V)?;
+    match &retry_policy {
+        Some(RetryPolicy::Fixed {
+            count: _,
+            delay,
+            jitter,
+        }) => {
+            // Jitter can't be specified if delay is 0.
+            if delay.is_zero() && *jitter {
+                return Err(serde::de::Error::custom(
+                    "`jitter` cannot be true if `delay` isn't specified or is zero",
+                ));
+            }
+        }
+        Some(RetryPolicy::Exponential {
+            count,
+            delay,
+            jitter,
+            max_delay,
+        }) => {
+            // Count can't be zero.
+            if *count == 0 {
+                return Err(serde::de::Error::custom(
+                    "`count` cannot be zero with exponential backoff",
+                ));
+            }
+            // Delay can't be zero.
+            if delay.is_zero() {
+                return Err(serde::de::Error::custom(
+                    "`delay` cannot be zero with exponential backoff",
+                ));
+            }
+            // Max delay, if specified, can't be zero.
+            if max_delay.map_or(false, |f| f.is_zero()) {
+                return Err(serde::de::Error::custom(
+                    "`max-delay` cannot be zero with exponential backoff",
+                ));
+            }
+            // If jitter is false, max delay can't be less than delay. (We do let max delay be less
+            // than delay if jitter is true, in case there's some interest in using jitter that
+            // way.)
+            if !*jitter && max_delay.map_or(false, |max_delay| max_delay < *delay) {
+                return Err(serde::de::Error::custom(
+                    "`max-delay` cannot be less than delay if jitter is false",
+                ));
+            }
+        }
+        None => {}
+    }
+
+    Ok(retry_policy)
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -935,6 +992,7 @@ struct JunitImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use config::ConfigError;
     use guppy::{graph::cargo::BuildPlatform, MetadataCommand};
     use indoc::indoc;
     use nextest_filtering::BinaryQuery;
@@ -1200,7 +1258,13 @@ mod tests {
             retries = { backoff = "exponential", count = 4, delay = "2s" }
 
             [profile.exp-with-max-delay]
-            retries = { backoff = "exponential", count = 5, delay = "3s", jitter = true, max-delay = "10s" }
+            retries = { backoff = "exponential", count = 5, delay = "3s", max-delay = "10s" }
+
+            [profile.exp-with-max-delay-and-jitter]
+            retries = { backoff = "exponential", count = 6, delay = "4s", max-delay = "1m", jitter = true }
+
+            [profile.exp-with-max-delay-and-jitter-2]
+            retries = { backoff = "exponential", count = 7, delay = "4s", max-delay = "2s", jitter = true }
         "#};
 
         let workspace_dir = tempdir().unwrap();
@@ -1215,12 +1279,10 @@ mod tests {
                 .profile("default")
                 .expect("default profile exists")
                 .retries(),
-            RetryPolicy {
-                backoff: Backoff::Fixed,
+            RetryPolicy::Fixed {
                 count: 3,
                 delay: Duration::ZERO,
                 jitter: false,
-                max_delay: None,
             },
             "default retries matches"
         );
@@ -1230,20 +1292,17 @@ mod tests {
                 .profile("fixed-with-delay")
                 .expect("profile exists")
                 .retries(),
-            RetryPolicy {
-                backoff: Backoff::Fixed,
+            RetryPolicy::Fixed {
                 count: 3,
                 delay: Duration::from_secs(1),
                 jitter: false,
-                max_delay: None,
             },
             "fixed-with-delay retries matches"
         );
 
         assert_eq!(
             config.profile("exp").expect("profile exists").retries(),
-            RetryPolicy {
-                backoff: Backoff::Exponential,
+            RetryPolicy::Exponential {
                 count: 4,
                 delay: Duration::from_secs(2),
                 jitter: false,
@@ -1257,18 +1316,148 @@ mod tests {
                 .profile("exp-with-max-delay")
                 .expect("profile exists")
                 .retries(),
-            RetryPolicy {
-                backoff: Backoff::Exponential,
+            RetryPolicy::Exponential {
                 count: 5,
                 delay: Duration::from_secs(3),
-                jitter: true,
+                jitter: false,
                 max_delay: Some(Duration::from_secs(10)),
             },
             "exp-with-max-delay retries matches"
         );
 
-        // TODO: do not let max-delay be specified
-        // TODO: add tests for invalid
+        assert_eq!(
+            config
+                .profile("exp-with-max-delay-and-jitter")
+                .expect("profile exists")
+                .retries(),
+            RetryPolicy::Exponential {
+                count: 6,
+                delay: Duration::from_secs(4),
+                jitter: true,
+                max_delay: Some(Duration::from_secs(60)),
+            },
+            "exp-with-max-delay-and-jitter retries matches"
+        );
+
+        assert_eq!(
+            config
+                .profile("exp-with-max-delay-and-jitter-2")
+                .expect("profile exists")
+                .retries(),
+            RetryPolicy::Exponential {
+                count: 7,
+                delay: Duration::from_secs(4),
+                jitter: true,
+                max_delay: Some(Duration::from_secs(2)),
+            },
+            "exp-with-max-delay-and-jitter-2 retries matches"
+        );
+    }
+
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "foo" }
+        "#},
+        "unknown variant `foo`, expected `fixed` or `exponential`"
+        ; "invalid value for backoff")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "fixed" }
+        "#},
+        "missing field `count`"
+        ; "fixed specified without count")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "fixed", count = 1, delay = "foobar" }
+        "#},
+        "invalid value: string \"foobar\", expected a duration"
+        ; "delay is not a valid duration")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "fixed", count = 1, jitter = true }
+        "#},
+        "`jitter` cannot be true if `delay` isn't specified or is zero"
+        ; "jitter specified without delay")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "fixed", count = 1, max-delay = "10s" }
+        "#},
+        "unknown field `max-delay`, expected one of `count`, `delay`, `jitter`"
+        ; "max-delay is incompatible with fixed backoff")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "exponential", count = 1 }
+        "#},
+        "missing field `delay`"
+        ; "exponential backoff must specify delay")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "exponential", delay = "1s" }
+        "#},
+        "missing field `count`"
+        ; "exponential backoff must specify count")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "exponential", count = 0, delay = "1s" }
+        "#},
+        "`count` cannot be zero with exponential backoff"
+        ; "exponential backoff must have a non-zero count")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "exponential", count = 1, delay = "0s" }
+        "#},
+        "`delay` cannot be zero with exponential backoff"
+        ; "exponential backoff must have a non-zero delay")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "exponential", count = 1, delay = "1s", max-delay = "0s" }
+        "#},
+        "`max-delay` cannot be zero with exponential backoff"
+        ; "exponential backoff must have a non-zero max delay")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            retries = { backoff = "exponential", count = 1, delay = "4s", max-delay = "2s" }
+        "#},
+        "`max-delay` cannot be less than delay if jitter is false"
+        ; "max-delay greater than delay")]
+    fn parse_retries_invalid(config_contents: &str, expected_message: &str) {
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+
+        let config_err = NextestConfig::from_sources(graph.workspace().root(), &graph, None, [])
+            .expect_err("config expected to be invalid");
+
+        let message = match config_err.kind() {
+            ConfigParseErrorKind::DeserializeError(path_error) => match path_error.inner() {
+                ConfigError::Message(message) => message,
+                other => {
+                    panic!("for config error {config_err:?}, expected ConfigError::Message for inner error {other:?}");
+                }
+            },
+            other => {
+                panic!(
+                    "for config error {other:?}, expected ConfigParseErrorKind::DeserializeError"
+                );
+            }
+        };
+
+        assert!(
+            message.contains(expected_message),
+            "expected message \"{message}\" to contain \"{expected_message}\""
+        );
     }
 
     #[test]
