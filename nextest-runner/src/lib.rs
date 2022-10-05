@@ -2,11 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![warn(missing_docs)]
-// This is a temporary hack for our builds until Rust 1.64 is out (temp-process-group-hack)
-#![cfg_attr(
-    all(unix, process_group_bootstrap_hack),
-    feature(process_set_process_group)
-)]
 
 //! Core functionality for [cargo nextest](https://crates.io/crates/cargo-nextest). For a
 //! higher-level overview, see that documentation.
