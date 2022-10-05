@@ -28,12 +28,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, SystemTime},
 };
-use tokio::{
-    io::{AsyncReadExt, BufReader},
-    process::Child,
-    runtime::Runtime,
-    sync::mpsc::UnboundedSender,
-};
+use tokio::{io::AsyncReadExt, process::Child, runtime::Runtime, sync::mpsc::UnboundedSender};
 use uuid::Uuid;
 
 /// Test runner options.
@@ -498,8 +493,8 @@ impl<'a> TestRunnerInner<'a> {
 
         let child_stdout = child.stdout.take();
         let child_stderr = child.stderr.take();
-        let mut stdout = bytes::BytesMut::with_capacity(4096);
-        let mut stderr = bytes::BytesMut::with_capacity(4096);
+        let mut stdout = bytes::BytesMut::new();
+        let mut stderr = bytes::BytesMut::new();
 
         let (res, leaked) = {
             // Set up futures for reading from stdout and stderr.
