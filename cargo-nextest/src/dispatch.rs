@@ -322,7 +322,7 @@ enum Command {
             help_heading = "Archive options",
             value_name = "LEVEL",
             default_value_t = 0,
-            allow_hyphen_values = true
+            allow_negative_numbers = true
         )]
         zstd_level: i32,
         // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
@@ -627,7 +627,7 @@ pub struct TestRunnerOpts {
         value_name = "THREADS",
         conflicts_with_all = &["no-capture", "no-run"],
         env = "NEXTEST_TEST_THREADS",
-        allow_hyphen_values = true,
+        allow_negative_numbers = true,
     )]
     test_threads: Option<TestThreads>,
 
@@ -1420,9 +1420,9 @@ mod tests {
             // Test binary arguments
             // ---
             "cargo nextest run -- --a an arbitary arg",
-		// Test negative test threads
-		"cargo nextest run --jobs -3",
-		"cargo nextest run --jobs 3",
+            // Test negative test threads
+            "cargo nextest run --jobs -3",
+            "cargo nextest run --jobs 3",
         ];
 
         let invalid: &[(&'static str, ErrorKind)] = &[
