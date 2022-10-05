@@ -348,6 +348,19 @@ impl<'a> TestRunnerInner<'a> {
                             loop {
                                 let attempt = run_statuses.len() + 1;
 
+                                if canceled_ref.load(Ordering::Acquire) {
+                                    // The test run has been canceled. Don't run any further tests.
+                                    break;
+                                }
+
+                                if attempt > 1 {
+                                    _ = this_run_sender.send(InternalTestEvent::RetryStarted {
+                                        test_instance,
+                                        attempt,
+                                        total_attempts,
+                                    });
+                                }
+
                                 let run_status = self
                                     .run_test(
                                         test_instance,
@@ -371,16 +384,24 @@ impl<'a> TestRunnerInner<'a> {
                                     delay = backoff_iter
                                         .next()
                                         .expect("backoff delay must be non-empty");
-                                    let _ = this_run_sender.send(InternalTestEvent::Retry {
-                                        test_instance,
-                                        run_status: run_status.clone(),
-                                        delay_before_next_attempt: delay,
-                                    });
+
+                                    let _ = this_run_sender.send(
+                                        InternalTestEvent::AttemptFailedWillRetry {
+                                            test_instance,
+                                            run_status: run_status.clone(),
+                                            delay_before_next_attempt: delay,
+                                        },
+                                    );
                                     run_statuses.push(run_status);
+
                                     tokio::select! {
                                         _ = tokio::time::sleep(delay) => {}
                                         // Cancel the sleep if the run is cancelled.
-                                        _ = cancellation_receiver.recv() => {}
+                                        _ = cancellation_receiver.recv() => {
+                                            // Don't need to do anything special for this because
+                                            // cancellation_receiver gets a message after
+                                            // canceled_ref is set.
+                                        }
                                     }
                                 } else {
                                     // This test failed and is out of retries.
@@ -1120,14 +1141,24 @@ where
                 elapsed,
             })
             .map_err(InternalError::Error),
-            InternalEvent::Test(InternalTestEvent::Retry {
+            InternalEvent::Test(InternalTestEvent::AttemptFailedWillRetry {
                 test_instance,
                 run_status,
                 delay_before_next_attempt,
-            }) => (self.callback)(TestEvent::TestRetry {
+            }) => (self.callback)(TestEvent::TestAttemptFailedWillRetry {
                 test_instance,
                 run_status,
                 delay_before_next_attempt,
+            })
+            .map_err(InternalError::Error),
+            InternalEvent::Test(InternalTestEvent::RetryStarted {
+                test_instance,
+                attempt,
+                total_attempts,
+            }) => (self.callback)(TestEvent::TestRetryStarted {
+                test_instance,
+                attempt,
+                total_attempts,
             })
             .map_err(InternalError::Error),
             InternalEvent::Test(InternalTestEvent::Finished {
@@ -1240,10 +1271,15 @@ enum InternalTestEvent<'a> {
         test_instance: TestInstance<'a>,
         elapsed: Duration,
     },
-    Retry {
+    AttemptFailedWillRetry {
         test_instance: TestInstance<'a>,
         run_status: ExecuteStatus,
         delay_before_next_attempt: Duration,
+    },
+    RetryStarted {
+        test_instance: TestInstance<'a>,
+        attempt: usize,
+        total_attempts: usize,
     },
     Finished {
         test_instance: TestInstance<'a>,

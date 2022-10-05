@@ -683,19 +683,22 @@ impl<'a> TestReporterImpl<'a> {
                     writeln!(writer)?;
                 }
             }
-            TestEvent::TestRetry {
+            TestEvent::TestAttemptFailedWillRetry {
                 test_instance,
                 run_status,
                 delay_before_next_attempt,
             } => {
                 if self.status_level >= StatusLevel::Retry {
-                    let retry_string = format!(
-                        "{}/{} RETRY in {}",
+                    let try_status_string = format!(
+                        "TRY {} {}",
                         run_status.attempt,
-                        run_status.total_attempts,
-                        humantime::Duration::from(*delay_before_next_attempt)
+                        short_status_str(run_status.result),
                     );
-                    write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
+                    write!(
+                        writer,
+                        "{:>12} ",
+                        try_status_string.style(self.styles.retry)
+                    )?;
 
                     // Next, print the time taken.
                     self.write_duration(run_status.time_taken, writer)?;
@@ -713,8 +716,40 @@ impl<'a> TestReporterImpl<'a> {
                         self.write_stdout_stderr(test_instance, run_status, true, writer)?;
                     }
 
-                    // The final output doesn't show retries.
+                    // The final output doesn't show retries, so don't store this result in
+                    // final_outputs.
+
+                    if !delay_before_next_attempt.is_zero() {
+                        // Print a "DELAY {}/{}" line.
+                        let delay_string = format!(
+                            "DELAY {}/{}",
+                            run_status.attempt + 1,
+                            run_status.total_attempts,
+                        );
+                        write!(writer, "{:>12} ", delay_string.style(self.styles.retry))?;
+
+                        self.write_duration_by(*delay_before_next_attempt, writer)?;
+
+                        // Print the name of the test.
+                        self.write_instance(*test_instance, writer)?;
+                        writeln!(writer)?;
+                    }
                 }
+            }
+            TestEvent::TestRetryStarted {
+                test_instance,
+                attempt,
+                total_attempts,
+            } => {
+                let retry_string = format!("RETRY {attempt}/{total_attempts}");
+                write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
+
+                // Add spacing to align test instances.
+                write!(writer, "[{:<9}] ", "")?;
+
+                // Print the name of the test.
+                self.write_instance(*test_instance, writer)?;
+                writeln!(writer)?;
             }
             TestEvent::TestFinished {
                 test_instance,
@@ -1054,6 +1089,14 @@ impl<'a> TestReporterImpl<'a> {
         write!(writer, "[{:>8.3?}s] ", duration.as_secs_f64())
     }
 
+    fn write_duration_by(&self, duration: Duration, writer: &mut impl Write) -> io::Result<()> {
+        // * > means right-align.
+        // * 7 is the number of characters to pad to.
+        // * .3 means print three digits after the decimal point.
+        // TODO: better time printing mechanism than this
+        write!(writer, "by {:>7.3?}s ", duration.as_secs_f64())
+    }
+
     fn write_slow_duration(&self, duration: Duration, writer: &mut impl Write) -> io::Result<()> {
         // Inside the curly braces:
         // * > means right-align.
@@ -1288,10 +1331,10 @@ pub enum TestEvent<'a> {
         elapsed: Duration,
     },
 
-    /// A test failed and is being retried.
+    /// A test attempt failed and will be retried in the future.
     ///
     /// This event does not occur on the final run of a failing test.
-    TestRetry {
+    TestAttemptFailedWillRetry {
         /// The test instance that is being retried.
         test_instance: TestInstance<'a>,
 
@@ -1300,6 +1343,18 @@ pub enum TestEvent<'a> {
 
         /// The delay before the next attempt to run the test.
         delay_before_next_attempt: Duration,
+    },
+
+    /// A retry has started.
+    TestRetryStarted {
+        /// The test instance that is being retried.
+        test_instance: TestInstance<'a>,
+
+        /// The current attempt.
+        attempt: usize,
+
+        /// The total number of attempts.
+        total_attempts: usize,
     },
 
     /// A test finished running.

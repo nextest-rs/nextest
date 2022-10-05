@@ -64,7 +64,7 @@ impl<'cfg> MetadataJunit<'cfg> {
             TestEvent::RunStarted { .. } => {}
             TestEvent::TestStarted { .. } => {}
             TestEvent::TestSlow { .. } => {}
-            TestEvent::TestRetry { .. } => {
+            TestEvent::TestAttemptFailedWillRetry { .. } | TestEvent::TestRetryStarted { .. } => {
                 // Retries are recorded in TestFinished.
             }
             TestEvent::TestFinished {
