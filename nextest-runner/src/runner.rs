@@ -496,8 +496,8 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        let child_stdout = child.stdout.take().map(BufReader::new);
-        let child_stderr = child.stderr.take().map(BufReader::new);
+        let child_stdout = child.stdout.take();
+        let child_stderr = child.stderr.take();
         let mut stdout = bytes::BytesMut::with_capacity(4096);
         let mut stderr = bytes::BytesMut::with_capacity(4096);
 
