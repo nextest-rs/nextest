@@ -812,7 +812,7 @@ where
         Some(RetryPolicy::Exponential {
             count,
             delay,
-            jitter,
+            jitter: _,
             max_delay,
         }) => {
             // Count can't be zero.
@@ -833,12 +833,10 @@ where
                     "`max-delay` cannot be zero with exponential backoff",
                 ));
             }
-            // If jitter is false, max delay can't be less than delay. (We do let max delay be less
-            // than delay if jitter is true, in case there's some interest in using jitter that
-            // way.)
-            if !*jitter && max_delay.map_or(false, |max_delay| max_delay < *delay) {
+            // Max delay can't be less than delay.
+            if max_delay.map_or(false, |max_delay| max_delay < *delay) {
                 return Err(serde::de::Error::custom(
-                    "`max-delay` cannot be less than delay if jitter is false",
+                    "`max-delay` cannot be less than delay with exponential backoff",
                 ));
             }
         }
@@ -1262,9 +1260,6 @@ mod tests {
 
             [profile.exp-with-max-delay-and-jitter]
             retries = { backoff = "exponential", count = 6, delay = "4s", max-delay = "1m", jitter = true }
-
-            [profile.exp-with-max-delay-and-jitter-2]
-            retries = { backoff = "exponential", count = 7, delay = "4s", max-delay = "2s", jitter = true }
         "#};
 
         let workspace_dir = tempdir().unwrap();
@@ -1337,20 +1332,6 @@ mod tests {
                 max_delay: Some(Duration::from_secs(60)),
             },
             "exp-with-max-delay-and-jitter retries matches"
-        );
-
-        assert_eq!(
-            config
-                .profile("exp-with-max-delay-and-jitter-2")
-                .expect("profile exists")
-                .retries(),
-            RetryPolicy::Exponential {
-                count: 7,
-                delay: Duration::from_secs(4),
-                jitter: true,
-                max_delay: Some(Duration::from_secs(2)),
-            },
-            "exp-with-max-delay-and-jitter-2 retries matches"
         );
     }
 
@@ -1427,9 +1408,9 @@ mod tests {
     #[test_case(
         indoc!{r#"
             [profile.default]
-            retries = { backoff = "exponential", count = 1, delay = "4s", max-delay = "2s" }
+            retries = { backoff = "exponential", count = 1, delay = "4s", max-delay = "2s", jitter = true }
         "#},
-        "`max-delay` cannot be less than delay if jitter is false"
+        "`max-delay` cannot be less than delay"
         ; "max-delay greater than delay")]
     fn parse_retries_invalid(config_contents: &str, expected_message: &str) {
         let workspace_dir = tempdir().unwrap();
