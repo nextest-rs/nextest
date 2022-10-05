@@ -3,6 +3,21 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.38] - 2022-10-05
+
+### Added
+
+- Test retries now support fixed delays and exponential backoffs, with optional jitter. See [Delays and backoff](https://nexte.st/book/retries#delays-and-backoff) for more information. Thanks [Tomas Olvecky](https://github.com/tomasol) for your first contribution!
+
+### Internal improvements
+
+- Reading test data from standard output and standard error no longer buffers twice, just once. Thanks [Jiahao XU](https://github.com/NobodyXu) for your first contribution!
+
+> Note to distributors: now that Rust 1.64 is out, `process_group_bootstrap_hack` is no longer supported or required. Please remove the following environment variables if you've set them:
+>
+> - `RUSTC_BOOTSTRAP=1`
+> - `RUSTFLAGS='--cfg process_group --cfg process_group_bootstrap_hack'`
+
 ## [0.9.37] - 2022-09-30
 
 ### Added
@@ -554,6 +569,8 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.38]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.38
+[0.9.37]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.37
 [0.9.36]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.36
 [0.9.35]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.35
 [0.9.34]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.34
