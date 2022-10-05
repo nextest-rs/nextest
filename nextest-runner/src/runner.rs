@@ -28,7 +28,12 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, SystemTime},
 };
-use tokio::{io::AsyncReadExt, process::Child, runtime::Runtime, sync::mpsc::UnboundedSender};
+use tokio::{
+    io::{AsyncRead, AsyncReadExt},
+    process::Child,
+    runtime::Runtime,
+    sync::mpsc::UnboundedSender,
+};
 use uuid::Uuid;
 
 /// Test runner options.
@@ -497,16 +502,27 @@ impl<'a> TestRunnerInner<'a> {
         let mut stderr = bytes::BytesMut::new();
 
         let (res, leaked) = {
+            async fn read_all_to_bytes(
+                bytes: &mut bytes::BytesMut,
+                mut input: &mut (dyn AsyncRead + Unpin + Send),
+            ) -> std::io::Result<()> {
+                // Reborrow it as AsyncReadExt::read_buf expects
+                // Sized self.
+                let input = &mut input;
+
+                loop {
+                    bytes.reserve(4096);
+                    let bytes_read = input.read_buf(bytes).await?;
+                    if bytes_read == 0 {
+                        break Ok(());
+                    }
+                }
+            }
+
             // Set up futures for reading from stdout and stderr.
             let stdout_fut = async {
                 if let Some(mut child_stdout) = child_stdout {
-                    loop {
-                        stdout.reserve(4096);
-                        let bytes_read = child_stdout.read_buf(&mut stdout).await?;
-                        if bytes_read == 0 {
-                            break;
-                        }
-                    }
+                    read_all_to_bytes(&mut stdout, &mut child_stdout).await?;
                 }
                 Ok::<_, std::io::Error>(())
             };
@@ -515,13 +531,7 @@ impl<'a> TestRunnerInner<'a> {
 
             let stderr_fut = async {
                 if let Some(mut child_stderr) = child_stderr {
-                    loop {
-                        stderr.reserve(4096);
-                        let bytes_read = child_stderr.read_buf(&mut stderr).await?;
-                        if bytes_read == 0 {
-                            break;
-                        }
-                    }
+                    read_all_to_bytes(&mut stderr, &mut child_stderr).await?;
                 }
                 Ok::<_, std::io::Error>(())
             };
