@@ -522,18 +522,20 @@ impl<'a> TestRunnerInner<'a> {
             // Set up futures for reading from stdout and stderr.
             let stdout_fut = async {
                 if let Some(mut child_stdout) = child_stdout {
-                    read_all_to_bytes(&mut stdout, &mut child_stdout).await?;
+                    read_all_to_bytes(&mut stdout, &mut child_stdout).await
+                } else {
+                    Ok(())
                 }
-                Ok::<_, std::io::Error>(())
             };
             tokio::pin!(stdout_fut);
             let mut stdout_done = false;
 
             let stderr_fut = async {
                 if let Some(mut child_stderr) = child_stderr {
-                    read_all_to_bytes(&mut stderr, &mut child_stderr).await?;
+                    read_all_to_bytes(&mut stderr, &mut child_stderr).await
+                } else {
+                    Ok(())
                 }
-                Ok::<_, std::io::Error>(())
             };
             tokio::pin!(stderr_fut);
             let mut stderr_done = false;
