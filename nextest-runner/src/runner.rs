@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestRunner`].
 
 use crate::{
-    config::{Backoff, NextestProfile, ProfileOverrides, RetryPolicy, TestThreads},
+    config::{NextestProfile, ProfileOverrides, RetryPolicy, TestThreads},
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
     helpers::convert_build_platform,
     list::{TestInstance, TestList},
@@ -22,7 +22,6 @@ use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
-    cmp::min,
     convert::Infallible,
     marker::PhantomData,
     num::NonZeroUsize,
@@ -40,70 +39,70 @@ use uuid::Uuid;
 
 #[derive(Debug)]
 struct BackoffIter {
-    backoff: Backoff,
+    policy: RetryPolicy,
     current_factor: f64,
-    jitter: bool,
-    delay: Duration,
-    max_delay: Option<Duration>,
-    max_retries: usize,
+    remaining_attempts: usize,
 }
 
 impl BackoffIter {
-    fn new(
-        RetryPolicy {
-            backoff,
-            count,
-            delay,
-            jitter,
-            max_delay,
-        }: RetryPolicy,
-    ) -> Self {
+    const BACKOFF_EXPONENT: f64 = 2.;
+
+    fn new(policy: RetryPolicy) -> Self {
+        let remaining_attempts = policy.count();
         Self {
-            backoff,
-            max_retries: count,
-            delay,
-            jitter,
-            max_delay,
+            policy,
             current_factor: 1.,
+            remaining_attempts,
         }
     }
 
-    fn jitter(duration: Duration) -> Duration {
+    fn next_delay_and_jitter(&mut self) -> (Duration, bool) {
+        match self.policy {
+            RetryPolicy::Fixed { delay, jitter, .. } => (delay, jitter),
+            RetryPolicy::Exponential {
+                delay,
+                jitter,
+                max_delay,
+                ..
+            } => {
+                let factor = self.current_factor;
+                let exp_delay = delay.mul_f64(factor);
+
+                // Stop multiplying the exponential factor if delay is greater than max_delay.
+                if let Some(max_delay) = max_delay {
+                    if exp_delay > max_delay {
+                        return (max_delay, jitter);
+                    }
+                }
+
+                let next_factor = self.current_factor * Self::BACKOFF_EXPONENT;
+                self.current_factor = next_factor;
+
+                (exp_delay, jitter)
+            }
+        }
+    }
+
+    fn apply_jitter(duration: Duration) -> Duration {
         let jitter: f64 = thread_rng().sample(OpenClosed01);
-        let secs = (duration.as_secs() as f64) * jitter;
-        let nanos = (duration.subsec_nanos() as f64) * jitter;
-        let millis = (secs * 1_000_f64) + (nanos / 1_000_000_f64);
-        Duration::from_millis(millis as u64)
+        // Apply jitter in the range (0.5, 1].
+        duration.mul_f64(0.5 + jitter / 2.)
     }
 }
 
-const BACKOFF_EXPONENT: f64 = 2.;
 impl Iterator for BackoffIter {
     type Item = Duration;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.max_retries > 0 {
-            let factor = match self.backoff {
-                Backoff::Fixed => self.current_factor,
-                Backoff::Exponential => {
-                    let factor = self.current_factor;
-                    let next_factor = self.current_factor * BACKOFF_EXPONENT;
-                    self.current_factor = next_factor;
-                    factor
-                }
-            };
-
-            let mut delay = self.delay.mul_f64(factor);
-            if self.jitter {
-                delay = Self::jitter(delay);
+        if self.remaining_attempts > 0 {
+            let (mut delay, jitter) = self.next_delay_and_jitter();
+            if jitter {
+                delay = Self::apply_jitter(delay);
             }
-            if let Some(max_delay) = self.max_delay {
-                delay = min(delay, max_delay);
-            }
-            self.max_retries -= 1;
-
-            return Some(delay);
+            self.remaining_attempts -= 1;
+            Some(delay)
+        } else {
+            None
         }
-        None
     }
 }
 
@@ -321,12 +320,13 @@ impl<'a> TestRunnerInner<'a> {
                                 test_name: test_instance.name,
                             };
                             let overrides = self.profile.overrides_for(&query);
-                            let retries = match (self.ignore_retry_overrides, overrides.retries()) {
-                                (true, _) | (false, None) => self.global_retries,
-                                (false, Some(retries)) => retries,
-                            };
-                            let total_attempts = retries.count + 1;
-                            let mut backoff_iter = BackoffIter::new(retries);
+                            let retry_policy =
+                                match (self.ignore_retry_overrides, overrides.retries()) {
+                                    (true, _) | (false, None) => self.global_retries,
+                                    (false, Some(retries)) => retries,
+                                };
+                            let total_attempts = retry_policy.count() + 1;
+                            let mut backoff_iter = BackoffIter::new(retry_policy);
 
                             if let FilterMatch::Mismatch { reason } =
                                 test_instance.test_info.filter_match
