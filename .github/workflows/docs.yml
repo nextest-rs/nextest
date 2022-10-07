@@ -48,3 +48,4 @@ jobs:
         with:
           branch: gh-pages
           folder: target/gh-pages
+          single-commit: true
