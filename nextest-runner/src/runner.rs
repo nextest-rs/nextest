@@ -17,7 +17,10 @@ use crate::{
 };
 use async_scoped::TokioScope;
 use bytes::Bytes;
-use futures::{future::FusedFuture, prelude::*};
+use futures::{
+    future::{try_join, FusedFuture},
+    prelude::*,
+};
 use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
@@ -633,9 +636,7 @@ impl<'a> TestRunnerInner<'a> {
                 } else {
                     Ok(())
                 }
-            }
-            .fuse();
-            tokio::pin!(stdout_fut);
+            };
 
             let stderr_fut = async {
                 if let Some(mut child_stderr) = child_stderr {
@@ -643,16 +644,14 @@ impl<'a> TestRunnerInner<'a> {
                 } else {
                     Ok(())
                 }
-            }
-            .fuse();
-            tokio::pin!(stderr_fut);
+            };
+
+            let collect_output_fut = try_join(stdout_fut, stderr_fut).fuse();
+            tokio::pin!(collect_output_fut);
 
             let res = loop {
                 tokio::select! {
-                    res = &mut stdout_fut => {
-                        res?;
-                    }
-                    res = &mut stderr_fut => {
+                    res = &mut collect_output_fut => {
                         res?;
                     }
                     res = child.wait() => {
@@ -702,13 +701,10 @@ impl<'a> TestRunnerInner<'a> {
                 let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
-                    res = &mut stdout_fut => {
+                    res = &mut collect_output_fut => {
                         res?;
                     }
-                    res = &mut stderr_fut => {
-                        res?;
-                    }
-                    () = sleep, if !(stdout_fut.is_terminated() && stderr_fut.is_terminated()) => {
+                    () = sleep, if !collect_output_fut.is_terminated() => {
                         // stdout and/or stderr haven't completed yet. In this case, break the loop
                         // and mark this as leaked.
                         break true;
