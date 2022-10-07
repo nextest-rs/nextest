@@ -708,7 +708,7 @@ impl<'a> TestRunnerInner<'a> {
                         false
                     }
                     () = sleep => {
-                        // stdout and/or stderr haven't completed yet. In this case, break the loop
+                        // stdout and/or stderr haven't completed yet. In this case,
                         // and mark this as leaked.
                         true
                     }
