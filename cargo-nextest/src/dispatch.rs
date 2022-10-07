@@ -11,7 +11,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
-use nextest_filtering::FilteringExpr;
+use nextest_filtering::BoxedFilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
@@ -86,7 +86,7 @@ impl AppOpts {
             build_filter
                 .filter_expr
                 .iter()
-                .any(|expr| FilteringExpr::needs_deps(expr))
+                .any(|expr| BoxedFilteringExpr::needs_deps(expr))
         }
 
         match self.command {
@@ -471,7 +471,7 @@ impl TestBuildFilter {
 
     fn make_test_filter_builder(
         &self,
-        filter_exprs: Vec<FilteringExpr>,
+        filter_exprs: Vec<BoxedFilteringExpr>,
     ) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
@@ -1016,12 +1016,12 @@ impl App {
         Ok(Self { base, build_filter })
     }
 
-    fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
+    fn build_filtering_expressions(&self) -> Result<Vec<BoxedFilteringExpr>> {
         let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
             .filter_expr
             .iter()
-            .map(|input| FilteringExpr::parse(input, self.base.graph()))
+            .map(|input| BoxedFilteringExpr::parse(input, self.base.graph()))
             .partition_result();
 
         if !all_errors.is_empty() {

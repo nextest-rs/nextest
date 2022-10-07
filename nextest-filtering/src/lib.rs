@@ -9,4 +9,6 @@ pub mod errors;
 mod expression;
 mod parsing;
 
-pub use expression::{BinaryQuery, FilteringExpr, FilteringSet, NameMatcher, TestQuery};
+pub use expression::{
+    BinaryQuery, BoxedFilteringExpr, FilteringExpr, FilteringSet, NameMatcher, TestQuery,
+};

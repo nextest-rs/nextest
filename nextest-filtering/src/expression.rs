@@ -3,17 +3,14 @@
 
 use crate::{
     errors::{FilterExpressionParseErrors, ParseSingleError, State},
-    parsing::{parse, Expr, ParsedExpr, SetDef, Span},
+    parsing::{parse, ParsedExpr, Span},
 };
 use guppy::{
     graph::{cargo::BuildPlatform, PackageGraph},
     PackageId,
 };
 use miette::SourceSpan;
-use recursion::{
-    map_layer::{MapLayer, Project},
-    Collapse,
-};
+use recursion::{expand_and_collapse, map_layer::MapLayer};
 use std::{cell::RefCell, collections::HashSet};
 
 /// Matcher for name
@@ -91,15 +88,69 @@ pub struct TestQuery<'a> {
 ///
 /// Used to filter tests to run.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FilteringExpr {
+pub enum FilteringExpr<Set = FilteringSet, A = BoxedFilteringExpr> {
     /// Accepts every test not in the given expression
-    Not(Box<FilteringExpr>),
+    Not(A),
     /// Accepts every test in either given expression
-    Union(Box<FilteringExpr>, Box<FilteringExpr>),
+    Union(A, A),
     /// Accepts every test in both given expressions
-    Intersection(Box<FilteringExpr>, Box<FilteringExpr>),
+    Intersection(A, A),
     /// Accepts every test in a set
-    Set(FilteringSet),
+    Set(Set),
+}
+
+impl<Set, A> FilteringExpr<Set, A> {
+    pub(crate) fn map_set<NewSet, F: FnMut(Set) -> NewSet>(
+        self,
+        mut f: F,
+    ) -> FilteringExpr<NewSet, A> {
+        use FilteringExpr::*;
+        match self {
+            Not(a) => Not(a),
+            Union(a, b) => Union(a, b),
+            Intersection(a, b) => Intersection(a, b),
+            Set(s) => Set(f(s)),
+        }
+    }
+}
+
+/// Boxed Filtering Expression
+///
+/// Used to filter tests to run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoxedFilteringExpr(pub Box<FilteringExpr<FilteringSet, BoxedFilteringExpr>>);
+
+impl BoxedFilteringExpr {
+    pub(crate) fn new(x: FilteringExpr<FilteringSet, BoxedFilteringExpr>) -> Self {
+        Self(Box::new(x))
+    }
+
+    fn as_ref(&self) -> FilteringExpr<&FilteringSet, &Self> {
+        use FilteringExpr::*;
+        match self.0.as_ref() {
+            Not(a) => Not(a),
+            Union(a, b) => Union(a, b),
+            Intersection(a, b) => Intersection(a, b),
+            Set(f) => Set(f),
+        }
+    }
+}
+
+impl<A, Set, B> MapLayer<B> for FilteringExpr<Set, A> {
+    type Unwrapped = A;
+
+    type To = FilteringExpr<Set, B>;
+
+    #[inline(always)]
+    fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, mut f: F) -> Self::To {
+        use FilteringExpr::*;
+        match self {
+            Not(a) => Not(f(a)),
+            Union(a, b) => Union(f(a), f(b)),
+            Intersection(a, b) => Intersection(f(a), f(b)),
+            Set(f) => Set(f),
+        }
+    }
 }
 
 impl NameMatcher {
@@ -138,12 +189,9 @@ impl FilteringSet {
     }
 }
 
-impl FilteringExpr {
+impl BoxedFilteringExpr {
     /// Parse a filtering expression
-    pub fn parse(
-        input: &str,
-        graph: &PackageGraph,
-    ) -> Result<FilteringExpr, FilterExpressionParseErrors> {
+    pub fn parse(input: &str, graph: &PackageGraph) -> Result<Self, FilterExpressionParseErrors> {
         let errors = RefCell::new(Vec::new());
         match parse(Span::new_extra(input, State::new(&errors))) {
             Ok(parsed_expr) => {
@@ -187,27 +235,37 @@ impl FilteringExpr {
     /// * `Some(false)` if this binary is definitely not accepted.
     /// * `None` if this binary might or might not be accepted.
     pub fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
-        use ExprLayer::*;
-        Wrapped(self).collapse_layers(|layer: ExprLayer<&FilteringSet, Option<bool>>| {
-            match layer {
-                Set(set) => set.matches_binary(query),
-                Not(a) => a.logic_not(),
-                // TODO: or_else/and_then?
-                Union(a, b) => a.logic_or(b),
-                Intersection(a, b) => a.logic_and(b),
-            }
-        })
+        expand_and_collapse(
+            self,
+            BoxedFilteringExpr::as_ref,
+            |layer: FilteringExpr<&FilteringSet, Option<bool>>| {
+                use FilteringExpr::*;
+                match layer {
+                    Set(set) => set.matches_binary(query),
+                    Not(a) => a.logic_not(),
+                    // TODO: or_else/and_then?
+                    Union(a, b) => a.logic_or(b),
+                    Intersection(a, b) => a.logic_and(b),
+                }
+            },
+        )
     }
 
     /// Returns true if the given test is accepted by this filter expression.
     pub fn matches_test(&self, query: &TestQuery<'_>) -> bool {
-        use ExprLayer::*;
-        Wrapped(self).collapse_layers(|layer: ExprLayer<&FilteringSet, bool>| match layer {
-            Set(set) => set.matches_test(query),
-            Not(a) => !a,
-            Union(a, b) => a || b,
-            Intersection(a, b) => a && b,
-        })
+        expand_and_collapse(
+            self,
+            BoxedFilteringExpr::as_ref,
+            |layer: FilteringExpr<&FilteringSet, bool>| {
+                use FilteringExpr::*;
+                match layer {
+                    Set(set) => set.matches_test(query),
+                    Not(a) => !a,
+                    Union(a, b) => a || b,
+                    Intersection(a, b) => a && b,
+                }
+            },
+        )
     }
 
     /// Returns true if the given expression needs dependencies information to work
@@ -308,64 +366,5 @@ impl Logic for Option<bool> {
     #[inline]
     fn logic_not(self) -> Self {
         self.map(|v| !v)
-    }
-}
-
-pub(crate) enum ExprLayer<Set, A> {
-    Not(A),
-    Union(A, A),
-    Intersection(A, A),
-    Set(Set),
-}
-
-impl<A, Set, B> MapLayer<B> for ExprLayer<Set, A> {
-    type Unwrapped = A;
-
-    type To = ExprLayer<Set, B>;
-
-    #[inline(always)]
-    fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, mut f: F) -> Self::To {
-        use ExprLayer::*;
-        match self {
-            Not(a) => Not(f(a)),
-            Union(a, b) => Union(f(a), f(b)),
-            Intersection(a, b) => Intersection(f(a), f(b)),
-            Set(f) => Set(f),
-        }
-    }
-}
-
-// Wrapped struct to prevent trait impl leakages.
-pub(crate) struct Wrapped<T>(pub(crate) T);
-
-impl<'a> Project for Wrapped<&'a FilteringExpr> {
-    type To = ExprLayer<&'a FilteringSet, Wrapped<&'a FilteringExpr>>;
-
-    fn project(self) -> Self::To {
-        match self.0 {
-            FilteringExpr::Not(a) => ExprLayer::Not(Wrapped(a.as_ref())),
-            FilteringExpr::Union(a, b) => {
-                ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
-            }
-            FilteringExpr::Intersection(a, b) => {
-                ExprLayer::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
-            }
-            FilteringExpr::Set(f) => ExprLayer::Set(f),
-        }
-    }
-}
-
-impl<'a> Project for Wrapped<&'a Expr> {
-    type To = ExprLayer<&'a SetDef, Wrapped<&'a Expr>>;
-
-    fn project(self) -> Self::To {
-        match self.0 {
-            Expr::Not(a) => ExprLayer::Not(Wrapped(a.as_ref())),
-            Expr::Union(a, b) => ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref())),
-            Expr::Intersection(a, b) => {
-                ExprLayer::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
-            }
-            Expr::Set(f) => ExprLayer::Set(f),
-        }
     }
 }

@@ -28,7 +28,7 @@ use nom_tracable::tracable_parser;
 
 mod unicode_string;
 
-use crate::{errors::*, NameMatcher};
+use crate::{errors::*, FilteringExpr, NameMatcher};
 
 pub(crate) type Span<'a> = nom_locate::LocatedSpan<&'a str, State<'a>>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
@@ -79,6 +79,15 @@ impl Expr {
 
     fn difference(expr_1: Self, expr_2: Self) -> Self {
         Expr::Intersection(expr_1.boxed(), expr_2.not().boxed())
+    }
+
+    pub(crate) fn as_filtering_expr_layer(&self) -> FilteringExpr<&SetDef, &Self> {
+        match self {
+            Expr::Not(a) => FilteringExpr::Not(a.as_ref()),
+            Expr::Union(a, b) => FilteringExpr::Union(a.as_ref(), b.as_ref()),
+            Expr::Intersection(a, b) => FilteringExpr::Intersection(a.as_ref(), b.as_ref()),
+            Expr::Set(s) => FilteringExpr::Set(s),
+        }
     }
 
     #[cfg(test)]

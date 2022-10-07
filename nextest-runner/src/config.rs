@@ -13,7 +13,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
 use guppy::graph::PackageGraph;
-use nextest_filtering::{FilteringExpr, TestQuery};
+use nextest_filtering::{TestQuery, BoxedFilteringExpr};
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{
     cmp::Ordering, collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration,
@@ -952,7 +952,7 @@ impl NextestOverridesImpl {
 
 #[derive(Clone, Debug)]
 struct ProfileOverrideImpl {
-    expr: FilteringExpr,
+    expr: BoxedFilteringExpr,
     data: ProfileOverrideData,
 }
 
@@ -963,7 +963,7 @@ impl ProfileOverrideImpl {
         source: &ProfileOverrideSource,
         errors: &mut Vec<ConfigParseOverrideError>,
     ) -> Option<Self> {
-        match FilteringExpr::parse(&source.filter, graph) {
+        match BoxedFilteringExpr::parse(&source.filter, graph) {
             Ok(expr) => Some(Self {
                 expr,
                 data: source.data.clone(),

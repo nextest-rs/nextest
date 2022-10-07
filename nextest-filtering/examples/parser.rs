@@ -53,7 +53,7 @@ fn main() {
     let args = Args::parse();
 
     let graph = load_graph(args.cargo_metadata);
-    match nextest_filtering::FilteringExpr::parse(&args.expr, &graph) {
+    match nextest_filtering::BoxedFilteringExpr::parse(&args.expr, &graph) {
         Ok(expr) => println!("{:?}", expr),
         Err(FilterExpressionParseErrors { input, errors, .. }) => {
             for error in errors {

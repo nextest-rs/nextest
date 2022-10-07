@@ -11,13 +11,13 @@ use guppy::{
     PackageId,
 };
 use miette::SourceSpan;
-use recursion::Collapse;
+use recursion::expand_and_collapse;
 use std::collections::HashSet;
 
 pub(crate) fn compile(
     expr: &Expr,
     graph: &PackageGraph,
-) -> Result<FilteringExpr, Vec<ParseSingleError>> {
+) -> Result<BoxedFilteringExpr, Vec<ParseSingleError>> {
     let in_workspace_packages: Vec<_> = graph
         .resolve_workspace()
         .packages(guppy::graph::DependencyDirection::Forward)
@@ -133,14 +133,8 @@ fn compile_expr(
     packages: &[PackageMetadata],
     cache: &mut DependsCache,
     errors: &mut Vec<ParseSingleError>,
-) -> FilteringExpr {
-    use crate::expression::ExprLayer::*;
-    Wrapped(expr).collapse_layers(|layer: ExprLayer<&SetDef, FilteringExpr>| match layer {
-        Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache, errors)),
-        Not(expr) => FilteringExpr::Not(Box::new(expr)),
-        Union(expr_1, expr_2) => FilteringExpr::Union(Box::new(expr_1), Box::new(expr_2)),
-        Intersection(expr_1, expr_2) => {
-            FilteringExpr::Intersection(Box::new(expr_1), Box::new(expr_2))
-        }
+) -> BoxedFilteringExpr {
+    expand_and_collapse(expr, Expr::as_filtering_expr_layer, |layer| {
+        BoxedFilteringExpr::new(layer.map_set(|set| compile_set_def(set, packages, cache, errors)))
     })
 }
