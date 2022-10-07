@@ -700,18 +700,14 @@ impl<'a> TestRunnerInner<'a> {
             let leaked = if collect_output_fut.is_terminated() {
                 false
             } else {
-                let sleep = tokio::time::sleep(leak_timeout);
-
-                tokio::select! {
-                    res = &mut collect_output_fut => {
+                match tokio::time::timeout(leak_timeout, collect_output_fut).await {
+                    Ok(res) => {
                         res?;
                         false
                     }
-                    () = sleep => {
-                        // stdout and/or stderr haven't completed yet. In this case,
-                        // and mark this as leaked.
-                        true
-                    }
+                    // stdout and/or stderr haven't completed yet. In this case,
+                    // and mark this as leaked.
+                    Err(_) => true,
                 }
             };
 
