@@ -17,7 +17,7 @@ use crate::{
 };
 use async_scoped::TokioScope;
 use bytes::Bytes;
-use futures::prelude::*;
+use futures::{future::try_join, prelude::*};
 use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
@@ -634,8 +634,6 @@ impl<'a> TestRunnerInner<'a> {
                     Ok(())
                 }
             };
-            tokio::pin!(stdout_fut);
-            let mut stdout_done = false;
 
             let stderr_fut = async {
                 if let Some(mut child_stderr) = child_stderr {
@@ -644,17 +642,15 @@ impl<'a> TestRunnerInner<'a> {
                     Ok(())
                 }
             };
-            tokio::pin!(stderr_fut);
-            let mut stderr_done = false;
+
+            let collect_output_fut = try_join(stdout_fut, stderr_fut);
+            tokio::pin!(collect_output_fut);
+            let mut collect_output_done = false;
 
             let res = loop {
                 tokio::select! {
-                    res = &mut stdout_fut, if !stdout_done => {
-                        stdout_done = true;
-                        res?;
-                    }
-                    res = &mut stderr_fut, if !stderr_done => {
-                        stderr_done = true;
+                    res = &mut collect_output_fut, if !collect_output_done => {
+                        collect_output_done = true;
                         res?;
                     }
                     res = child.wait() => {
@@ -704,15 +700,11 @@ impl<'a> TestRunnerInner<'a> {
                 let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
-                    res = &mut stdout_fut, if !stdout_done => {
-                        stdout_done = true;
+                    res = &mut collect_output_fut, if !collect_output_done => {
+                        collect_output_done = true;
                         res?;
                     }
-                    res = &mut stderr_fut, if !stderr_done => {
-                        stderr_done = true;
-                        res?;
-                    }
-                    () = sleep, if !(stdout_done && stderr_done) => {
+                    () = sleep, if !collect_output_done => {
                         // stdout and/or stderr haven't completed yet. In this case, break the loop
                         // and mark this as leaked.
                         break true;
