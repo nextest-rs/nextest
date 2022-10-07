@@ -697,20 +697,20 @@ impl<'a> TestRunnerInner<'a> {
             // Once the process is done executing, wait up to leak_timeout for the pipes to shut down.
             // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
             // didn't shut down properly. Now, this detects those cases and marks them as leaked.
-            let leaked = loop {
+            let leaked = if collect_output_fut.is_terminated() {
+                false
+            } else {
                 let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
                     res = &mut collect_output_fut => {
                         res?;
+                        false
                     }
-                    () = sleep, if !collect_output_fut.is_terminated() => {
+                    () = sleep => {
                         // stdout and/or stderr haven't completed yet. In this case, break the loop
                         // and mark this as leaked.
-                        break true;
-                    }
-                    else => {
-                        break false;
+                        true
                     }
                 }
             };
