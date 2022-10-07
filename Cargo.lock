@@ -72,7 +72,7 @@ checksum = "76464446b8bc32758d7e88ee1a804d9914cd9b1cb264c029899680b0be29826f"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -315,7 +315,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -400,7 +400,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdffe87e1d521a10f9696f833fe502293ea446d7f256c06128293a4119bdf4cb"
 dependencies = [
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -595,7 +595,7 @@ checksum = "42cd15d1c7456c04dbdf7e88bcd69760d74f3a798d6444e16974b505b0e62f17"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -920,9 +920,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c8af84674fe1f223a982c933a0ee1086ac4d4052aa0fb8060c12c6ad838e754"
+checksum = "4217ad341ebadf8d8e724e264f13e593e0648f5b3e94b3896a5df283be015ecc"
 
 [[package]]
 name = "jobserver"
@@ -1016,7 +1016,7 @@ checksum = "4f2485ed7d1fe80704928e3eb86387439609bd0c6bb96db8208daa364cfd1e09"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -1191,7 +1191,7 @@ dependencies = [
  "quote 1.0.21",
  "serde",
  "serde_json",
- "syn 1.0.101",
+ "syn 1.0.102",
  "tokio",
  "uuid",
  "winapi",
@@ -1237,7 +1237,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a6ae7ea2ecde0ee81e0eb45ce5415f2d3b0ef3c30688b0e85d127d43e0f6913"
 dependencies = [
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -1388,7 +1388,7 @@ checksum = "069bdb1e05adc7a8990dce9cc75370895fbe4e3d58b9b73bf1aee56359344a55"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -1430,7 +1430,7 @@ dependencies = [
  "proc-macro-error-attr",
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
  "version_check",
 ]
 
@@ -1800,7 +1800,7 @@ checksum = "81fa1584d3d1bcacd84c277a0dfe21f5b0f6accf4a23d04d4c6d61f1af522b4c"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -1979,9 +1979,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.101"
+version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e90cde112c4b9690b8cbe810cba9ddd8bc1d7472e2cae317b69e9438c1cba7d2"
+checksum = "3fcd952facd492f9be3ef0d0b7032a6e442ee9b361d4acc2b1d0c4aaa5f613a1"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
@@ -2068,7 +2068,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -2099,7 +2099,7 @@ checksum = "982d17546b47146b28f7c22e3d08465f6b8903d0ea13c1660d9d84a6e7adcdbb"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -2156,7 +2156,7 @@ checksum = "9724f9a975fb987ef7a3cd9be0350edcbe130698af5b8f7a631e23d42d052484"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -2224,9 +2224,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.29"
+version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aeea4303076558a00714b823f9ad67d58a3bbda1df83d8827d21193156e22f7"
+checksum = "24eb03ba0eab1fd845050058ce5e616558e8f8d8fca633e6b163fe25c797213a"
 dependencies = [
  "once_cell",
 ]
@@ -2407,7 +2407,7 @@ dependencies = [
  "once_cell",
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
  "wasm-bindgen-shared",
 ]
 
@@ -2441,7 +2441,7 @@ checksum = "07bc0c051dc5f23e307b13285f9d75df86bfdf816c5721e573dec1f9b8aa193c"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.101",
+ "syn 1.0.102",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
