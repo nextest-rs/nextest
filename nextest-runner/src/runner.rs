@@ -670,24 +670,28 @@ impl<'a> TestRunnerInner<'a> {
                             false
                         };
 
-                        let _ = run_sender.send(InternalTestEvent::Slow {
-                            test_instance: test,
-                            retry_data,
-                            // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
-                            // slightly longer.
-                            elapsed: timeout_hit * slow_timeout.period,
-                            will_terminate,
-                        });
+                        if !slow_timeout.grace_period.is_zero() {
+                            let _ = run_sender.send(InternalTestEvent::Slow {
+                                test_instance: test,
+                                retry_data,
+                                // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
+                                // slightly longer.
+                                elapsed: timeout_hit * slow_timeout.period,
+                                will_terminate,
+                            });
+                        }
 
-                        if will_terminate
-                            {
+                        if will_terminate {
                                 // attempt to terminate the slow test.
                                 // as there is a race between shutting down a slow test and its own completion
                                 // we silently ignore errors to avoid printing false warnings.
-                                imp::terminate_child(&mut child, TerminateMode::Timeout, forward_receiver, job.as_ref()).await;
+                                imp::terminate_child(&mut child, TerminateMode::Timeout(slow_timeout.grace_period), forward_receiver, job.as_ref()).await;
                                 status = Some(ExecutionResult::Timeout);
+                                if slow_timeout.grace_period.is_zero() {
+                                    break child.wait().await;
+                                }
                                 // Don't break here to give the wait task a chance to finish.
-                            }
+                        }
 
                     }
                     recv = forward_receiver.recv() => {
@@ -1471,7 +1475,7 @@ mod imp {
     ) {
         // Ignore signal events since Windows propagates them to child processes (this may change if
         // we start assigning processes to groups on Windows).
-        if mode != TerminateMode::Timeout {
+        if !matches!(mode, TerminateMode::Timeout(_)) {
             return;
         }
         if let Some(job) = job {
@@ -1552,8 +1556,16 @@ mod imp {
     ) {
         if let Some(pid) = child.id() {
             let pid = pid as i32;
+            let mut grace_period = Duration::from_secs(10);
             let term_signal = match mode {
-                TerminateMode::Timeout => SIGTERM,
+                TerminateMode::Timeout(grace) => {
+                    grace_period = grace;
+                    if grace.is_zero() {
+                        SIGKILL
+                    } else {
+                        SIGTERM
+                    }
+                }
                 TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Hangup)) => SIGHUP,
                 TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Term)) => SIGTERM,
                 TerminateMode::Signal(SignalForwardEvent::Once(SignalEvent::Interrupt)) => SIGINT,
@@ -1571,7 +1583,7 @@ mod imp {
             }
 
             // give the process a grace period of 10s
-            let sleep = tokio::time::sleep(Duration::from_secs(10));
+            let sleep = tokio::time::sleep(grace_period);
             tokio::select! {
                 biased;
 
@@ -1606,7 +1618,7 @@ mod imp {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TerminateMode {
-    Timeout,
+    Timeout(Duration),
     Signal(SignalForwardEvent),
 }
 
