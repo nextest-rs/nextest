@@ -8,6 +8,7 @@
 
 use crate::errors::{CargoConfigError, InvalidCargoCliConfigReason, TargetTripleError};
 use camino::{Utf8Path, Utf8PathBuf};
+use nextest_metadata::{CargoEnvironmentVariable, EnvironmentMap};
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::{collections::BTreeMap, fmt};
@@ -241,6 +242,50 @@ impl CargoConfigs {
         &self.cwd
     }
 
+    /// The environment variables to set when running Cargo commands.
+    pub fn env(&self) -> Result<EnvironmentMap, CargoConfigError> {
+        let env = self
+            .discovered_configs()?
+            .filter_map(|config| match config {
+                DiscoveredConfig::CliOption { config, source }
+                | DiscoveredConfig::File { config, source } => Some((config, source)),
+                DiscoveredConfig::Env => None,
+            })
+            .flat_map(|(config, source)| {
+                let source = match source {
+                    CargoConfigSource::CliOption => None,
+                    CargoConfigSource::File(path) => Some(path.clone()),
+                };
+                config
+                    .env
+                    .clone()
+                    .into_iter()
+                    .map(move |(name, value)| (source.clone(), name, value))
+            })
+            .map(|(source, name, value)| match value {
+                CargoConfigEnv::Value(value) => CargoEnvironmentVariable {
+                    source,
+                    name,
+                    value,
+                    force: false,
+                    relative: false,
+                },
+                CargoConfigEnv::Fields {
+                    value,
+                    force,
+                    relative,
+                } => CargoEnvironmentVariable {
+                    source,
+                    name,
+                    value,
+                    force,
+                    relative,
+                },
+            })
+            .collect();
+        Ok(env)
+    }
+
     pub(crate) fn discovered_configs(
         &self,
     ) -> Result<
@@ -396,6 +441,11 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
             error,
         }
     })?;
+
+    // Note: environment variables parsed from CLI configs can't be relative. However, this isn't
+    // necessary to check because the only way to specify that is as an inline table, which is
+    // rejected above.
+
     Ok(cargo_config)
 }
 
@@ -493,11 +543,51 @@ fn load_file(
     Ok((CargoConfigSource::File(path), config))
 }
 
+/// Returns the directory against which relative paths are computed for the given config path.
+pub(crate) fn relative_dir_for(config_path: &Utf8Path) -> Option<&Utf8Path> {
+    // Need to call parent() twice here, since in Cargo land relative means relative to the *parent*
+    // of the directory the config is in. First parent() gets the directory the config is in, and
+    // the second one gets the parent of that.
+    let relative_dir = config_path.parent()?.parent()?;
+
+    // On Windows, remove the UNC prefix since Cargo does so as well.
+    Some(strip_unc_prefix(relative_dir))
+}
+
+#[cfg(windows)]
+#[inline]
+fn strip_unc_prefix(path: &Utf8Path) -> &Utf8Path {
+    dunce::simplified(path.as_std_path())
+        .try_into()
+        .expect("stripping verbatim components from a UTF-8 path should result in a UTF-8 path")
+}
+
+#[cfg(not(windows))]
+#[inline]
+fn strip_unc_prefix(path: &Utf8Path) -> &Utf8Path {
+    path
+}
+
+#[derive(Clone, Deserialize, Debug)]
+#[serde(untagged)]
+pub(crate) enum CargoConfigEnv {
+    Value(String),
+    Fields {
+        value: String,
+        #[serde(default)]
+        force: bool,
+        #[serde(default)]
+        relative: bool,
+    },
+}
+
 #[derive(Deserialize, Debug)]
 pub(crate) struct CargoConfig {
     #[serde(default)]
     pub(crate) build: CargoConfigBuild,
     pub(crate) target: Option<BTreeMap<String, CargoConfigRunner>>,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, CargoConfigEnv>,
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -745,6 +835,96 @@ mod tests {
         assert_eq!(find_target_triple(&[], None, &dir_path, &dir_path), None);
     }
 
+    #[test]
+    fn test_env_var_precedence() {
+        let dir = setup_temp_dir().unwrap();
+        let dir_path = Utf8PathBuf::try_from(dir.path().canonicalize().unwrap()).unwrap();
+        let dir_foo_path = dir_path.join("foo");
+        let dir_foo_bar_path = dir_foo_path.join("bar");
+
+        let configs =
+            CargoConfigs::new_with_isolation(&[] as &[&str], &dir_foo_bar_path, &dir_path).unwrap();
+        let env = configs.env().unwrap();
+        let env_values: Vec<&str> = env.iter().map(|elem| elem.value.as_str()).collect();
+        assert_eq!(env_values, vec!["foo-bar-config", "foo-config"]);
+
+        let configs = CargoConfigs::new_with_isolation(
+            &["env.SOME_VAR=\"cli-config\""],
+            &dir_foo_bar_path,
+            &dir_path,
+        )
+        .unwrap();
+        let env = configs.env().unwrap();
+        let env_values: Vec<&str> = env.iter().map(|elem| elem.value.as_str()).collect();
+        assert_eq!(
+            env_values,
+            vec!["cli-config", "foo-bar-config", "foo-config"]
+        );
+    }
+
+    #[test]
+    fn test_cli_env_var_relative() {
+        let dir = setup_temp_dir().unwrap();
+        let dir_path = Utf8PathBuf::try_from(dir.path().canonicalize().unwrap()).unwrap();
+        let dir_foo_path = dir_path.join("foo");
+        let dir_foo_bar_path = dir_foo_path.join("bar");
+
+        CargoConfigs::new_with_isolation(
+            &["env.SOME_VAR={value = \"path\", relative = true }"],
+            &dir_foo_bar_path,
+            &dir_path,
+        )
+        .expect_err("CLI configs can't be relative");
+
+        CargoConfigs::new_with_isolation(
+            &["env.SOME_VAR.value=\"path\"", "env.SOME_VAR.relative=true"],
+            &dir_foo_bar_path,
+            &dir_path,
+        )
+        .expect_err("CLI configs can't be relative");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_relative_dir_for_unix() {
+        assert_eq!(
+            relative_dir_for("/foo/bar/.cargo/config.toml".as_ref()),
+            Some("/foo/bar".as_ref()),
+        );
+        assert_eq!(
+            relative_dir_for("/foo/bar/.cargo/config".as_ref()),
+            Some("/foo/bar".as_ref()),
+        );
+        assert_eq!(
+            relative_dir_for("/foo/bar/config".as_ref()),
+            Some("/foo".as_ref())
+        );
+        assert_eq!(relative_dir_for("/foo/config".as_ref()), Some("/".as_ref()));
+        assert_eq!(relative_dir_for("/config.toml".as_ref()), None);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_relative_dir_for_windows() {
+        assert_eq!(
+            relative_dir_for("C:\\foo\\bar\\.cargo\\config.toml".as_ref()),
+            Some("C:\\foo\\bar".as_ref()),
+        );
+        assert_eq!(
+            relative_dir_for("C:\\foo\\bar\\.cargo\\config".as_ref()),
+            Some("C:\\foo\\bar".as_ref()),
+        );
+        assert_eq!(
+            relative_dir_for("C:\\foo\\bar\\config".as_ref()),
+            Some("C:\\foo".as_ref())
+        );
+        assert_eq!(
+            relative_dir_for("C:\\foo\\config".as_ref()),
+            Some("C:\\".as_ref())
+        );
+        assert_eq!(relative_dir_for("C:\\config.toml".as_ref()), None);
+    }
+
     fn setup_temp_dir() -> Result<TempDir> {
         let dir = tempfile::Builder::new()
             .tempdir()
@@ -794,11 +974,17 @@ mod tests {
     static FOO_CARGO_CONFIG_CONTENTS: &str = r#"
     [build]
     target = "x86_64-pc-windows-msvc"
+
+    [env]
+    SOME_VAR = { value = "foo-config", force = true }
     "#;
 
     static FOO_BAR_CARGO_CONFIG_CONTENTS: &str = r#"
     [build]
     target = "x86_64-unknown-linux-gnu"
+
+    [env]
+    SOME_VAR = { value = "foo-bar-config", force = true }
     "#;
 
     static FOO_EXTRA_CONFIG_CONTENTS: &str = r#"

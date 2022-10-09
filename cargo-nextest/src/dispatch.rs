@@ -12,7 +12,7 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
-use nextest_metadata::{BinaryListSummary, BuildPlatform};
+use nextest_metadata::{BinaryListSummary, BuildPlatform, EnvironmentMap};
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::{NextestConfig, NextestProfile, RetryPolicy, TestThreads, ToolConfigFile},
@@ -442,6 +442,7 @@ impl TestBuildFilter {
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
         runner: &TargetRunner,
+        env: EnvironmentMap,
         reuse_build: &ReuseBuildInfo,
     ) -> Result<TestList<'g>> {
         let path_mapper = make_path_mapper(
@@ -463,6 +464,7 @@ impl TestBuildFilter {
             rust_build_meta,
             &test_filter_builder,
             runner,
+            env,
             // TODO: do we need to allow customizing this?
             num_cpus::get(),
         )
@@ -1037,11 +1039,13 @@ impl App {
         test_filter_builder: TestFilterBuilder,
         target_runner: &TargetRunner,
     ) -> Result<TestList> {
+        let env = self.base.cargo_configs.env()?;
         self.build_filter.compute_test_list(
             self.base.graph(),
             binary_list,
             test_filter_builder,
             target_runner,
+            env,
             &self.base.reuse_build,
         )
     }

@@ -6,8 +6,9 @@ use color_eyre::Result;
 use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
-use nextest_metadata::{FilterMatch, MismatchReason};
+use nextest_metadata::{EnvironmentMap, FilterMatch, MismatchReason};
 use nextest_runner::{
+    cargo_config::CargoConfigs,
     config::NextestConfig,
     list::{BinaryList, RustBuildMeta, RustTestArtifact, TestList, TestListState},
     reporter::TestEvent,
@@ -201,6 +202,40 @@ pub(crate) static EXPECTED_BINARY_LIST: [(&str, &str, bool); 8] = [
 pub(crate) fn set_env_vars() {
     // The dynamic library tests require this flag.
     std::env::set_var("RUSTFLAGS", "-C prefer-dynamic");
+
+    std::env::set_var(
+        "__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_NO_OVERRIDE",
+        "test-PASSED-value-set-by-environment",
+    );
+    std::env::set_var(
+        "__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_OVERRIDDEN",
+        "test-FAILED-value-set-by-environment",
+    );
+    std::env::set_var(
+        "__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_NO_OVERRIDE",
+        "test-PASSED-value-set-by-environment",
+    );
+    std::env::set_var(
+        "__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_OVERRIDDEN",
+        "test-FAILED-value-set-by-environment",
+    );
+
+    std::env::set_var(
+        "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_EXTRA",
+        "test-FAILED-value-set-by-environment",
+    );
+    std::env::set_var(
+        "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN",
+        "test-PASSED-value-set-by-environment",
+    );
+    std::env::set_var(
+        "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH",
+        "test-FAILED-value-set-by-environment",
+    );
+    std::env::set_var(
+        "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE",
+        "test-PASSED-value-set-by-environment",
+    );
 }
 
 pub(crate) fn workspace_root() -> Utf8PathBuf {
@@ -263,11 +298,19 @@ pub(crate) static FIXTURE_TARGETS: Lazy<FixtureTargets> = Lazy::new(FixtureTarge
 pub(crate) struct FixtureTargets {
     pub(crate) rust_build_meta: RustBuildMeta<TestListState>,
     pub(crate) test_artifacts: BTreeMap<String, RustTestArtifact<'static>>,
+    pub(crate) env: EnvironmentMap,
 }
 
 impl FixtureTargets {
     fn new() -> Self {
         let graph = &*PACKAGE_GRAPH;
+        let cargo_configs = CargoConfigs::new_with_isolation(
+            [workspace_root().join(".cargo/extra-config.toml")],
+            &workspace_root(),
+            &workspace_root(),
+        )
+        .unwrap();
+        let env = cargo_configs.env().unwrap();
         let binary_list = Arc::new(
             BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
                 .unwrap(),
@@ -293,6 +336,7 @@ impl FixtureTargets {
         Self {
             rust_build_meta,
             test_artifacts,
+            env,
         }
     }
 
@@ -307,6 +351,7 @@ impl FixtureTargets {
             self.rust_build_meta.clone(),
             test_filter,
             target_runner,
+            self.env.to_owned(),
             num_cpus::get(),
         )
         .expect("test list successfully created")

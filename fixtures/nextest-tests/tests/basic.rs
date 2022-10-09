@@ -1,5 +1,9 @@
 // Copyright (c) The nextest Contributors
-use std::{env, io::Read, path::Path};
+use std::{
+    env,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 #[test]
 fn test_success() {}
@@ -156,6 +160,78 @@ fn test_cargo_env_vars() {
     // CARGO_PRIMARY_PACKAGE is missing at runtime
     // CARGO_TARGET_TMPDIR is missing at runtime
     // Dynamic library paths are tested by actually executing the tests -- they depend on the dynamic library.
+
+    if std::env::var("__NEXTEST_NO_CHECK_CARGO_ENV_VARS").is_err() {
+        let config_workspace_dir = PathBuf::from(
+            std::env::var("CONFIG_WORKSPACE_DIR")
+                .expect("CONFIG_WORKSPACE_DIR should be present, defined in [env]"),
+        );
+        assert_eq!(
+            config_workspace_dir,
+            PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+        );
+
+        assert_eq!(
+            std::env::var("__NEXTEST_ENV_VAR_FOR_TESTING_NOT_IN_PARENT_ENV").as_deref(),
+            Ok("test-PASSED-value-set-by-main-config")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_NO_OVERRIDE").as_deref(),
+            Ok("test-PASSED-value-set-by-environment")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_OVERRIDDEN").as_deref(),
+            Ok("test-PASSED-value-set-by-main-config")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_NO_OVERRIDE")
+                .as_deref(),
+            Ok("test-PASSED-value-set-by-environment")
+        );
+        let overridden_path =
+            std::env::var("__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_OVERRIDDEN")
+                .unwrap();
+        assert_eq!(
+            &overridden_path,
+            config_workspace_dir
+                .join("test-PASSED-value-set-by-main-config")
+                .to_str()
+                .unwrap(),
+        );
+
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_EXTRA").as_deref(),
+            Ok("test-PASSED-value-set-by-extra-config"),
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_MAIN").as_deref(),
+            Ok("test-PASSED-value-set-by-extra-config")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_BOTH").as_deref(),
+            Ok("test-PASSED-value-set-by-extra-config")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_NONE").as_deref(),
+            Ok("test-PASSED-value-set-by-extra-config")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_EXTRA").as_deref(),
+            Ok("test-PASSED-value-set-by-extra-config")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN").as_deref(),
+            Ok("test-PASSED-value-set-by-environment")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH").as_deref(),
+            Ok("test-PASSED-value-set-by-extra-config")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE").as_deref(),
+            Ok("test-PASSED-value-set-by-environment")
+        );
+    }
 }
 
 #[test]

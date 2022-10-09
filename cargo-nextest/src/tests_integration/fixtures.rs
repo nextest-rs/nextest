@@ -138,6 +138,10 @@ pub(super) fn set_env_vars() {
     // This environment variable is required to test the #[bench] fixture. Note that THIS IS FOR
     // TEST CODE ONLY. NEVER USE THIS IN PRODUCTION.
     std::env::set_var("RUSTC_BOOTSTRAP", "1");
+
+    // Disable the tests which check for environment variables being set in `config.toml`, as they
+    // won't be in the search path when running integration tests.
+    std::env::set_var("__NEXTEST_NO_CHECK_CARGO_ENV_VARS", "1");
 }
 
 #[track_caller]

@@ -3,8 +3,8 @@ name = "nextest-tests"
 version = "0.1.0"
 description = "nextest-tests description"
 authors = [
-    "Diem Association <opensource@diem.com>",
     "Fake Author <fakeauthor@example.com>",
+    "Author 2 <author2@example.org>",
 ]
 homepage = "https://fake-homepage.example.com"
 # Specify both a license and a license file for test_cargo_env_vars.
