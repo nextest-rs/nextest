@@ -462,7 +462,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                                 assert!(
                                     matches!(prior_status.result, ExecutionResult::Fail { .. }),
                                     "prior status {} should be fail",
-                                    prior_status.attempt
+                                    prior_status.retry_data.attempt
                                 );
                             }
                             last_status.result == ExecutionResult::Pass
@@ -484,7 +484,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                                         ExecutionResult::Fail { .. } | ExecutionResult::Leak
                                     ),
                                     "retry {} should be fail or leak",
-                                    retry.attempt
+                                    retry.retry_data.attempt
                                 );
                             }
                             matches!(

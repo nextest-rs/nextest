@@ -336,8 +336,8 @@ impl fmt::Debug for InstanceStatus {
                     write!(
                         f,
                         "({}/{}) {:?}\n---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",
-                        run_status.attempt,
-                        run_status.total_attempts,
+                        run_status.retry_data.attempt,
+                        run_status.retry_data.total_attempts,
                         run_status.result,
                         String::from_utf8_lossy(&run_status.stdout),
                         String::from_utf8_lossy(&run_status.stderr)

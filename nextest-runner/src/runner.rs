@@ -346,38 +346,40 @@ impl<'a> TestRunnerInner<'a> {
                             let mut run_statuses = vec![];
                             let mut delay = Duration::ZERO;
                             loop {
-                                let attempt = run_statuses.len() + 1;
+                                let retry_data = RetryData {
+                                    attempt: run_statuses.len() + 1,
+                                    total_attempts,
+                                };
 
                                 if canceled_ref.load(Ordering::Acquire) {
                                     // The test run has been canceled. Don't run any further tests.
                                     break;
                                 }
 
-                                if attempt > 1 {
+                                if retry_data.attempt > 1 {
                                     _ = this_run_sender.send(InternalTestEvent::RetryStarted {
                                         test_instance,
-                                        attempt,
-                                        total_attempts,
+                                        retry_data,
                                     });
                                 }
 
                                 let run_status = self
                                     .run_test(
                                         test_instance,
-                                        attempt,
+                                        retry_data,
                                         &overrides,
                                         &this_run_sender,
                                         &mut this_forward_receiver,
                                         delay,
                                     )
                                     .await
-                                    .into_external(attempt, total_attempts);
+                                    .into_external(retry_data);
 
                                 if run_status.result.is_success() {
                                     // The test succeeded.
                                     run_statuses.push(run_status);
                                     break;
-                                } else if attempt < total_attempts
+                                } else if retry_data.attempt < retry_data.total_attempts
                                     && !canceled_ref.load(Ordering::Acquire)
                                 {
                                     // Retry this test: send a retry event, then retry the loop.
@@ -523,7 +525,7 @@ impl<'a> TestRunnerInner<'a> {
     async fn run_test(
         &self,
         test: TestInstance<'a>,
-        attempt: usize,
+        retry_data: RetryData,
         overrides: &ProfileOverrides,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
@@ -534,7 +536,7 @@ impl<'a> TestRunnerInner<'a> {
         match self
             .run_test_inner(
                 test,
-                attempt,
+                retry_data,
                 &stopwatch,
                 overrides,
                 run_sender,
@@ -560,7 +562,7 @@ impl<'a> TestRunnerInner<'a> {
     async fn run_test_inner(
         &self,
         test: TestInstance<'a>,
-        attempt: usize,
+        retry_data: RetryData,
         stopwatch: &StopwatchStart,
         overrides: &ProfileOverrides,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
@@ -570,7 +572,7 @@ impl<'a> TestRunnerInner<'a> {
         let mut cmd = test.make_expression(self.test_list, &self.target_runner);
 
         // Debug environment variable for testing.
-        cmd.env("__NEXTEST_ATTEMPT", format!("{}", attempt));
+        cmd.env("__NEXTEST_ATTEMPT", format!("{}", retry_data.attempt));
         cmd.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
         cmd.stdin(Stdio::null());
         imp::cmd_pre_exec(&mut cmd);
@@ -660,18 +662,24 @@ impl<'a> TestRunnerInner<'a> {
                     _ = interval.tick(), if status.is_none() => {
                         is_slow = true;
                         timeout_hit += 1;
+                        let will_terminate = if let Some(terminate_after) = slow_timeout.terminate_after {
+                            NonZeroUsize::new(timeout_hit as usize)
+                                .expect("timeout_hit cannot be non-zero")
+                                >= terminate_after
+                        } else {
+                            false
+                        };
 
                         let _ = run_sender.send(InternalTestEvent::Slow {
                             test_instance: test,
+                            retry_data,
                             // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
                             // slightly longer.
                             elapsed: timeout_hit * slow_timeout.period,
+                            will_terminate,
                         });
 
-                        if let Some(terminate_after) = slow_timeout.terminate_after {
-                            if NonZeroUsize::new(timeout_hit as usize)
-                                .expect("timeout_hit cannot be non-zero")
-                                >= terminate_after
+                        if will_terminate
                             {
                                 // attempt to terminate the slow test.
                                 // as there is a race between shutting down a slow test and its own completion
@@ -680,7 +688,7 @@ impl<'a> TestRunnerInner<'a> {
                                 status = Some(ExecutionResult::Timeout);
                                 // Don't break here to give the wait task a chance to finish.
                             }
-                        }
+
                     }
                     recv = forward_receiver.recv() => {
                         // The sender stays open longer than the whole loop, and the buffer is big
@@ -759,6 +767,23 @@ impl<'a> TestRunnerInner<'a> {
             is_slow,
             delay_before_start,
         })
+    }
+}
+
+/// Data related to retries.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct RetryData {
+    /// The current attempt. In the range `[1, total_attempts]`.
+    pub attempt: usize,
+
+    /// The total number of times this test can be run. Equal to `1 + retries`.
+    pub total_attempts: usize,
+}
+
+impl RetryData {
+    /// Returns true if there are no more attempts after this.
+    pub fn is_last_attempt(&self) -> bool {
+        self.attempt >= self.total_attempts
     }
 }
 
@@ -909,10 +934,8 @@ impl<'a> ExecutionDescription<'a> {
 /// Information about a single execution of a test.
 #[derive(Clone, Debug)]
 pub struct ExecuteStatus {
-    /// The current attempt. In the range `[1, total_attempts]`.
-    pub attempt: usize,
-    /// The total number of times this test can be run. Equal to `1 + retries`.
-    pub total_attempts: usize,
+    /// Retry-related data.
+    pub retry_data: RetryData,
     /// Standard output for this test.
     pub stdout: Bytes,
     /// Standard error for this test.
@@ -939,10 +962,9 @@ struct InternalExecuteStatus {
 }
 
 impl InternalExecuteStatus {
-    fn into_external(self, attempt: usize, total_attempts: usize) -> ExecuteStatus {
+    fn into_external(self, retry_data: RetryData) -> ExecuteStatus {
         ExecuteStatus {
-            attempt,
-            total_attempts,
+            retry_data,
             stdout: self.stdout,
             stderr: self.stderr,
             result: self.result,
@@ -1134,10 +1156,14 @@ where
             }
             InternalEvent::Test(InternalTestEvent::Slow {
                 test_instance,
+                retry_data,
                 elapsed,
+                will_terminate,
             }) => (self.callback)(TestEvent::TestSlow {
                 test_instance,
+                retry_data,
                 elapsed,
+                will_terminate,
             })
             .map_err(InternalError::Error),
             InternalEvent::Test(InternalTestEvent::AttemptFailedWillRetry {
@@ -1152,12 +1178,10 @@ where
             .map_err(InternalError::Error),
             InternalEvent::Test(InternalTestEvent::RetryStarted {
                 test_instance,
-                attempt,
-                total_attempts,
+                retry_data,
             }) => (self.callback)(TestEvent::TestRetryStarted {
                 test_instance,
-                attempt,
-                total_attempts,
+                retry_data,
             })
             .map_err(InternalError::Error),
             InternalEvent::Test(InternalTestEvent::Finished {
@@ -1268,7 +1292,9 @@ enum InternalTestEvent<'a> {
     },
     Slow {
         test_instance: TestInstance<'a>,
+        retry_data: RetryData,
         elapsed: Duration,
+        will_terminate: bool,
     },
     AttemptFailedWillRetry {
         test_instance: TestInstance<'a>,
@@ -1277,8 +1303,7 @@ enum InternalTestEvent<'a> {
     },
     RetryStarted {
         test_instance: TestInstance<'a>,
-        attempt: usize,
-        total_attempts: usize,
+        retry_data: RetryData,
     },
     Finished {
         test_instance: TestInstance<'a>,

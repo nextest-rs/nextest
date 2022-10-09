@@ -17,7 +17,7 @@ use crate::{
     reporter::aggregator::EventAggregator,
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
-        RunStats,
+        RetryData, RunStats,
     },
 };
 use debug_ignore::DebugIgnore;
@@ -599,15 +599,42 @@ impl<'a> TestReporterImpl<'a> {
             }
             TestEvent::TestSlow {
                 test_instance,
+                retry_data,
                 elapsed,
+                will_terminate,
             } => {
-                if self.status_level >= StatusLevel::Slow {
-                    write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
-                    self.write_slow_duration(*elapsed, writer)?;
-                    self.write_instance(*test_instance, writer)?;
-                    writeln!(writer)?;
+                if !*will_terminate && self.status_level >= StatusLevel::Slow {
+                    if retry_data.total_attempts > 1 {
+                        write!(
+                            writer,
+                            "{:>12} ",
+                            format!("TRY {} SLOW", retry_data.attempt).style(self.styles.skip)
+                        )?;
+                    } else {
+                        write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
+                    }
+                } else if *will_terminate {
+                    let (required_status_level, style) = if retry_data.is_last_attempt() {
+                        (StatusLevel::Fail, self.styles.fail)
+                    } else {
+                        (StatusLevel::Retry, self.styles.retry)
+                    };
+                    if retry_data.total_attempts > 1 && self.status_level > required_status_level {
+                        write!(
+                            writer,
+                            "{:>12} ",
+                            format!("TRY {} TRMNTG", retry_data.attempt).style(style)
+                        )?;
+                    } else {
+                        write!(writer, "{:>12} ", "TERMINATING".style(style))?;
+                    };
                 }
+
+                self.write_slow_duration(*elapsed, writer)?;
+                self.write_instance(*test_instance, writer)?;
+                writeln!(writer)?;
             }
+
             TestEvent::TestAttemptFailedWillRetry {
                 test_instance,
                 run_status,
@@ -616,7 +643,7 @@ impl<'a> TestReporterImpl<'a> {
                 if self.status_level >= StatusLevel::Retry {
                     let try_status_string = format!(
                         "TRY {} {}",
-                        run_status.attempt,
+                        run_status.retry_data.attempt,
                         short_status_str(run_status.result),
                     );
                     write!(
@@ -648,8 +675,8 @@ impl<'a> TestReporterImpl<'a> {
                         // Print a "DELAY {}/{}" line.
                         let delay_string = format!(
                             "DELAY {}/{}",
-                            run_status.attempt + 1,
-                            run_status.total_attempts,
+                            run_status.retry_data.attempt + 1,
+                            run_status.retry_data.total_attempts,
                         );
                         write!(writer, "{:>12} ", delay_string.style(self.styles.retry))?;
 
@@ -663,8 +690,11 @@ impl<'a> TestReporterImpl<'a> {
             }
             TestEvent::TestRetryStarted {
                 test_instance,
-                attempt,
-                total_attempts,
+                retry_data:
+                    RetryData {
+                        attempt,
+                        total_attempts,
+                    },
             } => {
                 let retry_string = format!("RETRY {attempt}/{total_attempts}");
                 write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
@@ -871,11 +901,11 @@ impl<'a> TestReporterImpl<'a> {
                 write!(
                     writer,
                     "{:>12} ",
-                    format!("TRY {} PASS", last_status.attempt).style(self.styles.skip)
+                    format!("TRY {} PASS", last_status.retry_data.attempt).style(self.styles.skip)
                 )?;
             }
             ExecutionDescription::Failure { .. } => {
-                if last_status.attempt == 1 {
+                if last_status.retry_data.attempt == 1 {
                     write!(
                         writer,
                         "{:>12} ",
@@ -886,7 +916,7 @@ impl<'a> TestReporterImpl<'a> {
                     write!(
                         writer,
                         "{:>12} ",
-                        format!("TRY {} {}", last_status.attempt, status_str)
+                        format!("TRY {} {}", last_status.retry_data.attempt, status_str)
                             .style(self.styles.fail)
                     )?;
                 }
@@ -944,13 +974,13 @@ impl<'a> TestReporterImpl<'a> {
                     "{:>12} ",
                     format!(
                         "FLAKY {}/{}",
-                        last_status.attempt, last_status.total_attempts
+                        last_status.retry_data.attempt, last_status.retry_data.total_attempts
                     )
                     .style(self.styles.skip)
                 )?;
             }
             ExecutionDescription::Failure { .. } => {
-                if last_status.attempt == 1 {
+                if last_status.retry_data.attempt == 1 {
                     write!(
                         writer,
                         "{:>12} ",
@@ -961,7 +991,7 @@ impl<'a> TestReporterImpl<'a> {
                     write!(
                         writer,
                         "{:>12} ",
-                        format!("TRY {} {}", last_status.attempt, status_str)
+                        format!("TRY {} {}", last_status.retry_data.attempt, status_str)
                             .style(self.styles.fail)
                     )?;
                 }
@@ -1121,9 +1151,9 @@ impl<'a> TestReporterImpl<'a> {
         style: Style,
         writer: &mut impl Write,
     ) -> io::Result<usize> {
-        if run_status.total_attempts > 1 {
+        if run_status.retry_data.total_attempts > 1 {
             // 3 for 'TRY' + 1 for ' ' + length of the current attempt + 1 for following space.
-            let attempt_str = format!("{}", run_status.attempt);
+            let attempt_str = format!("{}", run_status.retry_data.attempt);
             let out_len = 3 + 1 + attempt_str.len() + 1;
             write!(
                 writer,
@@ -1252,8 +1282,14 @@ pub enum TestEvent<'a> {
         /// The test instance that was slow.
         test_instance: TestInstance<'a>,
 
+        /// Retry data.
+        retry_data: RetryData,
+
         /// The amount of time that has elapsed since the beginning of the test.
         elapsed: Duration,
+
+        /// True if the test has hit its timeout and is about to be terminated.
+        will_terminate: bool,
     },
 
     /// A test attempt failed and will be retried in the future.
@@ -1275,11 +1311,8 @@ pub enum TestEvent<'a> {
         /// The test instance that is being retried.
         test_instance: TestInstance<'a>,
 
-        /// The current attempt.
-        attempt: usize,
-
-        /// The total number of attempts.
-        total_attempts: usize,
+        /// Data related to retries.
+        retry_data: RetryData,
     },
 
     /// A test finished running.
