@@ -625,6 +625,12 @@ pub struct SlowTimeout {
     pub(crate) period: Duration,
     #[serde(default)]
     pub(crate) terminate_after: Option<NonZeroUsize>,
+    #[serde(with = "humantime_serde", default = "default_grace_period")]
+    pub(crate) grace_period: Duration,
+}
+
+fn default_grace_period() -> Duration {
+    Duration::from_secs(10)
 }
 
 fn require_deserialize_slow_timeout<'de, D>(deserializer: D) -> Result<SlowTimeout, D::Error>
@@ -665,6 +671,7 @@ where
                 Ok(Some(SlowTimeout {
                     period,
                     terminate_after: None,
+                    grace_period: default_grace_period(),
                 }))
             }
         }
@@ -1008,7 +1015,7 @@ mod tests {
 
     #[test_case(
         "",
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None }),
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10) }),
         None
 
         ; "empty config is expected to use the hardcoded values"
@@ -1018,7 +1025,7 @@ mod tests {
             [profile.default]
             slow-timeout = "30s"
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None }),
+        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10) }),
         None
 
         ; "overrides the default profile"
@@ -1031,8 +1038,8 @@ mod tests {
             [profile.ci]
             slow-timeout = { period = "60s", terminate-after = 3 }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None }),
-        Some(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), })
+        Ok(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10) }),
+        Some(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(10) })
 
         ; "adds a custom profile 'ci'"
     )]
@@ -1044,17 +1051,30 @@ mod tests {
             [profile.ci]
             slow-timeout = "30s"
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()) }),
-        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, })
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(10) }),
+        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10) })
 
         ; "ci profile uses string notation"
     )]
     #[test_case(
         indoc! {r#"
             [profile.default]
+            slow-timeout = { period = "60s", terminate-after = 3, grace-period = "1s" }
+
+            [profile.ci]
+            slow-timeout = "30s"
+        "#},
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: Some(NonZeroUsize::new(3).unwrap()), grace_period: Duration::from_secs(1) }),
+        Some(SlowTimeout { period: Duration::from_secs(30), terminate_after: None, grace_period: Duration::from_secs(10) })
+
+        ; "timeout grace period"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [profile.default]
             slow-timeout = { period = "60s" }
         "#},
-        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None }),
+        Ok(SlowTimeout { period: Duration::from_secs(60), terminate_after: None, grace_period: Duration::from_secs(10) }),
         None
 
         ; "partial table"
