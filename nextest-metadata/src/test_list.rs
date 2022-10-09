@@ -12,6 +12,36 @@ use std::{
     process::Command,
 };
 
+/// An environment variable set in `config.toml`. See https://doc.rust-lang.org/cargo/reference/config.html#env
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CargoEnvironmentVariable {
+    /// The source `config.toml` file. See
+    /// https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure for the lookup
+    /// order.
+    pub source: Option<Utf8PathBuf>,
+
+    /// The name of the environment variable to set.
+    pub name: String,
+
+    /// The value of the environment variable to set.
+    pub value: String,
+
+    /// If the environment variable is already set in the environment, it is not reassigned unless
+    /// `force` is set to `true`.
+    pub force: bool,
+
+    /// Interpret the environment variable as a path relative to the directory containing the source
+    /// `config.toml` file.
+    pub relative: bool,
+}
+
+/// A list of environment variables to set when running tests.
+///
+/// This is a `Vec` instead of a map because, on Windows, environment variables are case-insensitive
+/// but case-preserving. We produce the environment as-is and let the caller handle the case of
+/// duplicates.
+pub type EnvironmentMap = Vec<CargoEnvironmentVariable>;
+
 /// Command builder for `cargo nextest list`.
 #[derive(Clone, Debug, Default)]
 pub struct ListCommand {

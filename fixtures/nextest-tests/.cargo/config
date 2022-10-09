@@ -12,3 +12,24 @@ replace-with = "vendored-sources"
 
 [source.vendored-sources]
 directory = "vendor"
+
+[env]
+CONFIG_WORKSPACE_DIR = { value = "", relative = true }
+
+__NEXTEST_ENV_VAR_FOR_TESTING_NOT_IN_PARENT_ENV = "test-PASSED-value-set-by-main-config"
+__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_NO_OVERRIDE = "test-FAILED-value-set-by-main-config"
+__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_OVERRIDDEN = { value = "test-PASSED-value-set-by-main-config", force = true }
+__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_NO_OVERRIDE = { value = "test-FAILED-value-set-by-main-config", relative = true }
+__NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_OVERRIDDEN = { value = "test-PASSED-value-set-by-main-config", force = true, relative = true }
+
+# See extra-config.toml in this directory for more about the __NEXTEST_TESTING_EXTRA_CONFIG variables.
+# The extra config should always override the main config, no matter what "force" is.
+__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_EXTRA = "test-FAILED-value-set-by-main-config"
+__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_MAIN = { value = "test-FAILED-value-set-by-main-config", force = true }
+__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_BOTH = { value = "test-FAILED-value-set-by-main-config", force = true }
+__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_NONE = "test-FAILED-value-set-by-main-config"
+
+__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_EXTRA = "test-FAILED-value-set-by-main-config"
+__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN = { value = "test-FAILED-value-set-by-main-config", force = true }
+__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH = { value = "test-FAILED-value-set-by-main-config", force = true }
+__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE = "test-FAILED-value-set-by-main-config"

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    cargo_config::relative_dir_for,
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
     helpers::{dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
@@ -16,8 +17,9 @@ use guppy::{
     PackageId,
 };
 use nextest_metadata::{
-    BuildPlatform, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
-    RustTestCaseSummary, RustTestSuiteStatusSummary, RustTestSuiteSummary, TestListSummary,
+    BuildPlatform, CargoEnvironmentVariable, EnvironmentMap, RustNonTestBinaryKind,
+    RustTestBinaryKind, RustTestBinarySummary, RustTestCaseSummary, RustTestSuiteStatusSummary,
+    RustTestSuiteSummary, TestListSummary,
 };
 use once_cell::sync::{Lazy, OnceCell};
 use owo_colors::OwoColorize;
@@ -175,6 +177,7 @@ pub struct TestList<'g> {
     test_count: usize,
     rust_build_meta: RustBuildMeta<TestListState>,
     rust_suites: BTreeMap<Utf8PathBuf, RustTestSuite<'g>>,
+    env: EnvironmentMap,
     updated_dylib_path: OsString,
     // Computed on first access.
     skip_count: OnceCell<usize>,
@@ -187,6 +190,7 @@ impl<'g> TestList<'g> {
         rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
         runner: &TargetRunner,
+        env: EnvironmentMap,
         list_threads: usize,
     ) -> Result<Self, CreateTestListError>
     where
@@ -207,7 +211,7 @@ impl<'g> TestList<'g> {
                 if filter.should_obtain_test_list_from_binary(&test_binary) {
                     // Run the binary to obtain the test list.
                     let (non_ignored, ignored) =
-                        test_binary.exec(&updated_dylib_path, runner).await?;
+                        test_binary.exec(&updated_dylib_path, runner, &env).await?;
                     let (bin, info) = Self::process_output(
                         test_binary,
                         filter,
@@ -231,6 +235,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites,
+            env,
             rust_build_meta,
             updated_dylib_path,
             test_count,
@@ -246,6 +251,7 @@ impl<'g> TestList<'g> {
         >,
         rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
+        env: EnvironmentMap,
     ) -> Result<Self, CreateTestListError> {
         let mut test_count = 0;
 
@@ -272,6 +278,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites: test_artifacts,
+            env,
             rust_build_meta,
             updated_dylib_path,
             test_count,
@@ -404,6 +411,7 @@ impl<'g> TestList<'g> {
         Self {
             test_count: 0,
             rust_build_meta: RustBuildMeta::empty(),
+            env: Vec::new(),
             updated_dylib_path: OsString::new(),
             rust_suites: BTreeMap::new(),
             skip_count: OnceCell::new(),
@@ -625,6 +633,7 @@ impl<'g> RustTestArtifact<'g> {
         &self,
         dylib_path: &OsStr,
         runner: &TargetRunner,
+        env: &EnvironmentMap,
     ) -> Result<(String, String), CreateTestListError> {
         // This error situation has been known to happen with reused builds. It produces
         // a really terrible and confusing "file not found" message if allowed to prceed.
@@ -636,8 +645,8 @@ impl<'g> RustTestArtifact<'g> {
         }
         let platform_runner = runner.for_build_platform(self.build_platform);
 
-        let non_ignored = self.exec_single(false, dylib_path, platform_runner);
-        let ignored = self.exec_single(true, dylib_path, platform_runner);
+        let non_ignored = self.exec_single(false, dylib_path, platform_runner, env);
+        let ignored = self.exec_single(true, dylib_path, platform_runner, env);
 
         let (non_ignored_out, ignored_out) = futures::future::join(non_ignored, ignored).await;
         Ok((non_ignored_out?, ignored_out?))
@@ -648,6 +657,7 @@ impl<'g> RustTestArtifact<'g> {
         ignored: bool,
         dylib_path: &OsStr,
         runner: Option<&PlatformRunner>,
+        env: &EnvironmentMap,
     ) -> Result<String, CreateTestListError> {
         let mut argv = Vec::new();
 
@@ -676,6 +686,9 @@ impl<'g> RustTestArtifact<'g> {
             &self.package,
             dylib_path,
             &self.non_test_binaries,
+            // We don't need to set the user's custom environment variables defined in `config.toml`
+            // just to get the list of tests.
+            env,
         );
         let mut cmd = tokio::process::Command::from(cmd);
         match cmd.output().await {
@@ -837,6 +850,7 @@ impl<'a> TestInstance<'a> {
             &self.suite_info.package,
             test_list.updated_dylib_path(),
             &self.suite_info.non_test_binaries,
+            &test_list.env,
         )
     }
 }
@@ -849,6 +863,7 @@ pub(crate) fn make_test_command(
     package: &PackageMetadata<'_>,
     dylib_path: &OsStr,
     non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
+    env: &EnvironmentMap,
 ) -> std::process::Command {
     // This is a workaround for a macOS SIP issue:
     // https://github.com/nextest-rs/nextest/pull/84
@@ -881,6 +896,69 @@ pub(crate) fn make_test_command(
     });
 
     let mut cmd = std::process::Command::new(program);
+
+    let make_windows_compatible_key = |key: OsString| {
+        // On Windows, environment variable keys are case-insensitive, so create
+        // a canonical form to check existence.
+        if cfg!(windows) {
+            key.to_ascii_lowercase()
+        } else {
+            key
+        }
+    };
+
+    // NB: we will always override user-provided environment variables with the
+    // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
+    enum EnvSource {
+        Env,
+        CargoConfig,
+    }
+    let mut existing_keys: HashMap<OsString, EnvSource> = std::env::vars_os()
+        .map(|(k, _v)| (make_windows_compatible_key(k), EnvSource::Env))
+        .collect();
+    for CargoEnvironmentVariable {
+        source,
+        name,
+        value,
+        force,
+        relative,
+    } in env
+    {
+        let name_os_string = make_windows_compatible_key(OsString::from(name));
+        let should_set_value = match existing_keys.insert(name_os_string, EnvSource::CargoConfig) {
+            None => {
+                // No key with this name was set, proceed to set the value.
+                true
+            }
+            Some(EnvSource::CargoConfig) => {
+                // Always prefer previously-set cargo config values, since they have higher
+                // precedence. Note that `force` only applies to overwriting environment variables,
+                // not other cargo config values.
+                false
+            }
+            Some(EnvSource::Env) => *force,
+        };
+        if !should_set_value {
+            continue;
+        }
+
+        let value = if *relative {
+            let base_path = match source {
+                Some(source_path) => source_path,
+                None => unreachable!(
+                    "Cannot use a relative path for environment variable {name:?} \
+                    whose source is not a config file (this should already have been checked)"
+                ),
+            };
+            relative_dir_for(base_path).map_or_else(
+                || value.clone(),
+                |rel_dir| rel_dir.join(value).into_string(),
+            )
+        } else {
+            value.clone()
+        };
+        cmd.env(name, value);
+    }
 
     cmd.args(args)
         .current_dir(cwd)
@@ -1025,6 +1103,7 @@ mod tests {
             triple: "fake-triple".to_owned(),
             source: TargetTripleSource::CliOption,
         };
+        let fake_env = EnvironmentMap::new();
         let rust_build_meta =
             RustBuildMeta::new("/fake", Some(fake_triple)).map_paths(&PathMapper::noop());
         let test_list = TestList::new_with_outputs(
@@ -1038,6 +1117,7 @@ mod tests {
             ],
             rust_build_meta,
             &test_filter,
+            fake_env,
         )
         .expect("valid output");
         assert_eq!(
