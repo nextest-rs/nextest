@@ -60,7 +60,7 @@ retries = { backoff = "exponential", count = 3, delay = "1s", jitter = true }
 
 `jitter = true` also works for fixed backoff.
 
-The current jitter algorithm picks a value in between `0.5 * delay` and `delay` uniformly randomly. This is not part of the stable API and is subject to change.
+The current jitter algorithm picks a value in between `0.5 * delay` and `delay` uniformly at random. This is not part of the stable interface and is subject to change.
 
 ## Per-test overrides
 
