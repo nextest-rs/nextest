@@ -82,7 +82,7 @@ uuid = { version = "1.1.2", features = ["v4"] }
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.134"
+libc = "0.2.135"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.42.0", features = [
