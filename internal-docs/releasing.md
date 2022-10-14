@@ -18,7 +18,7 @@ For a smoother experience, [set `gitsign.connectorID`](https://github.com/sigsto
 
 ## Overview
 
-The nextest workspace consists of a set of crates, each independently version. Releases are managed in a somewhat distributed way, with part of the process being managed by GitHub Actions runners and part of the process done locally.
+The nextest workspace consists of a set of crates, each independently versioned. Releases are managed in a somewhat distributed way, with part of the process being managed by GitHub Actions runners and part of the process done locally.
 
 ## I. Prepare releases
 
