@@ -29,7 +29,7 @@ The nextest workspace consists of a set of crates, each independently versioned.
     * For other crates, look at the version.
 3. Prepare changelogs. Every crate MUST have a changelog in the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format, updated to the latest version. If unreleased changelogs have been maintained, this can be as simple as adding a version header.
 
-(Don't bump the version -- this will be done in the step below.)
+(Don't bump the version in `Cargo.toml` -- this will be done in the step below.)
 
 ## II. Create and push tags
 
