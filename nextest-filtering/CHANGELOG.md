@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] - 2022-10-14
+
+### Internal
+
+- Updated private dependency [recursion](https://crates.io/crates/recursion) to 0.3.0. Thanks [Inanna](https://github.com/inanna-malick) for your contribution!
+
 ## [0.2.1] - 2022-07-30
 
 ### Internal
@@ -25,6 +31,7 @@
 
 Initial release.
 
+[0.2.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.2
 [0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.1
 [0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.0
 [0.1.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.1.0

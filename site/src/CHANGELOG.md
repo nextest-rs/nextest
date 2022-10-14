@@ -3,6 +3,18 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.39] - 2022-10-14
+
+### Added
+
+- On Unix platforms, if a process times out, nextest attempts to terminate it gracefully by sending it `SIGTERM`, waiting for a grace period of 10 seconds, and then sending it `SIGKILL`. A custom grace period can now be specified through the `slow-timeout.grace-period` parameter. For more information, see [How nextest terminates tests](https://nexte.st/book/slow-tests#how-nextest-terminates-tests).
+
+  Thanks to [Ben Kimock](https://github.com/saethlin) for your first contribution!
+
+### Internal improvements
+
+- Updated clap to version 4.0.
+
 ## [0.9.38] - 2022-10-05
 
 ### Added
@@ -569,6 +581,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.39]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.39
 [0.9.38]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.38
 [0.9.37]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.37
 [0.9.36]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.36

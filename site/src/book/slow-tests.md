@@ -73,9 +73,23 @@ running 1 test
 
 ### How nextest terminates tests
 
-On Unix platforms, nextest creates a [process group] for each test. On timing out, nextest attempts a graceful shutdown: it first sends the [SIGTERM](https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html) signal to the process group, then waits 10 seconds for it to shut down. If the test doesn't shut itself down within that time, nextest sends SIGKILL (`kill -9`) to the process group to terminate it immediately.
+On Unix platforms, nextest creates a [process group] for each test. On timing out, nextest attempts a graceful shutdown: it first sends the [SIGTERM](https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html) signal to the process group, then waits for a grace period (by default 10 seconds) for the test to shut down. If the test doesn't shut itself down within that time, nextest sends SIGKILL (`kill -9`) to the process group to terminate it immediately.
 
-On other platforms including Windows, nextest terminates the test immediately in a manner akin to SIGKILL. (On Windows, nextest uses [job objects] to kill the test process and all its descendants.)
+To customize the grace period, use the `slow-timeout.grace-period` configuration setting. For example, with the `ci` profile, to terminate tests after 5 minutes with a grace period of 30 seconds:
+
+```toml
+[profile.ci]
+slow-timeout = { period = "60s", terminate-after = 5, grace-period = "30s" }
+```
+
+To send SIGKILL to a process immediately, without a grace period, set `slow-timeout.grace-period` to zero:
+
+```toml
+[profile.ci]
+slow-timeout = { period = "60s", terminate-after = 5, grace-period = "0s" }
+```
+
+On other platforms including Windows, nextest terminates the test immediately in a manner akin to SIGKILL. (On Windows, nextest uses [job objects] to kill the test process and all its descendants.) The `slow-timeout.grace-period` configuration setting is ignored.
 
 > **Note:** The behavior described in this subsection is not part of the [stability guarantees](stability.md), and is subject to change.
 
