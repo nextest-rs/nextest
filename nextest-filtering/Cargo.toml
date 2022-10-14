@@ -1,6 +1,6 @@
 [package]
 name = "nextest-filtering"
-version = "0.2.1"
+version = "0.2.2"
 description = "Filtering DSL for cargo-nextest"
 license = "MIT OR Apache-2.0"
 edition = "2021"
