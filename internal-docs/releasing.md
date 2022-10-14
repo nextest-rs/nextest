@@ -35,7 +35,13 @@ The nextest workspace consists of a set of crates, each independently versioned.
 
 We're going to now use `cargo-release` to create and push tags for each changed crate.
 
-For each changed crate, in topological order (internal dependencies like `nextest-filtering` first, `cargo-nextest` last), run `cargo release -p <crate-name> <version>`. For example, `cargo release -p nextest-runner 0.28.0`. This will perform a dry run.
+For each changed crate, in topological order (internal dependencies like `nextest-filtering` first, `cargo-nextest` last), run:
+
+```
+cargo release -p <crate-name> <version>
+```
+
+For example, `cargo release -p nextest-runner 0.28.0`. This will perform a dry run.
 
 If everything looks good, run the same command with `--execute`. This will do a few things:
 
