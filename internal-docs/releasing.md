@@ -64,7 +64,7 @@ You'll know that builds have completed once an "Update release metadata" commit 
 Once cargo-nextest builds are done, from the root of the repository, run:
 
 ```
-PUBLISH_GRACE_SLEEP=5 cargo release publish --publish --execute
+cargo release publish --publish --execute
 ```
 
 This will publish any crates with changed version numbers to crates.io.
