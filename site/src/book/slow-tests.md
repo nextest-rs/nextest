@@ -91,8 +91,6 @@ slow-timeout = { period = "60s", terminate-after = 5, grace-period = "0s" }
 
 On other platforms including Windows, nextest terminates the test immediately in a manner akin to SIGKILL. (On Windows, nextest uses [job objects] to kill the test process and all its descendants.) The `slow-timeout.grace-period` configuration setting is ignored.
 
-> **Note:** The behavior described in this subsection is not part of the [stability guarantees](stability.md), and is subject to change.
-
 [process group]: https://en.wikipedia.org/wiki/Process_group
 [job objects]: https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects
 
