@@ -36,7 +36,7 @@ uuid = { version = "1.1.2", features = ["private_getrandom", "rng", "std", "v4"]
 cc = { version = "1.0.73", default-features = false, features = ["jobserver", "parallel"] }
 hashbrown = { version = "0.12.3", features = ["ahash", "inline-more", "raw"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
-proc-macro2 = { version = "1.0.46", features = ["proc-macro"] }
+proc-macro2 = { version = "1.0.47", features = ["proc-macro"] }
 quote = { version = "1.0.21", features = ["proc-macro"] }
 syn = { version = "1.0.102", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
