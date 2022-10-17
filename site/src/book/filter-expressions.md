@@ -84,7 +84,7 @@ This section contains the full set of operators supported by the DSL.
 - `/regex/`: match a package or test name if any part of it matches the regular expression `regex`. To match the entire string against a regular expression, use `/^regex$/`. The implementation uses the [regex](https://github.com/rust-lang/regex) crate.
 - `string`: default matching strategy.
     - For tests (`test()`), this is equivalent to `~string`.
-    - For packages (`package()`, `deps()` and `rdeps()`), binary kinds (`kind()`), and , this is equivalent to `=string`.
+    - For packages (`package()`, `deps()` and `rdeps()`), binary kinds (`kind()`), and `platform()`, this is equivalent to `=string`.
 
 If you're constructing an expression string programmatically, it is recommended that you always use a prefix to avoid ambiguity.
 
