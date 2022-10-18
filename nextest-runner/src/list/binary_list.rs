@@ -50,9 +50,9 @@ impl BinaryList {
     pub fn from_messages(
         reader: impl io::BufRead,
         graph: &PackageGraph,
-        target_triple: Option<TargetTriple>,
+        target_platforms: Vec<TargetTriple>,
     ) -> Result<Self, FromMessagesError> {
-        let mut state = BinaryListBuildState::new(graph, target_triple);
+        let mut state = BinaryListBuildState::new(graph, target_platforms);
 
         for message in Message::parse_stream(reader) {
             let message = message.map_err(FromMessagesError::ReadMessages)?;
@@ -161,13 +161,13 @@ struct BinaryListBuildState<'g> {
 }
 
 impl<'g> BinaryListBuildState<'g> {
-    fn new(graph: &'g PackageGraph, target_triple: Option<TargetTriple>) -> Self {
+    fn new(graph: &'g PackageGraph, target_platforms: Vec<TargetTriple>) -> Self {
         let rust_target_dir = graph.workspace().target_directory().to_path_buf();
 
         Self {
             graph,
             rust_binaries: vec![],
-            rust_build_meta: RustBuildMeta::new(rust_target_dir, target_triple),
+            rust_build_meta: RustBuildMeta::new(rust_target_dir, target_platforms),
         }
     }
 
@@ -212,24 +212,28 @@ impl<'g> BinaryListBuildState<'g> {
                     });
                 }
 
-                let (computed_kind, platform) = if kind.iter().any(|k| {
-                    // https://doc.rust-lang.org/nightly/cargo/reference/cargo-targets.html#the-crate-type-field
-                    k == "lib" || k == "rlib" || k == "dylib" || k == "cdylib" || k == "staticlib"
-                }) {
-                    (RustTestBinaryKind::LIB, BuildPlatform::Target)
-                } else if kind.get(0).map(String::as_str) == Some("proc-macro") {
-                    (RustTestBinaryKind::PROC_MACRO, BuildPlatform::Host)
-                } else {
-                    // Non-lib kinds should always have just one element. Grab the first one.
-                    (
-                        RustTestBinaryKind::new(
-                            kind.into_iter()
-                                .next()
-                                .expect("already checked that kind is non-empty"),
-                        ),
-                        BuildPlatform::Target,
-                    )
-                };
+                let (computed_kind, platform) =
+                    if kind.get(0).map(String::as_str) == Some("proc-macro") {
+                        (RustTestBinaryKind::PROC_MACRO, BuildPlatform::Host)
+                    } else {
+                        let computed_kind = if kind.iter().any(|k| {
+                            // https://doc.rust-lang.org/nightly/cargo/reference/cargo-targets.html#the-crate-type-field
+                            k == "lib"
+                                || k == "rlib"
+                                || k == "dylib"
+                                || k == "cdylib"
+                                || k == "staticlib"
+                        }) {
+                            RustTestBinaryKind::LIB
+                        } else {
+                            // Non-lib kinds should always have just one element. Grab the first one.
+                            RustTestBinaryKind::new(
+                                kind.into_iter()
+                                    .next()
+                                    .expect("already checked that kind is non-empty"),
+                            )
+                        };
+                    };
 
                 // To ensure unique binary IDs, we use the following scheme:
                 if computed_kind == RustTestBinaryKind::LIB {
@@ -307,7 +311,7 @@ impl<'g> BinaryListBuildState<'g> {
     /// have a match.
     ///
     /// The `Option` in the return value is to let ? work.
-    fn detect_base_output_dir(&mut self, artifact_path: &Utf8Path) -> Option<()> {
+    fn detect_base_output_dir(&mut self, artifact_path: &Utf8Path) -> Option<&TargetTriple> {
         // Artifact paths must be relative to the target directory.
         let rel_path = artifact_path
             .strip_prefix(&self.rust_build_meta.target_directory)
@@ -320,8 +324,17 @@ impl<'g> BinaryListBuildState<'g> {
                     .base_output_directories
                     .insert(convert_rel_path_to_forward_slash(base));
             }
+            // If the base has a first component, it likely indicates a target. Look over the list
+            // of targets to see if one of them matches this one. If it does, return that.
+            if let Some(target) = base.iter().next() {
+                return self
+                    .rust_build_meta
+                    .target_platforms
+                    .iter()
+                    .find(|t| t.triple == target);
+            }
         }
-        Some(())
+        None
     }
 
     fn process_build_script(&mut self, build_script: BuildScript) -> Result<(), FromMessagesError> {
@@ -393,7 +406,7 @@ mod tests {
             triple: "fake-triple".to_owned(),
             source: TargetTripleSource::CliOption,
         };
-        let mut rust_build_meta = RustBuildMeta::new("/fake/target", Some(fake_triple));
+        let mut rust_build_meta = RustBuildMeta::new("/fake/target", vec![fake_triple]);
         rust_build_meta
             .base_output_directories
             .insert("my-profile".into());

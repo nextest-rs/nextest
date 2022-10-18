@@ -36,8 +36,8 @@ pub struct RustBuildMeta<State> {
     /// requested them. We might consider adding a new field with metadata about that.
     pub linked_paths: BTreeMap<Utf8PathBuf, BTreeSet<String>>,
 
-    /// The target triple used while compiling the artifacts
-    pub target_triple: Option<TargetTriple>,
+    /// The target triples used while compiling the artifacts
+    pub target_platforms: Vec<TargetTriple>,
 
     state: PhantomData<State>,
 }
@@ -46,7 +46,7 @@ impl RustBuildMeta<BinaryListState> {
     /// Creates a new [`RustBuildMeta`].
     pub fn new(
         target_directory: impl Into<Utf8PathBuf>,
-        target_triple: Option<TargetTriple>,
+        target_platforms: Vec<TargetTriple>,
     ) -> Self {
         Self {
             target_directory: target_directory.into(),
@@ -54,7 +54,7 @@ impl RustBuildMeta<BinaryListState> {
             non_test_binaries: BTreeMap::new(),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
-            target_triple,
+            target_platforms,
         }
     }
 
@@ -70,7 +70,7 @@ impl RustBuildMeta<BinaryListState> {
             non_test_binaries: self.non_test_binaries.clone(),
             linked_paths: self.linked_paths.clone(),
             state: PhantomData,
-            target_triple: self.target_triple.clone(),
+            target_platforms: self.target_platforms.clone(),
         }
     }
 }
@@ -85,7 +85,7 @@ impl RustBuildMeta<TestListState> {
             non_test_binaries: BTreeMap::new(),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
-            target_triple: None,
+            target_platforms: vec![],
         }
     }
 
@@ -134,7 +134,11 @@ impl<State> RustBuildMeta<State> {
                 .map(|linked_path| (linked_path, BTreeSet::new()))
                 .collect(),
             state: PhantomData,
-            target_triple: TargetTriple::deserialize(summary.target_platform),
+            target_platforms: summary
+                .target_platforms
+                .into_iter()
+                .map(TargetTriple::deserialize)
+                .collect(),
         }
     }
 
@@ -145,7 +149,7 @@ impl<State> RustBuildMeta<State> {
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
             linked_paths: self.linked_paths.keys().cloned().collect(),
-            target_platform: TargetTriple::serialize(self.target_triple.as_ref()),
+            target_platforms: TargetTriple::serialize(self.target_triple.as_ref()),
         }
     }
 }
