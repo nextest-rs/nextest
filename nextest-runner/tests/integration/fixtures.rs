@@ -6,9 +6,9 @@ use color_eyre::Result;
 use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
-use nextest_metadata::{EnvironmentMap, FilterMatch, MismatchReason};
+use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
-    cargo_config::CargoConfigs,
+    cargo_config::{CargoConfigs, EnvironmentMap},
     config::NextestConfig,
     list::{BinaryList, RustBuildMeta, RustTestArtifact, TestList, TestListState},
     reporter::TestEvent,

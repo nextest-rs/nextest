@@ -3,7 +3,6 @@
 
 use crate::errors::{CargoConfigError, InvalidCargoCliConfigReason};
 use camino::{Utf8Path, Utf8PathBuf};
-use nextest_metadata::{CargoEnvironmentVariable, EnvironmentMap};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use toml_edit::Item;
@@ -73,48 +72,6 @@ impl CargoConfigs {
 
     pub(crate) fn cwd(&self) -> &Utf8Path {
         &self.cwd
-    }
-
-    /// The environment variables to set when running Cargo commands.
-    pub fn env(&self) -> EnvironmentMap {
-        self.discovered_configs()
-            .filter_map(|config| match config {
-                DiscoveredConfig::CliOption { config, source }
-                | DiscoveredConfig::File { config, source } => Some((config, source)),
-                DiscoveredConfig::Env => None,
-            })
-            .flat_map(|(config, source)| {
-                let source = match source {
-                    CargoConfigSource::CliOption => None,
-                    CargoConfigSource::File(path) => Some(path.clone()),
-                };
-                config
-                    .env
-                    .clone()
-                    .into_iter()
-                    .map(move |(name, value)| (source.clone(), name, value))
-            })
-            .map(|(source, name, value)| match value {
-                CargoConfigEnv::Value(value) => CargoEnvironmentVariable {
-                    source,
-                    name,
-                    value,
-                    force: false,
-                    relative: false,
-                },
-                CargoConfigEnv::Fields {
-                    value,
-                    force,
-                    relative,
-                } => CargoEnvironmentVariable {
-                    source,
-                    name,
-                    value,
-                    force,
-                    relative,
-                },
-            })
-            .collect()
     }
 
     pub(crate) fn discovered_configs(

@@ -1,7 +1,82 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use camino::Utf8Path;
+use super::{CargoConfigEnv, CargoConfigSource, CargoConfigs, DiscoveredConfig};
+use camino::{Utf8Path, Utf8PathBuf};
+
+impl CargoConfigs {
+    /// The environment variables to set when running Cargo commands.
+    pub fn env(&self) -> EnvironmentMap {
+        self.discovered_configs()
+            .filter_map(|config| match config {
+                DiscoveredConfig::CliOption { config, source }
+                | DiscoveredConfig::File { config, source } => Some((config, source)),
+                DiscoveredConfig::Env => None,
+            })
+            .flat_map(|(config, source)| {
+                let source = match source {
+                    CargoConfigSource::CliOption => None,
+                    CargoConfigSource::File(path) => Some(path.clone()),
+                };
+                config
+                    .env
+                    .clone()
+                    .into_iter()
+                    .map(move |(name, value)| (source.clone(), name, value))
+            })
+            .map(|(source, name, value)| match value {
+                CargoConfigEnv::Value(value) => CargoEnvironmentVariable {
+                    source,
+                    name,
+                    value,
+                    force: false,
+                    relative: false,
+                },
+                CargoConfigEnv::Fields {
+                    value,
+                    force,
+                    relative,
+                } => CargoEnvironmentVariable {
+                    source,
+                    name,
+                    value,
+                    force,
+                    relative,
+                },
+            })
+            .collect()
+    }
+}
+
+/// An environment variable set in `config.toml`. See https://doc.rust-lang.org/cargo/reference/config.html#env
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CargoEnvironmentVariable {
+    /// The source `config.toml` file. See
+    /// https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure for the lookup
+    /// order.
+    pub source: Option<Utf8PathBuf>,
+
+    /// The name of the environment variable to set.
+    pub name: String,
+
+    /// The value of the environment variable to set.
+    pub value: String,
+
+    /// If the environment variable is already set in the environment, it is not reassigned unless
+    /// `force` is set to `true`.
+    pub force: bool,
+
+    /// Interpret the environment variable as a path relative to the directory containing the source
+    /// `config.toml` file.
+    pub relative: bool,
+}
+
+/// A list of environment variables to set when running tests.
+///
+/// This is a `Vec` instead of a map because, on Windows, environment variables are case-insensitive
+/// but case-preserving. We produce the environment as-is and let the caller handle the case of
+/// duplicates.
+pub type EnvironmentMap = Vec<CargoEnvironmentVariable>;
 
 /// Returns the directory against which relative paths are computed for the given config path.
 pub fn relative_dir_for(config_path: &Utf8Path) -> Option<&Utf8Path> {

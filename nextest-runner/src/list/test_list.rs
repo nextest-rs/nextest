@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    cargo_config::relative_dir_for,
+    cargo_config::{relative_dir_for, CargoEnvironmentVariable, EnvironmentMap},
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
     helpers::{dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
@@ -17,9 +17,8 @@ use guppy::{
     PackageId,
 };
 use nextest_metadata::{
-    BuildPlatform, CargoEnvironmentVariable, EnvironmentMap, RustNonTestBinaryKind,
-    RustTestBinaryKind, RustTestBinarySummary, RustTestCaseSummary, RustTestSuiteStatusSummary,
-    RustTestSuiteSummary, TestListSummary,
+    BuildPlatform, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
+    RustTestCaseSummary, RustTestSuiteStatusSummary, RustTestSuiteSummary, TestListSummary,
 };
 use once_cell::sync::{Lazy, OnceCell};
 use owo_colors::OwoColorize;

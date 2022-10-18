@@ -12,9 +12,9 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
-use nextest_metadata::{BinaryListSummary, BuildPlatform, EnvironmentMap};
+use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
-    cargo_config::{CargoConfigs, TargetTriple},
+    cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{NextestConfig, NextestProfile, RetryPolicy, TestThreads, ToolConfigFile},
     errors::WriteTestListError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
