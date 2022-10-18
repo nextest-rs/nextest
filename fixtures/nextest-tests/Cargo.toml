@@ -12,6 +12,7 @@ license = "MIT OR Apache-2.0"
 license-file = "foo.md"
 repository = "https://example.com/fake/repository"
 edition = "2018"
+rust-version = "1.56"
 
 [[example]]
 name = "nextest-tests"

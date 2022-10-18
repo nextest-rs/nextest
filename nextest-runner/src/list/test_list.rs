@@ -1012,6 +1012,18 @@ pub(crate) fn make_test_command(
             "CARGO_PKG_REPOSITORY",
             package.repository().unwrap_or_default(),
         )
+        .env(
+            "CARGO_PKG_RUST_VERSION",
+            package.rust_version().map_or(String::new(), |v| {
+                // A Rust version e.g. "1.58" has v.to_string() generated as "^1.58".
+                // Remove the prefix ^.
+                let s = v.to_string();
+                match s.strip_prefix('^') {
+                    Some(suffix) => suffix.to_owned(),
+                    None => s,
+                }
+            }),
+        )
         .env(dylib_path_envvar(), dylib_path);
 
     for (k, v) in &*LD_DYLD_ENV_VARS {

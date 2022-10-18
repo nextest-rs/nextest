@@ -155,6 +155,7 @@ fn test_cargo_env_vars() {
     assert_env!("CARGO_PKG_REPOSITORY");
     assert_env!("CARGO_PKG_LICENSE");
     assert_env!("CARGO_PKG_LICENSE_FILE");
+    assert_env!("CARGO_PKG_RUST_VERSION");
     // CARGO_CRATE_NAME is missing at runtime
     // CARGO_BIN_EXE is missing at runtime
     // CARGO_PRIMARY_PACKAGE is missing at runtime
