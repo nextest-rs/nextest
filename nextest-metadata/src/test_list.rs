@@ -13,7 +13,7 @@ use std::{
 };
 
 /// An environment variable set in `config.toml`. See https://doc.rust-lang.org/cargo/reference/config.html#env
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CargoEnvironmentVariable {
     /// The source `config.toml` file. See
     /// https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure for the lookup
