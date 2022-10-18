@@ -852,14 +852,6 @@ pub enum TargetTripleError {
         TargetTriple::CARGO_BUILD_TARGET_ENV
     )]
     InvalidEnvironmentVar,
-
-    /// Error looking up Cargo configs
-    #[error("error discovering Cargo configs")]
-    CargoConfigSearchError(
-        #[from]
-        #[source]
-        CargoConfigError,
-    ),
 }
 
 /// An error occurred determining the target runner
@@ -895,14 +887,6 @@ pub enum TargetRunnerError {
         #[source]
         error: target_spec::errors::TripleParseError,
     },
-
-    /// Error looking up Cargo configs.
-    #[error("error discovering Cargo configs")]
-    CargoConfigSearchError(
-        #[from]
-        #[source]
-        CargoConfigError,
-    ),
 }
 
 /// An error that occurred while setting up the signal handler.

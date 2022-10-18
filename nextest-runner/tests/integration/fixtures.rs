@@ -310,7 +310,7 @@ impl FixtureTargets {
             &workspace_root(),
         )
         .unwrap();
-        let env = cargo_configs.env().unwrap();
+        let env = cargo_configs.env();
         let binary_list = Arc::new(
             BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
                 .unwrap(),

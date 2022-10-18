@@ -9,7 +9,6 @@
 use crate::errors::{CargoConfigError, InvalidCargoCliConfigReason, TargetTripleError};
 use camino::{Utf8Path, Utf8PathBuf};
 use nextest_metadata::{CargoEnvironmentVariable, EnvironmentMap};
-use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::{collections::BTreeMap, fmt};
 use target_spec::Platform;
@@ -98,7 +97,7 @@ impl TargetTriple {
     }
 
     fn from_cargo_configs(cargo_configs: &CargoConfigs) -> Result<Option<Self>, TargetTripleError> {
-        for discovered_config in cargo_configs.discovered_configs()? {
+        for discovered_config in cargo_configs.discovered_configs() {
             match discovered_config {
                 DiscoveredConfig::CliOption { config, source }
                 | DiscoveredConfig::File { config, source } => {
@@ -195,8 +194,7 @@ pub enum CargoConfigSource {
 pub struct CargoConfigs {
     cli_configs: Vec<(CargoConfigSource, CargoConfig)>,
     cwd: Utf8PathBuf,
-    terminate_search_at: Option<Utf8PathBuf>,
-    discovered: OnceCell<Vec<(CargoConfigSource, CargoConfig)>>,
+    discovered: Vec<(CargoConfigSource, CargoConfig)>,
 }
 
 impl CargoConfigs {
@@ -210,12 +208,12 @@ impl CargoConfigs {
                 Utf8PathBuf::try_from(cwd).map_err(CargoConfigError::CurrentDirInvalidUtf8)
             })?;
         let cli_configs = parse_cli_configs(&cwd, cli_configs.into_iter())?;
+        let discovered = discover_impl(&cwd, None)?;
 
         Ok(Self {
             cli_configs,
             cwd,
-            terminate_search_at: None,
-            discovered: OnceCell::new(),
+            discovered,
         })
     }
 
@@ -229,12 +227,12 @@ impl CargoConfigs {
         terminate_search_at: &Utf8Path,
     ) -> Result<Self, CargoConfigError> {
         let cli_configs = parse_cli_configs(cwd, cli_configs.into_iter())?;
+        let discovered = discover_impl(&cwd, Some(terminate_search_at))?;
 
         Ok(Self {
             cli_configs,
             cwd: cwd.to_owned(),
-            terminate_search_at: Some(terminate_search_at.to_owned()),
-            discovered: OnceCell::new(),
+            discovered,
         })
     }
 
@@ -243,9 +241,8 @@ impl CargoConfigs {
     }
 
     /// The environment variables to set when running Cargo commands.
-    pub fn env(&self) -> Result<EnvironmentMap, CargoConfigError> {
-        let env = self
-            .discovered_configs()?
+    pub fn env(&self) -> EnvironmentMap {
+        self.discovered_configs()
             .filter_map(|config| match config {
                 DiscoveredConfig::CliOption { config, source }
                 | DiscoveredConfig::File { config, source } => Some((config, source)),
@@ -282,16 +279,12 @@ impl CargoConfigs {
                     relative,
                 },
             })
-            .collect();
-        Ok(env)
+            .collect()
     }
 
     pub(crate) fn discovered_configs(
         &self,
-    ) -> Result<
-        impl Iterator<Item = DiscoveredConfig<'_>> + DoubleEndedIterator + '_,
-        CargoConfigError,
-    > {
+    ) -> impl Iterator<Item = DiscoveredConfig<'_>> + DoubleEndedIterator + '_ {
         // TODO/NOTE: https://github.com/rust-lang/cargo/issues/10992 means that currently
         // environment variables are privileged over files passed in over the CLI. Once this
         // behavior is fixed in upstream cargo, it should also be fixed here.
@@ -307,14 +300,13 @@ impl CargoConfigs {
 
         let cargo_config_file_iter = self
             .discovered
-            .get_or_try_init(|| discover_impl(&self.cwd, self.terminate_search_at.as_deref()))?
             .iter()
             .map(|(source, config)| DiscoveredConfig::File { config, source });
 
-        Ok(cli_option_iter
+        cli_option_iter
             .chain(std::iter::once(DiscoveredConfig::Env))
             .chain(cli_file_iter)
-            .chain(cargo_config_file_iter))
+            .chain(cargo_config_file_iter)
     }
 }
 
@@ -844,7 +836,7 @@ mod tests {
 
         let configs =
             CargoConfigs::new_with_isolation(&[] as &[&str], &dir_foo_bar_path, &dir_path).unwrap();
-        let env = configs.env().unwrap();
+        let env = configs.env();
         let env_values: Vec<&str> = env.iter().map(|elem| elem.value.as_str()).collect();
         assert_eq!(env_values, vec!["foo-bar-config", "foo-config"]);
 
@@ -854,7 +846,7 @@ mod tests {
             &dir_path,
         )
         .unwrap();
-        let env = configs.env().unwrap();
+        let env = configs.env();
         let env_values: Vec<&str> = env.iter().map(|elem| elem.value.as_str()).collect();
         assert_eq!(
             env_values,

@@ -1039,7 +1039,7 @@ impl App {
         test_filter_builder: TestFilterBuilder,
         target_runner: &TargetRunner,
     ) -> Result<TestList> {
-        let env = self.base.cargo_configs.env()?;
+        let env = self.base.cargo_configs.env();
         self.build_filter.compute_test_list(
             self.base.graph(),
             binary_list,

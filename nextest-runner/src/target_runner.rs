@@ -123,7 +123,7 @@ impl PlatformRunner {
         // a runner that matches our target triple, we need to actually find
         // all the matches, but in reverse order as the closer the config is
         // to our current working directory, the higher precedence it has
-        for discovered_config in configs.discovered_configs()? {
+        for discovered_config in configs.discovered_configs() {
             match discovered_config {
                 DiscoveredConfig::CliOption { config, source }
                 | DiscoveredConfig::File { config, source } => {
