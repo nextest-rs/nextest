@@ -1,2 +1,5 @@
 # Disable CRLF conversions on Windows.
 * -text
+
+# Set syntax highlighting on GitHub.
+ fixtures/nextest-tests/.cargo/config linguist-language=toml
