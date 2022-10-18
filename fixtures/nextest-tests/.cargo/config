@@ -24,12 +24,12 @@ __NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_RELATIVE_OVERRIDDEN = { value = "tes
 
 # See extra-config.toml in this directory for more about the __NEXTEST_TESTING_EXTRA_CONFIG variables.
 # The extra config should always override the main config, no matter what "force" is.
-__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_EXTRA = "test-FAILED-value-set-by-main-config"
+__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_EXTRA = { value = "test-FAILED-value-set-by-main-config" }
 __NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_MAIN = { value = "test-FAILED-value-set-by-main-config", force = true }
 __NEXTEST_TESTING_EXTRA_CONFIG_FORCE_IN_BOTH = { value = "test-FAILED-value-set-by-main-config", force = true }
-__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_NONE = "test-FAILED-value-set-by-main-config"
+__NEXTEST_TESTING_EXTRA_CONFIG_FORCE_NONE = { value = "test-FAILED-value-set-by-main-config" }
 
-__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_EXTRA = "test-FAILED-value-set-by-main-config"
+__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_EXTRA = { value = "test-FAILED-value-set-by-main-config" }
 __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN = { value = "test-FAILED-value-set-by-main-config", force = true }
 __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH = { value = "test-FAILED-value-set-by-main-config", force = true }
-__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE = "test-FAILED-value-set-by-main-config"
+__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE = { value = "test-FAILED-value-set-by-main-config" }
