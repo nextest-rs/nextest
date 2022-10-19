@@ -18,10 +18,7 @@ jobs:
       - name: Install static-sitemap-cli
         run: npm install static-sitemap-cli
       - name: Build rustdoc
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: --all-features --workspace
+        uses: cargo doc --all-features --workspace
       - name: Install mdbook
         uses: baptiste0928/cargo-install@v1
         with:
