@@ -19,7 +19,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
+      - uses: Swatinem/rust-cache@v2
       - name: Lint (clippy)
         uses: actions-rs/cargo@v1
         with:
@@ -52,7 +52,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
+      - uses: Swatinem/rust-cache@v2
       - name: Build rustdoc
         uses: actions-rs/cargo@v1
         with:
@@ -76,7 +76,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
-      - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
+      - uses: Swatinem/rust-cache@v2
         with:
           # Matrix instances (other than OS) need to be added to this explicitly
           key: ${{ matrix.rust-version }}
@@ -134,7 +134,7 @@ jobs:
         with:
           toolchain: stable
           targets: x86_64-pc-windows-gnu
-      - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
+      - uses: Swatinem/rust-cache@v2
       - name: Install wine and gcc-mingw-w64-x86-64-win32
         run: |
           sudo apt-get update
