@@ -34,4 +34,4 @@ ARCHIVE_NAME="$BINARY_NAME-$VERSION-universal-apple-darwin.tar.gz"
 pushd target
 gtar acf "../$ARCHIVE_NAME" "$BINARY_NAME"
 
-echo "::set-output name=archive-name::$ARCHIVE_NAME"
+echo "archive-name=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
