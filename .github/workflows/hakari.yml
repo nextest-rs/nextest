@@ -18,17 +18,12 @@ jobs:
       RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
-      # Caching adapted from
-      # https://github.com/unicode-org/icu4x/blob/2d64d81d4661090c0d446b7bd700e65035840a5e/.github/workflows/build-test.yml#L32-L50.
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-hakari
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-hakari
-          version: "0.9"  # Most recent version compatible with 0.9        id: install-cargo-search2
+          version: "0.9"  # Most recent version compatible with 0.9
       - name: Check workspace-hack Cargo.toml is up-to-date
         uses: actions-rs/cargo@v1
         with:
