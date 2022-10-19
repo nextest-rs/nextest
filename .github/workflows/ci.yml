@@ -72,9 +72,6 @@ jobs:
           - windows-latest
         # 1.62 is the MSRV
         rust-version: [ 1.62, stable ]
-        # no-default-features means no self-update, all-features means
-        # with self-update
-        features: [ --no-default-features, --all-features ]
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
@@ -85,22 +82,27 @@ jobs:
       - uses: Swatinem/rust-cache@c5ed9ba6b7e1bb8aff90d43acd2f0af4990fa57c
         with:
           # Matrix instances (other than OS) need to be added to this explicitly
-          key: ${{ matrix.rust-version }}-${{ matrix.features }}
+          key: ${{ matrix.rust-version }}
       - name: Build quick-junit
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --package quick-junit ${{ matrix.features }}
+          args: --package quick-junit
       - name: Build nextest-metadata
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --package nextest-metadata ${{ matrix.features }}
+          args: --package nextest-metadata
+      - name: Build cargo-nextest without self-update
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --package cargo-nextest --no-default-features --features default-no-update
       - name: Build cargo-nextest
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --package cargo-nextest ${{ matrix.features }}
+          args: --package cargo-nextest
       - name: Build all targets
         uses: actions-rs/cargo@v1
         with:
