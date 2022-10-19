@@ -222,7 +222,7 @@ fn test_cargo_env_vars() {
         );
         assert_eq!(
             std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN").as_deref(),
-            Ok("test-PASSED-value-set-by-environment")
+            Ok("test-PASSED-value-set-by-extra-config")
         );
         assert_eq!(
             std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH").as_deref(),
@@ -231,6 +231,10 @@ fn test_cargo_env_vars() {
         assert_eq!(
             std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE").as_deref(),
             Ok("test-PASSED-value-set-by-environment")
+        );
+        assert_eq!(
+            std::env::var("__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_FALSE").as_deref(),
+            Ok("test-PASSED-value-set-by-environment"),
         );
     }
 }

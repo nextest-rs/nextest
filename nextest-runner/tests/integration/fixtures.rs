@@ -236,6 +236,10 @@ pub(crate) fn set_env_vars() {
         "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE",
         "test-PASSED-value-set-by-environment",
     );
+    std::env::set_var(
+        "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_FALSE",
+        "test-PASSED-value-set-by-environment",
+    );
 }
 
 pub(crate) fn workspace_root() -> Utf8PathBuf {
@@ -310,7 +314,7 @@ impl FixtureTargets {
             &workspace_root(),
         )
         .unwrap();
-        let env = cargo_configs.env();
+        let env = EnvironmentMap::new(&cargo_configs);
         let binary_list = Arc::new(
             BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
                 .unwrap(),

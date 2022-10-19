@@ -61,7 +61,7 @@ impl CargoConfigs {
         terminate_search_at: &Utf8Path,
     ) -> Result<Self, CargoConfigError> {
         let cli_configs = parse_cli_configs(cwd, cli_configs.into_iter())?;
-        let discovered = discover_impl(&cwd, Some(terminate_search_at))?;
+        let discovered = discover_impl(cwd, Some(terminate_search_at))?;
 
         Ok(Self {
             cli_configs,
@@ -333,11 +333,32 @@ pub(crate) enum CargoConfigEnv {
     Value(String),
     Fields {
         value: String,
-        #[serde(default)]
-        force: bool,
-        #[serde(default)]
-        relative: bool,
+        force: Option<bool>,
+        relative: Option<bool>,
     },
+}
+
+impl CargoConfigEnv {
+    pub(super) fn into_value(self) -> String {
+        match self {
+            Self::Value(v) => v,
+            Self::Fields { value, .. } => value,
+        }
+    }
+
+    pub(super) fn force(&self) -> Option<bool> {
+        match self {
+            Self::Value(_) => None,
+            Self::Fields { force, .. } => *force,
+        }
+    }
+
+    pub(super) fn relative(&self) -> Option<bool> {
+        match self {
+            Self::Value(_) => None,
+            Self::Fields { relative, .. } => *relative,
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]

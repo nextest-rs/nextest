@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    cargo_config::{relative_dir_for, CargoEnvironmentVariable, EnvironmentMap},
+    cargo_config::EnvironmentMap,
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
     helpers::{dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
@@ -410,7 +410,7 @@ impl<'g> TestList<'g> {
         Self {
             test_count: 0,
             rust_build_meta: RustBuildMeta::empty(),
-            env: Vec::new(),
+            env: EnvironmentMap::empty(),
             updated_dylib_path: OsString::new(),
             rust_suites: BTreeMap::new(),
             skip_count: OnceCell::new(),
@@ -896,68 +896,9 @@ pub(crate) fn make_test_command(
 
     let mut cmd = std::process::Command::new(program);
 
-    let make_windows_compatible_key = |key: OsString| {
-        // On Windows, environment variable keys are case-insensitive, so create
-        // a canonical form to check existence.
-        if cfg!(windows) {
-            key.to_ascii_lowercase()
-        } else {
-            key
-        }
-    };
-
     // NB: we will always override user-provided environment variables with the
     // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
-    enum EnvSource {
-        Env,
-        CargoConfig,
-    }
-    let mut existing_keys: HashMap<OsString, EnvSource> = std::env::vars_os()
-        .map(|(k, _v)| (make_windows_compatible_key(k), EnvSource::Env))
-        .collect();
-    for CargoEnvironmentVariable {
-        source,
-        name,
-        value,
-        force,
-        relative,
-    } in env
-    {
-        let name_os_string = make_windows_compatible_key(OsString::from(name));
-        let should_set_value = match existing_keys.insert(name_os_string, EnvSource::CargoConfig) {
-            None => {
-                // No key with this name was set, proceed to set the value.
-                true
-            }
-            Some(EnvSource::CargoConfig) => {
-                // Always prefer previously-set cargo config values, since they have higher
-                // precedence. Note that `force` only applies to overwriting environment variables,
-                // not other cargo config values.
-                false
-            }
-            Some(EnvSource::Env) => *force,
-        };
-        if !should_set_value {
-            continue;
-        }
-
-        let value = if *relative {
-            let base_path = match source {
-                Some(source_path) => source_path,
-                None => unreachable!(
-                    "Cannot use a relative path for environment variable {name:?} \
-                    whose source is not a config file (this should already have been checked)"
-                ),
-            };
-            relative_dir_for(base_path).map_or_else(
-                || value.clone(),
-                |rel_dir| rel_dir.join(value).into_string(),
-            )
-        } else {
-            value.clone()
-        };
-        cmd.env(name, value);
-    }
+    env.apply_env(&mut cmd);
 
     cmd.args(args)
         .current_dir(cwd)
@@ -1114,7 +1055,7 @@ mod tests {
             triple: "fake-triple".to_owned(),
             source: TargetTripleSource::CliOption,
         };
-        let fake_env = EnvironmentMap::new();
+        let fake_env = EnvironmentMap::empty();
         let rust_build_meta =
             RustBuildMeta::new("/fake", Some(fake_triple)).map_paths(&PathMapper::noop());
         let test_list = TestList::new_with_outputs(
