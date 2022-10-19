@@ -15,7 +15,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -50,7 +50,7 @@ jobs:
         os: [ ubuntu-latest ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -74,7 +74,7 @@ jobs:
         rust-version: [ 1.62, stable ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust-version }}
@@ -107,31 +107,31 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all-targets ${{ matrix.features }}
+          args: --all-targets
       - name: Doctests
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --doc ${{ matrix.features }}
+          args: --doc
       - name: Test with locally built nextest
         uses: actions-rs/cargo@v1
         with:
           command: local-nt
-          args: run ${{ matrix.features }} --profile ci
+          args: run --profile ci
       - name: Install latest nextest release
         uses: taiki-e/install-action@nextest
       - name: Test with latest nextest release
         uses: actions-rs/cargo@v1
         with:
           command: nextest
-          args: run ${{ matrix.features }} --profile ci
+          args: run --profile ci
 
   test-archive-target-runner:
     name: Test archives with a target runner
     # gcc-mingw-w64-x86-64-win32 requires Ubuntu 22.04
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Install host toolchain
         uses: actions-rs/toolchain@v1
         with:

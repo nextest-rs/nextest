@@ -30,7 +30,7 @@ jobs:
   ci:
     # ...
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       # Install a Rust toolchain here.
       - name: Install cargo-nextest
         uses: baptiste0928/cargo-install@v1
