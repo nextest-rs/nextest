@@ -12,6 +12,7 @@ __NEXTEST_TESTING_EXTRA_CONFIG_FORCE_NONE = { value = "test-PASSED-value-set-by-
 
 # These values are defined in the environment so they should be overridden as required.
 __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_EXTRA = { value = "test-PASSED-value-set-by-extra-config", force = true }
-__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN = { value = "test-FAILED-value-set-by-extra-config" }
+__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_MAIN = { value = "test-PASSED-value-set-by-extra-config" }
 __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_IN_BOTH = { value = "test-PASSED-value-set-by-extra-config", force = true }
 __NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_NONE = { value = "test-FAILED-value-set-by-extra-config" }
+__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_FALSE = { value = "test-FAILED-value-set-by-extra-config", force = false }

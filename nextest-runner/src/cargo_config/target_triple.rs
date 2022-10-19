@@ -1,8 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::cargo_config::{CargoConfigSource, CargoConfigs, DiscoveredConfig};
-use crate::errors::TargetTripleError;
+use crate::{
+    cargo_config::{CargoConfigSource, CargoConfigs, DiscoveredConfig},
+    errors::TargetTripleError,
+};
 use std::fmt;
 use target_spec::Platform;
 
