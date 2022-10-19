@@ -132,10 +132,10 @@ jobs:
         shell: bash
         run: |
           if [[ ${{ matrix.target }} == "x86_64-pc-windows-msvc" || ${{ matrix.target }} == "i686-pc-windows-msvc" ]]; then
-            echo "::set-output name=${{ matrix.target }}-tar::${{ github.ref_name }}-${{ matrix.target }}".tar.gz
-            echo "::set-output name=${{ matrix.target }}-zip::${{ github.ref_name }}-${{ matrix.target }}".zip
+            echo "${{ matrix.target }}-tar=${{ github.ref_name }}-${{ matrix.target }}".tar.gz >> $GITHUB_OUTPUT
+            echo "${{ matrix.target }}-zip=${{ github.ref_name }}-${{ matrix.target }}".zip >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=${{ matrix.target }}-tar::${{ github.ref_name }}-${{ matrix.target }}".tar.gz
+            echo "${{ matrix.target }}-tar=${{ github.ref_name }}-${{ matrix.target }}".tar.gz >> $GITHUB_OUTPUT
           fi
     outputs:
       x86_64-linux-tar: ${{ steps.archive-output.outputs.x86_64-unknown-linux-gnu-tar }}
