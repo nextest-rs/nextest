@@ -25,12 +25,6 @@ jobs:
           crate: cargo-hakari
           version: "0.9"  # Most recent version compatible with 0.9
       - name: Check workspace-hack Cargo.toml is up-to-date
-        uses: actions-rs/cargo@v1
-        with:
-          command: hakari
-          args: generate --diff
+        run: cargo hakari generate --diff
       - name: Check all crates depend on workspace-hack
-        uses: actions-rs/cargo@v1
-        with:
-          command: hakari
-          args: manage-deps --dry-run
+        run: cargo hakari manage-deps --dry-run
