@@ -13,10 +13,10 @@ cargo llvm-cov nextest
 
 ### Using llvm-cov in GitHub Actions
 
-Install nightly Rust with the `llvm-tools-preview` component, nextest, and llvm-cov in GitHub Actions. Then, run `cargo llvm-cov nextest`.
+Install Rust with the `llvm-tools-preview` component, nextest, and llvm-cov in GitHub Actions. Then, run `cargo llvm-cov nextest`.
 
 ```yaml
-- uses: dtolnay/rust-toolchain@nightly
+- uses: dtolnay/rust-toolchain@stable
   with:
     components: llvm-tools-preview
 - uses: taiki-e/install-action@cargo-llvm-cov
