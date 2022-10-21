@@ -18,7 +18,7 @@ backtrace = { version = "0.3.66", features = ["gimli-symbolize", "std"] }
 clap = { version = "4.0.18", features = ["color", "derive", "env", "error-context", "help", "std", "suggestions", "usage"] }
 console = { version = "0.15.2", features = ["ansi-parsing", "unicode-width"] }
 either = { version = "1.8.0", features = ["use_std"] }
-futures-channel = { version = "0.3.24", features = ["alloc", "futures-sink", "sink", "std"] }
+futures-channel = { version = "0.3.25", features = ["alloc", "futures-sink", "sink", "std"] }
 futures-sink = { version = "0.3.24", default-features = false, features = ["alloc", "std"] }
 getrandom = { version = "0.2.7", default-features = false, features = ["std"] }
 hashbrown = { version = "0.12.3", features = ["ahash", "inline-more", "raw"] }
