@@ -3,6 +3,15 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+### Added
+
+- Nextest now reads environment variables specified in [the `[env]` section](https://doc.rust-lang.org/cargo/reference/config.html#env) from `.cargo/config.toml` files. The full syntax is supported including `force` and `relative`.
+
+  Thanks to [Waleed Khan](https://github.com/arxanas) for your first contribution!
+- Nextest now sets the `CARGO_PKG_RUST_VERSION` environment variable when it runs tests. For `cargo test` this was added in Rust 1.64, but nextest sets it across all versions of Rust.
+
 ## [0.9.39] - 2022-10-14
 
 ### Added
