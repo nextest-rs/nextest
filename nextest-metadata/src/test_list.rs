@@ -11,6 +11,7 @@ use std::{
     path::PathBuf,
     process::Command,
 };
+use target_spec::summaries::PlatformSummary;
 
 /// Command builder for `cargo nextest list`.
 #[derive(Clone, Debug, Default)]
@@ -272,7 +273,14 @@ pub struct RustBuildMetaSummary {
     /// Linked paths, relative to the target directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
-    /// The target platform used while compiling the Rust artifacts
+    /// The target platforms used while compiling the Rust artifacts.
+    #[serde(default)]
+    pub target_platforms: Vec<PlatformSummary>,
+
+    /// A deprecated form of the target platform used for cross-compilation, if any.
+    ///
+    /// This is no longer used by nextest, but is maintained for compatibility with older versions
+    /// which used to generate this.
     #[serde(default)]
     pub target_platform: Option<String>,
 }
@@ -485,7 +493,22 @@ mod tests {
         non_test_binaries: BTreeMap::new(),
         linked_paths: BTreeSet::new(),
         target_platform: None,
+        target_platforms: vec![],
     }; "no target platform")]
+    #[test_case(r#"{
+        "target-directory": "/foo",
+        "base-output-directories": [],
+        "non-test-binaries": {},
+        "linked-paths": [],
+        "target-platform": "x86_64-unknown-linux-gnu"
+    }"#, RustBuildMetaSummary {
+        target_directory: "/foo".into(),
+        base_output_directories: BTreeSet::new(),
+        non_test_binaries: BTreeMap::new(),
+        linked_paths: BTreeSet::new(),
+        target_platform: Some("x86_64-unknown-linux-gnu".to_owned()),
+        target_platforms: vec![],
+    }; "single target platform specified")]
     fn test_deserialize_old_rust_build_meta(input: &str, expected: RustBuildMetaSummary) {
         let build_meta: RustBuildMetaSummary =
             serde_json::from_str(input).expect("input deserialized correctly");

@@ -1176,6 +1176,7 @@ dependencies = [
  "nextest-workspace-hack",
  "serde",
  "serde_json",
+ "target-spec",
  "test-case",
 ]
 
@@ -1270,9 +1271,9 @@ dependencies = [
  "owo-colors",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
- "serde",
  "serde_json",
  "syn 1.0.102",
+ "target-spec",
  "tokio",
  "uuid",
  "winapi",
@@ -2100,6 +2101,7 @@ checksum = "46b1748adaf6a95d3fa8cdf590403e789c5e172dcd9dc4b8c199c7f4be7fc11e"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
+ "serde",
  "target-lexicon",
 ]
 

@@ -974,7 +974,7 @@ impl BaseApp {
                     .map_err(|err| {
                         ExpectedError::argument_json_parse_error("binaries-metadata", path, err)
                     })?;
-                Arc::new(BinaryList::from_summary(binary_list))
+                Arc::new(BinaryList::from_summary(binary_list)?)
             }
             None => {
                 let target_triple =
@@ -1291,7 +1291,7 @@ fn discover_target_triple(
         Ok(Some(triple)) => {
             log::debug!(
                 "using target triple `{}` defined by `{}`",
-                triple.triple,
+                triple.platform.triple_str(),
                 triple.source
             );
             Some(triple)

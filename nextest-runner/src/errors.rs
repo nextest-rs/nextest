@@ -4,7 +4,7 @@
 //! Errors produced by nextest.
 
 use crate::{
-    cargo_config::TargetTriple,
+    cargo_config::{TargetTriple, TargetTripleSource},
     helpers::{dylib_path_envvar, extract_abort_status},
     reuse_build::ArchiveFormat,
     runner::AbortStatus,
@@ -284,6 +284,14 @@ impl fmt::Display for PathMapperConstructKind {
             Self::TargetDir => write!(f, "remapped target directory"),
         }
     }
+}
+
+/// An error that occurs while parsing Rust build metadata from a summary.
+#[derive(Debug, Error)]
+pub enum RustBuildMetaParseError {
+    /// An error occurred while deserializing the platform.
+    #[error("error deserializing platform from build metadata")]
+    PlatformDeserializeError(#[from] target_spec::Error),
 }
 
 /// An error that occurs in [`BinaryList::from_messages`](crate::list::BinaryList::from_messages) or
@@ -679,6 +687,10 @@ pub enum ArchiveExtractError {
     #[error("error reading archive")]
     Read(#[source] ArchiveReadError),
 
+    /// An error occurred while deserializing Rust build metadata.
+    #[error("error deserializing Rust build metadata")]
+    RustBuildMeta(#[from] RustBuildMetaParseError),
+
     /// An error occurred while writing out a file to the destination directory.
     #[error("error writing file `{path}` to disk")]
     WriteFile {
@@ -852,6 +864,17 @@ pub enum TargetTripleError {
         TargetTriple::CARGO_BUILD_TARGET_ENV
     )]
     InvalidEnvironmentVar,
+
+    /// An error occurred while deserializing the platform.
+    #[error("error deserializing target triple from {source}")]
+    TargetSpecError {
+        /// The source from which the triple couldn't be parsed.
+        source: TargetTripleSource,
+
+        /// The error that occurred parsing the triple.
+        #[source]
+        error: target_spec::Error,
+    },
 }
 
 /// An error occurred determining the target runner
@@ -875,17 +898,6 @@ pub enum TargetRunnerError {
 
         /// The value that was read from the key
         value: String,
-    },
-
-    /// Failed to parse the specified target triple
-    #[error("failed to parse triple `{triple}`")]
-    FailedToParseTargetTriple {
-        /// The triple that failed to parse
-        triple: String,
-
-        /// The error that occurred parsing the triple
-        #[source]
-        error: target_spec::errors::TripleParseError,
     },
 }
 

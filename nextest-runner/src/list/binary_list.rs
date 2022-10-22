@@ -3,7 +3,7 @@
 
 use crate::{
     cargo_config::TargetTriple,
-    errors::{FromMessagesError, WriteTestListError},
+    errors::{FromMessagesError, RustBuildMetaParseError, WriteTestListError},
     helpers::convert_rel_path_to_forward_slash,
     list::{BinaryListState, OutputFormat, RustBuildMeta, Styles},
 };
@@ -63,7 +63,7 @@ impl BinaryList {
     }
 
     /// Constructs the list from its summary format
-    pub fn from_summary(summary: BinaryListSummary) -> Self {
+    pub fn from_summary(summary: BinaryListSummary) -> Result<Self, RustBuildMetaParseError> {
         let rust_binaries = summary
             .rust_binaries
             .into_values()
@@ -76,10 +76,10 @@ impl BinaryList {
                 build_platform: bin.build_platform,
             })
             .collect();
-        Self {
-            rust_build_meta: RustBuildMeta::from_summary(summary.rust_build_meta),
+        Ok(Self {
+            rust_build_meta: RustBuildMeta::from_summary(summary.rust_build_meta)?,
             rust_binaries,
-        }
+        })
     }
 
     /// Outputs this list to the given writer.
@@ -367,6 +367,7 @@ mod tests {
     use indoc::indoc;
     use maplit::btreeset;
     use pretty_assertions::assert_eq;
+    use target_spec::{Platform, TargetFeatures};
 
     #[test]
     fn test_parse_binary_list() {
@@ -390,7 +391,7 @@ mod tests {
         };
 
         let fake_triple = TargetTriple {
-            triple: "fake-triple".to_owned(),
+            platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
             source: TargetTripleSource::CliOption,
         };
         let mut rust_build_meta = RustBuildMeta::new("/fake/target", Some(fake_triple));
@@ -463,7 +464,13 @@ mod tests {
               ]
             },
             "linked-paths": [],
-            "target-platform": "fake-triple"
+            "target-platforms": [
+              {
+                "triple": "x86_64-unknown-linux-gnu",
+                "target-features": "unknown"
+              }
+            ],
+            "target-platform": "x86_64-unknown-linux-gnu"
           },
           "rust-binaries": {
             "fake-macro::proc-macro/fake-macro": {

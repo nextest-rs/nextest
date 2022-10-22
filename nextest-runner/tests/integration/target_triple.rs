@@ -4,6 +4,7 @@
 use crate::fixtures::*;
 use color_eyre::Result;
 use nextest_runner::cargo_config::{CargoConfigs, TargetTriple, TargetTripleSource};
+use target_spec::{Platform, TargetFeatures};
 
 #[test]
 fn parses_target_cli_option() {
@@ -16,7 +17,7 @@ fn parses_target_cli_option() {
     assert_eq!(
         triple,
         Some(TargetTriple {
-            triple: "aarch64-unknown-linux-gnu".to_owned(),
+            platform: platform("aarch64-unknown-linux-gnu"),
             source: TargetTripleSource::CliOption,
         })
     )
@@ -33,7 +34,7 @@ fn parses_cargo_env() {
     assert_eq!(
         triple,
         Some(TargetTriple {
-            triple: "x86_64-unknown-linux-musl".to_owned(),
+            platform: platform("x86_64-unknown-linux-musl"),
             source: TargetTripleSource::Env,
         })
     )
@@ -50,4 +51,8 @@ fn target_triple(target_cli_option: Option<&str>) -> Result<Option<TargetTriple>
     .unwrap();
     let triple = TargetTriple::find(&configs, target_cli_option)?;
     Ok(triple)
+}
+
+fn platform(triple_str: &str) -> Platform {
+    Platform::new(triple_str.to_owned(), TargetFeatures::Unknown).unwrap()
 }
