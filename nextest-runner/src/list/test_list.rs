@@ -1001,6 +1001,7 @@ mod tests {
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use std::iter;
+    use target_spec::Platform;
 
     #[test]
     fn test_parse_test_list() {
@@ -1052,7 +1053,11 @@ mod tests {
         };
 
         let fake_triple = TargetTriple {
-            triple: "fake-triple".to_owned(),
+            platform: Platform::new(
+                "aarch64-unknown-linux-gnu",
+                target_spec::TargetFeatures::Unknown,
+            )
+            .unwrap(),
             source: TargetTripleSource::CliOption,
         };
         let fake_env = EnvironmentMap::empty();
@@ -1156,7 +1161,13 @@ mod tests {
                 "base-output-directories": [],
                 "non-test-binaries": {},
                 "linked-paths": [],
-                "target-platform": "fake-triple"
+                "target-platforms": [
+                  {
+                    "triple": "aarch64-unknown-linux-gnu",
+                    "target-features": "unknown"
+                  }
+                ],
+                "target-platform": "aarch64-unknown-linux-gnu"
               },
               "test-count": 6,
               "rust-suites": {

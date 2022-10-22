@@ -103,6 +103,11 @@ pub enum ExpectedError {
         #[source]
         err: guppy::Error,
     },
+    #[error("rust build meta parse error")]
+    RustBuildMetaParseError {
+        #[from]
+        err: RustBuildMetaParseError,
+    },
     #[error("error parsing Cargo messages")]
     FromMessagesError {
         #[from]
@@ -297,6 +302,7 @@ impl ExpectedError {
             | Self::ArgumentFileReadError { .. }
             | Self::UnknownArchiveFormat { .. }
             | Self::ArchiveExtractError { .. }
+            | Self::RustBuildMetaParseError { .. }
             | Self::PathMapperConstructError { .. }
             | Self::ArgumentJsonParseError { .. }
             | Self::TestRunnerBuildError { .. }
@@ -438,6 +444,10 @@ impl ExpectedError {
                     "error extracting archive `{}`",
                     archive_file.if_supports_color(Stream::Stderr, |x| x.bold())
                 );
+                Some(err as &dyn Error)
+            }
+            Self::RustBuildMetaParseError { err } => {
+                log::error!("error parsing Rust build metadata");
                 Some(err as &dyn Error)
             }
             Self::ArgumentJsonParseError {

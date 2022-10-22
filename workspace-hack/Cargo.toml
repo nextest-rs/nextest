@@ -28,8 +28,8 @@ miette = { version = "5.3.0", features = ["atty", "backtrace", "fancy", "fancy-n
 nom-tracable = { version = "0.8.0", features = ["trace"] }
 num-traits = { version = "0.2.15", default-features = false, features = ["std"] }
 owo-colors = { version = "3.5.0", default-features = false, features = ["supports-color", "supports-colors"] }
-serde = { version = "1.0.146", features = ["derive", "serde_derive", "std"] }
 serde_json = { version = "1.0.86", features = ["std", "unbounded_depth"] }
+target-spec = { version = "1.2.0", default-features = false, features = ["serde", "summaries"] }
 uuid = { version = "1.1.2", features = ["private_getrandom", "rng", "std", "v4"] }
 
 [build-dependencies]

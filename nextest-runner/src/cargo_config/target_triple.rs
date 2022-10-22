@@ -6,13 +6,13 @@ use crate::{
     errors::TargetTripleError,
 };
 use std::fmt;
-use target_spec::Platform;
+use target_spec::{summaries::PlatformSummary, Platform, TargetFeatures};
 
 /// Represents a target triple that's being cross-compiled against.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TargetTriple {
-    /// The target triple being built.
-    pub triple: String,
+    /// The target platform being built.
+    pub platform: Platform,
 
     /// The source the triple came from.
     pub source: TargetTripleSource,
@@ -23,12 +23,12 @@ impl TargetTriple {
     /// cargo-nextest represents the host triple with `None` during runtime.
     /// However the build-metadata might be used on a system with a different host triple.
     /// Therefore the host triple is detected if `target_triple` is `None`
-    pub fn serialize(target_triple: Option<&TargetTriple>) -> Option<String> {
+    pub fn serialize(target_triple: Option<&TargetTriple>) -> Option<PlatformSummary> {
         if let Some(target) = &target_triple {
-            Some(target.triple.clone())
+            Some(target.platform.to_summary())
         } else {
             match Platform::current() {
-                Ok(host) => Some(host.triple_str().to_owned()),
+                Ok(host) => Some(host.to_summary()),
                 Err(err) => {
                     log::warn!(
                         "failed to detect host target: {err}!\n cargo nextest may use the wrong test runner for this archive."
@@ -39,13 +39,33 @@ impl TargetTriple {
         }
     }
 
-    /// Converts a `String` that was output by `TargetTriple::serialize` back to a target triple.
-    /// This target triple is assumed to orginiate from a build-metadata config.
-    pub fn deserialize(target_triple: Option<String>) -> Option<TargetTriple> {
-        Some(TargetTriple {
-            triple: target_triple?,
-            source: TargetTripleSource::Metadata,
-        })
+    /// Converts a `PlatformSummary` that was output by `TargetTriple::serialize` back to a target triple.
+    /// This target triple is assumed to originate from a build-metadata config.
+    pub fn deserialize(
+        platform: Option<PlatformSummary>,
+    ) -> Result<Option<TargetTriple>, target_spec::Error> {
+        platform
+            .map(|platform| {
+                Ok(TargetTriple {
+                    platform: platform.to_platform()?,
+                    source: TargetTripleSource::Metadata,
+                })
+            })
+            .transpose()
+    }
+
+    /// Converts a string that was output by older versions of nextest back to a target triple.
+    pub fn deserialize_str(
+        triple_str: Option<String>,
+    ) -> Result<Option<TargetTriple>, target_spec::Error> {
+        triple_str
+            .map(|triple_str| {
+                Ok(TargetTriple {
+                    platform: Platform::new(triple_str, TargetFeatures::Unknown)?,
+                    source: TargetTripleSource::Metadata,
+                })
+            })
+            .transpose()
     }
 
     /// Find the target triple being built.
@@ -63,8 +83,16 @@ impl TargetTriple {
     ) -> Result<Option<Self>, TargetTripleError> {
         // First, look at the CLI option passed in.
         if let Some(triple) = target_cli_option {
+            let platform =
+                Platform::new(triple.to_owned(), TargetFeatures::Unknown).map_err(|error| {
+                    TargetTripleError::TargetSpecError {
+                        source: TargetTripleSource::CliOption,
+                        error,
+                    }
+                })?;
             return Ok(Some(TargetTriple {
-                triple: triple.to_owned(),
+                // TODO: need to get the minimum set of target features from here
+                platform,
                 source: TargetTripleSource::CliOption,
             }));
         }
@@ -81,8 +109,14 @@ impl TargetTriple {
             let triple = triple_val
                 .into_string()
                 .map_err(|_osstr| TargetTripleError::InvalidEnvironmentVar)?;
+            let platform = Platform::new(triple, TargetFeatures::Unknown).map_err(|error| {
+                TargetTripleError::TargetSpecError {
+                    source: TargetTripleSource::Env,
+                    error,
+                }
+            })?;
             Ok(Some(Self {
-                triple,
+                platform,
                 source: TargetTripleSource::Env,
             }))
         } else {
@@ -95,13 +129,16 @@ impl TargetTriple {
             match discovered_config {
                 DiscoveredConfig::CliOption { config, source }
                 | DiscoveredConfig::File { config, source } => {
+                    let source = TargetTripleSource::CargoConfig {
+                        source: source.clone(),
+                    };
                     if let Some(triple) = &config.build.target {
-                        return Ok(Some(TargetTriple {
-                            triple: triple.to_owned(),
-                            source: TargetTripleSource::CargoConfig {
-                                source: source.clone(),
-                            },
-                        }));
+                        match Platform::new(triple.clone(), TargetFeatures::Unknown) {
+                            Ok(platform) => return Ok(Some(TargetTriple { platform, source })),
+                            Err(error) => {
+                                return Err(TargetTripleError::TargetSpecError { source, error })
+                            }
+                        }
                     }
                 }
                 DiscoveredConfig::Env => {
@@ -183,7 +220,7 @@ mod tests {
         assert_eq!(
             find_target_triple(&[], None, &dir_foo_bar_path, &dir_path),
             Some(TargetTriple {
-                triple: "x86_64-unknown-linux-gnu".into(),
+                platform: platform("x86_64-unknown-linux-gnu"),
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::File(dir_path.join("foo/bar/.cargo/config.toml")),
                 },
@@ -193,7 +230,7 @@ mod tests {
         assert_eq!(
             find_target_triple(&[], None, &dir_foo_path, &dir_path),
             Some(TargetTriple {
-                triple: "x86_64-pc-windows-msvc".into(),
+                platform: platform("x86_64-pc-windows-msvc"),
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::File(dir_path.join("foo/.cargo/config")),
                 },
@@ -208,7 +245,7 @@ mod tests {
                 &dir_path
             ),
             Some(TargetTriple {
-                triple: "aarch64-unknown-linux-gnu".into(),
+                platform: platform("aarch64-unknown-linux-gnu"),
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
@@ -227,7 +264,7 @@ mod tests {
                 &dir_path
             ),
             Some(TargetTriple {
-                triple: "aarch64-unknown-linux-gnu".into(),
+                platform: platform("aarch64-unknown-linux-gnu"),
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
@@ -243,7 +280,7 @@ mod tests {
                 &dir_path
             ),
             Some(TargetTriple {
-                triple: "aarch64-unknown-linux-gnu".into(),
+                platform: platform("aarch64-unknown-linux-gnu"),
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
@@ -259,7 +296,7 @@ mod tests {
                 &dir_path
             ),
             Some(TargetTriple {
-                triple: "aarch64-pc-windows-msvc".into(),
+                platform: platform("aarch64-pc-windows-msvc"),
                 source: TargetTripleSource::Env,
             })
         );
@@ -269,7 +306,7 @@ mod tests {
         assert_eq!(
             find_target_triple(&["extra-config.toml"], None, &dir_foo_path, &dir_path),
             Some(TargetTriple {
-                triple: "aarch64-unknown-linux-gnu".into(),
+                platform: platform("aarch64-unknown-linux-gnu"),
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::File(dir_foo_path.join("extra-config.toml")),
                 },
@@ -283,7 +320,7 @@ mod tests {
                 &dir_path
             ),
             Some(TargetTriple {
-                triple: "aarch64-pc-windows-msvc".into(),
+                platform: platform("aarch64-pc-windows-msvc"),
                 source: TargetTripleSource::Env,
             })
         );
@@ -298,7 +335,7 @@ mod tests {
                 &dir_path
             ),
             Some(TargetTriple {
-                triple: "x86_64-unknown-linux-musl".into(),
+                platform: platform("x86_64-unknown-linux-musl"),
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
@@ -315,7 +352,7 @@ mod tests {
                 &dir_path
             ),
             Some(TargetTriple {
-                triple: "x86_64-unknown-linux-musl".into(),
+                platform: platform("x86_64-unknown-linux-musl"),
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
@@ -340,5 +377,9 @@ mod tests {
         let ret = TargetTriple::from_cargo_configs(&configs).unwrap();
         std::env::remove_var("CARGO_BUILD_TARGET");
         ret
+    }
+
+    fn platform(triple_str: &str) -> Platform {
+        Platform::new(triple_str.to_owned(), TargetFeatures::Unknown).expect("triple str is valid")
     }
 }

@@ -46,7 +46,7 @@ shell-words = "1.1.0"
 strip-ansi-escapes = "0.1.1"
 tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
-target-spec = "1.2.0"
+target-spec = { version = "1.2.0", features = ["summaries"] }
 tempfile = "3.3.0"
 thiserror = "1.0.37"
 # For parsing of .cargo/config.toml files

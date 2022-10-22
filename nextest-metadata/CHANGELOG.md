@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `RustBuildMetaSummary` has a new `target-platforms` field, which records information about a list
+  of cross-compilation target platforms. This is to prepare for future support for multiple
+  `--target` arguments ([#537]).
+
+  This field is optional, which means that the minimum supported nextest version hasn't been bumped
+  with this release.
+
+[#537]: https://github.com/nextest-rs/nextest/issues/537
+
 ## [0.6.0] - 2022-08-17
 
 ### Added

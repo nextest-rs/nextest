@@ -128,7 +128,7 @@ impl<'a> Unarchiver<'a> {
                         })
                     })?;
 
-                let this_binary_list = BinaryList::from_summary(summary);
+                let this_binary_list = BinaryList::from_summary(summary)?;
                 let test_binary_count = this_binary_list.rust_binaries.len();
                 let non_test_binary_count =
                     this_binary_list.rust_build_meta.non_test_binaries.len();

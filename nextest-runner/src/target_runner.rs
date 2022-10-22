@@ -95,15 +95,7 @@ impl PlatformRunner {
         triple: Option<&TargetTriple>,
     ) -> Result<Option<Self>, TargetRunnerError> {
         let target = match triple {
-            Some(target) => Platform::from_triple(
-                target_spec::Triple::new(target.triple.to_owned()).map_err(|error| {
-                    TargetRunnerError::FailedToParseTargetTriple {
-                        triple: target.triple.to_owned(),
-                        error,
-                    }
-                })?,
-                target_spec::TargetFeatures::Unknown,
-            ),
+            Some(target) => target.platform.clone(),
             None => Platform::current().map_err(TargetRunnerError::UnknownHostPlatform)?,
         };
 
