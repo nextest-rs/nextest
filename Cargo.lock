@@ -1597,7 +1597,7 @@ dependencies = [
  "indexmap",
  "nextest-workspace-hack",
  "owo-colors",
- "quick-xml 0.23.1",
+ "quick-xml 0.25.0",
  "thiserror",
  "uuid",
 ]
@@ -1613,9 +1613,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.23.1"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11bafc859c6815fbaffbbbf4229ecb767ac913fecb27f9ad4343662e9ef099ea"
+checksum = "58e21a144a0ffb5fad7b464babcdab934a325ad69b7c0373bcfef5cbd9799ca9"
 dependencies = [
  "memchr",
 ]
