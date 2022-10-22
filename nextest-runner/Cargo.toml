@@ -21,7 +21,7 @@ cfg-if = "1.0.0"
 chrono = "0.4.22"
 debug-ignore = "1.0.3"
 either = "1.8.0"
-futures = "0.3.24"
+futures = "0.3.25"
 guppy = "0.14.3"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
@@ -39,7 +39,7 @@ owo-colors = "3.5.0"
 num_cpus = "1.13.1"
 regex = "1.6.0"
 semver = "1.0.14"
-serde = { version = "1.0.146", features = ["derive"] }
+serde = { version = "1.0.147", features = ["derive"] }
 serde_json = "1.0.87"
 serde_path_to_error = "0.1.8"
 shell-words = "1.1.0"
@@ -50,7 +50,7 @@ target-spec = { version = "1.2.0", features = ["summaries"] }
 tempfile = "3.3.0"
 thiserror = "1.0.37"
 # For parsing of .cargo/config.toml files
-tokio = { version = "1.21.1", features = [
+tokio = { version = "1.21.2", features = [
     "io-util",
     "macros",
     "process",
@@ -60,7 +60,7 @@ tokio = { version = "1.21.1", features = [
     "sync",
     "time",
 ] }
-toml_edit = { version = "0.14.4", features = ["easy"] }
+toml_edit = { version = "0.15.0", features = ["easy"] }
 twox-hash = { version = "1.6.3", default-features = false }
 zstd = { version = "0.11.2", features = ["zstdmt"] }
 
@@ -78,7 +78,7 @@ self_update = { version = "0.32.0", optional = true, default-features = false, f
 nextest-filtering = { version = "0.2.1", path = "../nextest-filtering" }
 nextest-metadata = { version = "0.6.0", path = "../nextest-metadata" }
 quick-junit = { version = "0.3.0", path = "../quick-junit" }
-uuid = { version = "1.1.2", features = ["v4"] }
+uuid = { version = "1.2.1", features = ["v4"] }
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(unix)'.dependencies]
