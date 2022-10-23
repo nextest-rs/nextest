@@ -1416,7 +1416,7 @@ impl Styles {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::NextestConfig;
+    use crate::{config::NextestConfig, platform::BuildPlatforms};
 
     #[test]
     fn no_capture_settings() {
@@ -1430,10 +1430,15 @@ mod tests {
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
+        let build_platforms = BuildPlatforms::new(None).unwrap();
 
         let mut buf: Vec<u8> = Vec::new();
         let output = ReporterStderr::Buffer(&mut buf);
-        let reporter = builder.build(&test_list, &profile, output);
+        let reporter = builder.build(
+            &test_list,
+            &profile.apply_build_platforms(&build_platforms),
+            output,
+        );
         assert!(reporter.inner.no_capture, "no_capture is true");
         assert_eq!(
             reporter.inner.failure_output,

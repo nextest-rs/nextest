@@ -4,10 +4,9 @@
 //! Support for [target runners](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner)
 
 use crate::{
-    cargo_config::{
-        CargoConfig, CargoConfigSource, CargoConfigs, DiscoveredConfig, Runner, TargetTriple,
-    },
+    cargo_config::{CargoConfig, CargoConfigSource, CargoConfigs, DiscoveredConfig, Runner},
     errors::TargetRunnerError,
+    platform::BuildPlatforms,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use nextest_metadata::BuildPlatform;
@@ -28,13 +27,12 @@ impl TargetRunner {
     /// or via a `CARGO_TARGET_{TRIPLE}_RUNNER` environment variable
     pub fn new(
         configs: &CargoConfigs,
-        target_triple: Option<&TargetTriple>,
+        build_platforms: &BuildPlatforms,
     ) -> Result<Self, TargetRunnerError> {
-        let host = PlatformRunner::by_precedence(configs, None)?;
-        let target = if target_triple.is_some() {
-            PlatformRunner::by_precedence(configs, target_triple)?
-        } else {
-            host.clone()
+        let host = PlatformRunner::by_precedence(configs, &build_platforms.host)?;
+        let target = match &build_platforms.target {
+            Some(target) => PlatformRunner::by_precedence(configs, &target.platform)?,
+            None => host.clone(),
         };
 
         Ok(Self { host, target })
@@ -92,14 +90,9 @@ pub struct PlatformRunner {
 impl PlatformRunner {
     fn by_precedence(
         configs: &CargoConfigs,
-        triple: Option<&TargetTriple>,
+        platform: &Platform,
     ) -> Result<Option<Self>, TargetRunnerError> {
-        let target = match triple {
-            Some(target) => target.platform.clone(),
-            None => Platform::current().map_err(TargetRunnerError::UnknownHostPlatform)?,
-        };
-
-        Self::find_config(configs, target)
+        Self::find_config(configs, platform)
     }
 
     /// Attempts to find a target runner for the specified target from a
@@ -109,7 +102,7 @@ impl PlatformRunner {
     #[doc(hidden)]
     pub fn find_config(
         configs: &CargoConfigs,
-        target: target_spec::Platform,
+        target: &Platform,
     ) -> Result<Option<Self>, TargetRunnerError> {
         // Now that we've found all of the config files that could declare
         // a runner that matches our target triple, we need to actually find
@@ -120,7 +113,7 @@ impl PlatformRunner {
                 DiscoveredConfig::CliOption { config, source }
                 | DiscoveredConfig::File { config, source } => {
                     if let Some(runner) =
-                        Self::from_cli_option_or_file(&target, config, source, configs.cwd())?
+                        Self::from_cli_option_or_file(target, config, source, configs.cwd())?
                     {
                         return Ok(Some(runner));
                     }
@@ -128,8 +121,7 @@ impl PlatformRunner {
                 DiscoveredConfig::Env => {
                     // Check if we have a CARGO_TARGET_{TRIPLE}_RUNNER environment variable
                     // set, and if so use that.
-                    if let Some(tr) = Self::from_env(Self::runner_env_var(&target), configs.cwd())?
-                    {
+                    if let Some(tr) = Self::from_env(Self::runner_env_var(target), configs.cwd())? {
                         return Ok(Some(tr));
                     }
                 }
@@ -632,7 +624,7 @@ mod tests {
     ) -> Option<PlatformRunner> {
         let configs =
             CargoConfigs::new_with_isolation(cli_configs, cwd, terminate_search_at).unwrap();
-        PlatformRunner::find_config(&configs, platform).unwrap()
+        PlatformRunner::find_config(&configs, &platform).unwrap()
     }
 
     static CARGO_CONFIG_CONTENTS: &str = r#"

@@ -7,6 +7,7 @@ use color_eyre::Result;
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
+    platform::BuildPlatforms,
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -21,7 +22,7 @@ fn default() -> &'static target_spec::Platform {
     DEF.get_or_init(|| target_spec::Platform::current().unwrap())
 }
 
-fn runner_for_target(triple: Option<&str>) -> Result<TargetRunner> {
+fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunner)> {
     let configs = CargoConfigs::new_with_isolation(
         Vec::<String>::new(),
         &workspace_root(),
@@ -29,14 +30,16 @@ fn runner_for_target(triple: Option<&str>) -> Result<TargetRunner> {
     )
     .unwrap();
     let triple = TargetTriple::find(&configs, triple)?;
-    Ok(TargetRunner::new(&configs, triple.as_ref())?)
+    let build_platforms = BuildPlatforms::new(triple)?;
+    let target_runner = TargetRunner::new(&configs, &build_platforms)?;
+    Ok((build_platforms, target_runner))
 }
 
 #[test]
 fn parses_cargo_env() {
     set_env_vars();
 
-    let def_runner = with_env(
+    let (_, def_runner) = with_env(
         [(
             format!(
                 "CARGO_TARGET_{}_RUNNER",
@@ -60,7 +63,7 @@ fn parses_cargo_env() {
         );
     }
 
-    let specific_runner = with_env(
+    let (_, specific_runner) = with_env(
         [(
             "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUNNER",
             "cargo_with_specific",
@@ -85,7 +88,7 @@ fn parses_cargo_config_exact() {
     let configs =
         CargoConfigs::new_with_isolation(Vec::<String>::new(), &workspace_root, &workspace_root)
             .unwrap();
-    let runner = PlatformRunner::find_config(&configs, windows)
+    let runner = PlatformRunner::find_config(&configs, &windows)
         .unwrap()
         .unwrap();
 
@@ -100,7 +103,7 @@ fn disregards_non_matching() {
     let configs =
         CargoConfigs::new_with_isolation(Vec::<String>::new(), &workspace_root, &workspace_root)
             .unwrap();
-    assert!(PlatformRunner::find_config(&configs, windows)
+    assert!(PlatformRunner::find_config(&configs, &windows)
         .unwrap()
         .is_none());
 }
@@ -112,7 +115,7 @@ fn parses_cargo_config_cfg() {
     let configs =
         CargoConfigs::new_with_isolation(Vec::<String>::new(), &workspace_root, &workspace_root)
             .unwrap();
-    let runner = PlatformRunner::find_config(&configs, android)
+    let runner = PlatformRunner::find_config(&configs, &android)
         .unwrap()
         .unwrap();
 
@@ -120,7 +123,7 @@ fn parses_cargo_config_cfg() {
     assert_eq!(vec!["-x"], runner.args().collect::<Vec<_>>());
 
     let linux = parse_triple("x86_64-unknown-linux-musl");
-    let runner = PlatformRunner::find_config(&configs, linux)
+    let runner = PlatformRunner::find_config(&configs, &linux)
         .unwrap()
         .unwrap();
 
@@ -135,7 +138,7 @@ fn parses_cargo_config_cfg() {
 fn falls_back_to_cargo_config() {
     let linux = parse_triple("x86_64-unknown-linux-musl");
 
-    let target_runner = with_env(
+    let (_, target_runner) = with_env(
         [(
             "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
             "cargo-runner-windows",
@@ -174,7 +177,7 @@ fn test_listing_with_target_runner() -> Result<()> {
     let test_count = test_list.test_count();
 
     {
-        let target_runner = with_env(
+        let (_, target_runner) = with_env(
             [(
                 &current_runner_env_var(),
                 &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
@@ -204,7 +207,7 @@ fn test_run_with_target_runner() -> Result<()> {
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
 
-    let target_runner = with_env(
+    let (build_platforms, target_runner) = with_env(
         [(
             &current_runner_env_var(),
             &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
@@ -222,7 +225,8 @@ fn test_run_with_target_runner() -> Result<()> {
     let config = load_config();
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
-        .expect("default config is valid");
+        .expect("default config is valid")
+        .apply_build_platforms(&build_platforms);
 
     let runner = TestRunnerBuilder::default();
     let mut runner = runner

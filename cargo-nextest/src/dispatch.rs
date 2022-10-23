@@ -15,10 +15,13 @@ use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
-    config::{NextestConfig, NextestProfile, RetryPolicy, TestThreads, ToolConfigFile},
+    config::{
+        NextestConfig, NextestProfile, PreBuildPlatform, RetryPolicy, TestThreads, ToolConfigFile,
+    },
     errors::WriteTestListError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
     partition::PartitionerBuilder,
+    platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, TestRunnerBuilder},
@@ -918,9 +921,9 @@ impl BaseApp {
         })
     }
 
-    fn load_runner(&self, triple: Option<&TargetTriple>) -> &TargetRunner {
+    fn load_runner(&self, build_platforms: &BuildPlatforms) -> &TargetRunner {
         self.target_runner
-            .get_or_init(|| runner_for_target(&self.cargo_configs, triple))
+            .get_or_init(|| runner_for_target(&self.cargo_configs, build_platforms))
     }
 
     fn exec_archive(
@@ -1054,7 +1057,7 @@ impl App {
         &self,
         profile_name: Option<&str>,
         config: &'cfg NextestConfig,
-    ) -> Result<NextestProfile<'cfg>> {
+    ) -> Result<NextestProfile<'cfg, PreBuildPlatform>> {
         let profile_name = profile_name.unwrap_or_else(|| {
             // The "official" way to detect a miri environment is with MIRI_SYSROOT.
             // https://github.com/rust-lang/miri/pull/2398#issuecomment-1190747685
@@ -1099,7 +1102,7 @@ impl App {
             ListType::Full => {
                 let target_runner = self
                     .base
-                    .load_runner(binary_list.rust_build_meta.target_triple.as_ref());
+                    .load_runner(&binary_list.rust_build_meta.build_platforms()?);
                 let test_list =
                     self.build_test_list(binary_list, test_filter_builder, target_runner)?;
 
@@ -1133,13 +1136,13 @@ impl App {
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
-        let target_runner = self
-            .base
-            .load_runner(binary_list.rust_build_meta.target_triple.as_ref());
+        let build_platforms = binary_list.rust_build_meta.build_platforms()?;
+        let target_runner = self.base.load_runner(&build_platforms);
 
         let test_list = self.build_test_list(binary_list, test_filter_builder, target_runner)?;
 
         let output = output_writer.reporter_output();
+        let profile = profile.apply_build_platforms(&build_platforms);
 
         let mut reporter = reporter_opts
             .to_builder(no_capture)
@@ -1307,24 +1310,24 @@ fn discover_target_triple(
     }
 }
 
-fn runner_for_target(cargo_configs: &CargoConfigs, triple: Option<&TargetTriple>) -> TargetRunner {
-    match TargetRunner::new(cargo_configs, triple) {
+fn runner_for_target(
+    cargo_configs: &CargoConfigs,
+    build_platforms: &BuildPlatforms,
+) -> TargetRunner {
+    match TargetRunner::new(cargo_configs, build_platforms) {
         Ok(runner) => {
-            match triple {
-                Some(_) => {
-                    if let Some(runner) = runner.target() {
-                        log_platform_runner("for the target platform, ", runner);
-                    }
-                    if let Some(runner) = runner.host() {
-                        log_platform_runner("for the host platform, ", runner);
-                    }
+            if build_platforms.target.is_some() {
+                if let Some(runner) = runner.target() {
+                    log_platform_runner("for the target platform, ", runner);
                 }
-                None => {
-                    // If triple is None, then the host and target platforms use the same runner if
-                    // any.
-                    if let Some(runner) = runner.target() {
-                        log_platform_runner("", runner);
-                    }
+                if let Some(runner) = runner.host() {
+                    log_platform_runner("for the host platform, ", runner);
+                }
+            } else {
+                // If triple is None, then the host and target platforms use the same runner if
+                // any.
+                if let Some(runner) = runner.target() {
+                    log_platform_runner("", runner);
                 }
             }
             runner

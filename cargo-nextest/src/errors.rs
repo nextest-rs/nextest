@@ -59,6 +59,11 @@ pub enum ExpectedError {
         #[from]
         err: ConfigParseError,
     },
+    #[error("unknown host platform")]
+    UnknownHostPlatform {
+        #[from]
+        err: UnknownHostPlatform,
+    },
     #[error("argument file read error")]
     ArgumentFileReadError {
         arg_name: &'static str,
@@ -299,6 +304,7 @@ impl ExpectedError {
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
             | Self::ConfigParseError { .. }
+            | Self::UnknownHostPlatform { .. }
             | Self::ArgumentFileReadError { .. }
             | Self::UnknownArchiveFormat { .. }
             | Self::ArchiveExtractError { .. }
@@ -398,9 +404,7 @@ impl ExpectedError {
                                     .profile_name
                                     .if_supports_color(Stream::Stderr, |p| p.bold()),
                             );
-                            for single_error in &override_error.parse_errors.errors {
-                                let report = miette::Report::new(single_error.clone())
-                                    .with_source_code(override_error.parse_errors.input.to_owned());
+                            for report in override_error.reports() {
                                 log::error!(target: "cargo_nextest::no_heading", "{report:?}");
                             }
                         }
@@ -412,6 +416,10 @@ impl ExpectedError {
                         err.source()
                     }
                 }
+            }
+            Self::UnknownHostPlatform { err } => {
+                log::error!("the host platform was unknown to nextest");
+                Some(err as &dyn Error)
             }
             Self::ArgumentFileReadError {
                 arg_name,

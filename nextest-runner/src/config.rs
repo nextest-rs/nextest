@@ -8,16 +8,19 @@ use crate::{
         ConfigParseError, ConfigParseErrorKind, ConfigParseOverrideError, ProfileNotFound,
         TestThreadsParseError, ToolConfigFileParseError,
     },
+    platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
+use guppy::graph::cargo::BuildPlatform;
 use guppy::graph::PackageGraph;
-use nextest_filtering::{FilteringExpr, TestQuery};
+use nextest_filtering::{FilteringExpr, FilteringSet, TestQuery};
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{
     cmp::Ordering, collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration,
 };
+use target_spec::TargetSpec;
 
 /// Overall configuration for nextest.
 ///
@@ -101,7 +104,10 @@ impl NextestConfig {
 
     /// Returns the profile with the given name, or an error if a profile was specified but not
     /// found.
-    pub fn profile(&self, name: impl AsRef<str>) -> Result<NextestProfile<'_>, ProfileNotFound> {
+    pub fn profile(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Result<NextestProfile<'_, PreBuildPlatform>, ProfileNotFound> {
         self.make_profile(name.as_ref())
     }
 
@@ -205,7 +211,10 @@ impl NextestConfig {
         Config::builder().add_source(File::from_str(Self::DEFAULT_CONFIG, FileFormat::Toml))
     }
 
-    fn make_profile(&self, name: &str) -> Result<NextestProfile<'_>, ProfileNotFound> {
+    fn make_profile(
+        &self,
+        name: &str,
+    ) -> Result<NextestProfile<'_, PreBuildPlatform>, ProfileNotFound> {
         let custom_profile = self.inner.profiles.get(name)?;
 
         // The profile was found: construct the NextestProfile.
@@ -220,6 +229,7 @@ impl NextestConfig {
             .into_iter()
             .flatten()
             .chain(self.overrides.default.iter())
+            .cloned()
             .collect();
 
         Ok(NextestProfile {
@@ -289,18 +299,57 @@ impl FromStr for ToolConfigFile {
     }
 }
 
+/// The state of nextest profiles before build platforms have been applied.
+#[derive(Clone, Debug)]
+pub struct PreBuildPlatform {
+    // This is used by NextestOverridesImpl.
+    target_spec: Option<TargetSpec>,
+}
+
+/// The state of nextest profiles after build platforms have been applied.
+#[derive(Clone, Debug)]
+pub struct FinalConfig {
+    host_eval: bool,
+    target_eval: bool,
+}
+
 /// A configuration profile for nextest. Contains most configuration used by the nextest runner.
 ///
 /// Returned by [`NextestConfig::profile`].
 #[derive(Clone, Debug)]
-pub struct NextestProfile<'cfg> {
+pub struct NextestProfile<'cfg, State = FinalConfig> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
-    overrides: Vec<&'cfg ProfileOverrideImpl>,
+    overrides: Vec<ProfileOverrideImpl<State>>,
 }
 
-impl<'cfg> NextestProfile<'cfg> {
+impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
+    /// Returns the absolute profile-specific store directory.
+    pub fn store_dir(&self) -> &Utf8Path {
+        &self.store_dir
+    }
+
+    /// Applies build platforms to make the profile ready for evaluation.
+    ///
+    /// This is a separate step from parsing the config and reading a profile so that cargo-nextest
+    /// can tell users about configuration parsing errors before building the binary list.
+    pub fn apply_build_platforms(self, build_platforms: &BuildPlatforms) -> NextestProfile<'cfg> {
+        let overrides = self
+            .overrides
+            .into_iter()
+            .map(|override_| override_.apply_build_platforms(build_platforms))
+            .collect();
+        NextestProfile {
+            store_dir: self.store_dir,
+            default_profile: self.default_profile,
+            custom_profile: self.custom_profile,
+            overrides,
+        }
+    }
+}
+
+impl<'cfg> NextestProfile<'cfg, FinalConfig> {
     /// Returns the absolute profile-specific store directory.
     pub fn store_dir(&self) -> &Utf8Path {
         &self.store_dir
@@ -376,7 +425,15 @@ impl<'cfg> NextestProfile<'cfg> {
         let mut slow_timeout = None;
         let mut leak_timeout = None;
 
-        for &override_ in &self.overrides {
+        for override_ in &self.overrides {
+            if query.binary_query.platform == BuildPlatform::Host && !override_.state.host_eval {
+                continue;
+            }
+            if query.binary_query.platform == BuildPlatform::Target && !override_.state.target_eval
+            {
+                continue;
+            }
+
             if !override_.expr.matches_test(query) {
                 continue;
             }
@@ -892,8 +949,12 @@ struct CustomProfileImpl {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct ProfileOverrideSource {
+    /// The platforms to match against.
+    #[serde(default)]
+    platform: Option<String>,
     /// The filter expression to match against.
-    filter: String,
+    #[serde(default)]
+    filter: Option<String>,
     /// Overrides.
     #[serde(flatten)]
     data: ProfileOverrideData,
@@ -912,8 +973,8 @@ struct ProfileOverrideData {
 
 #[derive(Clone, Debug, Default)]
 struct NextestOverridesImpl {
-    default: Vec<ProfileOverrideImpl>,
-    other: HashMap<String, Vec<ProfileOverrideImpl>>,
+    default: Vec<ProfileOverrideImpl<PreBuildPlatform>>,
+    other: HashMap<String, Vec<ProfileOverrideImpl<PreBuildPlatform>>>,
 }
 
 impl NextestOverridesImpl {
@@ -949,7 +1010,7 @@ impl NextestOverridesImpl {
         profile_name: &str,
         overrides: &[ProfileOverrideSource],
         errors: &mut Vec<ConfigParseOverrideError>,
-    ) -> Vec<ProfileOverrideImpl> {
+    ) -> Vec<ProfileOverrideImpl<PreBuildPlatform>> {
         overrides
             .iter()
             .filter_map(|source| ProfileOverrideImpl::new(graph, profile_name, source, errors))
@@ -958,30 +1019,96 @@ impl NextestOverridesImpl {
 }
 
 #[derive(Clone, Debug)]
-struct ProfileOverrideImpl {
+struct ProfileOverrideImpl<State> {
+    state: State,
     expr: FilteringExpr,
     data: ProfileOverrideData,
 }
 
-impl ProfileOverrideImpl {
+impl ProfileOverrideImpl<PreBuildPlatform> {
     fn new(
         graph: &PackageGraph,
         profile_name: &str,
         source: &ProfileOverrideSource,
         errors: &mut Vec<ConfigParseOverrideError>,
     ) -> Option<Self> {
-        match FilteringExpr::parse(&source.filter, graph) {
-            Ok(expr) => Some(Self {
+        if source.platform.is_none() && source.filter.is_none() {
+            errors.push(ConfigParseOverrideError {
+                profile_name: profile_name.to_owned(),
+                not_specified: true,
+                platform_parse_error: None,
+                parse_errors: None,
+            });
+            return None;
+        }
+
+        let target_spec = source
+            .platform
+            .as_ref()
+            .map(|platform_str| TargetSpec::new(platform_str.to_owned()))
+            .transpose();
+        let filter_expr = source.filter.as_ref().map_or_else(
+            || Ok(FilteringExpr::Set(FilteringSet::All)),
+            |filter| FilteringExpr::parse(&filter, graph),
+        );
+
+        match (target_spec, filter_expr) {
+            (Ok(target_spec), Ok(expr)) => Some(Self {
+                state: PreBuildPlatform { target_spec },
                 expr,
                 data: source.data.clone(),
             }),
-            Err(parse_errors) => {
+            (Err(platform_parse_error), Ok(_)) => {
                 errors.push(ConfigParseOverrideError {
                     profile_name: profile_name.to_owned(),
-                    parse_errors,
+                    not_specified: false,
+                    platform_parse_error: Some(platform_parse_error),
+                    parse_errors: None,
                 });
                 None
             }
+            (Ok(_), Err(parse_errors)) => {
+                errors.push(ConfigParseOverrideError {
+                    profile_name: profile_name.to_owned(),
+                    not_specified: false,
+                    platform_parse_error: None,
+                    parse_errors: Some(parse_errors),
+                });
+                None
+            }
+            (Err(platform_parse_error), Err(parse_errors)) => {
+                errors.push(ConfigParseOverrideError {
+                    profile_name: profile_name.to_owned(),
+                    not_specified: false,
+                    platform_parse_error: Some(platform_parse_error),
+                    parse_errors: Some(parse_errors),
+                });
+                None
+            }
+        }
+    }
+
+    fn apply_build_platforms(
+        self,
+        build_platforms: &BuildPlatforms,
+    ) -> ProfileOverrideImpl<FinalConfig> {
+        let (host_eval, target_eval) = if let Some(spec) = self.state.target_spec {
+            // unknown (None) gets unwrapped to true.
+            let host_eval = spec.eval(&build_platforms.host).unwrap_or(true);
+            let target_eval = build_platforms.target.as_ref().map_or(host_eval, |triple| {
+                spec.eval(&triple.platform).unwrap_or(true)
+            });
+            (host_eval, target_eval)
+        } else {
+            (true, true)
+        };
+        ProfileOverrideImpl {
+            state: FinalConfig {
+                host_eval,
+                target_eval,
+            },
+            expr: self.expr,
+            data: self.data,
         }
     }
 }
@@ -996,12 +1123,15 @@ struct JunitImpl {
 
 #[cfg(test)]
 mod tests {
+    use crate::cargo_config::{TargetTriple, TargetTripleSource};
+
     use super::*;
     use config::ConfigError;
     use guppy::{graph::cargo::BuildPlatform, MetadataCommand};
     use indoc::indoc;
     use nextest_filtering::BinaryQuery;
     use std::{io::Write, path::PathBuf, process::Command};
+    use target_spec::{Platform, TargetFeatures};
     use tempfile::tempdir;
     use test_case::test_case;
 
@@ -1123,6 +1253,7 @@ mod tests {
                     nextest_config
                         .profile("default")
                         .expect("default profile should exist")
+                        .apply_build_platforms(&build_platforms())
                         .slow_timeout(),
                     expected_default,
                 );
@@ -1132,6 +1263,7 @@ mod tests {
                         nextest_config
                             .profile("ci")
                             .expect("ci profile should exist")
+                            .apply_build_platforms(&build_platforms())
                             .slow_timeout(),
                         expected_ci,
                     );
@@ -1158,6 +1290,7 @@ mod tests {
 
             [profile.ci]
         "#},
+        BuildPlatform::Target,
         Some(RetryPolicy::new_without_delay(2))
 
         ; "my_test matches exactly"
@@ -1170,6 +1303,7 @@ mod tests {
 
             [profile.ci]
         "#},
+        BuildPlatform::Target,
         None
 
         ; "not match"
@@ -1181,6 +1315,7 @@ mod tests {
 
             [profile.ci]
         "#},
+        BuildPlatform::Target,
         None
 
         ; "no retries specified"
@@ -1197,6 +1332,7 @@ mod tests {
 
             [profile.ci]
         "#},
+        BuildPlatform::Target,
         Some(RetryPolicy::new_without_delay(2))
 
         ; "earlier configs override later ones"
@@ -1213,6 +1349,7 @@ mod tests {
             filter = "test(=my_test)"
             retries = 3
         "#},
+        BuildPlatform::Target,
         Some(RetryPolicy::new_without_delay(3))
 
         ; "profile-specific configs override default ones"
@@ -1229,12 +1366,124 @@ mod tests {
             filter = "!test(=my_test_2)"
             retries = 3
         "#},
+        BuildPlatform::Target,
         Some(RetryPolicy::new_without_delay(3))
 
         ; "no overrides match my_test exactly"
     )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            platform = "x86_64-unknown-linux-gnu"
+            filter = "test(test)"
+            retries = 2
 
-    fn overrides_retries(config_contents: &str, retries: Option<RetryPolicy>) {
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 3
+
+            [profile.ci]
+        "#},
+        BuildPlatform::Host,
+        Some(RetryPolicy::new_without_delay(2))
+
+        ; "earlier config applied because it matches host triple"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            platform = "aarch64-apple-darwin"
+            filter = "test(test)"
+            retries = 2
+
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 3
+
+            [profile.ci]
+        "#},
+        BuildPlatform::Host,
+        Some(RetryPolicy::new_without_delay(3))
+
+        ; "earlier config ignored because it doesn't match host triple"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            platform = "aarch64-apple-darwin"
+            filter = "test(test)"
+            retries = 2
+
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 3
+
+            [profile.ci]
+        "#},
+        BuildPlatform::Target,
+        Some(RetryPolicy::new_without_delay(2))
+
+        ; "earlier config applied because it matches target triple"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            platform = "x86_64-unknown-linux-gnu"
+            filter = "test(test)"
+            retries = 2
+
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 3
+
+            [profile.ci]
+        "#},
+        BuildPlatform::Target,
+        Some(RetryPolicy::new_without_delay(3))
+
+        ; "earlier config ignored because it doesn't match target triple"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            platform = 'cfg(target_os = "macos")'
+            filter = "test(test)"
+            retries = 2
+
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 3
+
+            [profile.ci]
+        "#},
+        BuildPlatform::Target,
+        Some(RetryPolicy::new_without_delay(2))
+
+        ; "earlier config applied because it matches target cfg expr"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            platform = 'cfg(target_arch = "x86_64")'
+            filter = "test(test)"
+            retries = 2
+
+            [[profile.default.overrides]]
+            filter = "test(=my_test)"
+            retries = 3
+
+            [profile.ci]
+        "#},
+        BuildPlatform::Target,
+        Some(RetryPolicy::new_without_delay(3))
+
+        ; "earlier config ignored because it doesn't match target cfg expr"
+    )]
+    fn overrides_retries(
+        config_contents: &str,
+        build_platform: BuildPlatform,
+        retries: Option<RetryPolicy>,
+    ) {
         let workspace_dir = tempdir().unwrap();
         let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
@@ -1248,13 +1497,14 @@ mod tests {
                 package_id,
                 kind: "lib",
                 binary_name: "my-binary",
-                platform: BuildPlatform::Target,
+                platform: build_platform,
             },
             test_name: "my_test",
         };
         let overrides_for = config
             .profile("ci")
             .expect("ci profile is defined")
+            .apply_build_platforms(&build_platforms())
             .overrides_for(&query);
         assert_eq!(
             overrides_for.retries(),
@@ -1293,6 +1543,7 @@ mod tests {
             config
                 .profile("default")
                 .expect("default profile exists")
+                .apply_build_platforms(&build_platforms())
                 .retries(),
             RetryPolicy::Fixed {
                 count: 3,
@@ -1306,6 +1557,7 @@ mod tests {
             config
                 .profile("fixed-with-delay")
                 .expect("profile exists")
+                .apply_build_platforms(&build_platforms())
                 .retries(),
             RetryPolicy::Fixed {
                 count: 3,
@@ -1316,7 +1568,11 @@ mod tests {
         );
 
         assert_eq!(
-            config.profile("exp").expect("profile exists").retries(),
+            config
+                .profile("exp")
+                .expect("profile exists")
+                .apply_build_platforms(&build_platforms())
+                .retries(),
             RetryPolicy::Exponential {
                 count: 4,
                 delay: Duration::from_secs(2),
@@ -1330,6 +1586,7 @@ mod tests {
             config
                 .profile("exp-with-max-delay")
                 .expect("profile exists")
+                .apply_build_platforms(&build_platforms())
                 .retries(),
             RetryPolicy::Exponential {
                 count: 5,
@@ -1344,6 +1601,7 @@ mod tests {
             config
                 .profile("exp-with-max-delay-and-jitter")
                 .expect("profile exists")
+                .apply_build_platforms(&build_platforms())
                 .retries(),
             RetryPolicy::Exponential {
                 count: 6,
@@ -1565,11 +1823,12 @@ mod tests {
                 },
             ],
         )
-        .expect("parsing config failed");
+        .expect("config is valid");
 
         let default_profile = config
             .profile(NextestConfig::DEFAULT_PROFILE)
-            .expect("default profile is present");
+            .expect("default profile is present")
+            .apply_build_platforms(&build_platforms());
         // This is present in .config/nextest.toml and is the highest priority
         assert_eq!(default_profile.retries(), RetryPolicy::new_without_delay(3));
 
@@ -1619,7 +1878,10 @@ mod tests {
             "retries for test_baz/default profile"
         );
 
-        let lowpri_profile = config.profile("lowpri").expect("lowpri profile is present");
+        let lowpri_profile = config
+            .profile("lowpri")
+            .expect("lowpri profile is present")
+            .apply_build_platforms(&build_platforms());
         assert_eq!(lowpri_profile.retries(), RetryPolicy::new_without_delay(12));
         assert_eq!(
             lowpri_profile.overrides_for(&test_foo_query).retries(),
@@ -1639,7 +1901,8 @@ mod tests {
 
         let lowpri2_profile = config
             .profile("lowpri2")
-            .expect("lowpri2 profile is present");
+            .expect("lowpri2 profile is present")
+            .apply_build_platforms(&build_platforms());
         assert_eq!(
             lowpri2_profile.retries(),
             RetryPolicy::new_without_delay(18)
@@ -1702,6 +1965,7 @@ mod tests {
                     .unwrap()
                     .profile("custom")
                     .unwrap()
+                    .apply_build_platforms(&build_platforms())
                     .custom_profile
                     .unwrap()
                     .test_threads
@@ -1714,6 +1978,7 @@ mod tests {
                     .unwrap()
                     .profile("custom")
                     .unwrap()
+                    .apply_build_platforms(&build_platforms())
                     .custom_profile
                     .unwrap()
                     .test_threads
@@ -1749,5 +2014,15 @@ mod tests {
                 .expect("CARGO env var is not valid UTF-8"),
             None => Utf8PathBuf::from("cargo"),
         }
+    }
+
+    fn build_platforms() -> BuildPlatforms {
+        BuildPlatforms::new_with_host(
+            Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
+            Some(TargetTriple {
+                platform: Platform::new("aarch64-apple-darwin", TargetFeatures::Unknown).unwrap(),
+                source: TargetTripleSource::Env,
+            }),
+        )
     }
 }

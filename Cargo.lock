@@ -1034,9 +1034,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.135"
+version = "0.2.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68783febc7782c6c5cb401fbda4de5a9898be1762314da0bb2c10ced61f18b0c"
+checksum = "55edcf6c0bb319052dea84732cf99db461780fd5e8d3eb46ab6ff312ab31f197"
 
 [[package]]
 name = "link-cplusplus"
@@ -1211,6 +1211,7 @@ dependencies = [
  "libc",
  "log",
  "maplit",
+ "miette",
  "mukti-metadata",
  "nextest-filtering",
  "nextest-metadata",
@@ -1234,6 +1235,7 @@ dependencies = [
  "strip-ansi-escapes",
  "tar",
  "target-spec",
+ "target-spec-miette",
  "tempfile",
  "test-case",
  "thiserror",
@@ -2095,14 +2097,25 @@ checksum = "c02424087780c9b71cc96799eaeddff35af2bc513278cda5c99fc1f5d026d3c1"
 
 [[package]]
 name = "target-spec"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46b1748adaf6a95d3fa8cdf590403e789c5e172dcd9dc4b8c199c7f4be7fc11e"
+checksum = "eb961bf20f35d75a2e8e182c56c7f69890520c957334df265a6c9e37ba7674ae"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
  "serde",
  "target-lexicon",
+]
+
+[[package]]
+name = "target-spec-miette"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d05f99f2cd9ad6c8431ab04c9040e0da05b9ef2f05ca4a48c63939e285ee3cad"
+dependencies = [
+ "guppy-workspace-hack",
+ "miette",
+ "target-spec",
 ]
 
 [[package]]

@@ -15,6 +15,7 @@ use config::ConfigError;
 use itertools::Itertools;
 use nextest_filtering::errors::FilterExpressionParseErrors;
 use std::{borrow::Cow, env::JoinPathsError, fmt, process::ExitStatus};
+use target_spec_miette::IntoMietteDiagnostic;
 use thiserror::Error;
 
 /// An error that occurred while parsing the config.
@@ -82,14 +83,42 @@ pub enum ConfigParseErrorKind {
 /// An error that occurred while parsing config overrides.
 ///
 /// Part of [`ConfigParseErrorKind::OverrideError`].
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub struct ConfigParseOverrideError {
     /// The name of the profile under which the override was found.
     pub profile_name: String,
 
+    /// True if neither the platform nor the filter have been specified.
+    pub not_specified: bool,
+
+    /// A potential error that occurred while parsing the platform expression.
+    pub platform_parse_error: Option<target_spec::Error>,
+
     /// The expression, and the errors that occurred.
-    pub parse_errors: FilterExpressionParseErrors,
+    pub parse_errors: Option<FilterExpressionParseErrors>,
+}
+
+impl ConfigParseOverrideError {
+    /// Returns [`miette::Report`]s for each error recorded by self.
+    pub fn reports(&self) -> impl Iterator<Item = miette::Report> + '_ {
+        let platform_parse_report = self.platform_parse_error.as_ref().map(|error| {
+            // TODO: replace with Report::new_boxed once https://github.com/zkat/miette/pull/214
+            // is fixed.
+            miette::miette!(error.clone().into_diagnostic())
+        });
+        let parse_reports = self
+            .parse_errors
+            .as_ref()
+            .into_iter()
+            .flat_map(|parse_errors| {
+                parse_errors.errors.iter().map(|single_error| {
+                    miette::Report::new(single_error.clone())
+                        .with_source_code(parse_errors.input.to_owned())
+                })
+            });
+        platform_parse_report.into_iter().chain(parse_reports)
+    }
 }
 
 /// An error which indicates that a profile was requested but not known to nextest.
@@ -855,6 +884,14 @@ pub enum InvalidCargoCliConfigReason {
     DoesntProvideValue,
 }
 
+/// The host platform could not be determined.
+#[derive(Debug, Error)]
+#[error("the host platform could not be determined")]
+pub struct UnknownHostPlatform {
+    #[source]
+    pub(crate) error: target_spec::Error,
+}
+
 /// An error occurred while determining the cross-compiling target triple.
 #[derive(Debug, Error)]
 pub enum TargetTripleError {
@@ -880,11 +917,6 @@ pub enum TargetTripleError {
 /// An error occurred determining the target runner
 #[derive(Debug, Error)]
 pub enum TargetRunnerError {
-    /// Failed to determine the host triple, which is needed to determine the
-    /// default target triple when a target is not explicitly specified
-    #[error("unable to determine host platform")]
-    UnknownHostPlatform(#[source] target_spec::Error),
-
     /// An environment variable contained non-utf8 content
     #[error("environment variable '{0}' contained non-UTF-8 data")]
     InvalidEnvironmentVar(String),

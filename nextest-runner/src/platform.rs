@@ -3,9 +3,8 @@
 
 //! Platform-related data structures.
 
+use crate::{cargo_config::TargetTriple, errors::UnknownHostPlatform};
 pub use target_spec::Platform;
-
-use crate::cargo_config::TargetTriple;
 
 /// A representation of host and target platforms.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -23,8 +22,16 @@ pub struct BuildPlatforms {
 impl BuildPlatforms {
     /// Creates a new `BuildPlatform`.
     ///
-    /// The host platform should typically be set to `Platform::current()`.
-    pub fn new(host: Platform, target: Option<TargetTriple>) -> Self {
+    /// Returns an error if the host platform could not be determined.
+    pub fn new(target: Option<TargetTriple>) -> Result<Self, UnknownHostPlatform> {
+        let host = Platform::current().map_err(|error| UnknownHostPlatform { error })?;
+        Ok(Self { host, target })
+    }
+
+    /// Creates a new `BuildPlatform` where the host is specified.
+    ///
+    /// This is intended for testing situations. Most users should call [`Self::new`] instead.
+    pub fn new_with_host(host: Platform, target: Option<TargetTriple>) -> Self {
         Self { host, target }
     }
 }

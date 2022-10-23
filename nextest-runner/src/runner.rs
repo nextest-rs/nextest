@@ -1625,7 +1625,7 @@ enum TerminateMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::NextestConfig;
+    use crate::{config::NextestConfig, platform::BuildPlatforms};
 
     #[test]
     fn no_capture_settings() {
@@ -1637,9 +1637,15 @@ mod tests {
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
+        let build_platforms = BuildPlatforms::new(None).unwrap();
         let handler_kind = SignalHandlerKind::Noop;
         let runner = builder
-            .build(&test_list, profile, handler_kind, TargetRunner::empty())
+            .build(
+                &test_list,
+                profile.apply_build_platforms(&build_platforms),
+                handler_kind,
+                TargetRunner::empty(),
+            )
             .unwrap();
         assert!(runner.inner.no_capture, "no_capture is true");
         assert_eq!(runner.inner.test_threads, 1, "tests run serially");
