@@ -46,6 +46,7 @@ pub mod errors;
 mod helpers;
 pub mod list;
 pub mod partition;
+pub mod platform;
 pub mod reporter;
 pub mod reuse_build;
 pub mod runner;

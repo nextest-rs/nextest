@@ -9,6 +9,7 @@ use nextest_metadata::{BuildPlatform, FilterMatch, MismatchReason};
 use nextest_runner::{
     config::{NextestConfig, RetryPolicy},
     list::BinaryList,
+    platform::BuildPlatforms,
     reporter::heuristic_extract_description,
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
     signal::SignalHandlerKind,
@@ -92,11 +93,12 @@ fn test_run() -> Result<()> {
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
+    let build_platforms = BuildPlatforms::new(None).unwrap();
 
     let mut runner = TestRunnerBuilder::default()
         .build(
             &test_list,
-            profile,
+            profile.apply_build_platforms(&build_platforms),
             SignalHandlerKind::Noop,
             TargetRunner::empty(),
         )
@@ -190,11 +192,12 @@ fn test_run_ignored() -> Result<()> {
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
+    let build_platforms = BuildPlatforms::new(None).unwrap();
 
     let mut runner = TestRunnerBuilder::default()
         .build(
             &test_list,
-            profile,
+            profile.apply_build_platforms(&build_platforms),
             SignalHandlerKind::Noop,
             TargetRunner::empty(),
         )
@@ -381,6 +384,8 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     let profile = config
         .profile("with-retries")
         .expect("with-retries config is valid");
+    let build_platforms = BuildPlatforms::new(None).unwrap();
+    let profile = profile.apply_build_platforms(&build_platforms);
 
     let profile_retries = profile.retries();
     assert_eq!(
@@ -525,6 +530,8 @@ fn test_termination() -> Result<()> {
     let profile = config
         .profile("with-termination")
         .expect("with-termination config is valid");
+    let build_platforms = BuildPlatforms::new(None).unwrap();
+    let profile = profile.apply_build_platforms(&build_platforms);
 
     let mut runner = TestRunnerBuilder::default()
         .build(

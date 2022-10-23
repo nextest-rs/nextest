@@ -3,9 +3,10 @@
 
 use crate::{
     cargo_config::TargetTriple,
-    errors::RustBuildMetaParseError,
+    errors::{RustBuildMetaParseError, UnknownHostPlatform},
     helpers::convert_rel_path_to_main_sep,
     list::{BinaryListState, TestListState},
+    platform::BuildPlatforms,
     reuse_build::PathMapper,
 };
 use camino::Utf8PathBuf;
@@ -123,6 +124,11 @@ impl RustBuildMeta<TestListState> {
 }
 
 impl<State> RustBuildMeta<State> {
+    /// Returns the build platforms.
+    pub fn build_platforms(&self) -> Result<BuildPlatforms, UnknownHostPlatform> {
+        BuildPlatforms::new(self.target_triple.clone())
+    }
+
     /// Creates a `RustBuildMeta` from a serializable summary.
     pub fn from_summary(summary: RustBuildMetaSummary) -> Result<Self, RustBuildMetaParseError> {
         let target_triple = if !summary.target_platforms.is_empty() {
