@@ -22,7 +22,7 @@ Counted partitioning also applies after all other test filters. For example, if 
 
 Hashed sharding is specified with `--partition hash:m/n`, where m and n are both integers, and 1 ≤ m ≤ n. Specifying this operator means "run tests in hashed bucket m of n".
 
-The hash is completely deterministic, and is based on a combination of the binary and test names. The hash algorithm is guaranteed never to change within a nextest version series.
+The main benefit of hashed sharding is that it is completely deterministic (the hash is based on a combination of the binary and test names). Unlike with counted partitioning, adding or removing tests, or changing test filters, will never cause a test to fall into a different bucket. The hash algorithm is guaranteed never to change within a nextest version series.
 
 For sufficiently large numbers of tests, hashed sharding produces roughly the same number of tests per bucket. However, smaller test runs may result in an uneven distribution.
 
