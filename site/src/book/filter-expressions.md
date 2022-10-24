@@ -61,7 +61,7 @@ This section contains the full set of operators supported by the DSL.
   - `proc-macro` for tests in the `src/` directory of a procedural macro
 - `binary(name-matcher)`: include all tests in binary names matching `name-matcher`.
   - For tests of kind `lib` and `proc-macro`, the binary name is the same as the name of the crate.
-  - Otherwise, it's the name of the integration tests, benchmark, or binary target.
+  - Otherwise, it's the name of the integration test, benchmark, or binary target.
 - `platform(host)` or `platform(target)`: include all tests that are [built for the host or target platform](running.md#filtering-by-build-platform), respectively.
 - `none()`: include no tests.
 
