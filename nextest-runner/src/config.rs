@@ -1513,6 +1513,117 @@ mod tests {
         );
     }
 
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+    struct MietteJsonReport {
+        message: String,
+        labels: Vec<MietteJsonLabel>,
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+    struct MietteJsonLabel {
+        label: String,
+        span: MietteJsonSpan,
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+    struct MietteJsonSpan {
+        offset: usize,
+        length: usize,
+    }
+
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            retries = 2
+        "#},
+        "default",
+        &[MietteJsonReport {
+            message: "at least one of `platform` and `filter` should be specified".to_owned(),
+            labels: vec![],
+        }]
+
+        ; "neither platform nor filter specified"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.ci.overrides]]
+            platform = 'cfg(target_os = "macos)'
+            retries = 2
+        "#},
+        "ci",
+        &[MietteJsonReport {
+            message: "error parsing cfg() expression".to_owned(),
+            labels: vec![
+                MietteJsonLabel { label: "unclosed quotes".to_owned(), span: MietteJsonSpan { offset: 16, length: 6 } }
+            ]
+        }]
+
+        ; "invalid platform expression"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.ci.overrides]]
+            filter = 'test(/foo)'
+            retries = 2
+        "#},
+        "ci",
+        &[MietteJsonReport {
+            message: "expected close regex".to_owned(),
+            labels: vec![
+                MietteJsonLabel { label: "missing `/`".to_owned(), span: MietteJsonSpan { offset: 9, length: 0 } }
+            ]
+        }]
+
+        ; "invalid filter expression"
+    )]
+    fn parse_overrides_invalid(
+        config_contents: &str,
+        faulty_profile: &str,
+        expected_reports: &[MietteJsonReport],
+    ) {
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+
+        let err = NextestConfig::from_sources(graph.workspace().root(), &graph, None, [])
+            .expect_err("config is invalid");
+        match err.kind() {
+            ConfigParseErrorKind::OverrideError(override_errors) => {
+                assert_eq!(
+                    override_errors.len(),
+                    1,
+                    "exactly one override error must be produced"
+                );
+                let error = override_errors.first().unwrap();
+                assert_eq!(
+                    error.profile_name, faulty_profile,
+                    "override error profile matches"
+                );
+                let handler = miette::JSONReportHandler::new();
+                let reports = error
+                    .reports()
+                    .map(|report| {
+                        let mut out = String::new();
+                        handler.render_report(&mut out, report.as_ref()).unwrap();
+
+                        let json_report: MietteJsonReport = serde_json::from_str(&out)
+                            .unwrap_or_else(|err| {
+                                panic!(
+                                    "failed to deserialize JSON message produced by miette: {err}"
+                                )
+                            });
+                        json_report
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(&reports, expected_reports, "reports match");
+            }
+            other => {
+                panic!("for config error {other:?}, expected ConfigParseErrorKind::OverrideError");
+            }
+        };
+    }
+
     #[test]
     fn parse_retries_valid() {
         let config_contents = indoc! {r#"
