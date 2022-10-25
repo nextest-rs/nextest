@@ -16,7 +16,7 @@ async-scoped = { version = "0.7.0", features = ["use-tokio"] }
 bytes = "1.2.1"
 camino = { version = "1.1.1", features = ["serde1"] }
 config = { version = "0.13.2", default-features = false, features = ["toml"] }
-cargo_metadata = "0.14.2"
+cargo_metadata = "0.15.1"
 cfg-if = "1.0.0"
 chrono = "0.4.22"
 debug-ignore = "1.0.3"
