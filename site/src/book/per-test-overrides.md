@@ -1,10 +1,10 @@
 # Per-test overrides
 
-Nextest supports overriding some settings for subsets of tests, using the [filter
-expression](filter-expressions.md) syntax.
+Nextest supports overriding some settings for subsets of tests, using the [filter expression](filter-expressions.md) and Rust conditional compilation syntaxes.
 
 Overrides are set via the `[[profile.<name>.overrides]]` list. Each override consists of the following:
 * `filter` — The filter expression to match.
+* `platform` — The Rust [target triple](https://doc.rust-lang.org/beta/rustc/platform-support.html#platform-support) or [`cfg()` expression](https://doc.rust-lang.org/reference/conditional-compilation.html) to match.
 * Supported overrides, which are optional. Currently supported are:
   * `retries` — Number of retries to run tests with.
   * `slow-timeout` — Amount of time after which [tests are marked slow](slow-tests.md).
@@ -19,10 +19,21 @@ retries = 1
 [[profile.ci.overrides]]
 filter = 'test(/\btest_network_/)'
 retries = 4
+
+[[profile.ci.overrides]]
+platform = 'x86_64-unknown-linux-gnu'
+slow-timeout = "5m"
+
+[[profile.ci.overrides]]
+filter = 'test(/\btest_filesystem_/)'
+platform = 'cfg(target_os = "macos")'
+leak-timeout = "500ms"
 ```
 
-This configuration will retry all test names that start with `test_network_` (including test names
-like `my_module::test_network_`) up to 4 times. Other tests will be retried up to one time.
+When `--profile ci` is specified:
+* for test names that start with `test_network_` (including test names like `my_module::test_network_`), retry tests up to 4 times
+* on `x86_64-unknown-linux-gnu`, set a slow timeout of 5 minutes
+* on macOS, for test names that start with `test_filesystem_` (including test names like `my_module::test_filesystem_`), set a leak timeout of 500 milliseconds
 
 ## Override precedence
 

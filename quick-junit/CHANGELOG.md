@@ -20,8 +20,6 @@
 
 - Lower MSRV to Rust 1.54.
 
-## Unreleased
-
 ## [0.1.4] - 2022-02-07
 
 ### Fixed

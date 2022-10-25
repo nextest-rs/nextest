@@ -13,8 +13,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
-use guppy::graph::cargo::BuildPlatform;
-use guppy::graph::PackageGraph;
+use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use nextest_filtering::{FilteringExpr, FilteringSet, TestQuery};
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{

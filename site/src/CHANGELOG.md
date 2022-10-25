@@ -3,9 +3,19 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.40] - 2022-10-25
 
 ### Added
+
+- Overrides can now be restricted to certain platforms, using triples or `cfg()` expressions. For example, to add retries, but only on macOS:
+
+  ```toml
+  [[profile.default.overrides]]
+  platform = 'cfg(target_os = "macos")'
+  retries = 3
+  ```
+
+  For an override to match, `platform` and `filter` (if specified) must both be true for a given test. While [cross-compiling code](https://nexte.st/book/running#filtering-by-build-platform), `platform` is matched against the host platform for host tests, and against the target platform for target tests.
 
 - Nextest now reads environment variables specified in [the `[env]` section](https://doc.rust-lang.org/cargo/reference/config.html#env) from `.cargo/config.toml` files. The full syntax is supported including `force` and `relative`.
 
@@ -590,6 +600,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.40]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.40
 [0.9.39]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.39
 [0.9.38]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.38
 [0.9.37]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.37
