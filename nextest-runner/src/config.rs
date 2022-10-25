@@ -1049,7 +1049,7 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
             .transpose();
         let filter_expr = source.filter.as_ref().map_or_else(
             || Ok(FilteringExpr::Set(FilteringSet::All)),
-            |filter| FilteringExpr::parse(&filter, graph),
+            |filter| FilteringExpr::parse(filter, graph),
         );
 
         match (target_spec, filter_expr) {
