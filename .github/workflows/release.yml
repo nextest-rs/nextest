@@ -116,6 +116,7 @@ jobs:
             os: windows-latest
             container:
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     steps:
       - if: matrix.container == 'ubuntu:18.04'
         run: |
