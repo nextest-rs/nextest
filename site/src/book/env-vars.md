@@ -65,6 +65,7 @@ Nextest also sets these environment variables at runtime, matching the behavior 
 * `CARGO_PKG_REPOSITORY` — The repository from the manifest of your package.
 * `CARGO_PKG_LICENSE` — The license from the manifest of your package.
 * `CARGO_PKG_LICENSE_FILE` — The license file from the manifest of your package.
+* Environment variables specified in [the `[env]` section of `.cargo/config.toml`](https://doc.rust-lang.org/cargo/reference/config.html#env).
 
 ### Dynamic library paths
 
