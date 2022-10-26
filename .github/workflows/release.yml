@@ -120,7 +120,7 @@ jobs:
     steps:
       - if: matrix.container == 'ubuntu:18.04'
         run: |
-          set -eu -o pipefail
+          set -eu
           apt-get -qq update
           apt-get install -y software-properties-common sudo build-essential curl
           add-apt-repository ppa:git-core/ppa

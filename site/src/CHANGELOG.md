@@ -3,7 +3,7 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.41-a.3] - 2022-10-25
+## [0.9.41-a.4] - 2022-10-25
 
 This is a test release.
 
