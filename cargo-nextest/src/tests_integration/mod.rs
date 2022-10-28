@@ -108,12 +108,14 @@ fn test_target_dir() {
         .expect("changed current directory to workspace root");
 
     let run_check = |target_dir: &str, extra_args: Vec<&str>| {
+        // The test is for the target directory more than for any specific package, so pick a
+        // package that builds quickly.
         let mut args = vec![
             "cargo",
             "nextest",
             "list",
-            "--workspace",
-            "--all-targets",
+            "-p",
+            "cdylib-example",
             "--message-format",
             "json",
         ];
