@@ -368,6 +368,13 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
             .unwrap_or(self.default_profile.test_threads)
     }
 
+    /// Returns the number of threads required for each test.
+    pub fn threads_required(&self) -> usize {
+        self.custom_profile
+            .and_then(|profile| profile.threads_required)
+            .unwrap_or(self.default_profile.threads_required)
+    }
+
     /// Returns the time after which tests are treated as slow for this profile.
     pub fn slow_timeout(&self) -> SlowTimeout {
         self.custom_profile
@@ -420,6 +427,7 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
 
     /// Returns override settings for individual tests.
     pub fn overrides_for(&self, query: &TestQuery<'_>) -> ProfileOverrides {
+        let mut threads_required = None;
         let mut retries = None;
         let mut slow_timeout = None;
         let mut leak_timeout = None;
@@ -436,6 +444,9 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
             if !override_.expr.matches_test(query) {
                 continue;
             }
+            if threads_required.is_none() && override_.data.threads_required.is_some() {
+                threads_required = override_.data.threads_required;
+            }
             if retries.is_none() && override_.data.retries.is_some() {
                 retries = override_.data.retries;
             }
@@ -448,6 +459,7 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
         }
 
         ProfileOverrides {
+            threads_required,
             retries,
             slow_timeout,
             leak_timeout,
@@ -478,12 +490,18 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
 /// Returned by
 #[derive(Clone, Debug)]
 pub struct ProfileOverrides {
+    threads_required: Option<usize>,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<Duration>,
 }
 
 impl ProfileOverrides {
+    /// Returns the number of threads required for this test.
+    pub fn threads_required(&self) -> Option<usize> {
+        self.threads_required
+    }
+
     /// Returns the number of retries for this test.
     pub fn retries(&self) -> Option<RetryPolicy> {
         self.retries
@@ -566,6 +584,7 @@ impl NextestProfilesImpl {
 #[serde(rename_all = "kebab-case")]
 struct DefaultProfileImpl {
     test_threads: TestThreads,
+    threads_required: usize,
     #[serde(default, deserialize_with = "deserialize_retry_policy_or_default")]
     retries: RetryPolicy,
     status_level: StatusLevel,
@@ -925,6 +944,8 @@ struct CustomProfileImpl {
     #[serde(default)]
     test_threads: Option<TestThreads>,
     #[serde(default)]
+    threads_required: Option<usize>,
+    #[serde(default)]
     status_level: Option<StatusLevel>,
     #[serde(default)]
     final_status_level: Option<FinalStatusLevel>,
@@ -962,6 +983,8 @@ struct ProfileOverrideSource {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct ProfileOverrideData {
+    #[serde(default)]
+    threads_required: Option<usize>,
     #[serde(default, deserialize_with = "deserialize_retry_policy")]
     retries: Option<RetryPolicy>,
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]

@@ -10,6 +10,7 @@ retries = 2
 # Run test_flaky_mod_6 with 5 retries (6 tries) rather than 2.
 [[profile.with-retries.overrides]]
 filter = "test(=test_flaky_mod_6)"
+threads-required = 2
 retries = 5
 
 # Ensure that the earlier retry setting for test_flaky_mod_6 overrides the later one,

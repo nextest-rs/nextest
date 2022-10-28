@@ -16,6 +16,7 @@ use crate::{
     target_runner::TargetRunner,
 };
 use async_scoped::TokioScope;
+use buffer_unordered_weighted::StreamExt;
 use bytes::Bytes;
 use futures::{future::try_join, prelude::*};
 use nextest_filtering::{BinaryQuery, TestQuery};
@@ -157,6 +158,7 @@ impl TestRunnerBuilder {
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
         };
+        let threads_required = profile.threads_required();
         let (retries, ignore_retry_overrides) = match self.retries {
             Some(retries) => (retries, true),
             None => (profile.retries(), false),
@@ -176,6 +178,7 @@ impl TestRunnerBuilder {
                 no_capture: self.no_capture,
                 profile,
                 test_threads,
+                threads_required,
                 global_retries: retries,
                 ignore_retry_overrides,
                 fail_fast,
@@ -233,6 +236,7 @@ struct TestRunnerInner<'a> {
     no_capture: bool,
     profile: NextestProfile<'a>,
     test_threads: usize,
+    threads_required: usize,
     global_retries: RetryPolicy,
     ignore_retry_overrides: bool,
     fail_fast: bool,
@@ -297,7 +301,24 @@ impl<'a> TestRunnerInner<'a> {
                     .map(move |test_instance| {
                         let this_run_sender = run_sender.clone();
                         let mut cancellation_receiver = cancellation_sender.subscribe();
-                        async move {
+
+                        let query = TestQuery {
+                            binary_query: BinaryQuery {
+                                package_id: test_instance.suite_info.package.id(),
+                                kind: test_instance.suite_info.kind.as_str(),
+                                binary_name: &test_instance.suite_info.binary_name,
+                                platform: convert_build_platform(
+                                    test_instance.suite_info.build_platform,
+                                ),
+                            },
+                            test_name: test_instance.name,
+                        };
+                        let overrides = self.profile.overrides_for(&query);
+                        let threads_required = overrides
+                            .threads_required()
+                            .unwrap_or(self.threads_required);
+
+                        let fut = async move {
                             // Subscribe to the receiver *before* checking canceled_ref. The ordering is
                             // important to avoid race conditions with the code that first sets
                             // canceled_ref and then sends the notification.
@@ -308,18 +329,6 @@ impl<'a> TestRunnerInner<'a> {
                                 return;
                             }
 
-                            let query = TestQuery {
-                                binary_query: BinaryQuery {
-                                    package_id: test_instance.suite_info.package.id(),
-                                    kind: test_instance.suite_info.kind.as_str(),
-                                    binary_name: &test_instance.suite_info.binary_name,
-                                    platform: convert_build_platform(
-                                        test_instance.suite_info.build_platform,
-                                    ),
-                                },
-                                test_name: test_instance.name,
-                            };
-                            let overrides = self.profile.overrides_for(&query);
                             let retry_policy =
                                 match (self.ignore_retry_overrides, overrides.retries()) {
                                     (true, _) | (false, None) => self.global_retries,
@@ -420,10 +429,13 @@ impl<'a> TestRunnerInner<'a> {
                                 test_instance,
                                 run_statuses: ExecutionStatuses::new(run_statuses),
                             });
-                        }
+                        };
+
+                        (threads_required, fut)
                     })
-                    // buffer_unordered means tests are spawned in order but returned in any order.
-                    .buffer_unordered(self.test_threads)
+                    // buffer_unordered_weighted means tests are spawned in order but returned in
+                    // any order.
+                    .buffer_unordered_weighted(self.test_threads)
                     .collect();
 
                 // Run the stream to completion.

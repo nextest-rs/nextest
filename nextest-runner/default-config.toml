@@ -22,6 +22,10 @@ retries = 0
 # the string "num-cpus". Can be overridden through the `--test-threads` option.
 test-threads = "num-cpus"
 
+# The number of threads required for each test. This is generally used in overrides to
+# mark certain tests as heavier than others. However, it can also be set as a global parameter.
+threads-required = 1
+
 # Show these test statuses in the output.
 #
 # The possible values this can take are:
