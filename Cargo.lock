@@ -156,6 +156,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "buffer-unordered-weighted"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13766af4823e7d5f244b3db98940d122f61f4357bb13459e58a94fd462fb177e"
+dependencies = [
+ "futures-util",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1188,6 +1198,7 @@ dependencies = [
  "aho-corasick",
  "async-scoped",
  "atomicwrites",
+ "buffer-unordered-weighted",
  "bytes",
  "camino",
  "cargo_metadata",
