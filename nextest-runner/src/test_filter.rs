@@ -315,6 +315,8 @@ mod tests {
     use proptest::{collection::vec, prelude::*};
 
     proptest! {
+        #![proptest_config(ProptestConfig::with_cases(50))]
+
         #[test]
         fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
             let patterns: &[String] = &[];
