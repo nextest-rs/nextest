@@ -253,7 +253,7 @@ impl<'a> MuktiUpdateContext<'a> {
         let tmp_archive_dir_prefix = format!("{}_download", self.context.package_name);
         let tmp_archive_dir = tempfile::Builder::new()
             .prefix(&tmp_archive_dir_prefix)
-            .tempdir_in(&tmp_dir_parent)
+            .tempdir_in(tmp_dir_parent)
             .map_err(|error| UpdateError::TempDirCreate {
                 location: tmp_dir_parent.to_owned(),
                 error,
@@ -321,7 +321,7 @@ impl<'a> MuktiUpdateContext<'a> {
 
         let tmp_backup_dir = tempfile::Builder::new()
             .prefix(&tmp_backup_dir_prefix)
-            .tempdir_in(&tmp_dir_parent)
+            .tempdir_in(tmp_dir_parent)
             .map_err(|error| UpdateError::TempDirCreate {
                 location: tmp_dir_parent.to_owned(),
                 error,

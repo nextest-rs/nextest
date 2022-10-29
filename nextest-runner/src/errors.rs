@@ -71,10 +71,10 @@ fn provided_by_tool(tool: Option<&str>) -> String {
 pub enum ConfigParseErrorKind {
     /// An error occurred while building the config.
     #[error(transparent)]
-    BuildError(ConfigError),
+    BuildError(Box<ConfigError>),
     #[error(transparent)]
     /// An error occurred while deserializing the config.
-    DeserializeError(serde_path_to_error::Error<ConfigError>),
+    DeserializeError(Box<serde_path_to_error::Error<ConfigError>>),
     /// Errors occurred while parsing overrides.
     #[error("error parsing overrides (destructure this variant for more details)")]
     OverrideError(Vec<ConfigParseOverrideError>),

@@ -357,7 +357,7 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out;
         )];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_should_panic(*input).as_deref(), Some(*output));
+            assert_eq!(heuristic_should_panic(input).as_deref(), Some(*output));
         }
     }
 
@@ -391,7 +391,7 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
         ];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_stack_trace(*input).as_deref(), Some(*output));
+            assert_eq!(heuristic_stack_trace(input).as_deref(), Some(*output));
         }
     }
 }

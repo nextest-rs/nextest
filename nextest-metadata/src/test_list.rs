@@ -221,7 +221,7 @@ impl RustTestBinaryKind {
 
     /// Returns the kind as a string.
     pub fn as_str(&self) -> &str {
-        &*self.0
+        &self.0
     }
 
     /// The "lib" kind, used for unit tests within the library.
@@ -323,7 +323,7 @@ impl RustNonTestBinaryKind {
 
     /// Returns the kind as a string.
     pub fn as_str(&self) -> &str {
-        &*self.0
+        &self.0
     }
 
     /// The "dylib" kind, used for dynamic libraries (`.so` on Linux). Also used for
@@ -394,7 +394,7 @@ impl RustTestSuiteStatusSummary {
 
     /// Returns the kind as a string.
     pub fn as_str(&self) -> &str {
-        &*self.0
+        &self.0
     }
 
     /// The "listed" kind, which means that the test binary was executed with `--list` to gather the

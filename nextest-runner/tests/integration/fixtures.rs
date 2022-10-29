@@ -251,7 +251,7 @@ pub(crate) fn workspace_root() -> Utf8PathBuf {
 }
 
 pub(crate) fn load_config() -> NextestConfig {
-    NextestConfig::from_sources(workspace_root(), &*PACKAGE_GRAPH, None, [])
+    NextestConfig::from_sources(workspace_root(), &PACKAGE_GRAPH, None, [])
         .expect("loaded fixture config")
 }
 

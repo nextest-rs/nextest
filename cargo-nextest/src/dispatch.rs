@@ -1071,7 +1071,7 @@ impl App {
             .profile(profile_name)
             .map_err(ExpectedError::profile_not_found)?;
         let store_dir = profile.store_dir();
-        std::fs::create_dir_all(&store_dir).map_err(|err| ExpectedError::StoreDirCreateError {
+        std::fs::create_dir_all(store_dir).map_err(|err| ExpectedError::StoreDirCreateError {
             store_dir: store_dir.to_owned(),
             err,
         })?;

@@ -15,7 +15,7 @@ pub(super) fn copy_dir_all(
     let src = src.as_ref();
     let dst = dst.as_ref();
 
-    fs::create_dir_all(&dst)?;
+    fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let ty = entry.file_type()?;

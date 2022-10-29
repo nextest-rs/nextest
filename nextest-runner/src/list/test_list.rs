@@ -979,7 +979,7 @@ pub(crate) fn make_test_command(
     // Expose paths to non-test binaries at runtime so that relocated paths work.
     // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.
     for (name, path) in non_test_binaries {
-        cmd.env(format!("NEXTEST_BIN_EXE_{}", name), &path);
+        cmd.env(format!("NEXTEST_BIN_EXE_{}", name), path);
     }
 
     cmd
@@ -1022,7 +1022,7 @@ mod tests {
             None,
             iter::empty::<String>(),
             // Test against the platform() predicate because this is the most important one here.
-            vec![FilteringExpr::parse("platform(target)", &*PACKAGE_GRAPH_FIXTURE).unwrap()],
+            vec![FilteringExpr::parse("platform(target)", &PACKAGE_GRAPH_FIXTURE).unwrap()],
         );
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
         let fake_binary_name = "fake-binary".to_owned();

@@ -244,9 +244,10 @@ impl NextestConfig {
     ) -> Result<NextestConfigImpl, ConfigParseErrorKind> {
         let config = builder
             .build_cloned()
-            .map_err(ConfigParseErrorKind::BuildError)?;
+            .map_err(|error| ConfigParseErrorKind::BuildError(Box::new(error)))?;
 
-        serde_path_to_error::deserialize(config).map_err(ConfigParseErrorKind::DeserializeError)
+        serde_path_to_error::deserialize(config)
+            .map_err(|error| ConfigParseErrorKind::DeserializeError(Box::new(error)))
     }
 }
 

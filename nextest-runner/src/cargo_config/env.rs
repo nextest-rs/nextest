@@ -298,7 +298,7 @@ mod tests {
         assert_eq!(var.value, "foo-bar-config");
 
         let configs = CargoConfigs::new_with_isolation(
-            &["env.SOME_VAR=\"cli-config\""],
+            ["env.SOME_VAR=\"cli-config\""],
             &dir_foo_bar_path,
             &dir_path,
         )
@@ -319,14 +319,14 @@ mod tests {
         let dir_foo_bar_path = dir_foo_path.join("bar");
 
         CargoConfigs::new_with_isolation(
-            &["env.SOME_VAR={value = \"path\", relative = true }"],
+            ["env.SOME_VAR={value = \"path\", relative = true }"],
             &dir_foo_bar_path,
             &dir_path,
         )
         .expect_err("CLI configs can't be relative");
 
         CargoConfigs::new_with_isolation(
-            &["env.SOME_VAR.value=\"path\"", "env.SOME_VAR.relative=true"],
+            ["env.SOME_VAR.value=\"path\"", "env.SOME_VAR.relative=true"],
             &dir_foo_bar_path,
             &dir_path,
         )
