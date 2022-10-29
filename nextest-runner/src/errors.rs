@@ -108,7 +108,7 @@ impl ConfigParseOverrideError {
         let platform_parse_report = self.platform_parse_error.as_ref().map(|error| {
             // TODO: replace with Report::new_boxed once https://github.com/zkat/miette/pull/214
             // is fixed.
-            miette::miette!(error.clone().into_diagnostic())
+            miette::Report::new_boxed(error.clone().into_diagnostic())
         });
         let parse_reports = self
             .parse_errors
