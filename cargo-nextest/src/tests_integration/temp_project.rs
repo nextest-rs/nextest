@@ -23,7 +23,7 @@ pub(super) fn copy_dir_all(
             if root && entry.path().file_name() == Some(std::ffi::OsStr::new("target")) {
                 continue;
             }
-            copy_dir_all(&entry.path(), &dst.join(entry.file_name()), false)?;
+            copy_dir_all(entry.path(), dst.join(entry.file_name()), false)?;
         } else {
             fs::copy(entry.path(), dst.join(entry.file_name()))?;
         }
@@ -69,7 +69,7 @@ impl TempProject {
             .unwrap()
             .join("fixtures/nextest-tests");
 
-        copy_dir_all(&src_dir, &workspace_root, true)?;
+        copy_dir_all(src_dir, &workspace_root, true)?;
 
         let target_dir = match custom_target_dir {
             Some(dir) => fixup_macos_path(&dir),

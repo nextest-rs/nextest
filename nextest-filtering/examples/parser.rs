@@ -40,7 +40,7 @@ fn load_graph(path: Option<Utf8PathBuf>) -> PackageGraph {
         None => EMPTY_GRAPH.to_string(),
     };
 
-    match PackageGraph::from_json(&json) {
+    match PackageGraph::from_json(json) {
         Ok(graph) => graph,
         Err(err) => {
             eprintln!("Failed to parse cargo-metadata: {}", err);

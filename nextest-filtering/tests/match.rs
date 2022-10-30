@@ -11,7 +11,7 @@ use test_case::test_case;
 #[track_caller]
 fn load_graph() -> guppy::graph::PackageGraph {
     let json = std::fs::read_to_string("../fixtures/tests-workspace-metadata.json").unwrap();
-    guppy::CargoMetadata::parse_json(&json)
+    guppy::CargoMetadata::parse_json(json)
         .unwrap()
         .build_graph()
         .unwrap()

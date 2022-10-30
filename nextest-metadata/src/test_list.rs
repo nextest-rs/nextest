@@ -70,7 +70,7 @@ impl ListCommand {
             |path| PathBuf::from(path.as_std_path()),
         );
 
-        let mut command = Command::new(&cargo_path);
+        let mut command = Command::new(cargo_path);
         if let Some(path) = &self.manifest_path.as_deref() {
             command.args(["--manifest-path", path.as_str()]);
         }
