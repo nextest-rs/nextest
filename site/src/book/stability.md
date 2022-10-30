@@ -33,9 +33,7 @@ A bump to the minimum supported cargo-nextest version is considered a breaking c
 
 ### nextest-runner
 
-nextest-runner is built to serve the needs of cargo-nextest. Breaking changes to nextest-runner will be documented in [its CHANGELOG], but you should expect them to happen more rapidly than changes to `cargo-nextest`.
-
-[its CHANGELOG]: https://github.com/nextest-rs/nextest/blob/main/nextest-runner/CHANGELOG.md
+nextest-runner is built to serve the needs of cargo-nextest. Every `cargo-nextest` release is likely to correspond to a breaking change to nextest-runner.
 
 ## Minimum supported Rust version (MSRV)
 
