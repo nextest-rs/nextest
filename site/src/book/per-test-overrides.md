@@ -7,6 +7,7 @@ Overrides are set via the `[[profile.<name>.overrides]]` list. Each override con
 * `platform` — The Rust [target triple](https://doc.rust-lang.org/beta/rustc/platform-support.html#platform-support) or [`cfg()` expression](https://doc.rust-lang.org/reference/conditional-compilation.html) to match.
 * Supported overrides, which are optional. Currently supported are:
   * `retries` — Number of retries to run tests with.
+  * `threads-required` — Number of [threads required](threads-required.md) for this test.
   * `slow-timeout` — Amount of time after which [tests are marked slow](slow-tests.md).
   * `leak-timeout` — How long to wait after the test completes [for any subprocesses to exit](leaky-tests.md).
 
