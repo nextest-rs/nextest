@@ -123,7 +123,7 @@ jobs:
         run: |
           set -eu
           apt-get -qq update
-          apt-get install -y software-properties-common sudo build-essential curl
+          apt-get install -y software-properties-common sudo build-essential curl jq
           add-apt-repository ppa:git-core/ppa
           apt-get -qq update
           apt-get -qq -y install git-core

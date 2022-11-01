@@ -3,11 +3,15 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.41] - 2022-11-01
+## [0.9.42] - 2022-11-01
 
 ### Added
 
 - Added a new [`threads-required` configuration](https://nexte.st/book/threads-required) that can be specified as a [per-test override](https://nexte.st/book/per-test-overrides). This can be used to limit concurrency for heavier tests, to avoid overwhelming CPU or running out of memory.
+
+## [0.9.41] - 2022-11-01
+
+This release ran into an issue during publishing and was skipped.
 
 ## [0.9.40] - 2022-10-25
 
@@ -606,6 +610,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.42]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.42
 [0.9.41]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.41
 [0.9.40]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.40
 [0.9.39]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.39

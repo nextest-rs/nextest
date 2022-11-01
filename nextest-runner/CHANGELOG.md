@@ -4,7 +4,7 @@
 
 ### Changed
 
-See the changelog for [cargo-nextest 0.9.41](https://nexte.st/CHANGELOG.html#0941---2022-11-01).
+See the changelog for [cargo-nextest 0.9.42](https://nexte.st/CHANGELOG.html#0942---2022-11-01).
 
 ## [0.28.0] - 2022-10-25
 
