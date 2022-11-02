@@ -157,9 +157,9 @@ dependencies = [
 
 [[package]]
 name = "buffer-unordered-weighted"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13766af4823e7d5f244b3db98940d122f61f4357bb13459e58a94fd462fb177e"
+checksum = "55f2f39994c555ca870429ffed32206c4c963b891f939d23ad933686d0a42eb5"
 dependencies = [
  "futures-util",
  "pin-project-lite",
