@@ -14,6 +14,14 @@ jobs:
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo release
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-release
+          version: latest
+          locked: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
           prefix: quick-junit
@@ -22,6 +30,9 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: cargo release publish --publish --workspace --exclude cargo-nextest
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   nextest-filtering-release:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-filtering-')
@@ -30,6 +41,14 @@ jobs:
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo release
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-release
+          version: latest
+          locked: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
           prefix: nextest-filtering
@@ -38,6 +57,9 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: cargo release publish --publish --workspace --exclude cargo-nextest
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   nextest-metadata-release:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-metadata-')
@@ -46,6 +68,14 @@ jobs:
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo release
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-release
+          version: latest
+          locked: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
           prefix: nextest-metadata
@@ -54,6 +84,9 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: cargo release publish --publish --workspace --exclude cargo-nextest
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   nextest-runner-release:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-runner-')
@@ -62,6 +95,14 @@ jobs:
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo release
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-release
+          version: latest
+          locked: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
           prefix: nextest-runner
@@ -70,6 +111,9 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: cargo release publish --publish --workspace --exclude cargo-nextest
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   cargo-nextest-release:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
@@ -78,6 +122,8 @@ jobs:
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
+      # Note: do not publish this until binaries are built and uploaded below. This is so that
+      # `cargo binstall` keeps working.
       - uses: taiki-e/create-gh-release-action@v1
         id: create-gh-release
         with:
@@ -194,7 +240,7 @@ jobs:
       mac-tar: ${{ steps.build-release.outputs.archive-name }}
 
   update-release-meta:
-    name: Update release-meta branch
+    name: Update release-meta branch and publish to crates.io
     if: github.repository_owner == 'nextest-rs'
     needs:
       - cargo-nextest-release
@@ -203,6 +249,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo release
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-release
+          version: latest
+          locked: true
       - name: Download mukti
         run: |
           mkdir -p ~/bin
@@ -253,3 +307,6 @@ jobs:
         with:
           branch: release-meta
           folder: out-dir
+      - run: cargo release publish --publish --workspace
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
