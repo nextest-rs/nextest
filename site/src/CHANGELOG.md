@@ -3,7 +3,7 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.43-rc.1] - 2022-11-03
+## [0.9.43-rc.2] - 2022-11-03
 
 This is a test release.
 
@@ -614,7 +614,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.43-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43-rc.1
+[0.9.43-rc.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43-rc.2
 [0.9.42]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.42
 [0.9.41]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.41
 [0.9.40]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.40
