@@ -4,6 +4,5 @@ consolidate-commits = false
 pre-release-commit-message = "[{{crate_name}}] version {{version}}"
 tag-message = "[{{crate_name}}] version {{version}}"
 tag-name = "{{prefix}}{{version}}"
-dev-version = false
 publish = false
 dependent-version = "upgrade"
