@@ -32,7 +32,7 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm
+      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm --execute
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -59,7 +59,7 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm
+      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm --execute
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -86,7 +86,7 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm
+      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm --execute
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -113,7 +113,7 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm
+      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm --execute
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -309,6 +309,6 @@ jobs:
         with:
           branch: release-meta
           folder: out-dir
-      - run: cargo release publish --publish --workspace --no-confirm
+      - run: cargo release publish --publish --workspace --no-confirm --execute
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
