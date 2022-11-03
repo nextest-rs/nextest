@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.29.1-rc.1] - 2022-11-03
+
+This is a test release.
+
 ## [0.29.0] - 2022-11-01
 
 ### Changed
@@ -317,6 +321,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.29.1-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.29.1-rc.1
 [0.29.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.29.0
 [0.28.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.28.0
 [0.27.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.27.0
