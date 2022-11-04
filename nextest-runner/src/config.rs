@@ -15,11 +15,14 @@ use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use nextest_filtering::{FilteringExpr, FilteringSet, TestQuery};
+use once_cell::sync::Lazy;
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{
     cmp::Ordering, collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration,
 };
 use target_spec::TargetSpec;
+
+static NUM_CPUS: Lazy<usize> = Lazy::new(num_cpus::get);
 
 /// Overall configuration for nextest.
 ///
@@ -617,7 +620,7 @@ impl TestThreads {
     pub fn compute(self) -> usize {
         match self {
             Self::Count(threads) => threads,
-            Self::NumCpus => num_cpus::get(),
+            Self::NumCpus => *NUM_CPUS,
         }
     }
 }
@@ -635,9 +638,7 @@ impl FromStr for TestThreads {
                 "Error: {e} parsing {s}"
             ))),
             Ok(0) => Err(TestThreadsParseError::new("jobs may not be 0")),
-            Ok(j) if j < 0 => Ok(TestThreads::Count(
-                (num_cpus::get() as isize + j).max(1) as usize
-            )),
+            Ok(j) if j < 0 => Ok(TestThreads::Count((*NUM_CPUS as isize + j).max(1) as usize)),
             Ok(j) => Ok(TestThreads::Count(j as usize)),
         }
     }
@@ -678,9 +679,9 @@ impl<'de> Deserialize<'de> for TestThreads {
             {
                 match v.cmp(&0) {
                     Ordering::Greater => Ok(TestThreads::Count(v as usize)),
-                    Ordering::Less => Ok(TestThreads::Count(
-                        (num_cpus::get() as i64 + v).max(1) as usize
-                    )),
+                    Ordering::Less => {
+                        Ok(TestThreads::Count((*NUM_CPUS as i64 + v).max(1) as usize))
+                    }
                     Ordering::Equal => Err(serde::de::Error::invalid_value(
                         serde::de::Unexpected::Signed(v),
                         &self,
@@ -711,7 +712,7 @@ impl ThreadsRequired {
     pub fn compute(self, test_threads: usize) -> usize {
         match self {
             Self::Count(threads) => threads,
-            Self::NumCpus => num_cpus::get(),
+            Self::NumCpus => *NUM_CPUS,
             Self::NumTestThreads => test_threads,
         }
     }
@@ -2161,7 +2162,7 @@ mod tests {
             [profile.custom]
             test-threads = -1
         "#},
-        Some(num_cpus::get() - 1)
+        Some(*NUM_CPUS - 1)
 
         ; "negative"
     )]
@@ -2188,7 +2189,7 @@ mod tests {
             [profile.custom]
             test-threads = "num-cpus"
         "#},
-        Some(num_cpus::get())
+        Some(*NUM_CPUS)
 
         ; "num-cpus"
     )]
@@ -2249,7 +2250,7 @@ mod tests {
             [profile.custom]
             threads-required = "num-cpus"
         "#},
-        Some(num_cpus::get())
+        Some(*NUM_CPUS)
 
         ; "num-cpus"
     )]
@@ -2259,7 +2260,7 @@ mod tests {
             test-threads = 1
             threads-required = "num-cpus"
         "#},
-        Some(num_cpus::get())
+        Some(*NUM_CPUS)
 
         ; "num-cpus-with-custom-test-threads"
     )]
@@ -2268,7 +2269,7 @@ mod tests {
             [profile.custom]
             threads-required = "num-test-threads"
         "#},
-        Some(num_cpus::get())
+        Some(*NUM_CPUS)
 
         ; "num-test-threads"
     )]
