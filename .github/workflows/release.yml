@@ -309,6 +309,9 @@ jobs:
         with:
           branch: release-meta
           folder: out-dir
-      - run: ./scripts/cargo-release-publish.sh
+      # cargo release requires the working dir to not have any untracked files, hence the git clean.
+      - run: |
+          git clean -fdx
+          ./scripts/cargo-release-publish.sh
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
