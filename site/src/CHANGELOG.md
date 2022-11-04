@@ -3,6 +3,14 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+### Added
+
+- The [`threads-required` configuration](https://nexte.st/book/threads-required) now supports the
+  values "num-cpus", for the total number of logical CPUs available, and "num-test-threads", for the
+  number of test threads nextest is running with.
+
 ## [0.9.43-rc.2] - 2022-11-03
 
 This is a test release.
