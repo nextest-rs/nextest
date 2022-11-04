@@ -5,8 +5,8 @@
 set -xe -o pipefail
 
 # cargo-release requires a release off a branch (maybe it shouldn't?)
-# Check out a branch.
-git checkout -b to-release
+# Check out this branch, creating it if it doesn't exist.
+git checkout -B to-release
 
 cargo release publish --publish --execute --no-confirm --workspace "$@"
 
