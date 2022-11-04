@@ -9,7 +9,7 @@ use maplit::btreemap;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
-    config::NextestConfig,
+    config::{get_num_cpus, NextestConfig},
     list::{BinaryList, RustBuildMeta, RustTestArtifact, TestList, TestListState},
     reporter::TestEvent,
     reuse_build::PathMapper,
@@ -356,7 +356,7 @@ impl FixtureTargets {
             test_filter,
             target_runner,
             self.env.to_owned(),
-            num_cpus::get(),
+            get_num_cpus(),
         )
         .expect("test list successfully created")
     }
