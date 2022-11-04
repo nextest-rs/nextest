@@ -5,8 +5,8 @@
 
 use crate::{
     errors::{
-        ConfigParseError, ConfigParseErrorKind, ConfigParseOverrideError, ProfileNotFound,
-        TestThreadsParseError, ToolConfigFileParseError,
+        provided_by_tool, ConfigParseError, ConfigParseErrorKind, ConfigParseOverrideError,
+        ProfileNotFound, TestThreadsParseError, ToolConfigFileParseError,
     },
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
@@ -18,7 +18,12 @@ use nextest_filtering::{FilteringExpr, FilteringSet, TestQuery};
 use once_cell::sync::Lazy;
 use serde::{de::IntoDeserializer, Deserialize};
 use std::{
-    cmp::Ordering, collections::HashMap, fmt, num::NonZeroUsize, str::FromStr, time::Duration,
+    cmp::Ordering,
+    collections::{BTreeSet, HashMap},
+    fmt,
+    num::NonZeroUsize,
+    str::FromStr,
+    time::Duration,
 };
 use target_spec::TargetSpec;
 
@@ -88,10 +93,53 @@ impl NextestConfig {
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
+        Self::from_sources_impl(
+            workspace_root,
+            graph,
+            config_file,
+            tool_config_files,
+            |config_file, tool, unknown| {
+                let mut unknown_str = String::new();
+                if unknown.len() == 1 {
+                    // Print this on the same line.
+                    unknown_str.push(' ');
+                    unknown_str.push_str(unknown.iter().next().unwrap());
+                } else {
+                    for ignored_key in unknown {
+                        unknown_str.push('\n');
+                        unknown_str.push_str("  - ");
+                        unknown_str.push_str(ignored_key);
+                    }
+                }
+
+                log::warn!(
+                    "ignoring unknown configuration keys in config file {config_file}{}:{unknown_str}",
+                    provided_by_tool(tool),
+                )
+            },
+        )
+    }
+
+    // A custom unknown_callback can be passed in while testing.
+    fn from_sources_impl<'a, I>(
+        workspace_root: impl Into<Utf8PathBuf>,
+        graph: &PackageGraph,
+        config_file: Option<&Utf8Path>,
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+        mut unknown_callback: impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
         let workspace_root = workspace_root.into();
         let tool_config_files_rev = tool_config_files.into_iter().rev();
-        let (inner, overrides) =
-            Self::read_from_sources(graph, &workspace_root, config_file, tool_config_files_rev)?;
+        let (inner, overrides) = Self::read_from_sources(
+            graph,
+            &workspace_root,
+            config_file,
+            tool_config_files_rev,
+            &mut unknown_callback,
+        )?;
         Ok(Self {
             workspace_root,
             inner,
@@ -100,14 +148,30 @@ impl NextestConfig {
     }
 
     /// Returns the default nextest config.
-    pub fn default_config(workspace_root: impl Into<Utf8PathBuf>) -> Self {
+    #[cfg(test)]
+    pub(crate) fn default_config(workspace_root: impl Into<Utf8PathBuf>) -> Self {
+        use itertools::Itertools;
+
         let config = Self::make_default_config()
             .build()
             .expect("default config is always valid");
 
-        let deserialized: NextestConfigDeserialize = config
-            .try_deserialize()
+        let mut unknown = BTreeSet::new();
+        let deserialized: NextestConfigDeserialize =
+            serde_ignored::deserialize(config, |path: serde_ignored::Path| {
+                unknown.insert(path.to_string());
+            })
             .expect("default config is always valid");
+
+        // Make sure there aren't any unknown keys in the default config, since it is
+        // embedded/shipped with this binary.
+        if !unknown.is_empty() {
+            panic!(
+                "found unknown keys in default config: {}",
+                unknown.iter().join(", ")
+            );
+        }
+
         Self {
             workspace_root: workspace_root.into(),
             inner: deserialized.into_config_impl(),
@@ -134,6 +198,7 @@ impl NextestConfig {
         workspace_root: &Utf8Path,
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
+        unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
     ) -> Result<(NextestConfigImpl, NextestOverridesImpl), ConfigParseError> {
         // First, get the default config.
         let mut composite_builder = Self::make_default_config();
@@ -151,6 +216,7 @@ impl NextestConfig {
                 Some(tool),
                 source.clone(),
                 &mut overrides_impl,
+                unknown_callback,
             )?;
 
             // This is the final, composite builder used at the end.
@@ -173,11 +239,14 @@ impl NextestConfig {
             None,
             source.clone(),
             &mut overrides_impl,
+            unknown_callback,
         )?;
 
         composite_builder = composite_builder.add_source(source);
 
-        let config = Self::build_and_deserialize_config(&composite_builder)
+        // The unknown set is ignored here because any values in it have already been reported in
+        // deserialize_individual_config.
+        let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
             .map_err(|kind| ConfigParseError::new(config_file, None, kind))?;
 
         // Reverse all the overrides at the end.
@@ -195,13 +264,18 @@ impl NextestConfig {
         tool: Option<&str>,
         source: File<FileSourceFile, FileFormat>,
         overrides_impl: &mut NextestOverridesImpl,
+        unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
         let default_builder = Self::make_default_config();
         let this_builder = default_builder.add_source(source);
-        let this_config = Self::build_and_deserialize_config(&this_builder)
+        let (this_config, unknown) = Self::build_and_deserialize_config(&this_builder)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+
+        if !unknown.is_empty() {
+            unknown_callback(config_file, tool, &unknown);
+        }
 
         let this_config = this_config.into_config_impl();
 
@@ -257,15 +331,23 @@ impl NextestConfig {
         })
     }
 
+    /// This returns a tuple of (config, ignored paths).
     fn build_and_deserialize_config(
         builder: &ConfigBuilder<DefaultState>,
-    ) -> Result<NextestConfigDeserialize, ConfigParseErrorKind> {
+    ) -> Result<(NextestConfigDeserialize, BTreeSet<String>), ConfigParseErrorKind> {
         let config = builder
             .build_cloned()
             .map_err(|error| ConfigParseErrorKind::BuildError(Box::new(error)))?;
 
-        serde_path_to_error::deserialize(config)
-            .map_err(|error| ConfigParseErrorKind::DeserializeError(Box::new(error)))
+        let mut ignored = BTreeSet::new();
+        let mut cb = |path: serde_ignored::Path| {
+            ignored.insert(path.to_string());
+        };
+        let ignored_de = serde_ignored::Deserializer::new(config, &mut cb);
+        let config: NextestConfigDeserialize = serde_path_to_error::deserialize(ignored_de)
+            .map_err(|error| ConfigParseErrorKind::DeserializeError(Box::new(error)))?;
+
+        Ok((config, ignored))
     }
 }
 
@@ -2206,6 +2288,93 @@ mod tests {
             lowpri2_profile.overrides_for(&test_baz_query).retries(),
             Some(RetryPolicy::new_without_delay(26)),
             "retries for test_baz/default profile"
+        );
+    }
+
+    #[test]
+    fn ignored_keys() {
+        let config_contents = r#"
+        ignored1 = "test"
+
+        [profile.default]
+        retries = 3
+        ignored2 = "hi"
+
+        [[profile.default.overrides]]
+        filter = 'test(test_foo)'
+        retries = 20
+        ignored3 = 42
+        "#;
+
+        let tool_config_contents = r#"
+        [store]
+        ignored4 = 20
+
+        [profile.default]
+        retries = 4
+        ignored5 = false
+
+        [profile.lowpri]
+        retries = 12
+
+        [[profile.lowpri.overrides]]
+        filter = 'test(test_baz)'
+        retries = 22
+        ignored6 = 6.5
+        "#;
+
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+        let workspace_root = graph.workspace().root();
+        let tool_path = workspace_root.join(".config/tool.toml");
+        std::fs::write(&tool_path, tool_config_contents).unwrap();
+
+        let mut unknown_keys = HashMap::new();
+
+        let _ = NextestConfig::from_sources_impl(
+            workspace_root,
+            &graph,
+            None,
+            &[ToolConfigFile {
+                tool: "my-tool".to_owned(),
+                config_file: tool_path,
+            }],
+            |_path, tool, ignored| {
+                unknown_keys.insert(tool.map(|s| s.to_owned()), ignored.clone());
+            },
+        )
+        .expect("config is valid");
+
+        assert_eq!(
+            unknown_keys.len(),
+            2,
+            "there are two files with unknown keys"
+        );
+
+        let keys = unknown_keys
+            .remove(&None)
+            .expect("unknown keys for .config/nextest.toml");
+        assert_eq!(
+            keys,
+            maplit::btreeset! {
+                "ignored1".to_owned(),
+                "profile.default.ignored2".to_owned(),
+                "profile.default.overrides.0.ignored3".to_owned(),
+            }
+        );
+
+        let keys = unknown_keys
+            .remove(&Some("my-tool".to_owned()))
+            .expect("unknown keys for my-tool");
+        assert_eq!(
+            keys,
+            maplit::btreeset! {
+                "store.ignored4".to_owned(),
+                "profile.default.ignored5".to_owned(),
+                "profile.lowpri.overrides.0.ignored6".to_owned(),
+            }
         );
     }
 
