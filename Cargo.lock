@@ -1239,6 +1239,7 @@ dependencies = [
  "self_update",
  "semver",
  "serde",
+ "serde_ignored",
  "serde_json",
  "serde_path_to_error",
  "shell-words",
@@ -1283,6 +1284,7 @@ dependencies = [
  "owo-colors",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
+ "serde",
  "serde_json",
  "syn 1.0.103",
  "target-spec",
@@ -1901,6 +1903,15 @@ dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.103",
+]
+
+[[package]]
+name = "serde_ignored"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82b3da7eedd967647a866f67829d1c79d184d7c4521126e9cc2c46a9585c6d21"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

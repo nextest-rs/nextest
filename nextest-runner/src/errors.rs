@@ -56,7 +56,7 @@ impl ConfigParseError {
     }
 }
 
-fn provided_by_tool(tool: Option<&str>) -> String {
+pub(crate) fn provided_by_tool(tool: Option<&str>) -> String {
     match tool {
         Some(tool) => format!(" provided by tool `{tool}`"),
         None => String::new(),
