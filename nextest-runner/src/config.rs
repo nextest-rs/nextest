@@ -860,12 +860,13 @@ where
             E: serde::de::Error,
         {
             match v.cmp(&0) {
-                Ordering::Greater => Ok(Some(RetryPolicy::new_without_delay(v as usize))),
+                Ordering::Greater | Ordering::Equal => {
+                    Ok(Some(RetryPolicy::new_without_delay(v as usize)))
+                }
                 Ordering::Less => Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Signed(v),
                     &self,
                 )),
-                Ordering::Equal => Ok(None),
             }
         }
 
@@ -1653,6 +1654,9 @@ mod tests {
             [profile.default]
             retries = { backoff = "fixed", count = 3 }
 
+            [profile.no-retries]
+            retries = 0
+
             [profile.fixed-with-delay]
             retries = { backoff = "fixed", count = 3, delay = "1s" }
 
@@ -1685,6 +1689,16 @@ mod tests {
                 jitter: false,
             },
             "default retries matches"
+        );
+
+        assert_eq!(
+            config
+                .profile("no-retries")
+                .expect("profile exists")
+                .apply_build_platforms(&build_platforms())
+                .retries(),
+            RetryPolicy::new_without_delay(0),
+            "no-retries retries matches"
         );
 
         assert_eq!(
