@@ -3,17 +3,27 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.43] - 2022-11-04
+
+Nextest is now built with Rust 1.65. This version of Rust is the first one to spawn processes using [`posix_spawn`](https://pubs.opengroup.org/onlinepubs/007904975/functions/posix_spawn.html) rather than `fork`/`exec` on macOS, which should lead to performance benefits in some cases.
+
+For example, on an M1 Mac Mini, with the [clap repository](https://github.com/clap-rs/clap) at `520145e`, and the command `cargo nextest run -E 'not (test(ui_tests) + test(example_tests))'`:
+
+- **Before:** 0.636 seconds
+- **After:** 0.284 seconds (2.23x faster)
+
+This is a best-case scenario; tests that take longer to run will generally benefit less.
 
 ### Added
 
 - The [`threads-required` configuration](https://nexte.st/book/threads-required) now supports the
   values "num-cpus", for the total number of logical CPUs available, and "num-test-threads", for the
   number of test threads nextest is running with.
+- Nextest now prints a warning if a configuration setting is unknown.
 
-## [0.9.43-rc.2] - 2022-11-03
+### Fixed
 
-This is a test release.
+- Configuring `retries = 0` now works correctly. Thanks [xxchan](https://github.com/xxchan) for your first contribution!
 
 ## [0.9.42] - 2022-11-01
 
@@ -622,7 +632,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.43-rc.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43-rc.2
+[0.9.43]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43
 [0.9.42]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.42
 [0.9.41]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.41
 [0.9.40]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.40

@@ -14,6 +14,11 @@ threads-required = 2
 
 Then each test in the `tests::heavy` module will take up 2 of those 16 threads.
 
+The `threads-required` configuration can also be set to one of two special values:
+
+* `"num-cpus"` — The number of logical CPUs on the system.
+* `"num-test-threads"` — The number of test threads nextest is currently running with.
+
 ## Use cases
 
 Some use cases that may benefit from limiting concurrency:
