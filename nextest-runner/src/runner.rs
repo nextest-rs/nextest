@@ -158,7 +158,7 @@ impl TestRunnerBuilder {
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
         };
-        let threads_required = profile.threads_required();
+        let threads_required = profile.threads_required().compute(test_threads);
         let (retries, ignore_retry_overrides) = match self.retries {
             Some(retries) => (retries, true),
             None => (profile.retries(), false),
@@ -316,7 +316,7 @@ impl<'a> TestRunnerInner<'a> {
                         let overrides = self.profile.overrides_for(&query);
                         let threads_required = overrides
                             .threads_required()
-                            .unwrap_or(self.threads_required);
+                            .map_or(self.threads_required, |req| req.compute(self.test_threads));
 
                         let fut = async move {
                             // Subscribe to the receiver *before* checking canceled_ref. The ordering is
