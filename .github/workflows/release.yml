@@ -22,7 +22,7 @@ jobs:
           crate: cargo-release
           # Version 0.21.4 has the idempotency behavior we want, until
           # https://github.com/crate-ci/cargo-release/issues/594 is addressed.
-          version: 0.21.4
+          version: =0.21.4
           locked: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
@@ -32,7 +32,7 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm --execute
+      - run: ./cargo-release-publish.sh --exclude cargo-nextest
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -49,7 +49,7 @@ jobs:
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-release
-          version: 0.21.4
+          version: =0.21.4
           locked: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
@@ -59,7 +59,7 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm --execute
+      - run: ./cargo-release-publish.sh --exclude cargo-nextest
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -76,7 +76,7 @@ jobs:
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-release
-          version: 0.21.4
+          version: =0.21.4
           locked: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
@@ -86,7 +86,7 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm --execute
+      - run: ./cargo-release-publish.sh --exclude cargo-nextest
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -103,7 +103,7 @@ jobs:
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-release
-          version: 0.21.4
+          version: =0.21.4
           locked: true
       - uses: taiki-e/create-gh-release-action@v1
         with:
@@ -113,7 +113,7 @@ jobs:
           branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: cargo release publish --publish --workspace --exclude cargo-nextest --no-confirm --execute
+      - run: ./cargo-release-publish.sh --exclude cargo-nextest
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -257,7 +257,7 @@ jobs:
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-release
-          version: 0.21.4
+          version: =0.21.4
           locked: true
       - name: Download mukti
         run: |
@@ -309,6 +309,6 @@ jobs:
         with:
           branch: release-meta
           folder: out-dir
-      - run: cargo release publish --publish --workspace --no-confirm --execute
+      - run: ./cargo-release-publish.sh
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
