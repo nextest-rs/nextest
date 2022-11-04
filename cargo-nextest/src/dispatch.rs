@@ -16,7 +16,8 @@ use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        NextestConfig, NextestProfile, PreBuildPlatform, RetryPolicy, TestThreads, ToolConfigFile,
+        get_num_cpus, NextestConfig, NextestProfile, PreBuildPlatform, RetryPolicy, TestThreads,
+        ToolConfigFile,
     },
     errors::WriteTestListError,
     list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
@@ -469,7 +470,7 @@ impl TestBuildFilter {
             runner,
             env,
             // TODO: do we need to allow customizing this?
-            num_cpus::get(),
+            get_num_cpus(),
         )
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }

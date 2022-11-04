@@ -3,6 +3,7 @@
 
 use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
+    config::get_num_cpus,
     errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::convert_rel_path_to_forward_slash,
     list::{BinaryList, OutputFormat, SerializableFormat},
@@ -131,7 +132,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                     .include_checksum(true)
                     .map_err(ArchiveCreateError::OutputArchiveIo)?;
                 encoder
-                    .multithread(num_cpus::get() as u32)
+                    .multithread(get_num_cpus() as u32)
                     .map_err(ArchiveCreateError::OutputArchiveIo)?;
                 tar::Builder::new(encoder)
             }

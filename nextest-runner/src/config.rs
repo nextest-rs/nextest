@@ -22,7 +22,19 @@ use std::{
 };
 use target_spec::TargetSpec;
 
-static NUM_CPUS: Lazy<usize> = Lazy::new(num_cpus::get);
+/// Gets the number of available CPUs and caches the value.
+#[inline]
+pub fn get_num_cpus() -> usize {
+    static NUM_CPUS: Lazy<usize> = Lazy::new(|| match std::thread::available_parallelism() {
+        Ok(count) => count.into(),
+        Err(err) => {
+            log::warn!("unable to determine num-cpus ({err}), assuming 1 logical CPU");
+            1
+        }
+    });
+
+    *NUM_CPUS
+}
 
 /// Overall configuration for nextest.
 ///
@@ -620,7 +632,7 @@ impl TestThreads {
     pub fn compute(self) -> usize {
         match self {
             Self::Count(threads) => threads,
-            Self::NumCpus => *NUM_CPUS,
+            Self::NumCpus => get_num_cpus(),
         }
     }
 }
@@ -638,7 +650,9 @@ impl FromStr for TestThreads {
                 "Error: {e} parsing {s}"
             ))),
             Ok(0) => Err(TestThreadsParseError::new("jobs may not be 0")),
-            Ok(j) if j < 0 => Ok(TestThreads::Count((*NUM_CPUS as isize + j).max(1) as usize)),
+            Ok(j) if j < 0 => Ok(TestThreads::Count(
+                (get_num_cpus() as isize + j).max(1) as usize
+            )),
             Ok(j) => Ok(TestThreads::Count(j as usize)),
         }
     }
@@ -679,9 +693,9 @@ impl<'de> Deserialize<'de> for TestThreads {
             {
                 match v.cmp(&0) {
                     Ordering::Greater => Ok(TestThreads::Count(v as usize)),
-                    Ordering::Less => {
-                        Ok(TestThreads::Count((*NUM_CPUS as i64 + v).max(1) as usize))
-                    }
+                    Ordering::Less => Ok(TestThreads::Count(
+                        (get_num_cpus() as i64 + v).max(1) as usize
+                    )),
                     Ordering::Equal => Err(serde::de::Error::invalid_value(
                         serde::de::Unexpected::Signed(v),
                         &self,
@@ -712,7 +726,7 @@ impl ThreadsRequired {
     pub fn compute(self, test_threads: usize) -> usize {
         match self {
             Self::Count(threads) => threads,
-            Self::NumCpus => *NUM_CPUS,
+            Self::NumCpus => get_num_cpus(),
             Self::NumTestThreads => test_threads,
         }
     }
@@ -2162,7 +2176,7 @@ mod tests {
             [profile.custom]
             test-threads = -1
         "#},
-        Some(*NUM_CPUS - 1)
+        Some(get_num_cpus() - 1)
 
         ; "negative"
     )]
@@ -2189,7 +2203,7 @@ mod tests {
             [profile.custom]
             test-threads = "num-cpus"
         "#},
-        Some(*NUM_CPUS)
+        Some(get_num_cpus())
 
         ; "num-cpus"
     )]
@@ -2250,7 +2264,7 @@ mod tests {
             [profile.custom]
             threads-required = "num-cpus"
         "#},
-        Some(*NUM_CPUS)
+        Some(get_num_cpus())
 
         ; "num-cpus"
     )]
@@ -2260,7 +2274,7 @@ mod tests {
             test-threads = 1
             threads-required = "num-cpus"
         "#},
-        Some(*NUM_CPUS)
+        Some(get_num_cpus())
 
         ; "num-cpus-with-custom-test-threads"
     )]
@@ -2269,7 +2283,7 @@ mod tests {
             [profile.custom]
             threads-required = "num-test-threads"
         "#},
-        Some(*NUM_CPUS)
+        Some(get_num_cpus())
 
         ; "num-test-threads"
     )]
