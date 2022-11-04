@@ -105,12 +105,12 @@ impl NextestConfig {
             .build()
             .expect("default config is always valid");
 
-        let inner = config
+        let deserialized: NextestConfigDeserialize = config
             .try_deserialize()
             .expect("default config is always valid");
         Self {
             workspace_root: workspace_root.into(),
-            inner,
+            inner: deserialized.into_config_impl(),
             // The default config does not (cannot) have overrides.
             overrides: NextestOverridesImpl::default(),
         }
@@ -186,7 +186,7 @@ impl NextestConfig {
             override_.reverse();
         }
 
-        Ok((config, overrides_impl))
+        Ok((config.into_config_impl(), overrides_impl))
     }
 
     fn deserialize_individual_config(
@@ -202,6 +202,9 @@ impl NextestConfig {
         let this_builder = default_builder.add_source(source);
         let this_config = Self::build_and_deserialize_config(&this_builder)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+
+        let this_config = this_config.into_config_impl();
+
         // Compile the overrides for this file.
         let this_overrides = NextestOverridesImpl::new(graph, &this_config)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
@@ -229,7 +232,7 @@ impl NextestConfig {
         &self,
         name: &str,
     ) -> Result<NextestProfile<'_, PreBuildPlatform>, ProfileNotFound> {
-        let custom_profile = self.inner.profiles.get(name)?;
+        let custom_profile = self.inner.get_profile(name)?;
 
         // The profile was found: construct the NextestProfile.
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
@@ -248,7 +251,7 @@ impl NextestConfig {
 
         Ok(NextestProfile {
             store_dir,
-            default_profile: &self.inner.profiles.default,
+            default_profile: &self.inner.default_profile,
             custom_profile,
             overrides,
         })
@@ -256,7 +259,7 @@ impl NextestConfig {
 
     fn build_and_deserialize_config(
         builder: &ConfigBuilder<DefaultState>,
-    ) -> Result<NextestConfigImpl, ConfigParseErrorKind> {
+    ) -> Result<NextestConfigDeserialize, ConfigParseErrorKind> {
         let config = builder
             .build_cloned()
             .map_err(|error| ConfigParseErrorKind::BuildError(Box::new(error)))?;
@@ -457,7 +460,7 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
                 continue;
             }
 
-            if !override_.expr.matches_test(query) {
+            if !override_.data.expr.matches_test(query) {
                 continue;
             }
             if threads_required.is_none() && override_.data.threads_required.is_some() {
@@ -503,7 +506,7 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
 
 /// Override settings for individual tests.
 ///
-/// Returned by
+/// Returned by [`NextestProfile::overrides_for`].
 #[derive(Clone, Debug)]
 pub struct ProfileOverrides {
     threads_required: Option<ThreadsRequired>,
@@ -553,34 +556,19 @@ impl<'cfg> NextestJunitConfig<'cfg> {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Debug)]
 struct NextestConfigImpl {
     store: StoreConfigImpl,
-    #[serde(rename = "profile")]
-    profiles: NextestProfilesImpl,
+    default_profile: DefaultProfileImpl,
+    other_profiles: HashMap<String, CustomProfileImpl>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct StoreConfigImpl {
-    dir: Utf8PathBuf,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct NextestProfilesImpl {
-    default: DefaultProfileImpl,
-    #[serde(flatten)]
-    other: HashMap<String, CustomProfileImpl>,
-}
-
-impl NextestProfilesImpl {
-    fn get(&self, profile: &str) -> Result<Option<&CustomProfileImpl>, ProfileNotFound> {
+impl NextestConfigImpl {
+    fn get_profile(&self, profile: &str) -> Result<Option<&CustomProfileImpl>, ProfileNotFound> {
         let custom_profile = match profile {
             NextestConfig::DEFAULT_PROFILE => None,
             other => Some(
-                self.other
+                self.other_profiles
                     .get(other)
                     .ok_or_else(|| ProfileNotFound::new(profile, self.all_profiles()))?,
             ),
@@ -589,32 +577,99 @@ impl NextestProfilesImpl {
     }
 
     fn all_profiles(&self) -> impl Iterator<Item = &str> {
-        self.other
+        self.other_profiles
             .keys()
             .map(|key| key.as_str())
             .chain(std::iter::once(NextestConfig::DEFAULT_PROFILE))
     }
 }
 
+// This is the form of `NextestConfig` that gets deserialized.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+struct NextestConfigDeserialize {
+    store: StoreConfigImpl,
+    #[serde(rename = "profile")]
+    profiles: HashMap<String, CustomProfileImpl>,
+}
+
+impl NextestConfigDeserialize {
+    fn into_config_impl(mut self) -> NextestConfigImpl {
+        let p = self
+            .profiles
+            .remove("default")
+            .expect("default profile should exist");
+        let default_profile = DefaultProfileImpl::new(p);
+
+        NextestConfigImpl {
+            store: self.store,
+            default_profile,
+            other_profiles: self.profiles,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct StoreConfigImpl {
+    dir: Utf8PathBuf,
+}
+
+#[derive(Clone, Debug)]
 struct DefaultProfileImpl {
     test_threads: TestThreads,
     threads_required: ThreadsRequired,
-    #[serde(default, deserialize_with = "deserialize_retry_policy_or_default")]
     retries: RetryPolicy,
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
     fail_fast: bool,
-    #[serde(deserialize_with = "require_deserialize_slow_timeout")]
     slow_timeout: SlowTimeout,
-    #[serde(with = "humantime_serde")]
     leak_timeout: Duration,
-    #[serde(default)]
     overrides: Vec<ProfileOverrideSource>,
     junit: DefaultJunitImpl,
+}
+
+impl DefaultProfileImpl {
+    fn new(p: CustomProfileImpl) -> Self {
+        Self {
+            test_threads: p
+                .test_threads
+                .expect("test-threads present in default profile"),
+            threads_required: p
+                .threads_required
+                .expect("threads-required present in default profile"),
+            retries: p.retries.expect("retries present in default profile"),
+            status_level: p
+                .status_level
+                .expect("status-level present in default profile"),
+            final_status_level: p
+                .final_status_level
+                .expect("final-status-level present in default profile"),
+            failure_output: p
+                .failure_output
+                .expect("failure-output present in default profile"),
+            success_output: p
+                .success_output
+                .expect("success-output present in default profile"),
+            fail_fast: p.fail_fast.expect("fail-fast present in default profile"),
+            slow_timeout: p
+                .slow_timeout
+                .expect("slow-timeout present in default profile"),
+            leak_timeout: p
+                .leak_timeout
+                .expect("leak-timeout present in default profile"),
+            overrides: p.overrides,
+            junit: DefaultJunitImpl {
+                path: p.junit.path,
+                report_name: p
+                    .junit
+                    .report_name
+                    .expect("junit.report present in default profile"),
+            },
+        }
+    }
 }
 
 /// Type for the test-threads config key.
@@ -808,17 +863,6 @@ fn default_grace_period() -> Duration {
     Duration::from_secs(10)
 }
 
-fn require_deserialize_slow_timeout<'de, D>(deserializer: D) -> Result<SlowTimeout, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    match deserialize_slow_timeout(deserializer) {
-        Ok(None) => Err(serde::de::Error::missing_field("field missing or null")),
-        Err(e) => Err(e),
-        Ok(Some(st)) => Ok(st),
-    }
-}
-
 fn deserialize_slow_timeout<'de, D>(deserializer: D) -> Result<Option<SlowTimeout>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -923,17 +967,6 @@ impl RetryPolicy {
         match self {
             Self::Fixed { count, .. } | Self::Exponential { count, .. } => *count,
         }
-    }
-}
-
-fn deserialize_retry_policy_or_default<'de, D>(deserializer: D) -> Result<RetryPolicy, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    match deserialize_retry_policy(deserializer) {
-        Ok(None) => Ok(Default::default()),
-        Err(e) => Err(e),
-        Ok(Some(st)) => Ok(st),
     }
 }
 
@@ -1076,14 +1109,8 @@ struct ProfileOverrideSource {
     /// The filter expression to match against.
     #[serde(default)]
     filter: Option<String>,
-    /// Overrides.
-    #[serde(flatten)]
-    data: ProfileOverrideData,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct ProfileOverrideData {
+    /// Overrides. (This used to use serde(flatten) but that has issues:
+    /// https://github.com/serde-rs/serde/issues/2312.)
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
     #[serde(default, deserialize_with = "deserialize_retry_policy")]
@@ -1106,12 +1133,11 @@ impl NextestOverridesImpl {
         let default = Self::compile_overrides(
             graph,
             "default",
-            &config.profiles.default.overrides,
+            &config.default_profile.overrides,
             &mut errors,
         );
         let other: HashMap<_, _> = config
-            .profiles
-            .other
+            .other_profiles
             .iter()
             .map(|(profile_name, profile)| {
                 (
@@ -1144,8 +1170,16 @@ impl NextestOverridesImpl {
 #[derive(Clone, Debug)]
 struct ProfileOverrideImpl<State> {
     state: State,
-    expr: FilteringExpr,
     data: ProfileOverrideData,
+}
+
+#[derive(Clone, Debug)]
+struct ProfileOverrideData {
+    expr: FilteringExpr,
+    threads_required: Option<ThreadsRequired>,
+    retries: Option<RetryPolicy>,
+    slow_timeout: Option<SlowTimeout>,
+    leak_timeout: Option<Duration>,
 }
 
 impl ProfileOverrideImpl<PreBuildPlatform> {
@@ -1178,8 +1212,13 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
         match (target_spec, filter_expr) {
             (Ok(target_spec), Ok(expr)) => Some(Self {
                 state: PreBuildPlatform { target_spec },
-                expr,
-                data: source.data.clone(),
+                data: ProfileOverrideData {
+                    expr,
+                    threads_required: source.threads_required,
+                    retries: source.retries,
+                    slow_timeout: source.slow_timeout,
+                    leak_timeout: source.leak_timeout,
+                },
             }),
             (Err(platform_parse_error), Ok(_)) => {
                 errors.push(ConfigParseOverrideError {
@@ -1230,7 +1269,6 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
                 host_eval,
                 target_eval,
             },
-            expr: self.expr,
             data: self.data,
         }
     }
