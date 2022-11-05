@@ -3,7 +3,7 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.43-rc.3] - 2022-11-04
+## [0.9.43] - 2022-11-04
 
 Nextest is now built with Rust 1.65. This version of Rust is the first one to spawn processes using [`posix_spawn`](https://pubs.opengroup.org/onlinepubs/007904975/functions/posix_spawn.html) rather than `fork`/`exec` on macOS, which should lead to performance benefits in some cases.
 
@@ -632,7 +632,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.43-rc.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43-rc.3
+[0.9.43]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43
 [0.9.42]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.42
 [0.9.41]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.41
 [0.9.40]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.40
