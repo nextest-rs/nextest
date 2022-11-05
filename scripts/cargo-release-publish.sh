@@ -8,7 +8,11 @@ set -xe -o pipefail
 # Check out this branch, creating it if it doesn't exist.
 git checkout -B to-release
 
-cargo release publish --publish --execute --no-confirm --workspace "$@"
+# --execute: actually does the release
+# --no-verify: doesn't build before releasing (this is because cargo publish might pull in new
+# versions of dependencies, which might have regressions)
+# --no-confirm: don't ask for confirmation, since this is a non-interactive script
+cargo release publish --publish --execute --no-verify --no-confirm --workspace "$@"
 
 git checkout -
 git branch -D to-release
