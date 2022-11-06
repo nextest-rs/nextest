@@ -11,6 +11,7 @@
 
 pub mod cargo_config;
 pub mod config;
+pub mod double_spawn;
 pub mod errors;
 mod helpers;
 pub mod list;

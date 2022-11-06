@@ -8,6 +8,7 @@ use nextest_filtering::FilteringExpr;
 use nextest_metadata::{BuildPlatform, FilterMatch, MismatchReason};
 use nextest_runner::{
     config::{NextestConfig, RetryPolicy},
+    double_spawn::DoubleSpawnInfo,
     list::BinaryList,
     platform::BuildPlatforms,
     reporter::heuristic_extract_description,
@@ -100,6 +101,7 @@ fn test_run() -> Result<()> {
             &test_list,
             profile.apply_build_platforms(&build_platforms),
             SignalHandlerKind::Noop,
+            DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
         .unwrap();
@@ -199,6 +201,7 @@ fn test_run_ignored() -> Result<()> {
             &test_list,
             profile.apply_build_platforms(&build_platforms),
             SignalHandlerKind::Noop,
+            DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
         .unwrap();
@@ -403,6 +406,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
             &test_list,
             profile,
             SignalHandlerKind::Noop,
+            DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
         .unwrap();
@@ -538,6 +542,7 @@ fn test_termination() -> Result<()> {
             &test_list,
             profile,
             SignalHandlerKind::Noop,
+            DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
         .unwrap();
