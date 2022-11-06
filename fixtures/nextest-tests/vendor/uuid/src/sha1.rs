@@ -1,6 +1,6 @@
 #[cfg(feature = "v5")]
 pub(crate) fn hash(ns: &[u8], src: &[u8]) -> [u8; 16] {
-    use private_sha1_smol::Sha1;
+    use sha1_smol::Sha1;
 
     let mut hasher = Sha1::new();
 

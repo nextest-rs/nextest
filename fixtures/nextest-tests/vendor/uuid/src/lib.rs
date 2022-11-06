@@ -30,13 +30,16 @@
 //! practical purposes, it can be assumed that an unintentional collision would
 //! be extremely unlikely.
 //!
+//! UUIDs have a number of standardized encodings that are specified in [RFC4122](http://tools.ietf.org/html/rfc4122),
+//! with recent additions [in draft](https://datatracker.ietf.org/doc/html/draft-peabody-dispatch-new-uuid-format-04).
+//!
 //! # Getting started
 //!
 //! Add the following to your `Cargo.toml`:
 //!
 //! ```toml
 //! [dependencies.uuid]
-//! version = "1.1.2"
+//! version = "1.2.1"
 //! features = [
 //!     "v4",                # Lets you generate random UUIDs
 //!     "fast-rng",          # Use a faster (but still sufficiently random) RNG
@@ -65,21 +68,35 @@
 //! const ID: Uuid = uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 //! ```
 //!
-//! # Dependencies
+//! # Working with different UUID versions
 //!
-//! By default, this crate depends on nothing but `std` and can parse and format
-//! UUIDs, but cannot generate them. You need to enable the following Cargo
-//! features to enable various pieces of functionality:
+//! This library supports all standardized methods for generating UUIDs through individual Cargo features.
 //!
-//! * `v1` - adds the [`Uuid::new_v1`] function and the ability to create a V1
-//!   UUID using an implementation of [`v1::ClockSequence`] (usually
-//! [`v1::Context`]) and a UNIX timestamp.
-//! * `v3` - adds the [`Uuid::new_v3`] function and the ability to create a V3
-//!   UUID based on the MD5 hash of some data.
-//! * `v4` - adds the [`Uuid::new_v4`] function and the ability to randomly
-//!   generate a UUID.
-//! * `v5` - adds the [`Uuid::new_v5`] function and the ability to create a V5
-//!   UUID based on the SHA1 hash of some data.
+//! By default, this crate depends on nothing but the Rust standard library and can parse and format
+//! UUIDs, but cannot generate them. Depending on the kind of UUID you'd like to work with, there
+//! are Cargo features that enable generating them:
+//!
+//! * `v1` - Version 1 UUIDs using a timestamp and monotonic counter.
+//! * `v3` - Version 3 UUIDs based on the MD5 hash of some data.
+//! * `v4` - Version 4 UUIDs with random data.
+//! * `v5` - Version 5 UUIDs based on the SHA1 hash of some data.
+//!
+//! Versions that are in draft are also supported. See the _unstable features_ section for details.
+//!
+//! This library also includes a [`Builder`] type that can be used to help construct UUIDs of any
+//! version without any additional dependencies or features. It's a lower-level API than [`Uuid`]
+//! that can be used when you need control over implicit requirements on things like a source
+//! of randomness.
+//!
+//! ## Which UUID version should I use?
+//!
+//! If you just want to generate unique identifiers then consider version 4 (`v4`) UUIDs. If you want
+//! to use UUIDs as database keys or need to sort them then consider version 7 (`v7`) UUIDs.
+//! Other versions should generally be avoided unless there's an existing need for them.
+//!
+//! Some UUID versions supersede others. Prefer version 6 over version 1 and version 5 over version 3.
+//!
+//! # Other features
 //!
 //! Other crate features can also be useful beyond the version support:
 //!
@@ -88,15 +105,18 @@
 //!   `serde`.
 //! * `arbitrary` - adds an `Arbitrary` trait implementation to `Uuid` for
 //!   fuzzing.
-//! * `fast-rng` - when combined with `v4` uses a faster algorithm for
-//!   generating random UUIDs. This feature requires more dependencies to
-//!   compile, but is just as suitable for UUIDs as the default algorithm.
+//! * `fast-rng` - uses a faster algorithm for generating random UUIDs.
+//!   This feature requires more dependencies to compile, but is just as suitable for
+//!   UUIDs as the default algorithm.
 //!
-//! ## Unstable features
+//! # Unstable features
 //!
 //! Some features are unstable. They may be incomplete or depend on other
 //! unstable libraries. These include:
 //!
+//! * `v6` - Version 6 UUIDs using a timestamp and monotonic counter.
+//! * `v7` - Version 7 UUIDs using a Unix timestamp.
+//! * `v8` - Version 8 UUIDs using user-defined data.
 //! * `zerocopy` - adds support for zero-copy deserialization using the
 //!   `zerocopy` library.
 //!
@@ -114,20 +134,17 @@
 //!
 //! ## WebAssembly
 //!
-//! For WebAssembly, enable the `js` feature along with `v4` for a
-//! source of randomness:
+//! For WebAssembly, enable the `js` feature:
 //!
 //! ```toml
 //! [dependencies.uuid]
-//! version = "1"
+//! version = "1.2.1"
 //! features = [
 //!     "v4",
+//!     "v7",
 //!     "js",
 //! ]
 //! ```
-//!
-//! You don't need the `js` feature to use `uuid` in WebAssembly if you're
-//! not also enabling `v4`.
 //!
 //! ## Embedded
 //!
@@ -136,16 +153,16 @@
 //!
 //! ```toml
 //! [dependencies.uuid]
-//! version = "1"
+//! version = "1.2.1"
 //! default-features = false
 //! ```
 //!
 //! Some additional features are supported in no-std environments:
 //!
-//! * `v1`, `v3`, and `v5`
-//! * `serde`
+//! * `v1`, `v3`, `v5`, `v6`, and `v8`.
+//! * `serde`.
 //!
-//! If you need to use `v4` in a no-std environment, you'll need to
+//! If you need to use `v4` or `v7` in a no-std environment, you'll need to
 //! follow [`getrandom`'s docs] on configuring a source of randomness
 //! on currently unsupported targets. Alternatively, you can produce
 //! random bytes yourself and then pass them to [`Builder::from_random_bytes`]
@@ -153,11 +170,11 @@
 //!
 //! # Examples
 //!
-//! To parse a UUID given in the simple format and print it as a urn:
+//! Parse a UUID given in the simple format and print it as a URN:
 //!
 //! ```
 //! # use uuid::Uuid;
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # fn main() -> Result<(), uuid::Error> {
 //! let my_uuid = Uuid::parse_str("a1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8")?;
 //!
 //! println!("{}", my_uuid.urn());
@@ -165,7 +182,7 @@
 //! # }
 //! ```
 //!
-//! To create a new random (V4) UUID and print it out in hexadecimal form:
+//! Generate a random UUID and print it out in hexadecimal form:
 //!
 //! ```
 //! // Note that this requires the `v4` feature to be enabled.
@@ -182,17 +199,11 @@
 //! # References
 //!
 //! * [Wikipedia: Universally Unique Identifier](http://en.wikipedia.org/wiki/Universally_unique_identifier)
-//! * [RFC4122: A Universally Unique IDentifier (UUID) URN Namespace](http://tools.ietf.org/html/rfc4122)
+//! * [RFC4122: A Universally Unique Identifier (UUID) URN Namespace](http://tools.ietf.org/html/rfc4122)
+//! * [Draft RFC: New UUID Formats, Version 4](https://datatracker.ietf.org/doc/html/draft-peabody-dispatch-new-uuid-format-04)
 //!
 //! [`wasm-bindgen`]: https://crates.io/crates/wasm-bindgen
 //! [`cargo-web`]: https://crates.io/crates/cargo-web
-//! [`Uuid`]: struct.Uuid.html
-//! [`Uuid::new_v1`]: struct.Uuid.html#method.new_v1
-//! [`Uuid::new_v3`]: struct.Uuid.html#method.new_v3
-//! [`Uuid::new_v4`]: struct.Uuid.html#method.new_v4
-//! [`Uuid::new_v5`]: struct.Uuid.html#method.new_v5
-//! [`v1::ClockSequence`]: v1/trait.ClockSequence.html
-//! [`v1::Context`]: v1/struct.Context.html
 //! [`getrandom`'s docs]: https://docs.rs/getrandom
 
 #![no_std]
@@ -200,7 +211,7 @@
 #![doc(
     html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
     html_favicon_url = "https://www.rust-lang.org/favicon.ico",
-    html_root_url = "https://docs.rs/uuid/1.1.2"
+    html_root_url = "https://docs.rs/uuid/1.2.1"
 )]
 
 #[cfg(any(feature = "std", test))]
@@ -211,11 +222,7 @@ extern crate std;
 #[macro_use]
 extern crate core as std;
 
-// Check that unstable features are accompanied by a the `uuid_unstable` cfg
-#[cfg(all(not(uuid_unstable), feature = "zerocopy"))]
-compile_error!("The `zerocopy` feature is unstable and may break between releases. Please also pass `RUSTFLAGS=\"--cfg uuid_unstable\"` to allow it.");
-
-#[cfg(feature = "zerocopy")]
+#[cfg(all(uuid_unstable, feature = "zerocopy"))]
 use zerocopy::{AsBytes, FromBytes, Unaligned};
 
 mod builder;
@@ -223,8 +230,17 @@ mod error;
 mod parser;
 
 pub mod fmt;
+pub mod timestamp;
+
+pub use timestamp::{context::NoContext, ClockSequence, Timestamp};
+
+#[cfg(any(feature = "v1", feature = "v6"))]
+pub use timestamp::context::Context;
 
 #[cfg(feature = "v1")]
+#[doc(hidden)]
+// Soft-deprecated (Rust doesn't support deprecating re-exports)
+// Use `Context` from the crate root instead
 pub mod v1;
 #[cfg(feature = "v3")]
 mod v3;
@@ -232,6 +248,12 @@ mod v3;
 mod v4;
 #[cfg(feature = "v5")]
 mod v5;
+#[cfg(all(uuid_unstable, feature = "v6"))]
+mod v6;
+#[cfg(all(uuid_unstable, feature = "v7"))]
+mod v7;
+#[cfg(all(uuid_unstable, feature = "v8"))]
+mod v8;
 
 #[cfg(feature = "md5")]
 mod md5;
@@ -245,9 +267,10 @@ mod external;
 #[macro_use]
 mod macros;
 
+extern crate alloc;
 #[doc(hidden)]
 #[cfg(feature = "macro-diagnostics")]
-pub extern crate private_uuid_macro_internal;
+pub extern crate uuid_macro_internal;
 
 use crate::std::convert;
 
@@ -267,19 +290,32 @@ pub type Bytes = [u8; 16];
 /// * [Version in RFC4122](https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.3)
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[repr(u8)]
 pub enum Version {
-    /// Special case for `nil` UUID.
-    Nil = 0,
-    /// Version 1: MAC address.
-    Mac,
+    /// The "nil" (all zeros) UUID.
+    Nil = 0u8,
+    /// Version 1: Timestamp and node ID.
+    Mac = 1,
     /// Version 2: DCE Security.
-    Dce,
+    Dce = 2,
     /// Version 3: MD5 hash.
-    Md5,
+    Md5 = 3,
     /// Version 4: Random.
-    Random,
+    Random = 4,
     /// Version 5: SHA-1 hash.
-    Sha1,
+    Sha1 = 5,
+    /// Version 6: Sortable Timestamp and node ID.
+    #[cfg(uuid_unstable)]
+    SortMac = 6,
+    /// Version 7: Timestamp and random.
+    #[cfg(uuid_unstable)]
+    SortRand = 7,
+    /// Version 8: Custom.
+    #[cfg(uuid_unstable)]
+    Custom = 8,
+    /// The "max" (all ones) UUID.
+    #[cfg(uuid_unstable)]
+    Max = 0xff,
 }
 
 /// The reserved variants of UUIDs.
@@ -289,9 +325,10 @@ pub enum Version {
 /// * [Variant in RFC4122](http://tools.ietf.org/html/rfc4122#section-4.1.1)
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[repr(u8)]
 pub enum Variant {
     /// Reserved by the NCS for backward compatibility.
-    NCS = 0,
+    NCS = 0u8,
     /// As described in the RFC4122 Specification (default).
     RFC4122,
     /// Reserved by Microsoft for backward compatibility.
@@ -308,7 +345,7 @@ pub enum Variant {
 ///
 /// ```
 /// # use uuid::Uuid;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # fn main() -> Result<(), uuid::Error> {
 /// let my_uuid = Uuid::parse_str("a1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8")?;
 ///
 /// println!("{}", my_uuid.urn());
@@ -345,7 +382,7 @@ pub enum Variant {
 ///
 /// ```
 /// # use uuid::Uuid;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # fn main() -> Result<(), uuid::Error> {
 /// let my_uuid = Uuid::parse_str("a1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8")?;
 ///
 /// assert_eq!(
@@ -360,7 +397,7 @@ pub enum Variant {
 ///
 /// ```
 /// # use uuid::Uuid;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # fn main() -> Result<(), uuid::Error> {
 /// let my_uuid = Uuid::parse_str("a1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8")?;
 ///
 /// assert_eq!(
@@ -395,33 +432,33 @@ pub enum Variant {
 ///
 /// The `Uuid` type is always guaranteed to be have the same ABI as [`Bytes`].
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "zerocopy", derive(AsBytes, FromBytes, Unaligned))]
+#[cfg_attr(all(uuid_unstable, feature = "zerocopy"), derive(AsBytes, FromBytes, Unaligned))]
 #[repr(transparent)]
 pub struct Uuid(Bytes);
 
 impl Uuid {
     /// UUID namespace for Domain Name System (DNS).
     pub const NAMESPACE_DNS: Self = Uuid([
-        0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0,
-        0x4f, 0xd4, 0x30, 0xc8,
+        0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+        0xc8,
     ]);
 
     /// UUID namespace for ISO Object Identifiers (OIDs).
     pub const NAMESPACE_OID: Self = Uuid([
-        0x6b, 0xa7, 0xb8, 0x12, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0,
-        0x4f, 0xd4, 0x30, 0xc8,
+        0x6b, 0xa7, 0xb8, 0x12, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+        0xc8,
     ]);
 
     /// UUID namespace for Uniform Resource Locators (URLs).
     pub const NAMESPACE_URL: Self = Uuid([
-        0x6b, 0xa7, 0xb8, 0x11, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0,
-        0x4f, 0xd4, 0x30, 0xc8,
+        0x6b, 0xa7, 0xb8, 0x11, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+        0xc8,
     ]);
 
     /// UUID namespace for X.500 Distinguished Names (DNs).
     pub const NAMESPACE_X500: Self = Uuid([
-        0x6b, 0xa7, 0xb8, 0x14, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0,
-        0x4f, 0xd4, 0x30, 0xc8,
+        0x6b, 0xa7, 0xb8, 0x14, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+        0xc8,
     ]);
 
     /// Returns the variant of the UUID structure.
@@ -436,7 +473,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::{Uuid, Variant};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let my_uuid = Uuid::parse_str("02f09a3f-1624-3b1d-8409-44eff7708208")?;
     ///
     /// assert_eq!(Variant::RFC4122, my_uuid.get_variant());
@@ -471,7 +508,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::Uuid;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let my_uuid = Uuid::parse_str("02f09a3f-1624-3b1d-8409-44eff7708208")?;
     ///
     /// assert_eq!(3, my_uuid.get_version_num());
@@ -501,7 +538,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::{Uuid, Version};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let my_uuid = Uuid::parse_str("02f09a3f-1624-3b1d-8409-44eff7708208")?;
     ///
     /// assert_eq!(Some(Version::Md5), my_uuid.get_version());
@@ -520,6 +557,14 @@ impl Uuid {
             3 => Some(Version::Md5),
             4 => Some(Version::Random),
             5 => Some(Version::Sha1),
+            #[cfg(uuid_unstable)]
+            6 => Some(Version::SortMac),
+            #[cfg(uuid_unstable)]
+            7 => Some(Version::SortRand),
+            #[cfg(uuid_unstable)]
+            8 => Some(Version::Custom),
+            #[cfg(uuid_unstable)]
+            0xf => Some(Version::Max),
             _ => None,
         }
     }
@@ -548,7 +593,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::Uuid;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::nil();
     ///
     /// assert_eq!(uuid.as_fields(), (0, 0, 0, &[0u8; 8]));
@@ -595,7 +640,7 @@ impl Uuid {
     /// ```
     /// use uuid::Uuid;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8")?;
     ///
     /// assert_eq!(
@@ -620,8 +665,7 @@ impl Uuid {
 
         let d3 = (self.as_bytes()[6] as u16) | (self.as_bytes()[7] as u16) << 8;
 
-        let d4: &[u8; 8] =
-            convert::TryInto::try_into(&self.as_bytes()[8..16]).unwrap();
+        let d4: &[u8; 8] = convert::TryInto::try_into(&self.as_bytes()[8..16]).unwrap();
         (d1, d2, d3, d4)
     }
 
@@ -633,7 +677,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::Uuid;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8")?;
     ///
     /// assert_eq!(
@@ -677,7 +721,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::Uuid;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8")?;
     ///
     /// assert_eq!(
@@ -716,7 +760,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::Uuid;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8")?;
     /// assert_eq!(
     ///     uuid.as_u64_pair(),
@@ -790,7 +834,7 @@ impl Uuid {
     /// ```
     /// use uuid::Uuid;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8")?;
     ///
     /// assert_eq!(
@@ -805,15 +849,21 @@ impl Uuid {
     /// ```
     pub const fn to_bytes_le(&self) -> Bytes {
         [
-            self.0[3], self.0[2], self.0[1], self.0[0], self.0[5], self.0[4],
-            self.0[7], self.0[6], self.0[8], self.0[9], self.0[10], self.0[11],
-            self.0[12], self.0[13], self.0[14], self.0[15],
+            self.0[3], self.0[2], self.0[1], self.0[0], self.0[5], self.0[4], self.0[7], self.0[6],
+            self.0[8], self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14],
+            self.0[15],
         ]
     }
 
-    /// Tests if the UUID is nil.
+    /// Tests if the UUID is nil (all zeros).
     pub const fn is_nil(&self) -> bool {
-        self.as_u128() == 0
+        self.as_u128() == u128::MIN
+    }
+
+    /// Tests if the UUID is max (all ones).
+    #[cfg(uuid_unstable)]
+    pub const fn is_max(&self) -> bool {
+        self.as_u128() == u128::MAX
     }
 
     /// A buffer that can be used for `encode_...` calls, that is
@@ -843,6 +893,56 @@ impl Uuid {
     /// ```
     pub const fn encode_buffer() -> [u8; fmt::Urn::LENGTH] {
         [0; fmt::Urn::LENGTH]
+    }
+
+    /// If the UUID is the correct version (v1, v6, or v7) this will return
+    /// the timestamp and counter portion parsed from a V1 UUID.
+    ///
+    /// Returns `None` if the supplied UUID is not V1.
+    ///
+    /// The V1 timestamp format defined in RFC4122 specifies a 60-bit
+    /// integer representing the number of 100-nanosecond intervals
+    /// since 00:00:00.00, 15 Oct 1582.
+    ///
+    /// [`Timestamp`] offers several options for converting the raw RFC4122
+    /// value into more commonly-used formats, such as a unix timestamp.
+    ///
+    /// # Roundtripping
+    ///
+    /// This method is unlikely to roundtrip a timestamp in a UUID due to the way
+    /// UUIDs encode timestamps. The timestamp returned from this method will be truncated to
+    /// 100ns precision for version 1 and 6 UUIDs, and to millisecond precision for version 7 UUIDs.
+    ///
+    /// [`Timestamp`]: v1/struct.Timestamp.html
+    pub const fn get_timestamp(&self) -> Option<Timestamp> {
+        match self.get_version() {
+            Some(Version::Mac) => {
+                let (ticks, counter) = timestamp::decode_rfc4122_timestamp(self);
+
+                Some(Timestamp::from_rfc4122(ticks, counter))
+            }
+            #[cfg(uuid_unstable)]
+            Some(Version::SortMac) => {
+                let (ticks, counter) = timestamp::decode_sorted_rfc4122_timestamp(self);
+
+                Some(Timestamp::from_rfc4122(ticks, counter))
+            }
+            #[cfg(uuid_unstable)]
+            Some(Version::SortRand) => {
+                let millis = timestamp::decode_unix_timestamp_millis(self);
+
+                let seconds = millis / 1000;
+                let nanos = ((millis % 1000) * 1_000_000) as u32;
+
+                Some(Timestamp {
+                    seconds,
+                    nanos,
+                    #[cfg(any(feature = "v1", feature = "v6"))]
+                    counter: 0,
+                })
+            }
+            _ => None,
+        }
     }
 }
 
@@ -891,15 +991,15 @@ mod tests {
 
     pub const fn new() -> Uuid {
         Uuid::from_bytes([
-            0xF9, 0x16, 0x8C, 0x5E, 0xCE, 0xB2, 0x4F, 0xAA, 0xB6, 0xBF, 0x32,
-            0x9B, 0xF3, 0x9F, 0xA1, 0xE4,
+            0xF9, 0x16, 0x8C, 0x5E, 0xCE, 0xB2, 0x4F, 0xAA, 0xB6, 0xBF, 0x32, 0x9B, 0xF3, 0x9F,
+            0xA1, 0xE4,
         ])
     }
 
     pub const fn new2() -> Uuid {
         Uuid::from_bytes([
-            0xF9, 0x16, 0x8C, 0x5E, 0xCE, 0xB2, 0x4F, 0xAB, 0xB6, 0xBF, 0x32,
-            0x9B, 0xF3, 0x9F, 0xA1, 0xE4,
+            0xF9, 0x16, 0x8C, 0x5E, 0xCE, 0xB2, 0x4F, 0xAB, 0xB6, 0xBF, 0x32, 0x9B, 0xF3, 0x9F,
+            0xA1, 0xE4,
         ])
     }
 
@@ -990,20 +1090,42 @@ mod tests {
 
     #[test]
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    fn test_non_conforming() {
+        let from_bytes =
+            Uuid::from_bytes([4, 54, 67, 12, 43, 2, 2, 76, 32, 50, 87, 5, 1, 33, 43, 87]);
+
+        assert_eq!(from_bytes.get_version(), None);
+    }
+
+    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_nil() {
         let nil = Uuid::nil();
         let not_nil = new();
-        let from_bytes = Uuid::from_bytes([
-            4, 54, 67, 12, 43, 2, 2, 76, 32, 50, 87, 5, 1, 33, 43, 87,
-        ]);
-
-        assert_eq!(from_bytes.get_version(), None);
 
         assert!(nil.is_nil());
         assert!(!not_nil.is_nil());
 
         assert_eq!(nil.get_version(), Some(Version::Nil));
-        assert_eq!(not_nil.get_version(), Some(Version::Random))
+        assert_eq!(not_nil.get_version(), Some(Version::Random));
+
+        assert_eq!(nil, Builder::from_bytes([0; 16]).with_version(Version::Nil).into_uuid());
+    }
+
+    #[test]
+    #[cfg(uuid_unstable)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    fn test_max() {
+        let max = Uuid::max();
+        let not_max = new();
+
+        assert!(max.is_max());
+        assert!(!not_max.is_max());
+
+        assert_eq!(max.get_version(), Some(Version::Max));
+        assert_eq!(not_max.get_version(), Some(Version::Random));
+
+        assert_eq!(max, Builder::from_bytes([0xff; 16]).with_version(Version::Max).into_uuid());
     }
 
     #[test]
@@ -1031,8 +1153,7 @@ mod tests {
     #[test]
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_get_version_v3() {
-        let uuid =
-            Uuid::new_v3(&Uuid::NAMESPACE_DNS, "rust-lang.org".as_bytes());
+        let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, "rust-lang.org".as_bytes());
 
         assert_eq!(uuid.get_version().unwrap(), Version::Md5);
         assert_eq!(uuid.get_version_num(), 3);
@@ -1042,16 +1163,11 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_get_variant() {
         let uuid1 = new();
-        let uuid2 =
-            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
-        let uuid3 =
-            Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
-        let uuid4 =
-            Uuid::parse_str("936DA01F9ABD4d9dC0C702AF85C822A8").unwrap();
-        let uuid5 =
-            Uuid::parse_str("F9168C5E-CEB2-4faa-D6BF-329BF39FA1E4").unwrap();
-        let uuid6 =
-            Uuid::parse_str("f81d4fae-7dec-11d0-7765-00a0c91e6bf6").unwrap();
+        let uuid2 = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let uuid3 = Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
+        let uuid4 = Uuid::parse_str("936DA01F9ABD4d9dC0C702AF85C822A8").unwrap();
+        let uuid5 = Uuid::parse_str("F9168C5E-CEB2-4faa-D6BF-329BF39FA1E4").unwrap();
+        let uuid6 = Uuid::parse_str("f81d4fae-7dec-11d0-7765-00a0c91e6bf6").unwrap();
 
         assert_eq!(uuid1.get_variant(), Variant::RFC4122);
         assert_eq!(uuid2.get_variant(), Variant::RFC4122);
@@ -1077,7 +1193,7 @@ mod tests {
         let uuid1 = new();
         let s = uuid1.hyphenated().to_string();
 
-        assert!(s.len() == 36);
+        assert_eq!(36, s.len());
         assert!(s.chars().all(|c| c.is_digit(16) || c == '-'));
     }
 
@@ -1350,8 +1466,8 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_from_slice() {
         let b = [
-            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3,
-            0xd4, 0xd5, 0xd6, 0xd7, 0xd8,
+            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
+            0xd7, 0xd8,
         ];
 
         let u = Uuid::from_slice(&b).unwrap();
@@ -1364,8 +1480,8 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_from_bytes() {
         let b = [
-            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3,
-            0xd4, 0xd5, 0xd6, 0xd7, 0xd8,
+            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
+            0xd7, 0xd8,
         ];
 
         let u = Uuid::from_bytes(b);
@@ -1391,8 +1507,8 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_bytes_roundtrip() {
         let b_in: crate::Bytes = [
-            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3,
-            0xd4, 0xd5, 0xd6, 0xd7, 0xd8,
+            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
+            0xd7, 0xd8,
         ];
 
         let u = Uuid::from_slice(&b_in).unwrap();
@@ -1406,8 +1522,8 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_bytes_le_roundtrip() {
         let b = [
-            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3,
-            0xd4, 0xd5, 0xd6, 0xd7, 0xd8,
+            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6,
+            0xd7, 0xd8,
         ];
 
         let u1 = Uuid::from_bytes(b);

@@ -21,14 +21,9 @@ use serde::{
 };
 
 impl Serialize for Uuid {
-    fn serialize<S: Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
-            serializer.serialize_str(
-                self.hyphenated().encode_lower(&mut Uuid::encode_buffer()),
-            )
+            serializer.serialize_str(self.hyphenated().encode_lower(&mut Uuid::encode_buffer()))
         } else {
             serializer.serialize_bytes(self.as_bytes())
         }
@@ -36,45 +31,31 @@ impl Serialize for Uuid {
 }
 
 impl Serialize for Hyphenated {
-    fn serialize<S: Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.encode_lower(&mut Uuid::encode_buffer()))
     }
 }
 
 impl Serialize for Simple {
-    fn serialize<S: Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.encode_lower(&mut Uuid::encode_buffer()))
     }
 }
 
 impl Serialize for Urn {
-    fn serialize<S: Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.encode_lower(&mut Uuid::encode_buffer()))
     }
 }
 
 impl Serialize for Braced {
-    fn serialize<S: Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.encode_lower(&mut Uuid::encode_buffer()))
     }
 }
 
 impl<'de> Deserialize<'de> for Uuid {
-    fn deserialize<D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         fn de_error<E: de::Error>(e: Error) -> E {
             E::custom(format_args!("UUID parsing failed: {}", e))
         }
@@ -85,24 +66,15 @@ impl<'de> Deserialize<'de> for Uuid {
             impl<'vi> de::Visitor<'vi> for UuidVisitor {
                 type Value = Uuid;
 
-                fn expecting(
-                    &self,
-                    formatter: &mut fmt::Formatter<'_>,
-                ) -> fmt::Result {
+                fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                     write!(formatter, "a UUID string")
                 }
 
-                fn visit_str<E: de::Error>(
-                    self,
-                    value: &str,
-                ) -> Result<Uuid, E> {
+                fn visit_str<E: de::Error>(self, value: &str) -> Result<Uuid, E> {
                     value.parse::<Uuid>().map_err(de_error)
                 }
 
-                fn visit_bytes<E: de::Error>(
-                    self,
-                    value: &[u8],
-                ) -> Result<Uuid, E> {
+                fn visit_bytes<E: de::Error>(self, value: &[u8]) -> Result<Uuid, E> {
                     Uuid::from_slice(value).map_err(de_error)
                 }
 
@@ -141,17 +113,11 @@ impl<'de> Deserialize<'de> for Uuid {
             impl<'vi> de::Visitor<'vi> for UuidBytesVisitor {
                 type Value = Uuid;
 
-                fn expecting(
-                    &self,
-                    formatter: &mut fmt::Formatter<'_>,
-                ) -> fmt::Result {
+                fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                     write!(formatter, "bytes")
                 }
 
-                fn visit_bytes<E: de::Error>(
-                    self,
-                    value: &[u8],
-                ) -> Result<Uuid, E> {
+                fn visit_bytes<E: de::Error>(self, value: &[u8]) -> Result<Uuid, E> {
                     Uuid::from_slice(value).map_err(de_error)
                 }
             }
@@ -169,10 +135,7 @@ pub mod compact {
     /// Serialize from a [`Uuid`] as a `[u8; 16]`
     ///
     /// [`Uuid`]: ../../struct.Uuid.html
-    pub fn serialize<S>(
-        u: &crate::Uuid,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(u: &crate::Uuid, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -292,10 +255,7 @@ mod serde_tests {
         let uuid_bytes = b"F9168C5E-CEB2-4F";
         let u = Uuid::from_slice(uuid_bytes).unwrap();
 
-        serde_test::assert_de_tokens(
-            &u.readable(),
-            &[serde_test::Token::Bytes(uuid_bytes)],
-        );
+        serde_test::assert_de_tokens(&u.readable(), &[serde_test::Token::Bytes(uuid_bytes)]);
     }
 
     #[test]

@@ -5,7 +5,7 @@ macro_rules! define_uuid_macro {
         #[macro_export]
         macro_rules! uuid {
             ($uuid:literal) => {{
-                $crate::Uuid::from_bytes($crate::private_uuid_macro_internal::parse_lit!($uuid))
+                $crate::Uuid::from_bytes($crate::uuid_macro_internal::parse_lit!($uuid))
             }};
         }
 
