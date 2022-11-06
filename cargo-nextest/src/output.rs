@@ -68,7 +68,7 @@ impl Default for Color {
 static INIT_LOGGER: std::sync::Once = std::sync::Once::new();
 
 impl Color {
-    fn init(self) {
+    pub(crate) fn init(self) {
         match self {
             Color::Auto => owo_colors::unset_override(),
             Color::Always => owo_colors::set_override(true),

@@ -3,6 +3,7 @@
 
 use crate::{
     cargo_config::EnvironmentMap,
+    double_spawn::DoubleSpawnInfo,
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
     helpers::{dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
@@ -185,10 +186,10 @@ pub struct TestList<'g> {
 impl<'g> TestList<'g> {
     /// Creates a new test list by running the given command and applying the specified filter.
     pub fn new<I>(
+        ctx: &TestExecuteContext<'_>,
         test_artifacts: I,
         rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
-        runner: &TargetRunner,
         env: EnvironmentMap,
         list_threads: usize,
     ) -> Result<Self, CreateTestListError>
@@ -202,6 +203,12 @@ impl<'g> TestList<'g> {
             dylib_path_envvar(),
             updated_dylib_path.to_string_lossy(),
         );
+        let ctx = LocalExecuteContext {
+            double_spawn: ctx.double_spawn,
+            runner: ctx.target_runner,
+            dylib_path: &updated_dylib_path,
+            env: &env,
+        };
 
         let runtime = Runtime::new().map_err(CreateTestListError::TokioRuntimeCreate)?;
 
@@ -209,8 +216,7 @@ impl<'g> TestList<'g> {
             async {
                 if filter.should_obtain_test_list_from_binary(&test_binary) {
                     // Run the binary to obtain the test list.
-                    let (non_ignored, ignored) =
-                        test_binary.exec(&updated_dylib_path, runner, &env).await?;
+                    let (non_ignored, ignored) = test_binary.exec(&ctx).await?;
                     let (bin, info) = Self::process_output(
                         test_binary,
                         filter,
@@ -630,9 +636,7 @@ impl<'g> RustTestArtifact<'g> {
     /// Run this binary with and without --ignored and get the corresponding outputs.
     async fn exec(
         &self,
-        dylib_path: &OsStr,
-        runner: &TargetRunner,
-        env: &EnvironmentMap,
+        ctx: &LocalExecuteContext<'_>,
     ) -> Result<(String, String), CreateTestListError> {
         // This error situation has been known to happen with reused builds. It produces
         // a really terrible and confusing "file not found" message if allowed to prceed.
@@ -642,10 +646,10 @@ impl<'g> RustTestArtifact<'g> {
                 cwd: self.cwd.clone(),
             });
         }
-        let platform_runner = runner.for_build_platform(self.build_platform);
+        let platform_runner = ctx.runner.for_build_platform(self.build_platform);
 
-        let non_ignored = self.exec_single(false, dylib_path, platform_runner, env);
-        let ignored = self.exec_single(true, dylib_path, platform_runner, env);
+        let non_ignored = self.exec_single(false, ctx, platform_runner);
+        let ignored = self.exec_single(true, ctx, platform_runner);
 
         let (non_ignored_out, ignored_out) = futures::future::join(non_ignored, ignored).await;
         Ok((non_ignored_out?, ignored_out?))
@@ -654,9 +658,8 @@ impl<'g> RustTestArtifact<'g> {
     async fn exec_single(
         &self,
         ignored: bool,
-        dylib_path: &OsStr,
+        ctx: &LocalExecuteContext<'_>,
         runner: Option<&PlatformRunner>,
-        env: &EnvironmentMap,
     ) -> Result<String, CreateTestListError> {
         let mut argv = Vec::new();
 
@@ -679,15 +682,12 @@ impl<'g> RustTestArtifact<'g> {
         }
 
         let cmd = make_test_command(
+            ctx,
             program.clone(),
             &argv,
             &self.cwd,
             &self.package,
-            dylib_path,
             &self.non_test_binaries,
-            // We don't need to set the user's custom environment variables defined in `config.toml`
-            // just to get the list of tests.
-            env,
         );
         let mut cmd = tokio::process::Command::from(cmd);
         match cmd.output().await {
@@ -820,10 +820,12 @@ impl<'a> TestInstance<'a> {
     /// Creates the command expression for this test instance.
     pub(crate) fn make_expression(
         &self,
+        ctx: &TestExecuteContext<'_>,
         test_list: &TestList<'_>,
-        target_runner: &TargetRunner,
     ) -> std::process::Command {
-        let platform_runner = target_runner.for_build_platform(self.suite_info.build_platform);
+        let platform_runner = ctx
+            .target_runner
+            .for_build_platform(self.suite_info.build_platform);
         // TODO: non-rust tests
 
         let mut args = Vec::new();
@@ -842,27 +844,50 @@ impl<'a> TestInstance<'a> {
             args.push("--ignored");
         }
 
+        let ctx = LocalExecuteContext {
+            double_spawn: ctx.double_spawn,
+            runner: ctx.target_runner,
+            dylib_path: test_list.updated_dylib_path(),
+            env: &test_list.env,
+        };
+
         make_test_command(
+            &ctx,
             program,
-            args,
+            &args,
             &self.suite_info.cwd,
             &self.suite_info.package,
-            test_list.updated_dylib_path(),
             &self.suite_info.non_test_binaries,
-            &test_list.env,
         )
     }
 }
 
+/// Context required for test execution.
+#[derive(Clone, Debug)]
+pub struct TestExecuteContext<'a> {
+    /// Double-spawn info.
+    pub double_spawn: &'a DoubleSpawnInfo,
+
+    /// Target runner.
+    pub target_runner: &'a TargetRunner,
+}
+
+#[derive(Clone, Debug)]
+struct LocalExecuteContext<'a> {
+    double_spawn: &'a DoubleSpawnInfo,
+    runner: &'a TargetRunner,
+    dylib_path: &'a OsStr,
+    env: &'a EnvironmentMap,
+}
+
 /// Create a duct Expression for a test binary with the given arguments, using the specified [`PackageMetadata`].
-pub(crate) fn make_test_command(
+fn make_test_command(
+    ctx: &LocalExecuteContext<'_>,
     program: String,
-    args: impl IntoIterator<Item = impl AsRef<OsStr>>,
+    args: &[&str],
     cwd: &Utf8PathBuf,
     package: &PackageMetadata<'_>,
-    dylib_path: &OsStr,
     non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
-    env: &EnvironmentMap,
 ) -> std::process::Command {
     // This is a workaround for a macOS SIP issue:
     // https://github.com/nextest-rs/nextest/pull/84
@@ -894,14 +919,23 @@ pub(crate) fn make_test_command(
             .collect()
     });
 
-    let mut cmd = std::process::Command::new(program);
+    // TODO: pass in double spawn option
+    let mut cmd = if let Some(current_exe) = ctx.double_spawn.current_exe() {
+        let mut cmd = std::process::Command::new(current_exe);
+        cmd.args([DoubleSpawnInfo::SUBCOMMAND_NAME, "--", program.as_str()]);
+        cmd.arg(&shell_words::join(args));
+        cmd
+    } else {
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args);
+        cmd
+    };
 
     // NB: we will always override user-provided environment variables with the
     // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
-    env.apply_env(&mut cmd);
+    ctx.env.apply_env(&mut cmd);
 
-    cmd.args(args)
-        .current_dir(cwd)
+    cmd.current_dir(cwd)
         // This environment variable is set to indicate that tests are being run under nextest.
         .env("NEXTEST", "1")
         // This environment variable is set to indicate that each test is being run in its own process.
@@ -964,7 +998,7 @@ pub(crate) fn make_test_command(
                 }
             }),
         )
-        .env(dylib_path_envvar(), dylib_path);
+        .env(dylib_path_envvar(), ctx.dylib_path);
 
     for (k, v) in &*LD_DYLD_ENV_VARS {
         if k != dylib_path_envvar() {
@@ -973,7 +1007,7 @@ pub(crate) fn make_test_command(
     }
     // Also add the dylib path envvar under the NEXTEST_ prefix.
     if is_sip_sanitized(dylib_path_envvar()) {
-        cmd.env("NEXTEST_".to_owned() + dylib_path_envvar(), dylib_path);
+        cmd.env("NEXTEST_".to_owned() + dylib_path_envvar(), ctx.dylib_path);
     }
 
     // Expose paths to non-test binaries at runtime so that relocated paths work.

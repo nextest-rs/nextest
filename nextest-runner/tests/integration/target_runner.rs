@@ -7,6 +7,7 @@ use color_eyre::Result;
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
+    double_spawn::DoubleSpawnInfo,
     platform::BuildPlatforms,
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
@@ -230,7 +231,13 @@ fn test_run_with_target_runner() -> Result<()> {
 
     let runner = TestRunnerBuilder::default();
     let mut runner = runner
-        .build(&test_list, profile, SignalHandlerKind::Noop, target_runner)
+        .build(
+            &test_list,
+            profile,
+            SignalHandlerKind::Noop,
+            DoubleSpawnInfo::disabled(),
+            target_runner,
+        )
         .unwrap();
 
     let (instance_statuses, run_stats) = execute_collect(&mut runner);

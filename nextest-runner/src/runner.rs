@@ -7,9 +7,10 @@
 
 use crate::{
     config::{NextestProfile, ProfileOverrides, RetryPolicy, TestThreads},
+    double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
     helpers::convert_build_platform,
-    list::{TestInstance, TestList},
+    list::{TestExecuteContext, TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
     signal::{SignalEvent, SignalHandler, SignalHandlerKind},
     stopwatch::{StopwatchEnd, StopwatchStart},
@@ -149,6 +150,7 @@ impl TestRunnerBuilder {
         test_list: &'a TestList,
         profile: NextestProfile<'a>,
         handler_kind: SignalHandlerKind,
+        double_spawn: DoubleSpawnInfo,
         target_runner: TargetRunner,
     ) -> Result<TestRunner<'a>, TestRunnerBuildError> {
         let test_threads = match self.no_capture {
@@ -185,6 +187,7 @@ impl TestRunnerBuilder {
                 slow_timeout,
                 leak_timeout,
                 test_list,
+                double_spawn,
                 target_runner,
                 runtime,
                 run_id: Uuid::new_v4(),
@@ -243,6 +246,7 @@ struct TestRunnerInner<'a> {
     slow_timeout: crate::config::SlowTimeout,
     leak_timeout: Duration,
     test_list: &'a TestList<'a>,
+    double_spawn: DoubleSpawnInfo,
     target_runner: TargetRunner,
     runtime: Runtime,
     run_id: Uuid,
@@ -581,7 +585,11 @@ impl<'a> TestRunnerInner<'a> {
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
         delay_before_start: Duration,
     ) -> std::io::Result<InternalExecuteStatus> {
-        let mut cmd = test.make_expression(self.test_list, &self.target_runner);
+        let ctx = TestExecuteContext {
+            double_spawn: &self.double_spawn,
+            target_runner: &self.target_runner,
+        };
+        let mut cmd = test.make_expression(&ctx, self.test_list);
 
         // Debug environment variable for testing.
         cmd.env("__NEXTEST_ATTEMPT", format!("{}", retry_data.attempt));
@@ -1656,6 +1664,7 @@ mod tests {
                 &test_list,
                 profile.apply_build_platforms(&build_platforms),
                 handler_kind,
+                DoubleSpawnInfo::disabled(),
                 TargetRunner::empty(),
             )
             .unwrap();

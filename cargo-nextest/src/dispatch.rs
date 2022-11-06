@@ -19,8 +19,12 @@ use nextest_runner::{
         get_num_cpus, NextestConfig, NextestProfile, PreBuildPlatform, RetryPolicy, TestThreads,
         ToolConfigFile,
     },
+    double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
-    list::{BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestList},
+    list::{
+        BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
+        TestList,
+    },
     partition::PartitionerBuilder,
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
@@ -53,15 +57,22 @@ pub struct CargoNextestApp {
 impl CargoNextestApp {
     /// Executes the app.
     pub fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
-        let NextestSubcommand::Nextest(app) = self.subcommand;
-        app.exec(output_writer)
+        match self.subcommand {
+            NextestSubcommand::Nextest(app) => app.exec(output_writer),
+            #[cfg(unix)]
+            NextestSubcommand::DoubleSpawn(opts) => opts.exec(),
+        }
     }
 }
 
 #[derive(Debug, Subcommand)]
 enum NextestSubcommand {
     /// A next-generation test runner for Rust. <https://nexte.st>
-    Nextest(AppOpts),
+    Nextest(Box<AppOpts>),
+    /// Private command, used to double-spawn test processes.
+    #[cfg(unix)]
+    #[command(name = nextest_runner::double_spawn::DoubleSpawnInfo::SUBCOMMAND_NAME, hide = true)]
+    DoubleSpawn(crate::double_spawn::DoubleSpawnOpts),
 }
 
 #[derive(Debug, Args)]
@@ -442,10 +453,10 @@ struct TestBuildFilter {
 impl TestBuildFilter {
     fn compute_test_list<'g>(
         &self,
+        ctx: &TestExecuteContext<'_>,
         graph: &'g PackageGraph,
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
-        runner: &TargetRunner,
         env: EnvironmentMap,
         reuse_build: &ReuseBuildInfo,
     ) -> Result<TestList<'g>> {
@@ -464,10 +475,10 @@ impl TestBuildFilter {
             self.platform_filter.into(),
         )?;
         TestList::new(
+            ctx,
             test_artifacts,
             rust_build_meta,
             &test_filter_builder,
-            runner,
             env,
             // TODO: do we need to allow customizing this?
             get_num_cpus(),
@@ -835,6 +846,7 @@ struct BaseApp {
     config_opts: ConfigOpts,
 
     cargo_configs: CargoConfigs,
+    double_spawn: OnceCell<DoubleSpawnInfo>,
     target_runner: OnceCell<TargetRunner>,
 }
 
@@ -918,7 +930,19 @@ impl BaseApp {
             config_opts,
             cargo_configs,
 
+            double_spawn: OnceCell::new(),
             target_runner: OnceCell::new(),
+        })
+    }
+
+    fn load_double_spawn(&self) -> &DoubleSpawnInfo {
+        self.double_spawn.get_or_init(|| {
+            if std::env::var("NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN") == Ok("1".to_owned()) {
+                log::info!("using experimental double-spawn method for test processes");
+                DoubleSpawnInfo::enabled()
+            } else {
+                DoubleSpawnInfo::disabled()
+            }
         })
     }
 
@@ -1039,16 +1063,16 @@ impl App {
 
     fn build_test_list(
         &self,
+        ctx: &TestExecuteContext<'_>,
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
-        target_runner: &TargetRunner,
     ) -> Result<TestList> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
+            ctx,
             self.base.graph(),
             binary_list,
             test_filter_builder,
-            target_runner,
             env,
             &self.base.reuse_build,
         )
@@ -1101,11 +1125,16 @@ impl App {
                 writer.flush().map_err(WriteTestListError::Io)?;
             }
             ListType::Full => {
+                let double_spawn = self.base.load_double_spawn();
                 let target_runner = self
                     .base
                     .load_runner(&binary_list.rust_build_meta.build_platforms()?);
-                let test_list =
-                    self.build_test_list(binary_list, test_filter_builder, target_runner)?;
+                let ctx = TestExecuteContext {
+                    double_spawn,
+                    target_runner,
+                };
+
+                let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder)?;
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
@@ -1138,9 +1167,14 @@ impl App {
 
         let binary_list = self.base.build_binary_list()?;
         let build_platforms = binary_list.rust_build_meta.build_platforms()?;
+        let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(&build_platforms);
+        let ctx = TestExecuteContext {
+            double_spawn,
+            target_runner,
+        };
 
-        let test_list = self.build_test_list(binary_list, test_filter_builder, target_runner)?;
+        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder)?;
 
         let output = output_writer.reporter_output();
         let profile = profile.apply_build_platforms(&build_platforms);
@@ -1162,8 +1196,13 @@ impl App {
             }
         };
 
-        let mut runner =
-            runner_builder.build(&test_list, profile, handler, target_runner.clone())?;
+        let mut runner = runner_builder.build(
+            &test_list,
+            profile,
+            handler,
+            double_spawn.clone(),
+            target_runner.clone(),
+        )?;
 
         configure_handle_inheritance(no_capture)?;
         let run_stats = runner.try_execute(|event| {

@@ -10,7 +10,10 @@ use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
     config::{get_num_cpus, NextestConfig},
-    list::{BinaryList, RustBuildMeta, RustTestArtifact, TestList, TestListState},
+    double_spawn::DoubleSpawnInfo,
+    list::{
+        BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
+    },
     reporter::TestEvent,
     reuse_build::PathMapper,
     runner::{
@@ -350,11 +353,17 @@ impl FixtureTargets {
         target_runner: &TargetRunner,
     ) -> TestList<'_> {
         let test_bins: Vec<_> = self.test_artifacts.values().cloned().collect();
+        let double_spawn = DoubleSpawnInfo::disabled();
+        let ctx = TestExecuteContext {
+            double_spawn: &double_spawn,
+            target_runner,
+        };
+
         TestList::new(
+            &ctx,
             test_bins,
             self.rust_build_meta.clone(),
             test_filter,
-            target_runner,
             self.env.to_owned(),
             get_num_cpus(),
         )

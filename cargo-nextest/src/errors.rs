@@ -192,6 +192,18 @@ pub enum ExpectedError {
         reason: &'static str,
         args: Vec<String>,
     },
+    #[error("double-spawn parse error")]
+    DoubleSpawnParseArgsError {
+        args: String,
+        #[source]
+        err: shell_words::ParseError,
+    },
+    #[error("double-spawn execution error")]
+    DoubleSpawnExecError {
+        command: std::process::Command,
+        #[source]
+        err: std::io::Error,
+    },
 }
 
 impl ExpectedError {
@@ -319,6 +331,9 @@ impl ExpectedError {
             | Self::SignalHandlerSetupError { .. } => NextestExitCode::SETUP_ERROR,
             #[cfg(feature = "self-update")]
             Self::UpdateVersionParseError { .. } => NextestExitCode::SETUP_ERROR,
+            Self::DoubleSpawnParseArgsError { .. } | Self::DoubleSpawnExecError { .. } => {
+                NextestExitCode::DOUBLE_SPAWN_ERROR
+            }
             Self::FromMessagesError { .. } | Self::CreateTestListError { .. } => {
                 NextestExitCode::TEST_LIST_CREATION_FAILED
             }
@@ -590,6 +605,14 @@ impl ExpectedError {
                     args.join(", "),
                 );
                 None
+            }
+            Self::DoubleSpawnParseArgsError { args, err } => {
+                log::error!("[double-spawn] failed to parse arguments `{args}`");
+                Some(err as &dyn Error)
+            }
+            Self::DoubleSpawnExecError { command, err } => {
+                log::error!("[double-spawn] failed to exec `{command:?}`");
+                Some(err as &dyn Error)
             }
         };
 

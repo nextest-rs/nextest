@@ -15,6 +15,8 @@
 
 mod cargo_cli;
 mod dispatch;
+#[cfg(unix)]
+mod double_spawn;
 mod errors;
 mod output;
 mod reuse_build;

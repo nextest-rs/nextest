@@ -16,6 +16,9 @@ impl NextestExitCode {
     /// Building tests produced an error.
     pub const BUILD_FAILED: i32 = 101;
 
+    /// An error was encountered while attempting to double-spawn a nextest process.
+    pub const DOUBLE_SPAWN_ERROR: i32 = 70;
+
     /// One or more tests failed.
     pub const TEST_RUN_FAILED: i32 = 100;
 
