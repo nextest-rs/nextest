@@ -21,9 +21,7 @@ mod tests {
 
     #[test]
     fn test_arbitrary() {
-        let mut bytes = Unstructured::new(&[
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ]);
+        let mut bytes = Unstructured::new(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
         let uuid = Uuid::arbitrary(&mut bytes).unwrap();
 

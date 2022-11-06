@@ -11,40 +11,35 @@
 #[cfg(windows)]
 fn guid_to_uuid() {
     use uuid::Uuid;
-    use winapi::shared::guiddef;
+    use windows_sys::core;
 
-    let guid_in = guiddef::GUID {
-        Data1: 0x4a35229d,
-        Data2: 0x5527,
-        Data3: 0x4f30,
-        Data4: [0x86, 0x47, 0x9d, 0xc5, 0x4e, 0x1e, 0xe1, 0xe8],
+    let guid_in = core::GUID {
+        data1: 0x4a35229d,
+        data2: 0x5527,
+        data3: 0x4f30,
+        data4: [0x86, 0x47, 0x9d, 0xc5, 0x4e, 0x1e, 0xe1, 0xe8],
     };
 
-    let uuid = Uuid::from_fields(
-        guid_in.Data1,
-        guid_in.Data2,
-        guid_in.Data3,
-        &guid_in.Data4,
-    );
+    let uuid = Uuid::from_fields(guid_in.data1, guid_in.data2, guid_in.data3, &guid_in.data4);
 
     let guid_out = {
         let fields = uuid.as_fields();
 
-        guiddef::GUID {
-            Data1: fields.0,
-            Data2: fields.1,
-            Data3: fields.2,
-            Data4: *fields.3,
+        core::GUID {
+            data1: fields.0,
+            data2: fields.1,
+            data3: fields.2,
+            data4: *fields.3,
         }
     };
 
     assert_eq!(
-        (guid_in.Data1, guid_in.Data2, guid_in.Data3, guid_in.Data4),
+        (guid_in.data1, guid_in.data2, guid_in.data3, guid_in.data4),
         (
-            guid_out.Data1,
-            guid_out.Data2,
-            guid_out.Data3,
-            guid_out.Data4
+            guid_out.data1,
+            guid_out.data2,
+            guid_out.data3,
+            guid_out.data4
         )
     );
 }
@@ -53,44 +48,39 @@ fn guid_to_uuid() {
 #[cfg(windows)]
 fn guid_to_uuid_le_encoded() {
     use uuid::Uuid;
-    use winapi::shared::guiddef;
+    use windows_sys::core;
 
     // A GUID might not be encoded directly as a UUID
     // If its fields are stored in little-endian order they might
     // need to be flipped. Whether or not this is necessary depends
     // on the source of the GUID
-    let guid_in = guiddef::GUID {
-        Data1: 0x9d22354a,
-        Data2: 0x2755,
-        Data3: 0x304f,
-        Data4: [0x86, 0x47, 0x9d, 0xc5, 0x4e, 0x1e, 0xe1, 0xe8],
+    let guid_in = core::GUID {
+        data1: 0x9d22354a,
+        data2: 0x2755,
+        data3: 0x304f,
+        data4: [0x86, 0x47, 0x9d, 0xc5, 0x4e, 0x1e, 0xe1, 0xe8],
     };
 
-    let uuid = Uuid::from_fields_le(
-        guid_in.Data1,
-        guid_in.Data2,
-        guid_in.Data3,
-        &guid_in.Data4,
-    );
+    let uuid = Uuid::from_fields_le(guid_in.data1, guid_in.data2, guid_in.data3, &guid_in.data4);
 
     let guid_out = {
         let fields = uuid.to_fields_le();
 
-        guiddef::GUID {
-            Data1: fields.0,
-            Data2: fields.1,
-            Data3: fields.2,
-            Data4: *fields.3,
+        core::GUID {
+            data1: fields.0,
+            data2: fields.1,
+            data3: fields.2,
+            data4: *fields.3,
         }
     };
 
     assert_eq!(
-        (guid_in.Data1, guid_in.Data2, guid_in.Data3, guid_in.Data4),
+        (guid_in.data1, guid_in.data2, guid_in.data3, guid_in.data4),
         (
-            guid_out.Data1,
-            guid_out.Data2,
-            guid_out.Data3,
-            guid_out.Data4
+            guid_out.data1,
+            guid_out.data2,
+            guid_out.data3,
+            guid_out.data4
         )
     );
 }
@@ -99,16 +89,21 @@ fn guid_to_uuid_le_encoded() {
 #[cfg(windows)]
 fn uuid_from_cocreateguid() {
     use uuid::{Uuid, Variant, Version};
-    use winapi::{shared::guiddef, um::combaseapi::CoCreateGuid};
+    use windows_sys::core;
+    use windows_sys::Win32::System::Com::CoCreateGuid;
 
-    let mut guid = guiddef::GUID::default();
+    let mut guid = core::GUID {
+        data1: 0,
+        data2: 0,
+        data3: 0,
+        data4: [0u8; 8],
+    };
 
     unsafe {
-        CoCreateGuid(&mut guid as *mut _);
+        CoCreateGuid(&mut guid);
     }
 
-    let uuid =
-        Uuid::from_fields(guid.Data1, guid.Data2, guid.Data3, &guid.Data4);
+    let uuid = Uuid::from_fields(guid.data1, guid.data2, guid.data3, &guid.data4);
 
     assert_eq!(Variant::RFC4122, uuid.get_variant());
     assert_eq!(Some(Version::Random), uuid.get_version());

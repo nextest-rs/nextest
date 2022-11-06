@@ -24,6 +24,10 @@ impl Uuid {
     /// assert_eq!(Some(Version::Sha1), uuid.get_version());
     /// ```
     ///
+    /// # References
+    ///
+    /// * [Version 3 and 5 UUIDs in RFC4122](https://www.rfc-editor.org/rfc/rfc4122#section-4.3)
+    ///
     /// [`NAMESPACE_DNS`]: struct.Uuid.html#associatedconst.NAMESPACE_DNS
     /// [`NAMESPACE_OID`]: struct.Uuid.html#associatedconst.NAMESPACE_OID
     /// [`NAMESPACE_URL`]: struct.Uuid.html#associatedconst.NAMESPACE_URL
@@ -40,10 +44,7 @@ mod tests {
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::*;
 
-    use crate::{
-        Variant, Version,
-        std::string::ToString,
-    };
+    use crate::{std::string::ToString, Variant, Version};
 
     static FIXTURE: &'static [(&'static Uuid, &'static str, &'static str)] = &[
         (
@@ -131,8 +132,7 @@ mod tests {
     #[test]
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     fn test_get_version() {
-        let uuid =
-            Uuid::new_v5(&Uuid::NAMESPACE_DNS, "rust-lang.org".as_bytes());
+        let uuid = Uuid::new_v5(&Uuid::NAMESPACE_DNS, "rust-lang.org".as_bytes());
 
         assert_eq!(uuid.get_version(), Some(Version::Sha1));
         assert_eq!(uuid.get_version_num(), 5);

@@ -51,7 +51,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::{Uuid, Version, Variant};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000")?;
     ///
     /// assert_eq!(Some(Version::Random), uuid.get_version());
@@ -84,7 +84,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::{Uuid, Version, Variant};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::try_parse("550e8400-e29b-41d4-a716-446655440000")?;
     ///
     /// assert_eq!(Some(Version::Random), uuid.get_version());
@@ -112,7 +112,7 @@ impl Uuid {
     ///
     /// ```
     /// # use uuid::{Uuid, Version, Variant};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), uuid::Error> {
     /// let uuid = Uuid::try_parse_ascii(b"550e8400-e29b-41d4-a716-446655440000")?;
     ///
     /// assert_eq!(Some(Version::Random), uuid.get_version());
@@ -142,10 +142,9 @@ const fn try_parse(input: &[u8]) -> Result<[u8; 16], InvalidUuid> {
         // - `UUID` for a regular hyphenated UUID
         (36, s)
         | (38, [b'{', s @ .., b'}'])
-        | (
-            45,
-            [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..],
-        ) => parse_hyphenated(s),
+        | (45, [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..]) => {
+            parse_hyphenated(s)
+        }
         // Any other shaped input is immediately invalid
         _ => Err(()),
     };
@@ -279,15 +278,10 @@ mod tests {
 
     #[test]
     fn test_parse_uuid_v4_valid() {
-        let from_hyphenated =
-            Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
-        let from_simple =
-            Uuid::parse_str("67e5504410b1426f9247bb680e5fe0c8").unwrap();
-        let from_urn =
-            Uuid::parse_str("urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8")
-                .unwrap();
-        let from_guid =
-            Uuid::parse_str("{67e55044-10b1-426f-9247-bb680e5fe0c8}").unwrap();
+        let from_hyphenated = Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
+        let from_simple = Uuid::parse_str("67e5504410b1426f9247bb680e5fe0c8").unwrap();
+        let from_urn = Uuid::parse_str("urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
+        let from_guid = Uuid::parse_str("{67e55044-10b1-426f-9247-bb680e5fe0c8}").unwrap();
 
         assert_eq!(from_hyphenated, from_simple);
         assert_eq!(from_hyphenated, from_urn);
@@ -298,13 +292,8 @@ mod tests {
         assert!(Uuid::parse_str("F9168C5E-CEB2-4faa-B6BF-329BF39FA1E4").is_ok());
         assert!(Uuid::parse_str("67e5504410b1426f9247bb680e5fe0c8").is_ok());
         assert!(Uuid::parse_str("01020304-1112-2122-3132-414243444546").is_ok());
-        assert!(Uuid::parse_str(
-            "urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8"
-        )
-        .is_ok());
-        assert!(
-            Uuid::parse_str("{6d93bade-bd9f-4e13-8914-9474e1e3567b}").is_ok()
-        );
+        assert!(Uuid::parse_str("urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8").is_ok());
+        assert!(Uuid::parse_str("{6d93bade-bd9f-4e13-8914-9474e1e3567b}").is_ok());
 
         // Nil
         let nil = Uuid::nil();
@@ -527,9 +516,6 @@ mod tests {
 
     #[test]
     fn test_try_parse_ascii_non_utf8() {
-        assert!(Uuid::try_parse_ascii(
-            b"67e55044-10b1-426f-9247-bb680e5\0e0c8"
-        )
-        .is_err());
+        assert!(Uuid::try_parse_ascii(b"67e55044-10b1-426f-9247-bb680e5\0e0c8").is_err());
     }
 }
