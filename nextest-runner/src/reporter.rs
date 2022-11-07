@@ -222,7 +222,7 @@ impl TestReporterBuilder {
         profile: &NextestProfile<'a>,
         output: ReporterStderr<'a>,
     ) -> TestReporter<'a> {
-        let styles = Box::new(Styles::default());
+        let styles = Box::default();
         let binary_id_width = test_list
             .iter()
             .filter_map(|(_, info)| (info.status.test_count() > 0).then_some(info.binary_id.len()))

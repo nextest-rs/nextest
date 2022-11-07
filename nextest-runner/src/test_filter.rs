@@ -365,7 +365,7 @@ mod tests {
         ) {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &[pattern], Vec::new());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, [pattern], Vec::new());
             let single_filter = test_filter.build();
             prop_assert!(!single_filter.filter_name_match(&substring).is_match());
         }
