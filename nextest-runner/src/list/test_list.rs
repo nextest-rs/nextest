@@ -690,8 +690,9 @@ impl<'g> RustTestArtifact<'g> {
             &self.package,
             &self.non_test_binaries,
         );
-        // Capture stdout and stderr.
+        // Capture stdout and stderr, and close stdin.
         cmd.command_mut()
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
