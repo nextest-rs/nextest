@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    cargo_config::EnvironmentMap, double_spawn::DoubleSpawnInfo, helpers::dylib_path_envvar,
+    cargo_config::EnvironmentMap,
+    double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
+    helpers::dylib_path_envvar,
     target_runner::TargetRunner,
 };
 use camino::Utf8PathBuf;
@@ -25,6 +27,8 @@ pub(crate) struct LocalExecuteContext<'a> {
 pub(crate) struct TestCommand {
     /// The command to be run.
     command: std::process::Command,
+    /// Double-spawn context.
+    double_spawn: Option<DoubleSpawnContext>,
 }
 
 impl TestCommand {
@@ -164,7 +168,12 @@ impl TestCommand {
             cmd.env(format!("NEXTEST_BIN_EXE_{}", name), path);
         }
 
-        Self { command: cmd }
+        let double_spawn = ctx.double_spawn.spawn_context();
+
+        Self {
+            command: cmd,
+            double_spawn,
+        }
     }
 
     #[inline]
@@ -174,6 +183,10 @@ impl TestCommand {
 
     pub(crate) fn spawn(self) -> std::io::Result<tokio::process::Child> {
         let mut command = tokio::process::Command::from(self.command);
-        command.spawn()
+        let res = command.spawn();
+        if let Some(ctx) = self.double_spawn {
+            ctx.finish();
+        }
+        res
     }
 }

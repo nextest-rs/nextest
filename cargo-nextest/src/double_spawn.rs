@@ -4,6 +4,7 @@
 use crate::{output::Color, ExpectedError, Result};
 use camino::Utf8PathBuf;
 use clap::Args;
+use nextest_runner::double_spawn::double_spawn_child_init;
 use std::os::unix::process::CommandExt;
 
 #[derive(Debug, Args)]
@@ -19,6 +20,7 @@ impl DoubleSpawnOpts {
     pub(crate) fn exec(self) -> Result<i32> {
         // This double-spawned process should never use coloring.
         Color::Never.init();
+        double_spawn_child_init();
         let args = shell_words::split(&self.args).map_err(|err| {
             ExpectedError::DoubleSpawnParseArgsError {
                 args: self.args,
