@@ -227,13 +227,11 @@ dependencies = [
  "once_cell",
  "owo-colors",
  "pathdiff",
- "regex",
  "semver",
  "serde_json",
  "shell-words",
  "supports-color",
  "supports-unicode",
- "tempfile",
  "thiserror",
 ]
 
@@ -976,6 +974,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "integration-tests"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "cargo-nextest",
+ "cfg-if",
+ "clap",
+ "color-eyre",
+ "enable-ansi-support",
+ "nextest-metadata",
+ "nextest-workspace-hack",
+ "once_cell",
+ "pathdiff",
+ "regex",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

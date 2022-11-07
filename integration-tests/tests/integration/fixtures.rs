@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::temp_project::TempProject;
-use crate::{dispatch::CargoNextestApp, OutputWriter};
-use clap::Parser;
+use camino::Utf8PathBuf;
+use color_eyre::Result;
 use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustTestSuiteStatusSummary, TestListSummary,
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::process::Command;
+use std::{fmt, process::Command};
 
 pub struct TestInfo {
     id: &'static str,
@@ -127,6 +127,88 @@ pub fn cargo_bin() -> String {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct CargoNextestCli {
+    bin: Utf8PathBuf,
+    args: Vec<String>,
+    unchecked: bool,
+}
+
+impl CargoNextestCli {
+    pub fn new() -> Self {
+        let bin = std::env::var("NEXTEST_BIN_EXE_cargo-nextest-dup")
+            .expect("unable to find cargo-nextest-dup");
+        Self {
+            bin: bin.into(),
+            args: Vec::new(),
+            unchecked: false,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn arg(&mut self, arg: impl Into<String>) -> &mut Self {
+        self.args.push(arg.into());
+        self
+    }
+
+    pub fn args(&mut self, arg: impl IntoIterator<Item = impl Into<String>>) -> &mut Self {
+        self.args.extend(arg.into_iter().map(Into::into));
+        self
+    }
+
+    pub fn unchecked(&mut self, unchecked: bool) -> &mut Self {
+        self.unchecked = unchecked;
+        self
+    }
+
+    pub fn output(&self) -> CargoNextestOutput {
+        let mut command = std::process::Command::new(&self.bin);
+        command.arg("nextest").args(&self.args);
+        let output = command.output().expect("failed to execute");
+
+        let ret = CargoNextestOutput {
+            command,
+            exit_code: output.status.code(),
+            stdout: output.stdout,
+            stderr: output.stderr,
+        };
+
+        if !self.unchecked && !output.status.success() {
+            panic!("command failed:\n\n{ret}");
+        }
+
+        ret
+    }
+}
+
+#[derive(Debug)]
+pub struct CargoNextestOutput {
+    pub command: Command,
+    pub exit_code: Option<i32>,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
+impl CargoNextestOutput {
+    pub fn decode_test_list_json(&self) -> Result<TestListSummary> {
+        Ok(serde_json::from_slice(&self.stdout)?)
+    }
+}
+
+impl fmt::Display for CargoNextestOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "command: {:?}\nexit code: {:?}\n\
+                   --- stdout ---\n{}\n\n--- stderr ---\n{}\n\n",
+            self.command,
+            self.exit_code,
+            String::from_utf8_lossy(&self.stdout),
+            String::from_utf8_lossy(&self.stderr)
+        )
+    }
+}
+
 #[track_caller]
 pub(super) fn set_env_vars() {
     // The dynamic library tests require this flag.
@@ -163,26 +245,23 @@ pub fn save_cargo_metadata(p: &TempProject) {
 
 #[track_caller]
 pub fn build_tests(p: &TempProject) {
-    let args = CargoNextestApp::parse_from([
-        "cargo",
-        "nextest",
-        "--manifest-path",
-        p.manifest_path().as_str(),
-        "list",
-        "--workspace",
-        "--all-targets",
-        "--message-format",
-        "json",
-        "--list-type",
-        "binaries-only",
-        "--target-dir",
-        p.target_dir().as_str(),
-    ]);
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "json",
+            "--list-type",
+            "binaries-only",
+            "--target-dir",
+            p.target_dir().as_str(),
+        ])
+        .output();
 
-    let mut output = OutputWriter::new_test();
-    args.exec(&mut output).unwrap();
-
-    std::fs::write(p.binaries_metadata_path(), output.stdout().unwrap()).unwrap();
+    std::fs::write(p.binaries_metadata_path(), &output.stdout).unwrap();
 }
 
 pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {

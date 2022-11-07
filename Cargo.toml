@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "cargo-nextest",
+  "integration-tests",
   "nextest-metadata",
   "nextest-runner",
   "nextest-filtering",
