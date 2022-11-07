@@ -405,14 +405,22 @@ thread 'test_result_failure' panicked at 'assertion failed: `(left == right)`
  right: `0`: the test returned a termination value with a non-zero status code (1) which indicates a failure', /rustc/fe5b13d681f25ee6474be29d748c65adcd91f69e/library/test/src/lib.rs:186:5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
             ),
-            (
-                "foobar\nError: \"this is an error\"\n",
-                "Error: \"this is an error\"\n",
-            ),
         ];
 
         for (input, output) in tests {
             assert_eq!(heuristic_stack_trace(input).as_deref(), Some(*output));
+        }
+    }
+
+    #[test]
+    fn test_heuristic_error_str() {
+        let tests: &[(&str, &str)] = &[(
+            "foobar\nError: \"this is an error\"\n",
+            "Error: \"this is an error\"",
+        )];
+
+        for (input, output) in tests {
+            assert_eq!(heuristic_error_str(input).as_deref(), Some(*output));
         }
     }
 }
