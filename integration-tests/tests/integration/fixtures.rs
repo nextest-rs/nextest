@@ -261,7 +261,7 @@ pub fn build_tests(p: &TempProject) {
         ])
         .output();
 
-    std::fs::write(p.binaries_metadata_path(), &output.stdout).unwrap();
+    std::fs::write(p.binaries_metadata_path(), output.stdout).unwrap();
 }
 
 pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {

@@ -2538,7 +2538,7 @@ mod tests {
         std::fs::create_dir(&config_dir).expect("error creating config dir");
 
         let config_path = config_dir.join("nextest.toml");
-        let mut config_file = std::fs::File::create(&config_path).unwrap();
+        let mut config_file = std::fs::File::create(config_path).unwrap();
         config_file.write_all(config_contents.as_bytes()).unwrap();
 
         PackageGraph::from_command(MetadataCommand::new().current_dir(temp_dir))
