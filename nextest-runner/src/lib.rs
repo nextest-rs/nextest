@@ -23,6 +23,7 @@ pub mod runner;
 pub mod signal;
 mod stopwatch;
 pub mod target_runner;
+mod test_command;
 pub mod test_filter;
 #[cfg(feature = "self-update")]
 pub mod update;
