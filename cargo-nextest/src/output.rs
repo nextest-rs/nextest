@@ -209,14 +209,6 @@ impl Default for OutputWriter {
 }
 
 impl OutputWriter {
-    #[cfg(test)]
-    pub(crate) fn new_test() -> Self {
-        Self::Test {
-            stdout: Vec::new(),
-            stderr: Vec::new(),
-        }
-    }
-
     pub(crate) fn stdout_writer(&mut self) -> StdoutWriter<'_> {
         match self {
             Self::Normal => StdoutWriter::Normal {
@@ -248,24 +240,6 @@ impl OutputWriter {
             Self::Test { ref mut stderr, .. } => StderrWriter::Test {
                 buf: BufWriter::new(stderr),
             },
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn stdout(&self) -> Option<&'_ [u8]> {
-        match self {
-            Self::Test { ref stdout, .. } => Some(&stdout[..]),
-            #[cfg(test)]
-            _ => None,
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn stderr(&self) -> Option<&'_ [u8]> {
-        match self {
-            Self::Test { ref stderr, .. } => Some(&stderr[..]),
-            #[cfg(test)]
-            _ => None,
         }
     }
 }

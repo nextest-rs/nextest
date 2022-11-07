@@ -21,9 +21,6 @@ mod reuse_build;
 #[cfg(feature = "self-update")]
 mod update;
 
-#[cfg(test)]
-mod tests_integration;
-
 #[doc(hidden)]
 pub use dispatch::*;
 #[doc(hidden)]
