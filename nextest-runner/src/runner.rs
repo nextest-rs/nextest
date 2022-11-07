@@ -589,13 +589,14 @@ impl<'a> TestRunnerInner<'a> {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
         };
-        let mut cmd = test.make_expression(&ctx, self.test_list);
+        let mut cmd = test.make_command(&ctx, self.test_list);
+        let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.
-        cmd.env("__NEXTEST_ATTEMPT", format!("{}", retry_data.attempt));
-        cmd.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
-        cmd.stdin(Stdio::null());
-        imp::cmd_pre_exec(&mut cmd);
+        command_mut.env("__NEXTEST_ATTEMPT", format!("{}", retry_data.attempt));
+        command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
+        command_mut.stdin(Stdio::null());
+        imp::cmd_pre_exec(command_mut);
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
         // best-effort thing.
@@ -603,11 +604,11 @@ impl<'a> TestRunnerInner<'a> {
 
         if !self.no_capture {
             // Capture stdout and stderr.
-            cmd.stdout(std::process::Stdio::piped())
+            command_mut
+                .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped());
         };
 
-        let mut cmd = tokio::process::Command::from(cmd);
         let mut child = cmd.spawn()?;
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has

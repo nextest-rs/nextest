@@ -9,6 +9,7 @@ use crate::{
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
     target_runner::{PlatformRunner, TargetRunner},
+    test_command::{LocalExecuteContext, TestCommand},
     test_filter::TestFilterBuilder,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -24,7 +25,7 @@ use nextest_metadata::{
 use once_cell::sync::{Lazy, OnceCell};
 use owo_colors::OwoColorize;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
     io,
     io::Write,
@@ -681,7 +682,7 @@ impl<'g> RustTestArtifact<'g> {
             argv.push("--ignored");
         }
 
-        let cmd = make_test_command(
+        let mut cmd = TestCommand::new(
             ctx,
             program.clone(),
             &argv,
@@ -689,39 +690,50 @@ impl<'g> RustTestArtifact<'g> {
             &self.package,
             &self.non_test_binaries,
         );
-        let mut cmd = tokio::process::Command::from(cmd);
-        match cmd.output().await {
-            Ok(output) => {
-                if output.status.success() {
-                    String::from_utf8(output.stdout).map_err(|err| {
-                        CreateTestListError::CommandNonUtf8 {
-                            binary_id: self.binary_id.clone(),
-                            command: std::iter::once(program)
-                                .chain(argv.iter().map(|&s| s.to_owned()))
-                                .collect(),
-                            stdout: err.into_bytes(),
-                            stderr: output.stderr,
-                        }
-                    })
-                } else {
-                    Err(CreateTestListError::CommandFail {
-                        binary_id: self.binary_id.clone(),
-                        command: std::iter::once(program)
-                            .chain(argv.iter().map(|&s| s.to_owned()))
-                            .collect(),
-                        exit_status: output.status,
-                        stdout: output.stdout,
-                        stderr: output.stderr,
-                    })
-                }
+        // Capture stdout and stderr.
+        cmd.command_mut()
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let child = cmd
+            .spawn()
+            .map_err(|error| CreateTestListError::CommandExecFail {
+                binary_id: self.binary_id.clone(),
+                command: std::iter::once(program.clone())
+                    .chain(argv.iter().map(|&s| s.to_owned()))
+                    .collect(),
+                error,
+            })?;
+
+        let output = child.wait_with_output().await.map_err(|error| {
+            CreateTestListError::CommandExecFail {
+                binary_id: self.binary_id.clone(),
+                command: std::iter::once(program.clone())
+                    .chain(argv.iter().map(|&s| s.to_owned()))
+                    .collect(),
+                error,
             }
-            Err(error) => Err(CreateTestListError::CommandExecFail {
+        })?;
+
+        if output.status.success() {
+            String::from_utf8(output.stdout).map_err(|err| CreateTestListError::CommandNonUtf8 {
                 binary_id: self.binary_id.clone(),
                 command: std::iter::once(program)
                     .chain(argv.iter().map(|&s| s.to_owned()))
                     .collect(),
-                error,
-            }),
+                stdout: err.into_bytes(),
+                stderr: output.stderr,
+            })
+        } else {
+            Err(CreateTestListError::CommandFail {
+                binary_id: self.binary_id.clone(),
+                command: std::iter::once(program)
+                    .chain(argv.iter().map(|&s| s.to_owned()))
+                    .collect(),
+                exit_status: output.status,
+                stdout: output.stdout,
+                stderr: output.stderr,
+            })
         }
     }
 }
@@ -817,12 +829,12 @@ impl<'a> TestInstance<'a> {
         (&self.suite_info.binary_id, self.name)
     }
 
-    /// Creates the command expression for this test instance.
-    pub(crate) fn make_expression(
+    /// Creates the command for this test instance.
+    pub(crate) fn make_command(
         &self,
         ctx: &TestExecuteContext<'_>,
         test_list: &TestList<'_>,
-    ) -> std::process::Command {
+    ) -> TestCommand {
         let platform_runner = ctx
             .target_runner
             .for_build_platform(self.suite_info.build_platform);
@@ -851,7 +863,7 @@ impl<'a> TestInstance<'a> {
             env: &test_list.env,
         };
 
-        make_test_command(
+        TestCommand::new(
             &ctx,
             program,
             &args,
@@ -870,153 +882,6 @@ pub struct TestExecuteContext<'a> {
 
     /// Target runner.
     pub target_runner: &'a TargetRunner,
-}
-
-#[derive(Clone, Debug)]
-struct LocalExecuteContext<'a> {
-    double_spawn: &'a DoubleSpawnInfo,
-    runner: &'a TargetRunner,
-    dylib_path: &'a OsStr,
-    env: &'a EnvironmentMap,
-}
-
-/// Create a duct Expression for a test binary with the given arguments, using the specified [`PackageMetadata`].
-fn make_test_command(
-    ctx: &LocalExecuteContext<'_>,
-    program: String,
-    args: &[&str],
-    cwd: &Utf8PathBuf,
-    package: &PackageMetadata<'_>,
-    non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
-) -> std::process::Command {
-    // This is a workaround for a macOS SIP issue:
-    // https://github.com/nextest-rs/nextest/pull/84
-    //
-    // Basically, if SIP is enabled, macOS removes any environment variables that start with
-    // "LD_" or "DYLD_" when spawning system-protected processes. This unfortunately includes
-    // processes like bash -- this means that if nextest invokes a shell script, paths might
-    // end up getting sanitized.
-    //
-    // This is particularly relevant for target runners, which are often shell scripts.
-    //
-    // To work around this, re-export any variables that begin with LD_ or DYLD_ as "NEXTEST_LD_"
-    // or "NEXTEST_DYLD_". Do this on all platforms for uniformity.
-    //
-    // Nextest never changes these environment variables within its own process, so caching them is
-    // valid.
-    fn is_sip_sanitized(var: &str) -> bool {
-        // Look for variables starting with LD_ or DYLD_.
-        // https://briandfoy.github.io/macos-s-system-integrity-protection-sanitizes-your-environment/
-        var.starts_with("LD_") || var.starts_with("DYLD_")
-    }
-
-    static LD_DYLD_ENV_VARS: Lazy<HashMap<String, OsString>> = Lazy::new(|| {
-        std::env::vars_os()
-            .filter_map(|(k, v)| match k.into_string() {
-                Ok(k) => is_sip_sanitized(&k).then_some((k, v)),
-                Err(_) => None,
-            })
-            .collect()
-    });
-
-    // TODO: pass in double spawn option
-    let mut cmd = if let Some(current_exe) = ctx.double_spawn.current_exe() {
-        let mut cmd = std::process::Command::new(current_exe);
-        cmd.args([DoubleSpawnInfo::SUBCOMMAND_NAME, "--", program.as_str()]);
-        cmd.arg(&shell_words::join(args));
-        cmd
-    } else {
-        let mut cmd = std::process::Command::new(program);
-        cmd.args(args);
-        cmd
-    };
-
-    // NB: we will always override user-provided environment variables with the
-    // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
-    ctx.env.apply_env(&mut cmd);
-
-    cmd.current_dir(cwd)
-        // This environment variable is set to indicate that tests are being run under nextest.
-        .env("NEXTEST", "1")
-        // This environment variable is set to indicate that each test is being run in its own process.
-        .env("NEXTEST_EXECUTION_MODE", "process-per-test")
-        // These environment variables are set at runtime by cargo test:
-        // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
-        .env(
-            "CARGO_MANIFEST_DIR",
-            // CARGO_MANIFEST_DIR is set to the *new* cwd after path mapping.
-            cwd,
-        )
-        .env(
-            "__NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR",
-            // This is a test-only environment variable set to the *old* cwd. Not part of the
-            // public API.
-            package.manifest_path().parent().unwrap(),
-        )
-        .env("CARGO_PKG_VERSION", format!("{}", package.version()))
-        .env(
-            "CARGO_PKG_VERSION_MAJOR",
-            format!("{}", package.version().major),
-        )
-        .env(
-            "CARGO_PKG_VERSION_MINOR",
-            format!("{}", package.version().minor),
-        )
-        .env(
-            "CARGO_PKG_VERSION_PATCH",
-            format!("{}", package.version().patch),
-        )
-        .env(
-            "CARGO_PKG_VERSION_PRE",
-            format!("{}", package.version().pre),
-        )
-        .env("CARGO_PKG_AUTHORS", package.authors().join(":"))
-        .env("CARGO_PKG_NAME", package.name())
-        .env(
-            "CARGO_PKG_DESCRIPTION",
-            package.description().unwrap_or_default(),
-        )
-        .env("CARGO_PKG_HOMEPAGE", package.homepage().unwrap_or_default())
-        .env("CARGO_PKG_LICENSE", package.license().unwrap_or_default())
-        .env(
-            "CARGO_PKG_LICENSE_FILE",
-            package.license_file().unwrap_or_else(|| "".as_ref()),
-        )
-        .env(
-            "CARGO_PKG_REPOSITORY",
-            package.repository().unwrap_or_default(),
-        )
-        .env(
-            "CARGO_PKG_RUST_VERSION",
-            package.rust_version().map_or(String::new(), |v| {
-                // A Rust version e.g. "1.58" has v.to_string() generated as "^1.58".
-                // Remove the prefix ^.
-                let s = v.to_string();
-                match s.strip_prefix('^') {
-                    Some(suffix) => suffix.to_owned(),
-                    None => s,
-                }
-            }),
-        )
-        .env(dylib_path_envvar(), ctx.dylib_path);
-
-    for (k, v) in &*LD_DYLD_ENV_VARS {
-        if k != dylib_path_envvar() {
-            cmd.env("NEXTEST_".to_owned() + k, v);
-        }
-    }
-    // Also add the dylib path envvar under the NEXTEST_ prefix.
-    if is_sip_sanitized(dylib_path_envvar()) {
-        cmd.env("NEXTEST_".to_owned() + dylib_path_envvar(), ctx.dylib_path);
-    }
-
-    // Expose paths to non-test binaries at runtime so that relocated paths work.
-    // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.
-    for (name, path) in non_test_binaries {
-        cmd.env(format!("NEXTEST_BIN_EXE_{}", name), path);
-    }
-
-    cmd
 }
 
 #[cfg(test)]
