@@ -253,6 +253,13 @@ static PANICKED_AT_REGEX: Lazy<Regex> = Lazy::new(|| {
     builder.build().unwrap()
 });
 
+static ERROR_REGEX_STR: &str = "^Error: ";
+static ERROR_REGEX: Lazy<Regex> = Lazy::new(|| {
+    let mut builder = RegexBuilder::new(ERROR_REGEX_STR);
+    builder.multi_line(true);
+    builder.build().unwrap()
+});
+
 #[allow(unused_variables)]
 /// Not part of the public API: only used for testing.
 #[doc(hidden)]
@@ -306,6 +313,9 @@ pub fn heuristic_extract_description<'a>(
     if let Some(description) = heuristic_stack_trace(stderr) {
         return Some(description);
     }
+    if let Some(description) = heuristic_error_str(stderr) {
+        return Some(description);
+    }
     heuristic_should_panic(stdout)
 }
 
@@ -331,6 +341,13 @@ fn heuristic_stack_trace(stderr: &str) -> Option<String> {
         }
     }
 
+    Some(Output::new(stderr[start..].trim_end()).into_string())
+}
+
+fn heuristic_error_str(stderr: &str) -> Option<String> {
+    // Starting Rust 1.66, Result-based errors simply print out "Error: ".
+    let error_match = ERROR_REGEX.find(stderr)?;
+    let start = error_match.start();
     Some(Output::new(stderr[start..].trim_end()).into_string())
 }
 
@@ -387,6 +404,10 @@ thread 'test_result_failure' panicked at 'assertion failed: `(left == right)`
   left: `1`,
  right: `0`: the test returned a termination value with a non-zero status code (1) which indicates a failure', /rustc/fe5b13d681f25ee6474be29d748c65adcd91f69e/library/test/src/lib.rs:186:5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
+            ),
+            (
+                "foobar\nError: \"this is an error\"\n",
+                "Error: \"this is an error\"\n",
             ),
         ];
 
