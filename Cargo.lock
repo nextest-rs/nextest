@@ -269,9 +269,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0357a6402b295ca3a86bc148e84df46c02e41f41fef186bda662557ef6328aa"
+checksum = "0bbc13bf6290a6b202cc3efb36f7ec2b739a80634215630c8053a313edf6abef"
 dependencies = [
  "smallvec",
  "target-lexicon",
@@ -2148,9 +2148,9 @@ checksum = "9410d0f6853b1d94f0e519fb95df60f29d2c1eff2d921ffdf01a4c8a3b54f12d"
 
 [[package]]
 name = "target-spec"
-version = "1.2.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb961bf20f35d75a2e8e182c56c7f69890520c957334df265a6c9e37ba7674ae"
+checksum = "6a4b9859e2d5bf61d17ccdf2659396d69b207d956f2cb60e09df319394a8ccd4"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
