@@ -116,10 +116,11 @@ mod imp {
             // Attempt to obtain the current exe, and warn if it couldn't be found.
             // TODO: maybe add an option to fail?
             // TODO: Always use /proc/self/exe directly on Linux, just make sure it's always accessible
-            let current_exe = std::env::current_exe().map_or_else(
+            let current_exe = get_current_exe().map_or_else(
                 |error| {
                     log::warn!(
-                        "unable to determine current exe, tests will be less isolated: {error}"
+                        "unable to determine current exe, will not use double-spawning \
+                        for better isolation: {error}"
                     );
                     None
                 },
@@ -137,6 +138,31 @@ mod imp {
         pub(super) fn current_exe(&self) -> Option<&Path> {
             self.current_exe.as_deref()
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn get_current_exe() -> std::io::Result<PathBuf> {
+        static PROC_SELF_EXE: &str = "/proc/self/exe";
+
+        // Always use /proc/self/exe directly rather than trying to readlink it. Just make sure it's
+        // accessible.
+        let path = Path::new(PROC_SELF_EXE);
+        match path.symlink_metadata() {
+            Ok(_) => Ok(path.to_owned()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "no /proc/self/exe available. Is /proc mounted?",
+            )),
+            Err(e) => Err(e),
+        }
+    }
+
+    // TODO: Add other symlinks as well, e.g. /proc/self/path/a.out on solaris/illumos.
+
+    #[cfg(not(target_os = "linux"))]
+    #[inline]
+    fn get_current_exe() -> std::io::Result<PathBuf> {
+        std::env::current_exe()
     }
 
     #[derive(Debug)]
