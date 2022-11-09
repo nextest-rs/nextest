@@ -34,7 +34,7 @@ target-spec = { version = "1.2.2", default-features = false, features = ["serde"
 uuid = { version = "1.2.1", features = ["getrandom", "rng", "std", "v4"] }
 
 [build-dependencies]
-cc = { version = "1.0.74", default-features = false, features = ["jobserver", "parallel"] }
+cc = { version = "1.0.76", default-features = false, features = ["jobserver", "parallel"] }
 hashbrown = { version = "0.12.3", features = ["ahash", "inline-more", "raw"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 proc-macro2 = { version = "1.0.47", features = ["proc-macro"] }
