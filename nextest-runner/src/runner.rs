@@ -13,8 +13,8 @@ use crate::{
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
     signal::{SignalEvent, SignalHandler, SignalHandlerKind},
-    stopwatch::{StopwatchEnd, StopwatchStart},
     target_runner::TargetRunner,
+    time::{StopwatchEnd, StopwatchStart},
 };
 use async_scoped::TokioScope;
 use buffer_unordered_weighted::StreamExt;
@@ -547,7 +547,7 @@ impl<'a> TestRunnerInner<'a> {
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
         delay_before_start: Duration,
     ) -> InternalExecuteStatus {
-        let stopwatch = StopwatchStart::now();
+        let stopwatch = crate::time::stopwatch();
 
         match self
             .run_test_inner(
@@ -1147,7 +1147,7 @@ where
         Self {
             callback,
             run_id,
-            stopwatch: StopwatchStart::now(),
+            stopwatch: crate::time::stopwatch(),
             run_stats: RunStats {
                 initial_run_count,
                 ..RunStats::default()

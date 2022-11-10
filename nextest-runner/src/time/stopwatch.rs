@@ -9,6 +9,10 @@
 
 use std::time::{Duration, Instant, SystemTime};
 
+pub(crate) fn stopwatch() -> StopwatchStart {
+    StopwatchStart::new()
+}
+
 /// The start state of a stopwatch.
 #[derive(Clone, Debug)]
 pub(crate) struct StopwatchStart {
@@ -17,7 +21,7 @@ pub(crate) struct StopwatchStart {
 }
 
 impl StopwatchStart {
-    pub(crate) fn now() -> Self {
+    fn new() -> Self {
         Self {
             // These two syscalls will happen imperceptibly close to each other, which is good
             // enough for our purposes.
