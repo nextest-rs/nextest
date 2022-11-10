@@ -21,9 +21,9 @@ pub mod reporter;
 pub mod reuse_build;
 pub mod runner;
 pub mod signal;
-mod stopwatch;
 pub mod target_runner;
 mod test_command;
 pub mod test_filter;
+mod time;
 #[cfg(feature = "self-update")]
 pub mod update;
