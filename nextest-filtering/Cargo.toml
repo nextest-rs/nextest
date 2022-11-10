@@ -24,7 +24,7 @@ nom-tracable = "0.8.0"
 nom_locate = "4.0.0"
 recursion = "0.3.3"
 regex = "1.7.0"
-regex-syntax = "0.6.27"
+regex-syntax = "0.6.28"
 thiserror = "1.0.37"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
