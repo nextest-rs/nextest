@@ -23,7 +23,7 @@ chrono = "0.4.22"
 debug-ignore = "1.0.3"
 either = "1.8.0"
 futures = "0.3.25"
-guppy = "0.14.4"
+guppy = "0.15.0"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home = "0.5.4"
