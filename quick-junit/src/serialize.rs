@@ -36,7 +36,7 @@ pub(crate) fn serialize_report(
 ) -> Result<(), SerializeError> {
     let mut writer = Writer::new_with_indent(writer, b' ', 4);
 
-    let decl = BytesDecl::new(b"1.0", Some(b"UTF-8"), None);
+    let decl = BytesDecl::new("1.0", Some("UTF-8"), None);
     writer.write_event(Event::Decl(decl))?;
 
     serialize_report_impl(report, &mut writer)?;
@@ -61,7 +61,7 @@ pub(crate) fn serialize_report_impl(
         test_suites,
     } = report;
 
-    let mut testsuites_tag = BytesStart::borrowed_name(TESTSUITES_TAG.as_bytes());
+    let mut testsuites_tag = BytesStart::new(TESTSUITES_TAG);
     testsuites_tag.extend_attributes([
         ("name", name.as_str()),
         ("tests", tests.to_string().as_str()),
@@ -109,7 +109,7 @@ pub(crate) fn serialize_test_suite(
         extra,
     } = test_suite;
 
-    let mut test_suite_tag = BytesStart::borrowed_name(TESTSUITE_TAG.as_bytes());
+    let mut test_suite_tag = BytesStart::new(TESTSUITE_TAG);
     test_suite_tag.extend_attributes([
         ("name", name.as_str()),
         ("tests", tests.to_string().as_str()),
@@ -158,7 +158,7 @@ fn serialize_property(
     property: &Property,
     writer: &mut Writer<impl io::Write>,
 ) -> quick_xml::Result<()> {
-    let mut property_tag = BytesStart::borrowed_name(PROPERTY_TAG.as_bytes());
+    let mut property_tag = BytesStart::new(PROPERTY_TAG);
     property_tag.extend_attributes([
         ("name", property.name.as_str()),
         ("value", property.value.as_str()),
@@ -183,7 +183,7 @@ fn serialize_test_case(
         extra,
     } = test_case;
 
-    let mut testcase_tag = BytesStart::borrowed_name(TESTCASE_TAG.as_bytes());
+    let mut testcase_tag = BytesStart::new(TESTCASE_TAG);
     testcase_tag.extend_attributes([("name", name.as_str())]);
     if let Some(classname) = classname {
         testcase_tag.push_attribute(("classname", classname.as_str()));
@@ -266,7 +266,7 @@ fn serialize_status(
     tag_name: &'static str,
     writer: &mut Writer<impl io::Write>,
 ) -> quick_xml::Result<()> {
-    let mut tag = BytesStart::borrowed_name(tag_name.as_bytes());
+    let mut tag = BytesStart::new(tag_name);
     if let Some(message) = message {
         tag.push_attribute(("message", message));
     }
@@ -277,7 +277,7 @@ fn serialize_status(
     match description {
         Some(description) => {
             writer.write_event(Event::Start(tag))?;
-            writer.write_event(Event::Text(BytesText::from_plain_str(description)))?;
+            writer.write_event(Event::Text(BytesText::new(description)))?;
             serialize_end_tag(tag_name, writer)?;
         }
         None => {
@@ -318,7 +318,7 @@ fn serialize_rerun(
         (FlakyOrRerun::Rerun, NonSuccessKind::Error) => RERUN_ERROR_TAG,
     };
 
-    let mut tag = BytesStart::borrowed_name(tag_name.as_bytes());
+    let mut tag = BytesStart::new(tag_name);
     if let Some(timestamp) = timestamp {
         serialize_timestamp(&mut tag, timestamp);
     }
@@ -336,7 +336,7 @@ fn serialize_rerun(
 
     let mut needs_indent = false;
     if let Some(description) = description {
-        writer.write_event(Event::Text(BytesText::from_plain_str(description)))?;
+        writer.write_event(Event::Text(BytesText::new(description)))?;
         needs_indent = true;
     }
 
@@ -348,7 +348,7 @@ fn serialize_rerun(
             needs_indent = false;
         }
         serialize_empty_start_tag(STACK_TRACE_TAG, writer)?;
-        writer.write_event(Event::Text(BytesText::from_plain_str(stack_trace)))?;
+        writer.write_event(Event::Text(BytesText::new(stack_trace)))?;
         serialize_end_tag(STACK_TRACE_TAG, writer)?;
     }
 
@@ -379,7 +379,7 @@ fn serialize_output(
 ) -> quick_xml::Result<()> {
     serialize_empty_start_tag(tag_name, writer)?;
 
-    let text = BytesText::from_plain_str(output.as_str());
+    let text = BytesText::new(output.as_str());
     writer.write_event(Event::Text(text))?;
 
     serialize_end_tag(tag_name, writer)?;
@@ -391,7 +391,7 @@ fn serialize_empty_start_tag(
     tag_name: &'static str,
     writer: &mut Writer<impl io::Write>,
 ) -> quick_xml::Result<()> {
-    let tag = BytesStart::borrowed_name(tag_name.as_bytes());
+    let tag = BytesStart::new(tag_name);
     writer.write_event(Event::Start(tag))
 }
 
@@ -399,7 +399,7 @@ fn serialize_end_tag(
     tag_name: &'static str,
     writer: &mut Writer<impl io::Write>,
 ) -> quick_xml::Result<()> {
-    let end_tag = BytesEnd::borrowed(tag_name.as_bytes());
+    let end_tag = BytesEnd::new(tag_name);
     writer.write_event(Event::End(end_tag))
 }
 

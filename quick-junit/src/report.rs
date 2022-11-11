@@ -111,8 +111,7 @@ impl Report {
     pub fn to_string(&self) -> Result<String, SerializeError> {
         let mut buf: Vec<u8> = vec![];
         self.serialize(&mut buf)?;
-        String::from_utf8(buf)
-            .map_err(|utf8_err| quick_xml::Error::Utf8(utf8_err.utf8_error()).into())
+        String::from_utf8(buf).map_err(|utf8_err| quick_xml::Error::from(utf8_err).into())
     }
 }
 
