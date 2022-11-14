@@ -19,7 +19,7 @@ camino = { version = "1.1.1", features = ["serde1"] }
 config = { version = "0.13.2", default-features = false, features = ["toml"] }
 cargo_metadata = "0.15.1"
 cfg-if = "1.0.0"
-chrono = "0.4.22"
+chrono = "0.4.23"
 debug-ignore = "1.0.3"
 either = "1.8.0"
 futures = "0.3.25"
