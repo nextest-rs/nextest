@@ -31,7 +31,7 @@ owo-colors = { version = "3.5.0", default-features = false, features = ["support
 serde = { version = "1.0.147", features = ["alloc", "derive", "serde_derive", "std"] }
 serde_json = { version = "1.0.87", features = ["std", "unbounded_depth"] }
 target-spec = { version = "1.2.2", default-features = false, features = ["serde", "summaries"] }
-uuid = { version = "1.2.1", features = ["getrandom", "rng", "std", "v4"] }
+uuid = { version = "1.2.2", features = ["getrandom", "rng", "std", "v4"] }
 
 [build-dependencies]
 cc = { version = "1.0.76", default-features = false, features = ["jobserver", "parallel"] }
