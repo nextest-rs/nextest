@@ -8,11 +8,8 @@ use target_spec::{Platform, TargetFeatures};
 
 #[test]
 fn parses_target_cli_option() {
-    let triple = with_env(
-        [("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl")],
-        || target_triple(Some("aarch64-unknown-linux-gnu")),
-    )
-    .unwrap();
+    std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl");
+    let triple = target_triple(Some("aarch64-unknown-linux-gnu")).unwrap();
 
     assert_eq!(
         triple,
@@ -25,11 +22,8 @@ fn parses_target_cli_option() {
 
 #[test]
 fn parses_cargo_env() {
-    let triple = with_env(
-        [("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl")],
-        || target_triple(None),
-    )
-    .unwrap();
+    std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl");
+    let triple = target_triple(None).unwrap();
 
     assert_eq!(
         triple,

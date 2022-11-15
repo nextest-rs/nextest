@@ -14,14 +14,8 @@ use nextest_runner::{
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
 };
-use once_cell::sync::OnceCell;
 use std::env;
 use target_spec::Platform;
-
-fn default() -> &'static target_spec::Platform {
-    static DEF: OnceCell<target_spec::Platform> = OnceCell::new();
-    DEF.get_or_init(|| target_spec::Platform::current().unwrap())
-}
 
 fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunner)> {
     let configs = CargoConfigs::new_with_isolation(
@@ -39,21 +33,9 @@ fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunn
 #[test]
 fn parses_cargo_env() {
     set_env_vars();
+    std::env::set_var(current_runner_env_var(), "cargo_with_default --arg --arg2");
 
-    let (_, def_runner) = with_env(
-        [(
-            format!(
-                "CARGO_TARGET_{}_RUNNER",
-                default()
-                    .triple_str()
-                    .to_ascii_uppercase()
-                    .replace('-', "_")
-            ),
-            "cargo_with_default --arg --arg2",
-        )],
-        || runner_for_target(None),
-    )
-    .unwrap();
+    let (_, def_runner) = runner_for_target(None).unwrap();
 
     for (_, platform_runner) in def_runner.all_build_platforms() {
         let platform_runner = platform_runner.expect("env var means runner should be defined");
@@ -64,14 +46,12 @@ fn parses_cargo_env() {
         );
     }
 
-    let (_, specific_runner) = with_env(
-        [(
-            "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUNNER",
-            "cargo_with_specific",
-        )],
-        || runner_for_target(Some("aarch64-linux-android")),
-    )
-    .unwrap();
+    std::env::set_var(
+        "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUNNER",
+        "cargo_with_specific",
+    );
+
+    let (_, specific_runner) = runner_for_target(Some("aarch64-linux-android")).unwrap();
 
     let platform_runner = specific_runner.target().unwrap();
     assert_eq!("cargo_with_specific", platform_runner.binary());
@@ -138,15 +118,12 @@ fn parses_cargo_config_cfg() {
 #[test]
 fn falls_back_to_cargo_config() {
     let linux = parse_triple("x86_64-unknown-linux-musl");
+    std::env::set_var(
+        "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
+        "cargo-runner-windows",
+    );
 
-    let (_, target_runner) = with_env(
-        [(
-            "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
-            "cargo-runner-windows",
-        )],
-        || runner_for_target(Some(linux.triple_str())),
-    )
-    .unwrap();
+    let (_, target_runner) = runner_for_target(Some(linux.triple_str())).unwrap();
 
     let platform_runner = target_runner.target().unwrap();
 
@@ -178,13 +155,11 @@ fn test_listing_with_target_runner() -> Result<()> {
     let test_count = test_list.test_count();
 
     {
-        let (_, target_runner) = with_env(
-            [(
-                &current_runner_env_var(),
-                &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
-            )],
-            || runner_for_target(None),
-        )?;
+        std::env::set_var(
+            current_runner_env_var(),
+            format!("{} --ensure-this-arg-is-sent", passthrough_path()),
+        );
+        let (_, target_runner) = runner_for_target(None).unwrap();
 
         let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &target_runner);
 
@@ -208,13 +183,11 @@ fn test_run_with_target_runner() -> Result<()> {
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
 
-    let (build_platforms, target_runner) = with_env(
-        [(
-            &current_runner_env_var(),
-            &format!("{} --ensure-this-arg-is-sent", passthrough_path()),
-        )],
-        || runner_for_target(None),
-    )?;
+    std::env::set_var(
+        current_runner_env_var(),
+        format!("{} --ensure-this-arg-is-sent", passthrough_path()),
+    );
+    let (build_platforms, target_runner) = runner_for_target(None).unwrap();
 
     for (_, platform_runner) in target_runner.all_build_platforms() {
         let runner = platform_runner.expect("current platform runner was set through env var");
