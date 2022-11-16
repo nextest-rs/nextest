@@ -186,8 +186,11 @@ jobs:
 
       - uses: actions/checkout@v3
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          # Switch to beta Rust temporarily while https://github.com/rust-lang/rust/pull/101077
+          # makes its way to stable (in Rust 1.66)
+          toolchain: beta
           targets: ${{ matrix.target }}
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
@@ -228,7 +231,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          # Switch to beta Rust temporarily while https://github.com/rust-lang/rust/pull/101077
+          # makes its way to stable (in Rust 1.66)
+          toolchain: beta
       - name: Build release for Mac
         id: build-release
         run: |

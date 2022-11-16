@@ -61,7 +61,9 @@ jobs:
           - macos-latest
           - windows-latest
         # 1.62 is the MSRV
-        rust-version: [ 1.62, stable ]
+        # Switch to beta Rust temporarily while https://github.com/rust-lang/rust/pull/101077 makes
+        # its way to stable (in Rust 1.66)
+        rust-version: [ 1.62, beta ]
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
