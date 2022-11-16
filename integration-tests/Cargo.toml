@@ -12,7 +12,7 @@ path = "test-helpers/cargo-nextest-dup.rs"
 cargo-nextest = { path = "../cargo-nextest" }
 # we don't use the tracing support
 color-eyre = { version = "0.6.2", default-features = false }
-clap = { version = "4.0.24", features = ["derive", "env"] }
+clap = { version = "4.0.25", features = ["derive", "env"] }
 enable-ansi-support = "0.1.2"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
