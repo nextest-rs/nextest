@@ -54,9 +54,9 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "async-scoped"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1181d2a07303ac3e8df0b3bdaaf648b4ac968d352e61158f5c1897db70d22a09"
+checksum = "0e7a6a57c8aeb40da1ec037f5d455836852f7a57e69e1b1ad3d8f38ac1d6cadf"
 dependencies = [
  "futures",
  "pin-project",
