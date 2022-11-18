@@ -13,7 +13,7 @@ rust-version = "1.62"
 
 [dependencies]
 chrono = "0.4.23"
-indexmap = "1.9.1"
+indexmap = "1.9.2"
 quick-xml = "0.26.0"
 thiserror = "1.0.37"
 uuid = "1.2.1"
