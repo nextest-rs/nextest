@@ -1,3 +1,7 @@
 [alias]
 xfmt = "fmt -- --config imports_granularity=Crate"
 local-nt = "run --package cargo-nextest -- nextest"
+
+[build]
+# Required for tokio_console support
+rustflags = ["--cfg", "tokio_unstable"]
