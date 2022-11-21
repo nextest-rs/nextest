@@ -84,6 +84,7 @@ nextest-metadata = { version = "0.7.0", path = "../nextest-metadata" }
 quick-junit = { version = "0.3.0", path = "../quick-junit" }
 uuid = { version = "1.2.1", features = ["v4"] }
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+console-subscriber = { version = "0.1.8", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.137"
@@ -117,3 +118,4 @@ path = "test-helpers/passthrough.rs"
 
 [features]
 self-update = ["self_update", "mukti-metadata"]
+experimental-tokio-console = ["console-subscriber", "tokio/tracing"]

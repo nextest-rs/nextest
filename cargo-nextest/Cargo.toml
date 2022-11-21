@@ -42,6 +42,7 @@ nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [features]
 default = ["default-no-update", "self-update"]
+experimental-tokio-console = ["nextest-runner/experimental-tokio-console"]
 # Perform self-updates (enabled by default)
 self-update = ["nextest-runner/self-update"]
 # Default set of features excluding self-update. This is the recommended set of features for

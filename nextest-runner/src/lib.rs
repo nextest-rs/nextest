@@ -11,6 +11,8 @@
 
 pub mod cargo_config;
 pub mod config;
+#[cfg(feature = "experimental-tokio-console")]
+pub mod console;
 pub mod double_spawn;
 pub mod errors;
 mod helpers;
