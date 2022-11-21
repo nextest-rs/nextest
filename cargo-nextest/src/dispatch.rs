@@ -57,6 +57,9 @@ pub struct CargoNextestApp {
 impl CargoNextestApp {
     /// Executes the app.
     pub fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
+        #[cfg(feature = "experimental-tokio-console")]
+        nextest_runner::console::init();
+
         match self.subcommand {
             NextestSubcommand::Nextest(app) => app.exec(output_writer),
             #[cfg(unix)]
