@@ -20,7 +20,7 @@ for target in $targets; do
   # From: https://stackoverflow.com/a/66875783/473672
   SDKROOT=$(xcrun --show-sdk-path) \
   MACOSX_DEPLOYMENT_TARGET=$(xcrun --show-sdk-platform-version) \
-    cargo build --release "--target=$target"
+    cargo build --release -p cargo-nextest "--target=$target"
 done
 
 # From: https://developer.apple.com/documentation/apple-silicon/building-a-universal-macos-binary#Update-the-Architecture-List-of-Custom-Makefiles
