@@ -1,7 +1,7 @@
 [package]
 name = "quick-junit"
 description = "Data model and serializer for JUnit/XUnit XML"
-version = "0.3.0"
+version = "0.3.1"
 readme = "README.md"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/nextest-rs/nextest"
