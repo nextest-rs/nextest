@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.7.1] - 2022-11-23
+## [0.7.2] - 2022-11-23
 
 ### Added
 
@@ -9,6 +9,10 @@
 ### Changed
 
 - MSRV updated to Rust 1.62.
+
+## [0.7.1] - 2022-11-23
+
+(This version was not published due to a code issue.)
 
 ## [0.7.0] - 2022-10-25
 
@@ -127,6 +131,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.7.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.2
 [0.7.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.1
 [0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.0
 [0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.6.0
