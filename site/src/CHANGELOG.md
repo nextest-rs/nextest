@@ -3,20 +3,34 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.44] - 2022-11-23
 
 ### Added
 
-- On Unix platforms, a new experimental "double-spawn" approach to running test binaries has been added. The double-spawn approach will soon become the default.
-- Initial support for handling SIGTSTP (Ctrl-Z) and SIGCONT (`fg`). However, by default, note that pressing Ctrl-Z in the middle of a test run can lead to nextest runs hanging sometimes. These nondeterministic hangs will not happen if both of the following are true:
-  - Nextest is built with Rust 1.66 or above. Note that 1.66 is currently in beta, and the [pre-built binaries](https://nexte.st/book/pre-built-binaries) are built with beta Rust to pick up the fix [in upstream Rust](https://github.com/rust-lang/rust/pull/101077).
-  - The double-spawn approach is enabled (see below) with `NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1`.
+#### Double-spawning test processes
+
+On Unix platforms, a new experimental "double-spawn" approach to running test binaries has been added. With the double-spawn approach, when listing or running tests, nextest will no longer spawn test processes directly. Instead, nextest will first spawn a copy of itself, which will do some initial setup work and then `exec` the test process.
+
+The double-spawn approach is currently disabled by default. It can be enabled by setting `NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1` in your environment.
+
+The double-spawn approach will soon be enabled the default.
+
+#### Pausing and resuming test runs
+
+Nextest now has initial support for handling SIGTSTP (Ctrl-Z) and SIGCONT (`fg`). On SIGTSTP (e.g. when Ctrl-Z is pressed), all running tests and timers are paused, and nextest is suspended. On SIGCONT (e.g. when `fg` is run), tests and timers are resumed.
+
+Note that, by default, pressing Ctrl-Z in the middle of a test run can lead to [nextest runs hanging sometimes](https://inbox.sourceware.org/libc-help/87tu64w33v.fsf@oldenburg.str.redhat.com/T/#m5e40bfa2378e9df29e077addf1aa72b191902b86). These nondeterministic hangs will not happen if both of the following are true:
+
+- Nextest is built with Rust 1.66 (currently in beta) or above. Rust 1.66 contains [a required fix to upstream Rust](https://github.com/rust-lang/rust/pull/101077).
+
+  Note that the [pre-built binaries](https://nexte.st/book/pre-built-binaries) for this version are built with beta Rust to pick this fix up.
+- The double-spawn approach is enabled (see above) with `NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1`.
 
 **Call for testing:** Please try out the double-spawn approach by setting `NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1` in your environment. It has been extensively tested and should not cause any breakages, but if it does, please [report an issue](https://github.com/nextest-rs/nextest/issues/new). Thank you!
 
 ### Fixed
 
-- Fixed an issue with nextest hanging on Windows with spawned processes ([#656](https://github.com/nextest-rs/nextest/issues/656)). Thanks to [Chip Senkbeil](https://github.com/chipsenkbeil) for reporting it and providing a minimal example!
+- Fixed an issue with nextest hanging on Windows with spawned processes that outlive the test ([#656](https://github.com/nextest-rs/nextest/issues/656)). Thanks to [Chip Senkbeil](https://github.com/chipsenkbeil) for reporting it and providing a minimal example!
 
 ## [0.9.43] - 2022-11-04
 
@@ -647,6 +661,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.44]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.44
 [0.9.43]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43
 [0.9.42]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.42
 [0.9.41]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.41

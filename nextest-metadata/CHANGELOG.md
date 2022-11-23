@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.1] - 2022-11-23
+
+### Added
+
+- A new exit code, `DOUBLE_SPAWN_ERROR`, indicates that an error was encountered wile attempting to double-spawn a test process.
+
 ## [0.7.0] - 2022-10-25
 
 ### Added
@@ -117,6 +123,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.7.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.1
 [0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.0
 [0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.6.0
 [0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.5.0
