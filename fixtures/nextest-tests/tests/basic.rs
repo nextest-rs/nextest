@@ -282,9 +282,12 @@ fn test_result_failure() -> Result<(), std::io::Error> {
 #[cfg(any(unix, windows))]
 #[test]
 fn test_subprocess_doesnt_exit() {
-    // Note: setting a high value here can cause large delays with the GitHub Actions runner on
-    // Windows.
+    // Note: this is synchronized with a per-test override in the main nextest repo. TODO: This
+    // should actually be 360, but needs to wait until cargo-nextest 0.9.44 is out (because the test
+    // runner itself hangs, and CI is tested against the latest release as well.)
     let mut cmd = sleep_cmd(5);
+    // Try setting stdout to a piped process -- this will cause the runner to hang, unless
+    cmd.stdout(std::process::Stdio::piped());
     cmd.spawn().unwrap();
 }
 

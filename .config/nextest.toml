@@ -1,6 +1,13 @@
 [profile.default]
 final-status-level = "slow"
 
+[[profile.default.overrides]]
+# test_subprocess_doesnt_exit runs a sleep command for 360 seconds. If integration tests take longer
+# than 180 seconds, it likely means that nextest is stuck waiting for the sleep command to exit.
+# This is a bug.
+filter = 'package(integration-tests)'
+slow-timeout = { period = "60s", terminate-after = 3 }
+
 [profile.ci]
 # Don't fail fast in CI to run the full test suite.
 fail-fast = false

@@ -96,7 +96,7 @@ fn test_run() -> Result<()> {
         .expect("default config is valid");
     let build_platforms = BuildPlatforms::new(None).unwrap();
 
-    let mut runner = TestRunnerBuilder::default()
+    let runner = TestRunnerBuilder::default()
         .build(
             &test_list,
             profile.apply_build_platforms(&build_platforms),
@@ -106,7 +106,7 @@ fn test_run() -> Result<()> {
         )
         .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&mut runner);
+    let (instance_statuses, run_stats) = execute_collect(runner);
 
     for (binary_id, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
@@ -197,7 +197,7 @@ fn test_run_ignored() -> Result<()> {
         .expect("default config is valid");
     let build_platforms = BuildPlatforms::new(None).unwrap();
 
-    let mut runner = TestRunnerBuilder::default()
+    let runner = TestRunnerBuilder::default()
         .build(
             &test_list,
             profile.apply_build_platforms(&build_platforms),
@@ -207,7 +207,7 @@ fn test_run_ignored() -> Result<()> {
         )
         .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&mut runner);
+    let (instance_statuses, run_stats) = execute_collect(runner);
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
@@ -402,7 +402,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     if let Some(retries) = retries {
         builder.set_retries(retries);
     }
-    let mut runner = builder
+    let runner = builder
         .build(
             &test_list,
             profile,
@@ -412,7 +412,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
         )
         .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&mut runner);
+    let (instance_statuses, run_stats) = execute_collect(runner);
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
@@ -538,7 +538,7 @@ fn test_termination() -> Result<()> {
     let build_platforms = BuildPlatforms::new(None).unwrap();
     let profile = profile.apply_build_platforms(&build_platforms);
 
-    let mut runner = TestRunnerBuilder::default()
+    let runner = TestRunnerBuilder::default()
         .build(
             &test_list,
             profile,
@@ -548,7 +548,7 @@ fn test_termination() -> Result<()> {
         )
         .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&mut runner);
+    let (instance_statuses, run_stats) = execute_collect(runner);
     assert_eq!(run_stats.timed_out, 3, "3 tests timed out");
     for test_name in [
         "test_slow_timeout",

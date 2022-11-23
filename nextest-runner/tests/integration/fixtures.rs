@@ -406,10 +406,10 @@ impl fmt::Debug for InstanceStatus {
     }
 }
 
-pub(crate) fn execute_collect<'a>(
-    runner: &mut TestRunner<'a>,
+pub(crate) fn execute_collect(
+    runner: TestRunner<'_>,
 ) -> (
-    HashMap<(&'a Utf8Path, &'a str), InstanceValue<'a>>,
+    HashMap<(&'_ Utf8Path, &'_ str), InstanceValue<'_>>,
     RunStats,
 ) {
     let mut instance_statuses = HashMap::new();

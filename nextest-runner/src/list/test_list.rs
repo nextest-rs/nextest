@@ -234,6 +234,11 @@ impl<'g> TestList<'g> {
         let fut = stream.buffer_unordered(list_threads).try_collect();
 
         let rust_suites: BTreeMap<_, _> = runtime.block_on(fut)?;
+
+        // Ensure that the runtime doesn't stay hanging even if a custom test framework misbehaves
+        // (can be an issue on Windows).
+        runtime.shutdown_background();
+
         let test_count = rust_suites
             .values()
             .map(|suite| suite.status.test_count())
