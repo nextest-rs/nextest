@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0] - 2022-11-23
+
+### Changed
+
+- `guppy` updated to 0.15.0.
+- MSRV updated to Rust 1.62.
+
 ## [0.2.2] - 2022-10-14
 
 ### Internal
@@ -31,6 +38,7 @@
 
 Initial release.
 
+[0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.3.0
 [0.2.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.2
 [0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.1
 [0.2.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.0
