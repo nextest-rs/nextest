@@ -3,6 +3,21 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+### Added
+
+- On Unix platforms, a new experimental "double-spawn" approach to running test binaries has been added. The double-spawn approach will soon become the default.
+- Initial support for handling SIGTSTP (Ctrl-Z) and SIGCONT (`fg`). However, by default, note that pressing Ctrl-Z in the middle of a test run can lead to nextest runs hanging sometimes. These nondeterministic hangs will not happen if both of the following are true:
+  - Nextest is built with Rust 1.66 or above. Note that 1.66 is currently in beta, and the [pre-built binaries](https://nexte.st/book/pre-built-binaries) are built with beta Rust to pick up the fix [in upstream Rust](https://github.com/rust-lang/rust/pull/101077).
+  - The double-spawn approach is enabled (see below) with `NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1`.
+
+**Call for testing:** Please try out the double-spawn approach by setting `NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1` in your environment. It has been extensively tested and should not cause any breakages, but if it does, please [report an issue](https://github.com/nextest-rs/nextest/issues/new). Thank you!
+
+### Fixed
+
+- Fixed an issue with nextest hanging on Windows with spawned processes ([#656](https://github.com/nextest-rs/nextest/issues/656)). Thanks to [Chip Senkbeil](https://github.com/chipsenkbeil) for reporting it and providing a minimal example!
+
 ## [0.9.43] - 2022-11-04
 
 Nextest is now built with Rust 1.65. This version of Rust is the first one to spawn processes using [`posix_spawn`](https://pubs.opengroup.org/onlinepubs/007904975/functions/posix_spawn.html) rather than `fork`/`exec` on macOS, which should lead to performance benefits in some cases.
