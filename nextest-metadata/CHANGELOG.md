@@ -6,6 +6,10 @@
 
 - A new exit code, `DOUBLE_SPAWN_ERROR`, indicates that an error was encountered wile attempting to double-spawn a test process.
 
+### Changed
+
+- MSRV updated to Rust 1.62.
+
 ## [0.7.0] - 2022-10-25
 
 ### Added
