@@ -1199,7 +1199,7 @@ impl App {
             }
         };
 
-        let mut runner = runner_builder.build(
+        let runner = runner_builder.build(
             &test_list,
             profile,
             handler,

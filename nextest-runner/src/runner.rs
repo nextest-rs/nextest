@@ -210,7 +210,7 @@ impl<'a> TestRunner<'a> {
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.
-    pub fn execute<F>(&mut self, mut callback: F) -> RunStats
+    pub fn execute<F>(self, mut callback: F) -> RunStats
     where
         F: FnMut(TestEvent<'a>) + Send,
     {
@@ -225,12 +225,17 @@ impl<'a> TestRunner<'a> {
     ///
     /// Accepts a callback that is called with the results of each test. If the callback returns an
     /// error, the test run terminates and the callback is no longer called.
-    pub fn try_execute<E, F>(&mut self, callback: F) -> Result<RunStats, E>
+    pub fn try_execute<E, F>(mut self, callback: F) -> Result<RunStats, E>
     where
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
     {
-        self.inner.try_execute(&mut self.handler, callback)
+        let run_stats = self.inner.try_execute(&mut self.handler, callback);
+        // On Windows, the stdout and stderr futures might spawn processes that keep the runner
+        // stuck indefinitely if it's dropped the normal way. Shut it down aggressively, being OK
+        // with leaked resources.
+        self.inner.runtime.shutdown_background();
+        run_stats
     }
 }
 
@@ -840,8 +845,6 @@ impl<'a> TestRunnerInner<'a> {
                         res?;
                     }
                     () = sleep, if !collect_output_done => {
-                        // stdout and/or stderr haven't completed yet. In this case, break the loop
-                        // and mark this as leaked.
                         break true;
                     }
                     else => {

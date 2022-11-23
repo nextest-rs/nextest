@@ -203,7 +203,7 @@ fn test_run_with_target_runner() -> Result<()> {
         .apply_build_platforms(&build_platforms);
 
     let runner = TestRunnerBuilder::default();
-    let mut runner = runner
+    let runner = runner
         .build(
             &test_list,
             profile,
@@ -213,7 +213,7 @@ fn test_run_with_target_runner() -> Result<()> {
         )
         .unwrap();
 
-    let (instance_statuses, run_stats) = execute_collect(&mut runner);
+    let (instance_statuses, run_stats) = execute_collect(runner);
 
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
