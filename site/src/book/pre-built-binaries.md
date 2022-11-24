@@ -11,7 +11,8 @@ The quickest way to get going with nextest is to download a pre-built binary for
 These archives contain a single binary called `cargo-nextest` (`cargo-nextest.exe` on Windows). Add this binary to a location on your PATH.
 
 [^glibc]: The standard Linux binaries target glibc, and have a minimum requirement of glibc 2.27 (Ubuntu 18.04).
-[^musl]: Rust targeting Linux with musl currently has [a bug](https://github.com/rust-lang/rust/issues/99740) that Rust targeting Linux with glibc doesn't have. This bug means that nextest's linux-musl binary has slower test runs and is susceptible to more races. Only use the linux-musl binary if the standard Linux binary doesn't work in your environment.
+
+[^musl]: Rust targeting Linux with musl currently has [a bug](https://github.com/rust-lang/rust/issues/99740) that Rust targeting Linux with glibc doesn't have. This bug means that nextest's linux-musl binary has slower test runs and is susceptible to signal-related races. Only use the linux-musl binary if the standard Linux binary doesn't work in your environment.
 
 ## Downloading and installing from your terminal
 
