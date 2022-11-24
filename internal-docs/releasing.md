@@ -18,7 +18,7 @@ For a smoother experience, [set `gitsign.connectorID`](https://github.com/sigsto
 
 ## Overview
 
-The nextest workspace consists of a set of crates, each independently versioned. Releases are managed in a somewhat distributed way, with part of the process being managed by GitHub Actions runners and part of the process done locally.
+The nextest workspace consists of a set of crates, each independently versioned. Releases are managed in a somewhat distributed way, with most of the process being managed by GitHub Actions runners.
 
 ## I. Prepare releases
 
@@ -53,18 +53,6 @@ To customize the remote that https://github.com/nextest-rs/nextest is at, use `-
 
 The [GitHub Actions `release.yml` workflow](../.github/workflows/release.yml) will then pick up the tag, and will create a GitHub release corresponding to the tag. Additionally, for `cargo-nextest`, the workflow will also kick off binary builds.
 
-## III. Wait for cargo-nextest builds to complete
+Once that is completed (and for cargo-nextest, binary builds have finished and release metadata has been pushed), the crates will automatically be published to crates.io.
 
-If cargo-nextest is being released, wait for builds to complete before publishing the crates in the next step. **This is really important!** Without this, [`cargo binstall`](https://github.com/nextest-rs/nextest/blob/6264dab9b9ca18f1e1e08eb19628cf8534cbc71a/cargo-nextest/Cargo.toml#L57-L67) will temporarily stop working.
-
-You'll know that builds have completed once an "Update release metadata" commit is pushed to main ([example](https://github.com/nextest-rs/nextest/commit/ce9c7fe49b17758b1197b7fa3d2ef6a2c6f9fca2)).
-
-## IV. Publish crates to crates.io
-
-Once cargo-nextest builds are done, from the root of the repository, run:
-
-```
-cargo release publish --publish --execute
-```
-
-This will publish any crates with changed version numbers to crates.io.
+> Note: there are some issues with races and spurious network failures that happen sometimes. If it looks like an intermittent failure, feel free to retry the GitHub Actions job. The steps are meant to be idempotent.
