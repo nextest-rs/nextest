@@ -21,7 +21,7 @@ dialoguer = "0.10.2"
 duct = "0.13.5"
 enable-ansi-support = "0.1.2"
 # we don't use the default formatter so we don't need default features
-env_logger = { version = "0.9.3", default-features = false }
+env_logger = { version = "0.10.0", default-features = false }
 guppy = "0.15.0"
 log = "0.4.17"
 itertools = "0.10.5"
