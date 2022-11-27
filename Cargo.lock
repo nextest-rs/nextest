@@ -1543,6 +1543,7 @@ dependencies = [
  "tokio",
  "uuid",
  "winapi",
+ "windows-sys",
 ]
 
 [[package]]
