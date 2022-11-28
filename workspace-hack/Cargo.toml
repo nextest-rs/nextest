@@ -40,7 +40,7 @@ hashbrown = { version = "0.12.3", features = ["ahash", "inline-more", "raw"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 proc-macro2 = { version = "1.0.47", features = ["proc-macro"] }
 quote = { version = "1.0.21", features = ["proc-macro"] }
-syn = { version = "1.0.103", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
+syn = { version = "1.0.104", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.25", features = ["alloc", "std"] }
