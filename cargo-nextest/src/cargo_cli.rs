@@ -27,6 +27,14 @@ pub(crate) struct CargoOptions {
     #[arg(long, group = "cargo-opts")]
     bins: bool,
 
+    /// Test only the specified example
+    #[arg(long, group = "cargo-opts")]
+    example: Vec<String>,
+
+    /// Test all examples
+    #[arg(long, group = "cargo-opts")]
+    examples: bool,
+
     /// Test only the specified test target
     #[arg(long, group = "cargo-opts")]
     test: Vec<String>,
@@ -179,6 +187,15 @@ impl<'a> CargoCli<'a> {
             .extend(options.bin.iter().flat_map(|s| ["--bin", s.as_str()]));
         if options.bins {
             self.args.push("--bins");
+        }
+        self.args.extend(
+            options
+                .example
+                .iter()
+                .flat_map(|s| ["--example", s.as_str()]),
+        );
+        if options.examples {
+            self.args.push("--examples");
         }
         self.args
             .extend(options.test.iter().flat_map(|s| ["--test", s.as_str()]));
