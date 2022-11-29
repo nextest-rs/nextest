@@ -12,6 +12,8 @@ Cargo options:
       --lib                     Test only this package's library unit tests
       --bin <BIN>               Test only the specified binary
       --bins                    Test all binaries
+      --example <EXAMPLE>       Test only the specified example
+      --examples                Test all examples
       --test <TEST>             Test only the specified test target
       --tests                   Test all targets
       --bench <BENCH>           Test only the specified bench target
