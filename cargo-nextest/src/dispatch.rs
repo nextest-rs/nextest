@@ -1591,6 +1591,13 @@ mod tests {
             ("cargo nextest run --jobs 0", ValueValidation),
         ];
 
+        // Unset all NEXTEST_ env vars because they can conflict with the try_parse_from below.
+        for (k, _) in std::env::vars() {
+            if k.starts_with("NEXTEST_") {
+                std::env::remove_var(k);
+            }
+        }
+
         for valid_args in valid {
             if let Err(error) = CargoNextestApp::try_parse_from(
                 shell_words::split(valid_args).expect("valid command line"),
