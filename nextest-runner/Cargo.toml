@@ -66,7 +66,7 @@ tokio = { version = "1.22.0", features = [
 ] }
 toml_edit = { version = "0.15.0", features = ["easy"] }
 twox-hash = { version = "1.6.3", default-features = false }
-zstd = { version = "0.11.2", features = ["zstdmt"] }
+zstd = { version = "0.12.0", features = ["zstdmt"] }
 
 ###
 ### Update-related features, optionally enabled
