@@ -25,7 +25,7 @@ env_logger = { version = "0.10.0", default-features = false }
 guppy = "0.15.0"
 log = "0.4.17"
 itertools = "0.10.5"
-miette = { version = "5.4.1", features = ["fancy"] }
+miette = { version = "5.5.0", features = ["fancy"] }
 nextest-filtering = { version = "=0.3.0", path = "../nextest-filtering" }
 nextest-runner = { version = "=0.32.0", path = "../nextest-runner" }
 nextest-metadata = { version = "=0.7.2", path = "../nextest-metadata" }
