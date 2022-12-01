@@ -79,6 +79,10 @@ impl NextestConfig {
     /// The name of the default profile used for miri.
     pub const DEFAULT_MIRI_PROFILE: &'static str = "default-miri";
 
+    /// A list containing the names of the Nextest defined reserved profile names.
+    pub const DEFAULT_PROFILES: &'static [&'static str] =
+        &[Self::DEFAULT_PROFILE, Self::DEFAULT_MIRI_PROFILE];
+
     /// Reads the nextest config from the given file, or if not specified from `.config/nextest.toml`
     /// in the workspace root.
     ///
@@ -218,6 +222,7 @@ impl NextestConfig {
             let source = File::new(config_file.as_str(), FileFormat::Toml);
             Self::deserialize_individual_config(
                 graph,
+                workspace_root,
                 config_file,
                 Some(tool),
                 source.clone(),
@@ -242,6 +247,7 @@ impl NextestConfig {
 
         Self::deserialize_individual_config(
             graph,
+            workspace_root,
             &config_file,
             None,
             source.clone(),
@@ -266,8 +272,10 @@ impl NextestConfig {
         Ok((config.into_config_impl(), overrides_impl))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn deserialize_individual_config(
         graph: &PackageGraph,
+        workspace_root: &Utf8Path,
         config_file: &Utf8Path,
         tool: Option<&str>,
         source: File<FileSourceFile, FileFormat>,
@@ -313,6 +321,23 @@ impl NextestConfig {
         known_groups.extend(valid_groups);
 
         let this_config = this_config.into_config_impl();
+
+        let unknown_default_profiles: Vec<_> = this_config
+            .all_profiles()
+            .filter(|p| p.starts_with("default-") && !NextestConfig::DEFAULT_PROFILES.contains(p))
+            .collect();
+        if !unknown_default_profiles.is_empty() {
+            log::warn!(
+                "found unknown profiles in the reserved default- namespace in {}:",
+                config_file
+                    .strip_prefix(workspace_root)
+                    .unwrap_or(config_file),
+            );
+
+            for profile in unknown_default_profiles {
+                log::warn!("  {profile}");
+            }
+        }
 
         // Compile the overrides for this file.
         let this_overrides = NextestOverridesImpl::new(graph, &this_config)
