@@ -102,7 +102,7 @@ dunce = "1.0.3"
 
 [dev-dependencies]
 color-eyre = { version = "0.6.2", default-features = false }
-duct = "0.13.5"
+duct = "0.13.6"
 indoc = "1.0.7"
 maplit = "1.0.2"
 pathdiff = { version = "0.2.1", features = ["camino"] }
