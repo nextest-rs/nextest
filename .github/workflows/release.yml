@@ -150,35 +150,30 @@ jobs:
           # Native builds
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
-            build-tool: cargo
             container: ubuntu:18.04
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            build-tool: cargo
             container:
           - target: i686-pc-windows-msvc
             os: windows-latest
-            build-tool: cargo
             container:
 
           # Builds using cross
           - target: x86_64-unknown-linux-musl
             os: ubuntu-22.04
-            build-tool: cross
-            # musl is statically linked and uses cross, doesn't need a container
+            # musl is statically linked and uses cross
             container:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
-            build-tool: cross
             # uses cross
             container:
           - target: x86_64-unknown-freebsd
             os: ubuntu-22.04
-            build-tool: cross
+            # uses cross
             container:
           - target: x86_64-unknown-illumos
             os: ubuntu-22.04
-            build-tool: cross
+            # uses cross
             container:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
@@ -210,7 +205,6 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          build_tool: ${{ matrix.build-tool }}
           bin: cargo-nextest
           # The tag name contains the binary name so just use that.
           archive: $tag-$target
