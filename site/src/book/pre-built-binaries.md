@@ -88,8 +88,10 @@ curl -LsSf https://get.nexte.st/latest/freebsd | tar zxf - -C ${CARGO_HOME:-~/.c
 #### illumos x86_64
 
 ```
-curl -LsSf https://get.nexte.st/latest/illumos | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+curl -LsSf https://get.nexte.st/latest/illumos | gunzip | tar xf - -C ${CARGO_HOME:-~/.cargo}/bin
 ```
+
+As of 2022-12, the current version of illumos tar has [a bug](https://www.illumos.org/issues/15228) where `tar zxf` doesn't work over standard input.
 
 </details>
 
