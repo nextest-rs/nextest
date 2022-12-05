@@ -1,3 +1,2 @@
-# Temporary hack until Rust 1.64 comes out (temp-process-group-hack)
 [build.env]
-passthrough = ["RUSTC_BOOTSTRAP", "RUSTFLAGS"]
+passthrough = ["CARGO_PROFILE_RELEASE_LTO"]

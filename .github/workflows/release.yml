@@ -147,22 +147,38 @@ jobs:
     strategy:
       matrix:
         include:
+          # Native builds
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
+            build-tool: cargo
             container: ubuntu:18.04
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-22.04
-            # musl is statically linked, doesn't need a container
-            container:
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04
-            # aarch64 builds use cross which has its own container
-            container:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+            build-tool: cargo
             container:
           - target: i686-pc-windows-msvc
             os: windows-latest
+            build-tool: cargo
+            container:
+
+          # Builds using cross
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+            build-tool: cross
+            # musl is statically linked and uses cross, doesn't need a container
+            container:
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            build-tool: cross
+            # uses cross
+            container:
+          - target: x86_64-unknown-freebsd
+            os: ubuntu-22.04
+            build-tool: cross
+            container:
+          - target: x86_64-unknown-illumos
+            os: ubuntu-22.04
+            build-tool: cross
             container:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
@@ -194,6 +210,7 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
+          build_tool: ${{ matrix.build-tool }}
           bin: cargo-nextest
           # The tag name contains the binary name so just use that.
           archive: $tag-$target
@@ -221,6 +238,8 @@ jobs:
       x86_64-windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
       i686-windows-tar: ${{ steps.archive-output.outputs.i686-pc-windows-msvc-tar }}
       i686-windows-zip: ${{ steps.archive-output.outputs.i686-pc-windows-msvc-zip }}
+      x86_64-unknown-freebsd-tar: ${{ steps.archive-output.outputs.x86_64-unknown-freebsd-tar }}
+      x86_64-unknown-illumos-tar: ${{ steps.archive-output.outputs.x86_64-unknown-illumos-tar }}
 
   build-cargo-nextest-binaries-mac:
     name: Build universal cargo-nextest binary for Mac
@@ -283,7 +302,9 @@ jobs:
             --archive x86_64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-zip }} \
             --archive i686-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-tar }} \
             --archive i686-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-zip }} \
-            --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries-mac.outputs.mac-tar }}
+            --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries-mac.outputs.mac-tar }} \
+            --archive x86_64-unknown-freebsd:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-freebsd-tar }} \
+            --archive x86_64-unknown-illumos:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-illumos-tar }} \
       - name: Generate netlify redirects
         run: |
           mkdir out-dir
@@ -296,6 +317,8 @@ jobs:
             --alias windows-x86=i686-pc-windows-msvc:zip \
             --alias windows-x86-tar=i686-pc-windows-msvc:tar.gz \
             --alias mac=universal-apple-darwin:tar.gz \
+            --alias freebsd=x86_64-unknown-freebsd:tar.gz \
+            --alias illumos=x86_64-unknown-illumos:tar.gz \
       - name: Update releases.json on main branch
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
