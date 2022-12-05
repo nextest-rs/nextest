@@ -3,9 +3,12 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.45-rc.1] - 2022-12-04
+## [0.9.45] - 2022-12-04
 
-This is a test release.
+### Added
+
+* Support for listing and running tests in examples with the `--examples` and `--example <EXAMPLE>` command-line arguments. Thanks [Jed Brown](https://github.com/jedbrown) for your first contribution!
+* [Pre-built binaries](https://nexte.st/book/pre-built-binaries) are now available for FreeBSD and illumos. Due to GitHub Actions limitations, nextest is not tested on these platforms and might be broken.
 
 ## [0.9.44] - 2022-11-23
 
@@ -665,7 +668,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.45-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.45-rc.1
+[0.9.45]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.45
 [0.9.44]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.44
 [0.9.43]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43
 [0.9.42]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.42
