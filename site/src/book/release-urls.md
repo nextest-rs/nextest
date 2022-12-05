@@ -20,6 +20,8 @@ The `{platform}` identifier is:
 * `x86_64-pc-windows-msvc.tar.gz` for x86_64 Windows (tar.gz)
 * `i686-pc-windows-msvc.zip` for i686 Windows (zip)
 * `i686-pc-windows-msvc.tar.gz` for i686 Windows (tar.gz)
+* `x86_64-unknown-freebsd.tar.gz` for x86_64 FreeBSD (tar.gz)
+* `x86_64-unknown-illumos.tar.gz` for x86_64 illumos (tar.gz)
 
 For convenience, the following shortcuts are defined:
 
@@ -31,6 +33,8 @@ For convenience, the following shortcuts are defined:
 * `windows-tar` points to `x86_64-pc-windows-msvc.tar.gz`
 * `windows-x86` points to `i686-pc-windows-msvc.zip`
 * `windows-x86-tar` points to `i686-pc-windows-msvc.tar.gz`
+* `freebsd` points to `x86_64-unknown-freebsd.tar.gz`
+* `illumos` points to `x86_64-unknown-illumos.tar.gz`
 
 Also, each release's canonical GitHub Releases URL is available at **`https://get.nexte.st/{version}/release`**. For example, the latest GitHub release is avaiable at [get.nexte.st/latest/release](https://get.nexte.st/latest/release).
 

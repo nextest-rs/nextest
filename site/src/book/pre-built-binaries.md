@@ -3,10 +3,20 @@
 The quickest way to get going with nextest is to download a pre-built binary for your platform. The latest nextest release is available at:
 * [**get.nexte.st/latest/linux**](https://get.nexte.st/latest/linux) for Linux x86_64, including Windows Subsystem for Linux (WSL)[^glibc]
 * [**get.nexte.st/latest/linux-arm**](https://get.nexte.st/latest/linux-arm) for Linux aarch64[^glibc]
-* [**get.nexte.st/latest/linux-musl**](https://get.nexte.st/latest/linux-musl) for Linux x86_64, with musl libc[^musl]
 * [**get.nexte.st/latest/mac**](https://get.nexte.st/latest/mac) for macOS, both x86_64 and Apple Silicon
 * [**get.nexte.st/latest/windows**](https://get.nexte.st/latest/windows) for Windows x86_64
+
+<details>
+<summary><i>Other platforms</i></summary>
+
+Nextest's CI isn't run on these platforms -- these binaries most likely work but aren't guaranteed to do so.
+
+* [**get.nexte.st/latest/linux-musl**](https://get.nexte.st/latest/linux-musl) for Linux x86_64, with musl libc[^musl]
 * [**get.nexte.st/latest/windows-x86**](https://get.nexte.st/latest/windows-x86) for Windows i686
+* [**get.nexte.st/latest/freebsd**](https://get.nexte.st/latest/freebsd) for FreeBSD x86_64
+* [**get.nexte.st/latest/illumos**](https://get.nexte.st/latest/illumos) for illumos x86_64
+
+</details>
 
 These archives contain a single binary called `cargo-nextest` (`cargo-nextest.exe` on Windows). Add this binary to a location on your PATH.
 
@@ -22,19 +32,19 @@ The instructions below are suitable for both end users and CI. These links will 
 >
 > If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](stability.md) for more), replace `latest` in the URL with `0.9`.
 
-### Linux x86_64
+#### Linux x86_64
 
 ```
 curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
 ```
 
-### Linux aarch64
+#### Linux aarch64
 
 ```
 curl -LsSf https://get.nexte.st/latest/linux-arm | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
 ```
 
-### macOS (x86_64 and Apple Silicon)
+#### macOS (x86_64 and Apple Silicon)
 
 ```
 curl -LsSf https://get.nexte.st/latest/mac | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -42,7 +52,7 @@ curl -LsSf https://get.nexte.st/latest/mac | tar zxf - -C ${CARGO_HOME:-~/.cargo
 
 This will download a universal binary that works on both Intel and Apple Silicon Macs.
 
-### Windows x86_64 using PowerShell
+#### Windows x86_64 using PowerShell
 
 Run this in PowerShell:
 
@@ -54,7 +64,7 @@ $tmp | Expand-Archive -DestinationPath $outputDir -Force
 $tmp | Remove-Item
 ```
 
-### Windows x86_64 using Unix tools
+#### Windows x86_64 using Unix tools
 
 If you have access to a Unix shell, `curl` and `tar` *natively* on Windows (for example if you're using `shell: bash` on GitHub Actions):
 
@@ -65,6 +75,23 @@ curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-
 > **Note:** Windows Subsystem for Linux (WSL) users should follow the [Linux x86_64 instructions](#linux-x86_64).
 >
 > If you're a Windows expert who can come up with a better way to do this, please [add a suggestion to this issue](https://github.com/nextest-rs/nextest/issues/31)!
+
+<details>
+<summary><i>Other platforms</i></summary>
+
+#### FreeBSD x86_64
+
+```
+curl -LsSf https://get.nexte.st/latest/freebsd | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+```
+
+#### illumos x86_64
+
+```
+curl -LsSf https://get.nexte.st/latest/illumos | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+```
+
+</details>
 
 ### Using cargo-binstall
 
