@@ -145,7 +145,7 @@ impl AppOpts {
                     cargo_options,
                     self.config_opts,
                     self.manifest_path,
-                    false,
+                    build_filter_needs_deps(&build_filter),
                     output_writer,
                 )?;
                 let app = App::new(base, build_filter)?;
