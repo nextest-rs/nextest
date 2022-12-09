@@ -28,7 +28,7 @@ miette = { version = "5.5.0", features = ["atty", "backtrace", "fancy", "fancy-n
 nom-tracable = { version = "0.8.0", features = ["trace"] }
 num-traits = { version = "0.2.15", default-features = false, features = ["std"] }
 owo-colors = { version = "3.5.0", default-features = false, features = ["supports-color", "supports-colors"] }
-serde = { version = "1.0.148", features = ["alloc", "derive", "serde_derive", "std"] }
+serde = { version = "1.0.149", features = ["alloc", "derive", "serde_derive", "std"] }
 serde_json = { version = "1.0.89", features = ["std", "unbounded_depth"] }
 target-spec = { version = "1.2.2", default-features = false, features = ["serde", "summaries"] }
 tokio = { version = "1.22.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "num_cpus", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "sync", "time", "tokio-macros", "tracing"] }
