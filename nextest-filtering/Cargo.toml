@@ -17,7 +17,7 @@ default = []
 trace = ["nom-tracable/trace"]
 
 [dependencies]
-guppy = "0.15.0"
+guppy = "0.15.1"
 miette = "5.5.0"
 nom = "7.1.1"
 nom-tracable = "0.8.0"
