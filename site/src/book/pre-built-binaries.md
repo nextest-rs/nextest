@@ -115,6 +115,14 @@ If you have [Homebrew](https://brew.sh/) available, install nextest with:
 brew install cargo-nextest
 ```
 
+### Using Pacman
+
+If you are using [Arch Linux](https://archlinux.org), you can install nextest with [Pacman](https://wiki.archlinux.org/title/Pacman) as follows:
+
+```
+pacman -S cargo-nextest
+```
+
 ## Using pre-built binaries in CI
 
 Pre-built binaries can be used in continuous integration to speed up test runs.
