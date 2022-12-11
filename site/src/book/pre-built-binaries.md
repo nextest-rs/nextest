@@ -105,7 +105,7 @@ cargo binstall cargo-nextest --secure
 
 ## Community-maintained binaries
 
-These binaries are not supported by the nextest team. They are maintained by the community.
+These binaries are maintained by the community—*thank you for doing so!*
 
 ### Using Homebrew
 
