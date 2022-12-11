@@ -1,2 +1,7 @@
 [build.env]
 passthrough = ["CARGO_PROFILE_RELEASE_LTO"]
+
+[target.x86_64-unknown-freebsd]
+# The current cross 0.2.4 docker image doesn't have the memstat library on FreeBSD.
+# https://github.com/cross-rs/cross/pull/1166
+image = "ghcr.io/cross-rs/x86_64-unknown-freebsd:edge"

@@ -2,7 +2,7 @@
 
 ## [0.33.0] - 2022-12-10
 
-See the changelog for [cargo-nextest 0.9.46](https://nexte.st/CHANGELOG.html#0946---2022-12-10).
+See the changelog for [cargo-nextest 0.9.47](https://nexte.st/CHANGELOG.html#0947---2022-12-10).
 
 ## [0.32.0] - 2022-11-23
 
