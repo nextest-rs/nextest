@@ -6,6 +6,7 @@
 use crate::output::OutputContext;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Args;
+use guppy::graph::PackageGraph;
 use std::path::PathBuf;
 
 /// Options passed down to cargo.
@@ -141,6 +142,19 @@ pub(crate) struct CargoOptions {
     /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
     #[clap(short = 'Z', value_name = "FLAG", group = "cargo-opts")]
     unstable_flags: Vec<String>,
+}
+
+impl CargoOptions {
+    fn needs_default_members_warning(&self, graph: &PackageGraph) -> bool {
+        // If any package-related options are passed in, don't produce a warning.
+        if !self.packages.is_empty() || self.workspace || self.all {
+            return false;
+        }
+
+        // TODO: figure out whether this will cause everything to be built. Factors to consider:
+        // * symlinks
+        // * exact behavior with nested directories
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -863,6 +863,32 @@ pub enum CargoConfigError {
     },
 }
 
+/// An error occurred while parsing a root Cargo.toml.
+#[derive(Debug, Error)]
+pub enum RootCargoTomlError {
+    /// Error reading a file from disk.
+    #[error("failed to read workspace `{path}`")]
+    ReadError {
+        /// The path to the file.
+        path: Utf8PathBuf,
+
+        /// The inner error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Error parsing the `Cargo.toml` file.
+    #[error("failed to parse workspace `{path}`")]
+    ParseError {
+        /// The path to the file.
+        path: Utf8PathBuf,
+
+        /// The error that occurred trying to deserialize the file.
+        #[source]
+        error: toml_edit::easy::de::Error,
+    },
+}
+
 /// The reason an invalid CLI config failed.
 ///
 /// Part of [`CargoConfigError::InvalidCliConfig`].

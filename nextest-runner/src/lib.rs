@@ -10,6 +10,7 @@
 //! post](https://sunshowers.io/posts/nextest-and-tokio/).
 
 pub mod cargo_config;
+pub mod cargo_toml;
 pub mod config;
 #[cfg(feature = "experimental-tokio-console")]
 pub mod console;
