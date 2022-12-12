@@ -36,7 +36,7 @@ For convenience, the following shortcuts are defined:
 * `freebsd` points to `x86_64-unknown-freebsd.tar.gz`
 * `illumos` points to `x86_64-unknown-illumos.tar.gz`
 
-Also, each release's canonical GitHub Releases URL is available at **`https://get.nexte.st/{version}/release`**. For example, the latest GitHub release is avaiable at [get.nexte.st/latest/release](https://get.nexte.st/latest/release).
+Also, each release's canonical GitHub Releases URL is available at **`https://get.nexte.st/{version}/release`**. For example, the latest GitHub release is available at [get.nexte.st/latest/release](https://get.nexte.st/latest/release).
 
 ### Examples
 

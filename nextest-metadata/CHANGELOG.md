@@ -4,7 +4,7 @@
 
 ### Added
 
-- A new exit code, `DOUBLE_SPAWN_ERROR`, indicates that an error was encountered wile attempting to double-spawn a test process.
+- A new exit code, `DOUBLE_SPAWN_ERROR`, indicates that an error was encountered while attempting to double-spawn a test process.
 
 ### Changed
 

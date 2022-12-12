@@ -172,7 +172,7 @@ pub enum TargetTripleSource {
         source: CargoConfigSource,
     },
 
-    /// The platform runner was defined trough a metadata file provided using the --archive-file or
+    /// The platform runner was defined through a metadata file provided using the --archive-file or
     /// the `--binaries-metadata` CLI option
     Metadata,
 }
