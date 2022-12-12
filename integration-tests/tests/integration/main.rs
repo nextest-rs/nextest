@@ -121,7 +121,7 @@ fn test_target_dir() {
         );
     };
 
-    // Absolute target direcctory
+    // Absolute target directory
     {
         let abs_target_dir = p.workspace_root().join("test-target-dir-abs");
         run_check(

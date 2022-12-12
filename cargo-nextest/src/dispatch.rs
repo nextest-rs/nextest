@@ -1469,7 +1469,7 @@ mod tests {
             // ---
             // Test binary arguments
             // ---
-            "cargo nextest run -- --a an arbitary arg",
+            "cargo nextest run -- --a an arbitrary arg",
             // Test negative test threads
             "cargo nextest run --jobs -3",
             "cargo nextest run --jobs 3",

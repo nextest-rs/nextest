@@ -3,7 +3,7 @@
 
 use thiserror::Error;
 
-/// An error that occurrs while serializing a [`Report`](crate::Report).
+/// An error that occurs while serializing a [`Report`](crate::Report).
 ///
 /// Returned by [`Report::serialize`](crate::Report::serialize) and
 /// [`Report::to_string`](crate::Report::to_string).

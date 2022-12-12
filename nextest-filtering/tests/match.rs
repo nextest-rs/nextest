@@ -712,7 +712,7 @@ fn test_binary_query() {
         }),
         Some(true)
     );
-    // platform = host shold match the second predicate.
+    // platform = host should match the second predicate.
     assert_eq!(
         expr.matches_binary(&BinaryQuery {
             package_id: &pid_b,
@@ -722,7 +722,7 @@ fn test_binary_query() {
         }),
         Some(true)
     );
-    // kind = bench shold match the third predicate.
+    // kind = bench should match the third predicate.
     assert_eq!(
         expr.matches_binary(&BinaryQuery {
             package_id: &pid_a,
