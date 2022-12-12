@@ -88,7 +88,7 @@ console-subscriber = { version = "0.1.8", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.138"
-nix = { version = "0.25.1", default-features = false, features = ["signal"] }
+nix = { version = "0.26.1", default-features = false, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.42.0", features = [
