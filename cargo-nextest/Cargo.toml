@@ -19,7 +19,7 @@ clap = { version = "4.0.29", features = ["derive", "env"] }
 color-eyre = { version = "0.6.2", default-features = false }
 dialoguer = "0.10.2"
 duct = "0.13.6"
-enable-ansi-support = "0.1.2"
+enable-ansi-support = "0.2.1"
 # we don't use the default formatter so we don't need default features
 env_logger = { version = "0.10.0", default-features = false }
 guppy = "0.15.1"
