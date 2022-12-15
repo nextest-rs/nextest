@@ -35,7 +35,7 @@ tokio = { version = "1.23.0", features = ["bytes", "io-util", "libc", "macros", 
 uuid = { version = "1.2.2", features = ["getrandom", "rng", "std", "v4"] }
 
 [build-dependencies]
-cc = { version = "1.0.77", default-features = false, features = ["jobserver", "parallel"] }
+cc = { version = "1.0.78", default-features = false, features = ["jobserver", "parallel"] }
 hashbrown = { version = "0.12.3", features = ["ahash", "inline-more", "raw"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 proc-macro2 = { version = "1.0.47", features = ["proc-macro"] }
