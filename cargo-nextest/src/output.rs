@@ -132,21 +132,6 @@ impl Color {
     }
 }
 
-impl std::str::FromStr for Color {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "auto" => Ok(Color::Auto),
-            "always" => Ok(Color::Always),
-            "never" => Ok(Color::Never),
-            s => Err(format!(
-                "{s} is not a valid option, expected `auto`, `always` or `never`"
-            )),
-        }
-    }
-}
-
 fn format_fn(f: &mut Formatter, record: &Record<'_>) -> std::io::Result<()> {
     if record.target() == "cargo_nextest::no_heading" {
         writeln!(f, "{}", record.args())?;
