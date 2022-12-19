@@ -31,12 +31,11 @@ impl fmt::Display for CommandError {
             }
             Self::CommandFailed { exit_code, stderr } => {
                 let exit_code_str =
-                    exit_code.map_or(String::new(), |code| format!(" with exit code {}", code));
+                    exit_code.map_or(String::new(), |code| format!(" with exit code {code}"));
                 let stderr = String::from_utf8_lossy(stderr);
                 write!(
                     f,
-                    "`cargo nextest` failed{}, stderr:\n{}\n",
-                    exit_code_str, stderr
+                    "`cargo nextest` failed{exit_code_str}, stderr:\n{stderr}\n"
                 )
             }
             Self::Json(_) => {

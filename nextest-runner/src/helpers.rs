@@ -123,7 +123,7 @@ pub(crate) fn format_duration(duration: Duration) -> String {
     if duration > 60.0 {
         format!("{}m {:.2}s", duration as u32 / 60, duration % 60.0)
     } else {
-        format!("{:.2}s", duration)
+        format!("{duration:.2}s")
     }
 }
 

@@ -165,7 +165,7 @@ impl TestCommand {
         // Expose paths to non-test binaries at runtime so that relocated paths work.
         // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.
         for (name, path) in non_test_binaries {
-            cmd.env(format!("NEXTEST_BIN_EXE_{}", name), path);
+            cmd.env(format!("NEXTEST_BIN_EXE_{name}"), path);
         }
 
         let double_spawn = ctx.double_spawn.spawn_context();

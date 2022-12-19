@@ -189,7 +189,7 @@ fn serialize_test_case(
         testcase_tag.push_attribute(("classname", classname.as_str()));
     }
     if let Some(assertions) = assertions {
-        testcase_tag.push_attribute(("assertions", format!("{}", assertions).as_str()));
+        testcase_tag.push_attribute(("assertions", format!("{assertions}").as_str()));
     }
 
     if let Some(timestamp) = timestamp {

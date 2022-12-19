@@ -86,7 +86,7 @@ impl<'a> Unarchiver<'a> {
 
         // Extract the archive.
         self.file
-            .seek(io::SeekFrom::Start(0))
+            .rewind()
             .map_err(|error| ArchiveExtractError::Read(ArchiveReadError::Io(error)))?;
         let mut archive_reader =
             ArchiveReader::new(self.file, self.format).map_err(ArchiveExtractError::Read)?;

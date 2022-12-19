@@ -1518,8 +1518,7 @@ mod tests {
 
                 assert!(
                     err_str.contains(expected_err_str),
-                    "expected error string not found: {}",
-                    err_str,
+                    "expected error string not found: {err_str}",
                 )
             }
         }

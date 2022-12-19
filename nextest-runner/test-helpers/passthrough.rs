@@ -10,7 +10,7 @@ use std::{
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    eprintln!("[passthrough] args: {:?}", args);
+    eprintln!("[passthrough] args: {args:?}");
 
     if args[1] != "--ensure-this-arg-is-sent" {
         eprintln!("[passthrough] --ensure-this-arg-is-sent not passed as the first element");

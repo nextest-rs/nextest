@@ -33,7 +33,7 @@ fn load_graph(path: Option<Utf8PathBuf>) -> PackageGraph {
         Some(path) => match std::fs::read_to_string(path) {
             Ok(json) => json,
             Err(err) => {
-                eprintln!("Failed to read cargo-metadata file: {}", err);
+                eprintln!("Failed to read cargo-metadata file: {err}");
                 std::process::exit(1);
             }
         },
@@ -43,7 +43,7 @@ fn load_graph(path: Option<Utf8PathBuf>) -> PackageGraph {
     match PackageGraph::from_json(json) {
         Ok(graph) => graph,
         Err(err) => {
-            eprintln!("Failed to parse cargo-metadata: {}", err);
+            eprintln!("Failed to parse cargo-metadata: {err}");
             std::process::exit(1);
         }
     }
@@ -54,11 +54,11 @@ fn main() {
 
     let graph = load_graph(args.cargo_metadata);
     match nextest_filtering::FilteringExpr::parse(&args.expr, &graph) {
-        Ok(expr) => println!("{:?}", expr),
+        Ok(expr) => println!("{expr:?}"),
         Err(FilterExpressionParseErrors { input, errors, .. }) => {
             for error in errors {
                 let report = miette::Report::new(error).with_source_code(input.clone());
-                eprintln!("{:?}", report);
+                eprintln!("{report:?}");
             }
             std::process::exit(1);
         }

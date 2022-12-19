@@ -123,7 +123,7 @@ pub fn cargo_bin() -> String {
     match std::env::var("CARGO") {
         Ok(v) => v,
         Err(std::env::VarError::NotPresent) => "cargo".to_owned(),
-        Err(err) => panic!("error obtaining CARGO env var: {}", err),
+        Err(err) => panic!("error obtaining CARGO env var: {err}"),
     }
 }
 
@@ -350,9 +350,9 @@ pub fn check_list_binaries_output(stdout: &[u8]) {
 fn make_check_result_regex(result: bool, name: &str) -> Regex {
     let name = regex::escape(name);
     if result {
-        Regex::new(&format!(r"PASS \[.*\] *{}", name)).unwrap()
+        Regex::new(&format!(r"PASS \[.*\] *{name}")).unwrap()
     } else {
-        Regex::new(&format!(r"(FAIL|ABORT|SIGSEGV) \[.*\] *{}", name)).unwrap()
+        Regex::new(&format!(r"(FAIL|ABORT|SIGSEGV) \[.*\] *{name}")).unwrap()
     }
 }
 
@@ -363,7 +363,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
 
     let output = String::from_utf8(stderr.to_vec()).unwrap();
 
-    println!("{}", output);
+    println!("{output}");
 
     let cwd_pass = !relocated;
 
@@ -407,7 +407,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
 
     for (result, name) in expected {
         let reg = make_check_result_regex(*result, name);
-        assert!(reg.is_match(&output), "{}: result didn't match", name);
+        assert!(reg.is_match(&output), "{name}: result didn't match");
     }
 
     let summary_reg = if relocated {
@@ -419,7 +419,6 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     };
     assert!(
         summary_reg.is_match(&output),
-        "summary didn't match (actual output: {}, relocated: {relocated})",
-        output
+        "summary didn't match (actual output: {output}, relocated: {relocated})"
     );
 }

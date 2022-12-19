@@ -140,7 +140,7 @@ impl ReuseBuildOpts {
             )
             .map_err(|err| ExpectedError::ArchiveExtractError {
                 archive_file: archive_file.clone(),
-                err,
+                err: Box::new(err),
             });
         }
 

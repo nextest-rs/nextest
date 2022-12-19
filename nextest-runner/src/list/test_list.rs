@@ -532,8 +532,7 @@ impl<'g> TestList<'g> {
                     CreateTestListError::parse_line(
                         binary_id,
                         format!(
-                            "line '{}' did not end with the string ': test' or ': benchmark'",
-                            line
+                            "line '{line}' did not end with the string ': test' or ': benchmark'"
                         ),
                         list_output,
                     )

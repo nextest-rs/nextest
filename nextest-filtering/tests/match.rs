@@ -19,8 +19,7 @@ fn load_graph() -> guppy::graph::PackageGraph {
 
 fn mk_pid(c: char) -> PackageId {
     PackageId::new(format!(
-        "crate_{} 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-{})",
-        c, c
+        "crate_{c} 0.1.0 (path+file:///home/fakeuser/tests-workspace/crate-{c})"
     ))
 }
 
@@ -28,7 +27,7 @@ fn mk_pid(c: char) -> PackageId {
 fn test_expr_package_contains() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("package(~_a)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');
@@ -66,7 +65,7 @@ fn test_expr_package_contains() {
 fn test_expr_package_equal() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("package(=crate_a)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');
@@ -104,7 +103,7 @@ fn test_expr_package_equal() {
 fn test_expr_package_regex() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("package(/crate_(a|b)/)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');
@@ -142,7 +141,7 @@ fn test_expr_package_regex() {
 fn test_expr_deps() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("deps(crate_d)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');
@@ -230,7 +229,7 @@ fn test_expr_deps() {
 fn test_expr_rdeps() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("rdeps(crate_d)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');
@@ -343,7 +342,7 @@ fn test_expr_with_no_matching_packages() {
 fn test_expr_kind() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("kind(lib)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
@@ -382,7 +381,7 @@ fn test_expr_kind() {
 fn test_expr_binary() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("binary(my-binary)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
@@ -421,7 +420,7 @@ fn test_expr_binary() {
 fn test_expr_platform() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("platform(host)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
@@ -446,7 +445,7 @@ fn test_expr_platform() {
     }));
 
     let expr = FilteringExpr::parse("platform(target)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
@@ -475,7 +474,7 @@ fn test_expr_platform() {
 fn test_expr_kind_partial() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("kind(~tes)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
@@ -504,7 +503,7 @@ fn test_expr_kind_partial() {
 fn test_expr_test() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("test(parse)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');
@@ -545,7 +544,7 @@ fn test_expr_test() {
 fn test_expr_test_not() {
     let graph = load_graph();
     let expr = FilteringExpr::parse("not test(parse)", &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     assert!(!expr.matches_test(&TestQuery {
@@ -576,7 +575,7 @@ fn test_expr_test_not() {
 fn test_expr_test_union(input: &str) {
     let graph = load_graph();
     let expr = FilteringExpr::parse(input, &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
@@ -616,7 +615,7 @@ fn test_expr_test_union(input: &str) {
 fn test_expr_test_difference(input: &str) {
     let graph = load_graph();
     let expr = FilteringExpr::parse(input, &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
@@ -656,7 +655,7 @@ fn test_expr_test_difference(input: &str) {
 fn test_expr_test_intersect(input: &str) {
     let graph = load_graph();
     let expr = FilteringExpr::parse(input, &graph).unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
     let pid_a = mk_pid('a');
     assert!(!expr.matches_test(&TestQuery {
         binary_query: BinaryQuery {
@@ -698,7 +697,7 @@ fn test_binary_query() {
         &graph,
     )
     .unwrap();
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');

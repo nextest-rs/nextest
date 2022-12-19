@@ -276,7 +276,7 @@ fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
     let cmd_name = match env::var("CARGO") {
         Ok(v) => v,
         Err(env::VarError::NotPresent) => "cargo".to_owned(),
-        Err(err) => panic!("error obtaining CARGO env var: {}", err),
+        Err(err) => panic!("error obtaining CARGO env var: {err}"),
     };
 
     let expr = cmd!(
@@ -387,7 +387,7 @@ pub(crate) enum InstanceStatus {
 impl fmt::Debug for InstanceStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            InstanceStatus::Skipped(reason) => write!(f, "skipped: {}", reason),
+            InstanceStatus::Skipped(reason) => write!(f, "skipped: {reason}"),
             InstanceStatus::Finished(run_statuses) => {
                 for run_status in run_statuses.iter() {
                     write!(

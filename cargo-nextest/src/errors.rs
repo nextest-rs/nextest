@@ -87,7 +87,7 @@ pub enum ExpectedError {
     ArchiveExtractError {
         archive_file: Utf8PathBuf,
         #[source]
-        err: ArchiveExtractError,
+        err: Box<ArchiveExtractError>,
     },
     #[error("path mapper construct error")]
     PathMapperConstructError {
@@ -443,7 +443,7 @@ impl ExpectedError {
             } => {
                 log::error!(
                     "argument {} specified file `{}` that couldn't be read",
-                    format!("--{}", arg_name).if_supports_color(Stream::Stderr, |x| x.bold()),
+                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
                     file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
                 );
                 Some(err as &dyn Error)
@@ -480,7 +480,7 @@ impl ExpectedError {
             } => {
                 log::error!(
                     "argument {} specified JSON file `{}` that couldn't be deserialized",
-                    format!("--{}", arg_name).if_supports_color(Stream::Stderr, |x| x.bold()),
+                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
                     file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
                 );
                 Some(err as &dyn Error)
@@ -488,7 +488,7 @@ impl ExpectedError {
             Self::PathMapperConstructError { arg_name, err } => {
                 log::error!(
                     "argument {} specified `{}` that couldn't be read",
-                    format!("--{}", arg_name).if_supports_color(Stream::Stderr, |x| x.bold()),
+                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
                     err.input().if_supports_color(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)

@@ -219,7 +219,7 @@ fn test_run_with_target_runner() -> Result<()> {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(*name)
-            .unwrap_or_else(|| panic!("unexpected test name {}", name));
+            .unwrap_or_else(|| panic!("unexpected test name {name}"));
         for fixture in expected {
             let instance_value = instance_statuses
                 .get(&(test_binary.binary_path.as_path(), fixture.name))

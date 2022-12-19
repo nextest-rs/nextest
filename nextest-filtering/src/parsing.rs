@@ -920,7 +920,7 @@ mod tests {
         let error = errors.remove(0);
         let (span, message) = match error {
             ParseSingleError::InvalidRegex { span, message } => (span, message),
-            other => panic!("expected invalid regex with details, found {}", other),
+            other => panic!("expected invalid regex with details, found {other}"),
         };
         assert_eq!(span, (12, 1).into(), "span matches");
         assert_eq!(message, "unclosed group");
@@ -999,7 +999,7 @@ mod tests {
     fn test_complex_error() {
         let src = "all) + package(/not) - deps(expr none)";
         let mut errors = parse_err(src);
-        assert_eq!(2, errors.len(), "{:?}", errors);
+        assert_eq!(2, errors.len(), "{errors:?}");
         let error = errors.remove(0);
         assert_error!(error, ExpectedOpenParenthesis, 3, 0);
         let error = errors.remove(0);

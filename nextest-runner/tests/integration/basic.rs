@@ -57,7 +57,7 @@ fn test_list_tests() -> Result<()> {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(*name)
-            .unwrap_or_else(|| panic!("unexpected test name {}", name));
+            .unwrap_or_else(|| panic!("unexpected test name {name}"));
         let info = summary
             .rust_suites
             .remove(&test_binary.binary_id)
@@ -112,7 +112,7 @@ fn test_run() -> Result<()> {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(*binary_id)
-            .unwrap_or_else(|| panic!("unexpected binary ID {}", binary_id));
+            .unwrap_or_else(|| panic!("unexpected binary ID {binary_id}"));
         for fixture in expected {
             let instance_value = instance_statuses
                 .get(&(test_binary.binary_path.as_path(), fixture.name))
@@ -213,7 +213,7 @@ fn test_run_ignored() -> Result<()> {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(*name)
-            .unwrap_or_else(|| panic!("unexpected test name {}", name));
+            .unwrap_or_else(|| panic!("unexpected test name {name}"));
         for fixture in expected {
             if fixture.name.contains("test_slow_timeout") {
                 // These tests are filtered out by the expression above.
@@ -418,7 +418,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(*name)
-            .unwrap_or_else(|| panic!("unexpected test name {}", name));
+            .unwrap_or_else(|| panic!("unexpected test name {name}"));
         for fixture in expected {
             let instance_value =
                 &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];

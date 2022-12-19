@@ -86,10 +86,7 @@ impl FromStr for PartitionerBuilder {
         } else {
             Err(PartitionerBuilderParseError::new(
                 None,
-                format!(
-                    "partition input '{}' must begin with \"hash:\" or \"count:\"",
-                    s
-                ),
+                format!("partition input '{s}' must begin with \"hash:\" or \"count:\""),
             ))
         }
     }
@@ -106,24 +103,21 @@ fn parse_shards(
     let total_shards_str = split.next().ok_or_else(|| {
         PartitionerBuilderParseError::new(
             Some(expected_format),
-            format!("expected input '{}' to be in the format M/N", input),
+            format!("expected input '{input}' to be in the format M/N"),
         )
     })?;
 
     let shard: u64 = shard_str.parse().map_err(|err| {
         PartitionerBuilderParseError::new(
             Some(expected_format),
-            format!("failed to parse shard '{}' as u64: {}", shard_str, err),
+            format!("failed to parse shard '{shard_str}' as u64: {err}"),
         )
     })?;
 
     let total_shards: u64 = total_shards_str.parse().map_err(|err| {
         PartitionerBuilderParseError::new(
             Some(expected_format),
-            format!(
-                "failed to parse total_shards '{}' as u64: {}",
-                total_shards_str, err
-            ),
+            format!("failed to parse total_shards '{total_shards_str}' as u64: {err}"),
         )
     })?;
 
@@ -132,8 +126,7 @@ fn parse_shards(
         return Err(PartitionerBuilderParseError::new(
             Some(expected_format),
             format!(
-                "shard {} must be a number between 1 and total shards {}, inclusive",
-                shard, total_shards
+                "shard {shard} must be a number between 1 and total shards {total_shards}, inclusive"
             ),
         ));
     }
@@ -237,18 +230,16 @@ mod tests {
         for (input, output) in successes {
             assert_eq!(
                 PartitionerBuilder::from_str(input).unwrap_or_else(|err| panic!(
-                    "expected input '{}' to succeed, failed with: {}",
-                    input, err
+                    "expected input '{input}' to succeed, failed with: {err}"
                 )),
                 output,
-                "success case '{}' matches",
-                input,
+                "success case '{input}' matches",
             );
         }
 
         for input in failures {
             PartitionerBuilder::from_str(input)
-                .expect_err(&format!("expected input '{}' to fail", input));
+                .expect_err(&format!("expected input '{input}' to fail"));
         }
     }
 }

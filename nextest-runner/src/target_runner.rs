@@ -202,7 +202,7 @@ impl PlatformRunner {
     #[doc(hidden)]
     pub fn runner_env_var(target: &Platform) -> String {
         let triple_str = target.triple_str().to_ascii_uppercase().replace('-', "_");
-        format!("CARGO_TARGET_{}_RUNNER", triple_str)
+        format!("CARGO_TARGET_{triple_str}_RUNNER")
     }
 
     fn parse_runner(

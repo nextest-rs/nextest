@@ -141,8 +141,7 @@ impl std::str::FromStr for Color {
             "always" => Ok(Color::Always),
             "never" => Ok(Color::Never),
             s => Err(format!(
-                "{} is not a valid option, expected `auto`, `always` or `never`",
-                s
+                "{s} is not a valid option, expected `auto`, `always` or `never`"
             )),
         }
     }

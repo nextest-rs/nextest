@@ -1407,7 +1407,7 @@ fn log_platform_runner(prefix: &str, runner: &PlatformRunner) {
 
 fn warn_on_err(thing: &str, err: &(dyn std::error::Error)) -> Result<(), std::fmt::Error> {
     let mut s = String::with_capacity(256);
-    write!(s, "could not determine {thing}: {}", err)?;
+    write!(s, "could not determine {thing}: {err}")?;
     let mut next_error = err.source();
     while let Some(err) = next_error {
         write!(
@@ -1616,10 +1616,7 @@ mod tests {
             if let Err(error) = CargoNextestApp::try_parse_from(
                 shell_words::split(valid_args).expect("valid command line"),
             ) {
-                panic!(
-                    "{} should have successfully parsed, but didn't: {}",
-                    valid_args, error
-                );
+                panic!("{valid_args} should have successfully parsed, but didn't: {error}");
             }
         }
 
@@ -1628,17 +1625,13 @@ mod tests {
                 shell_words::split(invalid_args).expect("valid command"),
             ) {
                 Ok(_) => {
-                    panic!(
-                        "{} should have errored out but successfully parsed",
-                        invalid_args
-                    );
+                    panic!("{invalid_args} should have errored out but successfully parsed");
                 }
                 Err(error) => {
                     let actual_kind = error.kind();
                     if kind != actual_kind {
                         panic!(
-                            "{} should error with kind {kind:?}, but actual kind was {actual_kind:?}",
-                            invalid_args,
+                            "{invalid_args} should error with kind {kind:?}, but actual kind was {actual_kind:?}",
                         );
                     }
                 }
@@ -1656,7 +1649,7 @@ mod tests {
     fn test_test_binary_argument_parsing() {
         fn get_test_filter_builder(cmd: &str) -> Result<TestFilterBuilder> {
             let app = TestCli::try_parse_from(shell_words::split(cmd).expect("valid command line"))
-                .unwrap_or_else(|_| panic!("{} should have successfully parsed", cmd));
+                .unwrap_or_else(|_| panic!("{cmd} should have successfully parsed"));
             app.build_filter.make_test_filter_builder(vec![])
         }
 
@@ -1702,11 +1695,11 @@ mod tests {
         for (a, b) in valid {
             let a_str = format!(
                 "{:?}",
-                get_test_filter_builder(a).unwrap_or_else(|_| panic!("failed to parse {}", a))
+                get_test_filter_builder(a).unwrap_or_else(|_| panic!("failed to parse {a}"))
             );
             let b_str = format!(
                 "{:?}",
-                get_test_filter_builder(b).unwrap_or_else(|_| panic!("failed to parse {}", b))
+                get_test_filter_builder(b).unwrap_or_else(|_| panic!("failed to parse {b}"))
             );
             assert_eq!(a_str, b_str);
         }
