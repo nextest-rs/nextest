@@ -673,7 +673,7 @@ impl<'a> TestRunnerInner<'a> {
         command_mut.env("__NEXTEST_ATTEMPT", format!("{}", retry_data.attempt));
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
         command_mut.stdin(Stdio::null());
-        imp::cmd_pre_exec(command_mut);
+        imp::set_process_group(command_mut);
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
         // best-effort thing.
@@ -1609,7 +1609,7 @@ mod imp {
         Ok(())
     }
 
-    pub(super) fn cmd_pre_exec(_cmd: &mut std::process::Command) {
+    pub(super) fn set_process_group(_cmd: &mut std::process::Command) {
         // TODO: set process group on Windows for better ctrl-C handling.
     }
 
@@ -1675,28 +1675,8 @@ mod imp {
     ///
     /// This sets up just the process group ID.
     #[cfg(process_group)]
-    pub(super) fn cmd_pre_exec(cmd: &mut std::process::Command) {
+    pub(super) fn set_process_group(cmd: &mut std::process::Command) {
         cmd.process_group(0);
-    }
-
-    /// Pre-execution configuration on Unix.
-    ///
-    /// This sets up just the process group ID.
-    #[cfg(not(process_group))]
-    pub(super) fn cmd_pre_exec(cmd: &mut std::process::Command) {
-        unsafe {
-            // TODO: replace with process_group once Rust 1.64 is out -- that will let this use the
-            // posix_spawn fast path, which is significantly faster (0.5 seconds vs 1.5 on clap).
-            cmd.pre_exec(|| {
-                let pid = libc::getpid();
-                if libc::setpgid(pid, pid) == 0 {
-                    Ok(())
-                } else {
-                    // This is an error.
-                    Err(std::io::Error::last_os_error())
-                }
-            })
-        };
     }
 
     #[derive(Debug)]
@@ -1724,8 +1704,8 @@ mod imp {
                 JobControlEvent::Continue => SIGCONT,
             };
             unsafe {
-                // We set up a process group in cmd_pre_exec -- now
-                // send a signal to that group.
+                // We set up a process group while starting the test -- now send a signal to that
+                // group.
                 libc::kill(-pid, signal);
             }
         } else {
@@ -1765,8 +1745,8 @@ mod imp {
                 TerminateMode::Signal(ShutdownForwardEvent::Twice) => SIGKILL,
             };
             unsafe {
-                // We set up a process group in cmd_pre_exec -- now
-                // send a signal to that group.
+                // We set up a process group while starting the test -- now send a signal to that
+                // group.
                 libc::kill(-pid, term_signal)
             };
 
