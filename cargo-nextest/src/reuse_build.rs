@@ -12,7 +12,6 @@ use nextest_runner::{
         ReuseBuildInfo,
     },
 };
-use owo_colors::Stream;
 use std::io::Write;
 
 #[derive(Debug, Default, Args)]
@@ -124,7 +123,7 @@ impl ReuseBuildOpts {
             };
 
             let mut reporter = ArchiveReporter::new(output.verbose);
-            if output.color.should_colorize(Stream::Stderr) {
+            if output.color.should_colorize(supports_color::Stream::Stderr) {
                 reporter.colorize();
             }
 

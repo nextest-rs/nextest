@@ -5,10 +5,9 @@ use crate::{output::OutputContext, ExpectedError, Result};
 use camino::Utf8PathBuf;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersion};
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Stream};
 use semver::Version;
 use std::cmp::Ordering;
-use supports_color::Stream;
 
 /// Perform an update.
 pub(crate) fn perform_update(
@@ -83,7 +82,7 @@ pub(crate) fn perform_update(
                 true
             } else {
                 let colorful_theme = dialoguer::theme::ColorfulTheme::default();
-                let mut confirm = if output.color.should_colorize(Stream::Stderr) {
+                let mut confirm = if output.color.should_colorize(supports_color::Stream::Stderr) {
                     dialoguer::Confirm::with_theme(&colorful_theme)
                 } else {
                     dialoguer::Confirm::with_theme(&dialoguer::theme::SimpleTheme)

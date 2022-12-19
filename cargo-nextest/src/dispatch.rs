@@ -35,13 +35,12 @@ use nextest_runner::{
     test_filter::{RunIgnored, TestFilterBuilder},
 };
 use once_cell::sync::OnceCell;
-use owo_colors::{OwoColorize, Style};
+use owo_colors::{OwoColorize, Stream, Style};
 use std::{
     fmt::Write as _,
     io::{Cursor, Write},
     sync::Arc,
 };
-use supports_color::Stream;
 
 /// A next-generation test runner for Rust.
 ///
@@ -967,7 +966,11 @@ impl BaseApp {
         let path_mapper = PathMapper::noop();
 
         let mut reporter = ArchiveReporter::new(self.output.verbose);
-        if self.output.color.should_colorize(Stream::Stderr) {
+        if self
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr)
+        {
             reporter.colorize();
         }
 
@@ -1123,7 +1126,10 @@ impl App {
                 binary_list.write(
                     message_format.to_output_format(self.base.output.verbose),
                     &mut writer,
-                    self.base.output.color.should_colorize(Stream::Stdout),
+                    self.base
+                        .output
+                        .color
+                        .should_colorize(supports_color::Stream::Stdout),
                 )?;
                 writer.flush().map_err(WriteTestListError::Io)?;
             }
@@ -1143,7 +1149,10 @@ impl App {
                 test_list.write(
                     message_format.to_output_format(self.base.output.verbose),
                     &mut writer,
-                    self.base.output.color.should_colorize(Stream::Stdout),
+                    self.base
+                        .output
+                        .color
+                        .should_colorize(supports_color::Stream::Stdout),
                 )?;
                 writer.flush().map_err(WriteTestListError::Io)?;
             }
@@ -1186,7 +1195,12 @@ impl App {
             .to_builder(no_capture)
             .set_verbose(self.base.output.verbose)
             .build(&test_list, &profile, output);
-        if self.base.output.color.should_colorize(Stream::Stderr) {
+        if self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr)
+        {
             reporter.colorize();
         }
 

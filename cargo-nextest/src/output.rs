@@ -12,7 +12,6 @@ use std::{
     io::{BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,
 };
-use supports_color::Stream;
 
 #[derive(Copy, Clone, Debug, Args)]
 #[must_use]
@@ -83,7 +82,7 @@ impl Color {
                 .init();
 
             miette::set_hook(Box::new(move |_| {
-                let theme_styles = if self.should_colorize(Stream::Stderr) {
+                let theme_styles = if self.should_colorize(supports_color::Stream::Stderr) {
                     ThemeStyles {
                         error: style().bright_red().bold(),
                         warning: style().bright_yellow().bold(),
@@ -100,7 +99,8 @@ impl Color {
                 } else {
                     ThemeStyles::none()
                 };
-                let mut graphical_theme = if supports_unicode::on(Stream::Stderr) {
+                let mut graphical_theme = if supports_unicode::on(supports_unicode::Stream::Stderr)
+                {
                     GraphicalTheme::unicode()
                 } else {
                     GraphicalTheme::ascii()
@@ -115,7 +115,7 @@ impl Color {
         });
     }
 
-    pub(crate) fn should_colorize(self, stream: Stream) -> bool {
+    pub(crate) fn should_colorize(self, stream: supports_color::Stream) -> bool {
         match self {
             Color::Auto => supports_color::on_cached(stream).is_some(),
             Color::Always => true,
@@ -158,27 +158,27 @@ fn format_fn(f: &mut Formatter, record: &Record<'_>) -> std::io::Result<()> {
         Level::Error => writeln!(
             f,
             "{}: {}",
-            "error".if_supports_color(Stream::Stderr, |s| s
+            "error".if_supports_color(owo_colors::Stream::Stderr, |s| s
                 .style(Style::new().bright_red().bold())),
             record.args()
         ),
         Level::Warn => writeln!(
             f,
             "{}: {}",
-            "warning".if_supports_color(Stream::Stderr, |s| s
+            "warning".if_supports_color(owo_colors::Stream::Stderr, |s| s
                 .style(Style::new().bright_yellow().bold())),
             record.args()
         ),
         Level::Info => writeln!(
             f,
             "{}: {}",
-            "info".if_supports_color(Stream::Stderr, |s| s.bold()),
+            "info".if_supports_color(owo_colors::Stream::Stderr, |s| s.bold()),
             record.args()
         ),
         Level::Debug => writeln!(
             f,
             "{}: {}",
-            "debug".if_supports_color(Stream::Stderr, |s| s.bold()),
+            "debug".if_supports_color(owo_colors::Stream::Stderr, |s| s.bold()),
             record.args()
         ),
         _other => Ok(()),
