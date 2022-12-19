@@ -107,7 +107,7 @@ cargo binstall cargo-nextest --secure
 
 These binaries are maintained by the community—*thank you!*
 
-### Using Homebrew
+### Homebrew
 
 If you have [Homebrew](https://brew.sh/) available, install nextest with:
 
@@ -115,9 +115,9 @@ If you have [Homebrew](https://brew.sh/) available, install nextest with:
 brew install cargo-nextest
 ```
 
-### Using Pacman
+### Arch Linux
 
-If you are using [Arch Linux](https://archlinux.org), you can install nextest with [Pacman](https://wiki.archlinux.org/title/Pacman) as follows:
+If you're using [Arch Linux](https://archlinux.org), you can install nextest with [pacman](https://wiki.archlinux.org/title/Pacman) as follows:
 
 ```
 pacman -S cargo-nextest
