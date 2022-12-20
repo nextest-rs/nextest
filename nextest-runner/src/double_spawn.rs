@@ -42,16 +42,16 @@ impl DoubleSpawnInfo {
     /// The name of the double-spawn subcommand, used throughout nextest.
     pub const SUBCOMMAND_NAME: &'static str = "__double-spawn";
 
-    /// This returns a `DoubleSpawnInfo` which attempts to perform double-spawning.
+    /// Attempts to enable double-spawning and returns a new `DoubleSpawnInfo`.
     ///
-    /// This is super experimental, and should be used with caution.
-    pub fn new() -> Self {
+    /// If double-spawning is not available, [`current_exe`](Self::current_exe) returns `None`.
+    pub fn try_enable() -> Self {
         Self {
-            inner: imp::DoubleSpawnInfo::new(),
+            inner: imp::DoubleSpawnInfo::try_enable(),
         }
     }
 
-    /// This returns a `DoubleSpawnInfo` which disables double-spawning.
+    /// Returns a `DoubleSpawnInfo` which doesn't perform any double-spawning.
     pub fn disabled() -> Self {
         Self {
             inner: imp::DoubleSpawnInfo::disabled(),
@@ -112,7 +112,7 @@ mod imp {
 
     impl DoubleSpawnInfo {
         #[inline]
-        pub(super) fn new() -> Self {
+        pub(super) fn try_enable() -> Self {
             // Attempt to obtain the current exe, and warn if it couldn't be found.
             // TODO: maybe add an option to fail?
             // TODO: Always use /proc/self/exe directly on Linux, just make sure it's always accessible
@@ -209,7 +209,7 @@ mod imp {
 
     impl DoubleSpawnInfo {
         #[inline]
-        pub(super) fn new() -> Self {
+        pub(super) fn try_enable() -> Self {
             Self {}
         }
 

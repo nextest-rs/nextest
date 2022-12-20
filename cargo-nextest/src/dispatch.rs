@@ -949,7 +949,7 @@ impl BaseApp {
                 log::info!("NEXTEST_DOUBLE_SPAWN=0 set, disabling double-spawn for test processes");
                 DoubleSpawnInfo::disabled()
             } else {
-                DoubleSpawnInfo::new()
+                DoubleSpawnInfo::try_enable()
             }
         })
     }

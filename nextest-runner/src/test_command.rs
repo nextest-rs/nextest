@@ -71,7 +71,6 @@ impl TestCommand {
                 .collect()
         });
 
-        // TODO: pass in double spawn option
         let mut cmd = if let Some(current_exe) = ctx.double_spawn.current_exe() {
             let mut cmd = std::process::Command::new(current_exe);
             cmd.args([DoubleSpawnInfo::SUBCOMMAND_NAME, "--", program.as_str()]);
