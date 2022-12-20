@@ -45,9 +45,9 @@ impl DoubleSpawnInfo {
     /// This returns a `DoubleSpawnInfo` which attempts to perform double-spawning.
     ///
     /// This is super experimental, and should be used with caution.
-    pub fn enabled() -> Self {
+    pub fn new() -> Self {
         Self {
-            inner: imp::DoubleSpawnInfo::enabled(),
+            inner: imp::DoubleSpawnInfo::new(),
         }
     }
 
@@ -112,7 +112,7 @@ mod imp {
 
     impl DoubleSpawnInfo {
         #[inline]
-        pub(super) fn enabled() -> Self {
+        pub(super) fn new() -> Self {
             // Attempt to obtain the current exe, and warn if it couldn't be found.
             // TODO: maybe add an option to fail?
             // TODO: Always use /proc/self/exe directly on Linux, just make sure it's always accessible
@@ -209,7 +209,7 @@ mod imp {
 
     impl DoubleSpawnInfo {
         #[inline]
-        pub(super) fn enabled() -> Self {
+        pub(super) fn new() -> Self {
             Self {}
         }
 

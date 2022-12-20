@@ -92,10 +92,10 @@ jobs:
         uses: taiki-e/install-action@nextest
       - name: Test with latest nextest release
         run: cargo nextest run --profile ci
-      - name: Test double-spawning test processes
+      - name: Test without double-spawning
         if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
         env:
-          NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN: 1
+          NEXTEST_DOUBLE_SPAWN: 0
         run: cargo local-nt run --profile ci
 
   test-archive-target-runner:

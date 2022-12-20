@@ -939,11 +939,17 @@ impl BaseApp {
 
     fn load_double_spawn(&self) -> &DoubleSpawnInfo {
         self.double_spawn.get_or_init(|| {
-            if std::env::var("NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN") == Ok("1".to_owned()) {
-                log::info!("using experimental double-spawn method for test processes");
-                DoubleSpawnInfo::enabled()
-            } else {
+            if std::env::var("NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN").is_ok() {
+                log::warn!(
+                    "double-spawn is no longer experimental: \
+                     NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN does not need to be set"
+                );
+            }
+            if std::env::var("NEXTEST_DOUBLE_SPAWN") == Ok("0".to_owned()) {
+                log::info!("NEXTEST_DOUBLE_SPAWN=0 set, disabling double-spawn for test processes");
                 DoubleSpawnInfo::disabled()
+            } else {
+                DoubleSpawnInfo::new()
             }
         })
     }
