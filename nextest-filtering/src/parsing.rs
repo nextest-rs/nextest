@@ -13,6 +13,8 @@
 //!     - return an error/none variant of the expected result type
 //!     - push an error in the parsing state (in span.extra)
 
+use std::fmt;
+
 use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
 use nom::{
@@ -27,6 +29,7 @@ use nom::{
 use nom_tracable::tracable_parser;
 
 mod unicode_string;
+pub(crate) use unicode_string::DisplayParsedString;
 
 use crate::{errors::*, NameMatcher};
 
@@ -39,8 +42,12 @@ impl<'a> ToSourceSpan for Span<'a> {
     }
 }
 
+/// A filter expression that hasn't been compiled against a package graph.
+///
+/// Not part of the public API. Exposed for testing only.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum SetDef {
+#[doc(hidden)]
+pub enum SetDef {
     Package(NameMatcher, SourceSpan),
     Deps(NameMatcher, SourceSpan),
     Rdeps(NameMatcher, SourceSpan),
@@ -52,8 +59,28 @@ pub(crate) enum SetDef {
     None,
 }
 
+impl fmt::Display for SetDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Package(matcher, _) => write!(f, "package({matcher})"),
+            Self::Deps(matcher, _) => write!(f, "deps({matcher})"),
+            Self::Rdeps(matcher, _) => write!(f, "rdeps({matcher})"),
+            Self::Kind(matcher, _) => write!(f, "kind({matcher})"),
+            Self::Binary(matcher, _) => write!(f, "binary({matcher})"),
+            Self::Platform(platform, _) => write!(f, "platform({platform})"),
+            Self::Test(matcher, _) => write!(f, "test({matcher})"),
+            Self::All => write!(f, "all()"),
+            Self::None => write!(f, "none()"),
+        }
+    }
+}
+
+/// A filter expression that hasn't been compiled against a package graph.
+///
+/// Not part of the public API. Exposed for testing only.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Expr {
+#[doc(hidden)]
+pub enum Expr {
     Not(Box<Expr>),
     Union(Box<Expr>, Box<Expr>),
     Intersection(Box<Expr>, Box<Expr>),
@@ -89,6 +116,17 @@ impl Expr {
     #[cfg(test)]
     fn none() -> Expr {
         Expr::Set(SetDef::None)
+    }
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Not(expr) => write!(f, "not ({expr})"),
+            Self::Union(expr_1, expr_2) => write!(f, "({expr_1}) or ({expr_2})"),
+            Self::Intersection(expr_1, expr_2) => write!(f, "({expr_1}) and ({expr_2})"),
+            Self::Set(set) => write!(f, "{set}"),
+        }
     }
 }
 
@@ -268,6 +306,31 @@ fn parse_regex_inner(input: Span) -> IResult<String> {
     let (i, _) = peek(char('/'))(i)?;
 
     Ok((i, res))
+}
+
+// This should match parse_regex_inner above.
+pub(crate) struct DisplayParsedRegex<'a>(pub(crate) &'a regex::Regex);
+
+impl fmt::Display for DisplayParsedRegex<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let regex = self.0.as_str();
+        let mut escaped = false;
+        for c in regex.chars() {
+            if escaped {
+                escaped = false;
+                write!(f, "{c}")?;
+            } else if c == '\\' {
+                escaped = true;
+                write!(f, "{c}")?;
+            } else if c == '/' {
+                // '/' is the only additional escape.
+                write!(f, "\\/")?;
+            } else {
+                write!(f, "{c}")?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[tracable_parser]

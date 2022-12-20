@@ -3,7 +3,7 @@
 
 use crate::{
     errors::{FilterExpressionParseErrors, ParseSingleError, State},
-    parsing::{parse, Expr, ParsedExpr, SetDef, Span},
+    parsing::{parse, DisplayParsedRegex, DisplayParsedString, Expr, ParsedExpr, SetDef, Span},
 };
 use guppy::{
     graph::{cargo::BuildPlatform, PackageGraph},
@@ -14,7 +14,7 @@ use recursion::{
     map_layer::{MapLayer, Project},
     Collapse,
 };
-use std::{cell::RefCell, collections::HashSet};
+use std::{cell::RefCell, collections::HashSet, fmt};
 
 /// Matcher for name
 ///
@@ -41,6 +41,16 @@ impl PartialEq for NameMatcher {
 }
 
 impl Eq for NameMatcher {}
+
+impl fmt::Display for NameMatcher {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Equal(s) => write!(f, "={}", DisplayParsedString(s)),
+            Self::Contains(s) => write!(f, "~{}", DisplayParsedString(s)),
+            Self::Regex(r) => write!(f, "{}", DisplayParsedRegex(r)),
+        }
+    }
+}
 
 /// Define a set of tests
 #[derive(Debug, Clone, PartialEq, Eq)]
