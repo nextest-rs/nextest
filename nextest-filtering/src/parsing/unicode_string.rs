@@ -3,6 +3,8 @@
 
 // Adapted from https://github.com/Geal/nom/blob/294ffb3d9e0ade2c3b7ddfff52484b6d643dcce1/examples/string.rs
 
+use std::fmt;
+
 use nom::{
     branch::alt,
     bytes::streaming::{is_not, take_while_m_n},
@@ -74,6 +76,24 @@ fn parse_escaped_char(input: Span) -> IResult<char> {
     )(input)
 }
 
+// This should match parse_escaped_char above.
+pub(crate) struct DisplayParsedString<'a>(pub(crate) &'a str);
+
+impl fmt::Display for DisplayParsedString<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for c in self.0.chars() {
+            match c {
+                // These escapes are custom to nextest.
+                '/' => f.write_str("\\/")?,
+                ')' => f.write_str("\\)")?,
+                ',' => f.write_str("\\,")?,
+                // All the other escapes should be covered by this.
+                c => write!(f, "{}", c.escape_default())?,
+            }
+        }
+        Ok(())
+    }
+}
 #[tracable_parser]
 fn parse_literal(input: Span) -> IResult<Span> {
     let not_quote_slash = is_not(",)\\");
