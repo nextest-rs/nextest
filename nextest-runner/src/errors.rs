@@ -105,11 +105,10 @@ impl ConfigParseOverrideError {
         let not_specified_report = self.not_specified.then(|| {
             miette::Report::msg("at least one of `platform` and `filter` should be specified")
         });
-        let platform_parse_report = self.platform_parse_error.as_ref().map(|error| {
-            // TODO: replace with Report::new_boxed once https://github.com/zkat/miette/pull/214
-            // is fixed.
-            miette::Report::new_boxed(error.clone().into_diagnostic())
-        });
+        let platform_parse_report = self
+            .platform_parse_error
+            .as_ref()
+            .map(|error| miette::Report::new_boxed(error.clone().into_diagnostic()));
         let parse_reports = self
             .parse_errors
             .as_ref()

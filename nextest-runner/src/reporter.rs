@@ -808,7 +808,6 @@ impl<'a> TestReporterImpl<'a> {
                 // * > means right-align.
                 // * 8 is the number of characters to pad to.
                 // * .3 means print two digits after the decimal point.
-                // TODO: better time printing mechanism than this
                 write!(writer, "[{:>8.3?}s] ", elapsed.as_secs_f64())?;
 
                 write!(
@@ -1057,7 +1056,6 @@ impl<'a> TestReporterImpl<'a> {
         // * > means right-align.
         // * 8 is the number of characters to pad to.
         // * .3 means print three digits after the decimal point.
-        // TODO: better time printing mechanism than this
         write!(writer, "[{:>8.3?}s] ", duration.as_secs_f64())
     }
 
@@ -1065,7 +1063,6 @@ impl<'a> TestReporterImpl<'a> {
         // * > means right-align.
         // * 7 is the number of characters to pad to.
         // * .3 means print three digits after the decimal point.
-        // TODO: better time printing mechanism than this
         write!(writer, "by {:>7.3?}s ", duration.as_secs_f64())
     }
 
@@ -1074,7 +1071,6 @@ impl<'a> TestReporterImpl<'a> {
         // * > means right-align.
         // * 7 is the number of characters to pad to.
         // * .3 means print three digits after the decimal point.
-        // TODO: better time printing mechanism than this
         write!(writer, "[>{:>7.3?}s] ", duration.as_secs_f64())
     }
 

@@ -889,7 +889,6 @@ impl<'a> TestRunnerInner<'a> {
         });
 
         Ok(InternalExecuteStatus {
-            // TODO: replace with Bytes
             stdout: stdout.freeze(),
             stderr: stderr.freeze(),
             result: status,

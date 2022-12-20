@@ -775,7 +775,6 @@ impl RustTestSuiteStatus {
             RustTestSuiteStatus::Listed { test_cases } => test_cases.iter(),
             RustTestSuiteStatus::Skipped => {
                 // Return an empty test case.
-                // TODO: implement this
                 EMPTY_TEST_CASE_MAP.iter()
             }
         }
