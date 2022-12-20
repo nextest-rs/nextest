@@ -33,6 +33,7 @@ serde = { version = "1.0.151", features = ["alloc", "derive", "serde_derive", "s
 serde_json = { version = "1.0.91", features = ["std", "unbounded_depth"] }
 target-spec = { version = "1.2.2", default-features = false, features = ["serde", "summaries"] }
 tokio = { version = "1.23.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "num_cpus", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "sync", "time", "tokio-macros", "tracing"] }
+twox-hash = { version = "1.6.3", features = ["rand", "std"] }
 uuid = { version = "1.2.2", features = ["getrandom", "rng", "std", "v4"] }
 
 [build-dependencies]

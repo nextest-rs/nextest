@@ -12,3 +12,5 @@ mod parsing;
 mod proptest_helpers;
 
 pub use expression::{BinaryQuery, FilteringExpr, FilteringSet, NameMatcher, TestQuery};
+#[doc(hidden)]
+pub use parsing::Expr;
