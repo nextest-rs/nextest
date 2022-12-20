@@ -1428,6 +1428,7 @@ dependencies = [
  "test-case",
  "test-strategy",
  "thiserror",
+ "twox-hash",
 ]
 
 [[package]]
@@ -1546,6 +1547,7 @@ dependencies = [
  "syn 1.0.107",
  "target-spec",
  "tokio",
+ "twox-hash",
  "uuid",
  "winapi",
  "windows-sys",
@@ -2915,6 +2917,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
+ "rand",
  "static_assertions",
 ]
 

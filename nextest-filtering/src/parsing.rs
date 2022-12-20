@@ -13,7 +13,7 @@
 //!     - return an error/none variant of the expected result type
 //!     - push an error in the parsing state (in span.extra)
 
-use std::fmt;
+use std::{cell::RefCell, fmt};
 
 use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
@@ -104,6 +104,14 @@ pub enum Expr<S = SourceSpan> {
 }
 
 impl Expr {
+    pub fn parse(input: &str) -> Result<Self, Vec<ParseSingleError>> {
+        let errors = RefCell::new(Vec::new());
+        match parse(Span::new_extra(input, State::new(&errors))).unwrap() {
+            ParsedExpr::Valid(expr) => Ok(expr),
+            ParsedExpr::Error => Err(errors.into_inner()),
+        }
+    }
+
     fn boxed(self) -> Box<Self> {
         Box::new(self)
     }
@@ -840,11 +848,10 @@ mod tests {
 
     #[track_caller]
     fn parse(input: &str) -> Expr {
-        let errors = RefCell::new(Vec::new());
-        match super::parse(Span::new_extra(input, State::new(&errors))).unwrap() {
-            ParsedExpr::Valid(expr) => expr,
-            _ => {
-                for single_error in &*errors.borrow() {
+        match Expr::parse(input) {
+            Ok(expr) => expr,
+            Err(errors) => {
+                for single_error in &errors {
                     let report = miette::Report::new(single_error.clone())
                         .with_source_code(input.to_owned());
                     eprintln!("{report:?}");

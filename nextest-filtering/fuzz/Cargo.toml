@@ -1,0 +1,31 @@
+[package]
+name = "nextest-filtering-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+nextest-filtering = { path = ".." }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_parsing"
+path = "fuzz_targets/fuzz_parsing.rs"
+test = false
+doc = false
