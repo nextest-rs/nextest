@@ -47,7 +47,7 @@ impl fmt::Display for NameMatcher {
         match self {
             Self::Equal(s) => write!(f, "={}", DisplayParsedString(s)),
             Self::Contains(s) => write!(f, "~{}", DisplayParsedString(s)),
-            Self::Regex(r) => write!(f, "{}", DisplayParsedRegex(r)),
+            Self::Regex(r) => write!(f, "/{}/", DisplayParsedRegex(r)),
         }
     }
 }

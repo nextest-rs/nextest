@@ -45,21 +45,37 @@ impl<'a> ToSourceSpan for Span<'a> {
 /// A filter expression that hasn't been compiled against a package graph.
 ///
 /// Not part of the public API. Exposed for testing only.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[doc(hidden)]
-pub enum SetDef {
-    Package(NameMatcher, SourceSpan),
-    Deps(NameMatcher, SourceSpan),
-    Rdeps(NameMatcher, SourceSpan),
-    Kind(NameMatcher, SourceSpan),
-    Binary(NameMatcher, SourceSpan),
-    Platform(BuildPlatform, SourceSpan),
-    Test(NameMatcher, SourceSpan),
+pub enum SetDef<S = SourceSpan> {
+    Package(NameMatcher, S),
+    Deps(NameMatcher, S),
+    Rdeps(NameMatcher, S),
+    Kind(NameMatcher, S),
+    Binary(NameMatcher, S),
+    Platform(BuildPlatform, S),
+    Test(NameMatcher, S),
     All,
     None,
 }
 
-impl fmt::Display for SetDef {
+impl SetDef {
+    fn drop_source_span(self) -> SetDef<()> {
+        match self {
+            Self::Package(matcher, _) => SetDef::Package(matcher, ()),
+            Self::Deps(matcher, _) => SetDef::Deps(matcher, ()),
+            Self::Rdeps(matcher, _) => SetDef::Rdeps(matcher, ()),
+            Self::Kind(matcher, _) => SetDef::Kind(matcher, ()),
+            Self::Binary(matcher, _) => SetDef::Binary(matcher, ()),
+            Self::Platform(platform, _) => SetDef::Platform(platform, ()),
+            Self::Test(matcher, _) => SetDef::Test(matcher, ()),
+            Self::All => SetDef::All,
+            Self::None => SetDef::None,
+        }
+    }
+}
+
+impl<S> fmt::Display for SetDef<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Package(matcher, _) => write!(f, "package({matcher})"),
@@ -80,11 +96,11 @@ impl fmt::Display for SetDef {
 /// Not part of the public API. Exposed for testing only.
 #[derive(Debug, PartialEq, Eq)]
 #[doc(hidden)]
-pub enum Expr {
-    Not(Box<Expr>),
-    Union(Box<Expr>, Box<Expr>),
-    Intersection(Box<Expr>, Box<Expr>),
-    Set(SetDef),
+pub enum Expr<S = SourceSpan> {
+    Not(Box<Expr<S>>),
+    Union(Box<Expr<S>>, Box<Expr<S>>),
+    Intersection(Box<Expr<S>>, Box<Expr<S>>),
+    Set(SetDef<S>),
 }
 
 impl Expr {
@@ -117,9 +133,25 @@ impl Expr {
     fn none() -> Expr {
         Expr::Set(SetDef::None)
     }
+
+    #[allow(unused)]
+    fn drop_source_span(self) -> Expr<()> {
+        match self {
+            Self::Not(expr) => Expr::Not(Box::new(expr.drop_source_span())),
+            Self::Union(a, b) => Expr::Union(
+                Box::new(a.drop_source_span()),
+                Box::new(b.drop_source_span()),
+            ),
+            Self::Intersection(a, b) => Expr::Intersection(
+                Box::new(a.drop_source_span()),
+                Box::new(b.drop_source_span()),
+            ),
+            Self::Set(set) => Expr::Set(set.drop_source_span()),
+        }
+    }
 }
 
-impl fmt::Display for Expr {
+impl fmt::Display for Expr<()> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Not(expr) => write!(f, "not ({expr})"),
@@ -811,7 +843,14 @@ mod tests {
         let errors = RefCell::new(Vec::new());
         match super::parse(Span::new_extra(input, State::new(&errors))).unwrap() {
             ParsedExpr::Valid(expr) => expr,
-            _ => panic!("Not a  valid expression"),
+            _ => {
+                for single_error in &*errors.borrow() {
+                    let report = miette::Report::new(single_error.clone())
+                        .with_source_code(input.to_owned());
+                    eprintln!("{report:?}");
+                }
+                panic!("Not a valid expression!")
+            }
         }
     }
 
@@ -1067,5 +1106,14 @@ mod tests {
         assert_error!(error, ExpectedOpenParenthesis, 3, 0);
         let error = errors.remove(0);
         assert_error!(error, ExpectedCloseRegex, 19, 0);
+    }
+
+    #[test_strategy::proptest]
+    fn proptest_expr_roundtrip(#[strategy(Expr::strategy())] expr: Expr<()>) {
+        let expr_string = expr.to_string();
+        println!("expr string: {expr_string}");
+        let expr_2 = parse(&expr_string).drop_source_span();
+
+        assert_eq!(expr, expr_2, "exprs must roundtrip");
     }
 }
