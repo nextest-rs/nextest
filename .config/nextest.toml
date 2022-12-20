@@ -15,7 +15,7 @@ fail-fast = false
 [[profile.ci.overrides]]
 # These tests are a bit flaky on Mac GHA CI runners due to resource exhaustion.
 platform = 'cfg(target_os = "macos")'
-filter = 'package(nextest-runner) and binary(integration)'
+filter = '(package(nextest-runner) and binary(integration)) or package(integration-tests)'
 retries = { count = 3, backoff = "fixed", delay = "1s" }
 
 [profile.test-slow]
