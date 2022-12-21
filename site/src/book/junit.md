@@ -2,7 +2,7 @@
 
 cargo-nextest can produce output in the [JUnit/XUnit XML format](https://llg.cubic.org/docs/junit/). This format is widely understood by test analysis tools and libraries.
 
-To enable JUnit support, add this to your configuration:
+To enable JUnit support, add this to your [nextest configuration](configuration.md):
 
 ```toml
 [profile.ci.junit]  # this can be some other profile, too
