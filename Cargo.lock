@@ -1535,7 +1535,6 @@ dependencies = [
  "memchr",
  "miette",
  "miniz_oxide",
- "nom-tracable",
  "num-traits",
  "once_cell",
  "owo-colors",

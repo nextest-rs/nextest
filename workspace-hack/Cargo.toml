@@ -25,7 +25,6 @@ log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["std", "use_std"] }
 miette = { version = "5.5.0", features = ["atty", "backtrace", "fancy", "fancy-no-backtrace", "owo-colors", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 miniz_oxide = { version = "0.6.2", default-features = false, features = ["with-alloc"] }
-nom-tracable = { version = "0.8.0", features = ["trace"] }
 num-traits = { version = "0.2.15", default-features = false, features = ["std"] }
 owo-colors = { version = "3.5.0", default-features = false, features = ["supports-color", "supports-colors"] }
 rand = { version = "0.8.5", features = ["alloc", "getrandom", "libc", "rand_chacha", "std", "std_rng"] }

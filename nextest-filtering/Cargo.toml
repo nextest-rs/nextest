@@ -21,8 +21,9 @@ path = "src/bin/generate-expr-corpus.rs"
 default = []
 # Note: Not part of the public API.
 internal-testing = ["dep:proptest", "dep:test-strategy", "dep:twox-hash"]
-# Must be called `trace` which is a bit unfortunate
-trace = ["nom-tracable/trace"]
+# Uncomment and enable the feature below to get trace output for parsing. This feature must be
+# called `trace` which is a bit unfortunate.
+# trace = ["nom-tracable/trace"]
 
 [dependencies]
 guppy = "0.15.1"
