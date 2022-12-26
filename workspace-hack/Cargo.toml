@@ -48,13 +48,13 @@ futures-core = { version = "0.3.25", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.25" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
 indexmap = { version = "1.9.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.138", features = ["extra_traits", "std"] }
+libc = { version = "0.2.139", features = ["extra_traits", "std"] }
 once_cell = { version = "1.16.0", features = ["alloc", "race", "std"] }
 tokio = { version = "1.23.0", default-features = false, features = ["net", "socket2"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
-libc = { version = "0.2.138", features = ["extra_traits", "std"] }
+libc = { version = "0.2.139", features = ["extra_traits", "std"] }
 once_cell = { version = "1.16.0", features = ["alloc", "race", "std"] }
 
 [target.x86_64-apple-darwin.dependencies]
@@ -62,13 +62,13 @@ futures-core = { version = "0.3.25", features = ["alloc", "std"] }
 futures-sink = { version = "0.3.25" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
 indexmap = { version = "1.9.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.138", features = ["extra_traits", "std"] }
+libc = { version = "0.2.139", features = ["extra_traits", "std"] }
 once_cell = { version = "1.16.0", features = ["alloc", "race", "std"] }
 tokio = { version = "1.23.0", default-features = false, features = ["net", "socket2"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
-libc = { version = "0.2.138", features = ["extra_traits", "std"] }
+libc = { version = "0.2.139", features = ["extra_traits", "std"] }
 once_cell = { version = "1.16.0", features = ["alloc", "race", "std"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
