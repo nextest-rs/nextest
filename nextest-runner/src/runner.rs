@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestRunner`].
 
 use crate::{
-    config::{NextestProfile, ProfileOverrides, RetryPolicy, TestThreads},
+    config::{NextestProfile, ProfileOverrides, RetryPolicy, TestGroup, TestThreads},
     double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
     helpers::convert_build_platform,
@@ -17,8 +17,8 @@ use crate::{
     time::{StopwatchEnd, StopwatchStart},
 };
 use async_scoped::TokioScope;
-use buffer_unordered_weighted::StreamExt;
 use bytes::Bytes;
+use future_queue::StreamExt;
 use futures::{future::try_join, prelude::*};
 use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
@@ -309,6 +309,14 @@ impl<'a> TestRunnerInner<'a> {
             let (cancellation_sender, _cancellation_receiver) = tokio::sync::broadcast::channel(1);
             {
                 let cancellation_sender = cancellation_sender.clone();
+
+                // groups is going to be passed to future_queue_grouped.
+                let groups = self
+                    .profile
+                    .test_group_config()
+                    .iter()
+                    .map(|(group_name, config)| (group_name, config.max_threads.compute()));
+
                 let run_fut = futures::stream::iter(self.test_list.iter_tests())
                     .map(move |test_instance| {
                         let this_run_sender = run_sender.clone();
@@ -329,6 +337,11 @@ impl<'a> TestRunnerInner<'a> {
                         let threads_required = overrides
                             .threads_required()
                             .map_or(self.threads_required, |req| req.compute(self.test_threads));
+                        let test_group = match overrides.test_group().unwrap_or(&TestGroup::Global)
+                        {
+                            TestGroup::Global => None,
+                            TestGroup::Custom(name) => Some(name.clone()),
+                        };
 
                         let fut = async move {
                             // Subscribe to the receiver *before* checking canceled_ref. The ordering is
@@ -462,11 +475,11 @@ impl<'a> TestRunnerInner<'a> {
                                 }
                             }
                         };
-                        (threads_required, fut)
+                        (threads_required, test_group, fut)
                     })
-                    // buffer_unordered_weighted means tests are spawned in order but returned in
+                    // future_queue_grouped means tests are spawned in order but returned in
                     // any order.
-                    .buffer_unordered_weighted(self.test_threads)
+                    .future_queue_grouped(self.test_threads, groups)
                     .collect();
 
                 // Run the stream to completion.

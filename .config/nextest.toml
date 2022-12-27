@@ -7,6 +7,7 @@ final-status-level = "slow"
 # This is a bug.
 filter = 'package(integration-tests)'
 slow-timeout = { period = "60s", terminate-after = 3 }
+test-group = "my-group"
 
 [profile.ci]
 # Don't fail fast in CI to run the full test suite.
@@ -32,3 +33,7 @@ test-threads = 1
 [[profile.serial.overrides]]
 filter = 'test(foo)'
 retries = 3
+
+# Added for testing.
+[test-groups.my-group]
+max-threads = 4

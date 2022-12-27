@@ -6,7 +6,7 @@
 use crate::{
     errors::{
         provided_by_tool, ConfigParseError, ConfigParseErrorKind, ConfigParseOverrideError,
-        ProfileNotFound, TestThreadsParseError, ToolConfigFileParseError,
+        ProfileNotFound, TestThreadsParseError, ToolConfigFileParseError, UnknownTestGroupError,
     },
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
@@ -17,9 +17,10 @@ use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use nextest_filtering::{FilteringExpr, FilteringSet, TestQuery};
 use once_cell::sync::Lazy;
 use serde::{de::IntoDeserializer, Deserialize};
+use smol_str::SmolStr;
 use std::{
     cmp::Ordering,
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
     num::NonZeroUsize,
     str::FromStr,
@@ -97,7 +98,7 @@ impl NextestConfig {
             workspace_root,
             graph,
             config_file,
-            tool_config_files,
+            tool_config_files.into_iter(),
             |config_file, tool, unknown| {
                 let mut unknown_str = String::new();
                 if unknown.len() == 1 {
@@ -207,6 +208,8 @@ impl NextestConfig {
         // Note that they're stored in reverse order here, and are flipped over at the end.
         let mut overrides_impl = NextestOverridesImpl::default();
 
+        let mut known_groups = BTreeSet::new();
+
         // Next, merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
             let source = File::new(config_file.as_str(), FileFormat::Toml);
@@ -217,6 +220,7 @@ impl NextestConfig {
                 source.clone(),
                 &mut overrides_impl,
                 unknown_callback,
+                &mut known_groups,
             )?;
 
             // This is the final, composite builder used at the end.
@@ -240,6 +244,7 @@ impl NextestConfig {
             source.clone(),
             &mut overrides_impl,
             unknown_callback,
+            &mut known_groups,
         )?;
 
         composite_builder = composite_builder.add_source(source);
@@ -265,6 +270,7 @@ impl NextestConfig {
         source: File<FileSourceFile, FileFormat>,
         overrides_impl: &mut NextestOverridesImpl,
         unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
+        known_groups: &mut BTreeSet<CustomTestGroup>,
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
@@ -277,11 +283,84 @@ impl NextestConfig {
             unknown_callback(config_file, tool, &unknown);
         }
 
+        // Check that test groups are named as expected.
+        let (valid_groups, invalid_groups): (BTreeSet<_>, _) =
+            this_config.test_groups.keys().cloned().partition(|group| {
+                if let Some(tool) = tool {
+                    // If a tool is specified, the group must be prefixed with "@tool:<tool-name>:".
+                    group.name().strip_prefix("@tool:").map_or(false, |suffix| {
+                        suffix
+                            .strip_prefix(tool)
+                            .map_or(false, |suffix| suffix.starts_with(':'))
+                    })
+                } else {
+                    // If a tool is not specified, it must *not* have "@tool:" as a prefix.
+                    !group.name().starts_with("@tool:")
+                }
+            });
+
+        if !invalid_groups.is_empty() {
+            let kind = if tool.is_some() {
+                ConfigParseErrorKind::InvalidTestGroupsDefinedByTool(invalid_groups)
+            } else {
+                ConfigParseErrorKind::InvalidTestGroupsDefined(invalid_groups)
+            };
+            return Err(ConfigParseError::new(config_file, tool, kind));
+        }
+
+        known_groups.extend(valid_groups);
+
         let this_config = this_config.into_config_impl();
 
         // Compile the overrides for this file.
         let this_overrides = NextestOverridesImpl::new(graph, &this_config)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
+
+        // Check that all overrides specify known test groups.
+        let mut unknown_group_errors = Vec::new();
+        let mut check_test_group = |profile_name: &str, test_group: Option<&TestGroup>| {
+            if let Some(TestGroup::Custom(group)) = test_group {
+                if !known_groups.contains(group) {
+                    unknown_group_errors.push(UnknownTestGroupError {
+                        profile_name: profile_name.to_owned(),
+                        name: TestGroup::Custom(group.clone()),
+                    });
+                }
+            }
+        };
+
+        this_overrides.default.iter().for_each(|override_| {
+            check_test_group("default", override_.data.test_group.as_ref());
+        });
+
+        // Check that override test groups are known.
+        this_overrides
+            .other
+            .iter()
+            .for_each(|(profile_name, overrides)| {
+                overrides.iter().for_each(|override_| {
+                    check_test_group(profile_name, override_.data.test_group.as_ref());
+                });
+            });
+
+        // If there were any unknown groups, error out.
+        if !unknown_group_errors.is_empty() {
+            let known_groups = std::iter::once(TestGroup::Global)
+                .chain(
+                    known_groups
+                        .iter()
+                        .map(|group| TestGroup::Custom(group.clone())),
+                )
+                .collect();
+            return Err(ConfigParseError::new(
+                config_file,
+                tool,
+                ConfigParseErrorKind::UnknownTestGroups {
+                    errors: unknown_group_errors,
+                    known_groups,
+                },
+            ));
+        }
 
         // Grab the overrides for this config. Add them in reversed order (we'll flip it around at the end).
         overrides_impl
@@ -327,6 +406,7 @@ impl NextestConfig {
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
+            test_groups: &self.inner.test_groups,
             overrides,
         })
     }
@@ -421,6 +501,7 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
+    test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     overrides: Vec<ProfileOverrideImpl<State>>,
 }
 
@@ -444,6 +525,7 @@ impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
             store_dir: self.store_dir,
             default_profile: self.default_profile,
             custom_profile: self.custom_profile,
+            test_groups: self.test_groups,
             overrides,
         }
     }
@@ -474,6 +556,11 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
         self.custom_profile
             .and_then(|profile| profile.threads_required)
             .unwrap_or(self.default_profile.threads_required)
+    }
+
+    /// Returns the test group configuration for this profile.
+    pub fn test_group_config(&self) -> &'cfg BTreeMap<CustomTestGroup, TestGroupConfig> {
+        self.test_groups
     }
 
     /// Returns the time after which tests are treated as slow for this profile.
@@ -532,6 +619,7 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
         let mut retries = None;
         let mut slow_timeout = None;
         let mut leak_timeout = None;
+        let mut test_group = None;
 
         for override_ in &self.overrides {
             if query.binary_query.platform == BuildPlatform::Host && !override_.state.host_eval {
@@ -557,6 +645,9 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
             if leak_timeout.is_none() && override_.data.leak_timeout.is_some() {
                 leak_timeout = override_.data.leak_timeout;
             }
+            if test_group.is_none() && override_.data.test_group.is_some() {
+                test_group = override_.data.test_group.clone();
+            }
         }
 
         ProfileOverrides {
@@ -564,6 +655,7 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
             retries,
             slow_timeout,
             leak_timeout,
+            test_group,
         }
     }
 
@@ -595,6 +687,7 @@ pub struct ProfileOverrides {
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<Duration>,
+    test_group: Option<TestGroup>,
 }
 
 impl ProfileOverrides {
@@ -616,6 +709,11 @@ impl ProfileOverrides {
     /// Returns the leak timeout for this test.
     pub fn leak_timeout(&self) -> Option<Duration> {
         self.leak_timeout
+    }
+
+    /// Returns the test group for this test.
+    pub fn test_group(&self) -> Option<&TestGroup> {
+        self.test_group.as_ref()
     }
 }
 
@@ -641,6 +739,7 @@ impl<'cfg> NextestJunitConfig<'cfg> {
 #[derive(Clone, Debug)]
 struct NextestConfigImpl {
     store: StoreConfigImpl,
+    test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
     default_profile: DefaultProfileImpl,
     other_profiles: HashMap<String, CustomProfileImpl>,
 }
@@ -671,6 +770,8 @@ impl NextestConfigImpl {
 #[serde(rename_all = "kebab-case")]
 struct NextestConfigDeserialize {
     store: StoreConfigImpl,
+    #[serde(default)]
+    test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
     #[serde(rename = "profile")]
     profiles: HashMap<String, CustomProfileImpl>,
 }
@@ -686,6 +787,7 @@ impl NextestConfigDeserialize {
         NextestConfigImpl {
             store: self.store,
             default_profile,
+            test_groups: self.test_groups,
             other_profiles: self.profiles,
         }
     }
@@ -1144,6 +1246,83 @@ where
     Ok(retry_policy)
 }
 
+/// Represents the test group a test is in.
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub enum TestGroup {
+    /// This test is not in a group.
+    Global,
+
+    /// This test is in the named custom group.
+    Custom(CustomTestGroup),
+}
+
+impl<'de> Deserialize<'de> for TestGroup {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Try and deserialize the group as a string. (Note: we don't deserialize a
+        // `CustomTestGroup` directly because that errors out on None.
+        let group = SmolStr::deserialize(deserializer)?;
+        if group == "@global" {
+            Ok(TestGroup::Global)
+        } else {
+            Ok(TestGroup::Custom(CustomTestGroup(group)))
+        }
+    }
+}
+
+impl fmt::Display for TestGroup {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TestGroup::Global => write!(f, "@global"),
+            TestGroup::Custom(group) => write!(f, "{}", group.name()),
+        }
+    }
+}
+
+/// Represents a custom test group.
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub struct CustomTestGroup(SmolStr);
+
+impl CustomTestGroup {
+    /// Returns the name of the test group.
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for CustomTestGroup {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Try and deserialize as a string.
+        let group = SmolStr::deserialize(deserializer)?;
+        if group.starts_with('@') && !group.starts_with("@tool:") {
+            Err(serde::de::Error::custom(
+                "custom group name cannot start with \"@\"",
+            ))
+        } else {
+            Ok(CustomTestGroup(group))
+        }
+    }
+}
+
+impl fmt::Display for CustomTestGroup {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Configuration for a test group.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TestGroupConfig {
+    /// The maximum number of threads allowed for this test group.
+    pub max_threads: TestThreads,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct DefaultJunitImpl {
@@ -1201,6 +1380,8 @@ struct ProfileOverrideSource {
     slow_timeout: Option<SlowTimeout>,
     #[serde(default)]
     leak_timeout: Option<Duration>,
+    #[serde(default)]
+    test_group: Option<TestGroup>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1262,6 +1443,7 @@ struct ProfileOverrideData {
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<Duration>,
+    test_group: Option<TestGroup>,
 }
 
 impl ProfileOverrideImpl<PreBuildPlatform> {
@@ -1300,6 +1482,7 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
                     retries: source.retries,
                     slow_timeout: source.slow_timeout,
                     leak_timeout: source.leak_timeout,
+                    test_group: source.test_group.clone(),
                 },
             }),
             (Err(platform_parse_error), Ok(_)) => {
@@ -1372,6 +1555,7 @@ mod tests {
     use config::ConfigError;
     use guppy::{graph::cargo::BuildPlatform, MetadataCommand};
     use indoc::indoc;
+    use maplit::btreeset;
     use nextest_filtering::BinaryQuery;
     use std::{io::Write, path::PathBuf, process::Command};
     use target_spec::{Platform, TargetFeatures};
@@ -1486,7 +1670,7 @@ mod tests {
         let graph = temp_workspace(workspace_path, config_contents);
 
         let nextest_config_result =
-            NextestConfig::from_sources(graph.workspace().root(), &graph, None, []);
+            NextestConfig::from_sources(graph.workspace().root(), &graph, None, &[][..]);
 
         match expected_default {
             Ok(expected_default) => {
@@ -1733,7 +1917,7 @@ mod tests {
         let package_id = graph.workspace().iter().next().unwrap().id();
 
         let config =
-            NextestConfig::from_sources(graph.workspace().root(), &graph, None, []).unwrap();
+            NextestConfig::from_sources(graph.workspace().root(), &graph, None, &[][..]).unwrap();
         let query = TestQuery {
             binary_query: BinaryQuery {
                 package_id,
@@ -2119,6 +2303,14 @@ mod tests {
         [[profile.default.overrides]]
         filter = 'test(test_foo)'
         retries = 20
+        test-group = 'foo'
+
+        [[profile.default.overrides]]
+        filter = 'test(test_quux)'
+        test-group = '@tool:tool1:group1'
+
+        [test-groups.foo]
+        max-threads = 2
         "#;
 
         let tool1_config_contents = r#"
@@ -2135,6 +2327,15 @@ mod tests {
         [[profile.tool.overrides]]
         filter = 'test(test_baz)'
         retries = 22
+        test-group = '@tool:tool1:group1'
+
+        [[profile.tool.overrides]]
+        filter = 'test(test_quux)'
+        retries = 22
+        test-group = '@tool:tool2:group2'
+
+        [test-groups.'@tool:tool1:group1']
+        max-threads = 2
         "#;
 
         let tool2_config_contents = r#"
@@ -2151,10 +2352,12 @@ mod tests {
         [[profile.tool.overrides]]
         filter = 'test(test_ba)'
         retries = 24
+        test-group = '@tool:tool2:group2'
 
         [[profile.tool.overrides]]
         filter = 'test(test_)'
         retries = 25
+        test-group = '@global'
 
         [profile.tool2]
         retries = 18
@@ -2162,6 +2365,9 @@ mod tests {
         [[profile.tool2.overrides]]
         filter = 'all()'
         retries = 26
+
+        [test-groups.'@tool:tool2:group2']
+        max-threads = 4
         "#;
 
         let workspace_dir = tempdir().unwrap();
@@ -2227,6 +2433,15 @@ mod tests {
             },
             test_name: "test_baz",
         };
+        let test_quux_query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
+            test_name: "test_quux",
+        };
 
         assert_eq!(
             default_profile.overrides_for(&test_foo_query).retries(),
@@ -2234,14 +2449,29 @@ mod tests {
             "retries for test_foo/default profile"
         );
         assert_eq!(
+            default_profile.overrides_for(&test_foo_query).test_group(),
+            Some(&test_group("foo")),
+            "test_group for test_foo/default profile"
+        );
+        assert_eq!(
             default_profile.overrides_for(&test_bar_query).retries(),
             Some(RetryPolicy::new_without_delay(21)),
             "retries for test_bar/default profile"
         );
         assert_eq!(
+            default_profile.overrides_for(&test_bar_query).test_group(),
+            None,
+            "test_group for test_bar/default profile"
+        );
+        assert_eq!(
             default_profile.overrides_for(&test_baz_query).retries(),
             Some(RetryPolicy::new_without_delay(23)),
             "retries for test_baz/default profile"
+        );
+        assert_eq!(
+            default_profile.overrides_for(&test_quux_query).test_group(),
+            Some(&test_group("@tool:tool1:group1")),
+            "test group for test_quux/default profile"
         );
 
         let tool_profile = config
@@ -2285,6 +2515,354 @@ mod tests {
             Some(RetryPolicy::new_without_delay(26)),
             "retries for test_baz/default profile"
         );
+    }
+
+    #[derive(Debug)]
+    enum GroupExpectedError {
+        DeserializeError(&'static str),
+        InvalidTestGroups(BTreeSet<CustomTestGroup>),
+    }
+
+    #[test_case(
+        indoc!{r#"
+            [test-groups."@tool:my-tool:"]
+            max-threads = 1
+        "#},
+        Ok(btreeset! {CustomTestGroup("user-group".into()), CustomTestGroup("@tool:my-tool:".into())})
+        ; "group name valid 1")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups."@tool:my-tool:foo"]
+            max-threads = 1
+        "#},
+        Ok(btreeset! {CustomTestGroup("user-group".into()), CustomTestGroup("@tool:my-tool:foo".into())})
+        ; "group name valid 2")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups.foo]
+            max-threads = 1
+        "#},
+        Err(GroupExpectedError::InvalidTestGroups(btreeset! {CustomTestGroup("foo".into())}))
+        ; "group name doesn't start with @tool:")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups."@tool:moo"]
+            max-threads = 1
+        "#},
+        Err(GroupExpectedError::InvalidTestGroups(btreeset! {CustomTestGroup("@tool:moo".into())}))
+        ; "group name doesn't start with tool name")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups."@tool:my-tool"]
+            max-threads = 1
+        "#},
+        Err(GroupExpectedError::InvalidTestGroups(btreeset! {CustomTestGroup("@tool:my-tool".into())}))
+        ; "group name missing suffix colon")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups.'@global']
+            max-threads = 1
+        "#},
+        Err(GroupExpectedError::DeserializeError("test-groups.@global: custom group name cannot start with \"@\""))
+        ; "group name is @global")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups.'@foo']
+            max-threads = 1
+        "#},
+        Err(GroupExpectedError::DeserializeError("test-groups.@foo: custom group name cannot start with \"@\""))
+        ; "group name starts with @")]
+    fn tool_config_define_groups(
+        input: &str,
+        expected: Result<BTreeSet<CustomTestGroup>, GroupExpectedError>,
+    ) {
+        let config_contents = indoc! {r#"
+            [profile.default]
+            test-group = "user-group"
+
+            [test-groups.user-group]
+            max-threads = 1
+        "#};
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+        let workspace_root = graph.workspace().root();
+        let tool_path = workspace_root.join(".config/tool.toml");
+        std::fs::write(&tool_path, input).unwrap();
+
+        let config_res = NextestConfig::from_sources(
+            workspace_root,
+            &graph,
+            None,
+            &[ToolConfigFile {
+                tool: "my-tool".to_owned(),
+                config_file: tool_path.clone(),
+            }][..],
+        );
+        match expected {
+            Ok(expected_groups) => {
+                let config = config_res.expect("config is valid");
+                let profile = config.profile("default").expect("default profile is known");
+                let profile = profile.apply_build_platforms(&build_platforms());
+                assert_eq!(
+                    profile
+                        .test_group_config()
+                        .keys()
+                        .cloned()
+                        .collect::<BTreeSet<_>>(),
+                    expected_groups
+                );
+            }
+            Err(expected_error) => {
+                let error = config_res.expect_err("config is invalid");
+                assert_eq!(error.config_file(), &tool_path);
+                assert_eq!(error.tool(), Some("my-tool"));
+                match &expected_error {
+                    GroupExpectedError::InvalidTestGroups(expected_groups) => {
+                        assert!(
+                            matches!(
+                                error.kind(),
+                                ConfigParseErrorKind::InvalidTestGroupsDefinedByTool(groups)
+                                    if groups == expected_groups
+                            ),
+                            "expected config.kind ({}) to be {:?}",
+                            error.kind(),
+                            expected_error,
+                        );
+                    }
+                    GroupExpectedError::DeserializeError(error_str) => {
+                        assert!(
+                            matches!(
+                                error.kind(),
+                                ConfigParseErrorKind::DeserializeError(error)
+                                    if error.to_string() == *error_str
+                            ),
+                            "expected config.kind ({}) to be {:?}",
+                            error.kind(),
+                            expected_error,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test_case(
+        indoc!{r#"
+            [test-groups."my-group"]
+            max-threads = 1
+        "#},
+        Ok(btreeset! {CustomTestGroup("my-group".into())})
+        ; "group name valid")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups."@tool:"]
+            max-threads = 1
+        "#},
+        Err(GroupExpectedError::InvalidTestGroups(btreeset! {CustomTestGroup("@tool:".into())}))
+        ; "group name starts with @tool:")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups.'@global']
+            max-threads = 1
+        "#},
+        Err(GroupExpectedError::DeserializeError("test-groups.@global: custom group name cannot start with \"@\""))
+        ; "group name is @global")]
+    #[test_case(
+        indoc!{r#"
+            [test-groups.'@foo']
+            max-threads = 1
+        "#},
+        Err(GroupExpectedError::DeserializeError("test-groups.@foo: custom group name cannot start with \"@\""))
+        ; "group name starts with @")]
+    fn user_config_define_groups(
+        config_contents: &str,
+        expected: Result<BTreeSet<CustomTestGroup>, GroupExpectedError>,
+    ) {
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+        let workspace_root = graph.workspace().root();
+
+        let config_res = NextestConfig::from_sources(workspace_root, &graph, None, &[][..]);
+        match expected {
+            Ok(expected_groups) => {
+                let config = config_res.expect("config is valid");
+                let profile = config.profile("default").expect("default profile is known");
+                let profile = profile.apply_build_platforms(&build_platforms());
+                assert_eq!(
+                    profile
+                        .test_group_config()
+                        .keys()
+                        .cloned()
+                        .collect::<BTreeSet<_>>(),
+                    expected_groups
+                );
+            }
+            Err(expected_error) => {
+                let error = config_res.expect_err("config is invalid");
+                assert_eq!(error.tool(), None);
+                match &expected_error {
+                    GroupExpectedError::InvalidTestGroups(expected_groups) => {
+                        assert!(
+                            matches!(
+                                error.kind(),
+                                ConfigParseErrorKind::InvalidTestGroupsDefined(groups)
+                                    if groups == expected_groups
+                            ),
+                            "expected config.kind ({}) to be {:?}",
+                            error.kind(),
+                            expected_error,
+                        );
+                    }
+                    GroupExpectedError::DeserializeError(error_str) => {
+                        assert!(
+                            matches!(
+                                error.kind(),
+                                ConfigParseErrorKind::DeserializeError(error)
+                                    if error.to_string() == *error_str
+                            ),
+                            "expected config.kind ({}) to be {:?}",
+                            error.kind(),
+                            expected_error,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    fn test_group(name: &str) -> TestGroup {
+        TestGroup::Custom(CustomTestGroup(name.into()))
+    }
+
+    #[test_case(
+        indoc!{r#"
+            [[profile.default.overrides]]
+            filter = 'all()'
+            test-group = "foo"
+        "#},
+        "",
+        "",
+        Some("tool1"),
+        vec![UnknownTestGroupError {
+            profile_name: "default".to_owned(),
+            name: test_group("foo"),
+        }],
+        btreeset! { TestGroup::Global }
+        ; "unknown group in tool config")]
+    #[test_case(
+        "",
+        "",
+        indoc!{r#"
+            [[profile.default.overrides]]
+            filter = 'all()'
+            test-group = "foo"
+        "#},
+        None,
+        vec![UnknownTestGroupError {
+            profile_name: "default".to_owned(),
+            name: test_group("foo"),
+        }],
+        btreeset! { TestGroup::Global }
+        ; "unknown group in user config")]
+    #[test_case(
+        indoc!{r#"
+            [[profile.default.overrides]]
+            filter = 'all()'
+            test-group = "@tool:tool1:foo"
+
+            [test-groups."@tool:tool1:foo"]
+            max-threads = 1
+        "#},
+        indoc!{r#"
+            [[profile.default.overrides]]
+            filter = 'all()'
+            test-group = "@tool:tool1:foo"
+        "#},
+        indoc!{r#"
+            [[profile.default.overrides]]
+            filter = 'all()'
+            test-group = "foo"
+        "#},
+        Some("tool2"),
+        vec![UnknownTestGroupError {
+            profile_name: "default".to_owned(),
+            name: test_group("@tool:tool1:foo"),
+        }],
+        btreeset! { TestGroup::Global }
+        ; "depends on downstream tool config")]
+    #[test_case(
+        indoc!{r#"
+            [[profile.default.overrides]]
+            filter = 'all()'
+            test-group = "foo"
+        "#},
+        "",
+        indoc!{r#"
+            [[profile.default.overrides]]
+            filter = 'all()'
+            test-group = "foo"
+
+            [test-groups.foo]
+            max-threads = 1
+        "#},
+        Some("tool1"),
+        vec![UnknownTestGroupError {
+            profile_name: "default".to_owned(),
+            name: test_group("foo"),
+        }],
+        btreeset! { TestGroup::Global }
+        ; "depends on user config")]
+    fn unknown_groups(
+        tool1_config: &str,
+        tool2_config: &str,
+        user_config: &str,
+        tool: Option<&str>,
+        expected_errors: Vec<UnknownTestGroupError>,
+        expected_known_groups: BTreeSet<TestGroup>,
+    ) {
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, user_config);
+        let workspace_root = graph.workspace().root();
+        let tool1_path = workspace_root.join(".config/tool1.toml");
+        std::fs::write(&tool1_path, tool1_config).unwrap();
+        let tool2_path = workspace_root.join(".config/tool2.toml");
+        std::fs::write(&tool2_path, tool2_config).unwrap();
+
+        let config = NextestConfig::from_sources(
+            workspace_root,
+            &graph,
+            None,
+            &[
+                ToolConfigFile {
+                    tool: "tool1".to_owned(),
+                    config_file: tool1_path,
+                },
+                ToolConfigFile {
+                    tool: "tool2".to_owned(),
+                    config_file: tool2_path,
+                },
+            ][..],
+        )
+        .expect_err("config is invalid");
+        assert_eq!(config.tool(), tool);
+        match config.kind() {
+            ConfigParseErrorKind::UnknownTestGroups {
+                errors,
+                known_groups,
+            } => {
+                assert_eq!(errors, &expected_errors, "expected errors match");
+                assert_eq!(known_groups, &expected_known_groups, "known groups match");
+            }
+            other => {
+                panic!("expected ConfigParseErrorKind::UnknownTestGroups, got {other}");
+            }
+        }
     }
 
     #[test]
@@ -2336,7 +2914,7 @@ mod tests {
             &[ToolConfigFile {
                 tool: "my-tool".to_owned(),
                 config_file: tool_path,
-            }],
+            }][..],
             |_path, tool, ignored| {
                 unknown_keys.insert(tool.map(|s| s.to_owned()), ignored.clone());
             },
@@ -2525,7 +3103,7 @@ mod tests {
 
     fn temp_workspace(temp_dir: &Utf8Path, config_contents: &str) -> PackageGraph {
         Command::new(cargo_path())
-            .args(["init", "--lib", "--name=test-package"])
+            .args(["init", "--lib", "--name=test-package", "--vcs=none"])
             .current_dir(temp_dir)
             .status()
             .expect("error initializing cargo project");
