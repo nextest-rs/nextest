@@ -5,6 +5,7 @@
 
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
+    config::{CustomTestGroup, TestGroup},
     helpers::{dylib_path_envvar, extract_abort_status},
     reuse_build::ArchiveFormat,
     runner::AbortStatus,
@@ -14,7 +15,7 @@ use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use itertools::Itertools;
 use nextest_filtering::errors::FilterExpressionParseErrors;
-use std::{borrow::Cow, env::JoinPathsError, fmt, process::ExitStatus};
+use std::{borrow::Cow, collections::BTreeSet, env::JoinPathsError, fmt, process::ExitStatus};
 use target_spec_miette::IntoMietteDiagnostic;
 use thiserror::Error;
 
@@ -50,13 +51,19 @@ impl ConfigParseError {
         &self.config_file
     }
 
+    /// Returns the tool name associated with this error.
+    pub fn tool(&self) -> Option<&str> {
+        self.tool.as_deref()
+    }
+
     /// Returns the kind of error this is.
     pub fn kind(&self) -> &ConfigParseErrorKind {
         &self.kind
     }
 }
 
-pub(crate) fn provided_by_tool(tool: Option<&str>) -> String {
+/// Returns the string ` provided by tool <tool>`, if `tool` is `Some`.
+pub fn provided_by_tool(tool: Option<&str>) -> String {
     match tool {
         Some(tool) => format!(" provided by tool `{tool}`"),
         None => String::new(),
@@ -78,6 +85,22 @@ pub enum ConfigParseErrorKind {
     /// Errors occurred while parsing overrides.
     #[error("error parsing overrides (destructure this variant for more details)")]
     OverrideError(Vec<ConfigParseOverrideError>),
+    /// An invalid set of test groups was defined by the user.
+    #[error("invalid test groups defined: {}\n(test groups cannot start with '@tool:' unless specified by a tool)", .0.iter().join(", "))]
+    InvalidTestGroupsDefined(BTreeSet<CustomTestGroup>),
+    /// An invalid set of test groups was defined by a tool config file.
+    #[error(
+        "invalid test groups defined by tool: {}\n(test groups must start with '@tool:<tool-name>:')", .0.iter().join(", "))]
+    InvalidTestGroupsDefinedByTool(BTreeSet<CustomTestGroup>),
+    /// Some test groups were unknown.
+    #[error("unknown test groups specified by config (destructure this variant for more details)")]
+    UnknownTestGroups {
+        /// The list of errors that occurred.
+        errors: Vec<UnknownTestGroupError>,
+
+        /// Known groups up to this point.
+        known_groups: BTreeSet<TestGroup>,
+    },
 }
 
 /// An error that occurred while parsing config overrides.
@@ -124,6 +147,17 @@ impl ConfigParseOverrideError {
             .chain(platform_parse_report)
             .chain(parse_reports)
     }
+}
+
+/// An unknown test group was specified in the config.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub struct UnknownTestGroupError {
+    /// The name of the profile under which the unknown test group was found.
+    pub profile_name: String,
+
+    /// The name of the unknown test group.
+    pub name: TestGroup,
 }
 
 /// An error which indicates that a profile was requested but not known to nextest.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::Utf8PathBuf;
+use itertools::Itertools;
 use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::*;
@@ -413,8 +414,9 @@ impl ExpectedError {
                         // Override errors are printed out using miette.
                         for override_error in errors {
                             log::error!(
-                                "for config file `{}`, failed to parse overrides for profile: {}",
+                                "for config file `{}`{}, failed to parse overrides for profile: {}",
                                 err.config_file(),
+                                provided_by_tool(err.tool()),
                                 override_error
                                     .profile_name
                                     .if_supports_color(Stream::Stderr, |p| p.bold()),
@@ -423,6 +425,35 @@ impl ExpectedError {
                                 log::error!(target: "cargo_nextest::no_heading", "{report:?}");
                             }
                         }
+                        None
+                    }
+                    ConfigParseErrorKind::UnknownTestGroups {
+                        errors,
+                        known_groups,
+                    } => {
+                        let known_groups_str = known_groups
+                            .iter()
+                            .map(|group_name| {
+                                group_name.if_supports_color(Stream::Stderr, |x| x.bold())
+                            })
+                            .join(", ");
+                        let mut errors_str = String::new();
+                        for error in errors {
+                            errors_str.push_str(&format!(
+                                " - group `{}` in overrides for profile `{}`\n",
+                                error.name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                                error
+                                    .profile_name
+                                    .if_supports_color(Stream::Stderr, |x| x.bold())
+                            ));
+                        }
+
+                        log::error!(
+                            "for config file `{}`{}, unknown test groups defined \
+                            (known groups: {known_groups_str}):\n{errors_str}",
+                            err.config_file(),
+                            provided_by_tool(err.tool()),
+                        );
                         None
                     }
                     _ => {
