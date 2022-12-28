@@ -22,6 +22,7 @@ pub mod platform;
 pub mod reporter;
 pub mod reuse_build;
 pub mod runner;
+pub mod show_config;
 pub mod signal;
 pub mod target_runner;
 mod test_command;

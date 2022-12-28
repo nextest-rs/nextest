@@ -373,13 +373,7 @@ impl NextestConfig {
 
         // If there were any unknown groups, error out.
         if !unknown_group_errors.is_empty() {
-            let known_groups = std::iter::once(TestGroup::Global)
-                .chain(
-                    known_groups
-                        .iter()
-                        .map(|group| TestGroup::Custom(group.clone())),
-                )
-                .collect();
+            let known_groups = TestGroup::make_all_groups(known_groups.iter().cloned()).collect();
             return Err(ConfigParseError::new(
                 config_file,
                 tool,
@@ -530,12 +524,19 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
     overrides: Vec<ProfileOverrideImpl<State>>,
 }
 
-impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
+impl<'cfg, State> NextestProfile<'cfg, State> {
     /// Returns the absolute profile-specific store directory.
     pub fn store_dir(&self) -> &Utf8Path {
         &self.store_dir
     }
 
+    /// Returns the test group configuration for this profile.
+    pub fn test_group_config(&self) -> &'cfg BTreeMap<CustomTestGroup, TestGroupConfig> {
+        self.test_groups
+    }
+}
+
+impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
     /// Applies build platforms to make the profile ready for evaluation.
     ///
     /// This is a separate step from parsing the config and reading a profile so that cargo-nextest
@@ -557,11 +558,6 @@ impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
 }
 
 impl<'cfg> NextestProfile<'cfg, FinalConfig> {
-    /// Returns the absolute profile-specific store directory.
-    pub fn store_dir(&self) -> &Utf8Path {
-        &self.store_dir
-    }
-
     /// Returns the retry count for this profile.
     pub fn retries(&self) -> RetryPolicy {
         self.custom_profile
@@ -581,11 +577,6 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
         self.custom_profile
             .and_then(|profile| profile.threads_required)
             .unwrap_or(self.default_profile.threads_required)
-    }
-
-    /// Returns the test group configuration for this profile.
-    pub fn test_group_config(&self) -> &'cfg BTreeMap<CustomTestGroup, TestGroupConfig> {
-        self.test_groups
     }
 
     /// Returns the time after which tests are treated as slow for this profile.
@@ -640,6 +631,21 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
 
     /// Returns override settings for individual tests.
     pub fn overrides_for(&self, query: &TestQuery<'_>) -> ProfileOverrides {
+        self.overrides_for_impl(query)
+    }
+
+    /// Returns override settings for individual tests, with sources attached.
+    pub(crate) fn overrides_with_source_for(
+        &self,
+        query: &TestQuery<'_>,
+    ) -> ProfileOverrides<&ProfileOverrideImpl<FinalConfig>> {
+        self.overrides_for_impl(query)
+    }
+
+    fn overrides_for_impl<'p, Source: OverrideSource<'p>>(
+        &'p self,
+        query: &TestQuery<'_>,
+    ) -> ProfileOverrides<Source> {
         let mut threads_required = None;
         let mut retries = None;
         let mut slow_timeout = None;
@@ -662,19 +668,19 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
                 // If no expression is present, it's equivalent to "all()".
             }
             if threads_required.is_none() && override_.data.threads_required.is_some() {
-                threads_required = override_.data.threads_required;
+                threads_required = Source::track_source(override_.data.threads_required, override_);
             }
             if retries.is_none() && override_.data.retries.is_some() {
-                retries = override_.data.retries;
+                retries = Source::track_source(override_.data.retries, override_);
             }
             if slow_timeout.is_none() && override_.data.slow_timeout.is_some() {
-                slow_timeout = override_.data.slow_timeout;
+                slow_timeout = Source::track_source(override_.data.slow_timeout, override_);
             }
             if leak_timeout.is_none() && override_.data.leak_timeout.is_some() {
-                leak_timeout = override_.data.leak_timeout;
+                leak_timeout = Source::track_source(override_.data.leak_timeout, override_);
             }
             if test_group.is_none() && override_.data.test_group.is_some() {
-                test_group = override_.data.test_group.clone();
+                test_group = Source::track_source(override_.data.test_group.clone(), override_);
             }
         }
 
@@ -709,39 +715,94 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
 /// Override settings for individual tests.
 ///
 /// Returned by [`NextestProfile::overrides_for`].
+///
+/// The `Source` parameter tracks an optional source.
 #[derive(Clone, Debug)]
-pub struct ProfileOverrides {
-    threads_required: Option<ThreadsRequired>,
-    retries: Option<RetryPolicy>,
-    slow_timeout: Option<SlowTimeout>,
-    leak_timeout: Option<Duration>,
-    test_group: Option<TestGroup>,
+pub struct ProfileOverrides<Source = ()> {
+    threads_required: Option<(ThreadsRequired, Source)>,
+    retries: Option<(RetryPolicy, Source)>,
+    slow_timeout: Option<(SlowTimeout, Source)>,
+    leak_timeout: Option<(Duration, Source)>,
+    test_group: Option<(TestGroup, Source)>,
+}
+
+trait OverrideSource<'p>: Sized {
+    fn track_source<T>(
+        value: Option<T>,
+        source: &'p ProfileOverrideImpl<FinalConfig>,
+    ) -> Option<(T, Self)>;
+}
+
+impl<'p> OverrideSource<'p> for () {
+    fn track_source<T>(
+        value: Option<T>,
+        _source: &'p ProfileOverrideImpl<FinalConfig>,
+    ) -> Option<(T, Self)> {
+        value.map(|value| (value, ()))
+    }
+}
+
+impl<'p> OverrideSource<'p> for &'p ProfileOverrideImpl<FinalConfig> {
+    fn track_source<T>(
+        value: Option<T>,
+        source: &'p ProfileOverrideImpl<FinalConfig>,
+    ) -> Option<(T, Self)> {
+        value.map(|value| (value, source))
+    }
 }
 
 impl ProfileOverrides {
     /// Returns the number of threads required for this test.
     pub fn threads_required(&self) -> Option<ThreadsRequired> {
-        self.threads_required
+        self.threads_required.map(|x| x.0)
     }
 
     /// Returns the number of retries for this test.
     pub fn retries(&self) -> Option<RetryPolicy> {
-        self.retries
+        self.retries.map(|x| x.0)
     }
 
     /// Returns the slow timeout for this test.
     pub fn slow_timeout(&self) -> Option<SlowTimeout> {
-        self.slow_timeout
+        self.slow_timeout.map(|x| x.0)
     }
 
     /// Returns the leak timeout for this test.
     pub fn leak_timeout(&self) -> Option<Duration> {
-        self.leak_timeout
+        self.leak_timeout.map(|x| x.0)
     }
 
     /// Returns the test group for this test.
     pub fn test_group(&self) -> Option<&TestGroup> {
-        self.test_group.as_ref()
+        self.test_group.as_ref().map(|x| &x.0)
+    }
+}
+
+#[allow(dead_code)]
+impl<Source> ProfileOverrides<Source> {
+    /// Returns the number of threads required for this test, with the source attached.
+    pub(crate) fn threads_required_with_source(&self) -> Option<(ThreadsRequired, &Source)> {
+        self.threads_required.as_ref().map(|x| (x.0, &x.1))
+    }
+
+    /// Returns the number of retries for this test, with the source attached.
+    pub(crate) fn retries_with_source(&self) -> Option<(RetryPolicy, &Source)> {
+        self.retries.as_ref().map(|x| (x.0, &x.1))
+    }
+
+    /// Returns the slow timeout for this test, with the source attached.
+    pub(crate) fn slow_timeout_with_source(&self) -> Option<(SlowTimeout, &Source)> {
+        self.slow_timeout.as_ref().map(|x| (x.0, &x.1))
+    }
+
+    /// Returns the leak timeout for this test, with the source attached.
+    pub(crate) fn leak_timeout_with_source(&self) -> Option<(Duration, &Source)> {
+        self.leak_timeout.as_ref().map(|x| (x.0, &x.1))
+    }
+
+    /// Returns the test group for this test, with the source attached.
+    pub(crate) fn test_group_with_source(&self) -> Option<(&TestGroup, &Source)> {
+        self.test_group.as_ref().map(|x| (&x.0, &x.1))
     }
 }
 
@@ -921,6 +982,15 @@ impl FromStr for TestThreads {
                 (get_num_cpus() as isize + j).max(1) as usize
             )),
             Ok(j) => Ok(TestThreads::Count(j as usize)),
+        }
+    }
+}
+
+impl fmt::Display for TestThreads {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Count(threads) => write!(f, "{}", threads),
+            Self::NumCpus => write!(f, "num-cpus"),
         }
     }
 }
@@ -1277,11 +1347,22 @@ where
 /// Represents the test group a test is in.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum TestGroup {
-    /// This test is not in a group.
-    Global,
-
     /// This test is in the named custom group.
     Custom(CustomTestGroup),
+
+    /// This test is not in a group.
+    Global,
+}
+
+impl TestGroup {
+    pub(crate) fn make_all_groups(
+        custom_groups: impl IntoIterator<Item = CustomTestGroup>,
+    ) -> impl Iterator<Item = Self> {
+        custom_groups
+            .into_iter()
+            .map(TestGroup::Custom)
+            .chain(std::iter::once(TestGroup::Global))
+    }
 }
 
 impl<'de> Deserialize<'de> for TestGroup {
@@ -1298,6 +1379,18 @@ impl<'de> Deserialize<'de> for TestGroup {
             Ok(TestGroup::Custom(
                 CustomTestGroup::new(group).map_err(serde::de::Error::custom)?,
             ))
+        }
+    }
+}
+
+impl FromStr for TestGroup {
+    type Err = InvalidCustomTestGroupName;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "@global" {
+            Ok(TestGroup::Global)
+        } else {
+            Ok(TestGroup::Custom(CustomTestGroup::new(s.into())?))
         }
     }
 }
@@ -1465,15 +1558,31 @@ impl NextestOverridesImpl {
     ) -> Vec<ProfileOverrideImpl<PreBuildPlatform>> {
         overrides
             .iter()
-            .filter_map(|source| ProfileOverrideImpl::new(graph, profile_name, source, errors))
+            .enumerate()
+            .filter_map(|(index, source)| {
+                ProfileOverrideImpl::new(graph, profile_name, index, source, errors)
+            })
             .collect()
     }
 }
 
 #[derive(Clone, Debug)]
-struct ProfileOverrideImpl<State> {
+pub(crate) struct ProfileOverrideImpl<State> {
+    id: OverrideId,
     state: State,
     data: ProfileOverrideData,
+}
+
+impl<State> ProfileOverrideImpl<State> {
+    pub(crate) fn id(&self) -> &OverrideId {
+        &self.id
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct OverrideId {
+    pub(crate) profile_name: SmolStr,
+    index: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -1491,6 +1600,7 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
     fn new(
         graph: &PackageGraph,
         profile_name: &str,
+        index: usize,
         source: &ProfileOverrideSource,
         errors: &mut Vec<ConfigParseOverrideError>,
     ) -> Option<Self> {
@@ -1515,6 +1625,10 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
 
         match (target_spec, filter_expr) {
             (Ok(target_spec), Ok(expr)) => Some(Self {
+                id: OverrideId {
+                    profile_name: profile_name.into(),
+                    index,
+                },
                 state: PreBuildPlatform {},
                 data: ProfileOverrideData {
                     target_spec,
@@ -1571,12 +1685,28 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
             (true, true)
         };
         ProfileOverrideImpl {
+            id: self.id,
             state: FinalConfig {
                 host_eval,
                 target_eval,
             },
             data: self.data,
         }
+    }
+}
+
+impl ProfileOverrideImpl<FinalConfig> {
+    /// Returns the target spec.
+    pub(crate) fn target_spec(&self) -> Option<&TargetSpec> {
+        self.data.target_spec.as_ref()
+    }
+
+    /// Returns the filter string and expression, if any.
+    pub(crate) fn filter(&self) -> Option<(&str, &FilteringExpr)> {
+        self.data
+            .expr
+            .as_ref()
+            .map(|(filter, expr)| (filter.as_str(), expr))
     }
 }
 

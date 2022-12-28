@@ -1,11 +1,12 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use super::{DisplayFilterMatcher, TestListDisplayFilter};
 use crate::{
     cargo_config::EnvironmentMap,
     double_spawn::DoubleSpawnInfo,
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
-    helpers::{dylib_path, dylib_path_envvar, write_test_name},
+    helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
     target_runner::{PlatformRunner, TargetRunner},
@@ -18,6 +19,7 @@ use guppy::{
     graph::{PackageGraph, PackageMetadata},
     PackageId,
 };
+use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{
     BuildPlatform, RustBinaryId, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
     RustTestCaseSummary, RustTestSuiteStatusSummary, RustTestSuiteSummary, TestListSummary,
@@ -532,13 +534,43 @@ impl<'g> TestList<'g> {
         })
     }
 
-    fn write_human(&self, mut writer: impl Write, verbose: bool, colorize: bool) -> io::Result<()> {
+    /// Writes this test list out in a human-friendly format.
+    pub fn write_human(&self, writer: impl Write, verbose: bool, colorize: bool) -> io::Result<()> {
+        self.write_human_impl(None, writer, verbose, colorize)
+    }
+
+    /// Writes this test list out in a human-friendly format with the given filter.
+    pub(crate) fn write_human_with_filter(
+        &self,
+        filter: &TestListDisplayFilter<'_>,
+        writer: impl Write,
+        verbose: bool,
+        colorize: bool,
+    ) -> io::Result<()> {
+        self.write_human_impl(Some(filter), writer, verbose, colorize)
+    }
+
+    fn write_human_impl(
+        &self,
+        filter: Option<&TestListDisplayFilter<'_>>,
+        mut writer: impl Write,
+        verbose: bool,
+        colorize: bool,
+    ) -> io::Result<()> {
         let mut styles = Styles::default();
         if colorize {
             styles.colorize();
         }
 
         for info in self.rust_suites.values() {
+            let matcher = match filter {
+                Some(filter) => match filter.matcher_for(&info.binary_id) {
+                    Some(matcher) => matcher,
+                    None => continue,
+                },
+                None => DisplayFilterMatcher::All,
+            };
+
             // Skip this binary if there are no tests within it that will be run, and this isn't
             // verbose output.
             if !verbose
@@ -571,10 +603,14 @@ impl<'g> TestList<'g> {
 
             match &info.status {
                 RustTestSuiteStatus::Listed { test_cases } => {
-                    if test_cases.is_empty() {
+                    let matching_tests: Vec<_> = test_cases
+                        .iter()
+                        .filter(|(name, _)| matcher.is_match(name))
+                        .collect();
+                    if matching_tests.is_empty() {
                         writeln!(indented, "(no tests)")?;
                     } else {
-                        for (name, info) in test_cases {
+                        for (name, info) in matching_tests {
                             match (verbose, info.filter_match.is_match()) {
                                 (_, true) => {
                                     write_test_name(name, &styles, &mut indented)?;
@@ -826,6 +862,19 @@ impl<'a> TestInstance<'a> {
     #[inline]
     pub(crate) fn sort_key(&self) -> (&'a str, &'a str) {
         ((self.suite_info.binary_id.as_str()), self.name)
+    }
+
+    /// Returns the corresponding [`TestQuery`] for this `TestInstance`.
+    pub fn to_test_query(&self) -> TestQuery<'a> {
+        TestQuery {
+            binary_query: BinaryQuery {
+                package_id: self.suite_info.package.id(),
+                kind: self.suite_info.kind.as_str(),
+                binary_name: &self.suite_info.binary_name,
+                platform: convert_build_platform(self.suite_info.build_platform),
+            },
+            test_name: self.name,
+        }
     }
 
     /// Creates the command for this test instance.

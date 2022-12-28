@@ -392,3 +392,94 @@ fn test_run_from_archive() {
     );
     check_run_output(&output.stderr, true);
 }
+
+#[test]
+fn test_show_config_test_groups() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let default_profile_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+        ])
+        .output();
+
+    insta::assert_snapshot!(default_profile_output.stdout_as_str());
+
+    let default_profile_all_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--show-default",
+        ])
+        .output();
+
+    insta::assert_snapshot!(default_profile_all_output.stdout_as_str());
+
+    let with_retries_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--profile=with-retries",
+        ])
+        .output();
+
+    insta::assert_snapshot!(with_retries_output.stdout_as_str());
+
+    let with_retries_all_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--profile=with-retries",
+            "--show-default",
+        ])
+        .output();
+
+    insta::assert_snapshot!(with_retries_all_output.stdout_as_str());
+
+    let with_termination_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--profile=with-termination",
+        ])
+        .output();
+
+    insta::assert_snapshot!(with_termination_output.stdout_as_str());
+
+    let with_termination_all_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "test-groups",
+            "--workspace",
+            "--all-targets",
+            "--profile=with-termination",
+            "--show-default",
+        ])
+        .output();
+
+    insta::assert_snapshot!(with_termination_all_output.stdout_as_str());
+}

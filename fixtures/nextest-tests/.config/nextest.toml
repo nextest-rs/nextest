@@ -18,6 +18,7 @@ retries = 5
 [[profile.with-retries.overrides]]
 filter = "test(test_flaky_mod)"
 retries = 4
+test-group = 'flaky'
 
 [profile.with-termination]
 slow-timeout = { period = "1s", terminate-after = 2 }
@@ -26,6 +27,7 @@ slow-timeout = { period = "1s", terminate-after = 2 }
 filter = 'test(=test_slow_timeout_2)'
 # This is set to 1 second
 slow-timeout = { period = "500ms", terminate-after = 2 }
+test-group = '@global'
 
 [profile.with-junit]
 retries = 2
@@ -35,3 +37,9 @@ path = "junit.xml"
 
 [profile.retries-with-backoff]
 retries = { backoff = "exponential", count = 2, jitter = true, delay = "1s" }
+
+[test-groups.flaky]
+max-threads = 4
+
+[test-groups.unused]
+max-threads = 20

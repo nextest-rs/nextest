@@ -8,11 +8,13 @@
 //! * [`BinaryList`] for test binaries
 
 mod binary_list;
+mod display_filter;
 mod output_format;
 mod rust_build_meta;
 mod test_list;
 
 pub use binary_list::*;
+pub(crate) use display_filter::*;
 pub use output_format::*;
 pub use rust_build_meta::*;
 pub use test_list::*;

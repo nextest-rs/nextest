@@ -9,7 +9,6 @@ use crate::{
     config::{NextestProfile, ProfileOverrides, RetryPolicy, TestGroup, TestThreads},
     double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
-    helpers::convert_build_platform,
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
@@ -20,7 +19,6 @@ use async_scoped::TokioScope;
 use bytes::Bytes;
 use future_queue::StreamExt;
 use futures::{future::try_join, prelude::*};
-use nextest_filtering::{BinaryQuery, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
@@ -322,17 +320,7 @@ impl<'a> TestRunnerInner<'a> {
                         let this_run_sender = run_sender.clone();
                         let mut cancellation_receiver = cancellation_sender.subscribe();
 
-                        let query = TestQuery {
-                            binary_query: BinaryQuery {
-                                package_id: test_instance.suite_info.package.id(),
-                                kind: test_instance.suite_info.kind.as_str(),
-                                binary_name: &test_instance.suite_info.binary_name,
-                                platform: convert_build_platform(
-                                    test_instance.suite_info.build_platform,
-                                ),
-                            },
-                            test_name: test_instance.name,
-                        };
+                        let query = test_instance.to_test_query();
                         let overrides = self.profile.overrides_for(&query);
                         let threads_required = overrides
                             .threads_required()

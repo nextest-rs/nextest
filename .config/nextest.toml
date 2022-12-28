@@ -36,4 +36,7 @@ retries = 3
 
 # Added for testing.
 [test-groups.my-group]
-max-threads = 4
+max-threads = 8
+
+[test-groups.unused-group]
+max-threads = 8

@@ -13,3 +13,10 @@ members = [
 # make backtrace + color-eyre faster on debug builds
 [profile.dev.package.backtrace]
 opt-level = 3
+
+# insta and similar are recommended by insta
+[profile.dev.package.insta]
+opt-level = 3
+
+[profile.dev.package.similar]
+opt-level = 3
