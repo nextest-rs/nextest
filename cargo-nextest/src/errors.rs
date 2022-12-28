@@ -155,6 +155,11 @@ pub enum ExpectedError {
         #[from]
         err: ConfigureHandleInheritanceError,
     },
+    #[error("show test groups error")]
+    ShowTestGroupsError {
+        #[from]
+        err: ShowTestGroupsError,
+    },
     #[error("test run failed")]
     TestRunFailed,
     #[cfg(feature = "self-update")]
@@ -329,7 +334,8 @@ impl ExpectedError {
             | Self::CargoMetadataParseError { .. }
             | Self::TestBinaryArgsParseError { .. }
             | Self::DialoguerError { .. }
-            | Self::SignalHandlerSetupError { .. } => NextestExitCode::SETUP_ERROR,
+            | Self::SignalHandlerSetupError { .. }
+            | Self::ShowTestGroupsError { .. } => NextestExitCode::SETUP_ERROR,
             #[cfg(feature = "self-update")]
             Self::UpdateVersionParseError { .. } => NextestExitCode::SETUP_ERROR,
             Self::DoubleSpawnParseArgsError { .. } | Self::DoubleSpawnExecError { .. } => {
@@ -588,6 +594,10 @@ impl ExpectedError {
             Self::TestRunFailed => {
                 log::error!("test run failed");
                 None
+            }
+            Self::ShowTestGroupsError { err } => {
+                log::error!("{err}");
+                err.source()
             }
             #[cfg(feature = "self-update")]
             Self::UpdateVersionParseError { err } => {

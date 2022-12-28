@@ -16,8 +16,8 @@ use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        get_num_cpus, NextestConfig, NextestProfile, PreBuildPlatform, RetryPolicy, TestThreads,
-        ToolConfigFile,
+        get_num_cpus, NextestConfig, NextestProfile, PreBuildPlatform, RetryPolicy, TestGroup,
+        TestThreads, ToolConfigFile,
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
@@ -30,6 +30,7 @@ use nextest_runner::{
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, TestRunnerBuilder},
+    show_config::{ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -94,18 +95,18 @@ struct AppOpts {
     command: Command,
 }
 
+fn build_filter_needs_deps(build_filter: &TestBuildFilter) -> bool {
+    build_filter
+        .filter_expr
+        .iter()
+        .any(|expr| FilteringExpr::needs_deps(expr))
+}
+
 impl AppOpts {
     /// Execute the command.
     ///
     /// Returns the exit code.
     fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
-        fn build_filter_needs_deps(build_filter: &TestBuildFilter) -> bool {
-            build_filter
-                .filter_expr
-                .iter()
-                .any(|expr| FilteringExpr::needs_deps(expr))
-        }
-
         match self.command {
             Command::List {
                 cargo_options,
@@ -175,6 +176,12 @@ impl AppOpts {
                 app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
                 Ok(0)
             }
+            Command::ShowConfig { command } => command.exec(
+                self.manifest_path,
+                self.output,
+                self.config_opts,
+                output_writer,
+            ),
             Command::Self_ { command } => command.exec(self.output),
         }
     }
@@ -343,6 +350,16 @@ enum Command {
         )]
         zstd_level: i32,
         // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
+    },
+    /// Show information about nextest's configuration in this workspace.
+    ///
+    /// This command shows configuration information about nextest, including overrides applied to
+    /// individual tests.
+    ///
+    /// In the future, this will show more information about configurations and overrides.
+    ShowConfig {
+        #[clap(subcommand)]
+        command: ShowConfigCommand,
     },
     /// Manage the nextest installation
     #[clap(name = "self")]
@@ -1166,6 +1183,64 @@ impl App {
         Ok(())
     }
 
+    fn exec_show_test_groups(
+        &self,
+        profile_name: Option<&str>,
+        show_default: bool,
+        groups: Vec<TestGroup>,
+        output_writer: &mut OutputWriter,
+    ) -> Result<()> {
+        let config = self
+            .base
+            .config_opts
+            .make_config(&self.base.workspace_root, self.base.graph())?;
+        let profile = self.load_profile(profile_name, &config)?;
+
+        // Validate test groups before doing any other work.
+        let mode = if groups.is_empty() {
+            ShowTestGroupsMode::All
+        } else {
+            let groups = ShowTestGroups::validate_groups(&profile, groups)?;
+            ShowTestGroupsMode::Only(groups)
+        };
+        let settings = ShowTestGroupSettings { mode, show_default };
+
+        let filter_exprs = self.build_filtering_expressions()?;
+        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+
+        let binary_list = self.base.build_binary_list()?;
+        let build_platforms = binary_list.rust_build_meta.build_platforms()?;
+
+        let double_spawn = self.base.load_double_spawn();
+        let target_runner = self
+            .base
+            .load_runner(&binary_list.rust_build_meta.build_platforms()?);
+        let ctx = TestExecuteContext {
+            double_spawn,
+            target_runner,
+        };
+
+        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder)?;
+
+        let profile = profile.apply_build_platforms(&build_platforms);
+
+        let mut writer = output_writer.stdout_writer();
+
+        let show_test_groups = ShowTestGroups::new(&profile, &test_list, &settings);
+        show_test_groups
+            .write_human(
+                &mut writer,
+                self.base
+                    .output
+                    .color
+                    .should_colorize(supports_color::Stream::Stdout),
+            )
+            .map_err(WriteTestListError::Io)?;
+        writer.flush().map_err(WriteTestListError::Io)?;
+
+        Ok(())
+    }
+
     fn exec_run(
         &self,
         profile_name: Option<&str>,
@@ -1236,6 +1311,69 @@ impl App {
             return Err(ExpectedError::test_run_failed());
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum ShowConfigCommand {
+    /// Show defined test groups and their associated tests.
+    TestGroups {
+        /// Nextest profile to show test groups for
+        #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
+        profile: Option<String>,
+
+        /// Show default test groups
+        #[arg(long)]
+        show_default: bool,
+
+        /// Show only the named groups
+        #[arg(long)]
+        groups: Vec<TestGroup>,
+
+        #[clap(flatten)]
+        cargo_options: CargoOptions,
+
+        #[clap(flatten)]
+        build_filter: TestBuildFilter,
+
+        #[clap(flatten)]
+        reuse_build: ReuseBuildOpts,
+    },
+}
+
+impl ShowConfigCommand {
+    fn exec(
+        self,
+        manifest_path: Option<Utf8PathBuf>,
+        output: OutputOpts,
+        config_opts: ConfigOpts,
+        output_writer: &mut OutputWriter,
+    ) -> Result<i32> {
+        match self {
+            Self::TestGroups {
+                profile,
+                show_default,
+                groups,
+                cargo_options,
+                build_filter,
+                reuse_build,
+            } => {
+                let base = BaseApp::new(
+                    output,
+                    reuse_build,
+                    cargo_options,
+                    config_opts,
+                    manifest_path,
+                    build_filter_needs_deps(&build_filter),
+                    output_writer,
+                )?;
+                let app = App::new(base, build_filter)?;
+
+                app.exec_show_test_groups(profile.as_deref(), show_default, groups, output_writer)?;
+            }
+        }
+
+        Ok(0)
     }
 }
 

@@ -9,7 +9,7 @@ use nextest_metadata::{
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::{fmt, process::Command};
+use std::{borrow::Cow, fmt, process::Command};
 
 pub struct TestInfo {
     id: RustBinaryId,
@@ -190,6 +190,10 @@ pub struct CargoNextestOutput {
 }
 
 impl CargoNextestOutput {
+    pub fn stdout_as_str(&self) -> Cow<'_, str> {
+        String::from_utf8_lossy(&self.stdout)
+    }
+
     pub fn decode_test_list_json(&self) -> Result<TestListSummary> {
         Ok(serde_json::from_slice(&self.stdout)?)
     }

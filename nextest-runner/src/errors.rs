@@ -1008,6 +1008,24 @@ pub enum TargetRunnerError {
 #[error("error setting up signal handler")]
 pub struct SignalHandlerSetupError(#[from] std::io::Error);
 
+/// An error occurred while showing test groups.
+#[derive(Debug, Error)]
+pub enum ShowTestGroupsError {
+    /// Unknown test groups were specified.
+    #[error(
+        "unknown test groups specified: {}\n(known groups: {})",
+        unknown_groups.iter().join(", "),
+        known_groups.iter().join(", "),
+    )]
+    UnknownGroups {
+        /// The unknown test groups.
+        unknown_groups: BTreeSet<TestGroup>,
+
+        /// All known test groups.
+        known_groups: BTreeSet<TestGroup>,
+    },
+}
+
 #[cfg(feature = "self-update")]
 mod self_update_errors {
     use super::*;

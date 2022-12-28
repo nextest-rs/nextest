@@ -5,6 +5,7 @@ use crate::{list::Styles, runner::AbortStatus};
 use camino::{Utf8Path, Utf8PathBuf};
 use owo_colors::OwoColorize;
 use std::{
+    fmt,
     io::{self, Write},
     path::PathBuf,
     process::ExitStatus,
@@ -183,6 +184,18 @@ pub(crate) fn display_nt_status(nt_status: windows::Win32::Foundation::NTSTATUS)
         nt_status.0,
         io::Error::from_raw_os_error(win32_code as i32)
     );
+}
+
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct QuotedDisplay<'a, T: ?Sized>(pub(crate) &'a T);
+
+impl<'a, T: ?Sized> fmt::Display for QuotedDisplay<'a, T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}'", self.0)
+    }
 }
 
 // From https://twitter.com/8051Enthusiast/status/1571909110009921538
