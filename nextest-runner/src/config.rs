@@ -2111,7 +2111,7 @@ mod tests {
     }
 
     #[test]
-    fn lowpri_config() {
+    fn tool_config_basic() {
         let config_contents = r#"
         [profile.default]
         retries = 3
@@ -2121,7 +2121,7 @@ mod tests {
         retries = 20
         "#;
 
-        let lowpri1_config_contents = r#"
+        let tool1_config_contents = r#"
         [profile.default]
         retries = 4
 
@@ -2129,15 +2129,15 @@ mod tests {
         filter = 'test(test_bar)'
         retries = 21
 
-        [profile.lowpri]
+        [profile.tool]
         retries = 12
 
-        [[profile.lowpri.overrides]]
+        [[profile.tool.overrides]]
         filter = 'test(test_baz)'
         retries = 22
         "#;
 
-        let lowpri2_config_contents = r#"
+        let tool2_config_contents = r#"
         [profile.default]
         retries = 5
 
@@ -2145,21 +2145,21 @@ mod tests {
         filter = 'test(test_)'
         retries = 23
 
-        [profile.lowpri]
+        [profile.tool]
         retries = 16
 
-        [[profile.lowpri.overrides]]
+        [[profile.tool.overrides]]
         filter = 'test(test_ba)'
         retries = 24
 
-        [[profile.lowpri.overrides]]
+        [[profile.tool.overrides]]
         filter = 'test(test_)'
         retries = 25
 
-        [profile.lowpri2]
+        [profile.tool2]
         retries = 18
 
-        [[profile.lowpri2.overrides]]
+        [[profile.tool2.overrides]]
         filter = 'all()'
         retries = 26
         "#;
@@ -2169,10 +2169,10 @@ mod tests {
 
         let graph = temp_workspace(workspace_path, config_contents);
         let workspace_root = graph.workspace().root();
-        let lowpri1_path = workspace_root.join(".config/lowpri1.toml");
-        let lowpri2_path = workspace_root.join(".config/lowpri2.toml");
-        std::fs::write(&lowpri1_path, lowpri1_config_contents).unwrap();
-        std::fs::write(&lowpri2_path, lowpri2_config_contents).unwrap();
+        let tool1_path = workspace_root.join(".config/tool1.toml");
+        let tool2_path = workspace_root.join(".config/tool2.toml");
+        std::fs::write(&tool1_path, tool1_config_contents).unwrap();
+        std::fs::write(&tool2_path, tool2_config_contents).unwrap();
 
         let config = NextestConfig::from_sources(
             workspace_root,
@@ -2180,12 +2180,12 @@ mod tests {
             None,
             &[
                 ToolConfigFile {
-                    tool: "lowpri1".to_owned(),
-                    config_file: lowpri1_path,
+                    tool: "tool1".to_owned(),
+                    config_file: tool1_path,
                 },
                 ToolConfigFile {
-                    tool: "lowpri2".to_owned(),
-                    config_file: lowpri2_path,
+                    tool: "tool2".to_owned(),
+                    config_file: tool2_path,
                 },
             ],
         )
@@ -2244,47 +2244,44 @@ mod tests {
             "retries for test_baz/default profile"
         );
 
-        let lowpri_profile = config
-            .profile("lowpri")
-            .expect("lowpri profile is present")
+        let tool_profile = config
+            .profile("tool")
+            .expect("tool profile is present")
             .apply_build_platforms(&build_platforms());
-        assert_eq!(lowpri_profile.retries(), RetryPolicy::new_without_delay(12));
+        assert_eq!(tool_profile.retries(), RetryPolicy::new_without_delay(12));
         assert_eq!(
-            lowpri_profile.overrides_for(&test_foo_query).retries(),
+            tool_profile.overrides_for(&test_foo_query).retries(),
             Some(RetryPolicy::new_without_delay(25)),
             "retries for test_foo/default profile"
         );
         assert_eq!(
-            lowpri_profile.overrides_for(&test_bar_query).retries(),
+            tool_profile.overrides_for(&test_bar_query).retries(),
             Some(RetryPolicy::new_without_delay(24)),
             "retries for test_bar/default profile"
         );
         assert_eq!(
-            lowpri_profile.overrides_for(&test_baz_query).retries(),
+            tool_profile.overrides_for(&test_baz_query).retries(),
             Some(RetryPolicy::new_without_delay(22)),
             "retries for test_baz/default profile"
         );
 
-        let lowpri2_profile = config
-            .profile("lowpri2")
-            .expect("lowpri2 profile is present")
+        let tool2_profile = config
+            .profile("tool2")
+            .expect("tool2 profile is present")
             .apply_build_platforms(&build_platforms());
+        assert_eq!(tool2_profile.retries(), RetryPolicy::new_without_delay(18));
         assert_eq!(
-            lowpri2_profile.retries(),
-            RetryPolicy::new_without_delay(18)
-        );
-        assert_eq!(
-            lowpri2_profile.overrides_for(&test_foo_query).retries(),
+            tool2_profile.overrides_for(&test_foo_query).retries(),
             Some(RetryPolicy::new_without_delay(26)),
             "retries for test_foo/default profile"
         );
         assert_eq!(
-            lowpri2_profile.overrides_for(&test_bar_query).retries(),
+            tool2_profile.overrides_for(&test_bar_query).retries(),
             Some(RetryPolicy::new_without_delay(26)),
             "retries for test_bar/default profile"
         );
         assert_eq!(
-            lowpri2_profile.overrides_for(&test_baz_query).retries(),
+            tool2_profile.overrides_for(&test_baz_query).retries(),
             Some(RetryPolicy::new_without_delay(26)),
             "retries for test_baz/default profile"
         );
@@ -2313,10 +2310,10 @@ mod tests {
         retries = 4
         ignored5 = false
 
-        [profile.lowpri]
+        [profile.tool]
         retries = 12
 
-        [[profile.lowpri.overrides]]
+        [[profile.tool.overrides]]
         filter = 'test(test_baz)'
         retries = 22
         ignored6 = 6.5
@@ -2372,7 +2369,7 @@ mod tests {
             maplit::btreeset! {
                 "store.ignored4".to_owned(),
                 "profile.default.ignored5".to_owned(),
-                "profile.lowpri.overrides.0.ignored6".to_owned(),
+                "profile.tool.overrides.0.ignored6".to_owned(),
             }
         );
     }
