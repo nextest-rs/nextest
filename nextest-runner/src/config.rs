@@ -14,7 +14,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
-use nextest_filtering::{FilteringExpr, FilteringSet, TestQuery};
+use nextest_filtering::{FilteringExpr, TestQuery};
 use once_cell::sync::Lazy;
 use serde::{de::IntoDeserializer, Deserialize};
 use smol_str::SmolStr;
@@ -481,10 +481,7 @@ impl FromStr for ToolConfigFile {
 
 /// The state of nextest profiles before build platforms have been applied.
 #[derive(Clone, Debug)]
-pub struct PreBuildPlatform {
-    // This is used by NextestOverridesImpl.
-    target_spec: Option<TargetSpec>,
-}
+pub struct PreBuildPlatform {}
 
 /// The state of nextest profiles after build platforms have been applied.
 #[derive(Clone, Debug)]
@@ -630,8 +627,11 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
                 continue;
             }
 
-            if !override_.data.expr.matches_test(query) {
-                continue;
+            if let Some((_, expr)) = &override_.data.expr {
+                if !expr.matches_test(query) {
+                    continue;
+                }
+                // If no expression is present, it's equivalent to "all()".
             }
             if threads_required.is_none() && override_.data.threads_required.is_some() {
                 threads_required = override_.data.threads_required;
@@ -1438,7 +1438,8 @@ struct ProfileOverrideImpl<State> {
 
 #[derive(Clone, Debug)]
 struct ProfileOverrideData {
-    expr: FilteringExpr,
+    target_spec: Option<TargetSpec>,
+    expr: Option<(String, FilteringExpr)>,
     threads_required: Option<ThreadsRequired>,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
@@ -1468,15 +1469,15 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
             .as_ref()
             .map(|platform_str| TargetSpec::new(platform_str.to_owned()))
             .transpose();
-        let filter_expr = source.filter.as_ref().map_or_else(
-            || Ok(FilteringExpr::Set(FilteringSet::All)),
-            |filter| FilteringExpr::parse(filter, graph),
-        );
+        let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
+            Some(FilteringExpr::parse(filter, graph).map(|expr| (filter.clone(), expr))).transpose()
+        });
 
         match (target_spec, filter_expr) {
             (Ok(target_spec), Ok(expr)) => Some(Self {
-                state: PreBuildPlatform { target_spec },
+                state: PreBuildPlatform {},
                 data: ProfileOverrideData {
+                    target_spec,
                     expr,
                     threads_required: source.threads_required,
                     retries: source.retries,
@@ -1519,7 +1520,7 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
         self,
         build_platforms: &BuildPlatforms,
     ) -> ProfileOverrideImpl<FinalConfig> {
-        let (host_eval, target_eval) = if let Some(spec) = self.state.target_spec {
+        let (host_eval, target_eval) = if let Some(spec) = &self.data.target_spec {
             // unknown (None) gets unwrapped to true.
             let host_eval = spec.eval(&build_platforms.host).unwrap_or(true);
             let target_eval = build_platforms.target.as_ref().map_or(host_eval, |triple| {
