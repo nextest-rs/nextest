@@ -100,9 +100,8 @@ pub fn double_spawn_child_init() {
 
 #[cfg(unix)]
 mod imp {
-    use nix::sys::signal::{SigSet, Signal};
-
     use super::*;
+    use nix::sys::signal::{SigSet, Signal};
     use std::path::PathBuf;
 
     #[derive(Clone, Debug)]

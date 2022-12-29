@@ -13,8 +13,6 @@
 //!     - return an error/none variant of the expected result type
 //!     - push an error in the parsing state (in span.extra)
 
-use std::{cell::RefCell, fmt};
-
 use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
 use nom::{
@@ -27,11 +25,11 @@ use nom::{
     Slice,
 };
 use nom_tracable::tracable_parser;
+use std::{cell::RefCell, fmt};
 
 mod unicode_string;
-pub(crate) use unicode_string::DisplayParsedString;
-
 use crate::{errors::*, NameMatcher};
+pub(crate) use unicode_string::DisplayParsedString;
 
 pub(crate) type Span<'a> = nom_locate::LocatedSpan<&'a str, State<'a>>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
@@ -649,9 +647,8 @@ pub(crate) fn parse(input: Span) -> Result<ParsedExpr, nom::Err<nom::error::Erro
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-
     use super::*;
+    use std::cell::RefCell;
 
     #[track_caller]
     fn parse_regex(input: &str) -> NameMatcher {

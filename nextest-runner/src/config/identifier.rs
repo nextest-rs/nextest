@@ -1,12 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::fmt;
-
-use smol_str::SmolStr;
-use unicode_normalization::{is_nfc_quick, IsNormalized, UnicodeNormalization};
-
 use crate::errors::InvalidIdentifier;
+use smol_str::SmolStr;
+use std::fmt;
+use unicode_normalization::{is_nfc_quick, IsNormalized, UnicodeNormalization};
 
 /// An identifier used in configuration.
 ///
