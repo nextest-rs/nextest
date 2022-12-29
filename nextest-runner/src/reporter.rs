@@ -6,9 +6,6 @@
 //! The main structure in this module is [`TestReporter`].
 
 mod aggregator;
-pub use aggregator::heuristic_extract_description;
-use uuid::Uuid;
-
 use crate::{
     config::NextestProfile,
     errors::WriteEventError,
@@ -20,6 +17,7 @@ use crate::{
         RetryData, RunStats,
     },
 };
+pub use aggregator::heuristic_extract_description;
 use debug_ignore::DebugIgnore;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::MismatchReason;
@@ -33,6 +31,7 @@ use std::{
     io::{BufWriter, Write},
     time::{Duration, SystemTime},
 };
+use uuid::Uuid;
 
 /// When to display test output in the reporter.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]

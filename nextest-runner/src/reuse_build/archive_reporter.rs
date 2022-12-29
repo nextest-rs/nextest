@@ -1,14 +1,13 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::helpers::format_duration;
 use camino::Utf8Path;
 use owo_colors::{OwoColorize, Style};
 use std::{
     io::{self, Write},
     time::Duration,
 };
-
-use crate::helpers::format_duration;
 
 #[derive(Debug)]
 /// Reporter for archive operations.

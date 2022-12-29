@@ -4,8 +4,6 @@
 //! Configuration support for nextest.
 
 mod identifier;
-pub use identifier::*;
-
 use crate::{
     errors::{
         provided_by_tool, ConfigParseError, ConfigParseErrorKind, ConfigParseOverrideError,
@@ -18,6 +16,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
+pub use identifier::*;
 use nextest_filtering::{FilteringExpr, TestQuery};
 use once_cell::sync::Lazy;
 use serde::{de::IntoDeserializer, Deserialize};
@@ -1565,9 +1564,8 @@ struct JunitImpl {
 
 #[cfg(test)]
 mod tests {
-    use crate::cargo_config::{TargetTriple, TargetTripleSource};
-
     use super::*;
+    use crate::cargo_config::{TargetTriple, TargetTripleSource};
     use config::ConfigError;
     use guppy::{graph::cargo::BuildPlatform, MetadataCommand};
     use indoc::indoc;

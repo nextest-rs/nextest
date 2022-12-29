@@ -3,8 +3,7 @@
 
 // Adapted from https://github.com/Geal/nom/blob/294ffb3d9e0ade2c3b7ddfff52484b6d643dcce1/examples/string.rs
 
-use std::fmt;
-
+use super::{IResult, Span};
 use nom::{
     branch::alt,
     bytes::streaming::{is_not, take_while_m_n},
@@ -15,8 +14,7 @@ use nom::{
     Slice,
 };
 use nom_tracable::tracable_parser;
-
-use super::{IResult, Span};
+use std::fmt;
 
 fn run_str_parser<'a, T, I>(mut inner: I) -> impl FnMut(Span<'a>) -> IResult<'a, T>
 where
