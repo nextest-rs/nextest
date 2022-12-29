@@ -88,6 +88,8 @@ quick-junit = { version = "0.3.2", path = "../quick-junit" }
 uuid = { version = "1.2.2", features = ["v4"] }
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 console-subscriber = { version = "0.1.8", optional = true }
+unicode-ident = "1.0.6"
+unicode-normalization = "0.1.22"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.139"

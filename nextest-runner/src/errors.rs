@@ -15,6 +15,7 @@ use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use itertools::Itertools;
 use nextest_filtering::errors::FilterExpressionParseErrors;
+use smol_str::SmolStr;
 use std::{borrow::Cow, collections::BTreeSet, env::JoinPathsError, fmt, process::ExitStatus};
 use target_spec_miette::IntoMietteDiagnostic;
 use thiserror::Error;
@@ -181,6 +182,35 @@ impl ProfileNotFound {
         }
     }
 }
+
+/// An identifier is invalid.
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+pub enum InvalidIdentifier {
+    /// The identifier is empty.
+    #[error("identifier is empty")]
+    Empty,
+
+    /// The identifier is not in the correct Unicode format.
+    #[error("invalid identifier `{0}`")]
+    InvalidXid(SmolStr),
+
+    /// This tool identifier doesn't match the expected pattern.
+    #[error("tool identifier not of the form \"@tool:tool-name:identifier\": `{0}`")]
+    ToolIdentifierInvalidFormat(SmolStr),
+
+    /// One of the components of this tool identifier is empty.
+    #[error("tool identifier has empty component: `{0}`")]
+    ToolComponentEmpty(SmolStr),
+
+    /// The tool identifier is not in the correct Unicode format.
+    #[error("invalid tool identifier `{0}`")]
+    ToolIdentifierInvalidXid(SmolStr),
+}
+
+/// The name of a test group is invalid (not a valid identifier).
+#[derive(Clone, Debug, Error)]
+#[error("invalid custom test group name: {0}")]
+pub struct InvalidCustomTestGroupName(pub InvalidIdentifier);
 
 /// Error returned while parsing a [`ToolConfigFile`](crate::config::ToolConfigFile) value.
 #[derive(Clone, Debug, Error)]

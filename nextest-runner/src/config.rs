@@ -3,10 +3,14 @@
 
 //! Configuration support for nextest.
 
+mod identifier;
+pub use identifier::*;
+
 use crate::{
     errors::{
         provided_by_tool, ConfigParseError, ConfigParseErrorKind, ConfigParseOverrideError,
-        ProfileNotFound, TestThreadsParseError, ToolConfigFileParseError, UnknownTestGroupError,
+        InvalidCustomTestGroupName, ProfileNotFound, TestThreadsParseError,
+        ToolConfigFileParseError, UnknownTestGroupError,
     },
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
@@ -287,15 +291,14 @@ impl NextestConfig {
         let (valid_groups, invalid_groups): (BTreeSet<_>, _) =
             this_config.test_groups.keys().cloned().partition(|group| {
                 if let Some(tool) = tool {
-                    // If a tool is specified, the group must be prefixed with "@tool:<tool-name>:".
-                    group.name().strip_prefix("@tool:").map_or(false, |suffix| {
-                        suffix
-                            .strip_prefix(tool)
-                            .map_or(false, |suffix| suffix.starts_with(':'))
-                    })
+                    // The first component must be the tool name.
+                    group
+                        .as_identifier()
+                        .tool_components()
+                        .map_or(false, |(tool_name, _)| tool_name == tool)
                 } else {
-                    // If a tool is not specified, it must *not* have "@tool:" as a prefix.
-                    !group.name().starts_with("@tool:")
+                    // If a tool is not specified, it must *not* be a tool identifier.
+                    !group.as_identifier().is_tool_identifier()
                 }
             });
 
@@ -1267,7 +1270,9 @@ impl<'de> Deserialize<'de> for TestGroup {
         if group == "@global" {
             Ok(TestGroup::Global)
         } else {
-            Ok(TestGroup::Custom(CustomTestGroup(group)))
+            Ok(TestGroup::Custom(
+                CustomTestGroup::new(group).map_err(serde::de::Error::custom)?,
+            ))
         }
     }
 }
@@ -1276,19 +1281,35 @@ impl fmt::Display for TestGroup {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TestGroup::Global => write!(f, "@global"),
-            TestGroup::Custom(group) => write!(f, "{}", group.name()),
+            TestGroup::Custom(group) => write!(f, "{}", group.as_str()),
         }
     }
 }
 
 /// Represents a custom test group.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct CustomTestGroup(SmolStr);
+pub struct CustomTestGroup(ConfigIdentifier);
 
 impl CustomTestGroup {
-    /// Returns the name of the test group.
-    pub fn name(&self) -> &str {
+    /// Creates a new custom test group, returning an error if it is invalid.
+    pub fn new(name: SmolStr) -> Result<Self, InvalidCustomTestGroupName> {
+        let identifier = ConfigIdentifier::new(name).map_err(InvalidCustomTestGroupName)?;
+        Ok(Self(identifier))
+    }
+
+    /// Creates a new custom test group from an identifier.
+    pub fn from_identifier(identifier: ConfigIdentifier) -> Self {
+        Self(identifier)
+    }
+
+    /// Returns the test group as a [`ConfigIdentifier`].
+    pub fn as_identifier(&self) -> &ConfigIdentifier {
         &self.0
+    }
+
+    /// Returns the test group as a string.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 }
 
@@ -1298,20 +1319,14 @@ impl<'de> Deserialize<'de> for CustomTestGroup {
         D: serde::Deserializer<'de>,
     {
         // Try and deserialize as a string.
-        let group = SmolStr::deserialize(deserializer)?;
-        if group.starts_with('@') && !group.starts_with("@tool:") {
-            Err(serde::de::Error::custom(
-                "custom group name cannot start with \"@\"",
-            ))
-        } else {
-            Ok(CustomTestGroup(group))
-        }
+        let identifier = SmolStr::deserialize(deserializer)?;
+        Self::new(identifier).map_err(serde::de::Error::custom)
     }
 }
 
 impl fmt::Display for CustomTestGroup {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -2526,52 +2541,45 @@ mod tests {
 
     #[test_case(
         indoc!{r#"
-            [test-groups."@tool:my-tool:"]
-            max-threads = 1
-        "#},
-        Ok(btreeset! {CustomTestGroup("user-group".into()), CustomTestGroup("@tool:my-tool:".into())})
-        ; "group name valid 1")]
-    #[test_case(
-        indoc!{r#"
             [test-groups."@tool:my-tool:foo"]
             max-threads = 1
         "#},
-        Ok(btreeset! {CustomTestGroup("user-group".into()), CustomTestGroup("@tool:my-tool:foo".into())})
-        ; "group name valid 2")]
+        Ok(btreeset! {custom_test_group("user-group"), custom_test_group("@tool:my-tool:foo")})
+        ; "group name valid")]
     #[test_case(
         indoc!{r#"
             [test-groups.foo]
             max-threads = 1
         "#},
-        Err(GroupExpectedError::InvalidTestGroups(btreeset! {CustomTestGroup("foo".into())}))
+        Err(GroupExpectedError::InvalidTestGroups(btreeset! {custom_test_group("foo")}))
         ; "group name doesn't start with @tool:")]
     #[test_case(
         indoc!{r#"
-            [test-groups."@tool:moo"]
+            [test-groups."@tool:moo:test"]
             max-threads = 1
         "#},
-        Err(GroupExpectedError::InvalidTestGroups(btreeset! {CustomTestGroup("@tool:moo".into())}))
+        Err(GroupExpectedError::InvalidTestGroups(btreeset! {custom_test_group("@tool:moo:test")}))
         ; "group name doesn't start with tool name")]
     #[test_case(
         indoc!{r#"
             [test-groups."@tool:my-tool"]
             max-threads = 1
         "#},
-        Err(GroupExpectedError::InvalidTestGroups(btreeset! {CustomTestGroup("@tool:my-tool".into())}))
+        Err(GroupExpectedError::DeserializeError("test-groups.@tool:my-tool: invalid custom test group name: tool identifier not of the form \"@tool:tool-name:identifier\": `@tool:my-tool`"))
         ; "group name missing suffix colon")]
     #[test_case(
         indoc!{r#"
             [test-groups.'@global']
             max-threads = 1
         "#},
-        Err(GroupExpectedError::DeserializeError("test-groups.@global: custom group name cannot start with \"@\""))
+        Err(GroupExpectedError::DeserializeError("test-groups.@global: invalid custom test group name: invalid identifier `@global`"))
         ; "group name is @global")]
     #[test_case(
         indoc!{r#"
             [test-groups.'@foo']
             max-threads = 1
         "#},
-        Err(GroupExpectedError::DeserializeError("test-groups.@foo: custom group name cannot start with \"@\""))
+        Err(GroupExpectedError::DeserializeError("test-groups.@foo: invalid custom test group name: invalid identifier `@foo`"))
         ; "group name starts with @")]
     fn tool_config_define_groups(
         input: &str,
@@ -2654,28 +2662,28 @@ mod tests {
             [test-groups."my-group"]
             max-threads = 1
         "#},
-        Ok(btreeset! {CustomTestGroup("my-group".into())})
+        Ok(btreeset! {custom_test_group("my-group")})
         ; "group name valid")]
     #[test_case(
         indoc!{r#"
             [test-groups."@tool:"]
             max-threads = 1
         "#},
-        Err(GroupExpectedError::InvalidTestGroups(btreeset! {CustomTestGroup("@tool:".into())}))
+        Err(GroupExpectedError::DeserializeError("test-groups.@tool:: invalid custom test group name: tool identifier not of the form \"@tool:tool-name:identifier\": `@tool:`"))
         ; "group name starts with @tool:")]
     #[test_case(
         indoc!{r#"
             [test-groups.'@global']
             max-threads = 1
         "#},
-        Err(GroupExpectedError::DeserializeError("test-groups.@global: custom group name cannot start with \"@\""))
+        Err(GroupExpectedError::DeserializeError("test-groups.@global: invalid custom test group name: invalid identifier `@global`"))
         ; "group name is @global")]
     #[test_case(
         indoc!{r#"
             [test-groups.'@foo']
             max-threads = 1
         "#},
-        Err(GroupExpectedError::DeserializeError("test-groups.@foo: custom group name cannot start with \"@\""))
+        Err(GroupExpectedError::DeserializeError("test-groups.@foo: invalid custom test group name: invalid identifier `@foo`"))
         ; "group name starts with @")]
     fn user_config_define_groups(
         config_contents: &str,
@@ -2736,7 +2744,12 @@ mod tests {
     }
 
     fn test_group(name: &str) -> TestGroup {
-        TestGroup::Custom(CustomTestGroup(name.into()))
+        TestGroup::Custom(custom_test_group(name))
+    }
+
+    fn custom_test_group(name: &str) -> CustomTestGroup {
+        CustomTestGroup::new(name.into())
+            .unwrap_or_else(|error| panic!("invalid custom test group {name}: {error}"))
     }
 
     #[test_case(

@@ -1501,6 +1501,8 @@ dependencies = [
  "tokio",
  "toml_edit",
  "twox-hash",
+ "unicode-ident",
+ "unicode-normalization",
  "uuid",
  "win32job",
  "windows",
