@@ -1,8 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::{
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 fn main() {
     // Set the target directory to be within the output directory.
