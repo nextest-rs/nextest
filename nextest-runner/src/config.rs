@@ -328,10 +328,11 @@ impl NextestConfig {
             .collect();
         if !unknown_default_profiles.is_empty() {
             log::warn!(
-                "found unknown profiles in the reserved default- namespace in {}:",
+                "unknown profiles in the reserved `default-` namespace in config file {}{}:",
                 config_file
                     .strip_prefix(workspace_root)
                     .unwrap_or(config_file),
+                provided_by_tool(tool),
             );
 
             for profile in unknown_default_profiles {
