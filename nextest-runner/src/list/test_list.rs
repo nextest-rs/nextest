@@ -12,7 +12,7 @@ use crate::{
     test_command::{LocalExecuteContext, TestCommand},
     test_filter::TestFilterBuilder,
 };
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use futures::prelude::*;
 use guppy::{
     graph::{PackageGraph, PackageMetadata},
@@ -145,7 +145,7 @@ impl<'g> RustTestArtifact<'g> {
     // ---
     // Helper methods
     // ---
-    fn into_test_suite(self, status: RustTestSuiteStatus) -> (Utf8PathBuf, RustTestSuite<'g>) {
+    fn into_test_suite(self, status: RustTestSuiteStatus) -> (RustBinaryId, RustTestSuite<'g>) {
         let Self {
             binary_id,
             package,
@@ -157,9 +157,10 @@ impl<'g> RustTestArtifact<'g> {
             build_platform,
         } = self;
         (
-            binary_path,
+            binary_id.clone(),
             RustTestSuite {
                 binary_id,
+                binary_path,
                 package,
                 binary_name,
                 kind,
@@ -177,7 +178,7 @@ impl<'g> RustTestArtifact<'g> {
 pub struct TestList<'g> {
     test_count: usize,
     rust_build_meta: RustBuildMeta<TestListState>,
-    rust_suites: BTreeMap<Utf8PathBuf, RustTestSuite<'g>>,
+    rust_suites: BTreeMap<RustBinaryId, RustTestSuite<'g>>,
     env: EnvironmentMap,
     updated_dylib_path: OsString,
     // Computed on first access.
@@ -268,7 +269,7 @@ impl<'g> TestList<'g> {
 
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
 
-        let test_artifacts = test_bin_outputs
+        let rust_suites = test_bin_outputs
             .into_iter()
             .map(|(test_binary, non_ignored, ignored)| {
                 if filter.should_obtain_test_list_from_binary(&test_binary) {
@@ -288,7 +289,7 @@ impl<'g> TestList<'g> {
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         Ok(Self {
-            rust_suites: test_artifacts,
+            rust_suites,
             env,
             rust_build_meta,
             updated_dylib_path,
@@ -328,11 +329,6 @@ impl<'g> TestList<'g> {
         self.rust_suites.len()
     }
 
-    /// Returns the tests for a given binary, or `None` if the binary wasn't in the list.
-    pub fn get(&self, test_bin: impl AsRef<Utf8Path>) -> Option<&RustTestSuite> {
-        self.rust_suites.get(test_bin.as_ref())
-    }
-
     /// Returns the updated dynamic library path used for tests.
     pub fn updated_dylib_path(&self) -> &OsStr {
         &self.updated_dylib_path
@@ -342,24 +338,24 @@ impl<'g> TestList<'g> {
     pub fn to_summary(&self) -> TestListSummary {
         let rust_suites = self
             .rust_suites
-            .iter()
-            .map(|(binary_path, info)| {
-                let (status, test_cases) = info.status.to_summary();
+            .values()
+            .map(|test_suite| {
+                let (status, test_cases) = test_suite.status.to_summary();
                 let testsuite = RustTestSuiteSummary {
-                    package_name: info.package.name().to_owned(),
+                    package_name: test_suite.package.name().to_owned(),
                     binary: RustTestBinarySummary {
-                        binary_name: info.binary_name.clone(),
-                        package_id: info.package.id().repr().to_owned(),
-                        kind: info.kind.clone(),
-                        binary_path: binary_path.clone(),
-                        binary_id: info.binary_id.clone(),
-                        build_platform: info.build_platform,
+                        binary_name: test_suite.binary_name.clone(),
+                        package_id: test_suite.package.id().repr().to_owned(),
+                        kind: test_suite.kind.clone(),
+                        binary_path: test_suite.binary_path.clone(),
+                        binary_id: test_suite.binary_id.clone(),
+                        build_platform: test_suite.build_platform,
                     },
-                    cwd: info.cwd.clone(),
+                    cwd: test_suite.cwd.clone(),
                     status,
                     test_cases,
                 };
-                (info.binary_id.clone(), testsuite)
+                (test_suite.binary_id.clone(), testsuite)
             })
             .collect();
         let mut summary = TestListSummary::new(self.rust_build_meta.to_summary());
@@ -385,22 +381,18 @@ impl<'g> TestList<'g> {
         }
     }
 
-    /// Iterates over all the test binaries.
-    pub fn iter(&self) -> impl Iterator<Item = (&Utf8Path, &RustTestSuite)> + '_ {
-        self.rust_suites
-            .iter()
-            .map(|(path, info)| (path.as_path(), info))
+    /// Iterates over all the test suites.
+    pub fn iter(&self) -> impl Iterator<Item = &RustTestSuite> + '_ {
+        self.rust_suites.values()
     }
 
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
-        self.rust_suites.iter().flat_map(|(test_bin, test_suite)| {
+        self.rust_suites.values().flat_map(|test_suite| {
             test_suite
                 .status
                 .test_cases()
-                .map(move |(name, test_info)| {
-                    TestInstance::new(name, test_bin, test_suite, test_info)
-                })
+                .map(move |(name, test_info)| TestInstance::new(name, test_suite, test_info))
         })
     }
 
@@ -468,7 +460,7 @@ impl<'g> TestList<'g> {
         filter: &TestFilterBuilder,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
-    ) -> Result<(Utf8PathBuf, RustTestSuite<'g>), CreateTestListError> {
+    ) -> Result<(RustBinaryId, RustTestSuite<'g>), CreateTestListError> {
         let mut test_cases = BTreeMap::new();
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
@@ -502,7 +494,7 @@ impl<'g> TestList<'g> {
         Ok(test_binary.into_test_suite(RustTestSuiteStatus::Listed { test_cases }))
     }
 
-    fn process_skipped(test_binary: RustTestArtifact<'g>) -> (Utf8PathBuf, RustTestSuite<'g>) {
+    fn process_skipped(test_binary: RustTestArtifact<'g>) -> (RustBinaryId, RustTestSuite<'g>) {
         test_binary.into_test_suite(RustTestSuiteStatus::Skipped)
     }
 
@@ -546,7 +538,7 @@ impl<'g> TestList<'g> {
             styles.colorize();
         }
 
-        for (test_bin, info) in &self.rust_suites {
+        for info in self.rust_suites.values() {
             // Skip this binary if there are no tests within it that will be run, and this isn't
             // verbose output.
             if !verbose
@@ -560,7 +552,12 @@ impl<'g> TestList<'g> {
 
             writeln!(writer, "{}:", info.binary_id.style(styles.binary_id))?;
             if verbose {
-                writeln!(writer, "  {} {}", "bin:".style(styles.field), test_bin)?;
+                writeln!(
+                    writer,
+                    "  {} {}",
+                    "bin:".style(styles.field),
+                    info.binary_path
+                )?;
                 writeln!(writer, "  {} {}", "cwd:".style(styles.field), info.cwd)?;
                 writeln!(
                     writer,
@@ -613,6 +610,9 @@ impl<'g> TestList<'g> {
 pub struct RustTestSuite<'g> {
     /// A unique identifier for this binary.
     pub binary_id: RustBinaryId,
+
+    /// The path to the binary.
+    pub binary_path: Utf8PathBuf,
 
     /// Package metadata.
     pub package: PackageMetadata<'g>,
@@ -801,9 +801,6 @@ pub struct TestInstance<'a> {
     /// The name of the test.
     pub name: &'a str,
 
-    /// The test binary.
-    pub binary: &'a Utf8Path,
-
     /// Information about the test suite.
     pub suite_info: &'a RustTestSuite<'a>,
 
@@ -815,13 +812,11 @@ impl<'a> TestInstance<'a> {
     /// Creates a new `TestInstance`.
     pub(crate) fn new(
         name: &'a (impl AsRef<str> + ?Sized),
-        binary: &'a (impl AsRef<Utf8Path> + ?Sized),
         suite_info: &'a RustTestSuite,
         test_info: &'a RustTestCaseSummary,
     ) -> Self {
         Self {
             name: name.as_ref(),
-            binary: binary.as_ref(),
             suite_info,
             test_info,
         }
@@ -849,10 +844,10 @@ impl<'a> TestInstance<'a> {
         let program: String = match platform_runner {
             Some(runner) => {
                 args.extend(runner.args());
-                args.push(self.binary.as_str());
+                args.push(self.suite_info.binary_path.as_str());
                 runner.binary().into()
             }
-            None => self.binary.to_owned().into(),
+            None => self.suite_info.binary_path.to_owned().into(),
         };
 
         args.extend(["--exact", self.name, "--nocapture"]);
@@ -983,7 +978,7 @@ mod tests {
         assert_eq!(
             test_list.rust_suites,
             btreemap! {
-                "/fake/binary".into() => RustTestSuite {
+                fake_binary_id.clone() => RustTestSuite {
                     status: RustTestSuiteStatus::Listed {
                         test_cases: btreemap! {
                             "tests::foo::test_bar".to_owned() => RustTestCaseSummary {
@@ -1017,16 +1012,18 @@ mod tests {
                     package: package_metadata(),
                     binary_name: fake_binary_name,
                     binary_id: fake_binary_id,
+                    binary_path: "/fake/binary".into(),
                     kind: RustTestBinaryKind::LIB,
                     non_test_binaries: BTreeSet::new(),
                 },
-                "/fake/skipped-binary".into() => RustTestSuite {
+                skipped_binary_id.clone() => RustTestSuite {
                     status: RustTestSuiteStatus::Skipped,
                     cwd: fake_cwd,
                     build_platform: BuildPlatform::Host,
                     package: package_metadata(),
                     binary_name: skipped_binary_name,
                     binary_id: skipped_binary_id,
+                    binary_path: "/fake/skipped-binary".into(),
                     kind: RustTestBinaryKind::PROC_MACRO,
                     non_test_binaries: BTreeSet::new(),
                 },
