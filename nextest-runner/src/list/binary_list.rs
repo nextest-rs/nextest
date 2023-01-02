@@ -11,8 +11,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::{Artifact, BuildScript, Message, PackageId};
 use guppy::graph::PackageGraph;
 use nextest_metadata::{
-    BinaryListSummary, BuildPlatform, RustNonTestBinaryKind, RustNonTestBinarySummary,
-    RustTestBinaryKind, RustTestBinarySummary,
+    BinaryListSummary, BuildPlatform, RustBinaryId, RustNonTestBinaryKind,
+    RustNonTestBinarySummary, RustTestBinaryKind, RustTestBinarySummary,
 };
 use owo_colors::OwoColorize;
 use std::{fmt::Write as _, io, io::Write};
@@ -21,7 +21,7 @@ use std::{fmt::Write as _, io, io::Write};
 #[derive(Clone, Debug)]
 pub struct RustTestBinary {
     /// A unique ID.
-    pub id: String,
+    pub id: RustBinaryId,
     /// The path to the binary artifact.
     pub path: Utf8PathBuf,
     /// The package this artifact belongs to.
@@ -248,6 +248,8 @@ impl<'g> BinaryListBuildState<'g> {
                     write!(id, "::{computed_kind}/{name}").unwrap();
                 }
 
+                let id = RustBinaryId::new(&id);
+
                 self.rust_binaries.push(RustTestBinary {
                     path,
                     package_id,
@@ -372,7 +374,7 @@ mod tests {
     #[test]
     fn test_parse_binary_list() {
         let fake_bin_test = RustTestBinary {
-            id: "fake-package::bin/fake-binary".to_owned(),
+            id: "fake-package::bin/fake-binary".into(),
             path: "/fake/binary".into(),
             package_id: "fake-package 0.1.0 (path+file:///Users/fakeuser/project/fake-package)"
                 .to_owned(),
@@ -381,7 +383,7 @@ mod tests {
             build_platform: BuildPlatform::Target,
         };
         let fake_macro_test = RustTestBinary {
-            id: "fake-macro::proc-macro/fake-macro".to_owned(),
+            id: "fake-macro::proc-macro/fake-macro".into(),
             path: "/fake/macro".into(),
             package_id: "fake-macro 0.1.0 (path+file:///Users/fakeuser/project/fake-macro)"
                 .to_owned(),

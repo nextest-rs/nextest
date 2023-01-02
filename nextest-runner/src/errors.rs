@@ -15,6 +15,7 @@ use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use itertools::Itertools;
 use nextest_filtering::errors::FilterExpressionParseErrors;
+use nextest_metadata::RustBinaryId;
 use smol_str::SmolStr;
 use std::{borrow::Cow, collections::BTreeSet, env::JoinPathsError, fmt, process::ExitStatus};
 use target_spec_miette::IntoMietteDiagnostic;
@@ -426,7 +427,7 @@ pub enum CreateTestListError {
     )]
     CwdIsNotDir {
         /// The binary ID for which the current directory wasn't found.
-        binary_id: String,
+        binary_id: RustBinaryId,
 
         /// The current directory that wasn't found.
         cwd: Utf8PathBuf,
@@ -439,7 +440,7 @@ pub enum CreateTestListError {
     )]
     CommandExecFail {
         /// The binary ID for which gathering the list of tests failed.
-        binary_id: String,
+        binary_id: RustBinaryId,
 
         /// The command that was run.
         command: Vec<String>,
@@ -459,7 +460,7 @@ pub enum CreateTestListError {
     )]
     CommandFail {
         /// The binary ID for which gathering the list of tests failed.
-        binary_id: String,
+        binary_id: RustBinaryId,
 
         /// The command that was run.
         command: Vec<String>,
@@ -483,7 +484,7 @@ pub enum CreateTestListError {
     )]
     CommandNonUtf8 {
         /// The binary ID for which gathering the list of tests failed.
-        binary_id: String,
+        binary_id: RustBinaryId,
 
         /// The command that was run.
         command: Vec<String>,
@@ -499,7 +500,7 @@ pub enum CreateTestListError {
     #[error("for `{binary_id}`, {message}\nfull output:\n{full_output}")]
     ParseLine {
         /// The binary ID for which parsing the list of tests failed.
-        binary_id: String,
+        binary_id: RustBinaryId,
 
         /// A descriptive message.
         message: Cow<'static, str>,
@@ -530,12 +531,12 @@ pub enum CreateTestListError {
 
 impl CreateTestListError {
     pub(crate) fn parse_line(
-        binary_id: impl Into<String>,
+        binary_id: RustBinaryId,
         message: impl Into<Cow<'static, str>>,
         full_output: impl Into<String>,
     ) -> Self {
         Self::ParseLine {
-            binary_id: binary_id.into(),
+            binary_id,
             message: message.into(),
             full_output: full_output.into(),
         }

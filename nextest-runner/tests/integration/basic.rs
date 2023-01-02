@@ -56,7 +56,7 @@ fn test_list_tests() -> Result<()> {
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(*name)
+            .get(name)
             .unwrap_or_else(|| panic!("unexpected test name {name}"));
         let info = summary
             .rust_suites
@@ -75,7 +75,7 @@ fn test_list_tests() -> Result<()> {
         let mut err_msg = "actual output has test suites missing in expected output:\n".to_owned();
         for missing_suite in summary.rust_suites.keys() {
             err_msg.push_str("  - ");
-            err_msg.push_str(missing_suite);
+            err_msg.push_str(missing_suite.as_str());
             err_msg.push('\n');
         }
         panic!("{}", err_msg);
@@ -111,7 +111,7 @@ fn test_run() -> Result<()> {
     for (binary_id, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(*binary_id)
+            .get(binary_id)
             .unwrap_or_else(|| panic!("unexpected binary ID {binary_id}"));
         for fixture in expected {
             let instance_value = instance_statuses
@@ -212,7 +212,7 @@ fn test_run_ignored() -> Result<()> {
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(*name)
+            .get(name)
             .unwrap_or_else(|| panic!("unexpected test name {name}"));
         for fixture in expected {
             if fixture.name.contains("test_slow_timeout") {
@@ -417,7 +417,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(*name)
+            .get(name)
             .unwrap_or_else(|| panic!("unexpected test name {name}"));
         for fixture in expected {
             let instance_value =

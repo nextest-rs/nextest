@@ -1430,6 +1430,7 @@ dependencies = [
  "nextest-workspace-hack",
  "serde",
  "serde_json",
+ "smol_str",
  "target-spec",
  "test-case",
 ]
