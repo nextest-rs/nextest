@@ -429,7 +429,7 @@ checksum = "d379af7f68bfc21714c6c7dea883544201741d2ce8274bb12fa54f89507f52a7"
 dependencies = [
  "async-trait",
  "lazy_static",
- "nom 7.1.1",
+ "nom 7.1.2",
  "pathdiff",
  "serde",
  "toml",
@@ -932,7 +932,7 @@ dependencies = [
  "base64",
  "byteorder",
  "flate2",
- "nom 7.1.1",
+ "nom 7.1.2",
  "num-traits",
 ]
 
@@ -1409,7 +1409,7 @@ dependencies = [
  "guppy",
  "miette",
  "nextest-workspace-hack",
- "nom 7.1.1",
+ "nom 7.1.2",
  "nom-tracable",
  "nom_locate 4.0.0",
  "proptest",
@@ -1571,9 +1571,9 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "7.1.1"
+version = "7.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8903e5a29a317527874d0402f867152a3d21c908bb0b933e416c65e301d4c36"
+checksum = "e5507769c4919c998e69e49c839d9dc6e693ede4cc4290d6ad8b41d4f09c548c"
 dependencies = [
  "memchr",
  "minimal-lexical",
@@ -1585,7 +1585,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02e0d5ea9205a12f87381f7449d43a9ff1dd888af72ef01a858ecccd6d4182de"
 dependencies = [
- "nom 7.1.1",
+ "nom 7.1.2",
  "nom-tracable-macros",
  "nom_locate 1.0.0",
  "nom_locate 4.0.0",
@@ -1629,7 +1629,7 @@ checksum = "37794436ca3029a3089e0b95d42da1f0b565ad271e4d3bb4bad0c7bb70b10605"
 dependencies = [
  "bytecount 0.6.3",
  "memchr",
- "nom 7.1.1",
+ "nom 7.1.2",
 ]
 
 [[package]]

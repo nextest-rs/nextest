@@ -28,7 +28,7 @@ internal-testing = ["dep:proptest", "dep:test-strategy", "dep:twox-hash"]
 [dependencies]
 guppy = "0.15.1"
 miette = "5.5.0"
-nom = "7.1.1"
+nom = "7.1.2"
 nom-tracable = "0.8.0"
 nom_locate = "4.0.0"
 recursion = "0.3.3"
