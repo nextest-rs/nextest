@@ -4,8 +4,10 @@
 use crate::CommandError;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 use std::{
     borrow::Cow,
+    cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     fmt,
     path::PathBuf,
@@ -132,7 +134,7 @@ pub struct TestListSummary {
 
     /// A map of Rust test suites to the test binaries within them, keyed by a unique identifier
     /// for each test suite.
-    pub rust_suites: BTreeMap<String, RustTestSuiteSummary>,
+    pub rust_suites: BTreeMap<RustBinaryId, RustTestSuiteSummary>,
 }
 
 impl TestListSummary {
@@ -177,7 +179,7 @@ impl fmt::Display for BuildPlatform {
 #[serde(rename_all = "kebab-case")]
 pub struct RustTestBinarySummary {
     /// A unique binary ID.
-    pub binary_id: String,
+    pub binary_id: RustBinaryId,
 
     /// The name of the test binary within the package.
     pub binary_name: String,
@@ -254,7 +256,145 @@ pub struct BinaryListSummary {
     pub rust_build_meta: RustBuildMetaSummary,
 
     /// The list of Rust test binaries (indexed by binary-id).
-    pub rust_binaries: BTreeMap<String, RustTestBinarySummary>,
+    pub rust_binaries: BTreeMap<RustBinaryId, RustTestBinarySummary>,
+}
+
+// IMPLEMENTATION NOTE: SmolStr is *not* part of the public API.
+
+/// A unique identifier for a test suite (a Rust binary).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct RustBinaryId(SmolStr);
+
+impl fmt::Display for RustBinaryId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl RustBinaryId {
+    /// Creates a new `RustBinaryId` from a string.
+    #[inline]
+    pub fn new(id: &str) -> Self {
+        Self(id.into())
+    }
+
+    /// Returns the identifier as a string.
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Returns the length of the identifier in bytes.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns `true` if the identifier is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns the components of this identifier.
+    #[inline]
+    pub fn components(&self) -> RustBinaryIdComponents<'_> {
+        RustBinaryIdComponents::new(self)
+    }
+}
+
+impl<S> From<S> for RustBinaryId
+where
+    S: AsRef<str>,
+{
+    #[inline]
+    fn from(s: S) -> Self {
+        Self(s.into())
+    }
+}
+
+impl Ord for RustBinaryId {
+    fn cmp(&self, other: &RustBinaryId) -> Ordering {
+        // Use the components as the canonical sort order.
+        self.components().cmp(&other.components())
+    }
+}
+
+impl PartialOrd for RustBinaryId {
+    fn partial_cmp(&self, other: &RustBinaryId) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// The components of a [`RustBinaryId`].
+///
+/// This defines the canonical sort order for a `RustBinaryId`.
+///
+/// Returned by [`RustBinaryId::components`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RustBinaryIdComponents<'a> {
+    /// The name of the package.
+    pub package_name: &'a str,
+
+    /// The kind and binary name, if specified.
+    pub binary_name_and_kind: RustBinaryIdNameAndKind<'a>,
+}
+
+impl<'a> RustBinaryIdComponents<'a> {
+    fn new(id: &'a RustBinaryId) -> Self {
+        let mut parts = id.as_str().splitn(2, "::");
+
+        let package_name = parts
+            .next()
+            .expect("splitn(2) returns at least 1 component");
+        let binary_name_and_kind = if let Some(suffix) = parts.next() {
+            let mut parts = suffix.splitn(2, '/');
+
+            let part1 = parts
+                .next()
+                .expect("splitn(2) returns at least 1 component");
+            if let Some(binary_name) = parts.next() {
+                RustBinaryIdNameAndKind::NameAndKind {
+                    kind: part1,
+                    binary_name,
+                }
+            } else {
+                RustBinaryIdNameAndKind::NameOnly { binary_name: part1 }
+            }
+        } else {
+            RustBinaryIdNameAndKind::None
+        };
+
+        Self {
+            package_name,
+            binary_name_and_kind,
+        }
+    }
+}
+
+/// The name and kind of a Rust binary, present within a [`RustBinaryId`].
+///
+/// Part of [`RustBinaryIdComponents`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RustBinaryIdNameAndKind<'a> {
+    /// The binary has no name or kind.
+    None,
+
+    /// The binary has a name but no kind.
+    NameOnly {
+        /// The name of the binary.
+        binary_name: &'a str,
+    },
+
+    /// The binary has a name and kind.
+    NameAndKind {
+        /// The kind of the binary.
+        kind: &'a str,
+
+        /// The name of the binary.
+        binary_name: &'a str,
+    },
 }
 
 /// Rust metadata used for builds and test runs.
@@ -516,5 +656,49 @@ mod tests {
             build_meta, expected,
             "deserialized input matched expected output"
         );
+    }
+
+    #[test]
+    fn test_binary_id_ord() {
+        let empty = RustBinaryId::new("");
+        let foo = RustBinaryId::new("foo");
+        let bar = RustBinaryId::new("bar");
+        let foo_name1 = RustBinaryId::new("foo::name1");
+        let foo_name2 = RustBinaryId::new("foo::name2");
+        let bar_name = RustBinaryId::new("bar::name");
+        let foo_bin_name1 = RustBinaryId::new("foo::bin/name1");
+        let foo_bin_name2 = RustBinaryId::new("foo::bin/name2");
+        let bar_bin_name = RustBinaryId::new("bar::bin/name");
+        let foo_proc_macro_name = RustBinaryId::new("foo::proc_macro/name");
+        let bar_proc_macro_name = RustBinaryId::new("bar::proc_macro/name");
+
+        // This defines the expected sort order.
+        let sorted_ids = [
+            empty,
+            bar,
+            bar_name,
+            bar_bin_name,
+            bar_proc_macro_name,
+            foo,
+            foo_name1,
+            foo_name2,
+            foo_bin_name1,
+            foo_bin_name2,
+            foo_proc_macro_name,
+        ];
+
+        for (i, id) in sorted_ids.iter().enumerate() {
+            for (j, other_id) in sorted_ids.iter().enumerate() {
+                let expected = i.cmp(&j);
+                assert_eq!(
+                    id.cmp(other_id),
+                    expected,
+                    "comparing {:?} to {:?} gave {:?}",
+                    id,
+                    other_id,
+                    expected
+                );
+            }
+        }
     }
 }

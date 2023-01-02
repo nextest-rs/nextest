@@ -19,7 +19,7 @@ use guppy::{
     PackageId,
 };
 use nextest_metadata::{
-    BuildPlatform, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
+    BuildPlatform, RustBinaryId, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
     RustTestCaseSummary, RustTestSuiteStatusSummary, RustTestSuiteSummary, TestListSummary,
 };
 use once_cell::sync::{Lazy, OnceCell};
@@ -41,7 +41,7 @@ use tokio::runtime::Runtime;
 #[derive(Clone, Debug)]
 pub struct RustTestArtifact<'g> {
     /// A unique identifier for this test artifact.
-    pub binary_id: String,
+    pub binary_id: RustBinaryId,
 
     /// Metadata for the package this artifact is a part of. This is used to set the correct
     /// environment variables.
@@ -508,7 +508,7 @@ impl<'g> TestList<'g> {
 
     /// Parses the output of --list --format terse and returns a sorted list.
     fn parse<'a>(
-        binary_id: &'a str,
+        binary_id: &'a RustBinaryId,
         list_output: &'a str,
     ) -> Result<Vec<&'a str>, CreateTestListError> {
         let mut list = Self::parse_impl(binary_id, list_output).collect::<Result<Vec<_>, _>>()?;
@@ -517,7 +517,7 @@ impl<'g> TestList<'g> {
     }
 
     fn parse_impl<'a>(
-        binary_id: &'a str,
+        binary_id: &'a RustBinaryId,
         list_output: &'a str,
     ) -> impl Iterator<Item = Result<&'a str, CreateTestListError>> + 'a {
         // The output is in the form:
@@ -530,7 +530,7 @@ impl<'g> TestList<'g> {
                 .or_else(|| line.strip_suffix(": benchmark"))
                 .ok_or_else(|| {
                     CreateTestListError::parse_line(
-                        binary_id,
+                        binary_id.clone(),
                         format!(
                             "line '{line}' did not end with the string ': test' or ': benchmark'"
                         ),
@@ -612,7 +612,7 @@ impl<'g> TestList<'g> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RustTestSuite<'g> {
     /// A unique identifier for this binary.
-    pub binary_id: String,
+    pub binary_id: RustBinaryId,
 
     /// Package metadata.
     pub package: PackageMetadata<'g>,
@@ -830,7 +830,7 @@ impl<'a> TestInstance<'a> {
     /// Return a reasonable key for sorting. This is (binary ID, test name).
     #[inline]
     pub(crate) fn sort_key(&self) -> (&'a str, &'a str) {
-        (&self.suite_info.binary_id, self.name)
+        ((self.suite_info.binary_id.as_str()), self.name)
     }
 
     /// Creates the command for this test instance.
@@ -929,7 +929,7 @@ mod tests {
         );
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
         let fake_binary_name = "fake-binary".to_owned();
-        let fake_binary_id = "fake-package::fake-binary".to_owned();
+        let fake_binary_id = RustBinaryId::new("fake-package::fake-binary");
 
         let test_binary = RustTestArtifact {
             binary_path: "/fake/binary".into(),
@@ -943,7 +943,7 @@ mod tests {
         };
 
         let skipped_binary_name = "skipped-binary".to_owned();
-        let skipped_binary_id = "fake-package::skipped-binary".to_owned();
+        let skipped_binary_id = RustBinaryId::new("fake-package::skipped-binary");
         let skipped_binary = RustTestArtifact {
             binary_path: "/fake/skipped-binary".into(),
             cwd: fake_cwd.clone(),

@@ -5,7 +5,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreemap;
-use nextest_metadata::{FilterMatch, MismatchReason};
+use nextest_metadata::{FilterMatch, MismatchReason, RustBinaryId};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
     config::{get_num_cpus, NextestConfig},
@@ -102,11 +102,11 @@ impl FixtureStatus {
     }
 }
 
-pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>> = Lazy::new(
+pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<RustBinaryId, Vec<TestFixture>>> = Lazy::new(
     || {
         btreemap! {
             // Integration tests
-            "nextest-tests::basic" => vec![
+            "nextest-tests::basic".into() => vec![
                 TestFixture { name: "test_cargo_env_vars", status: FixtureStatus::Pass },
                 TestFixture { name: "test_cwd", status: FixtureStatus::Pass },
                 TestFixture { name: "test_execute_bin", status: FixtureStatus::Pass },
@@ -126,53 +126,53 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<&'static str, Vec<TestFixture>>>
                 TestFixture { name: "test_success", status: FixtureStatus::Pass },
                 TestFixture { name: "test_success_should_panic", status: FixtureStatus::Pass },
             ],
-            "nextest-tests::other" => vec![
+            "nextest-tests::other".into() => vec![
                 TestFixture { name: "other_test_success", status: FixtureStatus::Pass },
             ],
-            "nextest-tests::segfault" => vec![
+            "nextest-tests::segfault".into() => vec![
                 TestFixture { name: "test_segfault", status: FixtureStatus::Segfault },
             ],
             // Unit tests
-            "nextest-tests" => vec![
+            "nextest-tests".into() => vec![
                 TestFixture { name: "tests::call_dylib_add_two", status: FixtureStatus::Pass },
                 TestFixture { name: "tests::unit_test_success", status: FixtureStatus::Pass },
             ],
             // Binary tests
-            "nextest-tests::bin/nextest-tests" => vec![
+            "nextest-tests::bin/nextest-tests".into() => vec![
                 TestFixture { name: "tests::bin_success", status: FixtureStatus::Pass },
             ],
-            "nextest-tests::bin/other" => vec![
+            "nextest-tests::bin/other".into() => vec![
                 TestFixture { name: "tests::other_bin_success", status: FixtureStatus::Pass },
             ],
             // Example tests
-            "nextest-tests::example/nextest-tests" => vec![
+            "nextest-tests::example/nextest-tests".into() => vec![
                 TestFixture { name: "tests::example_success", status: FixtureStatus::Pass },
             ],
-            "nextest-tests::example/other" => vec![
+            "nextest-tests::example/other".into() => vec![
                 TestFixture { name: "tests::other_example_success", status: FixtureStatus::Pass },
             ],
             // Benchmarks
-            "nextest-tests::bench/my-bench" => vec![
+            "nextest-tests::bench/my-bench".into() => vec![
                 TestFixture { name: "bench_add_two", status: FixtureStatus::Pass },
                 TestFixture { name: "tests::test_execute_bin", status: FixtureStatus::Pass },
             ],
             // Proc-macro tests
-            "nextest-derive::proc-macro/nextest-derive" => vec![
+            "nextest-derive::proc-macro/nextest-derive".into() => vec![
                 TestFixture { name: "it_works", status: FixtureStatus::Pass },
             ],
             // Dynamic library tests
-            "cdylib-link" => vec![
+            "cdylib-link".into() => vec![
                 TestFixture { name: "test_multiply_two", status: FixtureStatus::Pass },
             ],
-            "dylib-test" => vec![],
-            "cdylib-example" => vec![
+            "dylib-test".into() => vec![],
+            "cdylib-example".into() => vec![
                 TestFixture { name: "tests::test_multiply_two_cdylib", status: FixtureStatus::Pass },
             ]
         }
     },
 );
 
-pub(crate) fn get_expected_test(binary_id: &str, test_name: &str) -> &'static TestFixture {
+pub(crate) fn get_expected_test(binary_id: &RustBinaryId, test_name: &str) -> &'static TestFixture {
     let v = EXPECTED_TESTS
         .get(binary_id)
         .unwrap_or_else(|| panic!("binary id {binary_id} not found"));
@@ -303,7 +303,7 @@ pub(crate) static FIXTURE_TARGETS: Lazy<FixtureTargets> = Lazy::new(FixtureTarge
 #[derive(Debug)]
 pub(crate) struct FixtureTargets {
     pub(crate) rust_build_meta: RustBuildMeta<TestListState>,
-    pub(crate) test_artifacts: BTreeMap<String, RustTestArtifact<'static>>,
+    pub(crate) test_artifacts: BTreeMap<RustBinaryId, RustTestArtifact<'static>>,
     pub(crate) env: EnvironmentMap,
 }
 

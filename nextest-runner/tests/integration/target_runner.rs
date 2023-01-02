@@ -218,7 +218,7 @@ fn test_run_with_target_runner() -> Result<()> {
     for (name, expected) in &*EXPECTED_TESTS {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(*name)
+            .get(name)
             .unwrap_or_else(|| panic!("unexpected test name {name}"));
         for fixture in expected {
             let instance_value = instance_statuses

@@ -5,14 +5,14 @@ use super::temp_project::TempProject;
 use camino::Utf8PathBuf;
 use color_eyre::Result;
 use nextest_metadata::{
-    BinaryListSummary, BuildPlatform, RustTestSuiteStatusSummary, TestListSummary,
+    BinaryListSummary, BuildPlatform, RustBinaryId, RustTestSuiteStatusSummary, TestListSummary,
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{fmt, process::Command};
 
 pub struct TestInfo {
-    id: &'static str,
+    id: RustBinaryId,
     platform: BuildPlatform,
     test_cases: Vec<(&'static str, bool)>,
 }
@@ -24,7 +24,7 @@ impl TestInfo {
         test_cases: Vec<(&'static str, bool)>,
     ) -> Self {
         Self {
-            id,
+            id: id.into(),
             platform,
             test_cases,
         }
@@ -280,7 +280,7 @@ pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
             _ => {}
         }
 
-        let entry = result.rust_suites.get(test.id);
+        let entry = result.rust_suites.get(&test.id);
         let entry = match entry {
             Some(e) => e,
             _ => panic!("Missing binary: {}", test.id),
