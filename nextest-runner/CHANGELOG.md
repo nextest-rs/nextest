@@ -337,6 +337,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.34.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.34.0
 [0.33.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.33.0
 [0.32.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.32.0
 [0.31.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.31.0
