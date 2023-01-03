@@ -19,6 +19,8 @@ The `threads-required` configuration can also be set to one of two special value
 * `"num-cpus"` — The number of logical CPUs on the system.
 * `"num-test-threads"` — The number of test threads nextest is currently running with.
 
+> NOTE: `threads-required` is not meant to ensure mutual exclusion across sets of tests. To do so, see [Test groups and mutual exclusion](test-groups.md).
+
 ## Use cases
 
 Some use cases that may benefit from limiting concurrency:

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0] - 2023-01-02
+
+### Added
+
+- A new wrapper for test binary IDs, `RustBinaryId`. This wrapper has a custom `Ord` implementation to ensure that binary IDs are sorted in a reasonable way for `cargo nextest list` output.
+
+### Changed
+
+- Existing uses of test binary IDs have been changed from `String` to `RustBinaryId`.
+- MSRV updated to Rust 1.64.
+
 ## [0.7.2] - 2022-11-23
 
 ### Added
@@ -131,6 +142,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.8.0
 [0.7.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.2
 [0.7.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.1
 [0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.0

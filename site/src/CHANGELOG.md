@@ -3,6 +3,28 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.48] - 2023-01-02
+
+### Added
+
+- You can now mark certain *groups* of tests to be run with a limited amount of concurrency within the group. This can be used to run tests within a group serially, similar to the [`serial_test` crate](https://crates.io/crates/serial_test).
+
+  For more about test groups, see [Test groups and mutual exclusion](https://nexte.st/book/test-groups).
+
+- A new `show-config test-groups` command shows test groups currently in effect. (`show-config` will be broadened to show other kinds of configuration in future releases.)
+
+- Nextest now warns you if you've defined a profile in the `default-` namespace that isn't already known. Any profile names starting with `default-` are reserved for future use.
+
+  Thanks [Marcelo Nicolas Gomez Rivera](https://github.com/nextest-rs/nextest/pull/747) for your first contribution!
+
+### Changed
+
+- On Unix platforms, nextest now uses a new *double-spawn* test execution mode. This mode resolves some race conditions around signal handling without an apparent performance cost.
+
+  This mode is not expected to cause any issues. However, if it does, you can turn it off by setting `NEXTEST_DOUBLE_SPAWN=0` in your environment. (Please [report an issue](https://github.com/nextest-rs/nextest/issues/new) if it does!)
+
+- MSRV updated to Rust 1.64.
+
 ## [0.9.47] - 2022-12-10
 
 ### Fixed
@@ -678,6 +700,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.48]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.48
 [0.9.47]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.47
 [0.9.46]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.46
 [0.9.45]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.45
