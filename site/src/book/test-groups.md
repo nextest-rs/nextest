@@ -17,9 +17,9 @@ If the limit is set to 1, this is similar to `cargo test` with [the `serial_test
 
 ## Configuring test groups
 
-Test groups are configured in the [nextest configuration](configuration.md):
+Test groups are configured in the [nextest configuration](configuration.md) by:
 
-1. Specifying test group names along with concurrency limits using the `max-threads` parameter.
+1. Specifying test group names along with concurrency limits, using the `max-threads` parameter.
 2. Using the `test-groups` [per-test override](per-test-overrides.md).
 
 For example:
