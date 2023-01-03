@@ -45,7 +45,7 @@ This configuration defines two test groups:
 
 These test groups impact execution in the following ways:
 
-1. Any tests whose name contains `resource_limited::` will be limited to running four at a time. In other words, there is a logical semaphore around all tests that contain the name `resource_limited::`, with four available permits.
+1. Any tests whose name contains `resource_limited::` will be limited to running four at a time. In other words, there is a logical semaphore around all tests that contain `resource_limited::`, with four available permits.
 2. Any tests in the `integration-tests` package will be limited to running one at a time, i.e. serially. In other words, there is a logical mutex around all tests in the `integration-tests` package.
 3. Tests that are not in either of these groups will run with global concurrency limits.
 
@@ -96,7 +96,7 @@ threads-required = 1  # this is the default, shown for clarity
 
 With this configuration:
 
-- Tests whose names start with `group::heavy::`, and tests that start with `group::light`, are both part of `my-group`.
+- Tests whose names start with `group::heavy::`, and tests that start with `group::light::`, are both part of `my-group`.
 - The `group::heavy::` tests will take up two slots within *both* global and group concurrency limits.
 - The `group::light::` tests will take up one slot within both limits.
 
