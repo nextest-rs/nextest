@@ -96,7 +96,7 @@ threads-required = 1  # this is the default, shown for clarity
 
 With this configuration:
 
-- Tests whose name starts with `group::heavy::`, and tests that start with `group::light`, are both part of `my-group`.
+- Tests whose names start with `group::heavy::`, and tests that start with `group::light`, are both part of `my-group`.
 - The `group::heavy::` tests will take up two slots within *both* global and group concurrency limits.
 - The `group::light::` tests will take up one slot within both limits.
 
