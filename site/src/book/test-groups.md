@@ -6,9 +6,9 @@ In other words, nextest lets you define logical *semaphores* and *mutexes* that 
 
 Tests that aren't part of a test group are not affected by these concurrency limits.
 
-If the limit is set to 1, this is similar to `cargo test` with [the `serial_test` crate](https://crates.io/crates/serial_test), or a global mutex. Nextest's test groups are *strictly better* than these approaches because they don't impact the entire test run, just the sets of tests specified within the test group.
+If the limit is set to 1, this is similar to `cargo test` with [the `serial_test` crate](https://crates.io/crates/serial_test), or a global mutex.
 
-> NOTE: Nextest does not support the `serial_test` crate, or in-process mutexes (or semaphores), directly. Instead, you can emulate these features by using test groups.
+> NOTE: Nextest does not support in-process mutexes (or semaphores), directly. Instead, you can emulate these features by using test groups.
 
 ## Use cases
 
