@@ -8,6 +8,7 @@ Overrides are set via the `[[profile.<name>.overrides]]` list. Each override con
 * Supported overrides, which are optional. Currently supported are:
   * `retries` — Number of retries to run tests with.
   * `threads-required` — Number of [threads required](threads-required.md) for this test.
+  * `test-group` — An optional [test group](test-groups.md) for this test.
   * `slow-timeout` — Amount of time after which [tests are marked slow](slow-tests.md).
   * `leak-timeout` — How long to wait after the test completes [for any subprocesses to exit](leaky-tests.md).
 
