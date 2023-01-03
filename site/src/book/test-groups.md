@@ -2,6 +2,8 @@
 
 Starting version 0.9.48, nextest allows users to specify test *groups* for sets of tests. This lets you configure groups of tests to run serially or with a limited amount of concurrency.
 
+In other words, nextest lets you define logical *semaphores* and *mutexes* that apply to certain subsets of tests.
+
 Tests that aren't part of a test group are not affected by these concurrency limits.
 
 If the limit is set to 1, this is similar to `cargo test` with [the `serial_test` crate](https://crates.io/crates/serial_test), or a global mutex. Nextest's test groups are *strictly better* than these approaches because they don't impact the entire test run, just the sets of tests specified within the test group.
@@ -43,9 +45,9 @@ This configuration defines two test groups:
 
 These test groups impact execution in the following ways:
 
-1. Any tests whose name contains `resource_limited::` will be limited to running four at a time.
-2. Any tests in the `integration-tests` package will be limited to running one at a time, i.e. serially. In other words, there is a logical mutex around 
-3. Tests that are not in either of these groups will run with global concurrency limits. 
+1. Any tests whose name contains `resource_limited::` will be limited to running four at a time. In other words, there is a logical semaphore around all tests that contain the name `resource_limited::`, with four available permits.
+2. Any tests in the `integration-tests` package will be limited to running one at a time, i.e. serially. In other words, there is a logical mutex around all tests in the `integration-tests` package.
+3. Tests that are not in either of these groups will run with global concurrency limits.
 
 Nextest will continue to schedule as many tests as possible, accounting for global and group concurrency limits.
 
