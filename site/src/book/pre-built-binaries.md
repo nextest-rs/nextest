@@ -145,7 +145,7 @@ To install a version series or specific version, use this instead:
 
 ```yml
 - uses: taiki-e/install-action@v1
-- with:
+  with:
     tool: nextest
     ## version (defaults to "latest") can be a series like 0.9:
     # version: 0.9
