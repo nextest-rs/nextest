@@ -14,76 +14,76 @@ publish = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
-backtrace = { version = "0.3.67", features = ["gimli-symbolize", "std"] }
-clap = { version = "4.0.32", features = ["color", "derive", "env", "error-context", "help", "std", "suggestions", "usage"] }
-console = { version = "0.15.2", features = ["ansi-parsing", "unicode-width"] }
-either = { version = "1.8.0", features = ["use_std"] }
-futures-channel = { version = "0.3.25", features = ["alloc", "futures-sink", "sink", "std"] }
-futures-sink = { version = "0.3.25", default-features = false, features = ["alloc", "std"] }
-hashbrown = { version = "0.12.3", features = ["ahash", "inline-more", "raw"] }
+backtrace = { version = "0.3.67", features = ["gimli-symbolize"] }
+clap = { version = "4.0.32", features = ["derive", "env"] }
+console = { version = "0.15.2" }
+either = { version = "1.8.0" }
+futures-channel = { version = "0.3.25", features = ["sink"] }
+futures-sink = { version = "0.3.25", default-features = false, features = ["std"] }
+hashbrown = { version = "0.12.3", features = ["raw"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
-memchr = { version = "2.5.0", features = ["std", "use_std"] }
-miette = { version = "5.5.0", features = ["atty", "backtrace", "fancy", "fancy-no-backtrace", "owo-colors", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
+memchr = { version = "2.5.0", features = ["use_std"] }
+miette = { version = "5.5.0", features = ["fancy"] }
 miniz_oxide = { version = "0.6.2", default-features = false, features = ["with-alloc"] }
 num-traits = { version = "0.2.15", default-features = false, features = ["std"] }
-owo-colors = { version = "3.5.0", default-features = false, features = ["supports-color", "supports-colors"] }
-rand = { version = "0.8.5", features = ["alloc", "getrandom", "libc", "rand_chacha", "std", "std_rng"] }
-serde = { version = "1.0.152", features = ["alloc", "derive", "serde_derive", "std"] }
-serde_json = { version = "1.0.91", features = ["std", "unbounded_depth"] }
-similar = { version = "2.2.1", features = ["bstr", "inline", "text", "unicode", "unicode-segmentation"] }
-target-spec = { version = "1.2.2", default-features = false, features = ["serde", "summaries"] }
-tokio = { version = "1.23.0", features = ["bytes", "io-util", "libc", "macros", "memchr", "mio", "num_cpus", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "sync", "time", "tokio-macros", "tracing"] }
-twox-hash = { version = "1.6.3", features = ["rand", "std"] }
-uuid = { version = "1.2.2", features = ["getrandom", "rng", "std", "v4"] }
+owo-colors = { version = "3.5.0", default-features = false, features = ["supports-colors"] }
+rand = { version = "0.8.5" }
+serde = { version = "1.0.152", features = ["alloc", "derive"] }
+serde_json = { version = "1.0.91", features = ["unbounded_depth"] }
+similar = { version = "2.2.1", features = ["inline", "unicode"] }
+target-spec = { version = "1.2.2", default-features = false, features = ["summaries"] }
+tokio = { version = "1.23.0", features = ["io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
+twox-hash = { version = "1.6.3" }
+uuid = { version = "1.2.2", features = ["v4"] }
 
 [build-dependencies]
-cc = { version = "1.0.78", default-features = false, features = ["jobserver", "parallel"] }
-hashbrown = { version = "0.12.3", features = ["ahash", "inline-more", "raw"] }
-memchr = { version = "2.5.0", features = ["std", "use_std"] }
-proc-macro2 = { version = "1.0.49", features = ["proc-macro"] }
-quote = { version = "1.0.23", features = ["proc-macro"] }
-syn = { version = "1.0.107", features = ["clone-impls", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "quote", "visit", "visit-mut"] }
+cc = { version = "1.0.78", default-features = false, features = ["parallel"] }
+hashbrown = { version = "0.12.3", features = ["raw"] }
+memchr = { version = "2.5.0", features = ["use_std"] }
+proc-macro2 = { version = "1.0.49" }
+quote = { version = "1.0.23" }
+syn = { version = "1.0.107", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-futures-core = { version = "0.3.25", features = ["alloc", "std"] }
+futures-core = { version = "0.3.25" }
 futures-sink = { version = "0.3.25" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
 indexmap = { version = "1.9.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.139", features = ["extra_traits", "std"] }
-once_cell = { version = "1.17.0", features = ["alloc", "race", "std"] }
-tokio = { version = "1.23.0", default-features = false, features = ["net", "socket2"] }
+libc = { version = "0.2.139", features = ["extra_traits"] }
+once_cell = { version = "1.17.0" }
+tokio = { version = "1.23.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
-libc = { version = "0.2.139", features = ["extra_traits", "std"] }
-once_cell = { version = "1.17.0", features = ["alloc", "race", "std"] }
+libc = { version = "0.2.139", features = ["extra_traits"] }
+once_cell = { version = "1.17.0" }
 
 [target.x86_64-apple-darwin.dependencies]
-futures-core = { version = "0.3.25", features = ["alloc", "std"] }
+futures-core = { version = "0.3.25" }
 futures-sink = { version = "0.3.25" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
 indexmap = { version = "1.9.2", default-features = false, features = ["std"] }
-libc = { version = "0.2.139", features = ["extra_traits", "std"] }
-once_cell = { version = "1.17.0", features = ["alloc", "race", "std"] }
-tokio = { version = "1.23.0", default-features = false, features = ["net", "socket2"] }
+libc = { version = "0.2.139", features = ["extra_traits"] }
+once_cell = { version = "1.17.0" }
+tokio = { version = "1.23.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
-libc = { version = "0.2.139", features = ["extra_traits", "std"] }
-once_cell = { version = "1.17.0", features = ["alloc", "race", "std"] }
+libc = { version = "0.2.139", features = ["extra_traits"] }
+once_cell = { version = "1.17.0" }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-futures-core = { version = "0.3.25", features = ["alloc", "std"] }
+futures-core = { version = "0.3.25" }
 futures-sink = { version = "0.3.25" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
 indexmap = { version = "1.9.2", default-features = false, features = ["std"] }
-once_cell = { version = "1.17.0", features = ["alloc", "race", "std"] }
-tokio = { version = "1.23.0", default-features = false, features = ["net", "socket2", "windows-sys"] }
+once_cell = { version = "1.17.0" }
+tokio = { version = "1.23.0", default-features = false, features = ["net"] }
 winapi = { version = "0.3.9", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "jobapi2", "minwinbase", "minwindef", "ntdef", "ntsecapi", "objbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "shlobj", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
-windows-sys = { version = "0.42.0", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-sys = { version = "0.42.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
-once_cell = { version = "1.17.0", features = ["alloc", "race", "std"] }
+once_cell = { version = "1.17.0" }
 
 ### END HAKARI SECTION
