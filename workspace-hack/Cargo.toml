@@ -16,7 +16,7 @@ publish = false
 [dependencies]
 backtrace = { version = "0.3.67", features = ["gimli-symbolize"] }
 clap = { version = "4.0.32", features = ["derive", "env"] }
-console = { version = "0.15.2" }
+console = { version = "0.15.4" }
 either = { version = "1.8.0" }
 futures-channel = { version = "0.3.25", features = ["sink"] }
 futures-sink = { version = "0.3.25", default-features = false, features = ["std"] }
