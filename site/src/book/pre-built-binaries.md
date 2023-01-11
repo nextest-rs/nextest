@@ -144,13 +144,13 @@ The action will download pre-built binaries from the URL above and add them to `
 To install a version series or specific version, use this instead:
 
 ```yml
-- uses: taiki-e/install-action@v1
+- uses: taiki-e/install-action@v2
   with:
     tool: nextest
     ## version (defaults to "latest") can be a series like 0.9:
-    # version: 0.9
+    # tool: nextest@0.9
     ## version can also be a specific version like 0.9.11:
-    # version: 0.9.11
+    # tool: nextest@0.9.11
 ```
 
 > **Tip:** GitHub Actions supports ANSI color codes. To get color support for nextest (and Cargo), add this to your workflow:
