@@ -17,15 +17,15 @@ aho-corasick = "0.7.20"
 async-scoped = { version = "0.7.1", features = ["use-tokio"] }
 future-queue = "0.2.2"
 bytes = "1.3.0"
-camino = { version = "1.1.1", features = ["serde1"] }
+camino = { version = "1.1.2", features = ["serde1"] }
 config = { version = "0.13.3", default-features = false, features = ["toml"] }
 cargo_metadata = "0.15.2"
 cfg-if = "1.0.0"
 chrono = "0.4.23"
-debug-ignore = "1.0.3"
+debug-ignore = "1.0.5"
 either = "1.8.0"
 futures = "0.3.25"
-guppy = "0.15.1"
+guppy = "0.15.2"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home = "0.5.4"
@@ -41,7 +41,7 @@ miette = "5.5.0"
 once_cell = "1.17.0"
 owo-colors = "3.5.0"
 pin-project-lite = "0.2.9"
-regex = "1.7.0"
+regex = "1.7.1"
 semver = "1.0.16"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_ignored = "0.1.7"
@@ -52,12 +52,12 @@ smol_str = { version = "0.1.23", features = ["serde"] }
 strip-ansi-escapes = "0.1.1"
 tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
-target-spec = { version = "1.2.2", features = ["summaries"] }
+target-spec = { version = "1.3.1", features = ["summaries"] }
 target-spec-miette = "0.1.0"
 tempfile = "3.3.0"
 thiserror = "1.0.38"
 # For parsing of .cargo/config.toml files
-tokio = { version = "1.23.0", features = [
+tokio = { version = "1.24.1", features = [
     "io-util",
     "macros",
     "process",
@@ -69,7 +69,7 @@ tokio = { version = "1.23.0", features = [
 ] }
 toml_edit = { version = "0.16.2", features = ["easy"] }
 twox-hash = { version = "1.6.3", default-features = false }
-zstd = { version = "0.12.1", features = ["zstdmt"] }
+zstd = { version = "0.12.2", features = ["zstdmt"] }
 
 ###
 ### Update-related features, optionally enabled

@@ -12,7 +12,7 @@ edition = "2021"
 rust-version = "1.64"
 
 [dependencies]
-camino = "1.1.1"
+camino = "1.1.2"
 cfg-if = "1.0.0"
 clap = { version = "4.0.32", features = ["derive", "env"] }
 # we don't use the tracing support
@@ -22,7 +22,7 @@ duct = "0.13.6"
 enable-ansi-support = "0.2.1"
 # we don't use the default formatter so we don't need default features
 env_logger = { version = "0.10.0", default-features = false }
-guppy = "0.15.1"
+guppy = "0.15.2"
 log = "0.4.17"
 itertools = "0.10.5"
 miette = { version = "5.5.0", features = ["fancy"] }

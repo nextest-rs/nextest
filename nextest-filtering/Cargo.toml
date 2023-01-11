@@ -26,13 +26,13 @@ internal-testing = ["dep:proptest", "dep:test-strategy", "dep:twox-hash"]
 # trace = ["nom-tracable/trace"]
 
 [dependencies]
-guppy = "0.15.1"
+guppy = "0.15.2"
 miette = "5.5.0"
 nom = "7.1.2"
 nom-tracable = "0.8.0"
 nom_locate = "4.0.0"
 recursion = "0.3.3"
-regex = "1.7.0"
+regex = "1.7.1"
 regex-syntax = "0.6.28"
 thiserror = "1.0.38"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -42,7 +42,7 @@ twox-hash = { version = "1.6.3", optional = true }
 
 [dev-dependencies]
 clap = { version = "4.0.32", features = ["derive"] }
-camino = "1.1.1"
+camino = "1.1.2"
 test-case = "2.2.2"
 proptest = { version = "1.0.0" }
 test-strategy = { version = "0.2.1" }
