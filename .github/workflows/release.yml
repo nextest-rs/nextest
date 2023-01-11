@@ -157,6 +157,9 @@ jobs:
           - target: i686-pc-windows-msvc
             os: windows-latest
             container:
+          - target: universal-apple-darwin
+            os: macos-latest
+            container:
 
           # Builds using cross
           - target: x86_64-unknown-linux-musl
@@ -229,30 +232,9 @@ jobs:
       x86_64-windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
       i686-windows-tar: ${{ steps.archive-output.outputs.i686-pc-windows-msvc-tar }}
       i686-windows-zip: ${{ steps.archive-output.outputs.i686-pc-windows-msvc-zip }}
+      mac-tar: ${{ steps.archive-output.outputs.universal-apple-darwin-tar }}
       x86_64-unknown-freebsd-tar: ${{ steps.archive-output.outputs.x86_64-unknown-freebsd-tar }}
       x86_64-unknown-illumos-tar: ${{ steps.archive-output.outputs.x86_64-unknown-illumos-tar }}
-
-  build-cargo-nextest-binaries-mac:
-    name: Build universal cargo-nextest binary for Mac
-    if: github.repository_owner == 'nextest-rs'
-    needs:
-      - cargo-nextest-release
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build release for Mac
-        id: build-release
-        run: |
-          ./scripts/release-mac-build.sh cargo-nextest "${{ github.ref_name }}"
-      - uses: svenstaro/upload-release-action@2.2.1
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ steps.build-release.outputs.archive-name }}
-          tag: ${{ github.ref }}
-    outputs:
-      mac-tar: ${{ steps.build-release.outputs.archive-name }}
 
   update-release-meta:
     name: Update release-meta branch and publish to crates.io
@@ -260,7 +242,6 @@ jobs:
     needs:
       - cargo-nextest-release
       - build-cargo-nextest-binaries
-      - build-cargo-nextest-binaries-mac
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -289,7 +270,7 @@ jobs:
             --archive x86_64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-zip }} \
             --archive i686-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-tar }} \
             --archive i686-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-zip }} \
-            --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries-mac.outputs.mac-tar }} \
+            --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.mac-tar }} \
             --archive x86_64-unknown-freebsd:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-freebsd-tar }} \
             --archive x86_64-unknown-illumos:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-illumos-tar }} \
       - name: Generate netlify redirects
