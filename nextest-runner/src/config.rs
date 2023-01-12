@@ -69,7 +69,7 @@ pub fn get_num_cpus() -> usize {
 pub struct NextestConfig {
     workspace_root: Utf8PathBuf,
     inner: NextestConfigImpl,
-    overrides: NextestOverridesImpl,
+    overrides: CompiledOverridesByProfile,
 }
 
 impl NextestConfig {
@@ -196,7 +196,7 @@ impl NextestConfig {
             workspace_root: workspace_root.into(),
             inner: deserialized.into_config_impl(),
             // The default config does not (cannot) have overrides.
-            overrides: NextestOverridesImpl::default(),
+            overrides: CompiledOverridesByProfile::default(),
         }
     }
 
@@ -219,13 +219,13 @@ impl NextestConfig {
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
         unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
-    ) -> Result<(NextestConfigImpl, NextestOverridesImpl), ConfigParseError> {
+    ) -> Result<(NextestConfigImpl, CompiledOverridesByProfile), ConfigParseError> {
         // First, get the default config.
         let mut composite_builder = Self::make_default_config();
 
         // Overrides are handled additively.
         // Note that they're stored in reverse order here, and are flipped over at the end.
-        let mut overrides_impl = NextestOverridesImpl::default();
+        let mut overrides = CompiledOverridesByProfile::default();
 
         let mut known_groups = BTreeSet::new();
 
@@ -238,7 +238,7 @@ impl NextestConfig {
                 config_file,
                 Some(tool),
                 source.clone(),
-                &mut overrides_impl,
+                &mut overrides,
                 unknown_callback,
                 &mut known_groups,
             )?;
@@ -263,7 +263,7 @@ impl NextestConfig {
             &config_file,
             None,
             source.clone(),
-            &mut overrides_impl,
+            &mut overrides,
             unknown_callback,
             &mut known_groups,
         )?;
@@ -276,12 +276,12 @@ impl NextestConfig {
             .map_err(|kind| ConfigParseError::new(config_file, None, kind))?;
 
         // Reverse all the overrides at the end.
-        overrides_impl.default.reverse();
-        for override_ in overrides_impl.other.values_mut() {
+        overrides.default.reverse();
+        for override_ in overrides.other.values_mut() {
             override_.reverse();
         }
 
-        Ok((config.into_config_impl(), overrides_impl))
+        Ok((config.into_config_impl(), overrides))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -291,7 +291,7 @@ impl NextestConfig {
         config_file: &Utf8Path,
         tool: Option<&str>,
         source: File<FileSourceFile, FileFormat>,
-        overrides_impl: &mut NextestOverridesImpl,
+        overrides_out: &mut CompiledOverridesByProfile,
         unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
         known_groups: &mut BTreeSet<CustomTestGroup>,
     ) -> Result<(), ConfigParseError> {
@@ -353,7 +353,7 @@ impl NextestConfig {
         }
 
         // Compile the overrides for this file.
-        let this_overrides = NextestOverridesImpl::new(graph, &this_config)
+        let this_overrides = CompiledOverridesByProfile::new(graph, &this_config)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
 
         // Check that all overrides specify known test groups.
@@ -397,11 +397,11 @@ impl NextestConfig {
         }
 
         // Grab the overrides for this config. Add them in reversed order (we'll flip it around at the end).
-        overrides_impl
+        overrides_out
             .default
             .extend(this_overrides.default.into_iter().rev());
         for (name, overrides) in this_overrides.other {
-            overrides_impl
+            overrides_out
                 .other
                 .entry(name)
                 .or_default()

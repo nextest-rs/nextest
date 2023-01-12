@@ -164,12 +164,12 @@ impl<Source> ProfileOverrides<Source> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct NextestOverridesImpl {
+pub(super) struct CompiledOverridesByProfile {
     pub(super) default: Vec<CompiledOverride<PreBuildPlatform>>,
     pub(super) other: HashMap<String, Vec<CompiledOverride<PreBuildPlatform>>>,
 }
 
-impl NextestOverridesImpl {
+impl CompiledOverridesByProfile {
     pub(super) fn new(
         graph: &PackageGraph,
         config: &NextestConfigImpl,
