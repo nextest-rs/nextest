@@ -163,6 +163,58 @@ impl<Source> ProfileOverrides<Source> {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub(super) struct NextestOverridesImpl {
+    pub(super) default: Vec<CompiledOverride<PreBuildPlatform>>,
+    pub(super) other: HashMap<String, Vec<CompiledOverride<PreBuildPlatform>>>,
+}
+
+impl NextestOverridesImpl {
+    pub(super) fn new(
+        graph: &PackageGraph,
+        config: &NextestConfigImpl,
+    ) -> Result<Self, ConfigParseErrorKind> {
+        let mut errors = vec![];
+        let default = Self::compile_overrides(
+            graph,
+            "default",
+            &config.default_profile.overrides,
+            &mut errors,
+        );
+        let other: HashMap<_, _> = config
+            .other_profiles
+            .iter()
+            .map(|(profile_name, profile)| {
+                (
+                    profile_name.clone(),
+                    Self::compile_overrides(graph, profile_name, &profile.overrides, &mut errors),
+                )
+            })
+            .collect();
+
+        if errors.is_empty() {
+            Ok(Self { default, other })
+        } else {
+            Err(ConfigParseErrorKind::OverrideError(errors))
+        }
+    }
+
+    fn compile_overrides(
+        graph: &PackageGraph,
+        profile_name: &str,
+        overrides: &[PrecompiledOverride],
+        errors: &mut Vec<ConfigParseOverrideError>,
+    ) -> Vec<CompiledOverride<PreBuildPlatform>> {
+        overrides
+            .iter()
+            .enumerate()
+            .filter_map(|(index, source)| {
+                CompiledOverride::new(graph, profile_name, index, source, errors)
+            })
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct CompiledOverride<State> {
     id: OverrideId,
@@ -329,58 +381,6 @@ pub(super) struct PrecompiledOverride {
     leak_timeout: Option<Duration>,
     #[serde(default)]
     test_group: Option<TestGroup>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub(super) struct NextestOverridesImpl {
-    pub(super) default: Vec<CompiledOverride<PreBuildPlatform>>,
-    pub(super) other: HashMap<String, Vec<CompiledOverride<PreBuildPlatform>>>,
-}
-
-impl NextestOverridesImpl {
-    pub(super) fn new(
-        graph: &PackageGraph,
-        config: &NextestConfigImpl,
-    ) -> Result<Self, ConfigParseErrorKind> {
-        let mut errors = vec![];
-        let default = Self::compile_overrides(
-            graph,
-            "default",
-            &config.default_profile.overrides,
-            &mut errors,
-        );
-        let other: HashMap<_, _> = config
-            .other_profiles
-            .iter()
-            .map(|(profile_name, profile)| {
-                (
-                    profile_name.clone(),
-                    Self::compile_overrides(graph, profile_name, &profile.overrides, &mut errors),
-                )
-            })
-            .collect();
-
-        if errors.is_empty() {
-            Ok(Self { default, other })
-        } else {
-            Err(ConfigParseErrorKind::OverrideError(errors))
-        }
-    }
-
-    fn compile_overrides(
-        graph: &PackageGraph,
-        profile_name: &str,
-        overrides: &[PrecompiledOverride],
-        errors: &mut Vec<ConfigParseOverrideError>,
-    ) -> Vec<CompiledOverride<PreBuildPlatform>> {
-        overrides
-            .iter()
-            .enumerate()
-            .filter_map(|(index, source)| {
-                CompiledOverride::new(graph, profile_name, index, source, errors)
-            })
-            .collect()
-    }
 }
 
 #[cfg(test)]
