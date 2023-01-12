@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    CompiledOverride, CompiledOverridesByProfile, CustomTestGroup, PrecompiledOverride,
+    CompiledOverride, CompiledOverridesByProfile, CustomTestGroup, DeserializedOverride,
     ProfileOverrides, RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig, TestThreads,
     ThreadsRequired, ToolConfigFile,
 };
@@ -716,7 +716,7 @@ pub(super) struct DefaultProfileImpl {
     fail_fast: bool,
     slow_timeout: SlowTimeout,
     leak_timeout: Duration,
-    overrides: Vec<PrecompiledOverride>,
+    overrides: Vec<DeserializedOverride>,
     junit: DefaultJunitImpl,
 }
 
@@ -760,7 +760,7 @@ impl DefaultProfileImpl {
         }
     }
 
-    pub(super) fn overrides(&self) -> &[PrecompiledOverride] {
+    pub(super) fn overrides(&self) -> &[DeserializedOverride] {
         &self.overrides
     }
 }
@@ -797,7 +797,7 @@ pub(super) struct CustomProfileImpl {
     #[serde(default, with = "humantime_serde::option")]
     leak_timeout: Option<Duration>,
     #[serde(default)]
-    overrides: Vec<PrecompiledOverride>,
+    overrides: Vec<DeserializedOverride>,
     #[serde(default)]
     junit: JunitImpl,
 }
@@ -808,7 +808,7 @@ impl CustomProfileImpl {
         self.test_threads
     }
 
-    pub(super) fn overrides(&self) -> &[PrecompiledOverride] {
+    pub(super) fn overrides(&self) -> &[DeserializedOverride] {
         &self.overrides
     }
 }

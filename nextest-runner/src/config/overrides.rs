@@ -201,7 +201,7 @@ impl CompiledOverridesByProfile {
     fn compile_overrides(
         graph: &PackageGraph,
         profile_name: &str,
-        overrides: &[PrecompiledOverride],
+        overrides: &[DeserializedOverride],
         errors: &mut Vec<ConfigParseOverrideError>,
     ) -> Vec<CompiledOverride<PreBuildPlatform>> {
         overrides
@@ -249,7 +249,7 @@ impl CompiledOverride<PreBuildPlatform> {
         graph: &PackageGraph,
         profile_name: &str,
         index: usize,
-        source: &PrecompiledOverride,
+        source: &DeserializedOverride,
         errors: &mut Vec<ConfigParseOverrideError>,
     ) -> Option<Self> {
         if source.platform.is_none() && source.filter.is_none() {
@@ -358,10 +358,10 @@ impl CompiledOverride<FinalConfig> {
     }
 }
 
-/// Pre-compiled form of profile overrides.
+/// Deserialized form of profile overrides before compilation.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub(super) struct PrecompiledOverride {
+pub(super) struct DeserializedOverride {
     /// The platforms to match against.
     #[serde(default)]
     platform: Option<String>,
