@@ -3,6 +3,7 @@
 
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
+    config::{CustomTestGroup, TestGroup},
     platform::BuildPlatforms,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -45,4 +46,13 @@ pub(super) fn build_platforms() -> BuildPlatforms {
             source: TargetTripleSource::Env,
         }),
     )
+}
+
+pub(super) fn test_group(name: &str) -> TestGroup {
+    TestGroup::Custom(custom_test_group(name))
+}
+
+pub(super) fn custom_test_group(name: &str) -> CustomTestGroup {
+    CustomTestGroup::new(name.into())
+        .unwrap_or_else(|error| panic!("invalid custom test group {name}: {error}"))
 }
