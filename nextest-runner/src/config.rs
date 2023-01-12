@@ -1511,7 +1511,7 @@ struct ProfileOverrideSource {
     retries: Option<RetryPolicy>,
     #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
-    #[serde(default)]
+    #[serde(default, with = "humantime_serde::option")]
     leak_timeout: Option<Duration>,
     #[serde(default)]
     test_group: Option<TestGroup>,
@@ -1876,6 +1876,107 @@ mod tests {
                 )
             }
         }
+    }
+
+    /// Basic test to ensure overrides work. Add new override parameters to this test.
+    #[test]
+    fn test_overrides_basic() {
+        let config_contents = indoc! {r#"
+            [[profile.default.overrides]]
+            platform = 'aarch64-apple-darwin'  # this is the target platform
+            filter = "test(test)"
+            retries = { backoff = "exponential", count = 20, delay = "1s", max-delay = "20s" }
+            slow-timeout = { period = "120s", terminate-after = 1, grace-period = "0s" }
+
+            [[profile.default.overrides]]
+            filter = "test(test)"
+            threads-required = 8
+            retries = 3
+            slow-timeout = "60s"
+            leak-timeout = "300ms"
+            test-group = "my-group"
+
+            [test-groups.my-group]
+            max-threads = 20
+        "#};
+
+        let workspace_dir = tempdir().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+
+        let graph = temp_workspace(workspace_path, config_contents);
+        let package_id = graph.workspace().iter().next().unwrap().id();
+
+        let nextest_config_result =
+            NextestConfig::from_sources(graph.workspace().root(), &graph, None, &[][..])
+                .expect("config is valid");
+        let profile = nextest_config_result
+            .profile("default")
+            .expect("valid profile name")
+            .apply_build_platforms(&build_platforms());
+
+        // This query matches the second override.
+        let query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Host,
+            },
+            test_name: "test",
+        };
+        let overrides = profile.overrides_for(&query);
+
+        assert_eq!(
+            overrides.threads_required(),
+            Some(ThreadsRequired::Count(8))
+        );
+        assert_eq!(overrides.retries(), Some(RetryPolicy::new_without_delay(3)));
+        assert_eq!(
+            overrides.slow_timeout(),
+            Some(SlowTimeout {
+                period: Duration::from_secs(60),
+                terminate_after: None,
+                grace_period: Duration::from_secs(10),
+            })
+        );
+        assert_eq!(overrides.leak_timeout(), Some(Duration::from_millis(300)));
+        assert_eq!(overrides.test_group(), Some(&test_group("my-group")));
+
+        // This query matches both overrides.
+        let query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
+            test_name: "test",
+        };
+        let overrides = profile.overrides_for(&query);
+
+        assert_eq!(
+            overrides.threads_required(),
+            Some(ThreadsRequired::Count(8))
+        );
+        assert_eq!(
+            overrides.retries(),
+            Some(RetryPolicy::Exponential {
+                count: 20,
+                delay: Duration::from_secs(1),
+                jitter: false,
+                max_delay: Some(Duration::from_secs(20)),
+            })
+        );
+        assert_eq!(
+            overrides.slow_timeout(),
+            Some(SlowTimeout {
+                period: Duration::from_secs(120),
+                terminate_after: Some(NonZeroUsize::new(1).unwrap()),
+                grace_period: Duration::ZERO,
+            })
+        );
+        assert_eq!(overrides.leak_timeout(), Some(Duration::from_millis(300)));
+        assert_eq!(overrides.test_group(), Some(&test_group("my-group")));
     }
 
     #[test_case(
