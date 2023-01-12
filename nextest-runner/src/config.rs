@@ -767,7 +767,7 @@ struct DefaultProfileImpl {
     fail_fast: bool,
     slow_timeout: SlowTimeout,
     leak_timeout: Duration,
-    overrides: Vec<ProfileOverrideSource>,
+    overrides: Vec<PrecompiledOverride>,
     junit: DefaultJunitImpl,
 }
 
@@ -844,7 +844,7 @@ struct CustomProfileImpl {
     #[serde(default, with = "humantime_serde::option")]
     leak_timeout: Option<Duration>,
     #[serde(default)]
-    overrides: Vec<ProfileOverrideSource>,
+    overrides: Vec<PrecompiledOverride>,
     #[serde(default)]
     junit: JunitImpl,
 }
