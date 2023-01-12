@@ -3,8 +3,8 @@
 
 use crate::{
     config::{
-        CustomTestGroup, FinalConfig, NextestProfile, OverrideId, PreBuildPlatform,
-        ProfileOverrideImpl, TestGroup, TestGroupConfig,
+        CompiledOverride, CustomTestGroup, FinalConfig, NextestProfile, OverrideId,
+        PreBuildPlatform, TestGroup, TestGroupConfig,
     },
     errors::ShowTestGroupsError,
     helpers::QuotedDisplay,
@@ -256,12 +256,12 @@ impl ValidatedTestGroups {
 
 #[derive(Debug)]
 struct ShowTestGroupsData<'a> {
-    override_: &'a ProfileOverrideImpl<FinalConfig>,
+    override_: &'a CompiledOverride<FinalConfig>,
     matching_tests: TestListDisplayFilter<'a>,
 }
 
 impl<'a> ShowTestGroupsData<'a> {
-    fn new(override_: &'a ProfileOverrideImpl<FinalConfig>) -> Self {
+    fn new(override_: &'a CompiledOverride<FinalConfig>) -> Self {
         Self {
             override_,
             matching_tests: TestListDisplayFilter::new(),

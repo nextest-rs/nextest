@@ -533,7 +533,7 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
-    overrides: Vec<ProfileOverrideImpl<State>>,
+    overrides: Vec<CompiledOverride<State>>,
 }
 
 impl<'cfg, State> NextestProfile<'cfg, State> {
@@ -650,7 +650,7 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
     pub(crate) fn overrides_with_source_for(
         &self,
         query: &TestQuery<'_>,
-    ) -> ProfileOverrides<&ProfileOverrideImpl<FinalConfig>> {
+    ) -> ProfileOverrides<&CompiledOverride<FinalConfig>> {
         ProfileOverrides::new(&self.overrides, query)
     }
 

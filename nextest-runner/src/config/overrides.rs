@@ -32,23 +32,23 @@ pub struct ProfileOverrides<Source = ()> {
 pub(crate) trait OverrideSource<'p>: Sized {
     fn track_source<T>(
         value: Option<T>,
-        source: &'p ProfileOverrideImpl<FinalConfig>,
+        source: &'p CompiledOverride<FinalConfig>,
     ) -> Option<(T, Self)>;
 }
 
 impl<'p> OverrideSource<'p> for () {
     fn track_source<T>(
         value: Option<T>,
-        _source: &'p ProfileOverrideImpl<FinalConfig>,
+        _source: &'p CompiledOverride<FinalConfig>,
     ) -> Option<(T, Self)> {
         value.map(|value| (value, ()))
     }
 }
 
-impl<'p> OverrideSource<'p> for &'p ProfileOverrideImpl<FinalConfig> {
+impl<'p> OverrideSource<'p> for &'p CompiledOverride<FinalConfig> {
     fn track_source<T>(
         value: Option<T>,
-        source: &'p ProfileOverrideImpl<FinalConfig>,
+        source: &'p CompiledOverride<FinalConfig>,
     ) -> Option<(T, Self)> {
         value.map(|value| (value, source))
     }
@@ -84,7 +84,7 @@ impl ProfileOverrides {
 #[allow(dead_code)]
 impl<Source> ProfileOverrides<Source> {
     pub(super) fn new<'p>(
-        overrides: &'p [ProfileOverrideImpl<FinalConfig>],
+        overrides: &'p [CompiledOverride<FinalConfig>],
         query: &TestQuery<'_>,
     ) -> Self
     where
@@ -164,13 +164,13 @@ impl<Source> ProfileOverrides<Source> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ProfileOverrideImpl<State> {
+pub(crate) struct CompiledOverride<State> {
     id: OverrideId,
     state: State,
     pub(super) data: ProfileOverrideData,
 }
 
-impl<State> ProfileOverrideImpl<State> {
+impl<State> CompiledOverride<State> {
     pub(crate) fn id(&self) -> &OverrideId {
         &self.id
     }
@@ -193,7 +193,7 @@ pub(super) struct ProfileOverrideData {
     pub(super) test_group: Option<TestGroup>,
 }
 
-impl ProfileOverrideImpl<PreBuildPlatform> {
+impl CompiledOverride<PreBuildPlatform> {
     fn new(
         graph: &PackageGraph,
         profile_name: &str,
@@ -270,7 +270,7 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
     pub(super) fn apply_build_platforms(
         self,
         build_platforms: &BuildPlatforms,
-    ) -> ProfileOverrideImpl<FinalConfig> {
+    ) -> CompiledOverride<FinalConfig> {
         let (host_eval, target_eval) = if let Some(spec) = &self.data.target_spec {
             // unknown (None) gets unwrapped to true.
             let host_eval = spec.eval(&build_platforms.host).unwrap_or(true);
@@ -281,7 +281,7 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
         } else {
             (true, true)
         };
-        ProfileOverrideImpl {
+        CompiledOverride {
             id: self.id,
             state: FinalConfig {
                 host_eval,
@@ -292,7 +292,7 @@ impl ProfileOverrideImpl<PreBuildPlatform> {
     }
 }
 
-impl ProfileOverrideImpl<FinalConfig> {
+impl CompiledOverride<FinalConfig> {
     /// Returns the target spec.
     pub(crate) fn target_spec(&self) -> Option<&TargetSpec> {
         self.data.target_spec.as_ref()
@@ -333,8 +333,8 @@ pub(super) struct ProfileOverrideSource {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct NextestOverridesImpl {
-    pub(super) default: Vec<ProfileOverrideImpl<PreBuildPlatform>>,
-    pub(super) other: HashMap<String, Vec<ProfileOverrideImpl<PreBuildPlatform>>>,
+    pub(super) default: Vec<CompiledOverride<PreBuildPlatform>>,
+    pub(super) other: HashMap<String, Vec<CompiledOverride<PreBuildPlatform>>>,
 }
 
 impl NextestOverridesImpl {
@@ -372,12 +372,12 @@ impl NextestOverridesImpl {
         profile_name: &str,
         overrides: &[ProfileOverrideSource],
         errors: &mut Vec<ConfigParseOverrideError>,
-    ) -> Vec<ProfileOverrideImpl<PreBuildPlatform>> {
+    ) -> Vec<CompiledOverride<PreBuildPlatform>> {
         overrides
             .iter()
             .enumerate()
             .filter_map(|(index, source)| {
-                ProfileOverrideImpl::new(graph, profile_name, index, source, errors)
+                CompiledOverride::new(graph, profile_name, index, source, errors)
             })
             .collect()
     }
