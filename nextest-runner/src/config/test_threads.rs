@@ -166,9 +166,9 @@ mod tests {
                     .profile("custom")
                     .unwrap()
                     .apply_build_platforms(&build_platforms())
-                    .custom_profile
+                    .custom_profile()
                     .unwrap()
-                    .test_threads
+                    .test_threads()
                     .unwrap()
                     .compute(),
                 n,

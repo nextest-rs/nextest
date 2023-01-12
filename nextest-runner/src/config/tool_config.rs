@@ -1,11 +1,9 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::str::FromStr;
-
-use camino::{Utf8Path, Utf8PathBuf};
-
 use crate::errors::ToolConfigFileParseError;
+use camino::{Utf8Path, Utf8PathBuf};
+use std::str::FromStr;
 
 /// A tool-specific config file.
 ///
@@ -57,12 +55,11 @@ impl FromStr for ToolConfigFile {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::config::{test_helpers::*, NextestConfig, RetryPolicy};
     use guppy::graph::cargo::BuildPlatform;
     use nextest_filtering::{BinaryQuery, TestQuery};
     use tempfile::tempdir;
-
-    use super::*;
-    use crate::config::{test_helpers::*, NextestConfig, RetryPolicy};
 
     #[test]
     fn parse_tool_config_file() {

@@ -178,16 +178,15 @@ impl CompiledOverridesByProfile {
         let default = Self::compile_overrides(
             graph,
             "default",
-            &config.default_profile.overrides,
+            config.default_profile().overrides(),
             &mut errors,
         );
         let other: HashMap<_, _> = config
-            .other_profiles
-            .iter()
+            .other_profiles()
             .map(|(profile_name, profile)| {
                 (
-                    profile_name.clone(),
-                    Self::compile_overrides(graph, profile_name, &profile.overrides, &mut errors),
+                    profile_name.to_owned(),
+                    Self::compile_overrides(graph, profile_name, profile.overrides(), &mut errors),
                 )
             })
             .collect();
