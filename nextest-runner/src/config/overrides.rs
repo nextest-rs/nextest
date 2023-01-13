@@ -572,8 +572,12 @@ mod tests {
         assert_eq!(overrides.test_group(), &test_group("my-group"));
         assert_eq!(overrides.success_output(), TestOutputDisplay::Never);
         assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
-        assert_eq!(overrides.junit_store_success_output(), false);
-        assert_eq!(overrides.junit_store_failure_output(), false);
+        // For clarity.
+        #[allow(clippy::bool_assert_comparison)]
+        {
+            assert_eq!(overrides.junit_store_success_output(), false);
+            assert_eq!(overrides.junit_store_failure_output(), false);
+        }
 
         // This query matches both overrides.
         let query = TestQuery {
@@ -612,8 +616,12 @@ mod tests {
             TestOutputDisplay::ImmediateFinal
         );
         assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
-        assert_eq!(overrides.junit_store_success_output(), true);
-        assert_eq!(overrides.junit_store_failure_output(), false);
+        // For clarity.
+        #[allow(clippy::bool_assert_comparison)]
+        {
+            assert_eq!(overrides.junit_store_success_output(), true);
+            assert_eq!(overrides.junit_store_failure_output(), false);
+        }
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
