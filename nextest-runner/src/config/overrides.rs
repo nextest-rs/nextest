@@ -467,6 +467,7 @@ mod tests {
             filter = "test(test)"
             retries = { backoff = "exponential", count = 20, delay = "1s", max-delay = "20s" }
             slow-timeout = { period = "120s", terminate-after = 1, grace-period = "0s" }
+            success-output = "immediate-final"
 
             [[profile.default.overrides]]
             filter = "test(test)"
@@ -475,6 +476,7 @@ mod tests {
             slow-timeout = "60s"
             leak-timeout = "300ms"
             test-group = "my-group"
+            failure-output = "final"
 
             [test-groups.my-group]
             max-threads = 20
@@ -518,6 +520,8 @@ mod tests {
         );
         assert_eq!(overrides.leak_timeout(), Duration::from_millis(300));
         assert_eq!(overrides.test_group(), &test_group("my-group"));
+        assert_eq!(overrides.success_output(), TestOutputDisplay::Never);
+        assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
 
         // This query matches both overrides.
         let query = TestQuery {
@@ -551,6 +555,11 @@ mod tests {
         );
         assert_eq!(overrides.leak_timeout(), Duration::from_millis(300));
         assert_eq!(overrides.test_group(), &test_group("my-group"));
+        assert_eq!(
+            overrides.success_output(),
+            TestOutputDisplay::ImmediateFinal
+        );
+        assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
