@@ -202,7 +202,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ (matrix.target == 'universal-apple-darwin') && 'x86_64-apple-darwin' || matrix.target }}
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: cargo-nextest
