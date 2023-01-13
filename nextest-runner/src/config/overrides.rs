@@ -29,14 +29,14 @@ pub struct ProfileOverrides<Source = ()> {
     test_group: Option<(TestGroup, Source)>,
 }
 
-pub(crate) trait OverrideSource<'p>: Sized {
+pub(crate) trait TrackSource<'p>: Sized {
     fn track_source<T>(
         value: Option<T>,
         source: &'p CompiledOverride<FinalConfig>,
     ) -> Option<(T, Self)>;
 }
 
-impl<'p> OverrideSource<'p> for () {
+impl<'p> TrackSource<'p> for () {
     fn track_source<T>(
         value: Option<T>,
         _source: &'p CompiledOverride<FinalConfig>,
@@ -45,7 +45,7 @@ impl<'p> OverrideSource<'p> for () {
     }
 }
 
-impl<'p> OverrideSource<'p> for &'p CompiledOverride<FinalConfig> {
+impl<'p> TrackSource<'p> for &'p CompiledOverride<FinalConfig> {
     fn track_source<T>(
         value: Option<T>,
         source: &'p CompiledOverride<FinalConfig>,
@@ -88,7 +88,7 @@ impl<Source> ProfileOverrides<Source> {
         query: &TestQuery<'_>,
     ) -> Self
     where
-        Source: OverrideSource<'p>,
+        Source: TrackSource<'p>,
     {
         let mut threads_required = None;
         let mut retries = None;
