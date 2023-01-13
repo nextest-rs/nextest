@@ -56,7 +56,7 @@ impl FromStr for ToolConfigFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{test_helpers::*, NextestConfig, RetryPolicy};
+    use crate::config::{test_helpers::*, NextestConfig, RetryPolicy, TestGroup};
     use guppy::graph::cargo::BuildPlatform;
     use nextest_filtering::{BinaryQuery, TestQuery};
     use tempfile::tempdir;
@@ -236,33 +236,33 @@ mod tests {
         };
 
         assert_eq!(
-            default_profile.overrides_for(&test_foo_query).retries(),
-            Some(RetryPolicy::new_without_delay(20)),
+            default_profile.settings_for(&test_foo_query).retries(),
+            RetryPolicy::new_without_delay(20),
             "retries for test_foo/default profile"
         );
         assert_eq!(
-            default_profile.overrides_for(&test_foo_query).test_group(),
-            Some(&test_group("foo")),
+            default_profile.settings_for(&test_foo_query).test_group(),
+            &test_group("foo"),
             "test_group for test_foo/default profile"
         );
         assert_eq!(
-            default_profile.overrides_for(&test_bar_query).retries(),
-            Some(RetryPolicy::new_without_delay(21)),
+            default_profile.settings_for(&test_bar_query).retries(),
+            RetryPolicy::new_without_delay(21),
             "retries for test_bar/default profile"
         );
         assert_eq!(
-            default_profile.overrides_for(&test_bar_query).test_group(),
-            None,
+            default_profile.settings_for(&test_bar_query).test_group(),
+            &TestGroup::Global,
             "test_group for test_bar/default profile"
         );
         assert_eq!(
-            default_profile.overrides_for(&test_baz_query).retries(),
-            Some(RetryPolicy::new_without_delay(23)),
+            default_profile.settings_for(&test_baz_query).retries(),
+            RetryPolicy::new_without_delay(23),
             "retries for test_baz/default profile"
         );
         assert_eq!(
-            default_profile.overrides_for(&test_quux_query).test_group(),
-            Some(&test_group("@tool:tool1:group1")),
+            default_profile.settings_for(&test_quux_query).test_group(),
+            &test_group("@tool:tool1:group1"),
             "test group for test_quux/default profile"
         );
 
@@ -272,18 +272,18 @@ mod tests {
             .apply_build_platforms(&build_platforms());
         assert_eq!(tool_profile.retries(), RetryPolicy::new_without_delay(12));
         assert_eq!(
-            tool_profile.overrides_for(&test_foo_query).retries(),
-            Some(RetryPolicy::new_without_delay(25)),
+            tool_profile.settings_for(&test_foo_query).retries(),
+            RetryPolicy::new_without_delay(25),
             "retries for test_foo/default profile"
         );
         assert_eq!(
-            tool_profile.overrides_for(&test_bar_query).retries(),
-            Some(RetryPolicy::new_without_delay(24)),
+            tool_profile.settings_for(&test_bar_query).retries(),
+            RetryPolicy::new_without_delay(24),
             "retries for test_bar/default profile"
         );
         assert_eq!(
-            tool_profile.overrides_for(&test_baz_query).retries(),
-            Some(RetryPolicy::new_without_delay(22)),
+            tool_profile.settings_for(&test_baz_query).retries(),
+            RetryPolicy::new_without_delay(22),
             "retries for test_baz/default profile"
         );
 
@@ -293,18 +293,18 @@ mod tests {
             .apply_build_platforms(&build_platforms());
         assert_eq!(tool2_profile.retries(), RetryPolicy::new_without_delay(18));
         assert_eq!(
-            tool2_profile.overrides_for(&test_foo_query).retries(),
-            Some(RetryPolicy::new_without_delay(26)),
+            tool2_profile.settings_for(&test_foo_query).retries(),
+            RetryPolicy::new_without_delay(26),
             "retries for test_foo/default profile"
         );
         assert_eq!(
-            tool2_profile.overrides_for(&test_bar_query).retries(),
-            Some(RetryPolicy::new_without_delay(26)),
+            tool2_profile.settings_for(&test_bar_query).retries(),
+            RetryPolicy::new_without_delay(26),
             "retries for test_bar/default profile"
         );
         assert_eq!(
-            tool2_profile.overrides_for(&test_baz_query).retries(),
-            Some(RetryPolicy::new_without_delay(26)),
+            tool2_profile.settings_for(&test_baz_query).retries(),
+            RetryPolicy::new_without_delay(26),
             "retries for test_baz/default profile"
         );
     }

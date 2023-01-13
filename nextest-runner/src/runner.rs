@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestRunner`].
 
 use crate::{
-    config::{NextestProfile, ProfileOverrides, RetryPolicy, TestGroup, TestThreads},
+    config::{NextestProfile, RetryPolicy, TestGroup, TestSettings, TestThreads},
     double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
     list::{TestExecuteContext, TestInstance, TestList},
@@ -158,14 +158,7 @@ impl TestRunnerBuilder {
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
         };
-        let threads_required = profile.threads_required().compute(test_threads);
-        let (retries, ignore_retry_overrides) = match self.retries {
-            Some(retries) => (retries, true),
-            None => (profile.retries(), false),
-        };
         let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
-        let slow_timeout = profile.slow_timeout();
-        let leak_timeout = profile.leak_timeout();
 
         let runtime = Runtime::new().map_err(TestRunnerBuildError::TokioRuntimeCreate)?;
         let _guard = runtime.enter();
@@ -178,12 +171,8 @@ impl TestRunnerBuilder {
                 no_capture: self.no_capture,
                 profile,
                 test_threads,
-                threads_required,
-                global_retries: retries,
-                ignore_retry_overrides,
+                force_retries: self.retries,
                 fail_fast,
-                slow_timeout,
-                leak_timeout,
                 test_list,
                 double_spawn,
                 target_runner,
@@ -242,12 +231,9 @@ struct TestRunnerInner<'a> {
     no_capture: bool,
     profile: NextestProfile<'a>,
     test_threads: usize,
-    threads_required: usize,
-    global_retries: RetryPolicy,
-    ignore_retry_overrides: bool,
+    // This is Some if the user specifies a retry policy over the command-line.
+    force_retries: Option<RetryPolicy>,
     fail_fast: bool,
-    slow_timeout: crate::config::SlowTimeout,
-    leak_timeout: Duration,
     test_list: &'a TestList<'a>,
     double_spawn: DoubleSpawnInfo,
     target_runner: TargetRunner,
@@ -321,12 +307,10 @@ impl<'a> TestRunnerInner<'a> {
                         let mut cancellation_receiver = cancellation_sender.subscribe();
 
                         let query = test_instance.to_test_query();
-                        let overrides = self.profile.overrides_for(&query);
-                        let threads_required = overrides
-                            .threads_required()
-                            .map_or(self.threads_required, |req| req.compute(self.test_threads));
-                        let test_group = match overrides.test_group().unwrap_or(&TestGroup::Global)
-                        {
+                        let settings = self.profile.settings_for(&query);
+                        let threads_required =
+                            settings.threads_required().compute(self.test_threads);
+                        let test_group = match settings.test_group() {
                             TestGroup::Global => None,
                             TestGroup::Custom(name) => Some(name.clone()),
                         };
@@ -343,10 +327,7 @@ impl<'a> TestRunnerInner<'a> {
                             }
 
                             let retry_policy =
-                                match (self.ignore_retry_overrides, overrides.retries()) {
-                                    (true, _) | (false, None) => self.global_retries,
-                                    (false, Some(retries)) => retries,
-                                };
+                                self.force_retries.unwrap_or_else(|| settings.retries());
                             let total_attempts = retry_policy.count() + 1;
                             let mut backoff_iter = BackoffIter::new(retry_policy);
 
@@ -389,7 +370,7 @@ impl<'a> TestRunnerInner<'a> {
                                     .run_test(
                                         test_instance,
                                         retry_data,
-                                        &overrides,
+                                        &settings,
                                         &this_run_sender,
                                         &mut this_forward_receiver,
                                         delay,
@@ -620,7 +601,7 @@ impl<'a> TestRunnerInner<'a> {
         &self,
         test: TestInstance<'a>,
         retry_data: RetryData,
-        overrides: &ProfileOverrides,
+        overrides: &TestSettings,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
         delay_before_start: Duration,
@@ -658,7 +639,7 @@ impl<'a> TestRunnerInner<'a> {
         test: TestInstance<'a>,
         retry_data: RetryData,
         stopwatch: &mut StopwatchStart,
-        overrides: &ProfileOverrides,
+        settings: &TestSettings,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
         delay_before_start: Duration,
@@ -694,8 +675,8 @@ impl<'a> TestRunnerInner<'a> {
         let _ = imp::assign_process_to_job(&child, job.as_ref());
 
         let mut status: Option<ExecutionResult> = None;
-        let slow_timeout = overrides.slow_timeout().unwrap_or(self.slow_timeout);
-        let leak_timeout = overrides.leak_timeout().unwrap_or(self.leak_timeout);
+        let slow_timeout = settings.slow_timeout();
+        let leak_timeout = settings.leak_timeout();
         let mut is_slow = false;
 
         // Use a pausable_sleep rather than an interval here because it's much harder to pause and

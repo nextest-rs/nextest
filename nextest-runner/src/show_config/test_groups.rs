@@ -4,7 +4,7 @@
 use crate::{
     config::{
         CompiledOverride, CustomTestGroup, FinalConfig, NextestProfile, OverrideId,
-        PreBuildPlatform, TestGroup, TestGroupConfig,
+        PreBuildPlatform, SettingSource, TestGroup, TestGroupConfig,
     },
     errors::ShowTestGroupsError,
     helpers::QuotedDisplay,
@@ -68,20 +68,26 @@ impl<'a> ShowTestGroups<'a> {
             for (test_name, test_case) in suite.status.test_cases() {
                 let test_instance = TestInstance::new(test_name, suite, test_case);
                 let query = test_instance.to_test_query();
-                let profile_overrides = profile.overrides_with_source_for(&query);
+                let test_settings = profile.settings_with_source_for(&query);
+                let (test_group, source) = test_settings.test_group_with_source();
 
-                if let Some((test_group, source)) = profile_overrides.test_group_with_source() {
-                    let override_map = match indexed_overrides.get_mut(test_group) {
-                        Some(override_map) => override_map,
-                        None => continue,
-                    };
-                    let data = override_map
-                        .entry(source.id().clone())
-                        .or_insert_with(|| ShowTestGroupsData::new(source));
-                    data.matching_tests.insert(&suite.binary_id, test_name);
-                } else if let Some(non_overrides) = non_overrides.as_mut() {
-                    if settings.mode.matches_group(&TestGroup::Global) {
-                        non_overrides.insert(&suite.binary_id, test_name);
+                match source {
+                    SettingSource::Override(source) => {
+                        let override_map = match indexed_overrides.get_mut(test_group) {
+                            Some(override_map) => override_map,
+                            None => continue,
+                        };
+                        let data = override_map
+                            .entry(source.id().clone())
+                            .or_insert_with(|| ShowTestGroupsData::new(source));
+                        data.matching_tests.insert(&suite.binary_id, test_name);
+                    }
+                    SettingSource::Profile => {
+                        if let Some(non_overrides) = non_overrides.as_mut() {
+                            if settings.mode.matches_group(&TestGroup::Global) {
+                                non_overrides.insert(&suite.binary_id, test_name);
+                            }
+                        }
                     }
                 }
             }

@@ -408,7 +408,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Target,
-        Some(RetryPolicy::new_without_delay(2))
+        RetryPolicy::new_without_delay(2)
 
         ; "my_test matches exactly"
     )]
@@ -421,7 +421,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Target,
-        None
+        RetryPolicy::new_without_delay(0)
 
         ; "not match"
     )]
@@ -433,7 +433,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Target,
-        None
+        RetryPolicy::new_without_delay(0)
 
         ; "no retries specified"
     )]
@@ -450,7 +450,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Target,
-        Some(RetryPolicy::new_without_delay(2))
+        RetryPolicy::new_without_delay(2)
 
         ; "earlier configs override later ones"
     )]
@@ -467,7 +467,7 @@ mod tests {
             retries = 3
         "#},
         BuildPlatform::Target,
-        Some(RetryPolicy::new_without_delay(3))
+        RetryPolicy::new_without_delay(3)
 
         ; "profile-specific configs override default ones"
     )]
@@ -484,7 +484,7 @@ mod tests {
             retries = 3
         "#},
         BuildPlatform::Target,
-        Some(RetryPolicy::new_without_delay(3))
+        RetryPolicy::new_without_delay(3)
 
         ; "no overrides match my_test exactly"
     )]
@@ -502,7 +502,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Host,
-        Some(RetryPolicy::new_without_delay(2))
+        RetryPolicy::new_without_delay(2)
 
         ; "earlier config applied because it matches host triple"
     )]
@@ -520,7 +520,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Host,
-        Some(RetryPolicy::new_without_delay(3))
+        RetryPolicy::new_without_delay(3)
 
         ; "earlier config ignored because it doesn't match host triple"
     )]
@@ -538,7 +538,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Target,
-        Some(RetryPolicy::new_without_delay(2))
+        RetryPolicy::new_without_delay(2)
 
         ; "earlier config applied because it matches target triple"
     )]
@@ -556,7 +556,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Target,
-        Some(RetryPolicy::new_without_delay(3))
+        RetryPolicy::new_without_delay(3)
 
         ; "earlier config ignored because it doesn't match target triple"
     )]
@@ -574,7 +574,7 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Target,
-        Some(RetryPolicy::new_without_delay(2))
+        RetryPolicy::new_without_delay(2)
 
         ; "earlier config applied because it matches target cfg expr"
     )]
@@ -592,14 +592,14 @@ mod tests {
             [profile.ci]
         "#},
         BuildPlatform::Target,
-        Some(RetryPolicy::new_without_delay(3))
+        RetryPolicy::new_without_delay(3)
 
         ; "earlier config ignored because it doesn't match target cfg expr"
     )]
     fn overrides_retries(
         config_contents: &str,
         build_platform: BuildPlatform,
-        retries: Option<RetryPolicy>,
+        retries: RetryPolicy,
     ) {
         let workspace_dir = tempdir().unwrap();
         let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
@@ -618,13 +618,13 @@ mod tests {
             },
             test_name: "my_test",
         };
-        let overrides_for = config
+        let settings_for = config
             .profile("ci")
             .expect("ci profile is defined")
             .apply_build_platforms(&build_platforms())
-            .overrides_for(&query);
+            .settings_for(&query);
         assert_eq!(
-            overrides_for.retries(),
+            settings_for.retries(),
             retries,
             "actual retries don't match expected retries"
         );

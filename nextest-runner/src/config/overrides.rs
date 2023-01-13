@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::NextestConfigImpl;
+use super::{NextestConfigImpl, NextestProfile};
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
     errors::{ConfigParseErrorKind, ConfigParseOverrideError},
@@ -14,77 +14,83 @@ use smol_str::SmolStr;
 use std::{collections::HashMap, time::Duration};
 use target_spec::TargetSpec;
 
-/// Override settings for individual tests.
+/// Settings for individual tests.
 ///
-/// Returned by [`NextestProfile::overrides_for`].
+/// Returned by [`NextestProfile::settings_for`].
 ///
 /// The `Source` parameter tracks an optional source; this isn't used by any public APIs at the
 /// moment.
 #[derive(Clone, Debug)]
-pub struct ProfileOverrides<Source = ()> {
-    threads_required: Option<(ThreadsRequired, Source)>,
-    retries: Option<(RetryPolicy, Source)>,
-    slow_timeout: Option<(SlowTimeout, Source)>,
-    leak_timeout: Option<(Duration, Source)>,
-    test_group: Option<(TestGroup, Source)>,
+pub struct TestSettings<Source = ()> {
+    threads_required: (ThreadsRequired, Source),
+    retries: (RetryPolicy, Source),
+    slow_timeout: (SlowTimeout, Source),
+    leak_timeout: (Duration, Source),
+    test_group: (TestGroup, Source),
 }
 
 pub(crate) trait TrackSource<'p>: Sized {
-    fn track_source<T>(
-        value: Option<T>,
-        source: &'p CompiledOverride<FinalConfig>,
-    ) -> Option<(T, Self)>;
+    fn track_profile<T>(value: T) -> (T, Self);
+    fn track_override<T>(value: T, source: &'p CompiledOverride<FinalConfig>) -> (T, Self);
 }
 
 impl<'p> TrackSource<'p> for () {
-    fn track_source<T>(
-        value: Option<T>,
-        _source: &'p CompiledOverride<FinalConfig>,
-    ) -> Option<(T, Self)> {
-        value.map(|value| (value, ()))
+    fn track_profile<T>(value: T) -> (T, Self) {
+        (value, ())
+    }
+
+    fn track_override<T>(value: T, _source: &'p CompiledOverride<FinalConfig>) -> (T, Self) {
+        (value, ())
     }
 }
 
-impl<'p> TrackSource<'p> for &'p CompiledOverride<FinalConfig> {
-    fn track_source<T>(
-        value: Option<T>,
-        source: &'p CompiledOverride<FinalConfig>,
-    ) -> Option<(T, Self)> {
-        value.map(|value| (value, source))
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum SettingSource<'p> {
+    Profile,
+    Override(&'p CompiledOverride<FinalConfig>),
+}
+
+impl<'p> TrackSource<'p> for SettingSource<'p> {
+    fn track_profile<T>(value: T) -> (T, Self) {
+        (value, SettingSource::Profile)
+    }
+
+    fn track_override<T>(value: T, source: &'p CompiledOverride<FinalConfig>) -> (T, Self) {
+        (value, SettingSource::Override(source))
     }
 }
 
-impl ProfileOverrides {
+impl TestSettings {
     /// Returns the number of threads required for this test.
-    pub fn threads_required(&self) -> Option<ThreadsRequired> {
-        self.threads_required.map(|x| x.0)
+    pub fn threads_required(&self) -> ThreadsRequired {
+        self.threads_required.0
     }
 
     /// Returns the number of retries for this test.
-    pub fn retries(&self) -> Option<RetryPolicy> {
-        self.retries.map(|x| x.0)
+    pub fn retries(&self) -> RetryPolicy {
+        self.retries.0
     }
 
     /// Returns the slow timeout for this test.
-    pub fn slow_timeout(&self) -> Option<SlowTimeout> {
-        self.slow_timeout.map(|x| x.0)
+    pub fn slow_timeout(&self) -> SlowTimeout {
+        self.slow_timeout.0
     }
 
     /// Returns the leak timeout for this test.
-    pub fn leak_timeout(&self) -> Option<Duration> {
-        self.leak_timeout.map(|x| x.0)
+    pub fn leak_timeout(&self) -> Duration {
+        self.leak_timeout.0
     }
 
     /// Returns the test group for this test.
-    pub fn test_group(&self) -> Option<&TestGroup> {
-        self.test_group.as_ref().map(|x| &x.0)
+    pub fn test_group(&self) -> &TestGroup {
+        &self.test_group.0
     }
 }
 
 #[allow(dead_code)]
-impl<Source> ProfileOverrides<Source> {
+impl<Source: Copy> TestSettings<Source> {
     pub(super) fn new<'p>(
-        overrides: &'p [CompiledOverride<FinalConfig>],
+        profile: &'p NextestProfile<'_, FinalConfig>,
         query: &TestQuery<'_>,
     ) -> Self
     where
@@ -96,7 +102,7 @@ impl<Source> ProfileOverrides<Source> {
         let mut leak_timeout = None;
         let mut test_group = None;
 
-        for override_ in overrides {
+        for override_ in &profile.overrides {
             if query.binary_query.platform == BuildPlatform::Host && !override_.state.host_eval {
                 continue;
             }
@@ -111,24 +117,44 @@ impl<Source> ProfileOverrides<Source> {
                 }
                 // If no expression is present, it's equivalent to "all()".
             }
-            if threads_required.is_none() && override_.data.threads_required.is_some() {
-                threads_required = Source::track_source(override_.data.threads_required, override_);
+            if threads_required.is_none() {
+                if let Some(t) = override_.data.threads_required {
+                    threads_required = Some(Source::track_override(t, override_));
+                }
             }
-            if retries.is_none() && override_.data.retries.is_some() {
-                retries = Source::track_source(override_.data.retries, override_);
+            if retries.is_none() {
+                if let Some(r) = override_.data.retries {
+                    retries = Some(Source::track_override(r, override_));
+                }
             }
-            if slow_timeout.is_none() && override_.data.slow_timeout.is_some() {
-                slow_timeout = Source::track_source(override_.data.slow_timeout, override_);
+            if slow_timeout.is_none() {
+                if let Some(s) = override_.data.slow_timeout {
+                    slow_timeout = Some(Source::track_override(s, override_));
+                }
             }
-            if leak_timeout.is_none() && override_.data.leak_timeout.is_some() {
-                leak_timeout = Source::track_source(override_.data.leak_timeout, override_);
+            if leak_timeout.is_none() {
+                if let Some(l) = override_.data.leak_timeout {
+                    leak_timeout = Some(Source::track_override(l, override_));
+                }
             }
-            if test_group.is_none() && override_.data.test_group.is_some() {
-                test_group = Source::track_source(override_.data.test_group.clone(), override_);
+            if test_group.is_none() {
+                if let Some(t) = &override_.data.test_group {
+                    test_group = Some(Source::track_override(t.clone(), override_));
+                }
             }
         }
 
-        ProfileOverrides {
+        // If no overrides were found, use the profile defaults.
+        let threads_required =
+            threads_required.unwrap_or_else(|| Source::track_profile(profile.threads_required()));
+        let retries = retries.unwrap_or_else(|| Source::track_profile(profile.retries()));
+        let slow_timeout =
+            slow_timeout.unwrap_or_else(|| Source::track_profile(profile.slow_timeout()));
+        let leak_timeout =
+            leak_timeout.unwrap_or_else(|| Source::track_profile(profile.leak_timeout()));
+        let test_group = test_group.unwrap_or_else(|| Source::track_profile(TestGroup::Global));
+
+        TestSettings {
             threads_required,
             retries,
             slow_timeout,
@@ -138,28 +164,28 @@ impl<Source> ProfileOverrides<Source> {
     }
 
     /// Returns the number of threads required for this test, with the source attached.
-    pub(crate) fn threads_required_with_source(&self) -> Option<(ThreadsRequired, &Source)> {
-        self.threads_required.as_ref().map(|x| (x.0, &x.1))
+    pub(crate) fn threads_required_with_source(&self) -> (ThreadsRequired, Source) {
+        self.threads_required
     }
 
     /// Returns the number of retries for this test, with the source attached.
-    pub(crate) fn retries_with_source(&self) -> Option<(RetryPolicy, &Source)> {
-        self.retries.as_ref().map(|x| (x.0, &x.1))
+    pub(crate) fn retries_with_source(&self) -> (RetryPolicy, Source) {
+        self.retries
     }
 
     /// Returns the slow timeout for this test, with the source attached.
-    pub(crate) fn slow_timeout_with_source(&self) -> Option<(SlowTimeout, &Source)> {
-        self.slow_timeout.as_ref().map(|x| (x.0, &x.1))
+    pub(crate) fn slow_timeout_with_source(&self) -> (SlowTimeout, Source) {
+        self.slow_timeout
     }
 
     /// Returns the leak timeout for this test, with the source attached.
-    pub(crate) fn leak_timeout_with_source(&self) -> Option<(Duration, &Source)> {
-        self.leak_timeout.as_ref().map(|x| (x.0, &x.1))
+    pub(crate) fn leak_timeout_with_source(&self) -> (Duration, Source) {
+        self.leak_timeout
     }
 
     /// Returns the test group for this test, with the source attached.
-    pub(crate) fn test_group_with_source(&self) -> Option<(&TestGroup, &Source)> {
-        self.test_group.as_ref().map(|x| (&x.0, &x.1))
+    pub(crate) fn test_group_with_source(&self) -> &(TestGroup, Source) {
+        &self.test_group
     }
 }
 
@@ -439,23 +465,20 @@ mod tests {
             },
             test_name: "test",
         };
-        let overrides = profile.overrides_for(&query);
+        let overrides = profile.settings_for(&query);
 
-        assert_eq!(
-            overrides.threads_required(),
-            Some(ThreadsRequired::Count(8))
-        );
-        assert_eq!(overrides.retries(), Some(RetryPolicy::new_without_delay(3)));
+        assert_eq!(overrides.threads_required(), ThreadsRequired::Count(8));
+        assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(3));
         assert_eq!(
             overrides.slow_timeout(),
-            Some(SlowTimeout {
+            SlowTimeout {
                 period: Duration::from_secs(60),
                 terminate_after: None,
                 grace_period: Duration::from_secs(10),
-            })
+            }
         );
-        assert_eq!(overrides.leak_timeout(), Some(Duration::from_millis(300)));
-        assert_eq!(overrides.test_group(), Some(&test_group("my-group")));
+        assert_eq!(overrides.leak_timeout(), Duration::from_millis(300));
+        assert_eq!(overrides.test_group(), &test_group("my-group"));
 
         // This query matches both overrides.
         let query = TestQuery {
@@ -467,31 +490,28 @@ mod tests {
             },
             test_name: "test",
         };
-        let overrides = profile.overrides_for(&query);
+        let overrides = profile.settings_for(&query);
 
-        assert_eq!(
-            overrides.threads_required(),
-            Some(ThreadsRequired::Count(8))
-        );
+        assert_eq!(overrides.threads_required(), ThreadsRequired::Count(8));
         assert_eq!(
             overrides.retries(),
-            Some(RetryPolicy::Exponential {
+            RetryPolicy::Exponential {
                 count: 20,
                 delay: Duration::from_secs(1),
                 jitter: false,
                 max_delay: Some(Duration::from_secs(20)),
-            })
+            }
         );
         assert_eq!(
             overrides.slow_timeout(),
-            Some(SlowTimeout {
+            SlowTimeout {
                 period: Duration::from_secs(120),
                 terminate_after: Some(NonZeroUsize::new(1).unwrap()),
                 grace_period: Duration::ZERO,
-            })
+            }
         );
-        assert_eq!(overrides.leak_timeout(), Some(Duration::from_millis(300)));
-        assert_eq!(overrides.test_group(), Some(&test_group("my-group")));
+        assert_eq!(overrides.leak_timeout(), Duration::from_millis(300));
+        assert_eq!(overrides.test_group(), &test_group("my-group"));
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

@@ -3,7 +3,7 @@
 
 use super::{
     CompiledOverride, CompiledOverridesByProfile, CustomTestGroup, DeserializedOverride,
-    ProfileOverrides, RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig, TestThreads,
+    RetryPolicy, SettingSource, SlowTimeout, TestGroup, TestGroupConfig, TestSettings, TestThreads,
     ThreadsRequired, ToolConfigFile,
 };
 use crate::{
@@ -467,7 +467,7 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
-    overrides: Vec<CompiledOverride<State>>,
+    pub(super) overrides: Vec<CompiledOverride<State>>,
 }
 
 impl<'cfg, State> NextestProfile<'cfg, State> {
@@ -580,17 +580,17 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
             .unwrap_or(self.default_profile.fail_fast)
     }
 
-    /// Returns override settings for individual tests.
-    pub fn overrides_for(&self, query: &TestQuery<'_>) -> ProfileOverrides {
-        ProfileOverrides::new(&self.overrides, query)
+    /// Returns settings for individual tests.
+    pub fn settings_for(&self, query: &TestQuery<'_>) -> TestSettings {
+        TestSettings::new(self, query)
     }
 
     /// Returns override settings for individual tests, with sources attached.
-    pub(crate) fn overrides_with_source_for(
+    pub(crate) fn settings_with_source_for(
         &self,
         query: &TestQuery<'_>,
-    ) -> ProfileOverrides<&CompiledOverride<FinalConfig>> {
-        ProfileOverrides::new(&self.overrides, query)
+    ) -> TestSettings<SettingSource<'_>> {
+        TestSettings::new(self, query)
     }
 
     /// Returns the JUnit configuration for this profile.
