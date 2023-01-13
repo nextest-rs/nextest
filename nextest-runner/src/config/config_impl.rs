@@ -818,6 +818,7 @@ impl CustomProfileImpl {
 struct JunitImpl {
     #[serde(default)]
     path: Option<Utf8PathBuf>,
+    #[serde(default)]
     report_name: Option<String>,
 }
 
