@@ -10,7 +10,7 @@ use crate::{
     double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
     list::{TestExecuteContext, TestInstance, TestList},
-    reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent},
+    reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestOutputDisplay},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
     time::{StopwatchEnd, StopwatchStart},
@@ -393,6 +393,7 @@ impl<'a> TestRunnerInner<'a> {
                                     let _ = this_run_sender.send(
                                         InternalTestEvent::AttemptFailedWillRetry {
                                             test_instance,
+                                            failure_output: settings.failure_output(),
                                             run_status: run_status.clone(),
                                             delay_before_next_attempt: delay,
                                         },
@@ -421,6 +422,8 @@ impl<'a> TestRunnerInner<'a> {
                             // In either case, the test is finished.
                             let _ = this_run_sender.send(InternalTestEvent::Finished {
                                 test_instance,
+                                success_output: settings.success_output(),
+                                failure_output: settings.failure_output(),
                                 run_statuses: ExecutionStatuses::new(run_statuses),
                             });
 
@@ -1298,10 +1301,12 @@ where
             }),
             InternalEvent::Test(InternalTestEvent::AttemptFailedWillRetry {
                 test_instance,
+                failure_output,
                 run_status,
                 delay_before_next_attempt,
             }) => self.callback(TestEvent::TestAttemptFailedWillRetry {
                 test_instance,
+                failure_output,
                 run_status,
                 delay_before_next_attempt,
             }),
@@ -1314,6 +1319,8 @@ where
             }),
             InternalEvent::Test(InternalTestEvent::Finished {
                 test_instance,
+                success_output,
+                failure_output,
                 run_statuses,
             }) => {
                 self.running -= 1;
@@ -1324,6 +1331,8 @@ where
 
                 self.callback(TestEvent::TestFinished {
                     test_instance,
+                    success_output,
+                    failure_output,
                     run_statuses,
                     current_stats: self.run_stats,
                     running: self.running,
@@ -1450,6 +1459,7 @@ enum InternalTestEvent<'a> {
     },
     AttemptFailedWillRetry {
         test_instance: TestInstance<'a>,
+        failure_output: TestOutputDisplay,
         run_status: ExecuteStatus,
         delay_before_next_attempt: Duration,
     },
@@ -1459,6 +1469,8 @@ enum InternalTestEvent<'a> {
     },
     Finished {
         test_instance: TestInstance<'a>,
+        success_output: TestOutputDisplay,
+        failure_output: TestOutputDisplay,
         run_statuses: ExecutionStatuses,
     },
     Skipped {

@@ -243,17 +243,13 @@ impl TestReporterBuilder {
 
         // failure_output and success_output are meaningless if the runner isn't capturing any
         // output.
-        let failure_output = match self.no_capture {
-            true => TestOutputDisplay::Never,
-            false => self
-                .failure_output
-                .unwrap_or_else(|| profile.failure_output()),
+        let force_success_output = match self.no_capture {
+            true => Some(TestOutputDisplay::Never),
+            false => self.success_output,
         };
-        let success_output = match self.no_capture {
-            true => TestOutputDisplay::Never,
-            false => self
-                .success_output
-                .unwrap_or_else(|| profile.success_output()),
+        let force_failure_output = match self.no_capture {
+            true => Some(TestOutputDisplay::Never),
+            false => self.failure_output,
         };
 
         let stderr = match output {
@@ -314,8 +310,8 @@ impl TestReporterBuilder {
             inner: TestReporterImpl {
                 status_level,
                 final_status_level,
-                failure_output,
-                success_output,
+                force_success_output,
+                force_failure_output,
                 no_capture: self.no_capture,
                 binary_id_width,
                 styles,
@@ -535,14 +531,17 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) ->
 #[derive(Debug)]
 enum FinalOutput {
     Skipped(MismatchReason),
-    Executed(ExecutionStatuses),
+    Executed {
+        run_statuses: ExecutionStatuses,
+        test_output_display: TestOutputDisplay,
+    },
 }
 
 impl FinalOutput {
     fn final_status_level(&self) -> FinalStatusLevel {
         match self {
             Self::Skipped(_) => FinalStatusLevel::Skip,
-            Self::Executed(run_statuses) => run_statuses.describe().final_status_level(),
+            Self::Executed { run_statuses, .. } => run_statuses.describe().final_status_level(),
         }
     }
 }
@@ -550,8 +549,8 @@ impl FinalOutput {
 struct TestReporterImpl<'a> {
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
-    failure_output: TestOutputDisplay,
-    success_output: TestOutputDisplay,
+    force_success_output: Option<TestOutputDisplay>,
+    force_failure_output: Option<TestOutputDisplay>,
     no_capture: bool,
     binary_id_width: usize,
     styles: Box<Styles>,
@@ -640,6 +639,7 @@ impl<'a> TestReporterImpl<'a> {
                 test_instance,
                 run_status,
                 delay_before_next_attempt,
+                failure_output,
             } => {
                 if self.status_level >= StatusLevel::Retry {
                     let try_status_string = format!(
@@ -665,7 +665,7 @@ impl<'a> TestReporterImpl<'a> {
                         !run_status.result.is_success(),
                         "only failing tests are retried"
                     );
-                    if self.failure_output.is_immediate() {
+                    if self.failure_output(*failure_output).is_immediate() {
                         self.write_stdout_stderr(test_instance, run_status, true, writer)?;
                     }
 
@@ -709,14 +709,16 @@ impl<'a> TestReporterImpl<'a> {
             }
             TestEvent::TestFinished {
                 test_instance,
+                success_output,
+                failure_output,
                 run_statuses,
                 ..
             } => {
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
                 let test_output_display = match last_status.result.is_success() {
-                    true => self.success_output,
-                    false => self.failure_output,
+                    true => self.success_output(*success_output),
+                    false => self.failure_output(*failure_output),
                 };
 
                 if self.status_level >= describe.status_level() {
@@ -736,8 +738,13 @@ impl<'a> TestReporterImpl<'a> {
                 if test_output_display.is_final()
                     || self.final_status_level >= describe.final_status_level()
                 {
-                    self.final_outputs
-                        .push((*test_instance, FinalOutput::Executed(run_statuses.clone())));
+                    self.final_outputs.push((
+                        *test_instance,
+                        FinalOutput::Executed {
+                            run_statuses: run_statuses.clone(),
+                            test_output_display,
+                        },
+                    ));
                 }
             }
             TestEvent::TestSkipped {
@@ -847,12 +854,11 @@ impl<'a> TestReporterImpl<'a> {
                             FinalOutput::Skipped(_) => {
                                 self.write_skip_line(*test_instance, writer)?;
                             }
-                            FinalOutput::Executed(run_statuses) => {
+                            FinalOutput::Executed {
+                                run_statuses,
+                                test_output_display,
+                            } => {
                                 let last_status = run_statuses.last_status();
-                                let test_output_display = match last_status.result.is_success() {
-                                    true => self.success_output,
-                                    false => self.failure_output,
-                                };
 
                                 // Print out the final status line so that status lines are shown
                                 // for tests that e.g. failed due to signals.
@@ -1180,6 +1186,14 @@ impl<'a> TestReporterImpl<'a> {
             Ok(0)
         }
     }
+
+    fn success_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
+        self.force_success_output.unwrap_or(test_setting)
+    }
+
+    fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
+        self.force_failure_output.unwrap_or(test_setting)
+    }
 }
 
 impl<'a> fmt::Debug for TestReporter<'a> {
@@ -1318,6 +1332,9 @@ pub enum TestEvent<'a> {
 
         /// The delay before the next attempt to run the test.
         delay_before_next_attempt: Duration,
+
+        /// Whether failure outputs are printed out.
+        failure_output: TestOutputDisplay,
     },
 
     /// A retry has started.
@@ -1333,6 +1350,12 @@ pub enum TestEvent<'a> {
     TestFinished {
         /// The test instance that finished running.
         test_instance: TestInstance<'a>,
+
+        /// Test setting for success output.
+        success_output: TestOutputDisplay,
+
+        /// Test setting for failure output.
+        failure_output: TestOutputDisplay,
 
         /// Information about all the runs for this test.
         run_statuses: ExecutionStatuses,
@@ -1467,13 +1490,13 @@ mod tests {
         );
         assert!(reporter.inner.no_capture, "no_capture is true");
         assert_eq!(
-            reporter.inner.failure_output,
-            TestOutputDisplay::Never,
+            reporter.inner.force_failure_output,
+            Some(TestOutputDisplay::Never),
             "failure output is never, overriding other settings"
         );
         assert_eq!(
-            reporter.inner.success_output,
-            TestOutputDisplay::Never,
+            reporter.inner.force_success_output,
+            Some(TestOutputDisplay::Never),
             "success output is never, overriding other settings"
         );
         assert_eq!(

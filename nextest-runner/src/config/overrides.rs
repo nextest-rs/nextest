@@ -6,6 +6,7 @@ use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
     errors::{ConfigParseErrorKind, ConfigParseOverrideError},
     platform::BuildPlatforms,
+    reporter::TestOutputDisplay,
 };
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use nextest_filtering::{FilteringExpr, TestQuery};
@@ -27,6 +28,8 @@ pub struct TestSettings<Source = ()> {
     slow_timeout: (SlowTimeout, Source),
     leak_timeout: (Duration, Source),
     test_group: (TestGroup, Source),
+    success_output: (TestOutputDisplay, Source),
+    failure_output: (TestOutputDisplay, Source),
 }
 
 pub(crate) trait TrackSource<'p>: Sized {
@@ -85,6 +88,16 @@ impl TestSettings {
     pub fn test_group(&self) -> &TestGroup {
         &self.test_group.0
     }
+
+    /// Returns the success output setting for this test.
+    pub fn success_output(&self) -> TestOutputDisplay {
+        self.success_output.0
+    }
+
+    /// Returns the failure output setting for this test.
+    pub fn failure_output(&self) -> TestOutputDisplay {
+        self.failure_output.0
+    }
 }
 
 #[allow(dead_code)]
@@ -101,6 +114,8 @@ impl<Source: Copy> TestSettings<Source> {
         let mut slow_timeout = None;
         let mut leak_timeout = None;
         let mut test_group = None;
+        let mut success_output = None;
+        let mut failure_output = None;
 
         for override_ in &profile.overrides {
             if query.binary_query.platform == BuildPlatform::Host && !override_.state.host_eval {
@@ -142,6 +157,16 @@ impl<Source: Copy> TestSettings<Source> {
                     test_group = Some(Source::track_override(t.clone(), override_));
                 }
             }
+            if success_output.is_none() {
+                if let Some(s) = override_.data.success_output {
+                    success_output = Some(Source::track_override(s, override_));
+                }
+            }
+            if failure_output.is_none() {
+                if let Some(f) = override_.data.failure_output {
+                    failure_output = Some(Source::track_override(f, override_));
+                }
+            }
         }
 
         // If no overrides were found, use the profile defaults.
@@ -153,6 +178,10 @@ impl<Source: Copy> TestSettings<Source> {
         let leak_timeout =
             leak_timeout.unwrap_or_else(|| Source::track_profile(profile.leak_timeout()));
         let test_group = test_group.unwrap_or_else(|| Source::track_profile(TestGroup::Global));
+        let success_output =
+            success_output.unwrap_or_else(|| Source::track_profile(profile.success_output()));
+        let failure_output =
+            failure_output.unwrap_or_else(|| Source::track_profile(profile.failure_output()));
 
         TestSettings {
             threads_required,
@@ -160,6 +189,8 @@ impl<Source: Copy> TestSettings<Source> {
             slow_timeout,
             leak_timeout,
             test_group,
+            success_output,
+            failure_output,
         }
     }
 
@@ -268,6 +299,8 @@ pub(super) struct ProfileOverrideData {
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<Duration>,
     pub(super) test_group: Option<TestGroup>,
+    success_output: Option<TestOutputDisplay>,
+    failure_output: Option<TestOutputDisplay>,
 }
 
 impl CompiledOverride<PreBuildPlatform> {
@@ -312,6 +345,8 @@ impl CompiledOverride<PreBuildPlatform> {
                     slow_timeout: source.slow_timeout,
                     leak_timeout: source.leak_timeout,
                     test_group: source.test_group.clone(),
+                    success_output: source.success_output,
+                    failure_output: source.failure_output,
                 },
             }),
             (Err(platform_parse_error), Ok(_)) => {
@@ -406,6 +441,10 @@ pub(super) struct DeserializedOverride {
     leak_timeout: Option<Duration>,
     #[serde(default)]
     test_group: Option<TestGroup>,
+    #[serde(default)]
+    success_output: Option<TestOutputDisplay>,
+    #[serde(default)]
+    failure_output: Option<TestOutputDisplay>,
 }
 
 #[cfg(test)]
