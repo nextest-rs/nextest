@@ -72,6 +72,8 @@ impl<'cfg> MetadataJunit<'cfg> {
             TestEvent::TestFinished {
                 test_instance,
                 run_statuses,
+                junit_store_success_output,
+                junit_store_failure_output,
                 ..
             } => {
                 fn kind_ty(run_status: &ExecuteStatus) -> (NonSuccessKind, Cow<'static, str>) {
@@ -162,7 +164,6 @@ impl<'cfg> MetadataJunit<'cfg> {
                     .set_timestamp(to_datetime(main_status.start_time))
                     .set_time(main_status.time_taken);
 
-                // TODO: also provide stdout and stderr for passing tests?
                 // TODO: allure seems to want the output to be in a format where text files are
                 // written out to disk:
                 // https://github.com/allure-framework/allure2/blob/master/plugins/junit-xml-plugin/src/main/java/io/qameta/allure/junitxml/JunitXmlPlugin.java#L192-L196
@@ -175,7 +176,13 @@ impl<'cfg> MetadataJunit<'cfg> {
                     if let Some(description) = description {
                         testcase.status.set_description(description);
                     }
+                }
 
+                let is_success = main_status.result.is_success();
+
+                if (junit_store_success_output && is_success)
+                    || (junit_store_failure_output && !is_success)
+                {
                     testcase
                         .set_system_out_lossy(&main_status.stdout)
                         .set_system_err_lossy(&main_status.stderr);

@@ -8,6 +8,7 @@ final-status-level = "slow"
 filter = 'package(integration-tests)'
 slow-timeout = { period = "60s", terminate-after = 3 }
 test-group = "my-group"
+junit = { store-success-output = true }
 
 [profile.ci]
 # Don't fail fast in CI to run the full test suite.
@@ -26,6 +27,9 @@ slow-timeout = "1s"
 [profile.test-slow-with-timeout]
 slow-timeout = { period = "1s", terminate-after = 2 }
 retries = 2
+
+[profile.with-junit]
+junit = { path = "report.xml" }
 
 [profile.serial]
 test-threads = 1

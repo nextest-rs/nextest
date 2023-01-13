@@ -424,6 +424,8 @@ impl<'a> TestRunnerInner<'a> {
                                 test_instance,
                                 success_output: settings.success_output(),
                                 failure_output: settings.failure_output(),
+                                junit_store_success_output: settings.junit_store_success_output(),
+                                junit_store_failure_output: settings.junit_store_failure_output(),
                                 run_statuses: ExecutionStatuses::new(run_statuses),
                             });
 
@@ -1321,6 +1323,8 @@ where
                 test_instance,
                 success_output,
                 failure_output,
+                junit_store_success_output,
+                junit_store_failure_output,
                 run_statuses,
             }) => {
                 self.running -= 1;
@@ -1333,6 +1337,8 @@ where
                     test_instance,
                     success_output,
                     failure_output,
+                    junit_store_success_output,
+                    junit_store_failure_output,
                     run_statuses,
                     current_stats: self.run_stats,
                     running: self.running,
@@ -1471,6 +1477,8 @@ enum InternalTestEvent<'a> {
         test_instance: TestInstance<'a>,
         success_output: TestOutputDisplay,
         failure_output: TestOutputDisplay,
+        junit_store_success_output: bool,
+        junit_store_failure_output: bool,
         run_statuses: ExecutionStatuses,
     },
     Skipped {

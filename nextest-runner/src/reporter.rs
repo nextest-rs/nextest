@@ -1357,6 +1357,12 @@ pub enum TestEvent<'a> {
         /// Test setting for failure output.
         failure_output: TestOutputDisplay,
 
+        /// Whether the JUnit report should store success output for this test.
+        junit_store_success_output: bool,
+
+        /// Whether the JUnit report should store failure output for this test.
+        junit_store_failure_output: bool,
+
         /// Information about all the runs for this test.
         run_statuses: ExecutionStatuses,
 

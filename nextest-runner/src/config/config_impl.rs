@@ -607,7 +607,20 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
                 .custom_profile
                 .and_then(|profile| profile.junit.report_name.as_deref())
                 .unwrap_or(&self.default_profile.junit.report_name);
-            NextestJunitConfig { path, report_name }
+            let store_success_output = self
+                .custom_profile
+                .and_then(|profile| profile.junit.store_success_output)
+                .unwrap_or(self.default_profile.junit.store_success_output);
+            let store_failure_output = self
+                .custom_profile
+                .and_then(|profile| profile.junit.store_failure_output)
+                .unwrap_or(self.default_profile.junit.store_failure_output);
+            NextestJunitConfig {
+                path,
+                report_name,
+                store_success_output,
+                store_failure_output,
+            }
         })
     }
 }
@@ -617,6 +630,8 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
 pub struct NextestJunitConfig<'cfg> {
     path: Utf8PathBuf,
     report_name: &'cfg str,
+    store_success_output: bool,
+    store_failure_output: bool,
 }
 
 impl<'cfg> NextestJunitConfig<'cfg> {
@@ -628,6 +643,16 @@ impl<'cfg> NextestJunitConfig<'cfg> {
     /// Returns the name of the JUnit report.
     pub fn report_name(&self) -> &'cfg str {
         self.report_name
+    }
+
+    /// Returns true if success output should be stored.
+    pub fn store_success_output(&self) -> bool {
+        self.store_success_output
+    }
+
+    /// Returns true if failure output should be stored.
+    pub fn store_failure_output(&self) -> bool {
+        self.store_failure_output
     }
 }
 
@@ -756,6 +781,14 @@ impl DefaultProfileImpl {
                     .junit
                     .report_name
                     .expect("junit.report present in default profile"),
+                store_success_output: p
+                    .junit
+                    .store_success_output
+                    .expect("junit.store-success-output present in default profile"),
+                store_failure_output: p
+                    .junit
+                    .store_failure_output
+                    .expect("junit.store-failure-output present in default profile"),
             },
         }
     }
@@ -765,12 +798,12 @@ impl DefaultProfileImpl {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Debug)]
 struct DefaultJunitImpl {
-    #[serde(default)]
     path: Option<Utf8PathBuf>,
     report_name: String,
+    store_success_output: bool,
+    store_failure_output: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -820,6 +853,10 @@ struct JunitImpl {
     path: Option<Utf8PathBuf>,
     #[serde(default)]
     report_name: Option<String>,
+    #[serde(default)]
+    store_success_output: Option<bool>,
+    #[serde(default)]
+    store_failure_output: Option<bool>,
 }
 
 #[cfg(test)]

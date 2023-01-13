@@ -96,6 +96,17 @@ leak-timeout = "100ms"
 # for each report.
 report-name = "nextest-run"
 
+# Whether standard output and standard error for passing tests should be stored in the JUnit report.
+# Output is stored in the <system-out> and <system-err> elements of the <testcase> element.
+store-success-output = false
+
+# Whether standard output and standard error for failing tests should be stored in the JUnit report.
+# Output is stored in the <system-out> and <system-err> elements of the <testcase> element.
+#
+# Note that if a description can be extracted from the output, it is always stored in the
+# <description> element.
+store-failure-output = true
+
 # This profile is activated if MIRI_SYSROOT is set.
 [profile.default-miri]
 # Miri tests take up a lot of memory, so only run 1 test at a time by default.

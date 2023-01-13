@@ -30,6 +30,8 @@ pub struct TestSettings<Source = ()> {
     test_group: (TestGroup, Source),
     success_output: (TestOutputDisplay, Source),
     failure_output: (TestOutputDisplay, Source),
+    junit_store_success_output: (bool, Source),
+    junit_store_failure_output: (bool, Source),
 }
 
 pub(crate) trait TrackSource<'p>: Sized {
@@ -98,6 +100,16 @@ impl TestSettings {
     pub fn failure_output(&self) -> TestOutputDisplay {
         self.failure_output.0
     }
+
+    /// Returns whether success output should be stored in JUnit.
+    pub fn junit_store_success_output(&self) -> bool {
+        self.junit_store_success_output.0
+    }
+
+    /// Returns whether failure output should be stored in JUnit.
+    pub fn junit_store_failure_output(&self) -> bool {
+        self.junit_store_failure_output.0
+    }
 }
 
 #[allow(dead_code)]
@@ -116,6 +128,8 @@ impl<Source: Copy> TestSettings<Source> {
         let mut test_group = None;
         let mut success_output = None;
         let mut failure_output = None;
+        let mut junit_store_success_output = None;
+        let mut junit_store_failure_output = None;
 
         for override_ in &profile.overrides {
             if query.binary_query.platform == BuildPlatform::Host && !override_.state.host_eval {
@@ -167,6 +181,16 @@ impl<Source: Copy> TestSettings<Source> {
                     failure_output = Some(Source::track_override(f, override_));
                 }
             }
+            if junit_store_success_output.is_none() {
+                if let Some(s) = override_.data.junit.store_success_output {
+                    junit_store_success_output = Some(Source::track_override(s, override_));
+                }
+            }
+            if junit_store_failure_output.is_none() {
+                if let Some(f) = override_.data.junit.store_failure_output {
+                    junit_store_failure_output = Some(Source::track_override(f, override_));
+                }
+            }
         }
 
         // If no overrides were found, use the profile defaults.
@@ -182,6 +206,14 @@ impl<Source: Copy> TestSettings<Source> {
             success_output.unwrap_or_else(|| Source::track_profile(profile.success_output()));
         let failure_output =
             failure_output.unwrap_or_else(|| Source::track_profile(profile.failure_output()));
+        let junit_store_success_output = junit_store_success_output.unwrap_or_else(|| {
+            // If the profile doesn't have JUnit enabled, success output can just be false.
+            Source::track_profile(profile.junit().map_or(false, |j| j.store_success_output()))
+        });
+        let junit_store_failure_output = junit_store_failure_output.unwrap_or_else(|| {
+            // If the profile doesn't have JUnit enabled, failure output can just be false.
+            Source::track_profile(profile.junit().map_or(false, |j| j.store_failure_output()))
+        });
 
         TestSettings {
             threads_required,
@@ -191,6 +223,8 @@ impl<Source: Copy> TestSettings<Source> {
             test_group,
             success_output,
             failure_output,
+            junit_store_success_output,
+            junit_store_failure_output,
         }
     }
 
@@ -301,6 +335,7 @@ pub(super) struct ProfileOverrideData {
     pub(super) test_group: Option<TestGroup>,
     success_output: Option<TestOutputDisplay>,
     failure_output: Option<TestOutputDisplay>,
+    junit: DeserializedJunitOutput,
 }
 
 impl CompiledOverride<PreBuildPlatform> {
@@ -347,6 +382,7 @@ impl CompiledOverride<PreBuildPlatform> {
                     test_group: source.test_group.clone(),
                     success_output: source.success_output,
                     failure_output: source.failure_output,
+                    junit: source.junit,
                 },
             }),
             (Err(platform_parse_error), Ok(_)) => {
@@ -445,6 +481,15 @@ pub(super) struct DeserializedOverride {
     success_output: Option<TestOutputDisplay>,
     #[serde(default)]
     failure_output: Option<TestOutputDisplay>,
+    #[serde(default)]
+    junit: DeserializedJunitOutput,
+}
+
+#[derive(Copy, Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) struct DeserializedJunitOutput {
+    store_success_output: Option<bool>,
+    store_failure_output: Option<bool>,
 }
 
 #[cfg(test)]
@@ -468,6 +513,7 @@ mod tests {
             retries = { backoff = "exponential", count = 20, delay = "1s", max-delay = "20s" }
             slow-timeout = { period = "120s", terminate-after = 1, grace-period = "0s" }
             success-output = "immediate-final"
+            junit = { store-success-output = true }
 
             [[profile.default.overrides]]
             filter = "test(test)"
@@ -477,6 +523,10 @@ mod tests {
             leak-timeout = "300ms"
             test-group = "my-group"
             failure-output = "final"
+            junit = { store-failure-output = false }
+
+            [profile.default.junit]
+            path = "my-path.xml"
 
             [test-groups.my-group]
             max-threads = 20
@@ -522,6 +572,8 @@ mod tests {
         assert_eq!(overrides.test_group(), &test_group("my-group"));
         assert_eq!(overrides.success_output(), TestOutputDisplay::Never);
         assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
+        assert_eq!(overrides.junit_store_success_output(), false);
+        assert_eq!(overrides.junit_store_failure_output(), false);
 
         // This query matches both overrides.
         let query = TestQuery {
@@ -560,6 +612,8 @@ mod tests {
             TestOutputDisplay::ImmediateFinal
         );
         assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
+        assert_eq!(overrides.junit_store_success_output(), true);
+        assert_eq!(overrides.junit_store_failure_output(), false);
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
