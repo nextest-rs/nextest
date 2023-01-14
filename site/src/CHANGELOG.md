@@ -3,9 +3,14 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.49-rc.3] - 2023-01-12
+## [0.9.49] - 2023-01-13
 
-This is a test release.
+### Added
+
+- New configuration settings added to [JUnit reports](https://nexte.st/book/junit): `junit.store-success-output` (defaults to false) and `junit.store-failure-output` (defaults to true) control whether output for passing and failing tests should be stored in the JUnit report.
+- The following configuration options can now be specified as [per-test overrides](https://nexte.st/book/per-test-overrides):
+  - `success-output` and `failure-output`.
+  - `junit.store-success-output` and `junit.store-failure-output`.
 
 ## [0.9.48] - 2023-01-02
 
@@ -704,7 +709,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.49-rc.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.49-rc.3
+[0.9.49]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.49
 [0.9.48]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.48
 [0.9.47]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.47
 [0.9.46]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.46

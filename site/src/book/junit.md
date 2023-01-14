@@ -16,6 +16,32 @@ Some notes about the JUnit support:
 * Every test binary forms a single `<testsuite>`. Every test forms a single `<testcase>`.
 * Standard output and standard error are included for failed and retried tests. (However, [invalid XML characters](https://en.wikipedia.org/wiki/Valid_characters_in_XML) are stripped out.)
 
+## Configuration
+
+Configuration options supported for JUnit reports, within the `junit` section:
+
+* `report-name` — The name of the report. Defaults to `"nextest-run"`.
+* `store-success-output` — Whether to store output for successful tests in the `<system-out>` and `<system-err>` elements. Defaults to false.
+* `store-failure-output` — Whether to store output for failing tests in the `<system-out>` and `<system-err>` elements. Defaults to true.
+
+`store-success-output` and `store-failure-output` can also be configured as [per-test overrides](per-test-overrides.md).
+
+### Example configuration
+
+```toml
+[profile.default.junit]
+path = "junit.xml"
+# These are the default values, specified for clarity.
+store-success-output = false
+store-failure-output = true
+
+[[profile.default.overrides]]
+filter = 'test(important-test)'
+junit.store-success-output = true
+```
+
+In this example, the JUnit report will contain the output for all failing tests, and for successful tests that contain "important-test" in the name.
+
 ## Post-processing
 
 Some tools that read JUnit files don't follow the Jenkins standard. You can post-process the JUnit file in such cases. Here's some recommendations for post-processing tools written by community members:

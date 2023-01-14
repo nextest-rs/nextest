@@ -11,6 +11,12 @@ Overrides are set via the `[[profile.<name>.overrides]]` list. Each override con
   * `test-group` — An optional [test group](test-groups.md) for this test.
   * `slow-timeout` — Amount of time after which [tests are marked slow](slow-tests.md).
   * `leak-timeout` — How long to wait after the test completes [for any subprocesses to exit](leaky-tests.md).
+  * `success-output` and `failure-output` — Control [when standard output and standard error are displayed](other-options.md#--success-output-and---failure-output) for passing and failing tests, respectively. Values supported are:
+    * `immediate`: display output as soon as the test fails. Default for `failure-output`.
+    * `final`: display output at the end of the test run.
+    * `immediate-final`: display output as soon as the test fails, and at the end of the run.
+    * `never`: never display output. Default for `success-output`.
+  * `junit.store-success-output` and `junit.store-failure-output` — Whether to store output for passing and failing outputs, respectively. in [JUnit reports](junit.md).
 
 ## Example
 
@@ -30,12 +36,13 @@ slow-timeout = "5m"
 filter = 'test(/\btest_filesystem_/)'
 platform = 'cfg(target_os = "macos")'
 leak-timeout = "500ms"
+success-output = "immediate"
 ```
 
 When `--profile ci` is specified:
 * for test names that start with `test_network_` (including test names like `my_module::test_network_`), retry tests up to 4 times
 * on `x86_64-unknown-linux-gnu`, set a slow timeout of 5 minutes
-* on macOS, for test names that start with `test_filesystem_` (including test names like `my_module::test_filesystem_`), set a leak timeout of 500 milliseconds
+* on macOS, for test names that start with `test_filesystem_` (including test names like `my_module::test_filesystem_`), set a leak timeout of 500 milliseconds, and show success output immediately.
 
 ## Override precedence
 

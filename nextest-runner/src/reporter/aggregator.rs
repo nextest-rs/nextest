@@ -168,7 +168,8 @@ impl<'cfg> MetadataJunit<'cfg> {
                 // written out to disk:
                 // https://github.com/allure-framework/allure2/blob/master/plugins/junit-xml-plugin/src/main/java/io/qameta/allure/junitxml/JunitXmlPlugin.java#L192-L196
                 // we may have to update this format to handle that.
-                if !main_status.result.is_success() {
+                let is_success = main_status.result.is_success();
+                if !is_success {
                     let stdout = String::from_utf8_lossy(&main_status.stdout);
                     let stderr = String::from_utf8_lossy(&main_status.stderr);
                     let description =
@@ -177,8 +178,6 @@ impl<'cfg> MetadataJunit<'cfg> {
                         testcase.status.set_description(description);
                     }
                 }
-
-                let is_success = main_status.result.is_success();
 
                 if (junit_store_success_output && is_success)
                     || (junit_store_failure_output && !is_success)
