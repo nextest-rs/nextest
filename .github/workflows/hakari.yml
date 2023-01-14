@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-hakari
-        uses: taiki-e/cargo-install@cargo-hakari
+        uses: taiki-e/install-action@cargo-hakari
       - name: Check workspace-hack Cargo.toml is up-to-date
         run: cargo hakari generate --diff
       - name: Check all crates depend on workspace-hack
