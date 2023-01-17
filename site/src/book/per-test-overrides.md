@@ -16,7 +16,7 @@ Overrides are set via the `[[profile.<name>.overrides]]` list. Each override con
     * `final`: display output at the end of the test run.
     * `immediate-final`: display output as soon as the test fails, and at the end of the run.
     * `never`: never display output. Default for `success-output`.
-  * `junit.store-success-output` and `junit.store-failure-output` — Whether to store output for passing and failing outputs, respectively. in [JUnit reports](junit.md).
+  * `junit.store-success-output` and `junit.store-failure-output` — Whether to store output for passing and failing tests, respectively, in [JUnit reports](junit.md).
 
 ## Example
 
