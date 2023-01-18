@@ -1435,7 +1435,7 @@ dependencies = [
  "nextest-workspace-hack",
  "nom 7.1.2",
  "nom-tracable",
- "nom_locate 4.0.0",
+ "nom_locate 4.1.0",
  "proptest",
  "recursion",
  "regex",
@@ -1615,7 +1615,7 @@ dependencies = [
  "nom 7.1.2",
  "nom-tracable-macros",
  "nom_locate 1.0.0",
- "nom_locate 4.0.0",
+ "nom_locate 4.1.0",
 ]
 
 [[package]]
@@ -1650,9 +1650,9 @@ dependencies = [
 
 [[package]]
 name = "nom_locate"
-version = "4.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37794436ca3029a3089e0b95d42da1f0b565ad271e4d3bb4bad0c7bb70b10605"
+checksum = "b1e299bf5ea7b212e811e71174c5d1a5d065c4c0ad0c8691ecb1f97e3e66025e"
 dependencies = [
  "bytecount 0.6.3",
  "memchr",
