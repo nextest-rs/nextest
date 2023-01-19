@@ -41,7 +41,7 @@ test-strategy = { version = "0.3.0", optional = true }
 twox-hash = { version = "1.6.3", optional = true }
 
 [dev-dependencies]
-clap = { version = "4.1.0", features = ["derive"] }
+clap = { version = "4.1.1", features = ["derive"] }
 camino = "1.1.2"
 test-case = "2.2.2"
 proptest = { version = "1.0.0" }
