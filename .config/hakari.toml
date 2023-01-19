@@ -3,8 +3,7 @@
 
 hakari-package = "nextest-workspace-hack"
 
-# Format version. Version 3 requires cargo-hakari 0.9.18 or above.
-dep-format-version = "3"
+dep-format-version = "4"
 
 # Setting workspace.resolver = "2" in the root Cargo.toml is HIGHLY recommended.
 # Hakari works much better with the new feature resolver.
