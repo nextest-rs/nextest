@@ -13,7 +13,7 @@ If the limit is set to 1, this is similar to `cargo test` with [the `serial_test
 ## Use cases
 
 - Your tests access a network service (perhaps running on the same system) that can only handle one, or a limited number of, tests being run at a time.
-- Your tests run against a global system resource that may fail or encounter race conditions if accessed by more than one process at a time.
+- Your tests run against a global system resource that may fail, or encounter race conditions, if accessed by more than one process at a time.
 
 ## Configuring test groups
 
