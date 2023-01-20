@@ -75,7 +75,7 @@ This command accepts [all the same options](listing.md#options-and-arguments) th
 
 ## Comparison with `threads-required`
 
-Test groups are similar to [heavy tests and `threads-required`](threads-required.md). The key difference is that test groups are meant to limit concurrency for subsets of tests, while `threads-required` sets global limits across tests.
+Test groups are similar to [heavy tests and `threads-required`](threads-required.md). The key difference is that test groups are meant to limit concurrency for subsets of tests, while `threads-required` sets global limits across the entire test run.
 
 Both of these options can be combined. For example:
 
