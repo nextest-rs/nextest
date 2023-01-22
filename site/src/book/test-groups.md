@@ -17,9 +17,9 @@ If the limit is set to 1, this is similar to `cargo test` with [the `serial_test
 
 ## Configuring test groups
 
-Test groups are configured in the [nextest configuration](configuration.md) by:
+Test groups are specified in [nextest's configuration](configuration.md) by:
 
-1. Specifying test group names along with concurrency limits, using the `max-threads` parameter.
+1. Declaring test group names along with concurrency limits, using the `max-threads` parameter.
 2. Using the `test-groups` [per-test override](per-test-overrides.md).
 
 For example:
@@ -35,6 +35,7 @@ test-group = 'resource-limited'
 
 [[profile.default.overrides]]
 filter = 'package(integration-tests)'
+platform = 'cfg(unix)'
 test-group = 'serial-integration'
 ```
 
@@ -46,7 +47,7 @@ This configuration defines two test groups:
 These test groups impact execution in the following ways:
 
 1. Any tests whose name contains `resource_limited::` will be limited to running four at a time. In other words, there is a logical semaphore around all tests that contain `resource_limited::`, with four available permits.
-2. Any tests in the `integration-tests` package will be limited to running one at a time, i.e. serially. In other words, there is a logical mutex around all tests in the `integration-tests` package.
+2. On Unix platforms, tests in the `integration-tests` package will be limited to running one at a time, i.e. serially. In other words, on Unix platforms, there is a logical mutex around all tests in the `integration-tests` package.
 3. Tests that are not in either of these groups will run with global concurrency limits.
 
 Nextest will continue to schedule as many tests as possible, accounting for global and group concurrency limits.
