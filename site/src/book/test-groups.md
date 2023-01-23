@@ -18,7 +18,7 @@ If the limit is set to 1, this is similar to `cargo test` with [the `serial_test
 
 > While you can use test groups to make your existing tests work with nextest, this is not the "correct" way to write such tests. (For example, your tests might collide with a network service already running on the system.)
 >
-> - The best way to write such tests is to use [Unix domain sockets](https://en.wikipedia.org/wiki/Unix_domain_socket) (which also [work on Windows](https://devblogs.microsoft.com/commandline/windowswsl-interop-with-af_unix/).
+> - The best way to write such tests is to use [Unix domain sockets](https://en.wikipedia.org/wiki/Unix_domain_socket) (which also [work on Windows](https://devblogs.microsoft.com/commandline/windowswsl-interop-with-af_unix/)).
 > - If that is not an option, consider using a randomly assigned port.
 
 ## Configuring test groups
