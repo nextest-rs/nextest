@@ -7,9 +7,10 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 <img src="static/cover.png" id="nextest-cover">
 
 * **Clean, beautiful user interface.** Nextest presents its results concisely so you can see which tests passed and failed at a glance.
-* **[Up to 60% faster](book/benchmarks.md) than cargo test.** Nextest uses a [state-of-the-art execution model](book/how-it-works.md) for faster, more reliable test runs.
+* **[Up to 3× as fast](book/benchmarks.md) as cargo test.** Nextest uses a [state-of-the-art execution model](book/how-it-works.md) for faster, more reliable test runs.
 * **Identify [slow](book/slow-tests.md) and [leaky](book/leaky-tests.md) tests.** Use nextest to detect misbehaving tests, identify bottlenecks during test execution, and optionally terminate tests if they take too long.
 * **Filter tests using an embedded language.** Use powerful [filter expressions](book/filter-expressions.md) to specify granular subsets of tests on the command-line, and to enable [per-test overrides](book/per-test-overrides.md).
+* **Configure [per-test overrides](book/per-test-overrides.md)**. [Automatically retry](book/retries.md#per-test-overrides) subsets of tests, mark them as [heavy](book/threads-required.md), or [run them serially](book/test-groups.md).
 * **Designed for CI.** Nextest addresses real-world pain points in continuous integration scenarios:
   * Use **[pre-built binaries](book/pre-built-binaries.md)** for quick installation.
   * Set up CI-specific **[configuration profiles](book/configuration.md)**.
