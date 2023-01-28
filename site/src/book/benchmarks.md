@@ -57,8 +57,6 @@ All measurements were done on:
 * **RAM:** 64GB
 * **Rust:** version 1.66.0
 
-Lines of code were measured by `loc`, while the number of tests was recorded by nextest.
-
 The commands run were:
 
 * **cargo test:** `cargo test --workspace --bins --lib --tests --examples --no-fail-fast` (to exclude doctests since they're not supported by nextest)
