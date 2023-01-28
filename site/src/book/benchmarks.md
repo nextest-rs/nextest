@@ -52,7 +52,7 @@ Even if nextest doesn't result in faster test runs, you may find it useful for i
 ## Specifications
 
 All measurements were done on:
-* **Processor:** AMD Ryzen 9 7950x x86_64, 16 cores/32 threads
+* **Processor:** AMD Ryzen 9 7950X x86_64, 16 cores/32 threads
 * **Operating system:** Pop_OS! 22.04 running Linux kernel 6.0.12
 * **RAM:** 64GB
 * **Rust:** version 1.66.0
