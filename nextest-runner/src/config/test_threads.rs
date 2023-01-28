@@ -50,7 +50,7 @@ impl FromStr for TestThreads {
 impl fmt::Display for TestThreads {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Count(threads) => write!(f, "{}", threads),
+            Self::Count(threads) => write!(f, "{threads}"),
             Self::NumCpus => write!(f, "num-cpus"),
         }
     }

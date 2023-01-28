@@ -143,7 +143,7 @@ mod tests {
     }
 
     fn make_json(identifier: &str) -> String {
-        format!(r#"{{ "identifier": "{}" }}"#, identifier)
+        format!(r#"{{ "identifier": "{identifier}" }}"#)
     }
 
     #[test]

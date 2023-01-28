@@ -693,10 +693,7 @@ mod tests {
                 assert_eq!(
                     id.cmp(other_id),
                     expected,
-                    "comparing {:?} to {:?} gave {:?}",
-                    id,
-                    other_id,
-                    expected
+                    "comparing {id:?} to {other_id:?} gave {expected:?}"
                 );
             }
         }
