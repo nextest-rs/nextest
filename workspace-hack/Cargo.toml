@@ -37,7 +37,7 @@ twox-hash = { version = "1.6.3" }
 uuid = { version = "1.2.2", features = ["v4"] }
 
 [build-dependencies]
-cc = { version = "1.0.78", default-features = false, features = ["parallel"] }
+cc = { version = "1.0.79", default-features = false, features = ["parallel"] }
 hashbrown = { version = "0.12.3", features = ["raw"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
 proc-macro2 = { version = "1.0.50" }
