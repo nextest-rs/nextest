@@ -57,7 +57,7 @@ target-spec-miette = "0.1.0"
 tempfile = "3.3.0"
 thiserror = "1.0.38"
 # For parsing of .cargo/config.toml files
-tokio = { version = "1.24.2", features = [
+tokio = { version = "1.25.0", features = [
     "io-util",
     "macros",
     "process",
