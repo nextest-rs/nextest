@@ -104,12 +104,13 @@ dependencies = [
 
 [[package]]
 name = "atomicwrites"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb8f2cd6962fa53c0e2a9d3f97eaa7dbd1e3cbbeeb4745403515b42ae07b3ff6"
+checksum = "09a580bfc0fc2370333eddb71de8c8614d5972e3a327438eb3acc22824a638bf"
 dependencies = [
+ "rustix",
  "tempfile",
- "winapi",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
