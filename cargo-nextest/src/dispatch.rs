@@ -277,6 +277,7 @@ enum Command {
     /// then runs each test in parallel.
     ///
     /// For more information, see <https://nexte.st/book/running>.
+    #[command(visible_alias = "r")]
     Run {
         /// Nextest profile to use
         #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
