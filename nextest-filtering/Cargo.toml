@@ -36,7 +36,7 @@ regex = "1.7.1"
 regex-syntax = "0.6.28"
 thiserror = "1.0.38"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
-proptest = { version = "1.0.0", optional = true }
+proptest = { version = "1.1.0", optional = true }
 test-strategy = { version = "0.3.0", optional = true }
 twox-hash = { version = "1.6.3", optional = true }
 
@@ -44,5 +44,5 @@ twox-hash = { version = "1.6.3", optional = true }
 clap = { version = "4.1.4", features = ["derive"] }
 camino = "1.1.2"
 test-case = "2.2.2"
-proptest = { version = "1.0.0" }
+proptest = { version = "1.1.0" }
 test-strategy = { version = "0.3.0" }
