@@ -29,14 +29,14 @@ miette = { version = "5.5.0", features = ["fancy"] }
 nextest-filtering = { version = "=0.3.0", path = "../nextest-filtering" }
 nextest-runner = { version = "=0.35.0", path = "../nextest-runner" }
 nextest-metadata = { version = "=0.8.0", path = "../nextest-metadata" }
-once_cell = "1.17.0"
+once_cell = "1.17.1"
 owo-colors = { version = "3.5.0", features = ["supports-colors"] }
 pathdiff = { version = "0.2.1", features = ["camino"] }
 semver = "1.0.16"
 shell-words = "1.1.0"
 supports-color = "2.0.0"
 supports-unicode = "1.0.2"
-serde_json = "1.0.92"
+serde_json = "1.0.93"
 thiserror = "1.0.38"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

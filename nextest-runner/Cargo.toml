@@ -38,14 +38,14 @@ itertools = "0.10.5"
 log = "0.4.17"
 rand = "0.8.5"
 miette = "5.5.0"
-once_cell = "1.17.0"
+once_cell = "1.17.1"
 owo-colors = "3.5.0"
 pin-project-lite = "0.2.9"
 regex = "1.7.1"
 semver = "1.0.16"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_ignored = "0.1.7"
-serde_json = "1.0.92"
+serde_json = "1.0.93"
 serde_path_to_error = "0.1.9"
 shell-words = "1.1.0"
 smol_str = { version = "0.1.24", features = ["serde"] }
@@ -91,6 +91,7 @@ console-subscriber = { version = "0.1.8", optional = true }
 unicode-ident = "1.0.6"
 unicode-normalization = "0.1.22"
 indexmap = "1.9.2"
+smallvec = "1.10.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.139"
