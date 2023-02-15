@@ -4,7 +4,6 @@
 //! Configuration support for nextest.
 
 mod config_impl;
-mod expected_status;
 mod identifier;
 mod overrides;
 mod retry_policy;
