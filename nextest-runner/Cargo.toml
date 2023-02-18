@@ -67,7 +67,8 @@ tokio = { version = "1.25.0", features = [
     "sync",
     "time",
 ] }
-toml_edit = { version = "0.17.1", features = ["easy"] }
+toml = "0.7.2"
+toml_edit = "0.19.3"
 twox-hash = { version = "1.6.3", default-features = false }
 zstd = { version = "0.12.3", features = ["zstdmt"] }
 

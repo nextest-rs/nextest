@@ -869,7 +869,7 @@ pub enum CargoConfigError {
 
         /// The error that occurred trying to deserialize the config.
         #[source]
-        error: toml_edit::easy::de::Error,
+        error: toml_edit::de::Error,
     },
 
     /// A CLI config option is not in the dotted key format.
@@ -923,7 +923,7 @@ pub enum CargoConfigError {
 
         /// The error that occurred trying to deserialize the config file
         #[source]
-        error: toml_edit::easy::de::Error,
+        error: toml::de::Error,
     },
 }
 

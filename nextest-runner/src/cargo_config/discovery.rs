@@ -154,8 +154,10 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
             })?;
 
     fn non_empty_decor(d: &toml_edit::Decor) -> bool {
-        d.prefix().map_or(false, |p| !p.trim().is_empty())
-            || d.suffix().map_or(false, |s| !s.trim().is_empty())
+        d.prefix()
+            .map_or(false, |p| !p.as_str().unwrap_or_default().trim().is_empty())
+            || d.suffix()
+                .map_or(false, |s| !s.as_str().unwrap_or_default().trim().is_empty())
     }
 
     let ok = {
@@ -219,12 +221,11 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
         })?;
     }
 
-    let cargo_config: CargoConfig = toml_edit::easy::from_document(doc).map_err(|error| {
-        CargoConfigError::CliConfigDeError {
+    let cargo_config: CargoConfig =
+        toml_edit::de::from_document(doc).map_err(|error| CargoConfigError::CliConfigDeError {
             config_str: config_str.to_owned(),
             error,
-        }
-    })?;
+        })?;
 
     // Note: environment variables parsed from CLI configs can't be relative. However, this isn't
     // necessary to check because the only way to specify that is as an inline table, which is
@@ -318,12 +319,11 @@ fn load_file(
             path: path.clone(),
             error,
         })?;
-    let config: CargoConfig = toml_edit::easy::from_str(&config_contents).map_err(|error| {
-        CargoConfigError::ConfigParseError {
+    let config: CargoConfig =
+        toml::from_str(&config_contents).map_err(|error| CargoConfigError::ConfigParseError {
             path: path.clone(),
             error,
-        }
-    })?;
+        })?;
     Ok((CargoConfigSource::File(path), config))
 }
 
