@@ -49,8 +49,10 @@ syn = { version = "1.0.107", features = ["extra-traits", "fold", "full", "visit"
 futures-core = { version = "0.3.26" }
 futures-sink = { version = "0.3.26" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
+io-lifetimes = { version = "1.0.5" }
 libc = { version = "0.2.139", features = ["extra_traits"] }
 once_cell = { version = "1.17.1" }
+rustix = { version = "0.36.8", features = ["fs", "termios"] }
 tokio = { version = "1.25.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -62,8 +64,10 @@ once_cell = { version = "1.17.1" }
 futures-core = { version = "0.3.26" }
 futures-sink = { version = "0.3.26" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
+io-lifetimes = { version = "1.0.5" }
 libc = { version = "0.2.139", features = ["extra_traits"] }
 once_cell = { version = "1.17.1" }
+rustix = { version = "0.36.8", features = ["fs", "termios"] }
 tokio = { version = "1.25.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
