@@ -15,7 +15,7 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.67", features = ["gimli-symbolize"] }
-clap = { version = "4.1.4", features = ["derive", "env"] }
+clap = { version = "4.1.6", features = ["derive", "env"] }
 console = { version = "0.15.5" }
 either = { version = "1.8.1" }
 futures-channel = { version = "0.3.26", features = ["sink"] }
