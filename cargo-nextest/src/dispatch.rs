@@ -938,7 +938,7 @@ impl BaseApp {
             });
         }
 
-        let cargo_configs = CargoConfigs::new(&cargo_opts.config)?;
+        let cargo_configs = CargoConfigs::new(&cargo_opts.config).map_err(Box::new)?;
 
         Ok(Self {
             output,

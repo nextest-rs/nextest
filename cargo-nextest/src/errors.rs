@@ -53,7 +53,7 @@ pub enum ExpectedError {
     #[error("cargo config error")]
     CargoConfigError {
         #[from]
-        err: CargoConfigError,
+        err: Box<CargoConfigError>,
     },
     #[error("config parse error")]
     ConfigParseError {
