@@ -20,4 +20,4 @@ nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 smol_str = { version = "0.1.24", features = ["serde"] }
 
 [dev-dependencies]
-test-case = "2.2.2"
+test-case = "3.0.0"

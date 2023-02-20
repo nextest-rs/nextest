@@ -43,6 +43,6 @@ twox-hash = { version = "1.6.3", optional = true }
 [dev-dependencies]
 clap = { version = "4.1.6", features = ["derive"] }
 camino = "1.1.2"
-test-case = "2.2.2"
+test-case = "3.0.0"
 proptest = { version = "1.1.0" }
 test-strategy = { version = "0.3.0" }
