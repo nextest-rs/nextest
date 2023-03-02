@@ -43,7 +43,7 @@ hashbrown = { version = "0.12.3", features = ["raw"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
 proc-macro2 = { version = "1.0.51" }
 quote = { version = "1.0.23" }
-syn = { version = "1.0.107", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+syn = { version = "1.0.109", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.26" }
