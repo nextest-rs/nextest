@@ -45,8 +45,8 @@ regex = "1.7.1"
 semver = "1.0.16"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_ignored = "0.1.7"
-serde_json = "1.0.93"
-serde_path_to_error = "0.1.9"
+serde_json = "1.0.94"
+serde_path_to_error = "0.1.10"
 shell-words = "1.1.0"
 smol_str = { version = "0.1.24", features = ["serde"] }
 strip-ansi-escapes = "0.1.1"
@@ -54,10 +54,10 @@ tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
 target-spec = { version = "1.3.1", features = ["summaries"] }
 target-spec-miette = "0.1.0"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 thiserror = "1.0.38"
 # For parsing of .cargo/config.toml files
-tokio = { version = "1.25.0", features = [
+tokio = { version = "1.26.0", features = [
     "io-util",
     "macros",
     "process",
@@ -68,7 +68,7 @@ tokio = { version = "1.25.0", features = [
     "time",
 ] }
 toml = "0.7.2"
-toml_edit = "0.19.3"
+toml_edit = "0.19.4"
 twox-hash = { version = "1.6.3", default-features = false }
 zstd = { version = "0.12.3", features = ["zstdmt"] }
 
@@ -89,7 +89,7 @@ quick-junit = { version = "0.3.2", path = "../quick-junit" }
 uuid = { version = "1.3.0", features = ["v4"] }
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 console-subscriber = { version = "0.1.8", optional = true }
-unicode-ident = "1.0.6"
+unicode-ident = "1.0.7"
 unicode-normalization = "0.1.22"
 indexmap = "1.9.2"
 smallvec = "1.10.0"
