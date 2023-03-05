@@ -5,3 +5,9 @@ passthrough = ["CARGO_PROFILE_RELEASE_LTO"]
 # The current cross 0.2.4 docker image doesn't have the memstat library on FreeBSD.
 # https://github.com/cross-rs/cross/pull/1166
 image = "ghcr.io/cross-rs/x86_64-unknown-freebsd:edge"
+
+[target.riscv64gc-unknown-linux-gnu]
+pre-build = [
+    "dpkg --add-architecture aarch64",
+    "apt-get update && apt-get install --assume-yes libssl-dev:aarch64"
+]
