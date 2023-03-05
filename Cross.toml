@@ -6,8 +6,10 @@ passthrough = ["CARGO_PROFILE_RELEASE_LTO"]
 # https://github.com/cross-rs/cross/pull/1166
 image = "ghcr.io/cross-rs/x86_64-unknown-freebsd:edge"
 
-[target.riscv64gc-unknown-linux-gnu]
-pre-build = [
-    "dpkg --add-architecture aarch64",
-    "apt-get update && apt-get install --assume-yes libssl-dev:aarch64"
-]
+# This doesn't work because the cross 0.2.4 Docker container is based on Ubuntu 18.04, which doesn't
+# have binary packages available for riscv64.
+# [target.riscv64gc-unknown-linux-gnu]
+# pre-build = [
+#     "dpkg --add-architecture aarch64",
+#     "apt-get update && apt-get install --assume-yes libssl-dev:aarch64"
+# ]
