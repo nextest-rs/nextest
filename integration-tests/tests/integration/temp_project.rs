@@ -87,7 +87,7 @@ impl TempProject {
     #[allow(dead_code)]
     pub fn persist(&mut self) {
         if let Some(dir) = self.temp_dir.take() {
-            dir.into_path();
+            _ = dir.into_path();
         }
     }
 
