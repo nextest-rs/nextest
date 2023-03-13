@@ -19,11 +19,12 @@ use nextest_filtering::{BinaryQuery, FilteringExpr, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 
 /// Whether to run ignored tests.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
 pub enum RunIgnored {
     /// Only run tests that aren't ignored.
     ///
     /// This is the default.
+    #[default]
     Default,
 
     /// Only run tests that are ignored.
@@ -31,12 +32,6 @@ pub enum RunIgnored {
 
     /// Run both ignored and non-ignored tests.
     All,
-}
-
-impl Default for RunIgnored {
-    fn default() -> Self {
-        RunIgnored::Default
-    }
 }
 
 /// A builder for `TestFilter` instances.

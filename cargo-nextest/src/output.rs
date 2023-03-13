@@ -52,16 +52,12 @@ pub(crate) struct OutputContext {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 #[must_use]
+#[derive(Default)]
 pub enum Color {
+    #[default]
     Auto,
     Always,
     Never,
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Color::Auto
-    }
 }
 
 static INIT_LOGGER: std::sync::Once = std::sync::Once::new();
