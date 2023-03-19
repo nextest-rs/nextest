@@ -15,7 +15,7 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.67", features = ["gimli-symbolize"] }
-clap = { version = "4.1.8", features = ["derive", "env"] }
+clap = { version = "4.1.11", features = ["derive", "env"] }
 console = { version = "0.15.5" }
 either = { version = "1.8.1" }
 futures-channel = { version = "0.3.27", features = ["sink"] }
@@ -29,7 +29,7 @@ miniz_oxide = { version = "0.6.2", default-features = false, features = ["with-a
 num-traits = { version = "0.2.15", default-features = false, features = ["libm", "std"] }
 owo-colors = { version = "3.5.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
-serde = { version = "1.0.156", features = ["alloc", "derive"] }
+serde = { version = "1.0.157", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.94", features = ["unbounded_depth"] }
 similar = { version = "2.2.1", features = ["inline", "unicode"] }
 target-spec = { version = "1.3.1", default-features = false, features = ["summaries"] }
@@ -49,10 +49,10 @@ syn = { version = "1.0.109", features = ["extra-traits", "fold", "full", "visit"
 futures-core = { version = "0.3.27" }
 futures-sink = { version = "0.3.27" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
-io-lifetimes = { version = "1.0.6" }
+io-lifetimes = { version = "1.0.8" }
 libc = { version = "0.2.140", features = ["extra_traits"] }
 once_cell = { version = "1.17.1" }
-rustix = { version = "0.36.9", features = ["fs", "termios"] }
+rustix = { version = "0.36.10", features = ["fs", "termios"] }
 tokio = { version = "1.26.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -64,10 +64,10 @@ once_cell = { version = "1.17.1" }
 futures-core = { version = "0.3.27" }
 futures-sink = { version = "0.3.27" }
 getrandom = { version = "0.2.8", default-features = false, features = ["std"] }
-io-lifetimes = { version = "1.0.6" }
+io-lifetimes = { version = "1.0.8" }
 libc = { version = "0.2.140", features = ["extra_traits"] }
 once_cell = { version = "1.17.1" }
-rustix = { version = "0.36.9", features = ["fs", "termios"] }
+rustix = { version = "0.36.10", features = ["fs", "termios"] }
 tokio = { version = "1.26.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
