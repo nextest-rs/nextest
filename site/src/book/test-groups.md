@@ -107,4 +107,4 @@ With this configuration:
 - The `group::heavy::` tests will take up two slots within *both* global and group concurrency limits.
 - The `group::light::` tests will take up one slot within both limits.
 
-> NOTE: Setting `threads-required` to be greater than `max-threads` will not cause issues; a test that does so will take up all slots available.
+> NOTE: Setting `threads-required` to be greater than a test group's `max-threads` will not cause issues; a test that does so will take up all slots available.

@@ -3,6 +3,12 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.51] - 2023-03-19
+
+### Changed
+
+- The definition of `threads-required` has changed slightly. Previously, it was possible for global and group concurrency limits to be exceeded in some circumstances. Now, concurrency limits are never exceeded. This enables some new use cases, such as being able to declare that a test to be mutually exclusive with all other tests globally.
+
 ## [0.9.50] - 2023-03-13
 
 ### Added
@@ -719,6 +725,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.51]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.51
 [0.9.50]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.50
 [0.9.49]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.49
 [0.9.48]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.48

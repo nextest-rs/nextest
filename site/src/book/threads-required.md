@@ -19,7 +19,7 @@ The `threads-required` configuration can also be set to one of two special value
 * `"num-cpus"` — The number of logical CPUs on the system.
 * `"num-test-threads"` — The number of test threads nextest is currently running with.
 
-> NOTE: `threads-required` is not meant to ensure mutual exclusion across sets of tests. To do so, see [Test groups and mutual exclusion](test-groups.md).
+> NOTE: `threads-required` is not meant to ensure mutual exclusion across subsets of tests. See [Test groups and mutual exclusion](test-groups.md).
 
 ## Use cases
 
@@ -28,5 +28,6 @@ Some use cases that may benefit from limiting concurrency:
 - Integration tests that spin up a network of services to run against.
 - Tests that are multithreaded internally, possibly using a [custom test harness](custom-test-harnesses.md) where a single test is presented to nextest.
 - Tests that consume large amounts of memory.
+- Tests that must be mutually exclusive with all other tests globally (set `threads-required` to `num-test-threads`).
 
 > **Tip:** Be sure to benchmark your test runs! `threads-required` will often cause test runs to become slower overall. However, setting it might still be desirable if it makes test runs more reliable.
