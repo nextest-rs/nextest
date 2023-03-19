@@ -155,16 +155,10 @@ fn test_cargo_env_vars() {
     assert_env!("CARGO_PKG_REPOSITORY");
     assert_env!("CARGO_PKG_LICENSE");
     assert_env!("CARGO_PKG_LICENSE_FILE");
-
-    // This must be disabled at compile time because CARGO_PKG_RUST_VERSION isn't set at compile
-    // time on Rust < 1.64, which causes env! to fail.
-    #[cfg(not(no_pkg_rust_version))]
-    {
-        assert_env!("CARGO_PKG_RUST_VERSION");
-    }
+    assert_env!("CARGO_PKG_RUST_VERSION");
 
     // CARGO_CRATE_NAME is missing at runtime
-    // CARGO_BIN_EXE is missing at runtime
+    // CARGO_BIN_EXE_<name> is missing at runtime
     // CARGO_PRIMARY_PACKAGE is missing at runtime
     // CARGO_TARGET_TMPDIR is missing at runtime
     // Dynamic library paths are tested by actually executing the tests -- they depend on the dynamic library.
