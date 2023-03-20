@@ -7,7 +7,7 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ### Changed
 
-- The definition of `threads-required` has changed slightly. Previously, it was possible for global and group concurrency limits to be exceeded in some circumstances. Now, concurrency limits are never exceeded. This enables some new use cases, such as being able to declare that a test to be mutually exclusive with all other tests globally.
+- The definition of `threads-required` has changed slightly. Previously, it was possible for global and group concurrency limits to be exceeded in some circumstances. Now, concurrency limits are never exceeded. This enables some new use cases, such as being able to declare that a test is mutually exclusive with all other tests globally.
 
 ## [0.9.50] - 2023-03-13
 
