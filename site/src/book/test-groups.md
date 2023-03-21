@@ -16,10 +16,14 @@ If the limit is set to 1, this is similar to `cargo test` with [the `serial_test
 - Your tests run against a global system resource that may fail, or encounter race conditions, if accessed by more than one process at a time.
 - Your tests start up a network service that listens on a fixed TCP or UDP port on localhost, and if several tests try to open up the same port concurrently, they'll collide with each other.
 
-> While you can use test groups to make your existing network service tests work with nextest, this is not the "correct" way to write such tests. (For example, your tests might collide with a network service already running on the system.)
+> While you can use test groups to make your existing network service tests work with nextest, **this is not the "correct" way to write such tests**. For example, your tests might collide with a network service already running on the system. The logical mutex will also make your test runs slower.
 >
-> - The best way to write such tests is to use [Unix domain sockets](https://en.wikipedia.org/wiki/Unix_domain_socket) (which also [work on Windows](https://devblogs.microsoft.com/commandline/windowswsl-interop-with-af_unix/)).
-> - If that is not an option, consider using a randomly assigned port.
+> Consider these two recommended approaches instead:
+>
+> - **Use a randomly assigned port.** On all platforms you can do this by binding to port 0. Once your test creates the service, you'll need a way to communicate the actual port assigned back to your test.
+>   - If your service is in the same process as your test, you can expose an API to retrieve the actual port assigned.
+>   - If your service is in another process, you'll need a way to communicate the port assigned back to the test. One approach is to pass in a temporary directory as an environment variable, then arrange for the service to write the port number in a file within the temporary directory.
+> - **Rather than using TCP/IP, bind to a [Unix domain socket](https://en.wikipedia.org/wiki/Unix_domain_socket)** in a temporary directory. This approach also [works on Windows](https://devblogs.microsoft.com/commandline/windowswsl-interop-with-af_unix/).
 
 ## Configuring test groups
 
