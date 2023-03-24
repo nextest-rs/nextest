@@ -8,7 +8,7 @@ use crate::{
     ExpectedError, Result, ReuseBuildKind,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, ValueHint};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
@@ -85,6 +85,10 @@ struct AppOpts {
     #[arg(long, global = true, value_name = "PATH")]
     manifest_path: Option<Utf8PathBuf>,
 
+    /// Change to DIRECTORY before doing anything
+    #[arg(short = 'C', global = true, value_name = "DIRECTORY", value_hint = ValueHint::DirPath)]
+    directory: Option<Utf8PathBuf>,
+
     #[clap(flatten)]
     output: OutputOpts,
 
@@ -107,6 +111,13 @@ impl AppOpts {
     ///
     /// Returns the exit code.
     fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
+        let output = self.output.init();
+        // Change immediately to the directory if specified.
+        if let Some(directory) = &self.directory {
+            std::env::set_current_dir(directory)
+                .map_err(|error| ExpectedError::SetCurrentDirFailed { error })?;
+        }
+
         match self.command {
             Command::List {
                 cargo_options,
@@ -117,7 +128,7 @@ impl AppOpts {
                 ..
             } => {
                 let base = BaseApp::new(
-                    self.output,
+                    output,
                     reuse_build,
                     cargo_options,
                     self.config_opts,
@@ -140,7 +151,7 @@ impl AppOpts {
                 ..
             } => {
                 let base = BaseApp::new(
-                    self.output,
+                    output,
                     reuse_build,
                     cargo_options,
                     self.config_opts,
@@ -165,7 +176,7 @@ impl AppOpts {
                 zstd_level,
             } => {
                 let app = BaseApp::new(
-                    self.output,
+                    output,
                     ReuseBuildOpts::default(),
                     cargo_options,
                     self.config_opts,
@@ -872,7 +883,7 @@ struct BaseApp {
 
 impl BaseApp {
     fn new(
-        output: OutputOpts,
+        output: OutputContext,
         reuse_build: ReuseBuildOpts,
         cargo_opts: CargoOptions,
         config_opts: ConfigOpts,
@@ -880,7 +891,6 @@ impl BaseApp {
         graph_with_deps: bool,
         writer: &mut OutputWriter,
     ) -> Result<Self> {
-        let output = output.init();
         reuse_build.check_experimental(output);
 
         let reuse_build = reuse_build.process(output, writer)?;
@@ -1350,6 +1360,7 @@ impl ShowConfigCommand {
         config_opts: ConfigOpts,
         output_writer: &mut OutputWriter,
     ) -> Result<i32> {
+        let output = output.init();
         match self {
             Self::TestGroups {
                 profile,
@@ -1586,6 +1597,7 @@ mod tests {
             // ---
             // Commands with arguments
             // ---
+            "cargo nextest list -C /tmp",
             "cargo nextest list --list-type binaries-only",
             "cargo nextest list --list-type full",
             "cargo nextest list --message-format json-pretty",

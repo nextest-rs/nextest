@@ -27,6 +27,8 @@ pub enum ReuseBuildKind {
 #[derive(Debug, Error)]
 #[doc(hidden)]
 pub enum ExpectedError {
+    #[error("could not change to requested directory")]
+    SetCurrentDirFailed { error: std::io::Error },
     #[error("cargo metadata exec failed")]
     CargoMetadataExecFailed {
         command: String,
@@ -317,7 +319,8 @@ impl ExpectedError {
             Self::CargoMetadataExecFailed { .. } | Self::CargoMetadataFailed { .. } => {
                 NextestExitCode::CARGO_METADATA_FAILED
             }
-            Self::ProfileNotFound { .. }
+            Self::SetCurrentDirFailed { .. }
+            | Self::ProfileNotFound { .. }
             | Self::StoreDirCreateError { .. }
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
@@ -364,6 +367,10 @@ impl ExpectedError {
     /// Displays this error to stderr.
     pub fn display_to_stderr(&self) {
         let mut next_error = match &self {
+            Self::SetCurrentDirFailed { error } => {
+                log::error!("could not change to requested directory");
+                Some(error as &dyn Error)
+            }
             Self::CargoMetadataExecFailed { command, err } => {
                 log::error!(
                     "failed to execute `{}`",
