@@ -27,7 +27,11 @@ This repository contains the source code for:
 
 ## Minimum supported Rust version
 
-The minimum supported Rust version is **Rust 1.66.** At least the last 3 versions of stable Rust are supported at any given time; see the [stability policy](https://nexte.st/book/stability) for more details.
+The minimum supported Rust version to *run* nextest with is **Rust 1.38.** Nextest is not tested against versions that are that old, but it should work with any version of Rust released in the past year. (Please report a bug if not!)
+
+The minimum supported Rust version to *build* nextest with is **Rust 1.66.** For building, at least the last 3 versions of stable Rust are supported at any given time.
+
+See the [stability policy](https://nexte.st/book/stability) for more details.
 
 While a crate is pre-release status (0.x.x) it may have its MSRV bumped in a patch release. Once a
 crate has reached 1.x, any MSRV bump will be accompanied with a new minor version.
