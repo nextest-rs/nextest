@@ -44,8 +44,10 @@ See the [CONTRIBUTING](CONTRIBUTING.md) file for how to help out.
 
 ## License
 
-This project is available under the terms of either the [Apache 2.0 license](LICENSE-APACHE) or the [MIT
+**Nextest is Free Software.** This project is available under the terms of either the [Apache 2.0 license](LICENSE-APACHE) or the [MIT
 license](LICENSE-MIT).
+
+**Like all Free Software, nextest is a gift.** Nextest is provided on an "AS IS" basis and there is NO WARRANTY attached to it. As a user, please treat the authors and contributors to this project as if you were treating the giver of a gift. In particular, you're asked to follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 This project is derived from [diem-devtools](https://github.com/diem/diem-devtools/). Upstream
 source code is used under the terms of the [Apache 2.0
