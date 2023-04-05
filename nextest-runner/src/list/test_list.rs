@@ -500,7 +500,7 @@ impl<'g> TestList<'g> {
         test_binary.into_test_suite(RustTestSuiteStatus::Skipped)
     }
 
-    /// Parses the output of --list --format terse and returns a sorted list.
+    /// Parses the output of --list --message-format terse and returns a sorted list.
     fn parse<'a>(
         binary_id: &'a RustBinaryId,
         list_output: &'a str,

@@ -80,7 +80,7 @@ impl ListCommand {
             command.current_dir(current_dir);
         }
 
-        command.args(["nextest", "list", "--format=json"]);
+        command.args(["nextest", "list", "--message-format=json"]);
 
         command.args(self.args.iter().map(|s| s.as_ref()));
         command
@@ -146,7 +146,7 @@ impl TestListSummary {
             rust_suites: BTreeMap::new(),
         }
     }
-    /// Parse JSON output from `cargo nextest list --format json`.
+    /// Parse JSON output from `cargo nextest list --message-format json`.
     pub fn parse_json(json: impl AsRef<str>) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json.as_ref())
     }
