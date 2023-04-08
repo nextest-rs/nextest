@@ -21,7 +21,7 @@ console = { version = "0.15.5" }
 either = { version = "1.8.1" }
 futures-channel = { version = "0.3.28", features = ["sink"] }
 futures-sink = { version = "0.3.28", default-features = false, features = ["std"] }
-hashbrown = { version = "0.12.3", features = ["raw"] }
+hashbrown = { version = "0.13.2", features = ["raw"] }
 indexmap = { version = "1.9.3", default-features = false, features = ["std"] }
 log = { version = "0.4.17", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
@@ -40,7 +40,7 @@ uuid = { version = "1.3.0", features = ["v4"] }
 
 [build-dependencies]
 cc = { version = "1.0.79", default-features = false, features = ["parallel"] }
-hashbrown = { version = "0.12.3", features = ["raw"] }
+hashbrown = { version = "0.13.2", features = ["raw"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
 proc-macro2 = { version = "1.0.56" }
 quote = { version = "1.0.26" }
