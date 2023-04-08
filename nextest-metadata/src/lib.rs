@@ -12,7 +12,7 @@
 //!
 //! Get the list of tests in the repository:
 //!
-//! ```rust,no_run
+//! ```rust
 //! // This example requires `cargo nextest` to be installed.
 //!
 //! use nextest_metadata::ListCommand;
