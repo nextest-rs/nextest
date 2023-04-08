@@ -72,6 +72,8 @@ jobs:
         with:
           # Matrix instances (other than OS) need to be added to this explicitly
           key: ${{ matrix.rust-version }}
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
       - name: Build quick-junit
         run: cargo build --package quick-junit
       - name: Build nextest-metadata
@@ -88,8 +90,6 @@ jobs:
         run: cargo test --doc
       - name: Test with locally built nextest
         run: cargo local-nt run --profile ci
-      - name: Install latest nextest release
-        uses: taiki-e/install-action@nextest
       - name: Test with latest nextest release
         run: cargo nextest run --profile ci
       - name: Test without double-spawning
