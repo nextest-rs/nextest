@@ -1,14 +1,19 @@
 # Changelog
 
-## [0.8.1] - 2023-04-08
+## [0.8.2] - 2023-04-08
 
 ### Fixed
 
-- `ListCommand` was previously broken: it now uses `--message-format` correctly.
+- `ListCommand` was previously broken: it now uses `--message-format` correctly. Thanks [ Donny/강동윤](https://github.com/kdy1) for your first contribution!
 
 ### Changed
 
 - MSRV updated to Rust 1.66.
+
+## [0.8.1] - 2023-04-08
+
+(This was not released due to a publishing issue.)
+
 
 ## [0.8.0] - 2023-01-02
 
@@ -152,6 +157,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.8.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.8.2
 [0.8.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.8.1
 [0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.8.0
 [0.7.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.7.2
