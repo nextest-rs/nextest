@@ -1322,7 +1322,7 @@ checksum = "adcf93614601c8129ddf72e2d5633df827ba6551541c6d8c59520a371475be1f"
 dependencies = [
  "hermit-abi 0.3.1",
  "io-lifetimes",
- "rustix 0.37.9",
+ "rustix 0.37.11",
  "windows-sys 0.48.0",
 ]
 
@@ -1687,7 +1687,7 @@ dependencies = [
  "proc-macro2 1.0.56",
  "quote 1.0.26",
  "rand",
- "rustix 0.37.9",
+ "rustix 0.37.11",
  "serde",
  "serde_json",
  "similar",
@@ -2306,9 +2306,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.37.9"
+version = "0.37.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3eb76a3b09109e78c52d45979fea3cd8ddaadb223531d0846bedb60e72c3e99"
+checksum = "85597d61f83914ddeba6a47b3b8ffe7365107221c2e557ed94426489fefb5f77"
 dependencies = [
  "bitflags",
  "errno",
@@ -2781,7 +2781,7 @@ dependencies = [
  "cfg-if",
  "fastrand",
  "redox_syscall 0.3.5",
- "rustix 0.37.9",
+ "rustix 0.37.11",
  "windows-sys 0.45.0",
 ]
 
