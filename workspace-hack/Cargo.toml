@@ -54,7 +54,7 @@ getrandom = { version = "0.2.9", default-features = false, features = ["std"] }
 io-lifetimes = { version = "1.0.10" }
 libc = { version = "0.2.141", features = ["extra_traits"] }
 once_cell = { version = "1.17.1" }
-rustix = { version = "0.37.9", features = ["fs", "termios"] }
+rustix = { version = "0.37.11", features = ["fs", "termios"] }
 tokio = { version = "1.27.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -69,7 +69,7 @@ getrandom = { version = "0.2.9", default-features = false, features = ["std"] }
 io-lifetimes = { version = "1.0.10" }
 libc = { version = "0.2.141", features = ["extra_traits"] }
 once_cell = { version = "1.17.1" }
-rustix = { version = "0.37.9", features = ["fs", "termios"] }
+rustix = { version = "0.37.11", features = ["fs", "termios"] }
 tokio = { version = "1.27.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
