@@ -24,7 +24,7 @@ Adding your terminal to Developer Tools will cause any processes run by it to be
 1. Run `sudo spctl developer-mode enable-terminal` in your terminal.
 2. Go to System Preferences, and then to Security & Privacy.
 3. Under the Privacy tab, an item called `Developer Tools` should be present. Navigate to it.
-4. Ensure that your terminal is listed and enabled. If you're using a third-party terminal like iTerm, be sure to add it to the list (You may have to click the lock in the bottom-right corner and authenticate).
+4. Ensure that your terminal is listed and enabled. If you're using a third-party terminal like iTerm, be sure to add it to the list (You may have to click the lock in the bottom-left corner and authenticate).
 5. Restart your terminal.
 
 [See this comment on Hacker News for more.](https://news.ycombinator.com/item?id=24394150)
