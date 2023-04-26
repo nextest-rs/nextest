@@ -94,7 +94,7 @@ indexmap = "1.9.2"
 smallvec = "1.10.0"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.140"
+libc = "0.2.142"
 nix = { version = "0.26.2", default-features = false, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
