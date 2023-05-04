@@ -5,10 +5,6 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ## Unreleased
 
-### Added
-
-- A new global option `-C` allows changing to a new directory before doing anything. This was added to Rust 1.69 but is available with nextest for all Rust versions.
-
 ## [0.9.51] - 2023-03-19
 
 ### Changed

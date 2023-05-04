@@ -8,7 +8,7 @@ use crate::{
     ExpectedError, Result, ReuseBuildKind,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, ValueHint};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
@@ -85,10 +85,6 @@ struct AppOpts {
     #[arg(long, global = true, value_name = "PATH")]
     manifest_path: Option<Utf8PathBuf>,
 
-    /// Change to DIRECTORY before doing anything
-    #[arg(short = 'C', global = true, value_name = "DIRECTORY", value_hint = ValueHint::DirPath)]
-    directory: Option<Utf8PathBuf>,
-
     #[clap(flatten)]
     output: OutputOpts,
 
@@ -112,11 +108,6 @@ impl AppOpts {
     /// Returns the exit code.
     fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
         let output = self.output.init();
-        // Change immediately to the directory if specified.
-        if let Some(directory) = &self.directory {
-            std::env::set_current_dir(directory)
-                .map_err(|error| ExpectedError::SetCurrentDirFailed { error })?;
-        }
 
         match self.command {
             Command::List {
@@ -1597,7 +1588,6 @@ mod tests {
             // ---
             // Commands with arguments
             // ---
-            "cargo nextest list -C /tmp",
             "cargo nextest list --list-type binaries-only",
             "cargo nextest list --list-type full",
             "cargo nextest list --message-format json-pretty",
