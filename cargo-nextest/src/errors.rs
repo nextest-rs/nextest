@@ -62,6 +62,11 @@ pub enum ExpectedError {
         #[from]
         err: ConfigParseError,
     },
+    #[error("test filter build error")]
+    TestFilterBuilderError {
+        #[from]
+        err: TestFilterBuilderError,
+    },
     #[error("unknown host platform")]
     UnknownHostPlatform {
         #[from]
@@ -325,6 +330,7 @@ impl ExpectedError {
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
             | Self::ConfigParseError { .. }
+            | Self::TestFilterBuilderError { .. }
             | Self::UnknownHostPlatform { .. }
             | Self::ArgumentFileReadError { .. }
             | Self::UnknownArchiveFormat { .. }
@@ -475,6 +481,10 @@ impl ExpectedError {
                         err.source()
                     }
                 }
+            }
+            Self::TestFilterBuilderError { err } => {
+                log::error!("{err}");
+                err.source()
             }
             Self::UnknownHostPlatform { err } => {
                 log::error!("the host platform was unknown to nextest");

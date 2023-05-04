@@ -189,7 +189,8 @@ fn test_run_ignored() -> Result<()> {
         None,
         Vec::<String>::new(),
         vec![expr],
-    );
+    )
+    .unwrap();
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config = load_config();
     let profile = config
@@ -264,7 +265,8 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
         None,
         ["call_dylib_add_two", "test_flaky_mod_4"],
         vec![expr],
-    );
+    )
+    .unwrap();
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     for test in test_list.iter_tests() {
         if test.name == "tests::call_dylib_add_two" {
@@ -322,7 +324,8 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
     .expect("filter expression is valid");
 
     let test_filter =
-        TestFilterBuilder::new(RunIgnored::Default, None, Vec::<String>::new(), vec![expr]);
+        TestFilterBuilder::new(RunIgnored::Default, None, Vec::<String>::new(), vec![expr])
+            .unwrap();
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     for test in test_list.iter_tests() {
         if test.name.contains("test_multiply_two") || test.name == "tests::call_dylib_add_two" {
@@ -350,7 +353,8 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
         None,
         vec!["test_multiply_two", "tests::call_dylib_add_two"],
         vec![],
-    );
+    )
+    .unwrap();
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     for test in test_list.iter_tests() {
         if test.name.contains("test_multiply_two")
@@ -528,7 +532,8 @@ fn test_termination() -> Result<()> {
         None,
         Vec::<String>::new(),
         vec![expr],
-    );
+    )
+    .unwrap();
 
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
     let config = load_config();

@@ -970,7 +970,8 @@ mod tests {
             iter::empty::<String>(),
             // Test against the platform() predicate because this is the most important one here.
             vec![FilteringExpr::parse("platform(target)", &PACKAGE_GRAPH_FIXTURE).unwrap()],
-        );
+        )
+        .unwrap();
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();
         let fake_binary_name = "fake-binary".to_owned();
         let fake_binary_id = RustBinaryId::new("fake-package::fake-binary");

@@ -10,6 +10,7 @@
 // result
 
 use crate::{
+    errors::TestFilterBuilderError,
     helpers::convert_build_platform,
     list::RustTestArtifact,
     partition::{Partitioner, PartitionerBuilder},
@@ -77,24 +78,24 @@ impl TestFilterBuilder {
         partitioner_builder: Option<PartitionerBuilder>,
         patterns: impl IntoIterator<Item = impl Into<String>>,
         exprs: Vec<FilteringExpr>,
-    ) -> Self {
+    ) -> Result<Self, TestFilterBuilderError> {
         let mut patterns: Vec<_> = patterns.into_iter().map(|s| s.into()).collect();
         patterns.sort_unstable();
 
         let name_match = if patterns.is_empty() {
             NameMatch::EmptyPatterns
         } else {
-            let matcher = Box::new(AhoCorasick::new_auto_configured(&patterns));
+            let matcher = Box::new(AhoCorasick::new(&patterns)?);
 
             NameMatch::MatchSet { patterns, matcher }
         };
 
-        Self {
+        Ok(Self {
             run_ignored,
             partitioner_builder,
             name_match,
             exprs,
-        }
+        })
     }
 
     /// Creates a new `TestFilterBuilder` that matches any pattern by name.
@@ -315,7 +316,7 @@ mod tests {
         #[test]
         fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
             let patterns: &[String] = &[];
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new()).unwrap();
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_match(&test_name).is_match());
@@ -325,7 +326,7 @@ mod tests {
         // Test that exact names match.
         #[test]
         fn proptest_exact(test_names in vec(any::<String>(), 0..16)) {
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, Vec::new());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, Vec::new()).unwrap();
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_match(&test_name).is_match());
@@ -344,7 +345,7 @@ mod tests {
                 patterns.push(substring);
             }
 
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, Vec::new());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, Vec::new()).unwrap();
             let single_filter = test_filter.build();
             for test_name in test_names {
                 prop_assert!(single_filter.filter_name_match(&test_name).is_match());
@@ -360,7 +361,7 @@ mod tests {
         ) {
             prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
             let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, [pattern], Vec::new());
+            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, [pattern], Vec::new()).unwrap();
             let single_filter = test_filter.build();
             prop_assert!(!single_filter.filter_name_match(&substring).is_match());
         }

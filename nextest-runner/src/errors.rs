@@ -300,6 +300,19 @@ impl fmt::Display for PartitionerBuilderParseError {
     }
 }
 
+/// An error that occures while operating on a
+/// [`TestFilterBuilder`](crate::test_filter::TestFilterBuilder).
+#[derive(Clone, Debug, Error)]
+pub enum TestFilterBuilderError {
+    /// An error that occured while constructing test filters.
+    #[error("error constructing test filters")]
+    Construct {
+        /// The underlying error.
+        #[from]
+        error: aho_corasick::BuildError,
+    },
+}
+
 /// An error occurred in [`PathMapper::new`](crate::reuse_build::PathMapper::new).
 #[derive(Debug, Error)]
 pub enum PathMapperConstructError {

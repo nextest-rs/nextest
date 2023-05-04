@@ -531,7 +531,7 @@ impl TestBuildFilter {
             self.partition.clone(),
             &patterns,
             filter_exprs,
-        ))
+        )?)
     }
 
     fn merge_test_binary_args(
