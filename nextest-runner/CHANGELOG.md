@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.38.0] - 2023-05-04
+
+See the changelog for [cargo-nextest 0.9.52](https://nexte.st/CHANGELOG.html#0952---2023-05-04).
+
 ## [0.37.0] - 2023-03-13
 
 See the changelog for [cargo-nextest 0.9.51](https://nexte.st/CHANGELOG.html#0951---2023-03-19).
