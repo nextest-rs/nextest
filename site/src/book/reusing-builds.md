@@ -135,6 +135,6 @@ Some tests may need to be modified to handle changes in the workspace and target
 
 ## Options and arguments for `cargo nextest archive`
 
-```toml
+```
 {{#include ../../help-text/archive-help.txt}}
 ```
