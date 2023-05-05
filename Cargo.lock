@@ -1564,7 +1564,7 @@ dependencies = [
  "proptest",
  "recursion",
  "regex",
- "regex-syntax 0.6.29",
+ "regex-syntax 0.7.1",
  "test-case",
  "test-strategy",
  "thiserror",
