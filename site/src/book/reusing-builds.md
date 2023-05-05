@@ -57,7 +57,7 @@ By default, nextest expects the workspace's source code to be in the same locati
     Here you should specify all the options you would normally use to build your tests.
 
     ```shell
-    cargo nextest archive --archive-file my-archive.tar.zst
+    cargo nextest archive --workspace --all-features --archive-file my-archive.tar.zst
     ```
 
 2. Run the tests:
