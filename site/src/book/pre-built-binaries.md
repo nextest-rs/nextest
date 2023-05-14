@@ -109,7 +109,9 @@ These binaries are maintained by the community—*thank you!*
 
 ### Homebrew
 
-If you have [Homebrew](https://brew.sh/) available, install nextest with:
+**Homebrew is not currently recommended as an installation method** because it also installs a copy of Rust, separate from rustup. See [Homebrew core issue #124998](https://github.com/Homebrew/homebrew-core/issues/124998).
+
+With this disclaimer in mind, if you'd like to install nextest with Homebrew:
 
 ```
 brew install cargo-nextest
@@ -117,7 +119,7 @@ brew install cargo-nextest
 
 ### Arch Linux
 
-If you're using [Arch Linux](https://archlinux.org), you can install nextest with [pacman](https://wiki.archlinux.org/title/Pacman) as follows:
+On [Arch Linux](https://archlinux.org), install nextest with [pacman](https://wiki.archlinux.org/title/Pacman) by running:
 
 ```
 pacman -S cargo-nextest
