@@ -310,7 +310,7 @@ where
 {
     #[inline]
     fn from(s: S) -> Self {
-        Self(s.into())
+        Self(s.as_ref().into())
     }
 }
 
