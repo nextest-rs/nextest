@@ -326,7 +326,12 @@ fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
 fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     map(
         preceded(char('~'), parse_matcher_text),
-        |res: Option<String>| res.map(NameMatcher::Contains),
+        |res: Option<String>| {
+            res.map(|value| NameMatcher::Contains {
+                value,
+                implicit: false,
+            })
+        },
     )(input)
 }
 
@@ -334,7 +339,12 @@ fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
 fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ws(map(
         preceded(char('='), parse_matcher_text),
-        |res: Option<String>| res.map(NameMatcher::Equal),
+        |res: Option<String>| {
+            res.map(|value| NameMatcher::Equal {
+                value,
+                implicit: false,
+            })
+        },
     ))(input)
 }
 
@@ -539,12 +549,12 @@ fn platform_def(i: Span) -> IResult<Option<SetDef>> {
 #[tracable_parser]
 fn parse_set_def(input: Span) -> IResult<Option<SetDef>> {
     ws(alt((
-        unary_set_def("package", NameMatcher::Equal, SetDef::Package),
-        unary_set_def("deps", NameMatcher::Equal, SetDef::Deps),
-        unary_set_def("rdeps", NameMatcher::Equal, SetDef::Rdeps),
-        unary_set_def("kind", NameMatcher::Equal, SetDef::Kind),
-        unary_set_def("binary", NameMatcher::Equal, SetDef::Binary),
-        unary_set_def("test", NameMatcher::Contains, SetDef::Test),
+        unary_set_def("package", NameMatcher::implicit_equal, SetDef::Package),
+        unary_set_def("deps", NameMatcher::implicit_equal, SetDef::Deps),
+        unary_set_def("rdeps", NameMatcher::implicit_equal, SetDef::Rdeps),
+        unary_set_def("kind", NameMatcher::implicit_equal, SetDef::Kind),
+        unary_set_def("binary", NameMatcher::implicit_equal, SetDef::Binary),
+        unary_set_def("test", NameMatcher::implicit_contains, SetDef::Test),
         platform_def,
         nullary_set_def("all", || SetDef::All),
         nullary_set_def("none", || SetDef::None),
@@ -837,18 +847,19 @@ mod tests {
         assert_set_def!(
             parse_set("test(~something)"),
             Test,
-            NameMatcher::Contains("something".to_string())
+            NameMatcher::Contains {
+                value: "something".to_string(),
+                implicit: false,
+            }
         );
 
         assert_set_def!(
-            parse_set("test(~something)"),
-            Test,
-            NameMatcher::Contains("something".to_string())
-        );
-        assert_set_def!(
             parse_set("test(=something)"),
             Test,
-            NameMatcher::Equal("something".to_string())
+            NameMatcher::Equal {
+                value: "something".to_string(),
+                implicit: false,
+            }
         );
         assert_set_def!(
             parse_set("test(/some.*/)"),
@@ -860,56 +871,86 @@ mod tests {
         assert_set_def!(
             parse_set("test(something)"),
             Test,
-            NameMatcher::Contains("something".to_string())
+            NameMatcher::Contains {
+                value: "something".to_string(),
+                implicit: true,
+            }
         );
         assert_set_def!(
             parse_set("package(something)"),
             Package,
-            NameMatcher::Equal("something".to_string())
+            NameMatcher::Equal {
+                value: "something".to_string(),
+                implicit: true,
+            }
         );
 
         // Explicit contains matching
         assert_set_def!(
             parse_set("test(~something)"),
             Test,
-            NameMatcher::Contains("something".to_string())
+            NameMatcher::Contains {
+                value: "something".to_string(),
+                implicit: false,
+            }
         );
         assert_set_def!(
             parse_set("test(~~something)"),
             Test,
-            NameMatcher::Contains("~something".to_string())
+            NameMatcher::Contains {
+                value: "~something".to_string(),
+                implicit: false,
+            }
         );
         assert_set_def!(
             parse_set("test(~=something)"),
             Test,
-            NameMatcher::Contains("=something".to_string())
+            NameMatcher::Contains {
+                value: "=something".to_string(),
+                implicit: false,
+            }
         );
         assert_set_def!(
             parse_set("test(~/something/)"),
             Test,
-            NameMatcher::Contains("/something/".to_string())
+            NameMatcher::Contains {
+                value: "/something/".to_string(),
+                implicit: false,
+            }
         );
 
         // Explicit equals matching.
         assert_set_def!(
             parse_set("test(=something)"),
             Test,
-            NameMatcher::Equal("something".to_string())
+            NameMatcher::Equal {
+                value: "something".to_string(),
+                implicit: false,
+            }
         );
         assert_set_def!(
             parse_set("test(=~something)"),
             Test,
-            NameMatcher::Equal("~something".to_string())
+            NameMatcher::Equal {
+                value: "~something".to_string(),
+                implicit: false,
+            }
         );
         assert_set_def!(
             parse_set("test(==something)"),
             Test,
-            NameMatcher::Equal("=something".to_string())
+            NameMatcher::Equal {
+                value: "=something".to_string(),
+                implicit: false,
+            }
         );
         assert_set_def!(
             parse_set("test(=/something/)"),
             Test,
-            NameMatcher::Equal("/something/".to_string())
+            NameMatcher::Equal {
+                value: "/something/".to_string(),
+                implicit: false,
+            }
         );
     }
 
@@ -918,17 +959,26 @@ mod tests {
         assert_set_def!(
             parse_set(r"test(some'thing)"),
             Test,
-            NameMatcher::Contains(r"some'thing".to_string())
+            NameMatcher::Contains {
+                value: r"some'thing".to_string(),
+                implicit: true,
+            }
         );
         assert_set_def!(
             parse_set(r"test(some(thing\))"),
             Test,
-            NameMatcher::Contains(r"some(thing)".to_string())
+            NameMatcher::Contains {
+                value: r"some(thing)".to_string(),
+                implicit: true,
+            }
         );
         assert_set_def!(
             parse_set(r"test(some \u{55})"),
             Test,
-            NameMatcher::Contains(r"some U".to_string())
+            NameMatcher::Contains {
+                value: r"some U".to_string(),
+                implicit: true,
+            }
         );
     }
 
@@ -942,22 +992,34 @@ mod tests {
         assert_set_def!(
             parse_set("package(something)"),
             Package,
-            NameMatcher::Equal("something".to_string())
+            NameMatcher::Equal {
+                value: "something".to_string(),
+                implicit: true,
+            }
         );
         assert_set_def!(
             parse_set("deps(something)"),
             Deps,
-            NameMatcher::Equal("something".to_string())
+            NameMatcher::Equal {
+                value: "something".to_string(),
+                implicit: true,
+            }
         );
         assert_set_def!(
             parse_set("rdeps(something)"),
             Rdeps,
-            NameMatcher::Equal("something".to_string())
+            NameMatcher::Equal {
+                value: "something".to_string(),
+                implicit: true,
+            }
         );
         assert_set_def!(
             parse_set("test(something)"),
             Test,
-            NameMatcher::Contains("something".to_string())
+            NameMatcher::Contains {
+                value: "something".to_string(),
+                implicit: true,
+            }
         );
         assert_set_def!(parse_set("platform(host)"), Platform, BuildPlatform::Host);
         assert_set_def!(
@@ -1132,22 +1194,21 @@ mod tests {
     fn test_parse_comma() {
         // accept escaped comma
         let expr = ParsedExpr::Set(SetDef::Test(
-            NameMatcher::Contains("a,".to_string()),
+            NameMatcher::Contains {
+                value: "a,".to_string(),
+                implicit: false,
+            },
             (5, 4).into(),
         ));
         assert_eq_both_ways(&expr, r"test(~a\,)");
-        assert_eq!(
-            expr.drop_source_span(),
-            parse(r"test(a\,)").drop_source_span()
-        );
 
         // string parsing is compatible with possible future syntax
         fn parse_future_syntax(input: Span) -> IResult<(Option<NameMatcher>, Option<NameMatcher>)> {
             let (i, _) = tag("something")(input)?;
             let (i, _) = char('(')(i)?;
-            let (i, n1) = set_matcher(NameMatcher::Contains)(i)?;
+            let (i, n1) = set_matcher(NameMatcher::implicit_contains)(i)?;
             let (i, _) = ws(char(','))(i)?;
-            let (i, n2) = set_matcher(NameMatcher::Contains)(i)?;
+            let (i, n2) = set_matcher(NameMatcher::implicit_contains)(i)?;
             let (i, _) = char(')')(i)?;
             Ok((i, (n1, n2)))
         }

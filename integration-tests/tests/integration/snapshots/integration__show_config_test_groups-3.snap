@@ -3,7 +3,7 @@ source: integration-tests/tests/integration/main.rs
 expression: with_retries_output.stdout_as_str()
 ---
 group: flaky (max threads = 4)
-  * override for with-retries profile with filter 'test(~test_flaky_mod) | test(~test_flaky_mod_4)':
+  * override for with-retries profile with filter 'test(test_flaky_mod) | test(~test_flaky_mod_4)':
       nextest-tests::basic:
           test_flaky_mod_4
           test_flaky_mod_6
