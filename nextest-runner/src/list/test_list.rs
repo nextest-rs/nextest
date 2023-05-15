@@ -969,7 +969,10 @@ mod tests {
             None,
             iter::empty::<String>(),
             // Test against the platform() predicate because this is the most important one here.
-            vec![FilteringExpr::parse("platform(target)", &PACKAGE_GRAPH_FIXTURE).unwrap()],
+            vec![
+                FilteringExpr::parse("platform(target)".to_owned(), &PACKAGE_GRAPH_FIXTURE)
+                    .unwrap(),
+            ],
         )
         .unwrap();
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();

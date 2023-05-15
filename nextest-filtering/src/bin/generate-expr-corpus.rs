@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use nextest_filtering::Expr;
+use nextest_filtering::ParsedExpr;
 use proptest::{
     strategy::{Strategy, ValueTree},
     test_runner::{Config, RngAlgorithm, TestRng, TestRunner},
@@ -17,7 +17,7 @@ static CORPUS_DIR: &str = "fuzz/corpus/fuzz_parsing";
 fn main() {
     let mut gen = ValueGenerator::from_seed("fuzz_parsing_corpus");
     for n in 0..1024 {
-        let value = gen.generate(Expr::strategy());
+        let value = gen.generate(ParsedExpr::strategy());
         let path = Path::new(CORPUS_DIR);
         let path = path.join(format!("seed-{n}"));
         std::fs::write(path, value.to_string()).unwrap();

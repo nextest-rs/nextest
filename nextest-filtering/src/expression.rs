@@ -3,7 +3,9 @@
 
 use crate::{
     errors::{FilterExpressionParseErrors, ParseSingleError, State},
-    parsing::{parse, DisplayParsedRegex, DisplayParsedString, Expr, ParsedExpr, SetDef, Span},
+    parsing::{
+        parse, DisplayParsedRegex, DisplayParsedString, ExprResult, ParsedExpr, SetDef, Span,
+    },
 };
 use guppy::{
     graph::{cargo::BuildPlatform, PackageGraph},
@@ -101,13 +103,25 @@ pub struct TestQuery<'a> {
 ///
 /// Used to filter tests to run.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FilteringExpr {
+pub struct FilteringExpr {
+    /// The raw expression passed in.
+    pub input: String,
+
+    /// The parsed-but-not-compiled expression.
+    pub parsed: ParsedExpr,
+
+    /// The compiled expression.
+    pub compiled: CompiledExpr,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompiledExpr {
     /// Accepts every test not in the given expression
-    Not(Box<FilteringExpr>),
+    Not(Box<CompiledExpr>),
     /// Accepts every test in either given expression
-    Union(Box<FilteringExpr>, Box<FilteringExpr>),
+    Union(Box<CompiledExpr>, Box<CompiledExpr>),
     /// Accepts every test in both given expressions
-    Intersection(Box<FilteringExpr>, Box<FilteringExpr>),
+    Intersection(Box<CompiledExpr>, Box<CompiledExpr>),
     /// Accepts every test in a set
     Set(FilteringSet),
 }
@@ -150,22 +164,28 @@ impl FilteringSet {
 
 impl FilteringExpr {
     /// Parse a filtering expression
-    pub fn parse(
-        input: &str,
-        graph: &PackageGraph,
-    ) -> Result<FilteringExpr, FilterExpressionParseErrors> {
+    pub fn parse(input: String, graph: &PackageGraph) -> Result<Self, FilterExpressionParseErrors> {
         let errors = RefCell::new(Vec::new());
-        match parse(Span::new_extra(input, State::new(&errors))) {
+        match parse(Span::new_extra(&input, State::new(&errors))) {
             Ok(parsed_expr) => {
                 let errors = errors.into_inner();
 
                 if !errors.is_empty() {
-                    return Err(FilterExpressionParseErrors::new(input, errors));
+                    return Err(FilterExpressionParseErrors::new(input.clone(), errors));
                 }
 
                 match parsed_expr {
-                    ParsedExpr::Valid(expr) => crate::compile::compile(&expr, graph)
-                        .map_err(|errors| FilterExpressionParseErrors::new(input, errors)),
+                    ExprResult::Valid(parsed) => {
+                        let compiled =
+                            crate::compile::compile(&parsed, graph).map_err(|errors| {
+                                FilterExpressionParseErrors::new(input.clone(), errors)
+                            })?;
+                        Ok(Self {
+                            input,
+                            parsed,
+                            compiled,
+                        })
+                    }
                     _ => {
                         // should not happen
                         // If an ParsedExpr::Error is produced, we should also have an error inside
@@ -198,7 +218,7 @@ impl FilteringExpr {
     /// * `None` if this binary might or might not be accepted.
     pub fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
         use ExprLayer::*;
-        Wrapped(self).collapse_layers(|layer: ExprLayer<&FilteringSet, Option<bool>>| {
+        Wrapped(&self.compiled).collapse_layers(|layer: ExprLayer<&FilteringSet, Option<bool>>| {
             match layer {
                 Set(set) => set.matches_binary(query),
                 Not(a) => a.logic_not(),
@@ -214,7 +234,8 @@ impl FilteringExpr {
     /// Returns true if the given test is accepted by this filter expression.
     pub fn matches_test(&self, query: &TestQuery<'_>) -> bool {
         use ExprLayer::*;
-        Wrapped(self).collapse_layers(|layer: ExprLayer<&FilteringSet, bool>| match layer {
+        Wrapped(&self.compiled).collapse_layers(|layer: ExprLayer<&FilteringSet, bool>| match layer
+        {
             Set(set) => set.matches_test(query),
             Not(a) => !a,
             Union(a, b) => a || b,
@@ -356,38 +377,38 @@ impl<A, Set, B> MapLayer<B> for ExprLayer<Set, A> {
 // Wrapped struct to prevent trait impl leakages.
 pub(crate) struct Wrapped<T>(pub(crate) T);
 
-impl<'a> Project for Wrapped<&'a FilteringExpr> {
-    type To = ExprLayer<&'a FilteringSet, Wrapped<&'a FilteringExpr>>;
+impl<'a> Project for Wrapped<&'a CompiledExpr> {
+    type To = ExprLayer<&'a FilteringSet, Wrapped<&'a CompiledExpr>>;
 
     fn project(self) -> Self::To {
         match self.0 {
-            FilteringExpr::Not(a) => ExprLayer::Not(Wrapped(a.as_ref())),
-            FilteringExpr::Union(a, b) => {
-                ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
-            }
-            FilteringExpr::Intersection(a, b) => {
+            CompiledExpr::Not(a) => ExprLayer::Not(Wrapped(a.as_ref())),
+            CompiledExpr::Union(a, b) => ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref())),
+            CompiledExpr::Intersection(a, b) => {
                 ExprLayer::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
             }
-            FilteringExpr::Set(f) => ExprLayer::Set(f),
+            CompiledExpr::Set(f) => ExprLayer::Set(f),
         }
     }
 }
 
-impl<'a> Project for Wrapped<&'a Expr> {
-    type To = ExprLayer<&'a SetDef, Wrapped<&'a Expr>>;
+impl<'a> Project for Wrapped<&'a ParsedExpr> {
+    type To = ExprLayer<&'a SetDef, Wrapped<&'a ParsedExpr>>;
 
     fn project(self) -> Self::To {
         match self.0 {
-            Expr::Not(_, a) => ExprLayer::Not(Wrapped(a.as_ref())),
-            Expr::Union(_, a, b) => ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref())),
-            Expr::Intersection(_, a, b) => {
+            ParsedExpr::Not(_, a) => ExprLayer::Not(Wrapped(a.as_ref())),
+            ParsedExpr::Union(_, a, b) => {
+                ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
+            }
+            ParsedExpr::Intersection(_, a, b) => {
                 ExprLayer::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
             }
-            Expr::Difference(_, a, b) => {
+            ParsedExpr::Difference(_, a, b) => {
                 ExprLayer::Difference(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
             }
-            Expr::Parens(a) => ExprLayer::Parens(Wrapped(a.as_ref())),
-            Expr::Set(f) => ExprLayer::Set(f),
+            ParsedExpr::Parens(a) => ExprLayer::Parens(Wrapped(a.as_ref())),
+            ParsedExpr::Set(f) => ExprLayer::Set(f),
         }
     }
 }

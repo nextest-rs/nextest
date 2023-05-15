@@ -4,7 +4,7 @@
 use crate::{
     errors::ParseSingleError,
     expression::*,
-    parsing::{Expr, SetDef},
+    parsing::{ParsedExpr, SetDef},
 };
 use guppy::{
     graph::{DependsCache, PackageGraph, PackageMetadata},
@@ -15,9 +15,9 @@ use recursion::Collapse;
 use std::collections::HashSet;
 
 pub(crate) fn compile(
-    expr: &Expr,
+    expr: &ParsedExpr,
     graph: &PackageGraph,
-) -> Result<FilteringExpr, Vec<ParseSingleError>> {
+) -> Result<CompiledExpr, Vec<ParseSingleError>> {
     let in_workspace_packages: Vec<_> = graph
         .resolve_workspace()
         .packages(guppy::graph::DependencyDirection::Forward)
@@ -129,22 +129,22 @@ fn expect_non_empty(
 }
 
 fn compile_expr(
-    expr: &Expr,
+    expr: &ParsedExpr,
     packages: &[PackageMetadata],
     cache: &mut DependsCache,
     errors: &mut Vec<ParseSingleError>,
-) -> FilteringExpr {
+) -> CompiledExpr {
     use crate::expression::ExprLayer::*;
-    Wrapped(expr).collapse_layers(|layer: ExprLayer<&SetDef, FilteringExpr>| match layer {
-        Set(set) => FilteringExpr::Set(compile_set_def(set, packages, cache, errors)),
-        Not(expr) => FilteringExpr::Not(Box::new(expr)),
-        Union(expr_1, expr_2) => FilteringExpr::Union(Box::new(expr_1), Box::new(expr_2)),
+    Wrapped(expr).collapse_layers(|layer: ExprLayer<&SetDef, CompiledExpr>| match layer {
+        Set(set) => CompiledExpr::Set(compile_set_def(set, packages, cache, errors)),
+        Not(expr) => CompiledExpr::Not(Box::new(expr)),
+        Union(expr_1, expr_2) => CompiledExpr::Union(Box::new(expr_1), Box::new(expr_2)),
         Intersection(expr_1, expr_2) => {
-            FilteringExpr::Intersection(Box::new(expr_1), Box::new(expr_2))
+            CompiledExpr::Intersection(Box::new(expr_1), Box::new(expr_2))
         }
-        Difference(expr_1, expr_2) => FilteringExpr::Intersection(
+        Difference(expr_1, expr_2) => CompiledExpr::Intersection(
             Box::new(expr_1),
-            Box::new(FilteringExpr::Not(Box::new(expr_2))),
+            Box::new(CompiledExpr::Not(Box::new(expr_2))),
         ),
         Parens(expr_1) => expr_1,
     })

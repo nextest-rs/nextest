@@ -11,6 +11,7 @@ mod parsing;
 #[cfg(any(test, feature = "internal-testing"))]
 mod proptest_helpers;
 
-pub use expression::{BinaryQuery, FilteringExpr, FilteringSet, NameMatcher, TestQuery};
-#[doc(hidden)]
-pub use parsing::Expr;
+pub use expression::{
+    BinaryQuery, CompiledExpr, FilteringExpr, FilteringSet, NameMatcher, TestQuery,
+};
+pub use parsing::ParsedExpr;
