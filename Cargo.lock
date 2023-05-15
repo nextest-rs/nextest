@@ -1529,7 +1529,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 
 [[package]]
 name = "nextest-filtering"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "camino",
  "clap",
