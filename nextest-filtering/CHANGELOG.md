@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0] - 2023-05-15
+
+### Changed
+
+- `FilteringExpr` now carries three forms of an expression:
+  - `input`, which is the raw input as provided.
+  - `parsed`, which represents a parsed expression that hasn't yet been evaluated against a specific
+    `PackageGraph`. This is a newly public type `ParsedExpr`.
+  - `compiled`, which is an expression that has been compiled against a `PackageGraph`. This is of
+    type `CompiledExpr`, which is what `FilteringExpr` used to be.
+- Newlines are now supported within expressions, for e.g. multiline TOML for nextest's overrides.
+- A clean, well-formatted representation of a parsed expression can now be generated via the
+  `Display` impl on `ParsedExpr`.
+- The parser has been extensively fuzzed. No bugs were found.
+- MSRV updated to Rust 1.66.
+
 ## [0.3.0] - 2022-11-23
 
 ### Changed
@@ -38,6 +54,7 @@
 
 Initial release.
 
+[0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.4.0
 [0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.3.0
 [0.2.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.2
 [0.2.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.1

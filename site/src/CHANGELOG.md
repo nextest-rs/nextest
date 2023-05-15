@@ -3,6 +3,26 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.53] - 2023-05-15
+
+### Added
+
+- Filter expressions in TOML files can now be specified as multiline TOML strings. For example:
+
+```toml
+[[profile.default.overrides]]
+filter = '''
+  test(my_test)
+  | package(my-package)
+'''
+# ...
+```
+
+### Changed
+
+- `show-config test-groups` now shows a clean representation of filter expressions, to enable
+  printing out multiline expressions neatly.
+
 ## [0.9.52] - 2023-05-04
 
 ### Fixed
@@ -733,6 +753,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.53]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.53
 [0.9.52]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.52
 [0.9.51]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.51
 [0.9.50]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.50
