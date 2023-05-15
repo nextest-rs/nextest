@@ -24,18 +24,52 @@ use std::{cell::RefCell, collections::HashSet, fmt};
 #[derive(Debug, Clone)]
 pub enum NameMatcher {
     /// Exact value
-    Equal(String),
+    Equal { value: String, implicit: bool },
     /// Simple contains test
-    Contains(String),
+    Contains { value: String, implicit: bool },
     /// Test against a regex
     Regex(regex::Regex),
+}
+
+impl NameMatcher {
+    pub(crate) fn implicit_equal(value: String) -> Self {
+        Self::Equal {
+            value,
+            implicit: true,
+        }
+    }
+
+    pub(crate) fn implicit_contains(value: String) -> Self {
+        Self::Contains {
+            value,
+            implicit: true,
+        }
+    }
 }
 
 impl PartialEq for NameMatcher {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Contains(s1), Self::Contains(s2)) => s1 == s2,
-            (Self::Equal(s1), Self::Equal(s2)) => s1 == s2,
+            (
+                Self::Contains {
+                    value: s1,
+                    implicit: default1,
+                },
+                Self::Contains {
+                    value: s2,
+                    implicit: default2,
+                },
+            ) => s1 == s2 && default1 == default2,
+            (
+                Self::Equal {
+                    value: s1,
+                    implicit: default1,
+                },
+                Self::Equal {
+                    value: s2,
+                    implicit: default2,
+                },
+            ) => s1 == s2 && default1 == default2,
             (Self::Regex(r1), Self::Regex(r2)) => r1.as_str() == r2.as_str(),
             _ => false,
         }
@@ -47,8 +81,18 @@ impl Eq for NameMatcher {}
 impl fmt::Display for NameMatcher {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Equal(s) => write!(f, "={}", DisplayParsedString(s)),
-            Self::Contains(s) => write!(f, "~{}", DisplayParsedString(s)),
+            Self::Equal { value, implicit } => write!(
+                f,
+                "{}{}",
+                if *implicit { "" } else { "=" },
+                DisplayParsedString(value)
+            ),
+            Self::Contains { value, implicit } => write!(
+                f,
+                "{}{}",
+                if *implicit { "" } else { "~" },
+                DisplayParsedString(value)
+            ),
             Self::Regex(r) => write!(f, "/{}/", DisplayParsedRegex(r)),
         }
     }
@@ -129,8 +173,8 @@ pub enum CompiledExpr {
 impl NameMatcher {
     pub(crate) fn is_match(&self, input: &str) -> bool {
         match self {
-            Self::Equal(text) => text == input,
-            Self::Contains(text) => input.contains(text),
+            Self::Equal { value, .. } => value == input,
+            Self::Contains { value, .. } => input.contains(value),
             Self::Regex(reg) => reg.is_match(input),
         }
     }

@@ -104,13 +104,13 @@ impl ParsedExpr<()> {
 impl SetDef<()> {
     pub(crate) fn strategy() -> impl Strategy<Value = Self> {
         prop_oneof![
-            1 => NameMatcher::strategy().prop_map(|s| Self::Package(s, ())),
-            1 => NameMatcher::strategy().prop_map(|s| Self::Deps(s, ())),
-            1 => NameMatcher::strategy().prop_map(|s| Self::Rdeps(s, ())),
-            1 => NameMatcher::strategy().prop_map(|s| Self::Kind(s, ())),
-            1 => NameMatcher::strategy().prop_map(|s| Self::Binary(s, ())),
+            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Package(s, ())),
+            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Deps(s, ())),
+            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Rdeps(s, ())),
+            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Kind(s, ())),
+            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Binary(s, ())),
             1 => build_platform_strategy().prop_map(|p| Self::Platform(p, ())),
-            1 => NameMatcher::strategy().prop_map(|s| Self::Test(s, ())),
+            1 => NameMatcher::default_contains_strategy().prop_map(|s| Self::Test(s, ())),
             1 => Just(Self::All),
             1 => Just(Self::None),
         ]
@@ -118,13 +118,48 @@ impl SetDef<()> {
 }
 
 impl NameMatcher {
-    pub(crate) fn strategy() -> impl Strategy<Value = Self> {
+    pub(crate) fn default_equal_strategy() -> impl Strategy<Value = Self> {
         prop_oneof![
-            1 => name_strategy().prop_map(Self::Equal),
-            1 => name_strategy().prop_map(Self::Contains),
+            1 => (name_strategy(), any::<bool>()).prop_filter_map(
+                "implicit = true can't begin with operators",
+                |(value, implicit)| {
+                    let accept = match (implicit, begins_with_operator(&value)) {
+                        (false, _) => true,
+                        (true, false) => true,
+                        (true, true) => false,
+                    };
+                    accept.then_some(Self::Equal { value, implicit })
+                },
+            ),
+            1 => name_strategy().prop_map(|value| {
+                Self::Contains { value, implicit: false }
+            }),
             1 => regex_strategy().prop_map(Self::Regex),
         ]
     }
+
+    pub(crate) fn default_contains_strategy() -> impl Strategy<Value = Self> {
+        prop_oneof![
+            1 => name_strategy().prop_map(|value| {
+                Self::Equal { value, implicit: false }
+            }),
+            1 => (name_strategy(), any::<bool>()).prop_filter_map(
+                "implicit = true can't begin with operators",
+                |(value, implicit)| {
+                    let accept = match (implicit, begins_with_operator(&value)) {
+                        (false, _) => true,
+                        (true, false) => true,
+                        (true, true) => false,
+                    };
+                    accept.then_some(Self::Contains { value, implicit })
+            }),
+            1 => regex_strategy().prop_map(Self::Regex),
+        ]
+    }
+}
+
+fn begins_with_operator(value: &str) -> bool {
+    value.starts_with('=') || value.starts_with('~') || value.starts_with('/')
 }
 
 pub(crate) fn build_platform_strategy() -> impl Strategy<Value = BuildPlatform> {

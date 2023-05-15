@@ -20,7 +20,7 @@ retries = 5
 # This is specified as a multiline filter to ensure that we can deal with such parsers.
 filter = """
     test(test_flaky_mod)
-    | test(test_flaky_mod_4)
+    | test(~test_flaky_mod_4)
 """
 
 retries = 4
