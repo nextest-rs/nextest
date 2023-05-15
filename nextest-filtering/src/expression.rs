@@ -97,7 +97,7 @@ pub struct TestQuery<'a> {
     pub test_name: &'a str,
 }
 
-/// Filtering expression
+/// Filtering expression.
 ///
 /// Used to filter tests to run.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -16,7 +16,13 @@ retries = 5
 # Ensure that the earlier retry setting for test_flaky_mod_6 overrides the later one,
 # and also run test_flaky_mod_4 with 4 retries (5 tries): try 4/5 should pass.
 [[profile.with-retries.overrides]]
-filter = "test(test_flaky_mod)"
+
+# This is specified as a multiline filter to ensure that we can deal with such parsers.
+filter = """
+    test(test_flaky_mod)
+    | test(test_flaky_mod_4)
+"""
+
 retries = 4
 test-group = 'flaky'
 

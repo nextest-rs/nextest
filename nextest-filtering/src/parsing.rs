@@ -18,8 +18,8 @@ use miette::SourceSpan;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till},
-    character::complete::char,
-    combinator::{eof, map, peek, recognize, verify},
+    character::complete::{char, line_ending},
+    combinator::{eof, map, peek, recognize, value, verify},
     multi::{fold_many0, many0},
     sequence::{delimited, pair, preceded, terminated},
     Slice,
@@ -255,7 +255,13 @@ fn ws<'a, T, P: FnMut(Span<'a>) -> IResult<'a, T>>(
     mut inner: P,
 ) -> impl FnMut(Span<'a>) -> IResult<'a, T> {
     move |input| {
-        let (i, _) = many0(char(' '))(input.clone())?;
+        let (i, _) = many0(alt((
+            // Match individual space characters.
+            value((), char(' ')),
+            // Match CRLF and LF line endings. This allows filters to be specified as multiline TOML
+            // strings.
+            value((), line_ending),
+        )))(input.clone())?;
         match inner(i) {
             Ok(res) => Ok(res),
             Err(nom::Err::Error(err)) => {
