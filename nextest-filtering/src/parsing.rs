@@ -90,14 +90,13 @@ impl<S> fmt::Display for SetDef<S> {
 }
 
 /// A filter expression that hasn't been compiled against a package graph.
-///
-/// Not part of the public API. Exposed for testing only.
 #[derive(Debug, PartialEq, Eq)]
-#[doc(hidden)]
 pub enum Expr<S = SourceSpan> {
-    Not(Box<Expr<S>>),
-    Union(Box<Expr<S>>, Box<Expr<S>>),
-    Intersection(Box<Expr<S>>, Box<Expr<S>>),
+    Not(NotOperator, Box<Expr<S>>),
+    Union(OrOperator, Box<Expr<S>>, Box<Expr<S>>),
+    Intersection(AndOperator, Box<Expr<S>>, Box<Expr<S>>),
+    Difference(DifferenceOperator, Box<Expr<S>>, Box<Expr<S>>),
+    Parens(Box<Expr<S>>),
     Set(SetDef<S>),
 }
 
@@ -114,20 +113,24 @@ impl Expr {
         Box::new(self)
     }
 
-    fn not(self) -> Self {
-        Expr::Not(self.boxed())
+    fn not(self, op: NotOperator) -> Self {
+        Expr::Not(op, self.boxed())
     }
 
-    fn union(expr_1: Self, expr_2: Self) -> Self {
-        Expr::Union(expr_1.boxed(), expr_2.boxed())
+    fn union(op: OrOperator, expr_1: Self, expr_2: Self) -> Self {
+        Expr::Union(op, expr_1.boxed(), expr_2.boxed())
     }
 
-    fn intersection(expr_1: Self, expr_2: Self) -> Self {
-        Expr::Intersection(expr_1.boxed(), expr_2.boxed())
+    fn intersection(op: AndOperator, expr_1: Self, expr_2: Self) -> Self {
+        Expr::Intersection(op, expr_1.boxed(), expr_2.boxed())
     }
 
-    fn difference(expr_1: Self, expr_2: Self) -> Self {
-        Expr::Intersection(expr_1.boxed(), expr_2.not().boxed())
+    fn difference(op: DifferenceOperator, expr_1: Self, expr_2: Self) -> Self {
+        Expr::Difference(op, expr_1.boxed(), expr_2.boxed())
+    }
+
+    fn parens(self) -> Self {
+        Expr::Parens(self.boxed())
     }
 
     #[cfg(test)]
@@ -143,26 +146,36 @@ impl Expr {
     #[allow(unused)]
     fn drop_source_span(self) -> Expr<()> {
         match self {
-            Self::Not(expr) => Expr::Not(Box::new(expr.drop_source_span())),
-            Self::Union(a, b) => Expr::Union(
+            Self::Not(op, expr) => Expr::Not(op, Box::new(expr.drop_source_span())),
+            Self::Union(op, a, b) => Expr::Union(
+                op,
                 Box::new(a.drop_source_span()),
                 Box::new(b.drop_source_span()),
             ),
-            Self::Intersection(a, b) => Expr::Intersection(
+            Self::Intersection(op, a, b) => Expr::Intersection(
+                op,
                 Box::new(a.drop_source_span()),
                 Box::new(b.drop_source_span()),
             ),
+            Self::Difference(op, a, b) => Expr::Difference(
+                op,
+                Box::new(a.drop_source_span()),
+                Box::new(b.drop_source_span()),
+            ),
+            Self::Parens(a) => Expr::Parens(Box::new(a.drop_source_span())),
             Self::Set(set) => Expr::Set(set.drop_source_span()),
         }
     }
 }
 
-impl fmt::Display for Expr<()> {
+impl<S> fmt::Display for Expr<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Not(expr) => write!(f, "not ({expr})"),
-            Self::Union(expr_1, expr_2) => write!(f, "({expr_1}) or ({expr_2})"),
-            Self::Intersection(expr_1, expr_2) => write!(f, "({expr_1}) and ({expr_2})"),
+            Self::Not(op, expr) => write!(f, "{op} {expr}"),
+            Self::Union(op, expr_1, expr_2) => write!(f, "{expr_1} {op} {expr_2}"),
+            Self::Intersection(op, expr_1, expr_2) => write!(f, "{expr_1} {op} {expr_2}"),
+            Self::Difference(op, expr_1, expr_2) => write!(f, "{expr_1} {op} {expr_2}"),
+            Self::Parens(expr) => write!(f, "({expr})"),
             Self::Set(set) => write!(f, "{set}"),
         }
     }
@@ -174,16 +187,23 @@ pub(crate) enum ParsedExpr {
 }
 
 impl ParsedExpr {
-    fn combine(self, op: fn(Expr, Expr) -> Expr, other: Self) -> Self {
+    fn combine(self, op: impl FnOnce(Expr, Expr) -> Expr, other: Self) -> Self {
         match (self, other) {
             (Self::Valid(expr_1), Self::Valid(expr_2)) => Self::Valid(op(expr_1, expr_2)),
             _ => Self::Error,
         }
     }
 
-    fn negate(self) -> Self {
+    fn negate(self, op: NotOperator) -> Self {
         match self {
-            Self::Valid(expr) => Self::Valid(expr.not()),
+            Self::Valid(expr) => Self::Valid(expr.not(op)),
+            _ => Self::Error,
+        }
+    }
+
+    fn parens(self) -> Self {
+        match self {
+            Self::Valid(expr) => Self::Valid(expr.parens()),
             _ => Self::Error,
         }
     }
@@ -540,22 +560,14 @@ fn expect_expr<'a, P: FnMut(Span<'a>) -> IResult<'a, ParsedExpr>>(
 }
 
 #[tracable_parser]
-fn parse_expr_not(input: Span) -> IResult<ParsedExpr> {
-    map(
-        preceded(
-            alt((tag("not "), tag("!"))),
-            expect_expr(ws(parse_basic_expr)),
-        ),
-        ParsedExpr::negate,
-    )(input)
-}
-
-#[tracable_parser]
 fn parse_parentheses_expr(input: Span) -> IResult<ParsedExpr> {
-    delimited(
-        char('('),
-        expect_expr(parse_expr),
-        expect_char(')', ParseSingleError::ExpectedCloseParenthesis),
+    map(
+        delimited(
+            char('('),
+            expect_expr(parse_expr),
+            expect_char(')', ParseSingleError::ExpectedCloseParenthesis),
+        ),
+        |expr| expr.parens(),
     )(input)
 }
 
@@ -571,19 +583,69 @@ fn parse_basic_expr(input: Span) -> IResult<ParsedExpr> {
     )))(input)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    any(test, feature = "internal-testing"),
+    derive(test_strategy::Arbitrary)
+)]
+pub enum NotOperator {
+    LiteralNot,
+    Exclamation,
+}
+
+impl fmt::Display for NotOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NotOperator::LiteralNot => f.write_str("not"),
+            NotOperator::Exclamation => f.write_str("!"),
+        }
+    }
+}
+
+#[tracable_parser]
+fn parse_expr_not(input: Span) -> IResult<ParsedExpr> {
+    map(
+        pair(
+            alt((
+                value(NotOperator::LiteralNot, tag("not ")),
+                value(NotOperator::Exclamation, tag("!")),
+            )),
+            expect_expr(ws(parse_basic_expr)),
+        ),
+        |(op, expr)| expr.negate(op),
+    )(input)
+}
+
 // ---
 
-enum OrOperator {
-    Union,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    any(test, feature = "internal-testing"),
+    derive(test_strategy::Arbitrary)
+)]
+pub enum OrOperator {
+    LiteralOr,
+    Pipe,
+    Plus,
+}
+
+impl fmt::Display for OrOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrOperator::LiteralOr => f.write_str("or"),
+            OrOperator::Pipe => f.write_str("|"),
+            OrOperator::Plus => f.write_str("+"),
+        }
+    }
 }
 
 #[tracable_parser]
 fn parse_expr(input: Span) -> IResult<ParsedExpr> {
     // "or" binds less tightly than "and", so parse and within or.
-    let (input, expr) = expect_expr(parse_and_expr)(input)?;
+    let (input, expr) = expect_expr(parse_and_or_difference_expr)(input)?;
 
     let (input, ops) = fold_many0(
-        pair(parse_or_operator, expect_expr(parse_and_expr)),
+        pair(parse_or_operator, expect_expr(parse_and_or_difference_expr)),
         Vec::new,
         |mut ops, (op, expr)| {
             ops.push((op, expr));
@@ -591,8 +653,8 @@ fn parse_expr(input: Span) -> IResult<ParsedExpr> {
         },
     )(input)?;
 
-    let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| match op {
-        OrOperator::Union => expr_1.combine(Expr::union, expr_2),
+    let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| {
+        expr_1.combine(|expr_1, expr_2| Expr::union(op, expr_1, expr_2), expr_2)
     });
 
     Ok((input, expr))
@@ -600,24 +662,66 @@ fn parse_expr(input: Span) -> IResult<ParsedExpr> {
 
 #[tracable_parser]
 fn parse_or_operator(input: Span) -> IResult<OrOperator> {
-    ws(map(alt((tag("or "), tag("|"), tag("+"))), |_| {
-        OrOperator::Union
-    }))(input)
+    ws(alt((
+        value(OrOperator::LiteralOr, tag("or ")),
+        value(OrOperator::Pipe, tag("|")),
+        value(OrOperator::Plus, tag("+")),
+    )))(input)
 }
 
 // ---
 
-enum AndOperator {
-    Intersection,
-    Difference,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    any(test, feature = "internal-testing"),
+    derive(test_strategy::Arbitrary)
+)]
+pub enum AndOperator {
+    LiteralAnd,
+    Ampersand,
+}
+
+impl fmt::Display for AndOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AndOperator::LiteralAnd => f.write_str("and"),
+            AndOperator::Ampersand => f.write_str("&"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    any(test, feature = "internal-testing"),
+    derive(test_strategy::Arbitrary)
+)]
+pub enum DifferenceOperator {
+    Minus,
+}
+
+impl fmt::Display for DifferenceOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DifferenceOperator::Minus => f.write_str("-"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AndOrDifferenceOperator {
+    And(AndOperator),
+    Difference(DifferenceOperator),
 }
 
 #[tracable_parser]
-fn parse_and_expr(input: Span) -> IResult<ParsedExpr> {
+fn parse_and_or_difference_expr(input: Span) -> IResult<ParsedExpr> {
     let (input, expr) = expect_expr(parse_basic_expr)(input)?;
 
     let (input, ops) = fold_many0(
-        pair(parse_and_operator, expect_expr(parse_basic_expr)),
+        pair(
+            parse_and_or_difference_operator,
+            expect_expr(parse_basic_expr),
+        ),
         Vec::new,
         |mut ops, (op, expr)| {
             ops.push((op, expr));
@@ -626,18 +730,34 @@ fn parse_and_expr(input: Span) -> IResult<ParsedExpr> {
     )(input)?;
 
     let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| match op {
-        AndOperator::Intersection => expr_1.combine(Expr::intersection, expr_2),
-        AndOperator::Difference => expr_1.combine(Expr::difference, expr_2),
+        AndOrDifferenceOperator::And(op) => expr_1.combine(
+            |expr_1, expr_2| Expr::intersection(op, expr_1, expr_2),
+            expr_2,
+        ),
+        AndOrDifferenceOperator::Difference(op) => expr_1.combine(
+            |expr_1, expr_2| Expr::difference(op, expr_1, expr_2),
+            expr_2,
+        ),
     });
 
     Ok((input, expr))
 }
 
 #[tracable_parser]
-fn parse_and_operator(input: Span) -> IResult<AndOperator> {
+fn parse_and_or_difference_operator(input: Span) -> IResult<AndOrDifferenceOperator> {
     ws(alt((
-        map(alt((tag("and "), tag("&"))), |_| AndOperator::Intersection),
-        map(char('-'), |_| AndOperator::Difference),
+        value(
+            AndOrDifferenceOperator::And(AndOperator::LiteralAnd),
+            tag("and "),
+        ),
+        value(
+            AndOrDifferenceOperator::And(AndOperator::Ampersand),
+            char('&'),
+        ),
+        value(
+            AndOrDifferenceOperator::Difference(DifferenceOperator::Minus),
+            char('-'),
+        ),
     )))(input)
 }
 
@@ -869,82 +989,102 @@ mod tests {
         let expr = Expr::all();
         assert_eq!(expr, parse("all()"));
         assert_eq!(expr, parse("  all ( ) "));
+        assert_eq!(format!("{expr}"), "all()");
     }
 
     #[test]
     fn test_parse_expr_not() {
-        let expr = Expr::all().not();
-        assert_eq!(expr, parse("not all()"));
+        let expr = Expr::all().not(NotOperator::LiteralNot);
+        assert_eq_both_ways(&expr, "not all()");
         assert_eq!(expr, parse("not  all()"));
-        assert_eq!(expr, parse("!all()"));
-        assert_eq!(expr, parse("! all()"));
 
-        let expr = Expr::all().not().not();
-        assert_eq!(expr, parse("not not all()"));
+        let expr = Expr::all().not(NotOperator::Exclamation);
+        assert_eq_both_ways(&expr, "! all()");
+        assert_eq!(expr, parse("!all()"));
+
+        let expr = Expr::all()
+            .not(NotOperator::LiteralNot)
+            .not(NotOperator::LiteralNot);
+        assert_eq_both_ways(&expr, "not not all()");
     }
 
     #[test]
     fn test_parse_expr_intersection() {
-        let expr = Expr::intersection(Expr::all(), Expr::none());
-        assert_eq!(expr, parse("all() and none()"));
+        let expr = Expr::intersection(AndOperator::LiteralAnd, Expr::all(), Expr::none());
+        assert_eq_both_ways(&expr, "all() and none()");
         assert_eq!(expr, parse("all()and none()"));
-        assert_eq!(expr, parse("all() & none()"));
+
+        let expr = Expr::intersection(AndOperator::Ampersand, Expr::all(), Expr::none());
+        assert_eq_both_ways(&expr, "all() & none()");
         assert_eq!(expr, parse("all()&none()"));
     }
 
     #[test]
     fn test_parse_expr_union() {
-        let expr = Expr::union(Expr::all(), Expr::none());
-        assert_eq!(expr, parse("all() or none()"));
+        let expr = Expr::union(OrOperator::LiteralOr, Expr::all(), Expr::none());
+        assert_eq_both_ways(&expr, "all() or none()");
         assert_eq!(expr, parse("all()or none()"));
-        assert_eq!(expr, parse("all() | none()"));
+
+        let expr = Expr::union(OrOperator::Pipe, Expr::all(), Expr::none());
+        assert_eq_both_ways(&expr, "all() | none()");
         assert_eq!(expr, parse("all()|none()"));
-        assert_eq!(expr, parse("all() + none()"));
+
+        let expr = Expr::union(OrOperator::Plus, Expr::all(), Expr::none());
+        assert_eq_both_ways(&expr, "all() + none()");
         assert_eq!(expr, parse("all()+none()"));
     }
 
     #[test]
     fn test_parse_expr_difference() {
-        let expr = Expr::difference(Expr::all(), Expr::none());
+        let expr = Expr::difference(DifferenceOperator::Minus, Expr::all(), Expr::none());
+        assert_eq_both_ways(&expr, "all() - none()");
         assert_eq!(expr, parse("all()-none()"));
-        assert_eq!(expr, parse("all() - none()"));
-        assert_eq!(expr, parse("all() and not none()"));
     }
 
     #[test]
     fn test_parse_expr_precedence() {
-        let expr = Expr::intersection(Expr::all().not(), Expr::none());
-        assert_eq!(expr, parse("not all() and none()"));
+        let expr = Expr::intersection(
+            AndOperator::LiteralAnd,
+            Expr::all().not(NotOperator::LiteralNot),
+            Expr::none(),
+        );
+        assert_eq_both_ways(&expr, "not all() and none()");
 
-        let expr = Expr::intersection(Expr::all(), Expr::none().not());
-        assert_eq!(expr, parse("all() and not none()"));
+        let expr = Expr::intersection(
+            AndOperator::LiteralAnd,
+            Expr::all(),
+            Expr::none().not(NotOperator::LiteralNot),
+        );
+        assert_eq_both_ways(&expr, "all() and not none()");
 
-        let expr = Expr::intersection(Expr::all(), Expr::none());
-        let expr = Expr::union(expr, Expr::all());
-        assert_eq!(expr, parse("all() & none() | all()"));
+        let expr = Expr::intersection(AndOperator::Ampersand, Expr::all(), Expr::none());
+        let expr = Expr::union(OrOperator::Pipe, expr, Expr::all());
+        assert_eq_both_ways(&expr, "all() & none() | all()");
 
-        let expr = Expr::intersection(Expr::none(), Expr::all());
-        let expr = Expr::union(Expr::all(), expr);
-        assert_eq!(expr, parse("all() | none() & all()"));
+        let expr = Expr::intersection(AndOperator::Ampersand, Expr::none(), Expr::all());
+        let expr = Expr::union(OrOperator::Pipe, Expr::all(), expr);
+        assert_eq_both_ways(&expr, "all() | none() & all()");
 
-        let expr = Expr::union(Expr::all(), Expr::none());
-        let expr = Expr::intersection(expr, Expr::all());
-        assert_eq!(expr, parse("(all() | none()) & all()"));
+        let expr = Expr::union(OrOperator::Pipe, Expr::all(), Expr::none()).parens();
+        let expr = Expr::intersection(AndOperator::Ampersand, expr, Expr::all());
+        assert_eq_both_ways(&expr, "(all() | none()) & all()");
 
-        let expr = Expr::intersection(Expr::none(), Expr::all());
-        let expr = Expr::union(Expr::all(), expr);
-        assert_eq!(expr, parse("all() | (none() & all())"));
+        let expr = Expr::intersection(AndOperator::Ampersand, Expr::none(), Expr::all()).parens();
+        let expr = Expr::union(OrOperator::Pipe, Expr::all(), expr);
+        assert_eq_both_ways(&expr, "all() | (none() & all())");
 
-        let expr = Expr::difference(Expr::all(), Expr::none());
-        let expr = Expr::intersection(expr, Expr::all());
-        assert_eq!(expr, parse("all() - none() & all()"));
+        let expr = Expr::difference(DifferenceOperator::Minus, Expr::all(), Expr::none());
+        let expr = Expr::intersection(AndOperator::Ampersand, expr, Expr::all());
+        assert_eq_both_ways(&expr, "all() - none() & all()");
 
-        let expr = Expr::intersection(Expr::all(), Expr::none());
-        let expr = Expr::difference(expr, Expr::all());
-        assert_eq!(expr, parse("all() & none() - all()"));
+        let expr = Expr::intersection(AndOperator::Ampersand, Expr::all(), Expr::none());
+        let expr = Expr::difference(DifferenceOperator::Minus, expr, Expr::all());
+        assert_eq_both_ways(&expr, "all() & none() - all()");
 
-        let expr = Expr::intersection(Expr::none(), Expr::all()).not();
-        assert_eq!(expr, parse("not (none() & all())"));
+        let expr = Expr::intersection(AndOperator::Ampersand, Expr::none(), Expr::all())
+            .parens()
+            .not(NotOperator::LiteralNot);
+        assert_eq_both_ways(&expr, "not (none() & all())");
     }
 
     #[test]
@@ -952,9 +1092,13 @@ mod tests {
         // accept escaped comma
         let expr = Expr::Set(SetDef::Test(
             NameMatcher::Contains("a,".to_string()),
-            (5, 3).into(),
+            (5, 4).into(),
         ));
-        assert_eq!(expr, parse(r"test(a\,)"));
+        assert_eq_both_ways(&expr, r"test(~a\,)");
+        assert_eq!(
+            expr.drop_source_span(),
+            parse(r"test(a\,)").drop_source_span()
+        );
 
         // string parsing is compatible with possible future syntax
         fn parse_future_syntax(input: Span) -> IResult<(Option<NameMatcher>, Option<NameMatcher>)> {
@@ -1121,9 +1265,15 @@ mod tests {
     #[test_strategy::proptest]
     fn proptest_expr_roundtrip(#[strategy(Expr::strategy())] expr: Expr<()>) {
         let expr_string = expr.to_string();
-        println!("expr string: {expr_string}");
+        eprintln!("expr string: {expr_string}");
         let expr_2 = parse(&expr_string).drop_source_span();
 
         assert_eq!(expr, expr_2, "exprs must roundtrip");
+    }
+
+    #[track_caller]
+    fn assert_eq_both_ways(expr: &Expr, string: &str) {
+        assert_eq!(expr, &parse(string));
+        assert_eq!(format!("{expr}"), string);
     }
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    parsing::{Expr, SetDef},
+    parsing::{AndOperator, DifferenceOperator, Expr, NotOperator, OrOperator, SetDef},
     NameMatcher,
 };
 use guppy::graph::cargo::BuildPlatform;
@@ -14,12 +14,90 @@ impl Expr<()> {
         let leaf = SetDef::strategy().prop_map(Self::Set);
 
         leaf.prop_recursive(8, 256, 10, |inner| {
+            // Since `Expr` explicitly tracks parentheses, the below blocks need to add parentheses
+            // in places where they'd be necessary to parse out. For example, if the original
+            // expression is:
+            //
+            // Not(And("foo", "bar"))
+            //
+            // then it will be printed out as:
+            //
+            // not foo and bar
+            //
+            // which will parse as:
+            //
+            // And(Not("foo"), "bar")
+            //
+            // Adding parentheses in the right locations prevents these sorts of cases from being
+            // generated.
             prop_oneof![
-                1 => inner.clone().prop_map(|a| Self::Not(Box::new(a))),
-                1 => (inner.clone(), inner.clone()).prop_map(|(a, b)| Self::Union(Box::new(a), Box::new(b))),
-                1 => (inner.clone(), inner).prop_map(|(a, b)| Self::Intersection(Box::new(a), Box::new(b))),
+                1 => (any::<NotOperator>(), inner.clone()).prop_map(|(op, a)| {
+                    // Add parens to any other operations inside a not operator.
+                    Self::Not(op, a.parenthesize_not())
+                }),
+                1 => (any::<OrOperator>(), inner.clone(), inner.clone()).prop_map(|(op, a, b)| {
+                    Self::Union(op, a.parenthesize_or_left(), b.parenthesize_or_right())
+                }),
+                1 => (any::<AndOperator>(), inner.clone(), inner.clone()).prop_map(|(op, a, b)| {
+                    // Add parens to an or operation inside an and operation.
+                    Self::Intersection(op, a.parenthesize_and_left(), b.parenthesize_and_right())
+                }),
+                1 => (any::<DifferenceOperator>(), inner.clone(), inner.clone()).prop_map(|(op, a, b)| {
+                    Self::Difference(op, a.parenthesize_and_left(), b.parenthesize_and_right())
+                }),
+                1 => inner.prop_map(|a| Self::Parens(Box::new(a))),
             ]
         })
+    }
+
+    /// Adds parens to any other operations inside a not operator.
+    fn parenthesize_not(self) -> Box<Self> {
+        match &self {
+            Self::Union(_, _, _) | Self::Intersection(_, _, _) | Self::Difference(_, _, _) => {
+                Box::new(Self::Parens(Box::new(self)))
+            }
+            Self::Set(_) | Self::Not(_, _) | Self::Parens(_) => Box::new(self),
+        }
+    }
+
+    /// This is currently a no-op.
+    fn parenthesize_or_left(self) -> Box<Self> {
+        Box::new(self)
+    }
+
+    /// Adds parens to an or operation inside the right side of an or operation.
+    fn parenthesize_or_right(self) -> Box<Self> {
+        match &self {
+            Self::Union(_, _, _) => Box::new(Self::Parens(Box::new(self))),
+            Self::Set(_)
+            | Self::Intersection(_, _, _)
+            | Self::Difference(_, _, _)
+            | Self::Not(_, _)
+            | Self::Parens(_) => Box::new(self),
+        }
+    }
+
+    /// Adds parens to an or operation inside the left side of an and or difference operation.
+    fn parenthesize_and_left(self) -> Box<Self> {
+        match &self {
+            Self::Union(_, _, _) => Box::new(Self::Parens(Box::new(self))),
+            Self::Set(_)
+            | Self::Intersection(_, _, _)
+            | Self::Difference(_, _, _)
+            | Self::Not(_, _)
+            | Self::Parens(_) => Box::new(self),
+        }
+    }
+
+    /// Adds parens to an or, and, or difference operation inside the right side of an and
+    /// or difference operation.
+    fn parenthesize_and_right(self) -> Box<Self> {
+        match &self {
+            Self::Union(_, _, _) | Self::Intersection(_, _, _) | Self::Difference(_, _, _) => {
+                Box::new(Self::Parens(Box::new(self)))
+            }
+            Self::Set(_) | Self::Not(_, _) | Self::Parens(_) => Box::new(self),
+        }
     }
 }
 
