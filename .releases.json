@@ -4,9 +4,65 @@
       "latest": "0.9",
       "ranges": {
         "0.9": {
-          "latest": "0.9.52",
+          "latest": "0.9.53",
           "is_prerelease": false,
           "versions": {
+            "0.9.53": {
+              "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.53",
+              "status": "active",
+              "locations": [
+                {
+                  "target": "x86_64-unknown-linux-gnu",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-x86_64-unknown-linux-gnu.tar.gz"
+                },
+                {
+                  "target": "x86_64-unknown-linux-musl",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-x86_64-unknown-linux-musl.tar.gz"
+                },
+                {
+                  "target": "aarch64-unknown-linux-gnu",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-aarch64-unknown-linux-gnu.tar.gz"
+                },
+                {
+                  "target": "x86_64-pc-windows-msvc",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-x86_64-pc-windows-msvc.tar.gz"
+                },
+                {
+                  "target": "x86_64-pc-windows-msvc",
+                  "format": "zip",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-x86_64-pc-windows-msvc.zip"
+                },
+                {
+                  "target": "i686-pc-windows-msvc",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-i686-pc-windows-msvc.tar.gz"
+                },
+                {
+                  "target": "i686-pc-windows-msvc",
+                  "format": "zip",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-i686-pc-windows-msvc.zip"
+                },
+                {
+                  "target": "universal-apple-darwin",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-universal-apple-darwin.tar.gz"
+                },
+                {
+                  "target": "x86_64-unknown-freebsd",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-x86_64-unknown-freebsd.tar.gz"
+                },
+                {
+                  "target": "x86_64-unknown-illumos",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-x86_64-unknown-illumos.tar.gz"
+                }
+              ]
+            },
             "0.9.52": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.52",
               "status": "active",
