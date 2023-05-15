@@ -140,7 +140,7 @@ impl<Source: Copy> TestSettings<Source> {
                 continue;
             }
 
-            if let Some((_, expr)) = &override_.data.expr {
+            if let Some(expr) = &override_.data.expr {
                 if !expr.matches_test(query) {
                     continue;
                 }
@@ -327,7 +327,7 @@ pub(crate) struct OverrideId {
 #[derive(Clone, Debug)]
 pub(super) struct ProfileOverrideData {
     target_spec: Option<TargetSpec>,
-    expr: Option<(String, FilteringExpr)>,
+    expr: Option<FilteringExpr>,
     threads_required: Option<ThreadsRequired>,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
@@ -362,7 +362,7 @@ impl CompiledOverride<PreBuildPlatform> {
             .map(|platform_str| TargetSpec::new(platform_str.to_owned()))
             .transpose();
         let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(FilteringExpr::parse(filter, graph).map(|expr| (filter.clone(), expr))).transpose()
+            Some(FilteringExpr::parse(filter.clone(), graph)).transpose()
         });
 
         match (target_spec, filter_expr) {
@@ -446,12 +446,9 @@ impl CompiledOverride<FinalConfig> {
         self.data.target_spec.as_ref()
     }
 
-    /// Returns the filter string and expression, if any.
-    pub(crate) fn filter(&self) -> Option<(&str, &FilteringExpr)> {
-        self.data
-            .expr
-            .as_ref()
-            .map(|(filter, expr)| (filter.as_str(), expr))
+    /// Returns the filter expression, if any.
+    pub(crate) fn filter(&self) -> Option<&FilteringExpr> {
+        self.data.expr.as_ref()
     }
 }
 

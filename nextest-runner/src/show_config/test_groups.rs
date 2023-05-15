@@ -161,11 +161,11 @@ impl<'a> ShowTestGroups<'a> {
                     override_id.profile_name.style(styles.profile),
                 )?;
 
-                if let Some((filter_str, _)) = data.override_.filter() {
+                if let Some(expr) = data.override_.filter() {
                     write!(
                         writer,
                         " with filter {}",
-                        QuotedDisplay(filter_str).style(styles.filter)
+                        QuotedDisplay(&expr.parsed).style(styles.filter)
                     )?;
                 }
                 if let Some(target_spec) = data.override_.target_spec() {

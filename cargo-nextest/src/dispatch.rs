@@ -1082,7 +1082,7 @@ impl App {
             .build_filter
             .filter_expr
             .iter()
-            .map(|input| FilteringExpr::parse(input, self.base.graph()))
+            .map(|input| FilteringExpr::parse(input.clone(), self.base.graph()))
             .partition_result();
 
         if !all_errors.is_empty() {

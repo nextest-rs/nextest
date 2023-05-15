@@ -182,7 +182,8 @@ fn test_run() -> Result<()> {
 fn test_run_ignored() -> Result<()> {
     set_env_vars();
 
-    let expr = FilteringExpr::parse("not test(test_slow_timeout)", &PACKAGE_GRAPH).unwrap();
+    let expr =
+        FilteringExpr::parse("not test(test_slow_timeout)".to_owned(), &PACKAGE_GRAPH).unwrap();
 
     let test_filter = TestFilterBuilder::new(
         RunIgnored::IgnoredOnly,
@@ -255,7 +256,7 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
     set_env_vars();
 
     let expr = FilteringExpr::parse(
-        "test(test_multiply_two) | test(=tests::call_dylib_add_two)",
+        "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
         &PACKAGE_GRAPH,
     )
     .expect("filter expression is valid");
@@ -318,7 +319,7 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
     set_env_vars();
 
     let expr = FilteringExpr::parse(
-        "test(test_multiply_two) | test(=tests::call_dylib_add_two)",
+        "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
         &PACKAGE_GRAPH,
     )
     .expect("filter expression is valid");
@@ -526,7 +527,8 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
 fn test_termination() -> Result<()> {
     set_env_vars();
 
-    let expr = FilteringExpr::parse("test(/^test_slow_timeout/)", &PACKAGE_GRAPH).unwrap();
+    let expr =
+        FilteringExpr::parse("test(/^test_slow_timeout/)".to_owned(), &PACKAGE_GRAPH).unwrap();
     let test_filter = TestFilterBuilder::new(
         RunIgnored::IgnoredOnly,
         None,

@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    parsing::{AndOperator, DifferenceOperator, Expr, NotOperator, OrOperator, SetDef},
+    parsing::{AndOperator, DifferenceOperator, NotOperator, OrOperator, ParsedExpr, SetDef},
     NameMatcher,
 };
 use guppy::graph::cargo::BuildPlatform;
 use proptest::prelude::*;
 
-impl Expr<()> {
+impl ParsedExpr<()> {
     #[doc(hidden)]
     pub fn strategy() -> impl Strategy<Value = Self> {
         let leaf = SetDef::strategy().prop_map(Self::Set);
