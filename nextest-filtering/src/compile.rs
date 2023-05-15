@@ -142,5 +142,10 @@ fn compile_expr(
         Intersection(expr_1, expr_2) => {
             FilteringExpr::Intersection(Box::new(expr_1), Box::new(expr_2))
         }
+        Difference(expr_1, expr_2) => FilteringExpr::Intersection(
+            Box::new(expr_1),
+            Box::new(FilteringExpr::Not(Box::new(expr_2))),
+        ),
+        Parens(expr_1) => expr_1,
     })
 }

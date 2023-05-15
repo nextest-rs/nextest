@@ -205,6 +205,8 @@ impl FilteringExpr {
                 // TODO: or_else/and_then?
                 Union(a, b) => a.logic_or(b),
                 Intersection(a, b) => a.logic_and(b),
+                Difference(a, b) => a.logic_and(b.logic_not()),
+                Parens(a) => a,
             }
         })
     }
@@ -217,6 +219,8 @@ impl FilteringExpr {
             Not(a) => !a,
             Union(a, b) => a || b,
             Intersection(a, b) => a && b,
+            Difference(a, b) => a && !b,
+            Parens(a) => a,
         })
     }
 
@@ -325,6 +329,8 @@ pub(crate) enum ExprLayer<Set, A> {
     Not(A),
     Union(A, A),
     Intersection(A, A),
+    Difference(A, A),
+    Parens(A),
     Set(Set),
 }
 
@@ -340,6 +346,8 @@ impl<A, Set, B> MapLayer<B> for ExprLayer<Set, A> {
             Not(a) => Not(f(a)),
             Union(a, b) => Union(f(a), f(b)),
             Intersection(a, b) => Intersection(f(a), f(b)),
+            Difference(a, b) => Difference(f(a), f(b)),
+            Parens(a) => Parens(f(a)),
             Set(f) => Set(f),
         }
     }
@@ -370,11 +378,15 @@ impl<'a> Project for Wrapped<&'a Expr> {
 
     fn project(self) -> Self::To {
         match self.0 {
-            Expr::Not(a) => ExprLayer::Not(Wrapped(a.as_ref())),
-            Expr::Union(a, b) => ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref())),
-            Expr::Intersection(a, b) => {
+            Expr::Not(_, a) => ExprLayer::Not(Wrapped(a.as_ref())),
+            Expr::Union(_, a, b) => ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref())),
+            Expr::Intersection(_, a, b) => {
                 ExprLayer::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
             }
+            Expr::Difference(_, a, b) => {
+                ExprLayer::Difference(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
+            }
+            Expr::Parens(a) => ExprLayer::Parens(Wrapped(a.as_ref())),
             Expr::Set(f) => ExprLayer::Set(f),
         }
     }
