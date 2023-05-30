@@ -31,6 +31,7 @@
 - [Integrations with other tools](book/integrations.md)
   - [Test coverage](book/test-coverage.md)
   - [The Miri interpreter](book/miri.md)
+  - [Criterion benchmarks](book/benchmark-integration.md)
 ---
 - [Stability policy](book/stability.md)
 - [Experimental features](book/experimental-features.md)
