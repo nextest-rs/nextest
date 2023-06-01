@@ -8,15 +8,15 @@ Many benchmarks depend on the system that's running them being [quiescent](https
 
 However, it can still be good to verify in CI that benchmarks compile correctly, and don't panic when run. To support this use case, libraries like Criterion support running benchmarks in "test mode".
 
-For criterion and nextest, benchmarks are typically run with the following settings:
+For criterion and nextest, benchmarks are run with the following settings:
 
-* With the `test` Cargo profile (typically the same as the `dev` profile, and can be overridden with `--cargo-profile`)
-* With one iteration of the benchmark
+* With the `test` Cargo profile. This is typically the same as the `dev` profile, and can be overridden with `--cargo-profile`.
+* With one iteration of the benchmark.
 
 ## Requirements
 
 * Criterion 0.5.0 or above; previous versions are not compatible with nextest.
-* Any recent version of cargo-nextest
+* Any recent version of cargo-nextest.
 
 ## Running benchmarks
 
