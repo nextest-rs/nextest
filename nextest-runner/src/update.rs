@@ -236,6 +236,7 @@ impl<'a> MuktiUpdateContext<'a> {
             ))
         })?;
         let tmp_backup_dir_prefix = format!("__{}_backup", self.context.package_name);
+        #[allow(clippy::redundant_clone)]
         let tmp_backup_filename = tmp_backup_dir_prefix.clone();
 
         if cfg!(windows) {
