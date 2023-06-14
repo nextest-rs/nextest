@@ -14,7 +14,7 @@ rust-version = "1.66"
 [dependencies]
 camino = "1.1.4"
 cfg-if = "1.0.0"
-clap = { version = "4.3.0", features = ["derive", "env"] }
+clap = { version = "4.3.3", features = ["derive", "env"] }
 # we don't use the tracing support
 color-eyre = { version = "0.6.2", default-features = false }
 dialoguer = "0.10.4"
@@ -23,13 +23,13 @@ enable-ansi-support = "0.2.1"
 # we don't use the default formatter so we don't need default features
 env_logger = { version = "0.10.0", default-features = false }
 guppy = "0.15.2"
-log = "0.4.18"
+log = "0.4.19"
 itertools = "0.10.5"
 miette = { version = "5.9.0", features = ["fancy"] }
 nextest-filtering = { version = "=0.4.0", path = "../nextest-filtering" }
 nextest-runner = { version = "=0.39.0", path = "../nextest-runner" }
 nextest-metadata = { version = "=0.8.2", path = "../nextest-metadata" }
-once_cell = "1.17.2"
+once_cell = "1.18.0"
 owo-colors = { version = "3.5.0", features = ["supports-colors"] }
 pathdiff = { version = "0.2.1", features = ["camino"] }
 semver = "1.0.17"
