@@ -570,9 +570,21 @@ impl<'a> TestReporterImpl<'a> {
 
                 let count_style = self.styles.count;
 
+                let tests_str: &str = if test_list.run_count() == 1 {
+                    "test"
+                } else {
+                    "tests"
+                };
+
+                let binaries_str = if test_list.binary_count() == 1 {
+                    "binary"
+                } else {
+                    "binaries"
+                };
+
                 write!(
                     writer,
-                    "{} tests across {} binaries",
+                    "{} {tests_str} across {} {binaries_str}",
                     test_list.run_count().style(count_style),
                     test_list.binary_count().style(count_style),
                 )?;
@@ -831,10 +843,17 @@ impl<'a> TestReporterImpl<'a> {
                     )?;
                 }
 
+                let tests_str = if run_stats.finished_count == 1 && run_stats.initial_run_count == 1
+                {
+                    "test"
+                } else {
+                    "tests"
+                };
+
                 let mut summary_str = String::new();
                 // Writing to a string is infallible.
                 let _ = write_summary_str(run_stats, &self.styles, &mut summary_str);
-                writeln!(writer, " tests run: {summary_str}")?;
+                writeln!(writer, " {tests_str} run: {summary_str}")?;
 
                 // Don't print out final outputs if canceled due to Ctrl-C.
                 if self.cancel_status < Some(CancelReason::Signal) {
