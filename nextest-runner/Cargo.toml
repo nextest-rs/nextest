@@ -18,6 +18,7 @@ async-scoped = { version = "0.7.1", features = ["use-tokio"] }
 future-queue = "0.3.0"
 bytes = "1.4.0"
 camino = { version = "1.1.4", features = ["serde1"] }
+camino-tempfile = "1.0.2"
 config = { version = "0.13.3", default-features = false, features = ["toml"] }
 cargo_metadata = "0.15.4"
 cfg-if = "1.0.0"
@@ -54,7 +55,6 @@ tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
 target-spec = { version = "1.4.0", features = ["summaries"] }
 target-spec-miette = "0.1.0"
-tempfile = "3.6.0"
 thiserror = "1.0.40"
 # For parsing of .cargo/config.toml files
 tokio = { version = "1.28.2", features = [

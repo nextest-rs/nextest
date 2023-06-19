@@ -863,7 +863,7 @@ struct JunitImpl {
 mod tests {
     use super::*;
     use crate::config::test_helpers::*;
-    use tempfile::tempdir;
+    use camino_tempfile::tempdir;
 
     #[test]
     fn default_config_is_valid() {
@@ -906,9 +906,8 @@ mod tests {
         "#;
 
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
         let workspace_root = graph.workspace().root();
         let tool_path = workspace_root.join(".config/tool.toml");
         std::fs::write(&tool_path, tool_config_contents).unwrap();

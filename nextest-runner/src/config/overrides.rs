@@ -494,10 +494,10 @@ mod tests {
     use super::*;
     use crate::config::{test_helpers::*, NextestConfig};
     use camino::Utf8Path;
+    use camino_tempfile::tempdir;
     use indoc::indoc;
     use nextest_filtering::BinaryQuery;
     use std::num::NonZeroUsize;
-    use tempfile::tempdir;
     use test_case::test_case;
 
     /// Basic test to ensure overrides work. Add new override parameters to this test.
@@ -530,9 +530,8 @@ mod tests {
         "#};
 
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
 
         let nextest_config_result =

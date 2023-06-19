@@ -93,9 +93,8 @@ impl<'de> Deserialize<'de> for ThreadsRequired {
 mod tests {
     use super::*;
     use crate::config::{test_helpers::*, NextestConfig};
-    use camino::Utf8Path;
+    use camino_tempfile::tempdir;
     use indoc::indoc;
-    use tempfile::tempdir;
     use test_case::test_case;
 
     #[test_case(
@@ -165,9 +164,8 @@ mod tests {
     )]
     fn parse_threads_required(config_contents: &str, threads_required: Option<usize>) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
 
         let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None, []);
         match threads_required {

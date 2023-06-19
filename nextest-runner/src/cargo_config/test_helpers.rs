@@ -1,11 +1,11 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use camino_tempfile::Utf8TempDir;
 use color_eyre::eyre::{Context, Result};
-use tempfile::TempDir;
 
-pub(super) fn setup_temp_dir() -> Result<TempDir> {
-    let dir = tempfile::Builder::new()
+pub(super) fn setup_temp_dir() -> Result<Utf8TempDir> {
+    let dir = camino_tempfile::Builder::new()
         .tempdir()
         .wrap_err("error creating tempdir")?;
 

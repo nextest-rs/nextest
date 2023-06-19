@@ -57,9 +57,9 @@ impl FromStr for ToolConfigFile {
 mod tests {
     use super::*;
     use crate::config::{test_helpers::*, NextestConfig, RetryPolicy, TestGroup};
+    use camino_tempfile::tempdir;
     use guppy::graph::cargo::BuildPlatform;
     use nextest_filtering::{BinaryQuery, TestQuery};
-    use tempfile::tempdir;
 
     #[test]
     fn parse_tool_config_file() {
@@ -163,9 +163,8 @@ mod tests {
         "#;
 
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
         let workspace_root = graph.workspace().root();
         let tool1_path = workspace_root.join(".config/tool1.toml");
         let tool2_path = workspace_root.join(".config/tool2.toml");

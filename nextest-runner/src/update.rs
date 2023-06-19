@@ -252,21 +252,14 @@ impl<'a> MuktiUpdateContext<'a> {
         }
 
         let tmp_archive_dir_prefix = format!("{}_download", self.context.package_name);
-        let tmp_archive_dir = tempfile::Builder::new()
+        let tmp_archive_dir = camino_tempfile::Builder::new()
             .prefix(&tmp_archive_dir_prefix)
             .tempdir_in(tmp_dir_parent)
             .map_err(|error| UpdateError::TempDirCreate {
                 location: tmp_dir_parent.to_owned(),
                 error,
             })?;
-        let tmp_dir_path: &Utf8Path =
-            tmp_archive_dir
-                .path()
-                .try_into()
-                .map_err(|error| UpdateError::TempDirCreate {
-                    location: tmp_dir_parent.to_owned(),
-                    error: io::Error::new(io::ErrorKind::InvalidData, error),
-                })?;
+        let tmp_dir_path: &Utf8Path = tmp_archive_dir.path();
         let tmp_archive_path =
             tmp_dir_path.join(format!("{}.{TAR_GZ_SUFFIX}", self.context.package_name));
         let tmp_archive = fs::File::create(&tmp_archive_path).map_err(|error| {
@@ -311,7 +304,10 @@ impl<'a> MuktiUpdateContext<'a> {
         // Now extract data from this archive.
         Extract::from_source(tmp_archive_path.as_std_path())
             .archive(ArchiveKind::Tar(Some(Compression::Gz)))
-            .extract_file(tmp_archive_dir.path(), self.bin_path_in_archive)
+            .extract_file(
+                tmp_archive_dir.path().as_std_path(),
+                self.bin_path_in_archive,
+            )
             .map_err(UpdateError::SelfUpdate)?;
 
         // Since we're currently restricted to .tar.gz which carries metadata with it, there's no
@@ -320,7 +316,7 @@ impl<'a> MuktiUpdateContext<'a> {
         let new_exe = tmp_dir_path.join(self.bin_path_in_archive);
         log::debug!(target: "nextest-runner::update", "extracted to {new_exe}, replacing existing binary");
 
-        let tmp_backup_dir = tempfile::Builder::new()
+        let tmp_backup_dir = camino_tempfile::Builder::new()
             .prefix(&tmp_backup_dir_prefix)
             .tempdir_in(tmp_dir_parent)
             .map_err(|error| UpdateError::TempDirCreate {
@@ -328,14 +324,7 @@ impl<'a> MuktiUpdateContext<'a> {
                 error,
             })?;
 
-        let tmp_backup_dir_path: &Utf8Path =
-            tmp_backup_dir
-                .path()
-                .try_into()
-                .map_err(|error| UpdateError::TempDirCreate {
-                    location: tmp_dir_parent.to_owned(),
-                    error: io::Error::new(io::ErrorKind::InvalidData, error),
-                })?;
+        let tmp_backup_dir_path: &Utf8Path = tmp_backup_dir.path();
         let tmp_file_path = tmp_backup_dir_path.join(&tmp_backup_filename);
 
         Move::from_source(&new_exe)

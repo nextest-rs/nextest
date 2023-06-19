@@ -7,6 +7,7 @@ use crate::{
     list::BinaryList,
 };
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino_tempfile::Utf8TempDir;
 use guppy::{graph::PackageGraph, CargoMetadata};
 use nextest_metadata::BinaryListSummary;
 use std::{
@@ -14,7 +15,6 @@ use std::{
     io::{self, Seek},
     time::Instant,
 };
-use tempfile::TempDir;
 
 #[derive(Debug)]
 pub(crate) struct Unarchiver<'a> {
@@ -38,21 +38,15 @@ impl<'a> Unarchiver<'a> {
         let (dest_dir, temp_dir) = match dest {
             ExtractDestination::TempDir { persist } => {
                 // Create a new temporary directory and extract contents to it.
-                let temp_dir = tempfile::Builder::new()
+                let temp_dir = camino_tempfile::Builder::new()
                     .prefix("nextest-archive-")
                     .tempdir()
                     .map_err(ArchiveExtractError::TempDirCreate)?;
-                let dest_dir: Utf8PathBuf =
-                    temp_dir.path().to_path_buf().try_into().map_err(|err| {
-                        ArchiveExtractError::TempDirCreate(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            err,
-                        ))
-                    })?;
 
-                let dest_dir = dest_dir.canonicalize_utf8().map_err(|error| {
+                let dest_dir: Utf8PathBuf = temp_dir.path().to_path_buf();
+                let dest_dir = temp_dir.path().canonicalize_utf8().map_err(|error| {
                     ArchiveExtractError::DestDirCanonicalization {
-                        dir: dest_dir.to_owned(),
+                        dir: dest_dir,
                         error,
                     }
                 })?;
@@ -211,8 +205,8 @@ pub(crate) struct ExtractInfo {
     /// The destination directory.
     pub dest_dir: Utf8PathBuf,
 
-    /// An optional [`TempDir`], used for cleanup.
-    pub temp_dir: Option<TempDir>,
+    /// An optional [`Utf8TempDir`], used for cleanup.
+    pub temp_dir: Option<Utf8TempDir>,
 
     /// The [`BinaryList`] read from the archive.
     pub binary_list: BinaryList,

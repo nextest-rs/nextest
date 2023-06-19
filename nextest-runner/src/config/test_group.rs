@@ -127,10 +127,10 @@ mod tests {
         errors::{ConfigParseErrorKind, UnknownTestGroupError},
     };
     use camino::Utf8Path;
+    use camino_tempfile::tempdir;
     use indoc::indoc;
     use maplit::btreeset;
     use std::collections::BTreeSet;
-    use tempfile::tempdir;
     use test_case::test_case;
 
     #[derive(Debug)]
@@ -193,9 +193,8 @@ mod tests {
             max-threads = 1
         "#};
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
         let workspace_root = graph.workspace().root();
         let tool_path = workspace_root.join(".config/tool.toml");
         std::fs::write(&tool_path, input).unwrap();

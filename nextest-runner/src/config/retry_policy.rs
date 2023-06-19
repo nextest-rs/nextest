@@ -173,11 +173,11 @@ mod tests {
         errors::ConfigParseErrorKind,
     };
     use camino::Utf8Path;
+    use camino_tempfile::tempdir;
     use config::ConfigError;
     use guppy::graph::cargo::BuildPlatform;
     use indoc::indoc;
     use nextest_filtering::{BinaryQuery, TestQuery};
-    use tempfile::tempdir;
     use test_case::test_case;
 
     #[test]
@@ -203,9 +203,8 @@ mod tests {
         "#};
 
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
 
         let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None, [])
             .expect("config is valid");

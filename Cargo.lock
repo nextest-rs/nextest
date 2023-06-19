@@ -311,6 +311,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "camino-tempfile"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ab15a83d13f75dbd86f082bdefd160b628476ef58d3b900a0ef74e001bb097"
+dependencies = [
+ "camino",
+ "tempfile",
+]
+
+[[package]]
 name = "cargo-nextest"
 version = "0.9.53"
 dependencies = [
@@ -1575,6 +1585,7 @@ dependencies = [
  "atomicwrites",
  "bytes",
  "camino",
+ "camino-tempfile",
  "cargo_metadata",
  "cfg-if",
  "chrono",
@@ -1629,7 +1640,6 @@ dependencies = [
  "tar",
  "target-spec",
  "target-spec-miette",
- "tempfile",
  "test-case",
  "thiserror",
  "tokio",

@@ -363,14 +363,14 @@ impl fmt::Display for PlatformRunnerSource {
 mod tests {
     use super::*;
     use camino::Utf8Path;
+    use camino_tempfile::Utf8TempDir;
     use color_eyre::eyre::{Context, Result};
     use target_spec::TargetFeatures;
-    use tempfile::TempDir;
 
     #[test]
     fn test_find_config() {
         let dir = setup_temp_dir().unwrap();
-        let dir_path = Utf8PathBuf::try_from(dir.path().canonicalize().unwrap()).unwrap();
+        let dir_path = dir.path().canonicalize_utf8().unwrap();
         let dir_foo_path = dir_path.join("foo");
         let dir_foo_bar_path = dir_foo_path.join("bar");
 
@@ -595,8 +595,8 @@ mod tests {
         );
     }
 
-    fn setup_temp_dir() -> Result<TempDir> {
-        let dir = tempfile::Builder::new()
+    fn setup_temp_dir() -> Result<Utf8TempDir> {
+        let dir = camino_tempfile::Builder::new()
             .tempdir()
             .wrap_err("error creating tempdir")?;
 

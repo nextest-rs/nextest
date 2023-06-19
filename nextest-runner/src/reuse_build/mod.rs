@@ -14,9 +14,9 @@ use crate::{
     list::BinaryList,
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use camino_tempfile::Utf8TempDir;
 use guppy::graph::PackageGraph;
 use std::{fs, io, sync::Arc};
-use tempfile::TempDir;
 
 mod archive_reporter;
 mod archiver;
@@ -42,7 +42,7 @@ pub struct ReuseBuildInfo {
     pub binaries_metadata: Option<MetadataWithRemap<BinaryList>>,
 
     /// Optional temporary directory used for cleanup.
-    _temp_dir: Option<TempDir>,
+    _temp_dir: Option<Utf8TempDir>,
 }
 
 impl ReuseBuildInfo {
@@ -262,7 +262,6 @@ impl PathMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
     /// Ensure that PathMapper turns relative paths into absolute ones.
     #[test]
@@ -272,7 +271,7 @@ mod tests {
             .try_into()
             .expect("current dir is valid UTF-8");
 
-        let temp_workspace_root = TempDir::new().expect("new temp dir created");
+        let temp_workspace_root = Utf8TempDir::new().expect("new temp dir created");
         let workspace_root_path: Utf8PathBuf = temp_workspace_root
             .path()
             // On Mac, the temp dir is a symlink, so canonicalize it.
@@ -283,7 +282,7 @@ mod tests {
         let rel_workspace_root = pathdiff::diff_utf8_paths(&workspace_root_path, &current_dir)
             .expect("abs to abs diff is non-None");
 
-        let temp_target_dir = TempDir::new().expect("new temp dir created");
+        let temp_target_dir = Utf8TempDir::new().expect("new temp dir created");
         let target_dir_path: Utf8PathBuf = temp_target_dir
             .path()
             .canonicalize()
