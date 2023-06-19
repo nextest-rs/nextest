@@ -1559,9 +1559,8 @@ fn warn_on_err(thing: &str, err: &(dyn std::error::Error)) -> Result<(), std::fm
     while let Some(err) = next_error {
         write!(
             s,
-            "\n{} {}",
-            "caused by:"
-                .if_supports_color(Stream::Stderr, |s| s.style(Style::new().bold().yellow())),
+            "\n  {} {}",
+            "caused by:".if_supports_color(Stream::Stderr, |s| s.style(Style::new().yellow())),
             err
         )?;
         next_error = err.source();
