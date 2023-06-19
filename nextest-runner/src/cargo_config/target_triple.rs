@@ -301,8 +301,10 @@ mod tests {
             })
         );
 
-        // --config <path> should be parsed correctly. Config files currently come after
-        // keys and values passed in via --config, and after the environment.
+        // --config <path> should be parsed correctly. Config files passed in via --config currently
+        // come after keys and values passed in via --config, and before the environment (this
+        // didn't used to be the case in older versions of Rust, but is now the case as of Rust 1.68
+        // with https://github.com/rust-lang/cargo/pull/11077).
         assert_eq!(
             find_target_triple(&["extra-config.toml"], None, &dir_foo_path, &dir_path),
             Some(TargetTriple {
@@ -320,8 +322,10 @@ mod tests {
                 &dir_path
             ),
             Some(TargetTriple {
-                platform: platform("aarch64-pc-windows-msvc"),
-                source: TargetTripleSource::Env,
+                platform: platform("aarch64-unknown-linux-gnu"),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::File(dir_foo_path.join("extra-config.toml")),
+                },
             })
         );
         assert_eq!(

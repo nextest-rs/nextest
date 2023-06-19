@@ -77,9 +77,14 @@ impl CargoConfigs {
     pub(crate) fn discovered_configs(
         &self,
     ) -> impl Iterator<Item = DiscoveredConfig<'_>> + DoubleEndedIterator + '_ {
-        // TODO/NOTE: https://github.com/rust-lang/cargo/issues/10992 means that currently
-        // environment variables are privileged over files passed in over the CLI. Once this
-        // behavior is fixed in upstream cargo, it should also be fixed here.
+        // NOTE: The order is:
+        // 1. --config k=v
+        // 2. --config <file>
+        // 3. Environment variables
+        // 4. .cargo/configs.
+        //
+        // 2 and 3 used to be reversed in older versions of Rust, but this has been fixed as of Rust
+        // 1.68 (https://github.com/rust-lang/cargo/pull/11077).
         let cli_option_iter = self.cli_configs.iter().filter_map(|(source, config)| {
             matches!(source, CargoConfigSource::CliOption)
                 .then(|| DiscoveredConfig::CliOption { config, source })
@@ -96,8 +101,8 @@ impl CargoConfigs {
             .map(|(source, config)| DiscoveredConfig::File { config, source });
 
         cli_option_iter
-            .chain(std::iter::once(DiscoveredConfig::Env))
             .chain(cli_file_iter)
+            .chain(std::iter::once(DiscoveredConfig::Env))
             .chain(cargo_config_file_iter)
     }
 }
