@@ -289,7 +289,7 @@ mod tests {
         expected: Result<BTreeSet<CustomTestGroup>, GroupExpectedError>,
     ) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path();
 
         let graph = temp_workspace(workspace_path, config_contents);
         let workspace_root = graph.workspace().root();
@@ -429,7 +429,7 @@ mod tests {
         expected_known_groups: BTreeSet<TestGroup>,
     ) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path();
 
         let graph = temp_workspace(workspace_path, user_config);
         let workspace_root = graph.workspace().root();

@@ -371,7 +371,7 @@ mod tests {
         ; "max-delay greater than delay")]
     fn parse_retries_invalid(config_contents: &str, expected_message: &str) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path();
 
         let graph = temp_workspace(workspace_path, config_contents);
 
@@ -601,7 +601,7 @@ mod tests {
         retries: RetryPolicy,
     ) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path();
 
         let graph = temp_workspace(workspace_path, config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();

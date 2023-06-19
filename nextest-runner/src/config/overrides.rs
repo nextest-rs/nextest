@@ -689,7 +689,7 @@ mod tests {
         expected_reports: &[MietteJsonReport],
     ) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path().try_into().unwrap();
+        let workspace_path: &Utf8Path = workspace_dir.path();
 
         let graph = temp_workspace(workspace_path, config_contents);
 
