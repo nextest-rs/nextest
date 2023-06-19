@@ -385,9 +385,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.15.1"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8790cf1286da485c72cf5fc7aeba308438800036ec67d89425924c4807268c9"
+checksum = "215c0072ecc28f92eeb0eea38ba63ddfcb65c2828c46311d646f1a3ff5f9841c"
 dependencies = [
  "smallvec",
  "target-lexicon",
@@ -954,9 +954,9 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.15.2"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f822a2716041492e071691606474f5a7e4fa7c2acbfd7da7b29884fb448291c7"
+checksum = "7908f6137bed4f010d97c1863652aad548026a3460c1849ee1cb32ba7654e444"
 dependencies = [
  "camino",
  "cargo_metadata",
@@ -2719,21 +2719,22 @@ checksum = "fd1ba337640d60c3e96bc6f0638a939b9c9a7f2c316a1598c279828b3d1dc8c5"
 
 [[package]]
 name = "target-spec"
-version = "1.4.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bf4306559bd50cb358e7af5692694d6f6fad95cf2c0bea2571dd419f5298e12"
+checksum = "afb5c6b004c233467bdcdfbf856f45bfbe0e9aacf20cc31617c98fb4f5080af5"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
  "serde",
+ "serde_json",
  "target-lexicon",
 ]
 
 [[package]]
 name = "target-spec-miette"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d05f99f2cd9ad6c8431ab04c9040e0da05b9ef2f05ca4a48c63939e285ee3cad"
+checksum = "1f3440b0d3af524ba5fffdc27f18cf755f2b235dbc2d66a54fa2428c4ba35d14"
 dependencies = [
  "guppy-workspace-hack",
  "miette",

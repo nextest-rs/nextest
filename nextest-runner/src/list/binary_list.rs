@@ -365,7 +365,10 @@ impl<'g> BinaryListBuildState<'g> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{cargo_config::TargetTripleSource, list::SerializableFormat};
+    use crate::{
+        cargo_config::{TargetDefinitionLocation, TargetTripleSource},
+        list::SerializableFormat,
+    };
     use indoc::indoc;
     use maplit::btreeset;
     use pretty_assertions::assert_eq;
@@ -395,6 +398,7 @@ mod tests {
         let fake_triple = TargetTriple {
             platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
             source: TargetTripleSource::CliOption,
+            location: TargetDefinitionLocation::Builtin,
         };
         let mut rust_build_meta = RustBuildMeta::new("/fake/target", Some(fake_triple));
         rust_build_meta

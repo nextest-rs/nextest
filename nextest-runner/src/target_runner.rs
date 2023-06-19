@@ -225,7 +225,7 @@ impl PlatformRunner {
                         })?;
                 let args = runner_iter.map(String::from).collect();
                 (
-                    Self::normalize_runner(runner_binary, source.root(cwd)),
+                    Self::normalize_runner(runner_binary, source.resolve_dir(cwd)),
                     args,
                 )
             }
@@ -238,7 +238,7 @@ impl PlatformRunner {
                 } else {
                     let runner_binary = values.remove(0);
                     (
-                        Self::normalize_runner(&runner_binary, source.root(cwd)),
+                        Self::normalize_runner(&runner_binary, source.resolve_dir(cwd)),
                         values,
                     )
                 }
@@ -253,11 +253,11 @@ impl PlatformRunner {
     }
 
     // https://github.com/rust-lang/cargo/blob/40b674cd1115299034fafa34e7db3a9140b48a49/src/cargo/util/config/mod.rs#L735-L743
-    fn normalize_runner(runner_binary: &str, root: &Utf8Path) -> Utf8PathBuf {
+    fn normalize_runner(runner_binary: &str, resolve_dir: &Utf8Path) -> Utf8PathBuf {
         let is_path =
             runner_binary.contains('/') || (cfg!(windows) && runner_binary.contains('\\'));
         if is_path {
-            root.join(runner_binary)
+            resolve_dir.join(runner_binary)
         } else {
             // A pathless name.
             runner_binary.into()
@@ -313,26 +313,10 @@ pub enum PlatformRunnerSource {
 
 impl PlatformRunnerSource {
     // https://github.com/rust-lang/cargo/blob/3959f87158ea4f8733e2fcbe032b8a50ae0b6834/src/cargo/util/config/value.rs#L66-L75
-    fn root<'a>(&'a self, cwd: &'a Utf8Path) -> &'a Utf8Path {
+    fn resolve_dir<'a>(&'a self, cwd: &'a Utf8Path) -> &'a Utf8Path {
         match self {
-            Self::Env(_)
-            | Self::CargoConfig {
-                source: CargoConfigSource::CliOption,
-                ..
-            } => {
-                // Use the cwd as specified.
-                cwd
-            }
-            Self::CargoConfig {
-                source: CargoConfigSource::File(file),
-                ..
-            } => {
-                // The file is e.g. .cargo/config.toml -- go up two levels.
-                file.parent()
-                    .expect("got to .cargo")
-                    .parent()
-                    .expect("got to cwd")
-            }
+            Self::Env(_) => cwd,
+            Self::CargoConfig { source, .. } => source.resolve_dir(cwd),
         }
     }
 }
@@ -623,7 +607,8 @@ mod tests {
         terminate_search_at: &Utf8Path,
     ) -> Option<PlatformRunner> {
         let configs =
-            CargoConfigs::new_with_isolation(cli_configs, cwd, terminate_search_at).unwrap();
+            CargoConfigs::new_with_isolation(cli_configs, cwd, terminate_search_at, Vec::new())
+                .unwrap();
         PlatformRunner::find_config(&configs, &platform).unwrap()
     }
 

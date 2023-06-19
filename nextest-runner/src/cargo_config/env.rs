@@ -287,8 +287,13 @@ mod tests {
         let dir_foo_path = dir_path.join("foo");
         let dir_foo_bar_path = dir_foo_path.join("bar");
 
-        let configs =
-            CargoConfigs::new_with_isolation(&[] as &[&str], &dir_foo_bar_path, &dir_path).unwrap();
+        let configs = CargoConfigs::new_with_isolation(
+            &[] as &[&str],
+            &dir_foo_bar_path,
+            &dir_path,
+            Vec::new(),
+        )
+        .unwrap();
         let env = EnvironmentMap::new(&configs);
         let var = env
             .map
@@ -300,6 +305,7 @@ mod tests {
             ["env.SOME_VAR=\"cli-config\""],
             &dir_foo_bar_path,
             &dir_path,
+            Vec::new(),
         )
         .unwrap();
         let env = EnvironmentMap::new(&configs);
@@ -321,6 +327,7 @@ mod tests {
             ["env.SOME_VAR={value = \"path\", relative = true }"],
             &dir_foo_bar_path,
             &dir_path,
+            Vec::new(),
         )
         .expect_err("CLI configs can't be relative");
 
@@ -328,6 +335,7 @@ mod tests {
             ["env.SOME_VAR.value=\"path\"", "env.SOME_VAR.relative=true"],
             &dir_foo_bar_path,
             &dir_path,
+            Vec::new(),
         )
         .expect_err("CLI configs can't be relative");
     }

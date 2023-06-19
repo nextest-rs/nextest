@@ -20,6 +20,25 @@ pub enum CargoConfigSource {
     File(Utf8PathBuf),
 }
 
+impl CargoConfigSource {
+    /// Returns the directory against which relative paths should be resolved.
+    pub(crate) fn resolve_dir<'a>(&'a self, cwd: &'a Utf8Path) -> &'a Utf8Path {
+        match self {
+            CargoConfigSource::CliOption => {
+                // Use the cwd as specified.
+                cwd
+            }
+            CargoConfigSource::File(file) => {
+                // The file is e.g. .cargo/config.toml -- go up two levels.
+                file.parent()
+                    .expect("got to .cargo")
+                    .parent()
+                    .expect("got to cwd")
+            }
+        }
+    }
+}
+
 /// A store for Cargo config files discovered from disk.
 ///
 /// This is required by [`TargetRunner`](crate::target_runner::TargetRunner) and for target triple
@@ -29,6 +48,7 @@ pub struct CargoConfigs {
     cli_configs: Vec<(CargoConfigSource, CargoConfig)>,
     cwd: Utf8PathBuf,
     discovered: Vec<(CargoConfigSource, CargoConfig)>,
+    target_paths: Vec<Utf8PathBuf>,
 }
 
 impl CargoConfigs {
@@ -44,10 +64,23 @@ impl CargoConfigs {
         let cli_configs = parse_cli_configs(&cwd, cli_configs.into_iter())?;
         let discovered = discover_impl(&cwd, None)?;
 
+        // Used for target discovery.
+        let mut target_paths = Vec::new();
+        let target_path_env = std::env::var_os("RUST_TARGET_PATH").unwrap_or_default();
+        for path in std::env::split_paths(&target_path_env) {
+            match Utf8PathBuf::try_from(path) {
+                Ok(path) => target_paths.push(path),
+                Err(error) => {
+                    log::debug!("for RUST_TARGET_PATH, {error}");
+                }
+            }
+        }
+
         Ok(Self {
             cli_configs,
             cwd,
             discovered,
+            target_paths,
         })
     }
 
@@ -59,6 +92,7 @@ impl CargoConfigs {
         cli_configs: impl IntoIterator<Item = impl AsRef<str>>,
         cwd: &Utf8Path,
         terminate_search_at: &Utf8Path,
+        target_paths: Vec<Utf8PathBuf>,
     ) -> Result<Self, CargoConfigError> {
         let cli_configs = parse_cli_configs(cwd, cli_configs.into_iter())?;
         let discovered = discover_impl(cwd, Some(terminate_search_at))?;
@@ -67,6 +101,7 @@ impl CargoConfigs {
             cli_configs,
             cwd: cwd.to_owned(),
             discovered,
+            target_paths,
         })
     }
 
@@ -104,6 +139,10 @@ impl CargoConfigs {
             .chain(cli_file_iter)
             .chain(std::iter::once(DiscoveredConfig::Env))
             .chain(cargo_config_file_iter)
+    }
+
+    pub(crate) fn target_paths(&self) -> &[Utf8PathBuf] {
+        &self.target_paths
     }
 }
 
@@ -318,6 +357,9 @@ fn load_file(
     path: impl Into<Utf8PathBuf>,
 ) -> Result<(CargoConfigSource, CargoConfig), CargoConfigError> {
     let path = path.into();
+    let path = path
+        .canonicalize_utf8()
+        .map_err(|error| CargoConfigError::FailedPathCanonicalization { path, error })?;
 
     let config_contents =
         std::fs::read_to_string(&path).map_err(|error| CargoConfigError::ConfigReadError {

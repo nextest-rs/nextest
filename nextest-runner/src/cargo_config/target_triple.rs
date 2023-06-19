@@ -5,6 +5,7 @@ use crate::{
     cargo_config::{CargoConfigSource, CargoConfigs, DiscoveredConfig},
     errors::TargetTripleError,
 };
+use camino::{Utf8Path, Utf8PathBuf};
 use std::fmt;
 use target_spec::{summaries::PlatformSummary, Platform, TargetFeatures};
 
@@ -16,6 +17,9 @@ pub struct TargetTriple {
 
     /// The source the triple came from.
     pub source: TargetTripleSource,
+
+    /// The place where the target definition was obtained from.
+    pub location: TargetDefinitionLocation,
 }
 
 impl TargetTriple {
@@ -46,9 +50,16 @@ impl TargetTriple {
     ) -> Result<Option<TargetTriple>, target_spec::Error> {
         platform
             .map(|platform| {
+                let platform = platform.to_platform()?;
+                let location = if platform.is_custom() {
+                    TargetDefinitionLocation::MetadataCustom
+                } else {
+                    TargetDefinitionLocation::Builtin
+                };
                 Ok(TargetTriple {
-                    platform: platform.to_platform()?,
+                    platform,
                     source: TargetTripleSource::Metadata,
+                    location,
                 })
             })
             .transpose()
@@ -63,6 +74,7 @@ impl TargetTriple {
                 Ok(TargetTriple {
                     platform: Platform::new(triple_str, TargetFeatures::Unknown)?,
                     source: TargetTripleSource::Metadata,
+                    location: TargetDefinitionLocation::Builtin,
                 })
             })
             .transpose()
@@ -82,19 +94,14 @@ impl TargetTriple {
         target_cli_option: Option<&str>,
     ) -> Result<Option<Self>, TargetTripleError> {
         // First, look at the CLI option passed in.
-        if let Some(triple) = target_cli_option {
-            let platform =
-                Platform::new(triple.to_owned(), TargetFeatures::Unknown).map_err(|error| {
-                    TargetTripleError::TargetSpecError {
-                        source: TargetTripleSource::CliOption,
-                        error,
-                    }
-                })?;
-            return Ok(Some(TargetTriple {
-                // TODO: need to get the minimum set of target features from here
-                platform,
-                source: TargetTripleSource::CliOption,
-            }));
+        if let Some(triple_str_or_path) = target_cli_option {
+            let ret = Self::resolve_triple(
+                triple_str_or_path,
+                TargetTripleSource::CliOption,
+                cargo_configs.cwd(),
+                cargo_configs.target_paths(),
+            )?;
+            return Ok(Some(ret));
         }
 
         // Finally, look at the cargo configs.
@@ -104,21 +111,16 @@ impl TargetTriple {
     /// The environment variable used for target searches
     pub const CARGO_BUILD_TARGET_ENV: &'static str = "CARGO_BUILD_TARGET";
 
-    fn from_env() -> Result<Option<Self>, TargetTripleError> {
+    fn from_env(
+        cwd: &Utf8Path,
+        target_paths: &[Utf8PathBuf],
+    ) -> Result<Option<Self>, TargetTripleError> {
         if let Some(triple_val) = std::env::var_os(Self::CARGO_BUILD_TARGET_ENV) {
             let triple = triple_val
                 .into_string()
                 .map_err(|_osstr| TargetTripleError::InvalidEnvironmentVar)?;
-            let platform = Platform::new(triple, TargetFeatures::Unknown).map_err(|error| {
-                TargetTripleError::TargetSpecError {
-                    source: TargetTripleSource::Env,
-                    error,
-                }
-            })?;
-            Ok(Some(Self {
-                platform,
-                source: TargetTripleSource::Env,
-            }))
+            let ret = Self::resolve_triple(&triple, TargetTripleSource::Env, cwd, target_paths)?;
+            Ok(Some(ret))
         } else {
             Ok(None)
         }
@@ -129,21 +131,25 @@ impl TargetTriple {
             match discovered_config {
                 DiscoveredConfig::CliOption { config, source }
                 | DiscoveredConfig::File { config, source } => {
-                    let source = TargetTripleSource::CargoConfig {
-                        source: source.clone(),
-                    };
                     if let Some(triple) = &config.build.target {
-                        match Platform::new(triple.clone(), TargetFeatures::Unknown) {
-                            Ok(platform) => return Ok(Some(TargetTriple { platform, source })),
-                            Err(error) => {
-                                return Err(TargetTripleError::TargetSpecError { source, error })
-                            }
-                        }
+                        let resolve_dir = source.resolve_dir(cargo_configs.cwd());
+                        let source = TargetTripleSource::CargoConfig {
+                            source: source.clone(),
+                        };
+                        let ret = Self::resolve_triple(
+                            triple,
+                            source,
+                            resolve_dir,
+                            cargo_configs.target_paths(),
+                        )?;
+                        return Ok(Some(ret));
                     }
                 }
                 DiscoveredConfig::Env => {
                     // Look at the CARGO_BUILD_TARGET env var.
-                    if let Some(triple) = Self::from_env()? {
+                    if let Some(triple) =
+                        Self::from_env(cargo_configs.cwd(), cargo_configs.target_paths())?
+                    {
                         return Ok(Some(triple));
                     }
                 }
@@ -151,6 +157,119 @@ impl TargetTriple {
         }
 
         Ok(None)
+    }
+
+    /// Resolves triples passed in over the command line using the algorithm described here:
+    /// https://github.com/rust-lang/rust/blob/2d0aa57684e10f7b3d3fe740ee18d431181583ad/compiler/rustc_target/src/spec/mod.rs#L11C11-L20
+    /// https://github.com/rust-lang/rust/blob/f217411bacbe943ead9dfca93a91dff0753c2a96/compiler/rustc_session/src/config.rs#L2065-L2079
+    fn resolve_triple(
+        triple_str_or_path: &str,
+        source: TargetTripleSource,
+        // This is typically the cwd but in case of a triple specified in a config file is resolved
+        // with respect to that.
+        resolve_dir: &Utf8Path,
+        target_paths: &[Utf8PathBuf],
+    ) -> Result<Self, TargetTripleError> {
+        if triple_str_or_path.ends_with(".json") {
+            let path = resolve_dir.join(triple_str_or_path);
+            let canonicalized_path = path.canonicalize_utf8().map_err(|error| {
+                TargetTripleError::TargetPathReadError {
+                    source: source.clone(),
+                    path,
+                    error,
+                }
+            })?;
+            // Strip the ".json" at the end.
+            let triple_str = canonicalized_path
+                .file_stem()
+                .expect("target path must not be empty")
+                .to_owned();
+            return Self::load_file(
+                &triple_str,
+                &canonicalized_path,
+                source,
+                TargetDefinitionLocation::DirectPath(canonicalized_path.clone()),
+            );
+        }
+
+        // Is this a builtin (non-heuristic)?
+        if let Ok(platform) =
+            Platform::new_strict(triple_str_or_path.to_owned(), TargetFeatures::Unknown)
+        {
+            return Ok(Self {
+                platform,
+                source,
+                location: TargetDefinitionLocation::Builtin,
+            });
+        }
+
+        // Now look for this triple through all the paths in RUST_TARGET_PATH.
+        let triple_filename = {
+            let mut triple_str = triple_str_or_path.to_owned();
+            triple_str.push_str(".json");
+            Utf8PathBuf::from(triple_str)
+        };
+
+        for dir in target_paths {
+            let path = dir.join(&triple_filename);
+            if path.is_file() {
+                let path = path.canonicalize_utf8().map_err(|error| {
+                    TargetTripleError::TargetPathReadError {
+                        source: source.clone(),
+                        path,
+                        error,
+                    }
+                })?;
+                return Self::load_file(
+                    triple_str_or_path,
+                    &path,
+                    source,
+                    TargetDefinitionLocation::RustTargetPath(path.clone()),
+                );
+            }
+        }
+
+        // TODO: search in rustlib. This isn't documented and we need to implement searching for
+        // rustlib:
+        // https://github.com/rust-lang/rust/blob/2d0aa57684e10f7b3d3fe740ee18d431181583ad/compiler/rustc_target/src/spec/mod.rs#L2789-L2799.
+
+        // As a last-ditch effort, use a heuristic approach.
+        let platform = Platform::new(triple_str_or_path.to_owned(), TargetFeatures::Unknown)
+            .map_err(|error| TargetTripleError::TargetSpecError {
+                source: source.clone(),
+                error,
+            })?;
+        Ok(Self {
+            platform,
+            source,
+            location: TargetDefinitionLocation::Heuristic,
+        })
+    }
+
+    fn load_file(
+        triple_str: &str,
+        path: &Utf8Path,
+        source: TargetTripleSource,
+        location: TargetDefinitionLocation,
+    ) -> Result<Self, TargetTripleError> {
+        let contents = std::fs::read_to_string(path).map_err(|error| {
+            TargetTripleError::TargetPathReadError {
+                source: source.clone(),
+                path: path.to_owned(),
+                error,
+            }
+        })?;
+        let platform =
+            Platform::new_custom(triple_str.to_owned(), &contents, TargetFeatures::Unknown)
+                .map_err(|error| TargetTripleError::TargetSpecError {
+                    source: source.clone(),
+                    error,
+                })?;
+        Ok(Self {
+            platform,
+            source,
+            location,
+        })
     }
 }
 
@@ -165,15 +284,15 @@ pub enum TargetTripleSource {
     /// The target triple was defined by the `CARGO_BUILD_TARGET` env var.
     Env,
 
-    /// The platform runner was defined through a `.cargo/config.toml` or `.cargo/config` file, or a
+    /// The target triple was defined through a `.cargo/config.toml` or `.cargo/config` file, or a
     /// `--config` CLI option.
     CargoConfig {
         /// The source of the configuration.
         source: CargoConfigSource,
     },
 
-    /// The platform runner was defined through a metadata file provided using the --archive-file or
-    /// the `--binaries-metadata` CLI option
+    /// The target triple was defined through a metadata file provided using the --archive-file or
+    /// the `--binaries-metadata` CLI option.
     Metadata,
 }
 
@@ -181,7 +300,7 @@ impl fmt::Display for TargetTripleSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::CliOption => {
-                write!(f, "--target option")
+                write!(f, "--target <option>")
             }
             Self::Env => {
                 write!(f, "environment variable `CARGO_BUILD_TARGET`")
@@ -204,10 +323,54 @@ impl fmt::Display for TargetTripleSource {
     }
 }
 
+/// The location a target triple's definition was obtained from.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TargetDefinitionLocation {
+    /// The target triple was a builtin.
+    Builtin,
+
+    /// The definition was obtained from a file on disk -- the triple string ended with .json.
+    DirectPath(Utf8PathBuf),
+
+    /// The definition was obtained from a file in `RUST_TARGET_PATH`.
+    RustTargetPath(Utf8PathBuf),
+
+    /// The definition was obtained heuristically.
+    Heuristic,
+
+    /// A custom definition was stored in metadata.
+    MetadataCustom,
+}
+
+impl fmt::Display for TargetDefinitionLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Builtin => {
+                write!(f, "target was builtin")
+            }
+            Self::DirectPath(path) => {
+                write!(f, "definition obtained from file at path `{path}`")
+            }
+            Self::RustTargetPath(path) => {
+                write!(f, "definition obtained from RUST_TARGET_PATH: `{path}`")
+            }
+            Self::Heuristic => {
+                write!(f, "definition obtained heuristically")
+            }
+            Self::MetadataCustom => {
+                write!(f, "custom definition stored in metadata")
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cargo_config::{test_helpers::setup_temp_dir, CargoConfigs};
+    use crate::cargo_config::{
+        test_helpers::{custom_target_path, setup_temp_dir},
+        CargoConfigs,
+    };
     use camino::{Utf8Path, Utf8PathBuf};
 
     #[test]
@@ -216,7 +379,16 @@ mod tests {
         let dir_path = Utf8PathBuf::try_from(dir.path().canonicalize().unwrap()).unwrap();
         let dir_foo_path = dir_path.join("foo");
         let dir_foo_bar_path = dir_foo_path.join("bar");
+        let dir_foo_bar_custom1_path = dir_foo_bar_path.join("custom1");
+        let dir_foo_bar_custom2_path = dir_foo_bar_path.join("custom2");
+        let custom_target_dir = dir.path().join("custom-target");
+        let custom_target_path = dir
+            .path()
+            .join("custom-target/my-target.json")
+            .canonicalize_utf8()
+            .expect("path exists");
 
+        // Test reading from config files
         assert_eq!(
             find_target_triple(&[], None, &dir_foo_bar_path, &dir_path),
             Some(TargetTriple {
@@ -224,6 +396,7 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::File(dir_path.join("foo/bar/.cargo/config.toml")),
                 },
+                location: TargetDefinitionLocation::Builtin,
             }),
         );
 
@@ -234,7 +407,40 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::File(dir_path.join("foo/.cargo/config")),
                 },
+                location: TargetDefinitionLocation::Builtin,
             }),
+        );
+
+        assert_eq!(
+            find_target_triple(&[], None, &dir_foo_bar_custom2_path, &dir_path),
+            Some(TargetTriple {
+                platform: custom_platform(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::File(
+                        dir_path.join("foo/bar/custom2/.cargo/config.toml")
+                    ),
+                },
+                location: TargetDefinitionLocation::DirectPath(custom_target_path.clone()),
+            })
+        );
+
+        assert_eq!(
+            find_target_triple_with_paths(
+                &[],
+                None,
+                &dir_foo_bar_custom1_path,
+                &dir_path,
+                vec![custom_target_dir]
+            ),
+            Some(TargetTriple {
+                platform: custom_platform(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::File(
+                        dir_path.join("foo/bar/custom1/.cargo/config.toml")
+                    ),
+                },
+                location: TargetDefinitionLocation::RustTargetPath(custom_target_path.clone()),
+            })
         );
 
         assert_eq!(
@@ -249,6 +455,7 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
+                location: TargetDefinitionLocation::Builtin,
             })
         );
 
@@ -268,6 +475,24 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
+                location: TargetDefinitionLocation::Builtin,
+            })
+        );
+
+        // --config arguments are resolved wrt the current dir.
+        assert_eq!(
+            find_target_triple(
+                &["build.target=\"../../custom-target/my-target.json\"",],
+                None,
+                &dir_foo_bar_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                platform: custom_platform(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::CliOption,
+                },
+                location: TargetDefinitionLocation::DirectPath(custom_target_path.clone()),
             })
         );
 
@@ -284,6 +509,7 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
+                location: TargetDefinitionLocation::Builtin,
             })
         );
 
@@ -298,6 +524,7 @@ mod tests {
             Some(TargetTriple {
                 platform: platform("aarch64-pc-windows-msvc"),
                 source: TargetTripleSource::Env,
+                location: TargetDefinitionLocation::Builtin,
             })
         );
 
@@ -312,6 +539,7 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::File(dir_foo_path.join("extra-config.toml")),
                 },
+                location: TargetDefinitionLocation::Builtin,
             })
         );
         assert_eq!(
@@ -326,6 +554,7 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::File(dir_foo_path.join("extra-config.toml")),
                 },
+                location: TargetDefinitionLocation::Builtin,
             })
         );
         assert_eq!(
@@ -343,6 +572,7 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
+                location: TargetDefinitionLocation::Builtin,
             })
         );
         assert_eq!(
@@ -360,6 +590,25 @@ mod tests {
                 source: TargetTripleSource::CargoConfig {
                     source: CargoConfigSource::CliOption,
                 },
+                location: TargetDefinitionLocation::Builtin,
+            })
+        );
+        // Config paths passed over the command line are resolved according to the directory they're
+        // in. (To test this, run the test from dir/foo/bar -- extra-custom-config should be
+        // resolved according to dir/foo).
+        assert_eq!(
+            find_target_triple(
+                &["../extra-custom-config.toml"],
+                None,
+                &dir_foo_bar_path,
+                &dir_path
+            ),
+            Some(TargetTriple {
+                platform: custom_platform(),
+                source: TargetTripleSource::CargoConfig {
+                    source: CargoConfigSource::File(dir_foo_path.join("extra-custom-config.toml")),
+                },
+                location: TargetDefinitionLocation::DirectPath(custom_target_path),
             })
         );
 
@@ -372,9 +621,29 @@ mod tests {
         start_search_at: &Utf8Path,
         terminate_search_at: &Utf8Path,
     ) -> Option<TargetTriple> {
-        let configs =
-            CargoConfigs::new_with_isolation(cli_configs, start_search_at, terminate_search_at)
-                .unwrap();
+        find_target_triple_with_paths(
+            cli_configs,
+            env,
+            start_search_at,
+            terminate_search_at,
+            Vec::new(),
+        )
+    }
+
+    fn find_target_triple_with_paths(
+        cli_configs: &[&str],
+        env: Option<&str>,
+        start_search_at: &Utf8Path,
+        terminate_search_at: &Utf8Path,
+        target_paths: Vec<Utf8PathBuf>,
+    ) -> Option<TargetTriple> {
+        let configs = CargoConfigs::new_with_isolation(
+            cli_configs,
+            start_search_at,
+            terminate_search_at,
+            target_paths,
+        )
+        .unwrap();
         if let Some(env) = env {
             std::env::set_var("CARGO_BUILD_TARGET", env);
         }
@@ -385,5 +654,12 @@ mod tests {
 
     fn platform(triple_str: &str) -> Platform {
         Platform::new(triple_str.to_owned(), TargetFeatures::Unknown).expect("triple str is valid")
+    }
+
+    fn custom_platform() -> Platform {
+        let custom_target_json = std::fs::read_to_string(custom_target_path())
+            .expect("custom target json read successfully");
+        Platform::new_custom("my-target", &custom_target_json, TargetFeatures::Unknown)
+            .expect("custom target is valid")
     }
 }
