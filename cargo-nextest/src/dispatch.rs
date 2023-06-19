@@ -1497,9 +1497,10 @@ fn discover_target_triple(
     match TargetTriple::find(cargo_configs, target_cli_option) {
         Ok(Some(triple)) => {
             log::debug!(
-                "using target triple `{}` defined by `{}`",
+                "using target triple `{}` defined by `{}`; {}",
                 triple.platform.triple_str(),
-                triple.source
+                triple.source,
+                triple.location,
             );
             Some(triple)
         }

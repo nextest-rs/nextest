@@ -314,6 +314,7 @@ impl FixtureTargets {
             [workspace_root().join(".cargo/extra-config.toml")],
             &workspace_root(),
             &workspace_root(),
+            Vec::new(),
         )
         .unwrap();
         let env = EnvironmentMap::new(&cargo_configs);

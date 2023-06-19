@@ -995,6 +995,20 @@ pub enum TargetTripleError {
         #[source]
         error: target_spec::Error,
     },
+
+    /// For a custom platform, reading the target path failed.
+    #[error("target path `{path}` is not a valid file")]
+    TargetPathReadError {
+        /// The source from which the triple couldn't be parsed.
+        source: TargetTripleSource,
+
+        /// The path that we tried to read.
+        path: Utf8PathBuf,
+
+        /// The error that occurred parsing the triple.
+        #[source]
+        error: std::io::Error,
+    },
 }
 
 /// An error occurred determining the target runner

@@ -26,7 +26,7 @@ chrono = "0.4.26"
 debug-ignore = "1.0.5"
 either = "1.8.1"
 futures = "0.3.28"
-guppy = "0.15.2"
+guppy = "0.16.0"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home = "0.5.5"
@@ -53,8 +53,8 @@ smol_str = { version = "0.2.0", features = ["serde"] }
 strip-ansi-escapes = "0.1.1"
 tar = "0.4.38"
 # For cfg expression evaluation for [target.'cfg()'] expressions
-target-spec = { version = "1.4.0", features = ["summaries"] }
-target-spec-miette = "0.1.0"
+target-spec = { version = "2.0.1", features = ["custom", "summaries"] }
+target-spec-miette = "0.2.0"
 thiserror = "1.0.40"
 # For parsing of .cargo/config.toml files
 tokio = { version = "1.28.2", features = [

@@ -936,7 +936,7 @@ pub struct TestExecuteContext<'a> {
 mod tests {
     use super::*;
     use crate::{
-        cargo_config::{TargetTriple, TargetTripleSource},
+        cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::SerializableFormat,
         test_filter::RunIgnored,
     };
@@ -1010,6 +1010,7 @@ mod tests {
             )
             .unwrap(),
             source: TargetTripleSource::CliOption,
+            location: TargetDefinitionLocation::Builtin,
         };
         let fake_env = EnvironmentMap::empty();
         let rust_build_meta =

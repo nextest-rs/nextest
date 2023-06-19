@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    cargo_config::{TargetTriple, TargetTripleSource},
+    cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
     config::{CustomTestGroup, TestGroup},
     platform::BuildPlatforms,
 };
@@ -44,6 +44,7 @@ pub(super) fn build_platforms() -> BuildPlatforms {
         Some(TargetTriple {
             platform: Platform::new("aarch64-apple-darwin", TargetFeatures::Unknown).unwrap(),
             source: TargetTripleSource::Env,
+            location: TargetDefinitionLocation::Builtin,
         }),
     )
 }
