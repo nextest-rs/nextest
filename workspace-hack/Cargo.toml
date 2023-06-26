@@ -22,7 +22,6 @@ either = { version = "1.8.1" }
 futures-channel = { version = "0.3.28", features = ["sink"] }
 futures-sink = { version = "0.3.28", default-features = false, features = ["std"] }
 hashbrown = { version = "0.12.3", features = ["raw"] }
-indexmap = { version = "1.9.3", default-features = false, features = ["std"] }
 log = { version = "0.4.19", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
 miette = { version = "5.9.0", features = ["fancy"] }
