@@ -43,7 +43,7 @@ hashbrown = { version = "0.12.3", features = ["raw"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
 proc-macro2 = { version = "1.0.63" }
 quote = { version = "1.0.28" }
-syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extra-traits", "fold", "full", "visit"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.22", features = ["full", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
@@ -83,8 +83,7 @@ getrandom = { version = "0.2.10", default-features = false, features = ["std"] }
 once_cell = { version = "1.18.0" }
 tokio = { version = "1.28.2", default-features = false, features = ["net"] }
 winapi = { version = "0.3.9", default-features = false, features = ["basetsd", "consoleapi", "handleapi", "impl-debug", "impl-default", "jobapi2", "minwinbase", "minwindef", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "psapi", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
-windows-sys-53888c27b7ba5cf4 = { package = "windows-sys", version = "0.45.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
-windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
+windows-sys = { version = "0.48.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
 getrandom = { version = "0.2.10", default-features = false, features = ["std"] }
