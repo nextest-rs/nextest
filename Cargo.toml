@@ -20,3 +20,8 @@ opt-level = 3
 
 [profile.dev.package.similar]
 opt-level = 3
+
+# Uncomment for testing.
+# [patch.crates-io]
+# target-spec = { path = "../guppy/target-spec" }
+# target-spec-miette = { path = "../guppy/target-spec-miette" }

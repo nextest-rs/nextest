@@ -3,6 +3,15 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.54] - 2023-06-25
+
+### Added
+
+#### Custom targets
+
+* Nextest now supports custom targets specified via `--target`, `CARGO_BUILD_TARGET`, or configuration. See the Rust Embedonomicon for [how to create a custom target](https://docs.rust-embedded.org/embedonomicon/custom-target.html).
+* For [per-test overrides](https://nexte.st/book/per-test-overrides), platform filters now support custom target triples.
+
 ## [0.9.53] - 2023-05-15
 
 ### Added
@@ -753,6 +762,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.54]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.54
 [0.9.53]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.53
 [0.9.52]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.52
 [0.9.51]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.51

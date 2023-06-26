@@ -22,7 +22,7 @@ duct = "0.13.6"
 enable-ansi-support = "0.2.1"
 # we don't use the default formatter so we don't need default features
 env_logger = { version = "0.10.0", default-features = false }
-guppy = "0.16.0"
+guppy = "0.17.0"
 log = "0.4.19"
 itertools = "0.10.5"
 miette = { version = "5.9.0", features = ["fancy"] }

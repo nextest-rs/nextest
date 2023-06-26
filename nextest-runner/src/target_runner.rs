@@ -161,7 +161,7 @@ impl PlatformRunner {
                 _ => None,
             }) {
                 // Treat these as non-fatal, but would be good to log maybe
-                let expr = match target_spec::TargetExpression::new(cfg) {
+                let expr = match target_spec::TargetSpecExpression::new(cfg) {
                     Ok(expr) => expr,
                     Err(_err) => continue,
                 };

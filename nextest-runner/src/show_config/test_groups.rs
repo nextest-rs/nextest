@@ -16,7 +16,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     io::{self, Write},
 };
-use target_spec::TargetSpec;
 
 /// Shows sets of tests that are in various groups.
 #[derive(Debug)]
@@ -169,16 +168,10 @@ impl<'a> ShowTestGroups<'a> {
                     )?;
                 }
                 if let Some(target_spec) = data.override_.target_spec() {
-                    // TODO: add fmt::Display impl for target_spec.
-                    let platform_str = match target_spec {
-                        TargetSpec::Triple(triple) => triple.as_str(),
-                        TargetSpec::Expression(expr) => expr.expression_str(),
-                    };
-
                     write!(
                         writer,
                         " on platform {}",
-                        QuotedDisplay(platform_str).style(styles.platform)
+                        QuotedDisplay(target_spec).style(styles.platform)
                     )?;
                 }
 
