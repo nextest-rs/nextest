@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0] - 2023-06-25
+
+### Changed
+
+- `guppy` updated to 0.17.0.
+
 ## [0.4.0] - 2023-05-15
 
 ### Changed
@@ -54,6 +60,7 @@
 
 Initial release.
 
+[0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.5.0
 [0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.4.0
 [0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.3.0
 [0.2.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.2.2
