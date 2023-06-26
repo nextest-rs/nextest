@@ -46,7 +46,7 @@ regex = "1.8.4"
 semver = "1.0.17"
 serde = { version = "1.0.164", features = ["derive"] }
 serde_ignored = "0.1.7"
-serde_json = "1.0.97"
+serde_json = "1.0.99"
 serde_path_to_error = "0.1.11"
 shell-words = "1.1.0"
 smol_str = { version = "0.2.0", features = ["serde"] }
@@ -67,8 +67,8 @@ tokio = { version = "1.28.2", features = [
     "sync",
     "time",
 ] }
-toml = "0.7.4"
-toml_edit = "0.19.10"
+toml = "0.7.5"
+toml_edit = "0.19.11"
 twox-hash = { version = "1.6.3", default-features = false }
 zstd = { version = "0.12.3", features = ["zstdmt"] }
 
@@ -94,7 +94,7 @@ indexmap = "1.9.3"
 smallvec = "1.10.0"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.146"
+libc = "0.2.147"
 nix = { version = "0.26.2", default-features = false, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
