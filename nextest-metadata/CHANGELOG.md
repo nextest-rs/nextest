@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.0] - 2023-06-25
+
+### Changed
+
+- `target-spec` updated to version 3. This version includes support for custom platforms.
+
 ## [0.8.2] - 2023-04-08
 
 ### Fixed
@@ -157,6 +163,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.0
 [0.8.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.8.2
 [0.8.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.8.1
 [0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.8.0
