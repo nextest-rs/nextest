@@ -27,7 +27,7 @@ log = "0.4.19"
 itertools = "0.10.5"
 miette = { version = "5.9.0", features = ["fancy"] }
 nextest-filtering = { version = "=0.4.0", path = "../nextest-filtering" }
-nextest-runner = { version = "=0.40.0", path = "../nextest-runner" }
+nextest-runner = { version = "=0.41.0", path = "../nextest-runner" }
 nextest-metadata = { version = "=0.9.0", path = "../nextest-metadata" }
 once_cell = "1.18.0"
 owo-colors = { version = "3.5.0", features = ["supports-colors"] }
