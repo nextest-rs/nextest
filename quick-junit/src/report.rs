@@ -301,6 +301,9 @@ pub struct TestCase {
 
     /// Other fields that may be set as attributes, such as "classname".
     pub extra: IndexMap<String, String>,
+
+    /// Custom properties set during test execution, e.g. steps.
+    pub properties: Vec<Property>,
 }
 
 impl TestCase {
@@ -316,6 +319,7 @@ impl TestCase {
             system_out: None,
             system_err: None,
             extra: IndexMap::new(),
+            properties: vec![],
         }
     }
 
@@ -367,6 +371,23 @@ impl TestCase {
     /// The output is converted to a string, lossily.
     pub fn set_system_err_lossy(&mut self, system_err: impl AsRef<[u8]>) -> &mut Self {
         self.set_system_err(String::from_utf8_lossy(system_err.as_ref()))
+    }
+
+    /// Adds a property to this TestCase.
+    pub fn add_property(&mut self, property: impl Into<Property>) -> &mut Self {
+        self.properties.push(property.into());
+        self
+    }
+
+    /// Adds several properties to this TestCase.
+    pub fn add_properties(
+        &mut self,
+        properties: impl IntoIterator<Item = impl Into<Property>>,
+    ) -> &mut Self {
+        for property in properties {
+            self.add_property(property);
+        }
+        self
     }
 }
 
