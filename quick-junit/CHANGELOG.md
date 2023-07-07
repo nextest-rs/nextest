@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.3] - 2023-06-07
+
+### Added
+
+- `TestCase` now has an extra `properties` section and an `add_property` method, similar to `TestSuite`. Thanks [@skycoop](https://github.com/skycoop) for your first contribution!
+
+### Changed
+
+- MSRV updated to Rust 1.66.
+
 ## [0.3.2] - 2022-11-23
 
 ### Changed
