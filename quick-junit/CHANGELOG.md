@@ -8,6 +8,7 @@
 
 ### Changed
 
+- Internal dependency update: quick-xml updated to 0.29.0.
 - MSRV updated to Rust 1.66.
 
 ## [0.3.2] - 2022-11-23
@@ -69,6 +70,7 @@
 
 - Initial version.
 
+[0.3.3]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.3
 [0.3.2]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.2
 [0.3.1]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.1
 [0.3.0]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.0
