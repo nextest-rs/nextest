@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="my-test-run" tests="6" failures="2" errors="1" timestamp="2021-04-01T10:52:37.000-08:00" time="42.235">
-    <testsuite name="testsuite0" tests="6" disabled="1" errors="1" failures="2" timestamp="2021-04-01T10:52:39.000-08:00">
+<testsuites name="my-test-run" tests="7" failures="2" errors="1" timestamp="2021-04-01T10:52:37.000-08:00" time="42.235">
+    <testsuite name="testsuite0" tests="7" disabled="1" errors="1" failures="2" timestamp="2021-04-01T10:52:39.000-08:00">
         <properties>
             <property name="env" value="FOOBAR"/>
         </properties>
@@ -35,6 +35,11 @@
                 <stackTrace>retry error stack trace</stackTrace>
                 <system-out>retry error system output</system-out>
             </rerunError>
+        </testcase>
+        <testcase name="testcase6">
+            <properties>
+                <property name="step" value="foobar"/>
+            </properties>
         </testcase>
     </testsuite>
 </testsuites>

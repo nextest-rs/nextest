@@ -181,6 +181,7 @@ fn serialize_test_case(
         system_out,
         system_err,
         extra,
+        properties,
     } = test_case;
 
     let mut testcase_tag = BytesStart::new(TESTCASE_TAG);
@@ -203,6 +204,14 @@ fn serialize_test_case(
         testcase_tag.push_attribute((k.as_str(), v.as_str()));
     }
     writer.write_event(Event::Start(testcase_tag))?;
+
+    if !properties.is_empty() {
+        serialize_empty_start_tag(PROPERTIES_TAG, writer)?;
+        for property in properties {
+            serialize_property(property, writer)?;
+        }
+        serialize_end_tag(PROPERTIES_TAG, writer)?;
+    }
 
     match status {
         TestCaseStatus::Success { flaky_runs } => {

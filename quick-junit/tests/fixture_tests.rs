@@ -130,6 +130,11 @@ fn basic_report() -> Report {
     test_case.set_time(Duration::from_millis(156));
     test_suite.add_test_case(test_case);
 
+    let test_case_status = TestCaseStatus::success();
+    let mut test_case = TestCase::new("testcase6", test_case_status);
+    test_case.add_property(Property::new("step", "foobar"));
+    test_suite.add_test_case(test_case);
+
     test_suite.add_property(Property::new("env", "FOOBAR"));
 
     report.add_test_suite(test_suite);
