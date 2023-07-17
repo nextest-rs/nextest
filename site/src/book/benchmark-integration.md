@@ -22,7 +22,7 @@ For criterion and nextest, benchmarks are run with the following settings:
 
 By default, `cargo nextest run` does not include benchmarks as part of the test run. (This matches `cargo test`.)
 
-To include benchmarks in your test run, use `cargo nextest run --all-targets`:
+To include benchmarks in your test run, use `cargo nextest run --all-targets`.
 
 This will produce output that looks like:
 
