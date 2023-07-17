@@ -41,7 +41,7 @@ cc = { version = "1.0.79", default-features = false, features = ["parallel"] }
 hashbrown = { version = "0.12.3", features = ["raw"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
 proc-macro2 = { version = "1.0.63" }
-quote = { version = "1.0.28" }
+quote = { version = "1.0.30" }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extra-traits", "fold", "full", "visit"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.22", features = ["full", "visit-mut"] }
 
