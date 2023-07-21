@@ -1,6 +1,9 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// The prop_oneof! operators here cause clippy warnings with Rust 1.71.
+#![allow(clippy::arc_with_non_send_sync)]
+
 use crate::{
     parsing::{AndOperator, DifferenceOperator, NotOperator, OrOperator, ParsedExpr, SetDef},
     NameMatcher,

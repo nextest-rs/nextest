@@ -388,7 +388,7 @@ impl<'a> TestReporter<'a> {
     }
 }
 
-fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &mut ProgressBar) {
+fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &ProgressBar) {
     match event {
         TestEvent::TestStarted {
             current_stats,

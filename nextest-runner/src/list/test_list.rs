@@ -216,7 +216,7 @@ impl<'g> TestList<'g> {
 
         let runtime = Runtime::new().map_err(CreateTestListError::TokioRuntimeCreate)?;
 
-        let stream = futures::stream::iter(test_artifacts.into_iter()).map(|test_binary| {
+        let stream = futures::stream::iter(test_artifacts).map(|test_binary| {
             async {
                 if filter.should_obtain_test_list_from_binary(&test_binary) {
                     // Run the binary to obtain the test list.

@@ -189,7 +189,7 @@ impl OutputWriter {
         match self {
             Self::Normal => StdoutWriter::Normal {
                 buf: BufWriter::new(std::io::stdout()),
-                _lifetime: PhantomData::default(),
+                _lifetime: PhantomData,
             },
             #[cfg(test)]
             Self::Test { ref mut stdout, .. } => StdoutWriter::Test {
@@ -210,7 +210,7 @@ impl OutputWriter {
         match self {
             Self::Normal => StderrWriter::Normal {
                 buf: BufWriter::new(std::io::stderr()),
-                _lifetime: PhantomData::default(),
+                _lifetime: PhantomData,
             },
             #[cfg(test)]
             Self::Test { ref mut stderr, .. } => StderrWriter::Test {

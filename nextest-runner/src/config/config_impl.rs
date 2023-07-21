@@ -99,7 +99,7 @@ impl NextestConfig {
             workspace_root,
             graph,
             config_file,
-            tool_config_files.into_iter(),
+            tool_config_files,
             |config_file, tool, unknown| {
                 let mut unknown_str = String::new();
                 if unknown.len() == 1 {
