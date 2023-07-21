@@ -23,5 +23,6 @@ opt-level = 3
 
 # Uncomment for testing.
 # [patch.crates-io]
+# cargo_metadata = { path = "../cargo_metadata" }
 # target-spec = { path = "../guppy/target-spec" }
 # target-spec-miette = { path = "../guppy/target-spec-miette" }
