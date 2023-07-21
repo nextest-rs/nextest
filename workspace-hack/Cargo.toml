@@ -14,9 +14,9 @@ publish = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
-backtrace = { version = "0.3.67", features = ["gimli-symbolize"] }
-clap = { version = "4.3.8", features = ["derive", "env"] }
-clap_builder = { version = "4.3.8", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
+backtrace = { version = "0.3.68", features = ["gimli-symbolize"] }
+clap = { version = "4.3.17", features = ["derive", "env"] }
+clap_builder = { version = "4.3.17", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 console = { version = "0.15.7" }
 either = { version = "1.8.1" }
 futures-channel = { version = "0.3.28", features = ["sink"] }
@@ -24,36 +24,37 @@ futures-sink = { version = "0.3.28", default-features = false, features = ["std"
 hashbrown = { version = "0.12.3", features = ["raw"] }
 log = { version = "0.4.19", default-features = false, features = ["std"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
-miette = { version = "5.9.0", features = ["fancy"] }
-num-traits = { version = "0.2.15", default-features = false, features = ["libm", "std"] }
+miette = { version = "5.10.0", features = ["fancy"] }
+miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
+num-traits = { version = "0.2.16", default-features = false, features = ["libm", "std"] }
 owo-colors = { version = "3.5.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
-serde = { version = "1.0.164", features = ["alloc", "derive"] }
-serde_json = { version = "1.0.99", features = ["unbounded_depth"] }
+serde = { version = "1.0.174", features = ["alloc", "derive"] }
+serde_json = { version = "1.0.103", features = ["unbounded_depth"] }
 similar = { version = "2.2.1", features = ["inline", "unicode"] }
 target-spec = { version = "3.0.0", default-features = false, features = ["custom", "summaries"] }
-tokio = { version = "1.28.2", features = ["io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
+tokio = { version = "1.29.1", features = ["io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 twox-hash = { version = "1.6.3" }
-uuid = { version = "1.3.4", features = ["v4"] }
+uuid = { version = "1.4.1", features = ["v4"] }
 
 [build-dependencies]
 cc = { version = "1.0.79", default-features = false, features = ["parallel"] }
 hashbrown = { version = "0.12.3", features = ["raw"] }
 memchr = { version = "2.5.0", features = ["use_std"] }
-proc-macro2 = { version = "1.0.63" }
-quote = { version = "1.0.28" }
-syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extra-traits", "fold", "full", "visit"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.22", features = ["full", "visit-mut"] }
+proc-macro2 = { version = "1.0.66" }
+quote = { version = "1.0.31" }
+syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extra-traits", "fold", "full"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.27", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.28" }
 futures-sink = { version = "0.3.28" }
+futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
 getrandom = { version = "0.2.10", default-features = false, features = ["std"] }
-io-lifetimes = { version = "1.0.11" }
 libc = { version = "0.2.147", features = ["extra_traits"] }
 once_cell = { version = "1.18.0" }
-rustix = { version = "0.37.20", features = ["fs", "termios"] }
-tokio = { version = "1.28.2", default-features = false, features = ["net"] }
+rustix = { version = "0.38.4", features = ["fs", "termios"] }
+tokio = { version = "1.29.1", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 getrandom = { version = "0.2.10", default-features = false, features = ["std"] }
@@ -63,12 +64,12 @@ once_cell = { version = "1.18.0" }
 [target.x86_64-apple-darwin.dependencies]
 futures-core = { version = "0.3.28" }
 futures-sink = { version = "0.3.28" }
+futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
 getrandom = { version = "0.2.10", default-features = false, features = ["std"] }
-io-lifetimes = { version = "1.0.11" }
 libc = { version = "0.2.147", features = ["extra_traits"] }
 once_cell = { version = "1.18.0" }
-rustix = { version = "0.37.20", features = ["fs", "termios"] }
-tokio = { version = "1.28.2", default-features = false, features = ["net"] }
+rustix = { version = "0.38.4", features = ["fs", "termios"] }
+tokio = { version = "1.29.1", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 getrandom = { version = "0.2.10", default-features = false, features = ["std"] }
@@ -78,10 +79,11 @@ once_cell = { version = "1.18.0" }
 [target.x86_64-pc-windows-msvc.dependencies]
 futures-core = { version = "0.3.28" }
 futures-sink = { version = "0.3.28" }
+futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
 getrandom = { version = "0.2.10", default-features = false, features = ["std"] }
 once_cell = { version = "1.18.0" }
-tokio = { version = "1.28.2", default-features = false, features = ["net"] }
-winapi = { version = "0.3.9", default-features = false, features = ["basetsd", "consoleapi", "handleapi", "impl-debug", "impl-default", "jobapi2", "minwinbase", "minwindef", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "psapi", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+tokio = { version = "1.29.1", default-features = false, features = ["net"] }
+winapi = { version = "0.3.9", default-features = false, features = ["basetsd", "consoleapi", "handleapi", "impl-debug", "impl-default", "jobapi2", "minwinbase", "minwindef", "ntdef", "ntsecapi", "processenv", "processthreadsapi", "profileapi", "psapi", "std", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 windows-sys = { version = "0.48.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
