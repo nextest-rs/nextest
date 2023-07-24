@@ -24,7 +24,7 @@ cargo_metadata = "0.15.4"
 cfg-if = "1.0.0"
 chrono = "0.4.26"
 debug-ignore = "1.0.5"
-either = "1.8.1"
+either = "1.9.0"
 futures = "0.3.28"
 guppy = "0.17.0"
 # Used to find the cargo root directory, which is needed in case the user has

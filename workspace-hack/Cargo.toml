@@ -18,7 +18,7 @@ backtrace = { version = "0.3.68", features = ["gimli-symbolize"] }
 clap = { version = "4.3.17", features = ["derive", "env"] }
 clap_builder = { version = "4.3.17", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 console = { version = "0.15.7" }
-either = { version = "1.8.1" }
+either = { version = "1.9.0" }
 futures-channel = { version = "0.3.28", features = ["sink"] }
 futures-sink = { version = "0.3.28", default-features = false, features = ["std"] }
 hashbrown = { version = "0.12.3", features = ["raw"] }
