@@ -139,15 +139,9 @@ impl TestCommand {
             )
             .env(
                 "CARGO_PKG_RUST_VERSION",
-                package.rust_version().map_or(String::new(), |v| {
-                    // A Rust version e.g. "1.58" has v.to_string() generated as "^1.58".
-                    // Remove the prefix ^.
-                    let s = v.to_string();
-                    match s.strip_prefix('^') {
-                        Some(suffix) => suffix.to_owned(),
-                        None => s,
-                    }
-                }),
+                package
+                    .minimum_rust_version()
+                    .map_or(String::new(), |v| v.to_string()),
             )
             .env(dylib_path_envvar(), ctx.dylib_path);
 

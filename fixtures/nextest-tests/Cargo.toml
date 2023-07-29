@@ -12,7 +12,11 @@ license = "MIT OR Apache-2.0"
 license-file = "foo.md"
 repository = "https://example.com/fake/repository"
 edition = "2018"
-rust-version = "1.56"
+# This was previously "1.56", but that causes a divergence between compile-time and runtime because
+# nextest (via cargo_metadata) parses the field as a semver version, not a string (hence resulting
+# in 1.56.0). The important thing is not that the version is exactly preserved but that it is
+# effectively the same.
+rust-version = "1.58.0"
 
 [[example]]
 name = "nextest-tests"
