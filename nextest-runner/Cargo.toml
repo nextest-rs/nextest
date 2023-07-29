@@ -20,13 +20,13 @@ bytes = "1.4.0"
 camino = { version = "1.1.6", features = ["serde1"] }
 camino-tempfile = "1.0.2"
 config = { version = "0.13.3", default-features = false, features = ["toml"] }
-cargo_metadata = "0.15.4"
+cargo_metadata = "0.17.0"
 cfg-if = "1.0.0"
 chrono = "0.4.26"
 debug-ignore = "1.0.5"
-either = "1.8.1"
+either = "1.9.0"
 futures = "0.3.28"
-guppy = "0.17.0"
+guppy = "0.17.1"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home = "0.5.5"
@@ -35,7 +35,7 @@ humantime-serde = "1.1.1"
 indent_write = "2.2.0"
 indicatif = "0.17.5"
 is_ci = "1.1.1"
-itertools = "0.10.5"
+itertools = "0.11.0"
 log = "0.4.19"
 rand = "0.8.5"
 miette = "5.10.0"
@@ -44,16 +44,16 @@ owo-colors = "3.5.0"
 pin-project-lite = "0.2.10"
 regex = "1.9.1"
 semver = "1.0.18"
-serde = { version = "1.0.174", features = ["derive"] }
+serde = { version = "1.0.178", features = ["derive"] }
 serde_ignored = "0.1.9"
-serde_json = "1.0.103"
+serde_json = "1.0.104"
 serde_path_to_error = "0.1.14"
 shell-words = "1.1.0"
 smol_str = { version = "0.2.0", features = ["serde"] }
 strip-ansi-escapes = "0.1.1"
 tar = "0.4.39"
 # For cfg expression evaluation for [target.'cfg()'] expressions
-target-spec = { version = "3.0.0", features = ["custom", "summaries"] }
+target-spec = { version = "3.0.1", features = ["custom", "summaries"] }
 target-spec-miette = "0.3.0"
 thiserror = "1.0.44"
 # For parsing of .cargo/config.toml files
@@ -77,7 +77,7 @@ zstd = { version = "0.12.4", features = ["zstdmt"] }
 ###
 mukti-metadata = { version = "0.1.0", optional = true }
 # TODO: remove dependency on self_update, build our own thing on top of mukti
-self_update = { version = "0.36.0", optional = true, default-features = false, features = [
+self_update = { version = "0.37.0", optional = true, default-features = false, features = [
     "archive-tar",
     "compression-flate2",
 ] }
@@ -111,12 +111,12 @@ dunce = "1.0.4"
 # RISC-V: https://github.com/nextest-rs/nextest/issues/820
 # (default features for self_update turns on openssl)
 [target.'cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))'.dependencies]
-self_update = { version = "0.36.0", optional = true, default-features = false, features = [
+self_update = { version = "0.37.0", optional = true, default-features = false, features = [
     "rustls",
 ] }
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
-self_update = { version = "0.36.0", optional = true }
+self_update = { version = "0.37.0", optional = true }
 
 
 [dev-dependencies]

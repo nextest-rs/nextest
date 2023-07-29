@@ -26,7 +26,7 @@ internal-testing = ["dep:proptest", "dep:test-strategy", "dep:twox-hash"]
 # trace = ["nom-tracable/trace"]
 
 [dependencies]
-guppy = "0.17.0"
+guppy = "0.17.1"
 miette = "5.10.0"
 nom = "7.1.3"
 nom-tracable = "0.9.0"
@@ -41,7 +41,7 @@ test-strategy = { version = "0.3.1", optional = true }
 twox-hash = { version = "1.6.3", optional = true }
 
 [dev-dependencies]
-clap = { version = "4.3.17", features = ["derive"] }
+clap = { version = "4.3.19", features = ["derive"] }
 camino = "1.1.6"
 test-case = "3.1.0"
 proptest = { version = "1.2.0" }
