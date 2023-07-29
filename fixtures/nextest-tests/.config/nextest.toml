@@ -1,5 +1,7 @@
 ## nextest config for this fixture
 
+nextest-version = { required = "0.9.54", recommended = "0.9.56" }
+
 [profile.default]
 # disable fail-fast to ensure a deterministic test run
 fail-fast = false

@@ -1,0 +1,10 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: output.stdout_as_str()
+---
+current nextest version: 0.9.53
+version requirements:
+    - required: 0.9.54
+    - recommended: 0.9.56
+evaluation result: does not meet required version
+

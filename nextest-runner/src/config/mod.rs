@@ -5,6 +5,7 @@
 
 mod config_impl;
 mod identifier;
+mod nextest_version;
 mod overrides;
 mod retry_policy;
 mod slow_timeout;
@@ -15,6 +16,7 @@ mod tool_config;
 
 pub use config_impl::*;
 pub use identifier::*;
+pub use nextest_version::*;
 pub use overrides::*;
 pub use retry_policy::*;
 pub use slow_timeout::*;

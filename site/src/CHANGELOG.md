@@ -3,6 +3,16 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.55] - 2023-07-29
+
+### Added
+
+- Support for nextest enforcing required and recommended versions, via a new `nextest-version` top-level configuration option. See [Minimum nextest versions](https://nexte.st/book/minimum-versions) for more.
+
+### Fixed
+
+- Detect tests if debug level `line-tables-only` is passed in ([#910](https://github.com/nextest-rs/nextest/issues/910)).
+
 ## [0.9.54] - 2023-06-25
 
 ### Added
@@ -762,6 +772,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.55]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.55
 [0.9.54]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.54
 [0.9.53]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.53
 [0.9.52]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.52

@@ -7,6 +7,7 @@ use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::*;
 use owo_colors::{OwoColorize, Stream};
+use semver::Version;
 use std::error::Error;
 use thiserror::Error;
 
@@ -191,6 +192,12 @@ pub enum ExpectedError {
         #[from]
         err: SignalHandlerSetupError,
     },
+    #[error("required version not met")]
+    RequiredVersionNotMet {
+        required: Version,
+        current: Version,
+        tool: Option<String>,
+    },
     #[error("experimental feature not enabled")]
     ExperimentalFeatureNotEnabled {
         name: &'static str,
@@ -345,6 +352,7 @@ impl ExpectedError {
             | Self::DialoguerError { .. }
             | Self::SignalHandlerSetupError { .. }
             | Self::ShowTestGroupsError { .. } => NextestExitCode::SETUP_ERROR,
+            Self::RequiredVersionNotMet { .. } => NextestExitCode::REQUIRED_VERSION_NOT_MET,
             #[cfg(feature = "self-update")]
             Self::UpdateVersionParseError { .. } => NextestExitCode::SETUP_ERROR,
             Self::DoubleSpawnParseArgsError { .. } | Self::DoubleSpawnExecError { .. } => {
@@ -615,6 +623,30 @@ impl ExpectedError {
             Self::ShowTestGroupsError { err } => {
                 log::error!("{err}");
                 err.source()
+            }
+            Self::RequiredVersionNotMet {
+                required,
+                current,
+                tool,
+            } => {
+                log::error!(
+                    "this repository requires nextest version {}, but the current version is {}",
+                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                );
+                if let Some(tool) = tool {
+                    log::info!(
+                        target: "cargo_nextest::no_heading",
+                        "(required version specified by tool `{}`)",
+                        tool,
+                    );
+                }
+
+                crate::helpers::log_needs_update(
+                    log::Level::Info,
+                    crate::helpers::BYPASS_VERSION_TEXT,
+                );
+                None
             }
             #[cfg(feature = "self-update")]
             Self::UpdateVersionParseError { err } => {

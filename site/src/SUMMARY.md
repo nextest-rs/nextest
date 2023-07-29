@@ -24,6 +24,7 @@
 - [Machine-readable output](book/machine-readable.md)
 - [Configuration](book/configuration.md)
   - [Environment variables](book/env-vars.md)
+  - [Minimum nextest versions](book/minimum-versions.md)
   - [Per-test overrides](book/per-test-overrides.md)
   - [Heavy tests and threads-required](book/threads-required.md)
   - [Test groups and mutual exclusion](book/test-groups.md)
