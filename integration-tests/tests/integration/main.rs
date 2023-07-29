@@ -483,3 +483,123 @@ fn test_show_config_test_groups() {
 
     insta::assert_snapshot!(with_termination_all_output.stdout_as_str());
 }
+
+#[test]
+fn test_show_config_version() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // This is the same as dispatch.rs.
+    const TEST_VERSION_ENV: &str = "__NEXTEST_TEST_VERSION";
+
+    // Required 0.9.56, recommended 0.9.54.
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "version",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.56")
+        .output();
+
+    insta::assert_snapshot!(output.stdout_as_str());
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "version",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.55-a.1")
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_code,
+        Some(NextestExitCode::RECOMMENDED_VERSION_NOT_MET)
+    );
+    insta::assert_snapshot!(output.stdout_as_str());
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "version",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.54")
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_code,
+        Some(NextestExitCode::RECOMMENDED_VERSION_NOT_MET)
+    );
+    insta::assert_snapshot!(output.stdout_as_str());
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "version",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.54-rc.1")
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_code,
+        Some(NextestExitCode::REQUIRED_VERSION_NOT_MET)
+    );
+    insta::assert_snapshot!(output.stdout_as_str());
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "version",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.53")
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_code,
+        Some(NextestExitCode::REQUIRED_VERSION_NOT_MET)
+    );
+    insta::assert_snapshot!(output.stdout_as_str());
+
+    // ---
+    // With --override-version-check
+    // ---
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "version",
+            "--override-version-check",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.55")
+        .output();
+
+    insta::assert_snapshot!(output.stdout_as_str());
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "version",
+            "--override-version-check",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.53")
+        .output();
+
+    insta::assert_snapshot!(output.stdout_as_str());
+}

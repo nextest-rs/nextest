@@ -16,8 +16,8 @@ use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        get_num_cpus, NextestConfig, NextestProfile, PreBuildPlatform, RetryPolicy, TestGroup,
-        TestThreads, ToolConfigFile,
+        get_num_cpus, NextestConfig, NextestProfile, NextestVersionConfig, NextestVersionEval,
+        PreBuildPlatform, RetryPolicy, TestGroup, TestThreads, ToolConfigFile,
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
@@ -30,14 +30,16 @@ use nextest_runner::{
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, TestRunnerBuilder},
-    show_config::{ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
+    show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
 };
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Stream, Style};
+use semver::Version;
 use std::{
+    env::VarError,
     fmt::Write as _,
     io::{Cursor, Write},
     sync::Arc,
@@ -211,6 +213,13 @@ struct ConfigOpts {
     /// than those that come earlier.
     #[arg(long = "tool-config-file", global = true, value_name = "TOOL:ABS_PATH")]
     pub tool_config_files: Vec<ToolConfigFile>,
+
+    /// Override checks for the minimum version defined in nextest's config.
+    ///
+    /// Repository and tool-specific configuration files can specify minimum required and
+    /// recommended versions of nextest. This option overrides those checks.
+    #[arg(long, global = true)]
+    pub override_version_check: bool,
 }
 
 impl ConfigOpts {
@@ -866,6 +875,7 @@ struct BaseApp {
     reuse_build: ReuseBuildInfo,
     cargo_opts: CargoOptions,
     config_opts: ConfigOpts,
+    current_version: Version,
 
     cargo_configs: CargoConfigs,
     double_spawn: OnceCell<DoubleSpawnInfo>,
@@ -941,6 +951,8 @@ impl BaseApp {
 
         let cargo_configs = CargoConfigs::new(&cargo_opts.config).map_err(Box::new)?;
 
+        let current_version = current_version();
+
         Ok(Self {
             output,
             graph_data,
@@ -950,10 +962,147 @@ impl BaseApp {
             cargo_opts,
             config_opts,
             cargo_configs,
+            current_version,
 
             double_spawn: OnceCell::new(),
             target_runner: OnceCell::new(),
         })
+    }
+
+    fn load_config(&self) -> Result<NextestConfig> {
+        let config = self
+            .config_opts
+            .make_config(&self.workspace_root, self.graph())?;
+
+        self.check_version_config_initial(config.nextest_version())?;
+        Ok(config)
+    }
+
+    fn check_version_config_initial(&self, version_cfg: &NextestVersionConfig) -> Result<()> {
+        match version_cfg.eval(
+            &self.current_version,
+            self.config_opts.override_version_check,
+        ) {
+            NextestVersionEval::Satisfied => Ok(()),
+            NextestVersionEval::Error {
+                required,
+                current,
+                tool,
+            } => Err(ExpectedError::RequiredVersionNotMet {
+                required,
+                current,
+                tool,
+            }),
+            NextestVersionEval::Warn {
+                recommended: required,
+                current,
+                tool,
+            } => {
+                log::warn!(
+                    "this repository recommends nextest version {}, but the current version is {}",
+                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                );
+                if let Some(tool) = tool {
+                    log::info!(
+                        target: "cargo_nextest::no_heading",
+                        "(recommended version specified by tool `{}`)",
+                        tool,
+                    );
+                }
+
+                Ok(())
+            }
+            NextestVersionEval::ErrorOverride {
+                required,
+                current,
+                tool,
+            } => {
+                log::info!(
+                    "overriding version check (required: {}, current: {})",
+                    required,
+                    current
+                );
+                if let Some(tool) = tool {
+                    log::info!(
+                        target: "cargo_nextest::no_heading",
+                        "(required version specified by tool `{}`)",
+                        tool,
+                    );
+                }
+
+                Ok(())
+            }
+            NextestVersionEval::WarnOverride {
+                recommended,
+                current,
+                tool,
+            } => {
+                log::info!(
+                    "overriding version check (recommended: {}, current: {})",
+                    recommended,
+                    current,
+                );
+                if let Some(tool) = tool {
+                    log::info!(
+                        target: "cargo_nextest::no_heading",
+                        "(recommended version specified by tool `{}`)",
+                        tool,
+                    );
+                }
+
+                Ok(())
+            }
+        }
+    }
+
+    fn check_version_config_final(&self, version_cfg: &NextestVersionConfig) -> Result<()> {
+        match version_cfg.eval(
+            &self.current_version,
+            self.config_opts.override_version_check,
+        ) {
+            NextestVersionEval::Satisfied => Ok(()),
+            NextestVersionEval::Error {
+                required,
+                current,
+                tool,
+            } => Err(ExpectedError::RequiredVersionNotMet {
+                required,
+                current,
+                tool,
+            }),
+            NextestVersionEval::Warn {
+                recommended: required,
+                current,
+                tool,
+            } => {
+                log::warn!(
+                    "this repository recommends nextest version {}, but the current version is {}",
+                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                );
+                if let Some(tool) = tool {
+                    log::info!(
+                        target: "cargo_nextest::no_heading",
+                        "(recommended version specified by tool `{}`)",
+                        tool,
+                    );
+                }
+
+                // Don't need to print extra text here -- this is a warning, not an error.
+                crate::helpers::log_needs_update(
+                    log::Level::Info,
+                    crate::helpers::BYPASS_VERSION_TEXT,
+                );
+
+                Ok(())
+            }
+            NextestVersionEval::ErrorOverride { .. } | NextestVersionEval::WarnOverride { .. } => {
+                // Don't print overrides at the end since users have already opted into overrides --
+                // just be ok with the one at the beginning.
+                Ok(())
+            }
+        }
     }
 
     fn load_double_spawn(&self) -> &DoubleSpawnInfo {
@@ -1055,6 +1204,21 @@ impl BaseApp {
     }
 }
 
+fn current_version() -> Version {
+    // This is a test-only, not part of the public API.
+    match std::env::var("__NEXTEST_TEST_VERSION") {
+        Ok(version) => version
+            .parse()
+            .expect("__NEXTEST_TEST_VERSION should be a valid semver version"),
+        Err(VarError::NotPresent) => env!("CARGO_PKG_VERSION")
+            .parse()
+            .expect("CARGO_PKG_VERSION should be a valid semver version"),
+        Err(error) => {
+            panic!("error reading __NEXTEST_TEST_VERSION: {error}");
+        }
+    }
+}
+
 #[derive(Debug)]
 struct App {
     base: BaseApp,
@@ -1140,6 +1304,7 @@ impl App {
         list_type: ListType,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
+        let config = self.base.load_config()?;
         let filter_exprs = self.build_filtering_expressions()?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
@@ -1182,6 +1347,9 @@ impl App {
                 writer.flush().map_err(WriteTestListError::Io)?;
             }
         }
+
+        self.base
+            .check_version_config_final(config.nextest_version())?;
         Ok(())
     }
 
@@ -1192,10 +1360,7 @@ impl App {
         groups: Vec<TestGroup>,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let config = self
-            .base
-            .config_opts
-            .make_config(&self.base.workspace_root, self.base.graph())?;
+        let config = self.base.load_config()?;
         let profile = self.load_profile(profile_name, &config)?;
 
         // Validate test groups before doing any other work.
@@ -1251,10 +1416,7 @@ impl App {
         reporter_opts: &TestReporterOpts,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let config = self
-            .base
-            .config_opts
-            .make_config(&self.base.workspace_root, self.base.graph())?;
+        let config = self.base.load_config()?;
         let profile = self.load_profile(profile_name, &config)?;
 
         let filter_exprs = self.build_filtering_expressions()?;
@@ -1309,6 +1471,8 @@ impl App {
             // Write and flush the event.
             reporter.report_event(event)
         })?;
+        self.base
+            .check_version_config_final(config.nextest_version())?;
         if !run_stats.is_success() {
             return Err(ExpectedError::test_run_failed());
         }
@@ -1318,6 +1482,8 @@ impl App {
 
 #[derive(Debug, Subcommand)]
 enum ShowConfigCommand {
+    /// Show version-related configuration.
+    Version {},
     /// Show defined test groups and their associated tests.
     TestGroups {
         /// Nextest profile to show test groups for
@@ -1333,13 +1499,13 @@ enum ShowConfigCommand {
         groups: Vec<TestGroup>,
 
         #[clap(flatten)]
-        cargo_options: CargoOptions,
+        cargo_options: Box<CargoOptions>,
 
         #[clap(flatten)]
         build_filter: TestBuildFilter,
 
         #[clap(flatten)]
-        reuse_build: ReuseBuildOpts,
+        reuse_build: Box<ReuseBuildOpts>,
     },
 }
 
@@ -1353,6 +1519,54 @@ impl ShowConfigCommand {
     ) -> Result<i32> {
         let output = output.init();
         match self {
+            Self::Version {} => {
+                // We don't want to invoke the full BaseApp because it requires a number of
+                // irrelevant settings. Instead, do a lightweight discovery using a package graph.
+                //
+                // This shouldn't _really_ require a package graph since it accesses the part of
+                // configuration that doesn't need one. Solving that requires a major refactoring,
+                // though, so don't bother with it right now.
+                let json = acquire_graph_data(manifest_path.as_deref(), None, output, false)?;
+                let graph = PackageGraph::from_json(json)
+                    .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
+
+                let config = config_opts.make_config(graph.workspace().root(), &graph)?;
+                let current_version = current_version();
+
+                let show = ShowNextestVersion::new(
+                    config.nextest_version(),
+                    &current_version,
+                    config_opts.override_version_check,
+                );
+                show.write_human(
+                    &mut output_writer.stdout_writer(),
+                    output.color.should_colorize(supports_color::Stream::Stdout),
+                )
+                .map_err(WriteTestListError::Io)?;
+
+                match config
+                    .nextest_version()
+                    .eval(&current_version, config_opts.override_version_check)
+                {
+                    NextestVersionEval::Satisfied => Ok(0),
+                    NextestVersionEval::Error { .. } => {
+                        crate::helpers::log_needs_update(
+                            log::Level::Error,
+                            crate::helpers::BYPASS_VERSION_TEXT,
+                        );
+                        Ok(nextest_metadata::NextestExitCode::REQUIRED_VERSION_NOT_MET)
+                    }
+                    NextestVersionEval::Warn { .. } => {
+                        crate::helpers::log_needs_update(
+                            log::Level::Warn,
+                            crate::helpers::BYPASS_VERSION_TEXT,
+                        );
+                        Ok(nextest_metadata::NextestExitCode::RECOMMENDED_VERSION_NOT_MET)
+                    }
+                    NextestVersionEval::ErrorOverride { .. }
+                    | NextestVersionEval::WarnOverride { .. } => Ok(0),
+                }
+            }
             Self::TestGroups {
                 profile,
                 show_default,
@@ -1363,8 +1577,8 @@ impl ShowConfigCommand {
             } => {
                 let base = BaseApp::new(
                     output,
-                    reuse_build,
-                    cargo_options,
+                    *reuse_build,
+                    *cargo_options,
                     config_opts,
                     manifest_path,
                     build_filter_needs_deps(&build_filter),
@@ -1373,10 +1587,10 @@ impl ShowConfigCommand {
                 let app = App::new(base, build_filter)?;
 
                 app.exec_show_test_groups(profile.as_deref(), show_default, groups, output_writer)?;
+
+                Ok(0)
             }
         }
-
-        Ok(0)
     }
 }
 

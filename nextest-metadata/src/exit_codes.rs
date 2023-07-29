@@ -54,4 +54,16 @@ impl NextestExitCode {
 
     /// A self-update was requested but this version of cargo-nextest cannot perform self-updates.
     pub const SELF_UPDATE_UNAVAILABLE: i32 = 93;
+
+    /// The current version of nextest did not meet repository or tool requirements.
+    ///
+    /// *Since nextest 0.9.55*.
+    pub const REQUIRED_VERSION_NOT_MET: i32 = 92;
+
+    /// The current version of nextest is older than the minimum recommended version.
+    ///
+    /// This advisory exit code is only produced by `cargo nextest show-config version`.
+    ///
+    /// *Since nextest 0.9.55*.
+    pub const RECOMMENDED_VERSION_NOT_MET: i32 = 10;
 }

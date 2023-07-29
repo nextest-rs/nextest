@@ -9,7 +9,7 @@ use nextest_metadata::{
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::{borrow::Cow, fmt, process::Command};
+use std::{borrow::Cow, collections::HashMap, ffi::OsString, fmt, process::Command};
 
 pub struct TestInfo {
     id: RustBinaryId,
@@ -131,6 +131,7 @@ pub fn cargo_bin() -> String {
 pub struct CargoNextestCli {
     bin: Utf8PathBuf,
     args: Vec<String>,
+    envs: HashMap<OsString, OsString>,
     unchecked: bool,
 }
 
@@ -141,6 +142,7 @@ impl CargoNextestCli {
         Self {
             bin: bin.into(),
             args: Vec::new(),
+            envs: HashMap::new(),
             unchecked: false,
         }
     }
@@ -156,6 +158,21 @@ impl CargoNextestCli {
         self
     }
 
+    pub fn env(&mut self, k: impl Into<OsString>, v: impl Into<OsString>) -> &mut Self {
+        self.envs.insert(k.into(), v.into());
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn envs(
+        &mut self,
+        envs: impl IntoIterator<Item = (impl Into<OsString>, impl Into<OsString>)>,
+    ) -> &mut Self {
+        self.envs
+            .extend(envs.into_iter().map(|(k, v)| (k.into(), v.into())));
+        self
+    }
+
     pub fn unchecked(&mut self, unchecked: bool) -> &mut Self {
         self.unchecked = unchecked;
         self
@@ -164,6 +181,7 @@ impl CargoNextestCli {
     pub fn output(&self) -> CargoNextestOutput {
         let mut command = std::process::Command::new(&self.bin);
         command.arg("nextest").args(&self.args);
+        command.envs(&self.envs);
         let output = command.output().expect("failed to execute");
 
         let ret = CargoNextestOutput {

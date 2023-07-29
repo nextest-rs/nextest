@@ -18,6 +18,7 @@ mod dispatch;
 #[cfg(unix)]
 mod double_spawn;
 mod errors;
+mod helpers;
 mod output;
 mod reuse_build;
 #[cfg(feature = "self-update")]

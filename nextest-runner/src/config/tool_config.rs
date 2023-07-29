@@ -56,7 +56,10 @@ impl FromStr for ToolConfigFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{test_helpers::*, NextestConfig, RetryPolicy, TestGroup};
+    use crate::config::{
+        test_helpers::*, NextestConfig, NextestVersionConfig, NextestVersionReq, RetryPolicy,
+        TestGroup,
+    };
     use camino_tempfile::tempdir;
     use guppy::graph::cargo::BuildPlatform;
     use nextest_filtering::{BinaryQuery, TestQuery};
@@ -89,6 +92,8 @@ mod tests {
     #[test]
     fn tool_config_basic() {
         let config_contents = r#"
+        nextest-version = "0.9.50"
+
         [profile.default]
         retries = 3
 
@@ -106,6 +111,8 @@ mod tests {
         "#;
 
         let tool1_config_contents = r#"
+        nextest-version = { required = "0.9.51", recommended = "0.9.52" }
+
         [profile.default]
         retries = 4
 
@@ -131,6 +138,8 @@ mod tests {
         "#;
 
         let tool2_config_contents = r#"
+        nextest-version = { recommended = "0.9.49" }
+
         [profile.default]
         retries = 5
 
@@ -187,6 +196,21 @@ mod tests {
             ],
         )
         .expect("config is valid");
+
+        let nextest_version = config.nextest_version();
+        assert_eq!(
+            nextest_version,
+            &NextestVersionConfig {
+                required: NextestVersionReq::Version {
+                    version: "0.9.51".parse().unwrap(),
+                    tool: Some("tool1".to_owned())
+                },
+                recommended: NextestVersionReq::Version {
+                    version: "0.9.52".parse().unwrap(),
+                    tool: Some("tool1".to_owned())
+                }
+            },
+        );
 
         let default_profile = config
             .profile(NextestConfig::DEFAULT_PROFILE)
