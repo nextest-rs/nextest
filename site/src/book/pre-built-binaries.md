@@ -109,9 +109,7 @@ These binaries are maintained by the community—*thank you!*
 
 ### Homebrew
 
-**Homebrew is not currently recommended as an installation method** because it also installs a copy of Rust, separate from rustup. See [Homebrew core issue #124998](https://github.com/Homebrew/homebrew-core/issues/124998).
-
-With this disclaimer in mind, if you'd like to install nextest with Homebrew:
+To install nextest with Homebrew, on macOS or Linux:
 
 ```
 brew install cargo-nextest
