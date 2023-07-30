@@ -6,7 +6,7 @@
 use crate::output::OutputContext;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Args;
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
@@ -118,6 +118,10 @@ pub(crate) struct CargoOptions {
     #[arg(long, group = "cargo-opts")]
     future_incompat_report: bool,
 
+    /// Timing output formats (unstable) (comma separated): html, json
+    #[arg(long, require_equals = true, value_name = "FMTS", group = "cargo-opts")]
+    timings: Option<Option<String>>,
+
     // --verbose is not currently supported
     // --color is handled by runner
     /// Require Cargo.lock and cache are up to date
@@ -149,7 +153,7 @@ pub(crate) struct CargoCli<'a> {
     manifest_path: Option<&'a Utf8Path>,
     output: OutputContext,
     command: &'a str,
-    args: Vec<&'a str>,
+    args: Vec<Cow<'a, str>>,
 }
 
 impl<'a> CargoCli<'a> {
@@ -170,108 +174,116 @@ impl<'a> CargoCli<'a> {
 
     #[allow(dead_code)]
     pub(crate) fn add_arg(&mut self, arg: &'a str) -> &mut Self {
-        self.args.push(arg);
+        self.args.push(Cow::Borrowed(arg));
         self
     }
 
     pub(crate) fn add_args(&mut self, args: impl IntoIterator<Item = &'a str>) -> &mut Self {
-        self.args.extend(args);
+        self.args.extend(args.into_iter().map(Cow::Borrowed));
         self
     }
 
     pub(crate) fn add_options(&mut self, options: &'a CargoOptions) -> &mut Self {
         if options.lib {
-            self.args.push("--lib");
+            self.add_arg("--lib");
         }
-        self.args
-            .extend(options.bin.iter().flat_map(|s| ["--bin", s.as_str()]));
+        self.add_args(options.bin.iter().flat_map(|s| ["--bin", s.as_str()]));
         if options.bins {
-            self.args.push("--bins");
+            self.add_arg("--bins");
         }
-        self.args.extend(
+        self.add_args(
             options
                 .example
                 .iter()
                 .flat_map(|s| ["--example", s.as_str()]),
         );
         if options.examples {
-            self.args.push("--examples");
+            self.add_arg("--examples");
         }
-        self.args
-            .extend(options.test.iter().flat_map(|s| ["--test", s.as_str()]));
+        self.add_args(options.test.iter().flat_map(|s| ["--test", s.as_str()]));
         if options.tests {
-            self.args.push("--tests");
+            self.add_arg("--tests");
         }
-        self.args
-            .extend(options.bench.iter().flat_map(|s| ["--bench", s.as_str()]));
+        self.add_args(options.bench.iter().flat_map(|s| ["--bench", s.as_str()]));
         if options.benches {
-            self.args.push("--benches");
+            self.add_arg("--benches");
         }
         if options.all_targets {
-            self.args.push("--all-targets");
+            self.add_arg("--all-targets");
         }
-        self.args.extend(
+        self.add_args(
             options
                 .packages
                 .iter()
                 .flat_map(|s| ["--package", s.as_str()]),
         );
         if options.workspace {
-            self.args.push("--workspace");
+            self.add_arg("--workspace");
         }
-        self.args.extend(
+        self.add_args(
             options
                 .exclude
                 .iter()
                 .flat_map(|s| ["--exclude", s.as_str()]),
         );
         if options.all {
-            self.args.push("--all");
+            self.add_arg("--all");
         }
         if options.release {
-            self.args.push("--release");
+            self.add_arg("--release");
         }
         if let Some(profile) = &options.cargo_profile {
-            self.args.extend(["--profile", profile]);
+            self.add_args(["--profile", profile]);
         }
         if let Some(build_jobs) = &options.build_jobs {
-            self.args.extend(["--jobs", build_jobs.as_str()]);
+            self.add_args(["--jobs", build_jobs.as_str()]);
         }
-        self.args
-            .extend(options.features.iter().flat_map(|s| ["--features", s]));
+        self.add_args(options.features.iter().flat_map(|s| ["--features", s]));
         if options.all_features {
-            self.args.push("--all-features");
+            self.add_arg("--all-features");
         }
         if options.no_default_features {
-            self.args.push("--no-default-features");
+            self.add_arg("--no-default-features");
         }
         if let Some(target) = &options.target {
-            self.args.extend(["--target", target]);
+            self.add_args(["--target", target]);
         }
         if let Some(target_dir) = &options.target_dir {
-            self.args.extend(["--target-dir", target_dir.as_str()]);
+            self.add_args(["--target-dir", target_dir.as_str()]);
         }
         if options.ignore_rust_version {
-            self.args.push("--ignore-rust-version");
+            self.add_arg("--ignore-rust-version");
         }
         if options.unit_graph {
-            self.args.push("--unit-graph");
+            self.add_arg("--unit-graph");
+        }
+        if let Some(timings) = &options.timings {
+            match timings {
+                Some(timings) => {
+                    // The argument must be passed in as "--timings=html,json", not "--timings
+                    // html,json".
+                    let timings = format!("--timings={}", timings.as_str());
+                    self.add_owned_arg(timings);
+                }
+                None => {
+                    self.add_arg("--timings");
+                }
+            }
         }
         if options.future_incompat_report {
-            self.args.push("--future-incompat-report");
+            self.add_arg("--future-incompat-report");
         }
         if options.frozen {
-            self.args.push("--frozen");
+            self.add_arg("--frozen");
         }
         if options.locked {
-            self.args.push("--locked");
+            self.add_arg("--locked");
         }
         if options.offline {
-            self.args.push("--offline");
+            self.add_arg("--offline");
         }
-        self.args
-            .extend(options.config.iter().flat_map(|s| ["--config", s.as_str()]));
-        self.args.extend(
+        self.add_args(options.config.iter().flat_map(|s| ["--config", s.as_str()]));
+        self.add_args(
             options
                 .unstable_flags
                 .iter()
@@ -283,9 +295,13 @@ impl<'a> CargoCli<'a> {
         self
     }
 
+    fn add_owned_arg(&mut self, arg: String) {
+        self.args.push(Cow::Owned(arg));
+    }
+
     pub(crate) fn all_args(&self) -> Vec<&str> {
         let mut all_args = vec![self.cargo_path.as_str(), self.command];
-        all_args.extend_from_slice(&self.args);
+        all_args.extend(self.args.iter().map(|s| s.as_ref()));
         all_args
     }
 
@@ -298,7 +314,9 @@ impl<'a> CargoCli<'a> {
             // Ensure that cargo gets picked up from PATH if necessary, by calling as_str
             // rather than as_std_path.
             self.cargo_path.as_str(),
-            initial_args.into_iter().chain(self.args.iter().copied()),
+            initial_args
+                .into_iter()
+                .chain(self.args.iter().map(|s| s.as_ref())),
         )
     }
 }

@@ -7,7 +7,8 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ### Added
 
-- Support for nextest enforcing required and recommended versions, via a new `nextest-version` top-level configuration option. See [Minimum nextest versions](https://nexte.st/book/minimum-versions) for more.
+- Support for Cargo's `--timings` option ([#903](https://github.com/nextest-rs/nextest/issues/903)).
+- Support for required and recommended versions, via a new `nextest-version` top-level configuration option. See [Minimum nextest versions](https://nexte.st/book/minimum-versions) for more.
 
 ### Fixed
 
