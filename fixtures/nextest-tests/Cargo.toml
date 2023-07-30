@@ -38,3 +38,11 @@ members = [
 [dependencies]
 dylib-test = { path = "dylib-test" }
 uuid = "1.2.1"
+
+# TODO: Introduce this test (regarding #910) once the MSRV is Rust 1.70.
+# [profile.dev]
+# debug = 1
+
+# [profile.dev-line-tables-only]
+# inherits = "dev"
+# debug = "line-tables-only"
