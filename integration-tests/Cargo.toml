@@ -21,7 +21,7 @@ nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 camino = "1.1.6"
 cfg-if = "1.0.0"
 pathdiff = { version = "0.2.1", features = ["camino"] }
-nextest-metadata = { version = "=0.9.0", path = "../nextest-metadata" }
+nextest-metadata = { version = "=0.9.1", path = "../nextest-metadata" }
 once_cell = "1.18.0"
 tempfile = "3.7.0"
 regex = "1.9.1"
