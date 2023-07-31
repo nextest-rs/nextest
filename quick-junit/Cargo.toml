@@ -20,5 +20,5 @@ uuid = "1.4.1"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-goldenfile = "1.5.1"
+goldenfile = "1.5.2"
 owo-colors = "3.5.0"
