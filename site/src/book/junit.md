@@ -1,6 +1,6 @@
 # JUnit support
 
-cargo-nextest can produce output in the [JUnit/XUnit XML format](https://llg.cubic.org/docs/junit/). This format is widely understood by test analysis tools and libraries.
+Nextest can produce output in the [JUnit/XUnit XML format](https://llg.cubic.org/docs/junit/). This format is widely understood by test analysis tools and libraries.
 
 To enable JUnit support, add this to your [nextest configuration](configuration.md):
 
@@ -12,7 +12,7 @@ path = "junit.xml"
 If `--profile ci` is selected on the command line, a JUnit report will be written out to `target/nextest/ci/junit.xml` within the workspace root.
 
 Some notes about the JUnit support:
-* There are several slightly different formats all called "JUnit" or "XUnit". cargo-nextest adheres to the [Jenkins XML format](https://llg.cubic.org/docs/junit/).
+* There are several slightly different formats all called "JUnit" or "XUnit". Nextest adheres to the [Jenkins XML format](https://llg.cubic.org/docs/junit/).
 * Every test binary forms a single `<testsuite>`. Every test forms a single `<testcase>`.
 * Standard output and standard error are included for failed and retried tests. (However, [invalid XML characters](https://en.wikipedia.org/wiki/Valid_characters_in_XML) are stripped out.)
 
