@@ -4,12 +4,12 @@
       "latest": "0.9",
       "ranges": {
         "0.9": {
-          "latest": "0.9.56",
+          "latest": "0.9.55",
           "is_prerelease": false,
           "versions": {
             "0.9.56": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.56",
-              "status": "active",
+              "status": "yanked",
               "locations": [
                 {
                   "target": "x86_64-unknown-linux-gnu",
