@@ -339,9 +339,9 @@ impl<'de> Deserialize<'de> for NextestVersionDeserialize {
                 ))?;
 
                 if let (Some(required), Some(recommended)) = (&required, &recommended) {
-                    if required >= recommended {
+                    if required > recommended {
                         return Err(serde::de::Error::custom(format!(
-                            "required version ({}) must be less than recommended version ({})",
+                            "required version ({}) must not be greater than recommended version ({})",
                             required, recommended
                         )));
                     }
