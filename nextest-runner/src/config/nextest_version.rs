@@ -467,7 +467,7 @@ mod tests {
         r#"
             nextest-version = { required = "0.9.20", recommended = "0.9.10" }
         "#,
-        "required version (0.9.20) must be less than recommended version (0.9.10)" ; "error greater than warning"
+        "required version (0.9.20) must not be greater than recommended version (0.9.10)" ; "error greater than warning"
     )]
     fn test_invalid_nextest_version(input: &str, error_message: &str) {
         let err = toml::from_str::<VersionOnlyDeserialize>(input).unwrap_err();
