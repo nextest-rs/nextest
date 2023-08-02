@@ -1,0 +1,46 @@
+[profile.default]
+final-status-level = "slow"
+
+[[profile.default.overrides]]
+# test_subprocess_doesnt_exit runs a sleep command for 360 seconds. If integration tests take longer
+# than 180 seconds, it likely means that nextest is stuck waiting for the sleep command to exit.
+# This is a bug.
+filter = 'package(integration-tests)'
+slow-timeout = { period = "60s", terminate-after = 3 }
+test-group = "my-group"
+junit.store-success-output = true
+
+[profile.ci]
+# Don't fail fast in CI to run the full test suite.
+fail-fast = false
+
+[[profile.ci.overrides]]
+# These tests are a bit flaky on Mac GHA CI runners due to resource exhaustion.
+platform = 'cfg(target_os = "macos")'
+filter = '(package(nextest-runner) and binary(integration)) or package(integration-tests)'
+retries = { count = 3, backoff = "fixed", delay = "1s" }
+
+[profile.test-slow]
+# This is a test profile with a quick slow timeout.
+slow-timeout = "1s"
+
+[profile.test-slow-with-timeout]
+slow-timeout = { period = "1s", terminate-after = 2 }
+retries = 2
+
+[profile.with-junit]
+junit = { path = "report.xml" }
+
+[profile.serial]
+test-threads = 1
+
+[[profile.serial.overrides]]
+filter = 'test(foo)'
+retries = 3
+
+# Added for testing.
+[test-groups.my-group]
+max-threads = 8
+
+[test-groups.unused-group]
+max-threads = 8
