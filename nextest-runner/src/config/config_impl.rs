@@ -3,8 +3,8 @@
 
 use super::{
     CompiledOverride, CompiledOverridesByProfile, CustomTestGroup, DeserializedOverride,
-    NextestVersionConfig, NextestVersionDeserialize, RetryPolicy, SettingSource, SlowTimeout,
-    TestGroup, TestGroupConfig, TestSettings, TestThreads, ThreadsRequired, ToolConfigFile,
+    NextestVersionDeserialize, RetryPolicy, SettingSource, SlowTimeout, TestGroup, TestGroupConfig,
+    TestSettings, TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
     errors::{
@@ -51,7 +51,6 @@ pub fn get_num_cpus() -> usize {
 pub struct NextestConfig {
     workspace_root: Utf8PathBuf,
     inner: NextestConfigImpl,
-    nextest_version: NextestVersionConfig,
     overrides: CompiledOverridesByProfile,
 }
 
@@ -136,7 +135,7 @@ impl NextestConfig {
     {
         let workspace_root = workspace_root.into();
         let tool_config_files_rev = tool_config_files.into_iter().rev();
-        let (inner, nextest_version, overrides) = Self::read_from_sources(
+        let (inner, overrides) = Self::read_from_sources(
             graph,
             &workspace_root,
             config_file,
@@ -146,7 +145,6 @@ impl NextestConfig {
         Ok(Self {
             workspace_root,
             inner,
-            nextest_version,
             overrides,
         })
     }
@@ -179,15 +177,9 @@ impl NextestConfig {
         Self {
             workspace_root: workspace_root.into(),
             inner: deserialized.into_config_impl(),
-            nextest_version: NextestVersionConfig::default(),
             // The default config does not (cannot) have overrides.
             overrides: CompiledOverridesByProfile::default(),
         }
-    }
-
-    /// Returns the nextest version requirement.
-    pub fn nextest_version(&self) -> &NextestVersionConfig {
-        &self.nextest_version
     }
 
     /// Returns the profile with the given name, or an error if a profile was specified but not
@@ -209,24 +201,13 @@ impl NextestConfig {
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
         unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
-    ) -> Result<
-        (
-            NextestConfigImpl,
-            NextestVersionConfig,
-            CompiledOverridesByProfile,
-        ),
-        ConfigParseError,
-    > {
+    ) -> Result<(NextestConfigImpl, CompiledOverridesByProfile), ConfigParseError> {
         // First, get the default config.
         let mut composite_builder = Self::make_default_config();
 
         // Overrides are handled additively.
         // Note that they're stored in reverse order here, and are flipped over at the end.
         let mut overrides = CompiledOverridesByProfile::default();
-
-        // The nextest version configuration is handled specially: highest version specified by any
-        // tool wins.
-        let mut nextest_version = NextestVersionConfig::default();
 
         let mut known_groups = BTreeSet::new();
 
@@ -241,7 +222,6 @@ impl NextestConfig {
                 source.clone(),
                 &mut overrides,
                 unknown_callback,
-                &mut nextest_version,
                 &mut known_groups,
             )?;
 
@@ -267,7 +247,6 @@ impl NextestConfig {
             source.clone(),
             &mut overrides,
             unknown_callback,
-            &mut nextest_version,
             &mut known_groups,
         )?;
 
@@ -284,7 +263,7 @@ impl NextestConfig {
             override_.reverse();
         }
 
-        Ok((config.into_config_impl(), nextest_version, overrides))
+        Ok((config.into_config_impl(), overrides))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -296,7 +275,6 @@ impl NextestConfig {
         source: File<FileSourceFile, FileFormat>,
         overrides_out: &mut CompiledOverridesByProfile,
         unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
-        nextest_version: &mut NextestVersionConfig,
         known_groups: &mut BTreeSet<CustomTestGroup>,
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
@@ -308,10 +286,6 @@ impl NextestConfig {
 
         if !unknown.is_empty() {
             unknown_callback(config_file, tool, &unknown);
-        }
-
-        if let Some(version) = this_config.nextest_version.clone() {
-            nextest_version.accumulate(version, tool);
         }
 
         // Check that test groups are named as expected.
@@ -726,6 +700,9 @@ impl NextestConfigImpl {
 #[serde(rename_all = "kebab-case")]
 struct NextestConfigDeserialize {
     store: StoreConfigImpl,
+    // This is parsed as part of NextestConfigVersionOnly. It's re-parsed here to avoid printing an
+    // "unknown key" message.
+    #[allow(unused)]
     #[serde(default)]
     nextest_version: Option<NextestVersionDeserialize>,
     #[serde(default)]

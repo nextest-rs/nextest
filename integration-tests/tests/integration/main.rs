@@ -24,6 +24,7 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use nextest_metadata::{BuildPlatform, NextestExitCode};
+use std::{fs::File, io::Write};
 
 mod fixtures;
 mod temp_project;
@@ -589,6 +590,38 @@ fn test_show_config_version() {
         .output();
 
     insta::assert_snapshot!(output.stdout_as_str());
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "show-config",
+            "version",
+            "--override-version-check",
+        ])
+        .env(TEST_VERSION_ENV, "0.9.53")
+        .output();
+
+    insta::assert_snapshot!(output.stdout_as_str());
+
+    // Add an invalid test group to the config file.
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    let mut f = File::options()
+        .append(true)
+        .write(true)
+        .create(false)
+        .open(&config_path)
+        .unwrap();
+    f.write_all(
+        r#"
+    [test-groups.invalid-group]
+    max-threads = { foo = 42 }
+    "#
+        .as_bytes(),
+    )
+    .unwrap();
+    f.flush().unwrap();
+    std::mem::drop(f);
 
     let output = CargoNextestCli::new()
         .args([

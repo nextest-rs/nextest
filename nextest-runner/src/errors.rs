@@ -84,6 +84,12 @@ pub enum ConfigParseErrorKind {
     #[error(transparent)]
     /// An error occurred while deserializing the config.
     DeserializeError(Box<serde_path_to_error::Error<ConfigError>>),
+    /// An error occurred while reading the config file (version only).
+    #[error(transparent)]
+    VersionOnlyReadError(std::io::Error),
+    /// An error occurred while deserializing the config (version only).
+    #[error(transparent)]
+    VersionOnlyDeserializeError(Box<serde_path_to_error::Error<toml::de::Error>>),
     /// Errors occurred while parsing overrides.
     #[error("error parsing overrides (destructure this variant for more details)")]
     OverrideError(Vec<ConfigParseOverrideError>),

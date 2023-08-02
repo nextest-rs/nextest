@@ -58,7 +58,7 @@ mod tests {
     use super::*;
     use crate::config::{
         test_helpers::*, NextestConfig, NextestVersionConfig, NextestVersionReq, RetryPolicy,
-        TestGroup,
+        TestGroup, VersionOnlyConfig,
     };
     use camino_tempfile::tempdir;
     use guppy::graph::cargo::BuildPlatform;
@@ -180,24 +180,20 @@ mod tests {
         std::fs::write(&tool1_path, tool1_config_contents).unwrap();
         std::fs::write(&tool2_path, tool2_config_contents).unwrap();
 
-        let config = NextestConfig::from_sources(
-            workspace_root,
-            &graph,
-            None,
-            &[
-                ToolConfigFile {
-                    tool: "tool1".to_owned(),
-                    config_file: tool1_path,
-                },
-                ToolConfigFile {
-                    tool: "tool2".to_owned(),
-                    config_file: tool2_path,
-                },
-            ],
-        )
-        .expect("config is valid");
+        let tool_config_files = [
+            ToolConfigFile {
+                tool: "tool1".to_owned(),
+                config_file: tool1_path,
+            },
+            ToolConfigFile {
+                tool: "tool2".to_owned(),
+                config_file: tool2_path,
+            },
+        ];
 
-        let nextest_version = config.nextest_version();
+        let version_only_config =
+            VersionOnlyConfig::from_sources(workspace_root, None, &tool_config_files).unwrap();
+        let nextest_version = version_only_config.nextest_version();
         assert_eq!(
             nextest_version,
             &NextestVersionConfig {
@@ -211,6 +207,9 @@ mod tests {
                 }
             },
         );
+
+        let config = NextestConfig::from_sources(workspace_root, &graph, None, &tool_config_files)
+            .expect("config is valid");
 
         let default_profile = config
             .profile(NextestConfig::DEFAULT_PROFILE)

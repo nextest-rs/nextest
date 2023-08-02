@@ -3,8 +3,103 @@
 
 //! Nextest version configuration.
 
+use super::{NextestConfig, ToolConfigFile};
+use crate::errors::{ConfigParseError, ConfigParseErrorKind};
+use camino::Utf8Path;
 use semver::Version;
 use serde::{Deserialize, Deserializer};
+use std::borrow::Cow;
+
+/// A "version-only" form of the nextest configuration.
+///
+/// This is used as a first pass to determine the required nextest version before parsing the rest
+/// of the configuration. That avoids issues parsing incompatible configuration.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct VersionOnlyConfig {
+    /// The nextest version configuration.
+    nextest_version: NextestVersionConfig,
+}
+
+impl VersionOnlyConfig {
+    /// Reads the nextest version configuration from the given sources.
+    ///
+    /// See [`NextestConfig::from_sources`] for more details.
+    pub fn from_sources<'a, I>(
+        workspace_root: &Utf8Path,
+        config_file: Option<&Utf8Path>,
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
+        let tool_config_files_rev = tool_config_files.into_iter().rev();
+        let nextest_version =
+            Self::read_from_sources(workspace_root, config_file, tool_config_files_rev)?;
+        Ok(Self { nextest_version })
+    }
+
+    /// Returns the nextest version requirement.
+    pub fn nextest_version(&self) -> &NextestVersionConfig {
+        &self.nextest_version
+    }
+
+    fn read_from_sources<'a>(
+        workspace_root: &Utf8Path,
+        config_file: Option<&Utf8Path>,
+        tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
+    ) -> Result<NextestVersionConfig, ConfigParseError> {
+        let mut nextest_version = NextestVersionConfig::default();
+
+        // Merge in tool configs.
+        for ToolConfigFile { config_file, tool } in tool_config_files_rev {
+            if let Some(v) = Self::read_and_deserialize(config_file, Some(tool))? {
+                nextest_version.accumulate(v, Some(tool));
+            }
+        }
+
+        // Finally, merge in the repo config.
+        let config_file = match config_file {
+            Some(file) => Cow::Borrowed(file),
+            None => Cow::Owned(workspace_root.join(NextestConfig::CONFIG_PATH)),
+        };
+        if let Some(v) = Self::read_and_deserialize(&config_file, None)? {
+            nextest_version.accumulate(v, None);
+        }
+
+        Ok(nextest_version)
+    }
+
+    fn read_and_deserialize(
+        config_file: &Utf8Path,
+        tool: Option<&str>,
+    ) -> Result<Option<NextestVersionDeserialize>, ConfigParseError> {
+        let toml_str = std::fs::read_to_string(config_file.as_str()).map_err(|error| {
+            ConfigParseError::new(
+                config_file.clone(),
+                tool,
+                ConfigParseErrorKind::VersionOnlyReadError(error),
+            )
+        })?;
+        let toml_de = toml::de::Deserializer::new(&toml_str);
+        let v: VersionOnlyDeserialize =
+            serde_path_to_error::deserialize(toml_de).map_err(|error| {
+                ConfigParseError::new(
+                    config_file.clone(),
+                    tool,
+                    ConfigParseErrorKind::VersionOnlyDeserializeError(Box::new(error)),
+                )
+            })?;
+        Ok(v.nextest_version)
+    }
+}
+
+/// A version of configuration that only deserializes the nextest version.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct VersionOnlyDeserialize {
+    #[serde(default)]
+    nextest_version: Option<NextestVersionDeserialize>,
+}
 
 /// Nextest version configuration.
 ///
@@ -346,8 +441,8 @@ mod tests {
         } ; "with error and warning"
     )]
     fn test_valid_nextest_version(input: &str, expected: NextestVersionDeserialize) {
-        let actual: TestDeserialize = toml::from_str(input).unwrap();
-        assert_eq!(actual.nextest_version, expected);
+        let actual: VersionOnlyDeserialize = toml::from_str(input).unwrap();
+        assert_eq!(actual.nextest_version.unwrap(), expected);
     }
 
     #[test_case(
@@ -375,7 +470,7 @@ mod tests {
         "required version (0.9.20) must be less than recommended version (0.9.10)" ; "error greater than warning"
     )]
     fn test_invalid_nextest_version(input: &str, error_message: &str) {
-        let err = toml::from_str::<TestDeserialize>(input).unwrap_err();
+        let err = toml::from_str::<VersionOnlyDeserialize>(input).unwrap_err();
         assert!(
             err.to_string().contains(error_message),
             "error `{}` contains `{}`",
@@ -433,11 +528,5 @@ mod tests {
                 },
             }
         );
-    }
-
-    #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "kebab-case")]
-    struct TestDeserialize {
-        nextest_version: NextestVersionDeserialize,
     }
 }

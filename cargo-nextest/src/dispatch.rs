@@ -17,7 +17,7 @@ use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
         get_num_cpus, NextestConfig, NextestProfile, NextestVersionConfig, NextestVersionEval,
-        PreBuildPlatform, RetryPolicy, TestGroup, TestThreads, ToolConfigFile,
+        PreBuildPlatform, RetryPolicy, TestGroup, TestThreads, ToolConfigFile, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
@@ -223,6 +223,16 @@ struct ConfigOpts {
 }
 
 impl ConfigOpts {
+    /// Creates a nextest version-only config with the given options.
+    pub fn make_version_only_config(&self, workspace_root: &Utf8Path) -> Result<VersionOnlyConfig> {
+        VersionOnlyConfig::from_sources(
+            workspace_root,
+            self.config_file.as_deref(),
+            &self.tool_config_files,
+        )
+        .map_err(ExpectedError::config_parse_error)
+    }
+
     /// Creates a nextest config with the given options.
     pub fn make_config(
         &self,
@@ -969,13 +979,19 @@ impl BaseApp {
         })
     }
 
-    fn load_config(&self) -> Result<NextestConfig> {
+    fn load_config(&self) -> Result<(VersionOnlyConfig, NextestConfig)> {
+        // Load the version-only config first to avoid incompatibilities with parsing the rest of
+        // the config.
+        let version_only_config = self
+            .config_opts
+            .make_version_only_config(&self.workspace_root)?;
+        self.check_version_config_initial(version_only_config.nextest_version())?;
+
         let config = self
             .config_opts
             .make_config(&self.workspace_root, self.graph())?;
 
-        self.check_version_config_initial(config.nextest_version())?;
-        Ok(config)
+        Ok((version_only_config, config))
     }
 
     fn check_version_config_initial(&self, version_cfg: &NextestVersionConfig) -> Result<()> {
@@ -1304,7 +1320,7 @@ impl App {
         list_type: ListType,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let config = self.base.load_config()?;
+        let (version_only_config, _) = self.base.load_config()?;
         let filter_exprs = self.build_filtering_expressions()?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
@@ -1349,7 +1365,7 @@ impl App {
         }
 
         self.base
-            .check_version_config_final(config.nextest_version())?;
+            .check_version_config_final(version_only_config.nextest_version())?;
         Ok(())
     }
 
@@ -1360,7 +1376,7 @@ impl App {
         groups: Vec<TestGroup>,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let config = self.base.load_config()?;
+        let (_, config) = self.base.load_config()?;
         let profile = self.load_profile(profile_name, &config)?;
 
         // Validate test groups before doing any other work.
@@ -1416,7 +1432,7 @@ impl App {
         reporter_opts: &TestReporterOpts,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let config = self.base.load_config()?;
+        let (version_only_config, config) = self.base.load_config()?;
         let profile = self.load_profile(profile_name, &config)?;
 
         let filter_exprs = self.build_filtering_expressions()?;
@@ -1472,7 +1488,7 @@ impl App {
             reporter.report_event(event)
         })?;
         self.base
-            .check_version_config_final(config.nextest_version())?;
+            .check_version_config_final(version_only_config.nextest_version())?;
         if !run_stats.is_success() {
             return Err(ExpectedError::test_run_failed());
         }
@@ -1520,17 +1536,35 @@ impl ShowConfigCommand {
         let output = output.init();
         match self {
             Self::Version {} => {
-                // We don't want to invoke the full BaseApp because it requires a number of
-                // irrelevant settings. Instead, do a lightweight discovery using a package graph.
-                //
-                // This shouldn't _really_ require a package graph since it accesses the part of
-                // configuration that doesn't need one. Solving that requires a major refactoring,
-                // though, so don't bother with it right now.
-                let json = acquire_graph_data(manifest_path.as_deref(), None, output, false)?;
-                let graph = PackageGraph::from_json(json)
-                    .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
+                let mut cargo_cli =
+                    CargoCli::new("locate-project", manifest_path.as_deref(), output);
+                cargo_cli.add_args(["--workspace", "--message-format=plain"]);
+                let locate_project_output = cargo_cli
+                    .to_expression()
+                    .stdout_capture()
+                    .unchecked()
+                    .run()
+                    .map_err(|error| {
+                        ExpectedError::cargo_locate_project_exec_failed(cargo_cli.all_args(), error)
+                    })?;
+                if !locate_project_output.status.success() {
+                    return Err(ExpectedError::cargo_locate_project_failed(
+                        cargo_cli.all_args(),
+                    ));
+                }
+                let workspace_root = String::from_utf8(locate_project_output.stdout)
+                    .map_err(|err| ExpectedError::WorkspaceRootInvalidUtf8 { err })?;
+                // trim_end because the output ends with a newline.
+                let workspace_root = Utf8Path::new(workspace_root.trim_end());
+                // parent() because the output includes Cargo.toml at the end.
+                let workspace_root =
+                    workspace_root
+                        .parent()
+                        .ok_or_else(|| ExpectedError::WorkspaceRootInvalid {
+                            workspace_root: workspace_root.to_owned(),
+                        })?;
 
-                let config = config_opts.make_config(graph.workspace().root(), &graph)?;
+                let config = config_opts.make_version_only_config(workspace_root)?;
                 let current_version = current_version();
 
                 let show = ShowNextestVersion::new(

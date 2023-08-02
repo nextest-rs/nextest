@@ -8,7 +8,7 @@ use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::*;
 use owo_colors::{OwoColorize, Stream};
 use semver::Version;
-use std::error::Error;
+use std::{error::Error, string::FromUtf8Error};
 use thiserror::Error;
 
 pub(crate) type Result<T, E = ExpectedError> = std::result::Result<T, E>;
@@ -37,6 +37,20 @@ pub enum ExpectedError {
     },
     #[error("cargo metadata failed")]
     CargoMetadataFailed { command: String },
+    #[error("cargo locate-project exec failed")]
+    CargoLocateProjectExecFailed {
+        command: String,
+        err: std::io::Error,
+    },
+    #[error("cargo locate-project failed")]
+    CargoLocateProjectFailed { command: String },
+    #[error("workspace root is not valid UTF-8")]
+    WorkspaceRootInvalidUtf8 {
+        #[source]
+        err: FromUtf8Error,
+    },
+    #[error("workspace root is invalid")]
+    WorkspaceRootInvalid { workspace_root: Utf8PathBuf },
     #[error("root manifest not found at {path}")]
     RootManifestNotFound {
         path: Utf8PathBuf,
@@ -236,10 +250,29 @@ impl ExpectedError {
             err,
         }
     }
+
     pub(crate) fn cargo_metadata_failed(
         command: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Self {
         Self::CargoMetadataFailed {
+            command: shell_words::join(command),
+        }
+    }
+
+    pub(crate) fn cargo_locate_project_exec_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+        err: std::io::Error,
+    ) -> Self {
+        Self::CargoLocateProjectExecFailed {
+            command: shell_words::join(command),
+            err,
+        }
+    }
+
+    pub(crate) fn cargo_locate_project_failed(
+        command: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Self {
+        Self::CargoLocateProjectFailed {
             command: shell_words::join(command),
         }
     }
@@ -328,10 +361,13 @@ impl ExpectedError {
     /// Returns the exit code for the process.
     pub fn process_exit_code(&self) -> i32 {
         match self {
-            Self::CargoMetadataExecFailed { .. } | Self::CargoMetadataFailed { .. } => {
-                NextestExitCode::CARGO_METADATA_FAILED
-            }
-            Self::SetCurrentDirFailed { .. }
+            Self::CargoMetadataExecFailed { .. }
+            | Self::CargoMetadataFailed { .. }
+            | Self::CargoLocateProjectExecFailed { .. }
+            | Self::CargoLocateProjectFailed { .. } => NextestExitCode::CARGO_METADATA_FAILED,
+            Self::WorkspaceRootInvalidUtf8 { .. }
+            | Self::WorkspaceRootInvalid { .. }
+            | Self::SetCurrentDirFailed { .. }
             | Self::ProfileNotFound { .. }
             | Self::StoreDirCreateError { .. }
             | Self::RootManifestNotFound { .. }
@@ -394,6 +430,28 @@ impl ExpectedError {
             }
             Self::CargoMetadataFailed { .. } => {
                 // The error produced by `cargo metadata` is enough.
+                None
+            }
+            Self::CargoLocateProjectExecFailed { command, err } => {
+                log::error!(
+                    "failed to execute `{}`",
+                    command.if_supports_color(Stream::Stderr, |x| x.bold())
+                );
+                Some(err as &dyn Error)
+            }
+            Self::CargoLocateProjectFailed { .. } => {
+                // The error produced by `cargo locate-project` is enough.
+                None
+            }
+            Self::WorkspaceRootInvalidUtf8 { err } => {
+                log::error!("workspace root is not valid UTF-8");
+                Some(err as &dyn Error)
+            }
+            Self::WorkspaceRootInvalid { workspace_root } => {
+                log::error!(
+                    "workspace root `{}` is invalid",
+                    workspace_root.if_supports_color(Stream::Stderr, |x| x.bold())
+                );
                 None
             }
             Self::ProfileNotFound { err } => {
