@@ -59,11 +59,16 @@ impl VersionOnlyConfig {
 
         // Finally, merge in the repo config.
         let config_file = match config_file {
-            Some(file) => Cow::Borrowed(file),
-            None => Cow::Owned(workspace_root.join(NextestConfig::CONFIG_PATH)),
+            Some(file) => Some(Cow::Borrowed(file)),
+            None => {
+                let config_file = workspace_root.join(NextestConfig::CONFIG_PATH);
+                config_file.exists().then_some(Cow::Owned(config_file))
+            }
         };
-        if let Some(v) = Self::read_and_deserialize(&config_file, None)? {
-            nextest_version.accumulate(v, None);
+        if let Some(config_file) = config_file {
+            if let Some(v) = Self::read_and_deserialize(&config_file, None)? {
+                nextest_version.accumulate(v, None);
+            }
         }
 
         Ok(nextest_version)
