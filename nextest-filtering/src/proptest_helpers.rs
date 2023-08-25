@@ -1,6 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// https://github.com/proptest-rs/proptest/pull/363, can be removed once that is in a released
+// version of proptest.
+#![allow(clippy::arc_with_non_send_sync)]
+
 use crate::{
     parsing::{AndOperator, DifferenceOperator, NotOperator, OrOperator, ParsedExpr, SetDef},
     NameMatcher,
