@@ -61,7 +61,7 @@ jobs:
           - macos-latest
           - windows-latest
         # 1.70 is the MSRV
-        rust-version: [ 1.70, stable ]
+        rust-version: [ "1.70", stable ]
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
