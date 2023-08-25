@@ -9,7 +9,7 @@ repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://docs.rs/nextest-filtering"
 keywords = ["nextest", "test-runner"]
 categories = ["development-tools::testing"]
-rust-version = "1.66"
+rust-version = "1.70"
 
 [[bin]]
 name = "generate-expr-corpus"
