@@ -95,7 +95,7 @@ smallvec = "1.11.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.147"
-nix = { version = "0.26.2", default-features = false, features = ["signal"] }
+nix = { version = "0.27.0", default-features = false, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.48.0", features = [
