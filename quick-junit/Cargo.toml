@@ -12,10 +12,10 @@ edition = "2021"
 rust-version = "1.66"
 
 [dependencies]
-chrono = "0.4.28"
+chrono = "0.4.30"
 indexmap = "2.0.0"
 quick-xml = "0.30.0"
-thiserror = "1.0.47"
+thiserror = "1.0.48"
 uuid = "1.4.1"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
