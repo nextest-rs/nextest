@@ -150,7 +150,7 @@ jobs:
           # Native builds
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
-            container: ubuntu:18.04
+            container: ghcr.io/nextest-rs/ubuntu-18.04:1.0.0
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             container:
@@ -183,21 +183,7 @@ jobs:
     steps:
       - if: matrix.container == 'ubuntu:18.04'
         run: |
-          set -eu
-          apt-get -qq update
-          apt-get install -y software-properties-common sudo build-essential curl jq
-          add-apt-repository ppa:git-core/ppa
-          apt-get -qq update
-          apt-get -qq -y install git-core
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-          # gh is required by taiki-e/upload-rust-binary-action
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-          && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-          && sudo apt-get -qq update \
-          && sudo apt-get -qq -y install gh
-
       - uses: actions/checkout@v3
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
