@@ -82,6 +82,10 @@ pub(crate) struct CargoOptions {
     #[arg(long, value_name = "NAME", group = "cargo-opts")]
     cargo_profile: Option<String>,
 
+    /// Run cargo in quiet mode
+    #[arg(long, group = "cargo-opts")]
+    cargo_quiet: bool,
+
     /// Number of build jobs to run
     #[arg(long, value_name = "JOBS", group = "cargo-opts")]
     build_jobs: Option<String>,
@@ -234,6 +238,9 @@ impl<'a> CargoCli<'a> {
         }
         if let Some(profile) = &options.cargo_profile {
             self.add_args(["--profile", profile]);
+        }
+        if options.cargo_quiet {
+            self.add_arg("--quiet");
         }
         if let Some(build_jobs) = &options.build_jobs {
             self.add_args(["--jobs", build_jobs.as_str()]);
