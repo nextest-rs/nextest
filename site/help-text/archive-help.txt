@@ -6,7 +6,7 @@ Options:
       --manifest-path <PATH>  Path to Cargo.toml
   -v, --verbose               Verbose output [env: NEXTEST_VERBOSE=]
       --color <WHEN>          Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
-  -h, --help                  Print help information (use `--help` for more detail)
+  -h, --help                  Print help (see more with '--help')
 
 Cargo options:
       --lib                     Test only this package's library unit tests
@@ -46,7 +46,5 @@ Archive options:
       --zstd-level <LEVEL>       Zstandard compression level (-7 to 22, higher is more compressed + slower) [default: 0]
 
 Config options:
-      --config-file <PATH>
-          Config file [default: workspace-root/.config/nextest.toml]
-      --tool-config-file <TOOL:ABS_PATH>
-          Tool-specific config files
+      --config-file <PATH>                Config file [default: workspace-root/.config/nextest.toml]
+      --tool-config-file <TOOL:ABS_PATH>  Tool-specific config files

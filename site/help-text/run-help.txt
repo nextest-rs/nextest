@@ -11,7 +11,7 @@ Options:
   -P, --profile <PROFILE>     Nextest profile to use [env: NEXTEST_PROFILE=]
   -v, --verbose               Verbose output [env: NEXTEST_VERBOSE=]
       --color <WHEN>          Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
-  -h, --help                  Print help information (use `--help` for more detail)
+  -h, --help                  Print help (see more with '--help')
 
 Runner options:
       --no-run                  Compile, but don't run tests
@@ -78,7 +78,5 @@ Reuse build options:
       --target-dir-remap <PATH>   Remapping for the target directory
 
 Config options:
-      --config-file <PATH>
-          Config file [default: workspace-root/.config/nextest.toml]
-      --tool-config-file <TOOL:ABS_PATH>
-          Tool-specific config files
+      --config-file <PATH>                Config file [default: workspace-root/.config/nextest.toml]
+      --tool-config-file <TOOL:ABS_PATH>  Tool-specific config files
