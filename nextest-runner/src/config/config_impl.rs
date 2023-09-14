@@ -454,7 +454,13 @@ pub struct PreBuildPlatform {}
 /// The state of nextest profiles after build platforms have been applied.
 #[derive(Clone, Debug)]
 pub struct FinalConfig {
+    // Evaluation result for host_spec on the host platform.
     pub(super) host_eval: bool,
+    // Evaluation result for target_spec corresponding to tests that run on the host platform (e.g.
+    // proc-macro tests).
+    pub(super) host_test_eval: bool,
+    // Evaluation result for target_spec corresponding to tests that run on the target platform
+    // (most regular tests).
     pub(super) target_eval: bool,
 }
 

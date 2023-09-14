@@ -10,7 +10,7 @@ use crate::{
 };
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use nextest_filtering::{FilteringExpr, TestQuery};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use smol_str::SmolStr;
 use std::{collections::HashMap, time::Duration};
 use target_spec::TargetSpec;
@@ -132,7 +132,11 @@ impl<Source: Copy> TestSettings<Source> {
         let mut junit_store_failure_output = None;
 
         for override_ in &profile.overrides {
-            if query.binary_query.platform == BuildPlatform::Host && !override_.state.host_eval {
+            if !override_.state.host_eval {
+                continue;
+            }
+            if query.binary_query.platform == BuildPlatform::Host && !override_.state.host_test_eval
+            {
                 continue;
             }
             if query.binary_query.platform == BuildPlatform::Target && !override_.state.target_eval
@@ -326,6 +330,7 @@ pub(crate) struct OverrideId {
 
 #[derive(Clone, Debug)]
 pub(super) struct ProfileOverrideData {
+    host_spec: Option<TargetSpec>,
     target_spec: Option<TargetSpec>,
     expr: Option<FilteringExpr>,
     threads_required: Option<ThreadsRequired>,
@@ -346,18 +351,29 @@ impl CompiledOverride<PreBuildPlatform> {
         source: &DeserializedOverride,
         errors: &mut Vec<ConfigParseOverrideError>,
     ) -> Option<Self> {
-        if source.platform.is_none() && source.filter.is_none() {
+        if source.platform.host.is_none()
+            && source.platform.target.is_none()
+            && source.filter.is_none()
+        {
             errors.push(ConfigParseOverrideError {
                 profile_name: profile_name.to_owned(),
                 not_specified: true,
-                platform_parse_error: None,
+                host_parse_error: None,
+                target_parse_error: None,
                 parse_errors: None,
             });
             return None;
         }
 
+        let host_spec = source
+            .platform
+            .host
+            .as_ref()
+            .map(|platform_str| TargetSpec::new(platform_str.to_owned()))
+            .transpose();
         let target_spec = source
             .platform
+            .target
             .as_ref()
             .map(|platform_str| TargetSpec::new(platform_str.to_owned()))
             .transpose();
@@ -365,14 +381,15 @@ impl CompiledOverride<PreBuildPlatform> {
             Some(FilteringExpr::parse(filter.clone(), graph)).transpose()
         });
 
-        match (target_spec, filter_expr) {
-            (Ok(target_spec), Ok(expr)) => Some(Self {
+        match (host_spec, target_spec, filter_expr) {
+            (Ok(host_spec), Ok(target_spec), Ok(expr)) => Some(Self {
                 id: OverrideId {
                     profile_name: profile_name.into(),
                     index,
                 },
                 state: PreBuildPlatform {},
                 data: ProfileOverrideData {
+                    host_spec,
                     target_spec,
                     expr,
                     threads_required: source.threads_required,
@@ -385,30 +402,17 @@ impl CompiledOverride<PreBuildPlatform> {
                     junit: source.junit,
                 },
             }),
-            (Err(platform_parse_error), Ok(_)) => {
+            (maybe_host_err, maybe_platform_err, maybe_parse_err) => {
+                let host_platform_parse_error = maybe_host_err.err();
+                let platform_parse_error = maybe_platform_err.err();
+                let parse_errors = maybe_parse_err.err();
+
                 errors.push(ConfigParseOverrideError {
                     profile_name: profile_name.to_owned(),
                     not_specified: false,
-                    platform_parse_error: Some(platform_parse_error),
-                    parse_errors: None,
-                });
-                None
-            }
-            (Ok(_), Err(parse_errors)) => {
-                errors.push(ConfigParseOverrideError {
-                    profile_name: profile_name.to_owned(),
-                    not_specified: false,
-                    platform_parse_error: None,
-                    parse_errors: Some(parse_errors),
-                });
-                None
-            }
-            (Err(platform_parse_error), Err(parse_errors)) => {
-                errors.push(ConfigParseOverrideError {
-                    profile_name: profile_name.to_owned(),
-                    not_specified: false,
-                    platform_parse_error: Some(platform_parse_error),
-                    parse_errors: Some(parse_errors),
+                    host_parse_error: host_platform_parse_error,
+                    target_parse_error: platform_parse_error,
+                    parse_errors,
                 });
                 None
             }
@@ -419,7 +423,13 @@ impl CompiledOverride<PreBuildPlatform> {
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledOverride<FinalConfig> {
-        let (host_eval, target_eval) = if let Some(spec) = &self.data.target_spec {
+        let host_eval = if let Some(spec) = &self.data.host_spec {
+            // unknown (None) gets unwrapped to true.
+            spec.eval(&build_platforms.host).unwrap_or(true)
+        } else {
+            true
+        };
+        let (host_test_eval, target_eval) = if let Some(spec) = &self.data.target_spec {
             // unknown (None) gets unwrapped to true.
             let host_eval = spec.eval(&build_platforms.host).unwrap_or(true);
             let target_eval = build_platforms.target.as_ref().map_or(host_eval, |triple| {
@@ -429,10 +439,12 @@ impl CompiledOverride<PreBuildPlatform> {
         } else {
             (true, true)
         };
+
         CompiledOverride {
             id: self.id,
             state: FinalConfig {
                 host_eval,
+                host_test_eval,
                 target_eval,
             },
             data: self.data,
@@ -456,9 +468,9 @@ impl CompiledOverride<FinalConfig> {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(super) struct DeserializedOverride {
-    /// The platforms to match against.
+    /// The host and/or target platforms to match against.
     #[serde(default)]
-    platform: Option<String>,
+    platform: PlatformStrings,
     /// The filter expression to match against.
     #[serde(default)]
     filter: Option<String>,
@@ -489,6 +501,63 @@ pub(super) struct DeserializedJunitOutput {
     store_failure_output: Option<bool>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub(super) struct PlatformStrings {
+    host: Option<String>,
+    target: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for PlatformStrings {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct V;
+
+        impl<'de2> serde::de::Visitor<'de2> for V {
+            type Value = PlatformStrings;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str(
+                    "a table ({ host = \"x86_64-apple-darwin\", \
+                        target = \"cfg(windows)\" }) \
+                        or a string (\"x86_64-unknown-gnu-linux\")",
+                )
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(PlatformStrings {
+                    host: None,
+                    target: Some(v.to_owned()),
+                })
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de2>,
+            {
+                #[derive(Deserialize)]
+                struct PlatformStringsInner {
+                    #[serde(default)]
+                    host: Option<String>,
+                    #[serde(default)]
+                    target: Option<String>,
+                }
+
+                let inner = PlatformStringsInner::deserialize(
+                    serde::de::value::MapAccessDeserializer::new(map),
+                )?;
+                Ok(PlatformStrings {
+                    host: inner.host,
+                    target: inner.target,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(V)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,6 +573,7 @@ mod tests {
     #[test]
     fn test_overrides_basic() {
         let config_contents = indoc! {r#"
+            # Override 1
             [[profile.default.overrides]]
             platform = 'aarch64-apple-darwin'  # this is the target platform
             filter = "test(test)"
@@ -512,6 +582,7 @@ mod tests {
             success-output = "immediate-final"
             junit = { store-success-output = true }
 
+            # Override 2
             [[profile.default.overrides]]
             filter = "test(test)"
             threads-required = 8
@@ -521,6 +592,23 @@ mod tests {
             test-group = "my-group"
             failure-output = "final"
             junit = { store-failure-output = false }
+
+            # Override 3
+            [[profile.default.overrides]]
+            platform = { host = "cfg(unix)" }
+            filter = "test(override3)"
+            retries = 5
+
+            # Override 4 -- host not matched
+            [[profile.default.overrides]]
+            platform = { host = 'aarch64-apple-darwin' }
+            retries = 10
+
+            # Override 5 -- no filter provided, just platform
+            [[profile.default.overrides]]
+            platform = { host = 'cfg(target_os = "linux")', target = 'aarch64-apple-darwin' }
+            filter = "test(override5)"
+            retries = 8
 
             [profile.default.junit]
             path = "my-path.xml"
@@ -542,7 +630,7 @@ mod tests {
             .expect("valid profile name")
             .apply_build_platforms(&build_platforms());
 
-        // This query matches the second override.
+        // This query matches override 2.
         let query = TestQuery {
             binary_query: BinaryQuery {
                 package_id,
@@ -575,7 +663,7 @@ mod tests {
             assert_eq!(overrides.junit_store_failure_output(), false);
         }
 
-        // This query matches both overrides.
+        // This query matches override 1 and 2.
         let query = TestQuery {
             binary_query: BinaryQuery {
                 package_id,
@@ -618,6 +706,45 @@ mod tests {
             assert_eq!(overrides.junit_store_success_output(), true);
             assert_eq!(overrides.junit_store_failure_output(), false);
         }
+
+        // This query matches override 3.
+        let query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
+            test_name: "override3",
+        };
+        let overrides = profile.settings_for(&query);
+        assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(5));
+
+        // This query matches override 5.
+        let query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
+            test_name: "override5",
+        };
+        let overrides = profile.settings_for(&query);
+        assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(8));
+
+        // This query does not match any overrides.
+        let query = TestQuery {
+            binary_query: BinaryQuery {
+                package_id,
+                kind: "lib",
+                binary_name: "my-binary",
+                platform: BuildPlatform::Target,
+            },
+            test_name: "no_match",
+        };
+        let overrides = profile.settings_for(&query);
+        assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(0));
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -650,6 +777,20 @@ mod tests {
         }]
 
         ; "neither platform nor filter specified"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            platform = {}
+            retries = 2
+        "#},
+        "default",
+        &[MietteJsonReport {
+            message: "at least one of `platform` and `filter` should be specified".to_owned(),
+            labels: vec![],
+        }]
+
+        ; "empty platform map"
     )]
     #[test_case(
         indoc! {r#"
