@@ -123,8 +123,11 @@ pub struct ConfigParseOverrideError {
     /// True if neither the platform nor the filter have been specified.
     pub not_specified: bool,
 
-    /// A potential error that occurred while parsing the platform expression.
-    pub platform_parse_error: Option<target_spec::Error>,
+    /// A potential error that occurred while parsing the host platform expression.
+    pub host_parse_error: Option<target_spec::Error>,
+
+    /// A potential error that occurred while parsing the target platform expression.
+    pub target_parse_error: Option<target_spec::Error>,
 
     /// The expression, and the errors that occurred.
     pub parse_errors: Option<FilterExpressionParseErrors>,
@@ -136,8 +139,12 @@ impl ConfigParseOverrideError {
         let not_specified_report = self.not_specified.then(|| {
             miette::Report::msg("at least one of `platform` and `filter` should be specified")
         });
-        let platform_parse_report = self
-            .platform_parse_error
+        let host_parse_report = self
+            .host_parse_error
+            .as_ref()
+            .map(|error| miette::Report::new_boxed(error.clone().into_diagnostic()));
+        let target_parse_report = self
+            .target_parse_error
             .as_ref()
             .map(|error| miette::Report::new_boxed(error.clone().into_diagnostic()));
         let parse_reports = self
@@ -152,7 +159,8 @@ impl ConfigParseOverrideError {
             });
         not_specified_report
             .into_iter()
-            .chain(platform_parse_report)
+            .chain(host_parse_report)
+            .chain(target_parse_report)
             .chain(parse_reports)
     }
 }
