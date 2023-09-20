@@ -13,7 +13,7 @@ rust-version = "1.70"
 
 [dependencies]
 atomicwrites = "0.4.1"
-aho-corasick = "1.0.5"
+aho-corasick = "1.1.1"
 async-scoped = { version = "0.7.1", features = ["use-tokio"] }
 future-queue = "0.3.0"
 bytes = "1.5.0"
@@ -22,7 +22,7 @@ camino-tempfile = "1.0.2"
 config = { version = "0.13.3", default-features = false, features = ["toml"] }
 cargo_metadata = "0.17.0"
 cfg-if = "1.0.0"
-chrono = "0.4.30"
+chrono = "0.4.31"
 debug-ignore = "1.0.5"
 either = "1.9.0"
 futures = "0.3.28"
@@ -46,7 +46,7 @@ regex = "1.9.5"
 semver = "1.0.18"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_ignored = "0.1.9"
-serde_json = "1.0.106"
+serde_json = "1.0.107"
 serde_path_to_error = "0.1.14"
 shell-words = "1.1.0"
 smol_str = { version = "0.2.0", features = ["serde"] }
@@ -88,13 +88,13 @@ quick-junit = { version = "0.3.3", path = "../quick-junit" }
 uuid = { version = "1.4.1", features = ["v4"] }
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 console-subscriber = { version = "0.1.10", optional = true }
-unicode-ident = "1.0.11"
+unicode-ident = "1.0.12"
 unicode-normalization = "0.1.22"
 indexmap = "2.0.0"
-smallvec = "1.11.0"
+smallvec = "1.11.1"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.147"
+libc = "0.2.148"
 nix = { version = "0.27.1", default-features = false, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
@@ -126,13 +126,13 @@ self_update = { version = "0.37.0", optional = true }
 [dev-dependencies]
 color-eyre = { version = "0.6.2", default-features = false }
 duct = "0.13.6"
-indoc = "2.0.3"
+indoc = "2.0.4"
 maplit = "1.0.2"
 pathdiff = { version = "0.2.1", features = ["camino"] }
 pretty_assertions = "1.4.0"
 proptest = "1.2.0"
 proptest-derive = "0.3.0"
-test-case = "3.1.0"
+test-case = "3.2.1"
 
 
 [[bin]]

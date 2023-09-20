@@ -15,8 +15,8 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.69", features = ["gimli-symbolize"] }
-clap = { version = "4.4.3", features = ["derive", "env"] }
-clap_builder = { version = "4.4.2", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
+clap = { version = "4.4.4", features = ["derive", "env"] }
+clap_builder = { version = "4.4.4", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 console = { version = "0.15.7" }
 either = { version = "1.9.0" }
 futures-channel = { version = "0.3.28", features = ["sink"] }
@@ -28,7 +28,7 @@ num-traits = { version = "0.2.16", default-features = false, features = ["libm",
 owo-colors = { version = "3.5.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
 serde = { version = "1.0.188", features = ["alloc", "derive"] }
-serde_json = { version = "1.0.106", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.107", features = ["unbounded_depth"] }
 similar = { version = "2.2.1", features = ["inline", "unicode"] }
 target-spec = { version = "3.0.1", default-features = false, features = ["custom", "summaries"] }
 tokio = { version = "1.32.0", features = ["io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
@@ -37,36 +37,36 @@ uuid = { version = "1.4.1", features = ["v4"] }
 
 [build-dependencies]
 cc = { version = "1.0.83", default-features = false, features = ["parallel"] }
-proc-macro2 = { version = "1.0.66" }
+proc-macro2 = { version = "1.0.67" }
 quote = { version = "1.0.33" }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extra-traits", "fold", "full"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.31", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.37", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.28" }
 futures-sink = { version = "0.3.28" }
 futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
 indexmap = { version = "1.9.3", default-features = false, features = ["std"] }
-libc = { version = "0.2.147", features = ["extra_traits"] }
+libc = { version = "0.2.148", features = ["extra_traits"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
-rustix = { version = "0.38.13", features = ["fs", "termios"] }
+rustix = { version = "0.38.14", features = ["fs", "termios"] }
 tokio = { version = "1.32.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-libc = { version = "0.2.147", features = ["extra_traits"] }
+libc = { version = "0.2.148", features = ["extra_traits"] }
 
 [target.x86_64-apple-darwin.dependencies]
 futures-core = { version = "0.3.28" }
 futures-sink = { version = "0.3.28" }
 futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
 indexmap = { version = "1.9.3", default-features = false, features = ["std"] }
-libc = { version = "0.2.147", features = ["extra_traits"] }
+libc = { version = "0.2.148", features = ["extra_traits"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
-rustix = { version = "0.38.13", features = ["fs", "termios"] }
+rustix = { version = "0.38.14", features = ["fs", "termios"] }
 tokio = { version = "1.32.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
-libc = { version = "0.2.147", features = ["extra_traits"] }
+libc = { version = "0.2.148", features = ["extra_traits"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 futures-core = { version = "0.3.28" }
