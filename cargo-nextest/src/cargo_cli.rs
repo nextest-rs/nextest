@@ -5,7 +5,7 @@
 
 use crate::output::OutputContext;
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::Args;
+use clap::{ArgAction, Args};
 use std::{borrow::Cow, path::PathBuf};
 
 /// Options passed down to cargo.
@@ -82,9 +82,13 @@ pub(crate) struct CargoOptions {
     #[arg(long, value_name = "NAME", group = "cargo-opts")]
     cargo_profile: Option<String>,
 
-    /// Run cargo in quiet mode
+    /// Do not print cargo log messages
     #[arg(long, group = "cargo-opts")]
     cargo_quiet: bool,
+
+    /// Use cargo verbose output (specify twice for very verbose/build.rs output)
+    #[arg(long, action = ArgAction::Count, group = "cargo-opts")]
+    cargo_verbose: u8,
 
     /// Number of build jobs to run
     #[arg(long, value_name = "JOBS", group = "cargo-opts")]
@@ -126,7 +130,6 @@ pub(crate) struct CargoOptions {
     #[arg(long, require_equals = true, value_name = "FMTS", group = "cargo-opts")]
     timings: Option<Option<String>>,
 
-    // --verbose is not currently supported
     // --color is handled by runner
     /// Require Cargo.lock and cache are up to date
     #[arg(long, group = "cargo-opts")]
@@ -241,6 +244,9 @@ impl<'a> CargoCli<'a> {
         }
         if options.cargo_quiet {
             self.add_arg("--quiet");
+        }
+        if options.cargo_verbose > 0 {
+            self.add_args(std::iter::repeat("--verbose").take(options.cargo_verbose.into()));
         }
         if let Some(build_jobs) = &options.build_jobs {
             self.add_args(["--jobs", build_jobs.as_str()]);
