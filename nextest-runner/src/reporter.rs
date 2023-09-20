@@ -389,14 +389,14 @@ impl<'a> TestReporter<'a> {
 }
 
 fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &ProgressBar) {
-    match event {
-        TestEvent::TestStarted {
+    match &event.kind {
+        TestEventKind::TestStarted {
             current_stats,
             running,
             cancel_state,
             ..
         }
-        | TestEvent::TestFinished {
+        | TestEventKind::TestFinished {
             current_stats,
             running,
             cancel_state,
@@ -410,7 +410,7 @@ fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &Pr
             progress_bar.set_length(current_stats.initial_run_count as u64);
             progress_bar.set_position(current_stats.finished_count as u64);
         }
-        TestEvent::RunBeginCancel { reason, .. } => {
+        TestEventKind::RunBeginCancel { reason, .. } => {
             let running_state = RunningState::Canceling(*reason);
             progress_bar.set_prefix(running_state.progress_bar_prefix(styles));
         }
@@ -564,8 +564,8 @@ impl<'a> TestReporterImpl<'a> {
         event: &TestEvent<'a>,
         writer: &mut impl Write,
     ) -> io::Result<()> {
-        match event {
-            TestEvent::RunStarted { test_list, .. } => {
+        match &event.kind {
+            TestEventKind::RunStarted { test_list, .. } => {
                 write!(writer, "{:>12} ", "Starting".style(self.styles.pass))?;
 
                 let count_style = self.styles.count;
@@ -596,7 +596,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 writeln!(writer)?;
             }
-            TestEvent::TestStarted { test_instance, .. } => {
+            TestEventKind::TestStarted { test_instance, .. } => {
                 // In no-capture mode, print out a test start event.
                 if self.no_capture {
                     // The spacing is to align test instances.
@@ -609,7 +609,7 @@ impl<'a> TestReporterImpl<'a> {
                     writeln!(writer)?;
                 }
             }
-            TestEvent::TestSlow {
+            TestEventKind::TestSlow {
                 test_instance,
                 retry_data,
                 elapsed,
@@ -647,7 +647,7 @@ impl<'a> TestReporterImpl<'a> {
                 writeln!(writer)?;
             }
 
-            TestEvent::TestAttemptFailedWillRetry {
+            TestEventKind::TestAttemptFailedWillRetry {
                 test_instance,
                 run_status,
                 delay_before_next_attempt,
@@ -701,7 +701,7 @@ impl<'a> TestReporterImpl<'a> {
                     }
                 }
             }
-            TestEvent::TestRetryStarted {
+            TestEventKind::TestRetryStarted {
                 test_instance,
                 retry_data:
                     RetryData {
@@ -719,7 +719,7 @@ impl<'a> TestReporterImpl<'a> {
                 self.write_instance(*test_instance, writer)?;
                 writeln!(writer)?;
             }
-            TestEvent::TestFinished {
+            TestEventKind::TestFinished {
                 test_instance,
                 success_output,
                 failure_output,
@@ -759,7 +759,7 @@ impl<'a> TestReporterImpl<'a> {
                     ));
                 }
             }
-            TestEvent::TestSkipped {
+            TestEventKind::TestSkipped {
                 test_instance,
                 reason,
             } => {
@@ -771,7 +771,7 @@ impl<'a> TestReporterImpl<'a> {
                         .push((*test_instance, FinalOutput::Skipped(*reason)));
                 }
             }
-            TestEvent::RunBeginCancel { running, reason } => {
+            TestEventKind::RunBeginCancel { running, reason } => {
                 self.cancel_status = self.cancel_status.max(Some(*reason));
 
                 write!(writer, "{:>12} ", "Canceling".style(self.styles.fail))?;
@@ -789,7 +789,7 @@ impl<'a> TestReporterImpl<'a> {
                     running.style(self.styles.count)
                 )?;
             }
-            TestEvent::RunPaused { running } => {
+            TestEventKind::RunPaused { running } => {
                 writeln!(
                     writer,
                     "{:>12} {} running tests due to {}",
@@ -798,7 +798,7 @@ impl<'a> TestReporterImpl<'a> {
                     "signal".style(self.styles.count),
                 )?;
             }
-            TestEvent::RunContinued { running } => {
+            TestEventKind::RunContinued { running } => {
                 writeln!(
                     writer,
                     "{:>12} {} running tests due to {}",
@@ -807,7 +807,7 @@ impl<'a> TestReporterImpl<'a> {
                     "signal".style(self.styles.count),
                 )?;
             }
-            TestEvent::RunFinished {
+            TestEventKind::RunFinished {
                 start_time: _start_time,
                 elapsed,
                 run_stats,
@@ -1292,9 +1292,22 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
 
 /// A test event.
 ///
-/// Events are produced by a [`TestRunner`](crate::runner::TestRunner) and consumed by a [`TestReporter`].
+/// Events are produced by a [`TestRunner`](crate::runner::TestRunner) and consumed by a
+/// [`TestReporter`].
 #[derive(Clone, Debug)]
-pub enum TestEvent<'a> {
+pub struct TestEvent<'a> {
+    /// The amount of time elapsed since the start of the test run.
+    pub elapsed: Duration,
+
+    /// The kind of test event this is.
+    pub kind: TestEventKind<'a>,
+}
+
+/// The kind of test event this is.
+///
+/// Forms part of [`TestEvent`].
+#[derive(Clone, Debug)]
+pub enum TestEventKind<'a> {
     /// The test run started.
     RunStarted {
         /// The list of tests that will be run.

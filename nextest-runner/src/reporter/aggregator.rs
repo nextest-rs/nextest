@@ -3,13 +3,14 @@
 
 //! Metadata management.
 
+use super::TestEvent;
 #[cfg(any(unix, windows))]
 use crate::runner::AbortStatus;
 use crate::{
     config::{NextestJunitConfig, NextestProfile},
     errors::WriteEventError,
     list::TestInstance,
-    reporter::TestEvent,
+    reporter::TestEventKind,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
 };
 use camino::Utf8PathBuf;
@@ -60,16 +61,17 @@ impl<'cfg> MetadataJunit<'cfg> {
     }
 
     pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
-        match event {
-            TestEvent::RunStarted { .. }
-            | TestEvent::RunPaused { .. }
-            | TestEvent::RunContinued { .. } => {}
-            TestEvent::TestStarted { .. } => {}
-            TestEvent::TestSlow { .. } => {}
-            TestEvent::TestAttemptFailedWillRetry { .. } | TestEvent::TestRetryStarted { .. } => {
+        match event.kind {
+            TestEventKind::RunStarted { .. }
+            | TestEventKind::RunPaused { .. }
+            | TestEventKind::RunContinued { .. } => {}
+            TestEventKind::TestStarted { .. } => {}
+            TestEventKind::TestSlow { .. } => {}
+            TestEventKind::TestAttemptFailedWillRetry { .. }
+            | TestEventKind::TestRetryStarted { .. } => {
                 // Retries are recorded in TestFinished.
             }
-            TestEvent::TestFinished {
+            TestEventKind::TestFinished {
                 test_instance,
                 run_statuses,
                 junit_store_success_output,
@@ -189,7 +191,7 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 testsuite.add_test_case(testcase);
             }
-            TestEvent::TestSkipped { .. } => {
+            TestEventKind::TestSkipped { .. } => {
                 // TODO: report skipped tests? causes issues if we want to aggregate runs across
                 // skipped and non-skipped tests. Probably needs to be made configurable.
 
@@ -201,8 +203,8 @@ impl<'cfg> MetadataJunit<'cfg> {
                 //
                 // testsuite.add_testcase(testcase);
             }
-            TestEvent::RunBeginCancel { .. } => {}
-            TestEvent::RunFinished {
+            TestEventKind::RunBeginCancel { .. } => {}
+            TestEventKind::RunFinished {
                 run_id,
                 start_time,
                 elapsed,
