@@ -13,7 +13,7 @@ use nextest_filtering::{FilteringExpr, TestQuery};
 use serde::{Deserialize, Deserializer};
 use smol_str::SmolStr;
 use std::{collections::HashMap, time::Duration};
-use target_spec::TargetSpec;
+use target_spec::{Platform, TargetSpec};
 
 /// Settings for individual tests.
 ///
@@ -330,8 +330,8 @@ pub(crate) struct OverrideId {
 
 #[derive(Clone, Debug)]
 pub(super) struct ProfileOverrideData {
-    host_spec: Option<TargetSpec>,
-    target_spec: Option<TargetSpec>,
+    host_spec: MaybeTargetSpec,
+    target_spec: MaybeTargetSpec,
     expr: Option<FilteringExpr>,
     threads_required: Option<ThreadsRequired>,
     retries: Option<RetryPolicy>,
@@ -365,18 +365,8 @@ impl CompiledOverride<PreBuildPlatform> {
             return None;
         }
 
-        let host_spec = source
-            .platform
-            .host
-            .as_ref()
-            .map(|platform_str| TargetSpec::new(platform_str.to_owned()))
-            .transpose();
-        let target_spec = source
-            .platform
-            .target
-            .as_ref()
-            .map(|platform_str| TargetSpec::new(platform_str.to_owned()))
-            .transpose();
+        let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
+        let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
         let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
             Some(FilteringExpr::parse(filter.clone(), graph)).transpose()
         });
@@ -423,22 +413,14 @@ impl CompiledOverride<PreBuildPlatform> {
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledOverride<FinalConfig> {
-        let host_eval = if let Some(spec) = &self.data.host_spec {
-            // unknown (None) gets unwrapped to true.
-            spec.eval(&build_platforms.host).unwrap_or(true)
-        } else {
-            true
-        };
-        let (host_test_eval, target_eval) = if let Some(spec) = &self.data.target_spec {
-            // unknown (None) gets unwrapped to true.
-            let host_eval = spec.eval(&build_platforms.host).unwrap_or(true);
-            let target_eval = build_platforms.target.as_ref().map_or(host_eval, |triple| {
-                spec.eval(&triple.platform).unwrap_or(true)
+        let host_eval = self.data.host_spec.eval(&build_platforms.host);
+        let host_test_eval = self.data.target_spec.eval(&build_platforms.host);
+        let target_eval = build_platforms
+            .target
+            .as_ref()
+            .map_or(host_test_eval, |triple| {
+                self.data.target_spec.eval(&triple.platform)
             });
-            (host_eval, target_eval)
-        } else {
-            (true, true)
-        };
 
         CompiledOverride {
             id: self.id,
@@ -454,13 +436,41 @@ impl CompiledOverride<PreBuildPlatform> {
 
 impl CompiledOverride<FinalConfig> {
     /// Returns the target spec.
-    pub(crate) fn target_spec(&self) -> Option<&TargetSpec> {
-        self.data.target_spec.as_ref()
+    pub(crate) fn target_spec(&self) -> &MaybeTargetSpec {
+        &self.data.target_spec
     }
 
     /// Returns the filter expression, if any.
     pub(crate) fn filter(&self) -> Option<&FilteringExpr> {
         self.data.expr.as_ref()
+    }
+}
+
+/// Represents a [`TargetSpec`] that might have been provided.
+#[derive(Clone, Debug, Default)]
+pub(crate) enum MaybeTargetSpec {
+    Provided(TargetSpec),
+    #[default]
+    Any,
+}
+
+impl MaybeTargetSpec {
+    fn new(platform_str: Option<&str>) -> Result<Self, target_spec::Error> {
+        Ok(match platform_str {
+            Some(platform_str) => {
+                MaybeTargetSpec::Provided(TargetSpec::new(platform_str.to_owned())?)
+            }
+            None => MaybeTargetSpec::Any,
+        })
+    }
+
+    fn eval(&self, platform: &Platform) -> bool {
+        match self {
+            MaybeTargetSpec::Provided(spec) => spec
+                .eval(platform)
+                .unwrap_or(/* unknown results are mapped to true */ true),
+            MaybeTargetSpec::Any => true,
+        }
     }
 }
 
