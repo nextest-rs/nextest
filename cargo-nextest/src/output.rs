@@ -9,6 +9,7 @@ use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
 use nextest_runner::reporter::ReporterStderr;
 use owo_colors::{style, OwoColorize, Style};
 use std::{
+    fmt,
     io::{BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,
 };
@@ -65,9 +66,18 @@ static INIT_LOGGER: std::sync::Once = std::sync::Once::new();
 impl Color {
     pub(crate) fn init(self) {
         match self {
-            Color::Auto => owo_colors::unset_override(),
-            Color::Always => owo_colors::set_override(true),
-            Color::Never => owo_colors::set_override(false),
+            Color::Auto => {
+                owo_colors::unset_override();
+                overrides::unset_override();
+            }
+            Color::Always => {
+                owo_colors::set_override(true);
+                overrides::set_override(true);
+            }
+            Color::Never => {
+                owo_colors::set_override(false);
+                overrides::set_override(false);
+            }
         }
 
         INIT_LOGGER.call_once(|| {
@@ -134,27 +144,27 @@ fn format_fn(f: &mut Formatter, record: &Record<'_>) -> std::io::Result<()> {
         Level::Error => writeln!(
             f,
             "{}: {}",
-            "error".if_supports_color(owo_colors::Stream::Stderr, |s| s
+            "error".if_supports_color_2(supports_color::Stream::Stderr, |s| s
                 .style(Style::new().red().bold())),
             record.args()
         ),
         Level::Warn => writeln!(
             f,
             "{}: {}",
-            "warning".if_supports_color(owo_colors::Stream::Stderr, |s| s
+            "warning".if_supports_color_2(supports_color::Stream::Stderr, |s| s
                 .style(Style::new().yellow().bold())),
             record.args()
         ),
         Level::Info => writeln!(
             f,
             "{}: {}",
-            "info".if_supports_color(owo_colors::Stream::Stderr, |s| s.bold()),
+            "info".if_supports_color_2(supports_color::Stream::Stderr, |s| s.bold()),
             record.args()
         ),
         Level::Debug => writeln!(
             f,
             "{}: {}",
-            "debug".if_supports_color(owo_colors::Stream::Stderr, |s| s.bold()),
+            "debug".if_supports_color_2(supports_color::Stream::Stderr, |s| s.bold()),
             record.args()
         ),
         _other => Ok(()),
@@ -272,4 +282,119 @@ impl<'a> Write for StderrWriter<'a> {
             Self::Test { .. } => Ok(()),
         }
     }
+}
+
+/// Override support. Used by SupportsColorsV2Display.
+mod overrides {
+    use std::sync::atomic::{AtomicU8, Ordering};
+
+    pub(crate) fn set_override(enabled: bool) {
+        OVERRIDE.set_force(enabled)
+    }
+
+    pub(crate) fn unset_override() {
+        OVERRIDE.unset()
+    }
+
+    pub(crate) static OVERRIDE: Override = Override::none();
+
+    pub(crate) struct Override(AtomicU8);
+
+    const FORCE_MASK: u8 = 0b10;
+    const FORCE_ENABLE: u8 = 0b11;
+    const FORCE_DISABLE: u8 = 0b10;
+    const NO_FORCE: u8 = 0b00;
+
+    impl Override {
+        const fn none() -> Self {
+            Self(AtomicU8::new(NO_FORCE))
+        }
+
+        fn inner(&self) -> u8 {
+            self.0.load(Ordering::SeqCst)
+        }
+
+        pub(crate) fn is_force_enabled_or_disabled(&self) -> (bool, bool) {
+            let inner = self.inner();
+
+            (inner == FORCE_ENABLE, inner == FORCE_DISABLE)
+        }
+
+        fn set_force(&self, enable: bool) {
+            self.0.store(FORCE_MASK | (enable as u8), Ordering::SeqCst)
+        }
+
+        fn unset(&self) {
+            self.0.store(0, Ordering::SeqCst);
+        }
+    }
+}
+
+/// An extension trait for applying supports-color v2 to owo-colors.
+///
+/// supports-color v2 has some fixes that nextest needs.
+pub(crate) trait SupportsColorsV2: OwoColorize {
+    fn if_supports_color_2<'a, Out, ApplyFn>(
+        &'a self,
+        stream: supports_color::Stream,
+        apply: ApplyFn,
+    ) -> SupportsColorsV2Display<'a, Self, Out, ApplyFn>
+    where
+        ApplyFn: Fn(&'a Self) -> Out,
+    {
+        SupportsColorsV2Display(self, apply, stream)
+    }
+}
+
+impl<T: OwoColorize> SupportsColorsV2 for T {}
+
+/// A display wrapper which applies a transformation based on if the given stream supports
+/// colored terminal output
+pub struct SupportsColorsV2Display<'a, InVal, Out, ApplyFn>(
+    pub(crate) &'a InVal,
+    pub(crate) ApplyFn,
+    pub(crate) supports_color::Stream,
+)
+where
+    InVal: ?Sized,
+    ApplyFn: Fn(&'a InVal) -> Out;
+
+macro_rules! impl_fmt_for {
+    ($($trait:path),* $(,)?) => {
+        $(
+            impl<'a, In, Out, F> $trait for SupportsColorsV2Display<'a, In, Out, F>
+                where In: $trait,
+                      Out: $trait,
+                      F: Fn(&'a In) -> Out,
+            {
+                #[inline(always)]
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    // OVERRIDE is currently not supported
+                    let (force_enabled, force_disabled) = overrides::OVERRIDE.is_force_enabled_or_disabled();
+                    if force_enabled || (
+                        supports_color::on_cached(self.2)
+                            .map(|level| level.has_basic)
+                            .unwrap_or(false)
+                        && !force_disabled
+                    ) {
+                        <Out as $trait>::fmt(&self.1(self.0), f)
+                    } else {
+                        <In as $trait>::fmt(self.0, f)
+                    }
+                }
+            }
+        )*
+    };
+}
+
+impl_fmt_for! {
+    fmt::Display,
+    fmt::Debug,
+    fmt::UpperHex,
+    fmt::LowerHex,
+    fmt::Binary,
+    fmt::UpperExp,
+    fmt::LowerExp,
+    fmt::Octal,
+    fmt::Pointer,
 }

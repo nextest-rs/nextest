@@ -3,7 +3,7 @@
 
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
-    output::{OutputContext, OutputOpts, OutputWriter},
+    output::{OutputContext, OutputOpts, OutputWriter, SupportsColorsV2},
     reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
     ExpectedError, Result, ReuseBuildKind,
 };
@@ -36,7 +36,7 @@ use nextest_runner::{
     test_filter::{RunIgnored, TestFilterBuilder},
 };
 use once_cell::sync::OnceCell;
-use owo_colors::{OwoColorize, Stream, Style};
+use owo_colors::{OwoColorize, Style};
 use semver::Version;
 use std::{
     env::VarError,
@@ -44,6 +44,7 @@ use std::{
     io::{Cursor, Write},
     sync::Arc,
 };
+use supports_color::Stream;
 
 /// A next-generation test runner for Rust.
 ///
@@ -1016,8 +1017,8 @@ impl BaseApp {
             } => {
                 log::warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
-                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
-                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    required.if_supports_color_2(Stream::Stderr, |x| x.bold()),
+                    current.if_supports_color_2(Stream::Stderr, |x| x.bold()),
                 );
                 if let Some(tool) = tool {
                     log::info!(
@@ -1094,8 +1095,8 @@ impl BaseApp {
             } => {
                 log::warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
-                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
-                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    required.if_supports_color_2(Stream::Stderr, |x| x.bold()),
+                    current.if_supports_color_2(Stream::Stderr, |x| x.bold()),
                 );
                 if let Some(tool) = tool {
                     log::info!(
@@ -1796,7 +1797,7 @@ fn log_platform_runner(prefix: &str, runner: &PlatformRunner) {
     let runner_command = shell_words::join(std::iter::once(runner.binary()).chain(runner.args()));
     log::info!(
         "{prefix}using target runner `{}` defined by {}",
-        runner_command.if_supports_color(Stream::Stderr, |s| s.bold()),
+        runner_command.if_supports_color_2(Stream::Stderr, |s| s.bold()),
         runner.source()
     )
 }
@@ -1809,7 +1810,7 @@ fn warn_on_err(thing: &str, err: &(dyn std::error::Error)) -> Result<(), std::fm
         write!(
             s,
             "\n  {} {}",
-            "caused by:".if_supports_color(Stream::Stderr, |s| s.style(Style::new().yellow())),
+            "caused by:".if_supports_color_2(Stream::Stderr, |s| s.style(Style::new().yellow())),
             err
         )?;
         next_error = err.source();

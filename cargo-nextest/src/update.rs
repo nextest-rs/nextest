@@ -1,13 +1,17 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{output::OutputContext, ExpectedError, Result};
+use crate::{
+    output::{OutputContext, SupportsColorsV2},
+    ExpectedError, Result,
+};
 use camino::Utf8PathBuf;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersion};
-use owo_colors::{OwoColorize, Stream};
+use owo_colors::OwoColorize;
 use semver::Version;
 use std::cmp::Ordering;
+use supports_color::Stream;
 
 /// Perform an update.
 pub(crate) fn perform_update(
@@ -46,7 +50,7 @@ pub(crate) fn perform_update(
         CheckStatus::AlreadyOnRequested(version) => {
             log::info!(
                 "cargo-nextest is already at the latest version: {}",
-                version.if_supports_color(Stream::Stderr, |s| s.bold())
+                version.if_supports_color_2(Stream::Stderr, |s| s.bold())
             );
             Ok(0)
         }
@@ -57,8 +61,8 @@ pub(crate) fn perform_update(
             log::info!(
                 "not performing downgrade from {} to {}\n\
             (pass in --force to force downgrade)",
-                current_version.if_supports_color(Stream::Stderr, |s| s.bold()),
-                requested.if_supports_color(Stream::Stderr, |s| s.bold()),
+                current_version.if_supports_color_2(Stream::Stderr, |s| s.bold()),
+                requested.if_supports_color_2(Stream::Stderr, |s| s.bold()),
             );
             Ok(NextestExitCode::UPDATE_DOWNGRADE_NOT_PERFORMED)
         }
@@ -70,8 +74,9 @@ pub(crate) fn perform_update(
                     Ordering::Equal => "reinstall",
                     Ordering::Less => "downgrade",
                 },
-                current_version.if_supports_color(Stream::Stderr, |s| s.bold()),
-                ctx.version.if_supports_color(Stream::Stderr, |s| s.bold())
+                current_version.if_supports_color_2(Stream::Stderr, |s| s.bold()),
+                ctx.version
+                    .if_supports_color_2(Stream::Stderr, |s| s.bold())
             );
             if check {
                 // check + non-empty ops implies a non-zero exit status.
@@ -100,7 +105,8 @@ pub(crate) fn perform_update(
                     .map_err(|err| ExpectedError::UpdateError { err })?;
                 log::info!(
                     "cargo-nextest updated to {}",
-                    ctx.version.if_supports_color(Stream::Stderr, |s| s.bold())
+                    ctx.version
+                        .if_supports_color_2(Stream::Stderr, |s| s.bold())
                 );
                 Ok(0)
             } else {

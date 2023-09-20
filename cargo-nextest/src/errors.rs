@@ -1,14 +1,16 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::output::SupportsColorsV2;
 use camino::Utf8PathBuf;
 use itertools::Itertools;
 use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::errors::*;
-use owo_colors::{OwoColorize, Stream};
+use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, string::FromUtf8Error};
+use supports_color::Stream;
 use thiserror::Error;
 
 pub(crate) type Result<T, E = ExpectedError> = std::result::Result<T, E>;
@@ -424,7 +426,7 @@ impl ExpectedError {
             Self::CargoMetadataExecFailed { command, err } => {
                 log::error!(
                     "failed to execute `{}`",
-                    command.if_supports_color(Stream::Stderr, |x| x.bold())
+                    command.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -435,7 +437,7 @@ impl ExpectedError {
             Self::CargoLocateProjectExecFailed { command, err } => {
                 log::error!(
                     "failed to execute `{}`",
-                    command.if_supports_color(Stream::Stderr, |x| x.bold())
+                    command.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -450,7 +452,7 @@ impl ExpectedError {
             Self::WorkspaceRootInvalid { workspace_root } => {
                 log::error!(
                     "workspace root `{}` is invalid",
-                    workspace_root.if_supports_color(Stream::Stderr, |x| x.bold())
+                    workspace_root.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 None
             }
@@ -466,7 +468,7 @@ impl ExpectedError {
                     ReuseBuildKind::ReuseWithWorkspaceRemap { workspace_root } => {
                         format!(
                             "\n(hint: ensure that project source is available at {})",
-                            workspace_root.if_supports_color(Stream::Stderr, |x| x.bold())
+                            workspace_root.if_supports_color_2(Stream::Stderr, |x| x.bold())
                         )
                     }
                     ReuseBuildKind::Reuse => {
@@ -478,14 +480,14 @@ impl ExpectedError {
                 };
                 log::error!(
                     "workspace root manifest at {} does not exist{hint_str}",
-                    path.if_supports_color(Stream::Stderr, |x| x.bold())
+                    path.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 None
             }
             Self::StoreDirCreateError { store_dir, err } => {
                 log::error!(
                     "failed to create store dir at `{}`",
-                    store_dir.if_supports_color(Stream::Stderr, |x| x.bold())
+                    store_dir.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -504,7 +506,7 @@ impl ExpectedError {
                                 provided_by_tool(err.tool()),
                                 override_error
                                     .profile_name
-                                    .if_supports_color(Stream::Stderr, |p| p.bold()),
+                                    .if_supports_color_2(Stream::Stderr, |p| p.bold()),
                             );
                             for report in override_error.reports() {
                                 log::error!(target: "cargo_nextest::no_heading", "{report:?}");
@@ -519,17 +521,17 @@ impl ExpectedError {
                         let known_groups_str = known_groups
                             .iter()
                             .map(|group_name| {
-                                group_name.if_supports_color(Stream::Stderr, |x| x.bold())
+                                group_name.if_supports_color_2(Stream::Stderr, |x| x.bold())
                             })
                             .join(", ");
                         let mut errors_str = String::new();
                         for error in errors {
                             errors_str.push_str(&format!(
                                 " - group `{}` in overrides for profile `{}`\n",
-                                error.name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                                error.name.if_supports_color_2(Stream::Stderr, |x| x.bold()),
                                 error
                                     .profile_name
-                                    .if_supports_color(Stream::Stderr, |x| x.bold())
+                                    .if_supports_color_2(Stream::Stderr, |x| x.bold())
                             ));
                         }
 
@@ -563,29 +565,29 @@ impl ExpectedError {
             } => {
                 log::error!(
                     "argument {} specified file `{}` that couldn't be read",
-                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
-                    file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    format!("--{arg_name}").if_supports_color_2(Stream::Stderr, |x| x.bold()),
+                    file_name.if_supports_color_2(Stream::Stderr, |x| x.bold()),
                 );
                 Some(err as &dyn Error)
             }
             Self::UnknownArchiveFormat { archive_file, err } => {
                 log::error!(
                     "failed to autodetect archive format for {}",
-                    archive_file.if_supports_color(Stream::Stderr, |x| x.bold())
+                    archive_file.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
             Self::ArchiveCreateError { archive_file, err } => {
                 log::error!(
                     "error creating archive `{}`",
-                    archive_file.if_supports_color(Stream::Stderr, |x| x.bold())
+                    archive_file.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
             Self::ArchiveExtractError { archive_file, err } => {
                 log::error!(
                     "error extracting archive `{}`",
-                    archive_file.if_supports_color(Stream::Stderr, |x| x.bold())
+                    archive_file.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -600,16 +602,17 @@ impl ExpectedError {
             } => {
                 log::error!(
                     "argument {} specified JSON file `{}` that couldn't be deserialized",
-                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
-                    file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    format!("--{arg_name}").if_supports_color_2(Stream::Stderr, |x| x.bold()),
+                    file_name.if_supports_color_2(Stream::Stderr, |x| x.bold()),
                 );
                 Some(err as &dyn Error)
             }
             Self::PathMapperConstructError { arg_name, err } => {
                 log::error!(
                     "argument {} specified `{}` that couldn't be read",
-                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
-                    err.input().if_supports_color(Stream::Stderr, |x| x.bold())
+                    format!("--{arg_name}").if_supports_color_2(Stream::Stderr, |x| x.bold()),
+                    err.input()
+                        .if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -617,7 +620,7 @@ impl ExpectedError {
                 let metadata_source = match file_name {
                     Some(path) => format!(
                         " from file `{}`",
-                        path.if_supports_color(Stream::Stderr, |x| x.bold())
+                        path.if_supports_color_2(Stream::Stderr, |x| x.bold())
                     ),
                     None => "".to_owned(),
                 };
@@ -635,7 +638,7 @@ impl ExpectedError {
             Self::BuildExecFailed { command, err } => {
                 log::error!(
                     "failed to execute `{}`",
-                    command.if_supports_color(Stream::Stderr, |x| x.bold())
+                    command.if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -644,7 +647,7 @@ impl ExpectedError {
                     Some(code) => {
                         format!(
                             " with code {}",
-                            code.if_supports_color(Stream::Stderr, |x| x.bold())
+                            code.if_supports_color_2(Stream::Stderr, |x| x.bold())
                         )
                     }
                     None => "".to_owned(),
@@ -652,7 +655,7 @@ impl ExpectedError {
 
                 log::error!(
                     "command `{}` exited{}",
-                    command.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    command.if_supports_color_2(Stream::Stderr, |x| x.bold()),
                     with_code_str,
                 );
 
@@ -689,8 +692,8 @@ impl ExpectedError {
             } => {
                 log::error!(
                     "this repository requires nextest version {}, but the current version is {}",
-                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
-                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    required.if_supports_color_2(Stream::Stderr, |x| x.bold()),
+                    current.if_supports_color_2(Stream::Stderr, |x| x.bold()),
                 );
                 if let Some(tool) = tool {
                     log::info!(
@@ -715,7 +718,7 @@ impl ExpectedError {
             Self::UpdateError { err } => {
                 log::error!(
                     "failed to update nextest (please update manually by visiting <{}>)",
-                    "https://get.nexte.st".if_supports_color(Stream::Stderr, |x| x.bold())
+                    "https://get.nexte.st".if_supports_color_2(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
