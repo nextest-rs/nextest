@@ -7,14 +7,14 @@
 
 mod aggregator;
 use crate::{
-    config::NextestProfile,
+    config::{NextestProfile, ScriptId},
     errors::WriteEventError,
     helpers::write_test_name,
     list::{TestInstance, TestList},
     reporter::aggregator::EventAggregator,
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
-        RetryData, RunStats,
+        RetryData, RunStats, SetupScriptExecuteStatus,
     },
 };
 pub use aggregator::heuristic_extract_description;
@@ -390,6 +390,18 @@ impl<'a> TestReporter<'a> {
 
 fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &ProgressBar) {
     match &event.kind {
+        TestEventKind::SetupScriptStarted { no_capture, .. } => {
+            // Hide the progress bar if either stderr or stdout are being passed through.
+            if *no_capture {
+                progress_bar.set_draw_target(ProgressDrawTarget::hidden());
+            }
+        }
+        TestEventKind::SetupScriptFinished { no_capture, .. } => {
+            // Restore the progress bar if it was hidden.
+            if *no_capture {
+                progress_bar.set_draw_target(ProgressDrawTarget::stderr());
+            }
+        }
         TestEventKind::TestStarted {
             current_stats,
             running,
@@ -435,7 +447,7 @@ impl<'a> RunningState<'a> {
     fn progress_bar_prefix(self, styles: &Styles) -> String {
         let (prefix_str, prefix_style) = match self {
             Self::Running(current_stats) => {
-                let prefix_style = if current_stats.any_failed() {
+                let prefix_style = if current_stats.failure_kind().is_some() {
                     styles.fail
                 } else {
                     styles.pass
@@ -586,6 +598,58 @@ impl<'a> TestReporterImpl<'a> {
                 }
 
                 writeln!(writer)?;
+            }
+            TestEventKind::SetupScriptStarted {
+                index,
+                total,
+                script_id,
+                command,
+                args,
+                ..
+            } => {
+                write!(writer, "{:>12} ", "SETUP".style(self.styles.pass))?;
+                // index + 1 so that it displays as e.g. "1/2" and "2/2".
+                write!(writer, "[{:>9}] ", format!("{}/{}", index + 1, total))?;
+
+                self.write_setup_script(script_id, command, args, writer)?;
+                writeln!(writer)?;
+            }
+            TestEventKind::SetupScriptSlow {
+                script_id,
+                command,
+                args,
+                elapsed,
+                will_terminate,
+            } => {
+                if !*will_terminate && self.status_level >= StatusLevel::Slow {
+                    write!(writer, "{:>12} ", "SETUP SLOW".style(self.styles.skip))?;
+                } else if *will_terminate {
+                    write!(writer, "{:>12} ", "TERMINATING".style(self.styles.fail))?;
+                }
+
+                self.write_slow_duration(*elapsed, writer)?;
+                self.write_setup_script(script_id, command, args, writer)?;
+                writeln!(writer)?;
+            }
+            TestEventKind::SetupScriptFinished {
+                script_id,
+                index,
+                total,
+                command,
+                args,
+                run_status,
+                ..
+            } => {
+                self.write_setup_script_status_line(
+                    script_id, *index, *total, command, args, run_status, writer,
+                )?;
+                // Always display failing setup script output if it exists. We may change this in
+                // the future.
+                if !run_status.result.is_success() {
+                    self.write_setup_script_stdout_stderr(
+                        script_id, command, args, run_status, writer,
+                    )?;
+                }
             }
             TestEventKind::TestStarted { test_instance, .. } => {
                 // In no-capture mode, print out a test start event.
@@ -762,44 +826,103 @@ impl<'a> TestReporterImpl<'a> {
                         .push((*test_instance, FinalOutput::Skipped(*reason)));
                 }
             }
-            TestEventKind::RunBeginCancel { running, reason } => {
+            TestEventKind::RunBeginCancel {
+                setup_scripts_running,
+                running,
+                reason,
+            } => {
                 self.cancel_status = self.cancel_status.max(Some(*reason));
 
-                write!(writer, "{:>12} ", "Canceling".style(self.styles.fail))?;
-                let reason_str = match reason {
+                let reason_str: &str = match reason {
+                    CancelReason::SetupScriptFailure => "setup script failure",
                     CancelReason::TestFailure => "test failure",
                     CancelReason::ReportError => "error",
                     CancelReason::Signal => "signal",
                     CancelReason::Interrupt => "interrupt",
                 };
-                let tests_str = tests_str(*running);
 
-                writeln!(
+                write!(
                     writer,
-                    "due to {}: {} {tests_str} still running",
-                    reason_str.style(self.styles.fail),
-                    running.style(self.styles.count)
+                    "{:>12} due to {}",
+                    "Canceling".style(self.styles.fail),
+                    reason_str.style(self.styles.fail)
                 )?;
+
+                // At the moment, we can have either setup scripts or tests running, but not both.
+                if *setup_scripts_running > 0 {
+                    let s = setup_scripts_str(*setup_scripts_running);
+                    write!(
+                        writer,
+                        ": {} {s} still running",
+                        setup_scripts_running.style(self.styles.count),
+                    )?;
+                } else if *running > 0 {
+                    let tests_str = tests_str(*running);
+                    write!(
+                        writer,
+                        ": {} {tests_str} still running",
+                        running.style(self.styles.count),
+                    )?;
+                }
+                writeln!(writer)?;
             }
-            TestEventKind::RunPaused { running } => {
-                let tests_str = tests_str(*running);
-                writeln!(
+            TestEventKind::RunPaused {
+                setup_scripts_running,
+                running,
+            } => {
+                write!(
                     writer,
-                    "{:>12} {} running {tests_str} due to {}",
+                    "{:>12} due to {}",
                     "Pausing".style(self.styles.pass),
-                    running.style(self.styles.count),
-                    "signal".style(self.styles.count),
+                    "signal".style(self.styles.count)
                 )?;
+
+                // At the moment, we can have either setup scripts or tests running, but not both.
+                if *setup_scripts_running > 0 {
+                    let s = setup_scripts_str(*setup_scripts_running);
+                    write!(
+                        writer,
+                        ": {} {s} running",
+                        setup_scripts_running.style(self.styles.count),
+                    )?;
+                } else if *running > 0 {
+                    let tests_str = tests_str(*running);
+                    write!(
+                        writer,
+                        ": {} {tests_str} running",
+                        running.style(self.styles.count),
+                    )?;
+                }
+                writeln!(writer)?;
             }
-            TestEventKind::RunContinued { running } => {
-                let tests_str = tests_str(*running);
-                writeln!(
+            TestEventKind::RunContinued {
+                setup_scripts_running,
+                running,
+            } => {
+                write!(
                     writer,
-                    "{:>12} {} running {tests_str} due to {}",
+                    "{:>12} due to {}",
                     "Continuing".style(self.styles.pass),
-                    running.style(self.styles.count),
-                    "signal".style(self.styles.count),
+                    "signal".style(self.styles.count)
                 )?;
+
+                // At the moment, we can have either setup scripts or tests running, but not both.
+                if *setup_scripts_running > 0 {
+                    let s = setup_scripts_str(*setup_scripts_running);
+                    write!(
+                        writer,
+                        ": {} {s} running",
+                        setup_scripts_running.style(self.styles.count),
+                    )?;
+                } else if *running > 0 {
+                    let tests_str = tests_str(*running);
+                    write!(
+                        writer,
+                        ": {} {tests_str} running",
+                        running.style(self.styles.count),
+                    )?;
+                }
+                writeln!(writer)?;
             }
             TestEventKind::RunFinished {
                 start_time: _start_time,
@@ -807,7 +930,7 @@ impl<'a> TestReporterImpl<'a> {
                 run_stats,
                 ..
             } => {
-                let summary_style = if run_stats.any_failed() {
+                let summary_style = if run_stats.failure_kind().is_some() {
                     self.styles.fail
                 } else {
                     self.styles.pass
@@ -912,6 +1035,42 @@ impl<'a> TestReporterImpl<'a> {
         write!(writer, "[         ] ")?;
 
         self.write_instance(test_instance, writer)?;
+        writeln!(writer)?;
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn write_setup_script_status_line(
+        &self,
+        script_id: &ScriptId,
+        index: usize,
+        total: usize,
+        command: &str,
+        args: &[String],
+        status: &SetupScriptExecuteStatus,
+        writer: &mut impl Write,
+    ) -> io::Result<()> {
+        match status.result {
+            ExecutionResult::Pass => {
+                write!(writer, "{:>12} ", "SETUP PASS".style(self.styles.pass))?;
+            }
+            ExecutionResult::Leak => {
+                write!(writer, "{:>12} ", "SETUP LEAK".style(self.styles.skip))?;
+            }
+            other => {
+                let status_str = short_status_str(other);
+                write!(
+                    writer,
+                    "{:>12} ",
+                    format!("SETUP {status_str}").style(self.styles.fail),
+                )?;
+            }
+        }
+
+        write!(writer, "[{:>9}] ", format!("{}/{}", index + 1, total))?;
+
+        self.write_setup_script(script_id, command, args, writer)?;
         writeln!(writer)?;
 
         Ok(())
@@ -1072,6 +1231,23 @@ impl<'a> TestReporterImpl<'a> {
         write_test_name(instance.name, &self.styles.list_styles, writer)
     }
 
+    fn write_setup_script(
+        &self,
+        script_id: &ScriptId,
+        command: &str,
+        args: &[String],
+        writer: &mut impl Write,
+    ) -> io::Result<()> {
+        let full_command =
+            shell_words::join(std::iter::once(command).chain(args.iter().map(|arg| arg.as_ref())));
+        write!(
+            writer,
+            "{}: {}",
+            script_id.style(self.styles.script_id),
+            full_command
+        )
+    }
+
     fn write_duration(&self, duration: Duration, writer: &mut impl Write) -> io::Result<()> {
         // * > means right-align.
         // * 8 is the number of characters to pad to.
@@ -1109,6 +1285,40 @@ impl<'a> TestReporterImpl<'a> {
         )?;
 
         Ok(())
+    }
+
+    fn write_setup_script_stdout_stderr(
+        &self,
+        script_id: &ScriptId,
+        command: &str,
+        args: &[String],
+        run_status: &SetupScriptExecuteStatus,
+        writer: &mut impl Write,
+    ) -> io::Result<()> {
+        let (header_style, _output_style) = if run_status.result.is_success() {
+            (self.styles.pass, self.styles.pass_output)
+        } else {
+            (self.styles.fail, self.styles.fail_output)
+        };
+
+        if !run_status.stdout.is_empty() {
+            write!(writer, "\n{}", "--- ".style(header_style))?;
+            write!(writer, "{:21}", "STDOUT:".style(header_style))?;
+            self.write_setup_script(script_id, command, args, writer)?;
+            writeln!(writer, "{}", " ---".style(header_style))?;
+
+            self.write_test_output(&run_status.stdout, writer)?;
+        }
+        if !run_status.stderr.is_empty() {
+            write!(writer, "\n{}", "--- ".style(header_style))?;
+            write!(writer, "{:21}", "STDERR:".style(header_style))?;
+            self.write_setup_script(script_id, command, args, writer)?;
+            writeln!(writer, "{}", " ---".style(header_style))?;
+
+            self.write_test_output(&run_status.stderr, writer)?;
+        }
+
+        writeln!(writer)
     }
 
     fn write_stdout_stderr(
@@ -1206,6 +1416,14 @@ impl<'a> TestReporterImpl<'a> {
 
     fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
         self.force_failure_output.unwrap_or(test_setting)
+    }
+}
+
+fn setup_scripts_str(count: usize) -> &'static str {
+    if count == 1 {
+        "setup script"
+    } else {
+        "setup scripts"
     }
 }
 
@@ -1329,6 +1547,69 @@ pub enum TestEventKind<'a> {
         run_id: Uuid,
     },
 
+    /// A setup script started.
+    SetupScriptStarted {
+        /// The setup script index.
+        index: usize,
+
+        /// The total number of setup scripts.
+        total: usize,
+
+        /// The script ID.
+        script_id: ScriptId,
+
+        /// The command to run.
+        command: &'a str,
+
+        /// The arguments to the command.
+        args: &'a [String],
+
+        /// True if some output from the setup script is being passed through.
+        no_capture: bool,
+    },
+
+    /// A setup script was slow.
+    SetupScriptSlow {
+        /// The script ID.
+        script_id: ScriptId,
+
+        /// The command to run.
+        command: &'a str,
+
+        /// The arguments to the command.
+        args: &'a [String],
+
+        /// The amount of time elapsed since the start of execution.
+        elapsed: Duration,
+
+        /// True if the script has hit its timeout and is about to be terminated.
+        will_terminate: bool,
+    },
+
+    /// A setup script completed execution.
+    SetupScriptFinished {
+        /// The setup script index.
+        index: usize,
+
+        /// The total number of setup scripts.
+        total: usize,
+
+        /// The script ID.
+        script_id: ScriptId,
+
+        /// The command to run.
+        command: &'a str,
+
+        /// The arguments to the command.
+        args: &'a [String],
+
+        /// True if some output from the setup script was passed through.
+        no_capture: bool,
+
+        /// The execution status of the setup script.
+        run_status: SetupScriptExecuteStatus,
+    },
+
     // TODO: add events for BinaryStarted and BinaryFinished? May want a slightly different way to
     // do things, maybe a couple of reporter traits (one for the run as a whole and one for each
     // binary).
@@ -1429,6 +1710,9 @@ pub enum TestEventKind<'a> {
 
     /// A cancellation notice was received.
     RunBeginCancel {
+        /// The number of setup scripts still running.
+        setup_scripts_running: usize,
+
         /// The number of tests still running.
         running: usize,
 
@@ -1438,12 +1722,18 @@ pub enum TestEventKind<'a> {
 
     /// A SIGTSTP event was received and the run was paused.
     RunPaused {
+        /// The number of setup scripts running.
+        setup_scripts_running: usize,
+
         /// The number of tests currently running.
         running: usize,
     },
 
     /// A SIGCONT event was received and the run is being continued.
     RunContinued {
+        /// The number of setup scripts that will be started up again.
+        setup_scripts_running: usize,
+
         /// The number of tests that will be started up again.
         running: usize,
     },
@@ -1468,6 +1758,9 @@ pub enum TestEventKind<'a> {
 /// The reason why a test run is being cancelled.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum CancelReason {
+    /// A setup script failed.
+    SetupScriptFailure,
+
     /// A test failed and --no-fail-fast wasn't specified.
     TestFailure,
 
@@ -1492,6 +1785,7 @@ struct Styles {
     retry_output: Style,
     fail_output: Style,
     skip: Style,
+    script_id: Style,
     list_styles: crate::list::Styles,
 }
 
@@ -1506,6 +1800,7 @@ impl Styles {
         self.retry_output = Style::new().magenta();
         self.fail_output = Style::new().magenta();
         self.skip = Style::new().yellow().bold();
+        self.script_id = Style::new().blue().bold();
         self.list_styles.colorize();
     }
 }

@@ -155,7 +155,13 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
-        let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None, []);
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            [],
+            &Default::default(),
+        );
         match n_threads {
             None => assert!(config.is_err()),
             Some(n) => assert_eq!(

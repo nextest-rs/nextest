@@ -206,8 +206,14 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
-        let config = NextestConfig::from_sources(graph.workspace().root(), &graph, None, [])
-            .expect("config is valid");
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            [],
+            &Default::default(),
+        )
+        .expect("config is valid");
         assert_eq!(
             config
                 .profile("default")
@@ -375,8 +381,14 @@ mod tests {
 
         let graph = temp_workspace(workspace_path, config_contents);
 
-        let config_err = NextestConfig::from_sources(graph.workspace().root(), &graph, None, [])
-            .expect_err("config expected to be invalid");
+        let config_err = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            [],
+            &Default::default(),
+        )
+        .expect_err("config expected to be invalid");
 
         let message = match config_err.kind() {
             ConfigParseErrorKind::DeserializeError(path_error) => match path_error.inner() {
@@ -606,8 +618,14 @@ mod tests {
         let graph = temp_workspace(workspace_path, config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
 
-        let config =
-            NextestConfig::from_sources(graph.workspace().root(), &graph, None, &[][..]).unwrap();
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .unwrap();
         let query = TestQuery {
             binary_query: BinaryQuery {
                 package_id,

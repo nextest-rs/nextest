@@ -16,8 +16,9 @@ use nextest_metadata::{BinaryListSummary, BuildPlatform};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        get_num_cpus, NextestConfig, NextestProfile, NextestVersionConfig, NextestVersionEval,
-        PreBuildPlatform, RetryPolicy, TestGroup, TestThreads, ToolConfigFile, VersionOnlyConfig,
+        get_num_cpus, ConfigExperimental, NextestConfig, NextestProfile, NextestVersionConfig,
+        NextestVersionEval, PreBuildPlatform, RetryPolicy, TestGroup, TestThreads, ToolConfigFile,
+        VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
@@ -29,7 +30,7 @@ use nextest_runner::{
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
-    runner::{configure_handle_inheritance, TestRunnerBuilder},
+    runner::{configure_handle_inheritance, RunStatsFailureKind, TestRunnerBuilder},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -39,6 +40,7 @@ use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Style};
 use semver::Version;
 use std::{
+    collections::BTreeSet,
     env::VarError,
     fmt::Write as _,
     io::{Cursor, Write},
@@ -229,12 +231,14 @@ impl ConfigOpts {
         &self,
         workspace_root: &Utf8Path,
         graph: &PackageGraph,
+        experimental: &BTreeSet<ConfigExperimental>,
     ) -> Result<NextestConfig> {
         NextestConfig::from_sources(
             workspace_root,
             graph,
             self.config_file.as_deref(),
             &self.tool_config_files,
+            experimental,
         )
         .map_err(ExpectedError::config_parse_error)
     }
@@ -483,10 +487,12 @@ struct TestBuildFilter {
 }
 
 impl TestBuildFilter {
+    #[allow(clippy::too_many_arguments)]
     fn compute_test_list<'g>(
         &self,
         ctx: &TestExecuteContext<'_>,
         graph: &'g PackageGraph,
+        workspace_root: Utf8PathBuf,
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
         env: EnvironmentMap,
@@ -511,6 +517,7 @@ impl TestBuildFilter {
             test_artifacts,
             rust_build_meta,
             &test_filter_builder,
+            workspace_root,
             env,
             // TODO: do we need to allow customizing this?
             get_num_cpus(),
@@ -976,9 +983,23 @@ impl BaseApp {
             .make_version_only_config(&self.workspace_root)?;
         self.check_version_config_initial(version_only_config.nextest_version())?;
 
-        let config = self
-            .config_opts
-            .make_config(&self.workspace_root, self.graph())?;
+        let experimental = version_only_config.experimental();
+        if !experimental.is_empty() {
+            log::info!(
+                "experimental features enabled: {}",
+                experimental
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+
+        let config = self.config_opts.make_config(
+            &self.workspace_root,
+            self.graph(),
+            version_only_config.experimental(),
+        )?;
 
         Ok((version_only_config, config))
     }
@@ -1271,6 +1292,7 @@ impl App {
         self.build_filter.compute_test_list(
             ctx,
             self.base.graph(),
+            self.base.workspace_root.clone(),
             binary_list,
             test_filter_builder,
             env,
@@ -1465,7 +1487,7 @@ impl App {
 
         let runner = runner_builder.build(
             &test_list,
-            profile,
+            &profile,
             handler,
             double_spawn.clone(),
             target_runner.clone(),
@@ -1479,7 +1501,20 @@ impl App {
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
         if !run_stats.is_success() {
-            return Err(ExpectedError::test_run_failed());
+            match run_stats.failure_kind() {
+                Some(RunStatsFailureKind::SetupScript) => {
+                    return Err(ExpectedError::setup_script_failed());
+                }
+                Some(RunStatsFailureKind::Test) => {
+                    return Err(ExpectedError::test_run_failed());
+                }
+                None => {
+                    // XXX This means that the final number run of tests was less than the initial
+                    // number. Why can this be except if tests were failed or canceled for some
+                    // reason?
+                    return Err(ExpectedError::test_run_failed());
+                }
+            }
         }
         Ok(())
     }

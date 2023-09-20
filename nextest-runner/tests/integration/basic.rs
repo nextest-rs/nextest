@@ -95,11 +95,12 @@ fn test_run() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
     let build_platforms = BuildPlatforms::new(None).unwrap();
+    let profile = profile.apply_build_platforms(&build_platforms);
 
     let runner = TestRunnerBuilder::default()
         .build(
             &test_list,
-            profile.apply_build_platforms(&build_platforms),
+            &profile,
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
@@ -198,11 +199,12 @@ fn test_run_ignored() -> Result<()> {
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
     let build_platforms = BuildPlatforms::new(None).unwrap();
+    let profile = profile.apply_build_platforms(&build_platforms);
 
     let runner = TestRunnerBuilder::default()
         .build(
             &test_list,
-            profile.apply_build_platforms(&build_platforms),
+            &profile,
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
@@ -410,7 +412,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     let runner = builder
         .build(
             &test_list,
-            profile,
+            &profile,
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
@@ -548,7 +550,7 @@ fn test_termination() -> Result<()> {
     let runner = TestRunnerBuilder::default()
         .build(
             &test_list,
-            profile,
+            &profile,
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),

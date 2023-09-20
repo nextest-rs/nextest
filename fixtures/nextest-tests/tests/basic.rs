@@ -6,7 +6,13 @@ use std::{
 };
 
 #[test]
-fn test_success() {}
+fn test_success() {
+    // Check that MY_ENV_VAR (set by the setup script) isn't enabled.
+    assert_eq!(
+        std::env::var("MY_ENV_VAR"),
+        Err(std::env::VarError::NotPresent)
+    );
+}
 
 #[test]
 fn test_failure_assert() {
@@ -238,6 +244,8 @@ fn test_cargo_env_vars() {
             Ok("test-PASSED-value-set-by-environment"),
         );
     }
+
+    assert_eq!(std::env::var("MY_ENV_VAR").as_deref(), Ok("my-env-var"));
 }
 
 #[test]
