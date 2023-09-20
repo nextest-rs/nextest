@@ -904,14 +904,14 @@ impl<'a> TestInstance<'a> {
             args.push("--ignored");
         }
 
-        let ctx = LocalExecuteContext {
+        let lctx = LocalExecuteContext {
             double_spawn: ctx.double_spawn,
             dylib_path: test_list.updated_dylib_path(),
             env: &test_list.env,
         };
 
         TestCommand::new(
-            &ctx,
+            &lctx,
             program,
             &args,
             &self.suite_info.cwd,
