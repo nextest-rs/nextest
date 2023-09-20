@@ -77,7 +77,7 @@ zstd = { version = "0.12.4", features = ["zstdmt"] }
 ###
 mukti-metadata = { version = "0.1.0", optional = true }
 # TODO: remove dependency on self_update, build our own thing on top of mukti
-self_update = { version = "0.37.0", optional = true, default-features = false, features = [
+self_update = { version = "0.38.0", optional = true, default-features = false, features = [
     "archive-tar",
     "compression-flate2",
 ] }
@@ -115,12 +115,12 @@ dunce = "1.0.4"
 # RISC-V: https://github.com/nextest-rs/nextest/issues/820
 # (default features for self_update turns on openssl)
 [target.'cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))'.dependencies]
-self_update = { version = "0.37.0", optional = true, default-features = false, features = [
+self_update = { version = "0.38.0", optional = true, default-features = false, features = [
     "rustls",
 ] }
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
-self_update = { version = "0.37.0", optional = true }
+self_update = { version = "0.38.0", optional = true }
 
 
 [dev-dependencies]
