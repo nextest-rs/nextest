@@ -4,9 +4,8 @@ Nextest supports overriding some settings for subsets of tests, using the [filte
 
 Overrides are set via the `[[profile.<name>.overrides]]` list. Each override consists of the following:
 * `filter` — The filter expression to match.
-* `platform` — The Rust [target triple](https://doc.rust-lang.org/beta/rustc/platform-support.html#platform-support) or [`cfg()` expression](https://doc.rust-lang.org/reference/conditional-compilation.html) to match.
+* `platform` — The [platforms](specifying-platforms.md) to match.
 * Supported overrides, which are optional. Currently supported are:
-  * `retries` — Number of retries to run tests with.
   * `threads-required` — Number of [threads required](threads-required.md) for this test.
   * `test-group` — An optional [test group](test-groups.md) for this test.
   * `slow-timeout` — Amount of time after which [tests are marked slow](slow-tests.md).
@@ -34,7 +33,7 @@ slow-timeout = "5m"
 
 [[profile.ci.overrides]]
 filter = 'test(/\btest_filesystem_/)'
-platform = 'cfg(target_os = "macos")'
+platform = { host = 'cfg(target_os = "macos")' }
 leak-timeout = "500ms"
 success-output = "immediate"
 ```
@@ -42,7 +41,7 @@ success-output = "immediate"
 When `--profile ci` is specified:
 * for test names that start with `test_network_` (including test names like `my_module::test_network_`), retry tests up to 4 times
 * on `x86_64-unknown-linux-gnu`, set a slow timeout of 5 minutes
-* on macOS, for test names that start with `test_filesystem_` (including test names like `my_module::test_filesystem_`), set a leak timeout of 500 milliseconds, and show success output immediately.
+* on macOS hosts, for test names that start with `test_filesystem_` (including test names like `my_module::test_filesystem_`), set a leak timeout of 500 milliseconds, and show success output immediately.
 
 ## Override precedence
 

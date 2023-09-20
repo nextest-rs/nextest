@@ -26,6 +26,7 @@
   - [Environment variables](book/env-vars.md)
   - [Minimum nextest versions](book/minimum-versions.md)
   - [Per-test overrides](book/per-test-overrides.md)
+    - [Specifying platforms](book/specifying-platforms.md)
   - [Heavy tests and threads-required](book/threads-required.md)
   - [Test groups and mutual exclusion](book/test-groups.md)
 - [JUnit support](book/junit.md)

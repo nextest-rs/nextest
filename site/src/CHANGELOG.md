@@ -3,9 +3,16 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.58-rc.3] - 2023-09-20
+## [0.9.58] - 2023-09-20
 
-This is a test release.
+### Added
+
+- Per-test overrides [can now be filtered separately](https://nexte.st/book/per-test-overrides#specifying-platforms) by host and target platforms.
+- New `--cargo-quiet` and `--cargo-verbose` options to control Cargo's quiet and verbose output options. Thanks [Oliver Tale-Yazdi](https://github.com/ggwpez) for your first contribution!
+
+### Fixed
+
+- Improved color support by pulling in [zkat/supports-color#14](https://github.com/zkat/supports-color/pull/14). Now nextest should produce color more often when invoked over SSH.
 
 ## [0.9.57] - 2023-08-02
 
@@ -790,6 +797,7 @@ Supported in this initial release:
 * [Test retries](book/retries.md) and flaky test detection
 * [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.58]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.58
 [0.9.57]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.57
 [0.9.56]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.56
 [0.9.55]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.55
