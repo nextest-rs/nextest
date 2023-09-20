@@ -3,8 +3,8 @@
 
 use crate::{
     config::{
-        CompiledOverride, CustomTestGroup, FinalConfig, NextestProfile, OverrideId,
-        PreBuildPlatform, SettingSource, TestGroup, TestGroupConfig,
+        CompiledOverride, CustomTestGroup, FinalConfig, MaybeTargetSpec, NextestProfile,
+        OverrideId, PreBuildPlatform, SettingSource, TestGroup, TestGroupConfig,
     },
     errors::ShowTestGroupsError,
     helpers::QuotedDisplay,
@@ -167,7 +167,7 @@ impl<'a> ShowTestGroups<'a> {
                         QuotedDisplay(&expr.parsed).style(styles.filter)
                     )?;
                 }
-                if let Some(target_spec) = data.override_.target_spec() {
+                if let MaybeTargetSpec::Provided(target_spec) = data.override_.target_spec() {
                     write!(
                         writer,
                         " on platform {}",
