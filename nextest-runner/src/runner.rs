@@ -10,7 +10,9 @@ use crate::{
     double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
     list::{TestExecuteContext, TestInstance, TestList},
-    reporter::{CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestOutputDisplay},
+    reporter::{
+        CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestEventKind, TestOutputDisplay,
+    },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
     time::{StopwatchEnd, StopwatchStart},
@@ -1262,17 +1264,27 @@ where
     }
 
     fn run_started(&mut self, test_list: &'a TestList) -> Result<(), E> {
-        (self.callback)(TestEvent::RunStarted {
+        self.basic_callback(TestEventKind::RunStarted {
             test_list,
             run_id: self.run_id,
         })
     }
 
+    #[inline]
+    fn basic_callback(&mut self, kind: TestEventKind<'a>) -> Result<(), E> {
+        let event = TestEvent {
+            elapsed: self.stopwatch.elapsed(),
+            kind,
+        };
+        (self.callback)(event)
+    }
+
+    #[inline]
     fn callback(
         &mut self,
-        test_event: TestEvent<'a>,
+        kind: TestEventKind<'a>,
     ) -> Result<Option<JobControlEvent>, InternalError<E>> {
-        (self.callback)(test_event).map_err(InternalError::Error)?;
+        self.basic_callback(kind).map_err(InternalError::Error)?;
         Ok(None)
     }
 
@@ -1283,7 +1295,7 @@ where
         match event {
             InternalEvent::Test(InternalTestEvent::Started { test_instance }) => {
                 self.running += 1;
-                self.callback(TestEvent::TestStarted {
+                self.callback(TestEventKind::TestStarted {
                     test_instance,
                     current_stats: self.run_stats,
                     running: self.running,
@@ -1295,7 +1307,7 @@ where
                 retry_data,
                 elapsed,
                 will_terminate,
-            }) => self.callback(TestEvent::TestSlow {
+            }) => self.callback(TestEventKind::TestSlow {
                 test_instance,
                 retry_data,
                 elapsed,
@@ -1306,7 +1318,7 @@ where
                 failure_output,
                 run_status,
                 delay_before_next_attempt,
-            }) => self.callback(TestEvent::TestAttemptFailedWillRetry {
+            }) => self.callback(TestEventKind::TestAttemptFailedWillRetry {
                 test_instance,
                 failure_output,
                 run_status,
@@ -1315,7 +1327,7 @@ where
             InternalEvent::Test(InternalTestEvent::RetryStarted {
                 test_instance,
                 retry_data,
-            }) => self.callback(TestEvent::TestRetryStarted {
+            }) => self.callback(TestEventKind::TestRetryStarted {
                 test_instance,
                 retry_data,
             }),
@@ -1333,7 +1345,7 @@ where
                 // should this run be canceled because of a failure?
                 let fail_cancel = self.fail_fast && !run_statuses.last_status().result.is_success();
 
-                self.callback(TestEvent::TestFinished {
+                self.callback(TestEventKind::TestFinished {
                     test_instance,
                     success_output,
                     failure_output,
@@ -1359,7 +1371,7 @@ where
                 reason,
             }) => {
                 self.run_stats.skipped += 1;
-                self.callback(TestEvent::TestSkipped {
+                self.callback(TestEventKind::TestSkipped {
                     test_instance,
                     reason,
                 })
@@ -1383,7 +1395,7 @@ where
             InternalEvent::Signal(SignalEvent::JobControl(JobControlEvent::Stop)) => {
                 // Debounce stop signals.
                 if !self.stopwatch.is_paused() {
-                    self.callback(TestEvent::RunPaused {
+                    self.callback(TestEventKind::RunPaused {
                         running: self.running,
                     })?;
                     self.stopwatch.pause();
@@ -1397,7 +1409,7 @@ where
                 // Debounce continue signals.
                 if self.stopwatch.is_paused() {
                     self.stopwatch.resume();
-                    self.callback(TestEvent::RunContinued {
+                    self.callback(TestEventKind::RunContinued {
                         running: self.running,
                     })?;
                     Ok(Some(JobControlEvent::Continue))
@@ -1426,7 +1438,7 @@ where
     fn begin_cancel(&mut self, reason: CancelReason) -> Result<(), E> {
         if self.cancel_state < Some(reason) {
             self.cancel_state = Some(reason);
-            (self.callback)(TestEvent::RunBeginCancel {
+            self.basic_callback(TestEventKind::RunBeginCancel {
                 running: self.running,
                 reason,
             })?;
@@ -1436,7 +1448,7 @@ where
 
     fn run_finished(&mut self) -> Result<(), E> {
         let stopwatch_end = self.stopwatch.end();
-        (self.callback)(TestEvent::RunFinished {
+        self.basic_callback(TestEventKind::RunFinished {
             start_time: stopwatch_end.start_time,
             run_id: self.run_id,
             elapsed: stopwatch_end.duration,

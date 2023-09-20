@@ -63,6 +63,10 @@ impl StopwatchStart {
         }
     }
 
+    pub(crate) fn elapsed(&self) -> Duration {
+        self.instant.elapsed() - self.paused_time
+    }
+
     pub(crate) fn end(&self) -> StopwatchEnd {
         StopwatchEnd {
             start_time: self.start_time,

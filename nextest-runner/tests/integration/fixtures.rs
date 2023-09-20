@@ -13,7 +13,7 @@ use nextest_runner::{
     list::{
         BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
     },
-    reporter::TestEvent,
+    reporter::TestEventKind,
     reuse_build::PathMapper,
     runner::{
         configure_handle_inheritance, AbortStatus, ExecutionResult, ExecutionStatuses, RunStats,
@@ -416,12 +416,12 @@ pub(crate) fn execute_collect(
     let mut instance_statuses = HashMap::new();
     configure_handle_inheritance(false).expect("configuring handle inheritance on Windows failed");
     let run_stats = runner.execute(|event| {
-        let (test_instance, status) = match event {
-            TestEvent::TestSkipped {
+        let (test_instance, status) = match event.kind {
+            TestEventKind::TestSkipped {
                 test_instance,
                 reason,
             } => (test_instance, InstanceStatus::Skipped(reason)),
-            TestEvent::TestFinished {
+            TestEventKind::TestFinished {
                 test_instance,
                 run_statuses,
                 ..
