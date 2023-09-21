@@ -207,9 +207,8 @@ impl<'g> TestList<'g> {
             dylib_path_envvar(),
             updated_dylib_path.to_string_lossy(),
         );
-        let ctx = LocalExecuteContext {
+        let lctx = LocalExecuteContext {
             double_spawn: ctx.double_spawn,
-            runner: ctx.target_runner,
             dylib_path: &updated_dylib_path,
             env: &env,
         };
@@ -220,7 +219,7 @@ impl<'g> TestList<'g> {
             async {
                 if filter.should_obtain_test_list_from_binary(&test_binary) {
                     // Run the binary to obtain the test list.
-                    let (non_ignored, ignored) = test_binary.exec(&ctx).await?;
+                    let (non_ignored, ignored) = test_binary.exec(&lctx, ctx.target_runner).await?;
                     let (bin, info) = Self::process_output(
                         test_binary,
                         filter,
@@ -677,7 +676,8 @@ impl<'g> RustTestArtifact<'g> {
     /// Run this binary with and without --ignored and get the corresponding outputs.
     async fn exec(
         &self,
-        ctx: &LocalExecuteContext<'_>,
+        lctx: &LocalExecuteContext<'_>,
+        target_runner: &TargetRunner,
     ) -> Result<(String, String), CreateTestListError> {
         // This error situation has been known to happen with reused builds. It produces
         // a really terrible and confusing "file not found" message if allowed to prceed.
@@ -687,10 +687,10 @@ impl<'g> RustTestArtifact<'g> {
                 cwd: self.cwd.clone(),
             });
         }
-        let platform_runner = ctx.runner.for_build_platform(self.build_platform);
+        let platform_runner = target_runner.for_build_platform(self.build_platform);
 
-        let non_ignored = self.exec_single(false, ctx, platform_runner);
-        let ignored = self.exec_single(true, ctx, platform_runner);
+        let non_ignored = self.exec_single(false, lctx, platform_runner);
+        let ignored = self.exec_single(true, lctx, platform_runner);
 
         let (non_ignored_out, ignored_out) = futures::future::join(non_ignored, ignored).await;
         Ok((non_ignored_out?, ignored_out?))
@@ -699,7 +699,7 @@ impl<'g> RustTestArtifact<'g> {
     async fn exec_single(
         &self,
         ignored: bool,
-        ctx: &LocalExecuteContext<'_>,
+        lctx: &LocalExecuteContext<'_>,
         runner: Option<&PlatformRunner>,
     ) -> Result<String, CreateTestListError> {
         let mut argv = Vec::new();
@@ -723,7 +723,7 @@ impl<'g> RustTestArtifact<'g> {
         }
 
         let mut cmd = TestCommand::new(
-            ctx,
+            lctx,
             program.clone(),
             &argv,
             &self.cwd,
@@ -906,7 +906,6 @@ impl<'a> TestInstance<'a> {
 
         let ctx = LocalExecuteContext {
             double_spawn: ctx.double_spawn,
-            runner: ctx.target_runner,
             dylib_path: test_list.updated_dylib_path(),
             env: &test_list.env,
         };
