@@ -37,7 +37,7 @@ Readers may be wondering if any of this work will be contributed back to cargo.
 
 There is currently [an ongoing effort](https://epage.github.io/blog/2023/06/iterating-on-test/) to add parts of nextest to cargo test. However, there are a few reasons nextest remains a separate project for now:
 
-- As documented above, nextest has a significantly thicker interface with the test binary than Cargo does. `cargo test`` cannot just change how it works without breaking backwards compatibility, while nextest did not have this constraint at the time it was created.
+- As documented above, nextest has a significantly thicker interface with the test binary than Cargo does. `cargo test` cannot just change how it works without breaking backwards compatibility, while nextest did not have this constraint at the time it was created.
 - While nextest aims to be stable as far as possible, it has fewer stability guarantees than Cargo does. It is easier to experiment with improvements without having to worry about the long-term stability guarantees provided by Cargo, or go through the (necessarily) heavyweight Rust RFC process.
 - Ultimately, the primary maintainer of nextest considers it a more efficient use of their time to maintain nextest, than to try and port the changes over to `cargo test` (which won't make nextest fully redundant anyway, so it would still need to be maintained).
 
