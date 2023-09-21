@@ -5,7 +5,6 @@ use crate::{
     cargo_config::EnvironmentMap,
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
-    target_runner::TargetRunner,
 };
 use camino::Utf8PathBuf;
 use guppy::graph::PackageMetadata;
@@ -18,7 +17,6 @@ use std::{
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
     pub(crate) double_spawn: &'a DoubleSpawnInfo,
-    pub(crate) runner: &'a TargetRunner,
     pub(crate) dylib_path: &'a OsStr,
     pub(crate) env: &'a EnvironmentMap,
 }
