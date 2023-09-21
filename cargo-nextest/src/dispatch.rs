@@ -98,13 +98,6 @@ struct AppOpts {
     command: Command,
 }
 
-fn build_filter_needs_deps(build_filter: &TestBuildFilter) -> bool {
-    build_filter
-        .filter_expr
-        .iter()
-        .any(|expr| FilteringExpr::needs_deps(expr))
-}
-
 impl AppOpts {
     /// Execute the command.
     ///
@@ -127,7 +120,6 @@ impl AppOpts {
                     cargo_options,
                     self.config_opts,
                     self.manifest_path,
-                    build_filter_needs_deps(&build_filter),
                     output_writer,
                 )?;
                 let app = App::new(base, build_filter)?;
@@ -150,7 +142,6 @@ impl AppOpts {
                     cargo_options,
                     self.config_opts,
                     self.manifest_path,
-                    build_filter_needs_deps(&build_filter),
                     output_writer,
                 )?;
                 let app = App::new(base, build_filter)?;
@@ -175,7 +166,6 @@ impl AppOpts {
                     cargo_options,
                     self.config_opts,
                     self.manifest_path,
-                    true,
                     output_writer,
                 )?;
                 app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
@@ -900,7 +890,6 @@ impl BaseApp {
         cargo_opts: CargoOptions,
         config_opts: ConfigOpts,
         manifest_path: Option<Utf8PathBuf>,
-        graph_with_deps: bool,
         writer: &mut OutputWriter,
     ) -> Result<Self> {
         reuse_build.check_experimental(output);
@@ -923,7 +912,6 @@ impl BaseApp {
                     manifest_path.as_deref(),
                     cargo_opts.target_dir.as_deref(),
                     output,
-                    graph_with_deps,
                 )?;
                 let graph = PackageGraph::from_json(&json)
                     .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
@@ -1616,7 +1604,6 @@ impl ShowConfigCommand {
                     *cargo_options,
                     config_opts,
                     manifest_path,
-                    build_filter_needs_deps(&build_filter),
                     output_writer,
                 )?;
                 let app = App::new(base, build_filter)?;
@@ -1709,14 +1696,13 @@ fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
     target_dir: Option<&Utf8Path>,
     output: OutputContext,
-    with_deps: bool,
 ) -> Result<String> {
     let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
     cargo_cli.add_args(["--format-version=1", "--all-features"]);
 
-    if !with_deps {
-        cargo_cli.add_arg("--no-deps");
-    }
+    // We used to be able to only pull deps in some cases, but that was (a) error-prone and (b) a
+    // bit harder to do given that some nextest config options depend on the graph. Maybe we could
+    // reintroduce it some day.
 
     let mut expression = cargo_cli.to_expression().stdout_capture().unchecked();
     // cargo metadata doesn't support "--target-dir" but setting the environment
