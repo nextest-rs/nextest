@@ -19,12 +19,14 @@ use crate::{
 };
 use async_scoped::TokioScope;
 use bytes::Bytes;
+use display_error_chain::DisplayErrorChain;
 use future_queue::StreamExt;
 use futures::{future::try_join, prelude::*};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
     convert::Infallible,
+    fmt::Write,
     marker::PhantomData,
     num::NonZeroUsize,
     process::Stdio,
@@ -628,15 +630,20 @@ impl<'a> TestRunnerInner<'a> {
             .await
         {
             Ok(run_status) => run_status,
-            Err(_) => InternalExecuteStatus {
-                // TODO: can we return more information in stdout/stderr? investigate this
-                stdout: Bytes::new(),
-                stderr: Bytes::new(),
-                result: ExecutionResult::ExecFail,
-                stopwatch_end: stopwatch.end(),
-                is_slow: false,
-                delay_before_start,
-            },
+            Err(error) => {
+                // Put the error chain inside stderr.
+                let mut stderr = bytes::BytesMut::new();
+                writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
+
+                InternalExecuteStatus {
+                    stdout: Bytes::new(),
+                    stderr: stderr.freeze(),
+                    result: ExecutionResult::ExecFail,
+                    stopwatch_end: stopwatch.end(),
+                    is_slow: false,
+                    delay_before_start,
+                }
+            }
         }
     }
 
