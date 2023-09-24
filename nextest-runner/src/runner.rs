@@ -506,8 +506,8 @@ impl<'a> TestRunnerInner<'a> {
                             // There's a possibility of a race condition between a test exiting and
                             // sending the message to the receiver. For that reason, don't wait more
                             // than 100ms on children to stop.
-                            let sleep = tokio::time::sleep(Duration::from_millis(100));
-                            tokio::pin!(sleep);
+                            let mut sleep =
+                                std::pin::pin!(tokio::time::sleep(Duration::from_millis(100)));
 
                             loop {
                                 tokio::select! {
@@ -695,8 +695,7 @@ impl<'a> TestRunnerInner<'a> {
 
         // Use a pausable_sleep rather than an interval here because it's much harder to pause and
         // resume an interval.
-        let interval_sleep = crate::time::pausable_sleep(slow_timeout.period);
-        tokio::pin!(interval_sleep);
+        let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
 
         let mut timeout_hit = 0;
 
@@ -740,8 +739,7 @@ impl<'a> TestRunnerInner<'a> {
                 }
             };
 
-            let collect_output_fut = try_join(stdout_fut, stderr_fut);
-            tokio::pin!(collect_output_fut);
+            let mut collect_output_fut = std::pin::pin!(try_join(stdout_fut, stderr_fut));
             let mut collect_output_done = false;
 
             let res = loop {
@@ -1775,8 +1773,8 @@ mod imp {
                 return;
             }
 
-            let sleep = crate::time::pausable_sleep(grace_period);
-            tokio::pin!(sleep);
+            let mut sleep = std::pin::pin!(crate::time::pausable_sleep(grace_period));
+
             loop {
                 tokio::select! {
                     _ = child.wait() => {
