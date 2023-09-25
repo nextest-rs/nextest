@@ -18,7 +18,7 @@ use crate::{
     time::{StopwatchEnd, StopwatchStart},
 };
 use async_scoped::TokioScope;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use display_error_chain::DisplayErrorChain;
 use future_queue::StreamExt;
 use futures::{future::try_join, prelude::*};
@@ -705,41 +705,12 @@ impl<'a> TestRunnerInner<'a> {
         let mut stderr = bytes::BytesMut::new();
 
         let (res, leaked) = {
-            async fn read_all_to_bytes(
-                bytes: &mut bytes::BytesMut,
-                mut input: &mut (dyn AsyncRead + Unpin + Send),
-            ) -> std::io::Result<()> {
-                // Reborrow it as AsyncReadExt::read_buf expects
-                // Sized self.
-                let input = &mut input;
-
-                loop {
-                    bytes.reserve(4096);
-                    let bytes_read = input.read_buf(bytes).await?;
-                    if bytes_read == 0 {
-                        break Ok(());
-                    }
-                }
-            }
-
-            // Set up futures for reading from stdout and stderr.
-            let stdout_fut = async {
-                if let Some(mut child_stdout) = child_stdout {
-                    read_all_to_bytes(&mut stdout, &mut child_stdout).await
-                } else {
-                    Ok(())
-                }
-            };
-
-            let stderr_fut = async {
-                if let Some(mut child_stderr) = child_stderr {
-                    read_all_to_bytes(&mut stderr, &mut child_stderr).await
-                } else {
-                    Ok(())
-                }
-            };
-
-            let mut collect_output_fut = std::pin::pin!(try_join(stdout_fut, stderr_fut));
+            let mut collect_output_fut = std::pin::pin!(collect_output(
+                child_stdout,
+                &mut stdout,
+                child_stderr,
+                &mut stderr
+            ));
             let mut collect_output_done = false;
 
             let res = loop {
@@ -890,6 +861,49 @@ impl<'a> TestRunnerInner<'a> {
             is_slow,
             delay_before_start,
         })
+    }
+}
+
+fn collect_output<'a>(
+    child_stdout: Option<tokio::process::ChildStdout>,
+    stdout: &'a mut BytesMut,
+    child_stderr: Option<tokio::process::ChildStderr>,
+    stderr: &'a mut BytesMut,
+) -> impl Future<Output = Result<(), std::io::Error>> + 'a {
+    // Set up futures for reading from stdout and stderr.
+    let stdout_fut = async {
+        if let Some(mut child_stdout) = child_stdout {
+            read_all_to_bytes(stdout, &mut child_stdout).await
+        } else {
+            Ok(())
+        }
+    };
+
+    let stderr_fut = async {
+        if let Some(mut child_stderr) = child_stderr {
+            read_all_to_bytes(stderr, &mut child_stderr).await
+        } else {
+            Ok(())
+        }
+    };
+
+    try_join(stdout_fut, stderr_fut).map_ok(|_| ())
+}
+
+async fn read_all_to_bytes(
+    bytes: &mut bytes::BytesMut,
+    mut input: &mut (dyn AsyncRead + Unpin + Send),
+) -> std::io::Result<()> {
+    // Reborrow it as AsyncReadExt::read_buf expects
+    // Sized self.
+    let input = &mut input;
+
+    loop {
+        bytes.reserve(4096);
+        let bytes_read = input.read_buf(bytes).await?;
+        if bytes_read == 0 {
+            break Ok(());
+        }
     }
 }
 
