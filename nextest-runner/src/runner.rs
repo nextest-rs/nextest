@@ -8,7 +8,9 @@
 use crate::{
     config::{NextestProfile, RetryPolicy, TestGroup, TestSettings, TestThreads},
     double_spawn::DoubleSpawnInfo,
-    errors::{ConfigureHandleInheritanceError, TestRunnerBuildError},
+    errors::{
+        CollectTestOutputError, ConfigureHandleInheritanceError, RunTestError, TestRunnerBuildError,
+    },
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::{
         CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestEventKind, TestOutputDisplay,
@@ -657,7 +659,7 @@ impl<'a> TestRunnerInner<'a> {
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
         delay_before_start: Duration,
-    ) -> std::io::Result<InternalExecuteStatus> {
+    ) -> Result<InternalExecuteStatus, RunTestError> {
         let ctx = TestExecuteContext {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
@@ -682,7 +684,7 @@ impl<'a> TestRunnerInner<'a> {
                 .stderr(std::process::Stdio::piped());
         };
 
-        let mut child = cmd.spawn()?;
+        let mut child = cmd.spawn().map_err(RunTestError::Spawn)?;
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
@@ -821,7 +823,7 @@ impl<'a> TestRunnerInner<'a> {
             (res, leaked)
         };
 
-        let output = res?;
+        let output = res.map_err(RunTestError::Wait)?;
         let exit_status = output;
 
         let status = status.unwrap_or_else(|| {
@@ -869,11 +871,13 @@ fn collect_output<'a>(
     stdout: &'a mut BytesMut,
     child_stderr: Option<tokio::process::ChildStderr>,
     stderr: &'a mut BytesMut,
-) -> impl Future<Output = Result<(), std::io::Error>> + 'a {
+) -> impl Future<Output = Result<(), CollectTestOutputError>> + 'a {
     // Set up futures for reading from stdout and stderr.
     let stdout_fut = async {
         if let Some(mut child_stdout) = child_stdout {
-            read_all_to_bytes(stdout, &mut child_stdout).await
+            read_all_to_bytes(stdout, &mut child_stdout)
+                .await
+                .map_err(CollectTestOutputError::ReadStdout)
         } else {
             Ok(())
         }
@@ -881,7 +885,9 @@ fn collect_output<'a>(
 
     let stderr_fut = async {
         if let Some(mut child_stderr) = child_stderr {
-            read_all_to_bytes(stderr, &mut child_stderr).await
+            read_all_to_bytes(stderr, &mut child_stderr)
+                .await
+                .map_err(CollectTestOutputError::ReadStderr)
         } else {
             Ok(())
         }
