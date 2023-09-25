@@ -165,6 +165,35 @@ impl ConfigParseOverrideError {
     }
 }
 
+/// An execution error was returned while running a test.
+///
+/// Internal error type.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub(crate) enum RunTestError {
+    #[error("error spawning test process")]
+    Spawn(#[source] std::io::Error),
+
+    #[error("error waiting for setup script to exit")]
+    Wait(#[source] std::io::Error),
+
+    #[error("error collecting test output")]
+    CollectOutput(#[from] CollectTestOutputError),
+}
+
+/// An error was returned while collecting test output.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum CollectTestOutputError {
+    /// An error occurred while reading standard output.
+    #[error("error reading standard output")]
+    ReadStdout(#[source] std::io::Error),
+
+    /// An error occurred while reading standard error.
+    #[error("error reading standard error")]
+    ReadStderr(#[source] std::io::Error),
+}
+
 /// An unknown test group was specified in the config.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
