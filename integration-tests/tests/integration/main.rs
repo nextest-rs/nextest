@@ -636,3 +636,46 @@ fn test_show_config_version() {
 
     insta::assert_snapshot!(output.stdout_as_str());
 }
+
+#[test]
+fn test_setup_scripts_not_enabled() {
+    set_env_vars();
+
+    let p = TempProject::new().unwrap();
+
+    // Remove the "experimental" line from the config file.
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    let s = std::fs::read_to_string(&config_path).unwrap();
+    let mut out = String::new();
+    for line in s.lines() {
+        if !line.starts_with("experimental") {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    std::fs::write(&config_path, out).unwrap();
+
+    let output = CargoNextestCli::new()
+        .args(["run", "--manifest-path", p.manifest_path().as_str()])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_code,
+        Some(NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED)
+    );
+}
+
+#[test]
+fn test_setup_script_error() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::new()
+        .args(["run", "--manifest-path", p.manifest_path().as_str()])
+        .env("__NEXTEST_SETUP_SCRIPT_ERROR", "1")
+        .unchecked(true)
+        .output();
+
+    assert_eq!(output.exit_code, Some(NextestExitCode::SETUP_SCRIPT_FAILED));
+}

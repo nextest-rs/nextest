@@ -13,7 +13,7 @@ use crate::{
     test_command::{LocalExecuteContext, TestCommand},
     test_filter::TestFilterBuilder,
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use futures::prelude::*;
 use guppy::{
     graph::{PackageGraph, PackageMetadata},
@@ -181,6 +181,7 @@ pub struct TestList<'g> {
     test_count: usize,
     rust_build_meta: RustBuildMeta<TestListState>,
     rust_suites: BTreeMap<RustBinaryId, RustTestSuite<'g>>,
+    workspace_root: Utf8PathBuf,
     env: EnvironmentMap,
     updated_dylib_path: OsString,
     // Computed on first access.
@@ -194,6 +195,7 @@ impl<'g> TestList<'g> {
         test_artifacts: I,
         rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
+        workspace_root: Utf8PathBuf,
         env: EnvironmentMap,
         list_threads: usize,
     ) -> Result<Self, CreateTestListError>
@@ -248,6 +250,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites,
+            workspace_root,
             env,
             rust_build_meta,
             updated_dylib_path,
@@ -262,6 +265,7 @@ impl<'g> TestList<'g> {
         test_bin_outputs: impl IntoIterator<
             Item = (RustTestArtifact<'g>, impl AsRef<str>, impl AsRef<str>),
         >,
+        workspace_root: Utf8PathBuf,
         rust_build_meta: RustBuildMeta<TestListState>,
         filter: &TestFilterBuilder,
         env: EnvironmentMap,
@@ -291,6 +295,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites,
+            workspace_root,
             env,
             rust_build_meta,
             updated_dylib_path,
@@ -328,6 +333,16 @@ impl<'g> TestList<'g> {
     /// Returns the total number of binaries that contain tests.
     pub fn binary_count(&self) -> usize {
         self.rust_suites.len()
+    }
+
+    /// Returns the mapped workspace root.
+    pub fn workspace_root(&self) -> &Utf8Path {
+        &self.workspace_root
+    }
+
+    /// Returns the environment variables to be used when running tests.
+    pub fn cargo_env(&self) -> &EnvironmentMap {
+        &self.env
     }
 
     /// Returns the updated dynamic library path used for tests.
@@ -414,6 +429,7 @@ impl<'g> TestList<'g> {
     pub(crate) fn empty() -> Self {
         Self {
             test_count: 0,
+            workspace_root: Utf8PathBuf::new(),
             rust_build_meta: RustBuildMeta::empty(),
             env: EnvironmentMap::empty(),
             updated_dylib_path: OsString::new(),
@@ -1023,6 +1039,7 @@ mod tests {
                     &"should-not-show-up-stderr",
                 ),
             ],
+            Utf8PathBuf::from("/fake/path"),
             rust_build_meta,
             &test_filter,
             fake_env,

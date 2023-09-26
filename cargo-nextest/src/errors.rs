@@ -184,6 +184,8 @@ pub enum ExpectedError {
         #[from]
         err: ShowTestGroupsError,
     },
+    #[error("setup script failed")]
+    SetupScriptFailed,
     #[error("test run failed")]
     TestRunFailed,
     #[cfg(feature = "self-update")]
@@ -352,6 +354,10 @@ impl ExpectedError {
         Self::FilterExpressionParseError { all_errors }
     }
 
+    pub(crate) fn setup_script_failed() -> Self {
+        Self::SetupScriptFailed
+    }
+
     pub(crate) fn test_run_failed() -> Self {
         Self::TestRunFailed
     }
@@ -374,7 +380,6 @@ impl ExpectedError {
             | Self::StoreDirCreateError { .. }
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
-            | Self::ConfigParseError { .. }
             | Self::TestFilterBuilderError { .. }
             | Self::UnknownHostPlatform { .. }
             | Self::ArgumentFileReadError { .. }
@@ -390,6 +395,15 @@ impl ExpectedError {
             | Self::DialoguerError { .. }
             | Self::SignalHandlerSetupError { .. }
             | Self::ShowTestGroupsError { .. } => NextestExitCode::SETUP_ERROR,
+            Self::ConfigParseError { err } => {
+                // Experimental features not being enabled are their own error.
+                match err.kind() {
+                    ConfigParseErrorKind::ExperimentalFeatureNotEnabled { .. } => {
+                        NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
+                    }
+                    _ => NextestExitCode::SETUP_ERROR,
+                }
+            }
             Self::RequiredVersionNotMet { .. } => NextestExitCode::REQUIRED_VERSION_NOT_MET,
             #[cfg(feature = "self-update")]
             Self::UpdateVersionParseError { .. } => NextestExitCode::SETUP_ERROR,
@@ -402,6 +416,7 @@ impl ExpectedError {
             Self::BuildExecFailed { .. } | Self::BuildFailed { .. } => {
                 NextestExitCode::BUILD_FAILED
             }
+            Self::SetupScriptFailed => NextestExitCode::SETUP_SCRIPT_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::WriteTestListError { .. } | Self::WriteEventError { .. } => {
@@ -497,7 +512,7 @@ impl ExpectedError {
             }
             Self::ConfigParseError { err } => {
                 match err.kind() {
-                    ConfigParseErrorKind::OverrideError(errors) => {
+                    ConfigParseErrorKind::CompiledDataParseError(errors) => {
                         // Override errors are printed out using miette.
                         for override_error in errors {
                             log::error!(
@@ -538,6 +553,57 @@ impl ExpectedError {
                         log::error!(
                             "for config file `{}`{}, unknown test groups defined \
                             (known groups: {known_groups_str}):\n{errors_str}",
+                            err.config_file(),
+                            provided_by_tool(err.tool()),
+                        );
+                        None
+                    }
+                    ConfigParseErrorKind::UnknownConfigScripts {
+                        errors,
+                        known_scripts,
+                    } => {
+                        let known_scripts_str = known_scripts
+                            .iter()
+                            .map(|group_name| {
+                                group_name.if_supports_color_2(Stream::Stderr, |x| x.bold())
+                            })
+                            .join(", ");
+                        let mut errors_str = String::new();
+                        for error in errors {
+                            errors_str.push_str(&format!(
+                                " - script `{}` specified within profile `{}`\n",
+                                error.name.if_supports_color_2(Stream::Stderr, |x| x.bold()),
+                                error
+                                    .profile_name
+                                    .if_supports_color_2(Stream::Stderr, |x| x.bold())
+                            ));
+                        }
+
+                        log::error!(
+                            "for config file `{}`{}, unknown scripts defined \
+                        (known scripts: {known_scripts_str}):\n{errors_str}",
+                            err.config_file(),
+                            provided_by_tool(err.tool()),
+                        );
+                        None
+                    }
+                    ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known } => {
+                        let unknown_str = unknown
+                            .iter()
+                            .map(|feature_name| {
+                                feature_name.if_supports_color_2(Stream::Stderr, |x| x.bold())
+                            })
+                            .join(", ");
+                        let known_str = known
+                            .iter()
+                            .map(|feature_name| {
+                                feature_name.if_supports_color_2(Stream::Stderr, |x| x.bold())
+                            })
+                            .join(", ");
+
+                        log::error!(
+                            "for config file `{}`{}, unknown experimental features defined:
+                             {unknown_str} (known features: {known_str}):",
                             err.config_file(),
                             provided_by_tool(err.tool()),
                         );
@@ -676,6 +742,10 @@ impl ExpectedError {
             Self::WriteEventError { err } => {
                 log::error!("failed to write event to output");
                 Some(err as &dyn Error)
+            }
+            Self::SetupScriptFailed => {
+                log::error!("setup script failed");
+                None
             }
             Self::TestRunFailed => {
                 log::error!("test run failed");

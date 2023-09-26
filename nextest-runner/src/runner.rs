@@ -6,10 +6,14 @@
 //! The main structure in this module is [`TestRunner`].
 
 use crate::{
-    config::{NextestProfile, RetryPolicy, TestGroup, TestSettings, TestThreads},
+    config::{
+        NextestProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScript, SetupScriptEnvMap,
+        SetupScriptExecuteData, SlowTimeout, TestGroup, TestSettings, TestThreads,
+    },
     double_spawn::DoubleSpawnInfo,
     errors::{
-        CollectTestOutputError, ConfigureHandleInheritanceError, RunTestError, TestRunnerBuildError,
+        CollectTestOutputError, ConfigureHandleInheritanceError, RunTestError, SetupScriptError,
+        TestRunnerBuildError,
     },
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::{
@@ -33,7 +37,10 @@ use std::{
     num::NonZeroUsize,
     pin::Pin,
     process::{ExitStatus, Stdio},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, SystemTime},
 };
 use tokio::{
@@ -153,7 +160,7 @@ impl TestRunnerBuilder {
     pub fn build<'a>(
         self,
         test_list: &'a TestList,
-        profile: NextestProfile<'a>,
+        profile: &'a NextestProfile<'a>,
         handler_kind: SignalHandlerKind,
         double_spawn: DoubleSpawnInfo,
         target_runner: TargetRunner,
@@ -236,7 +243,7 @@ impl<'a> TestRunner<'a> {
 #[derive(Debug)]
 struct TestRunnerInner<'a> {
     no_capture: bool,
-    profile: NextestProfile<'a>,
+    profile: &'a NextestProfile<'a>,
     test_threads: usize,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
@@ -422,12 +429,75 @@ impl<'a> TestRunnerInner<'a> {
             scope.spawn_cancellable(exec_fut, || ());
 
             {
+                let setup_scripts = self.profile.setup_scripts(self.test_list);
+                let total = setup_scripts.len();
+                log::debug!("running {} setup scripts", total);
+
+                let mut setup_script_data = SetupScriptExecuteData::new();
+
+                // Run setup scripts one by one.
+                for (index, script) in setup_scripts.into_iter().enumerate() {
+                    let this_run_sender = run_sender.clone();
+                    let (completion_sender, completion_receiver) = tokio::sync::oneshot::channel();
+
+                    let script_id = script.id.clone();
+                    let config = script.config;
+
+                    let script_fut = async move {
+                        // Subscribe to the receiver *before* checking canceled_ref. The ordering is
+                        // important to avoid race conditions with the code that first sets
+                        // canceled_ref and then sends the notification.
+                        let mut this_forward_receiver = forward_sender_ref.subscribe();
+
+                        if canceled_ref.load(Ordering::Acquire) {
+                            // Check for test cancellation.
+                            return;
+                        }
+
+                        let _ = this_run_sender.send(InternalTestEvent::SetupScriptStarted {
+                            script_id: script_id.clone(),
+                            config,
+                            index,
+                            total,
+                        });
+
+                        let (status, env_map) = self
+                            .run_setup_script(&script, &this_run_sender, &mut this_forward_receiver)
+                            .await;
+                        let status = status.into_external();
+
+                        let _ = this_run_sender.send(InternalTestEvent::SetupScriptFinished {
+                            script_id,
+                            config,
+                            index,
+                            total,
+                            status,
+                        });
+
+                        drain_forward_receiver(this_forward_receiver).await;
+                        _ = completion_sender.send(env_map.map(|env_map| (script, env_map)));
+                    };
+
+                    // Run this setup script to completion.
+                    scope.spawn_cancellable(script_fut, || ());
+                    let script_and_env_map = completion_receiver.blocking_recv().unwrap_or_else(|_| {
+                        // This should never happen.
+                        log::warn!("setup script future did not complete -- this is a bug, please report it");
+                        None
+                    });
+                    if let Some((script, env_map)) = script_and_env_map {
+                        setup_script_data.add_script(script, env_map);
+                    }
+                }
+
                 // groups is going to be passed to future_queue_grouped.
                 let groups = self
                     .profile
                     .test_group_config()
                     .iter()
                     .map(|(group_name, config)| (group_name, config.max_threads.compute()));
+
+                let setup_script_data = Arc::new(setup_script_data);
 
                 let run_fut = futures::stream::iter(self.test_list.iter_tests())
                     .map(move |test_instance| {
@@ -436,6 +506,7 @@ impl<'a> TestRunnerInner<'a> {
 
                         let query = test_instance.to_test_query();
                         let settings = self.profile.settings_for(&query);
+                        let setup_script_data = setup_script_data.clone();
                         let threads_required =
                             settings.threads_required().compute(self.test_threads);
                         let test_group = match settings.test_group() {
@@ -499,6 +570,7 @@ impl<'a> TestRunnerInner<'a> {
                                         test_instance,
                                         retry_data,
                                         &settings,
+                                        &setup_script_data,
                                         &this_run_sender,
                                         &mut this_forward_receiver,
                                         delay,
@@ -590,12 +662,227 @@ impl<'a> TestRunnerInner<'a> {
     // Helper methods
     // ---
 
+    /// Run an individual setup script in its own process.
+    async fn run_setup_script(
+        &self,
+        script: &SetupScript<'a>,
+        run_sender: &UnboundedSender<InternalTestEvent<'a>>,
+        forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+    ) -> (InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
+        let mut stopwatch = crate::time::stopwatch();
+
+        match self
+            .run_setup_script_inner(script, &mut stopwatch, run_sender, forward_receiver)
+            .await
+        {
+            Ok((status, env_map)) => (status, env_map),
+            Err(error) => {
+                // Put the error chain inside stderr.
+                let mut stderr = bytes::BytesMut::new();
+                writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
+
+                (
+                    InternalSetupScriptExecuteStatus {
+                        stdout: Bytes::new(),
+                        stderr: stderr.freeze(),
+                        result: ExecutionResult::ExecFail,
+                        stopwatch_end: stopwatch.end(),
+                        is_slow: false,
+                        env_count: 0,
+                    },
+                    None,
+                )
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_setup_script_inner(
+        &self,
+        script: &SetupScript<'a>,
+        stopwatch: &mut StopwatchStart,
+        run_sender: &UnboundedSender<InternalTestEvent<'a>>,
+        forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+    ) -> Result<(InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>), SetupScriptError>
+    {
+        let mut cmd = script.make_command(&self.double_spawn, self.test_list)?;
+        let command_mut = cmd.command_mut();
+
+        command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
+        command_mut.stdin(Stdio::null());
+        imp::set_process_group(command_mut);
+
+        // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
+        // best-effort thing.
+        let job = imp::Job::create().ok();
+
+        // The --no-capture CLI argument overrides the config.
+        if !self.no_capture {
+            if script.config.capture_stdout {
+                command_mut.stdout(std::process::Stdio::piped());
+            }
+            if script.config.capture_stderr {
+                command_mut.stderr(std::process::Stdio::piped());
+            }
+        }
+
+        let (mut child, env_path) = cmd.spawn().map_err(SetupScriptError::ExecFail)?;
+
+        // If assigning the child to the job fails, ignore this. This can happen if the process has
+        // exited.
+        let _ = imp::assign_process_to_job(&child, job.as_ref());
+
+        let mut status: Option<ExecutionResult> = None;
+        // Unlike with tests, we don't automatically assume setup scripts are slow if they take a
+        // long time. For example, consider a setup script that performs a cargo build -- it can
+        // take an indeterminate amount of time. That's why we set a very large slow timeout rather
+        // than the test default of 60 seconds.
+        let slow_timeout = script
+            .config
+            .slow_timeout
+            .unwrap_or(SlowTimeout::VERY_LARGE);
+        let leak_timeout = script
+            .config
+            .leak_timeout
+            .unwrap_or(Duration::from_millis(100));
+        let mut is_slow = false;
+
+        let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
+
+        let mut timeout_hit = 0;
+
+        // TODO: capture output
+        let child_stdout = child.stdout.take();
+        let child_stderr = child.stderr.take();
+        let mut stdout = bytes::BytesMut::new();
+        let mut stderr = bytes::BytesMut::new();
+
+        let (res, leaked) = {
+            // Set up futures for reading from stdout and stderr.
+            let mut collect_output_fut = std::pin::pin!(collect_output(
+                child_stdout,
+                &mut stdout,
+                child_stderr,
+                &mut stderr
+            ));
+            let mut collect_output_done = false;
+
+            let res = loop {
+                tokio::select! {
+                    res = &mut collect_output_fut, if !collect_output_done => {
+                        collect_output_done = true;
+                        res?;
+                    }
+                    res = child.wait() => {
+                        // The test finished executing.
+                        break res;
+                    }
+                    _ = &mut interval_sleep, if status.is_none() => {
+                        is_slow = true;
+                        timeout_hit += 1;
+                        let will_terminate = if let Some(terminate_after) = slow_timeout.terminate_after {
+                            NonZeroUsize::new(timeout_hit as usize)
+                                .expect("timeout_hit cannot be non-zero")
+                                >= terminate_after
+                        } else {
+                            false
+                        };
+
+                        if !slow_timeout.grace_period.is_zero() {
+                            let _ = run_sender.send(InternalTestEvent::SetupScriptSlow {
+                                script_id: script.id.clone(),
+                                config: script.config,
+                                // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
+                                // slightly longer.
+                                elapsed: timeout_hit * slow_timeout.period,
+                                will_terminate,
+                            });
+                        }
+
+                        if will_terminate {
+                            // attempt to terminate the slow test.
+                            // as there is a race between shutting down a slow test and its own completion
+                            // we silently ignore errors to avoid printing false warnings.
+                            imp::terminate_child(&mut child, TerminateMode::Timeout(slow_timeout.grace_period), forward_receiver, job.as_ref()).await;
+                            status = Some(ExecutionResult::Timeout);
+                            if slow_timeout.grace_period.is_zero() {
+                                break child.wait().await;
+                            }
+                            // Don't break here to give the wait task a chance to finish.
+                        } else {
+                            interval_sleep.as_mut().reset_original_duration();
+                        }
+                    }
+                    recv = forward_receiver.recv() => {
+                        handle_forward_event(
+                            &mut child,
+                            recv,
+                            stopwatch,
+                            interval_sleep.as_mut(),
+                            forward_receiver,
+                            job.as_ref(),
+                        ).await;
+                    }
+                }
+            };
+
+            // Once the process is done executing, wait up to leak_timeout for the pipes to shut down.
+            // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
+            // didn't shut down properly. Now, this detects those cases and marks them as leaked.
+            let leaked = loop {
+                // Ignore stop and continue events here since the leak timeout should be very small.
+                // TODO: we may want to consider them.
+                let sleep = tokio::time::sleep(leak_timeout);
+
+                tokio::select! {
+                    res = &mut collect_output_fut, if !collect_output_done => {
+                        collect_output_done = true;
+                        res?;
+                    }
+                    () = sleep, if !collect_output_done => {
+                        break true;
+                    }
+                    else => {
+                        break false;
+                    }
+                }
+            };
+
+            (res, leaked)
+        };
+
+        let output = res.map_err(SetupScriptError::Wait)?;
+        let exit_status = output;
+
+        let status = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
+
+        let env_map = if status.is_success() {
+            Some(SetupScriptEnvMap::new(&env_path).await?)
+        } else {
+            None
+        };
+
+        Ok((
+            InternalSetupScriptExecuteStatus {
+                stdout: stdout.freeze(),
+                stderr: stderr.freeze(),
+                result: status,
+                stopwatch_end: stopwatch.end(),
+                is_slow,
+                env_count: env_map.as_ref().map(|map| map.len()).unwrap_or(0),
+            },
+            env_map,
+        ))
+    }
+
     /// Run an individual test in its own process.
+    #[allow(clippy::too_many_arguments)]
     async fn run_test(
         &self,
         test: TestInstance<'a>,
         retry_data: RetryData,
         settings: &TestSettings,
+        setup_script_data: &SetupScriptExecuteData<'a>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
         delay_before_start: Duration,
@@ -608,6 +895,7 @@ impl<'a> TestRunnerInner<'a> {
                 retry_data,
                 &mut stopwatch,
                 settings,
+                setup_script_data,
                 run_sender,
                 forward_receiver,
                 delay_before_start,
@@ -639,6 +927,7 @@ impl<'a> TestRunnerInner<'a> {
         retry_data: RetryData,
         stopwatch: &mut StopwatchStart,
         settings: &TestSettings,
+        setup_script_data: &SetupScriptExecuteData<'a>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
         delay_before_start: Duration,
@@ -654,6 +943,7 @@ impl<'a> TestRunnerInner<'a> {
         command_mut.env("__NEXTEST_ATTEMPT", format!("{}", retry_data.attempt));
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
         command_mut.stdin(Stdio::null());
+        setup_script_data.apply(&test.to_test_query(), command_mut);
         imp::set_process_group(command_mut);
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
@@ -1140,6 +1430,48 @@ impl InternalExecuteStatus {
     }
 }
 
+/// Information about the execution of a setup script.
+#[derive(Clone, Debug)]
+pub struct SetupScriptExecuteStatus {
+    /// Standard output for this setup script.
+    pub stdout: Bytes,
+    /// Standard error for this setup script.
+    pub stderr: Bytes,
+    /// The execution result for this setup script: pass, fail or execution error.
+    pub result: ExecutionResult,
+    /// The time at which the script started.
+    pub start_time: SystemTime,
+    /// The time it took for the script to run.
+    pub time_taken: Duration,
+    /// Whether this script counts as slow.
+    pub is_slow: bool,
+    /// The number of environment variables that were set by this script.
+    pub env_count: usize,
+}
+
+struct InternalSetupScriptExecuteStatus {
+    stdout: Bytes,
+    stderr: Bytes,
+    result: ExecutionResult,
+    stopwatch_end: StopwatchEnd,
+    is_slow: bool,
+    env_count: usize,
+}
+
+impl InternalSetupScriptExecuteStatus {
+    fn into_external(self) -> SetupScriptExecuteStatus {
+        SetupScriptExecuteStatus {
+            stdout: self.stdout,
+            stderr: self.stderr,
+            result: self.result,
+            start_time: self.stopwatch_end.start_time,
+            time_taken: self.stopwatch_end.duration,
+            is_slow: self.is_slow,
+            env_count: self.env_count,
+        }
+    }
+}
+
 /// Statistics for a test run.
 #[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
 pub struct RunStats {
@@ -1150,6 +1482,26 @@ pub struct RunStats {
 
     /// The total number of tests that finished running.
     pub finished_count: usize,
+
+    /// The total number of setup scripts that were expected to be run at the beginning.
+    ///
+    /// If the test run is canceled, this will be more than `finished_count` at the end.
+    pub setup_scripts_initial_count: usize,
+
+    /// The total number of setup scripts that finished running.
+    pub setup_scripts_finished_count: usize,
+
+    /// The number of setup scripts that passed.
+    pub setup_scripts_passed: usize,
+
+    /// The number of setup scripts that failed.
+    pub setup_scripts_failed: usize,
+
+    /// The number of setup scripts that encountered an execution failure.
+    pub setup_scripts_exec_failed: usize,
+
+    /// The number of setup scripts that timed out.
+    pub setup_scripts_timed_out: usize,
 
     /// The number of tests that passed. Includes `passed_slow`, `flaky` and `leaky`.
     pub passed: usize,
@@ -1187,19 +1539,53 @@ impl RunStats {
     /// * any tests failed
     /// * any tests encountered an execution failure
     pub fn is_success(&self) -> bool {
+        if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
+            return false;
+        }
         if self.initial_run_count > self.finished_count {
             return false;
         }
-        if self.any_failed() {
+        if self.failure_kind().is_some() {
             return false;
         }
         true
     }
 
-    /// Returns true if any tests failed or were timed out.
+    /// Returns the kind of failure recorded by the run stats, if any tests failed or were timed
+    /// out.
     #[inline]
-    pub fn any_failed(&self) -> bool {
-        self.failed > 0 || self.exec_failed > 0 || self.timed_out > 0
+    pub fn failure_kind(&self) -> Option<RunStatsFailureKind> {
+        if self.setup_scripts_failed > 0
+            || self.setup_scripts_exec_failed > 0
+            || self.setup_scripts_timed_out > 0
+        {
+            return Some(RunStatsFailureKind::SetupScript);
+        }
+
+        if self.failed > 0 || self.exec_failed > 0 || self.timed_out > 0 {
+            return Some(RunStatsFailureKind::Test);
+        }
+
+        None
+    }
+
+    fn on_setup_script_finished(&mut self, status: &SetupScriptExecuteStatus) {
+        self.setup_scripts_finished_count += 1;
+
+        match status.result {
+            ExecutionResult::Pass | ExecutionResult::Leak => {
+                self.setup_scripts_passed += 1;
+            }
+            ExecutionResult::Fail { .. } => {
+                self.setup_scripts_failed += 1;
+            }
+            ExecutionResult::ExecFail => {
+                self.setup_scripts_exec_failed += 1;
+            }
+            ExecutionResult::Timeout => {
+                self.setup_scripts_timed_out += 1;
+            }
+        }
     }
 
     fn on_test_finished(&mut self, run_statuses: &ExecutionStatuses) {
@@ -1245,6 +1631,16 @@ impl RunStats {
     }
 }
 
+/// A type summarizing the possible failures within a test run.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum RunStatsFailureKind {
+    /// A setup script failed.
+    SetupScript,
+
+    /// A test failed.
+    Test,
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum SignalCount {
     Once,
@@ -1282,6 +1678,7 @@ struct CallbackContext<F, E> {
     stopwatch: StopwatchStart,
     run_stats: RunStats,
     fail_fast: bool,
+    setup_scripts_running: usize,
     running: usize,
     cancel_state: Option<CancelReason>,
     signal_count: Option<SignalCount>,
@@ -1302,6 +1699,7 @@ where
                 ..RunStats::default()
             },
             fail_fast,
+            setup_scripts_running: 0,
             running: 0,
             cancel_state: None,
             signal_count: None,
@@ -1339,6 +1737,65 @@ where
         event: InternalEvent<'a>,
     ) -> Result<Option<JobControlEvent>, InternalError<E>> {
         match event {
+            InternalEvent::Test(InternalTestEvent::SetupScriptStarted {
+                script_id,
+                config,
+                index,
+                total,
+            }) => {
+                self.setup_scripts_running += 1;
+                self.callback(TestEventKind::SetupScriptStarted {
+                    index,
+                    total,
+                    script_id,
+                    command: config.program(),
+                    args: config.args(),
+                    no_capture: config.no_capture(),
+                })
+            }
+            InternalEvent::Test(InternalTestEvent::SetupScriptSlow {
+                script_id,
+                config,
+                elapsed,
+                will_terminate,
+            }) => self.callback(TestEventKind::SetupScriptSlow {
+                script_id,
+                command: config.program(),
+                args: config.args(),
+                elapsed,
+                will_terminate,
+            }),
+            InternalEvent::Test(InternalTestEvent::SetupScriptFinished {
+                script_id,
+                config,
+                index,
+                total,
+                status,
+            }) => {
+                self.setup_scripts_running -= 1;
+                self.run_stats.on_setup_script_finished(&status);
+                // Setup scripts failing always cause the entire test run to be cancelled
+                // (--no-fail-fast is ignored).
+                let fail_cancel = !status.result.is_success();
+
+                self.callback(TestEventKind::SetupScriptFinished {
+                    index,
+                    total,
+                    script_id,
+                    command: config.program(),
+                    args: config.args(),
+                    no_capture: config.no_capture(),
+                    run_status: status,
+                })?;
+
+                if fail_cancel {
+                    Err(InternalError::TestFailureCanceled(
+                        self.begin_cancel(CancelReason::SetupScriptFailure).err(),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            }
             InternalEvent::Test(InternalTestEvent::Started { test_instance }) => {
                 self.running += 1;
                 self.callback(TestEventKind::TestStarted {
@@ -1442,6 +1899,7 @@ where
                 // Debounce stop signals.
                 if !self.stopwatch.is_paused() {
                     self.callback(TestEventKind::RunPaused {
+                        setup_scripts_running: self.setup_scripts_running,
                         running: self.running,
                     })?;
                     self.stopwatch.pause();
@@ -1456,6 +1914,7 @@ where
                 if self.stopwatch.is_paused() {
                     self.stopwatch.resume();
                     self.callback(TestEventKind::RunContinued {
+                        setup_scripts_running: self.setup_scripts_running,
                         running: self.running,
                     })?;
                     Ok(Some(JobControlEvent::Continue))
@@ -1485,6 +1944,7 @@ where
         if self.cancel_state < Some(reason) {
             self.cancel_state = Some(reason);
             self.basic_callback(TestEventKind::RunBeginCancel {
+                setup_scripts_running: self.setup_scripts_running,
                 running: self.running,
                 reason,
             })?;
@@ -1512,6 +1972,25 @@ enum InternalEvent<'a> {
 
 #[derive(Debug)]
 enum InternalTestEvent<'a> {
+    SetupScriptStarted {
+        script_id: ScriptId,
+        config: &'a ScriptConfig,
+        index: usize,
+        total: usize,
+    },
+    SetupScriptSlow {
+        script_id: ScriptId,
+        config: &'a ScriptConfig,
+        elapsed: Duration,
+        will_terminate: bool,
+    },
+    SetupScriptFinished {
+        script_id: ScriptId,
+        config: &'a ScriptConfig,
+        index: usize,
+        total: usize,
+        status: SetupScriptExecuteStatus,
+    },
     Started {
         test_instance: TestInstance<'a>,
     },
@@ -1889,10 +2368,11 @@ mod tests {
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
         let build_platforms = BuildPlatforms::new(None).unwrap();
         let handler_kind = SignalHandlerKind::Noop;
+        let profile = profile.apply_build_platforms(&build_platforms);
         let runner = builder
             .build(
                 &test_list,
-                profile.apply_build_platforms(&build_platforms),
+                &profile,
                 handler_kind,
                 DoubleSpawnInfo::disabled(),
                 TargetRunner::empty(),
@@ -1963,62 +2443,163 @@ mod tests {
             .is_success(),
             "skipped => not considered a failure"
         );
+
+        assert!(
+            !RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 1,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "setup script not finished => failure"
+        );
+        assert!(
+            !RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_failed: 1,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "setup script failed => failure"
+        );
+        assert!(
+            !RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_exec_failed: 1,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "setup script exec failed => failure"
+        );
+        assert!(
+            !RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_timed_out: 1,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "setup script timed out => failure"
+        );
+        assert!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_passed: 2,
+                ..RunStats::default()
+            }
+            .is_success(),
+            "setup scripts passed => not considered a failure"
+        );
     }
 
     #[test]
     fn test_any_failed() {
-        assert!(
-            !RunStats::default().any_failed(),
+        assert_eq!(
+            RunStats::default().failure_kind(),
+            None,
             "empty run => none failed"
         );
-        assert!(
-            !RunStats {
+        assert_eq!(
+            RunStats {
                 initial_run_count: 42,
                 finished_count: 41,
                 ..RunStats::default()
             }
-            .any_failed(),
+            .failure_kind(),
+            None,
             "initial run count > final run count doesn't necessarily mean any failed"
         );
-        assert!(
+        assert_eq!(
             RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 failed: 1,
                 ..RunStats::default()
             }
-            .any_failed(),
+            .failure_kind(),
+            Some(RunStatsFailureKind::Test),
             "failed => failure"
         );
-        assert!(
+        assert_eq!(
             RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 exec_failed: 1,
                 ..RunStats::default()
             }
-            .any_failed(),
+            .failure_kind(),
+            Some(RunStatsFailureKind::Test),
             "exec failed => failure"
         );
-        assert!(
+        assert_eq!(
             RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 timed_out: 1,
                 ..RunStats::default()
             }
-            .any_failed(),
+            .failure_kind(),
+            Some(RunStatsFailureKind::Test),
             "timed out => failure"
         );
-        assert!(
-            !RunStats {
+        assert_eq!(
+            RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 skipped: 1,
                 ..RunStats::default()
             }
-            .any_failed(),
+            .failure_kind(),
+            None,
             "skipped => not considered a failure"
+        );
+
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_failed: 1,
+                ..RunStats::default()
+            }
+            .failure_kind(),
+            Some(RunStatsFailureKind::SetupScript),
+            "setup script failed => failure"
+        );
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_exec_failed: 1,
+                ..RunStats::default()
+            }
+            .failure_kind(),
+            Some(RunStatsFailureKind::SetupScript),
+            "setup script exec failed => failure"
+        );
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_timed_out: 1,
+                ..RunStats::default()
+            }
+            .failure_kind(),
+            Some(RunStatsFailureKind::SetupScript),
+            "setup script timed out => failure"
+        );
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_passed: 2,
+                ..RunStats::default()
+            }
+            .failure_kind(),
+            None,
+            "setup scripts passed => not considered a failure"
         );
     }
 }

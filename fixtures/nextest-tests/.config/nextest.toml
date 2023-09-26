@@ -1,10 +1,25 @@
 ## nextest config for this fixture
 
+# Note that these versions are not necessarily the version of nextest that's actually required --
+# they're only for testing with test_show_config_version.
 nextest-version = { required = "0.9.54", recommended = "0.9.56" }
+
+# This must be on one line for test_setup_scripts_not_enabled to work.
+experimental = ["setup-scripts"]
 
 [profile.default]
 # disable fail-fast to ensure a deterministic test run
 fail-fast = false
+
+[[profile.default.scripts]]
+platform = { host = "cfg(unix)" }
+filter = "test(=test_cargo_env_vars)"
+setup = "my-script-unix"
+
+[[profile.default.scripts]]
+platform = { host = "cfg(windows)" }
+filter = "test(=test_cargo_env_vars)"
+setup = "my-script-windows"
 
 [profile.with-retries]
 retries = 2
@@ -51,3 +66,9 @@ max-threads = 4
 
 [test-groups.unused]
 max-threads = 20
+
+[script.my-script-unix]
+command = './scripts/my-script.sh'
+
+[script.my-script-windows]
+command = 'cmd /c "scripts\\my-script.bat"'

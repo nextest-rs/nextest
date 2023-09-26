@@ -16,6 +16,16 @@ pub struct SlowTimeout {
     pub(crate) grace_period: Duration,
 }
 
+impl SlowTimeout {
+    /// A reasonable value for "maximum slow timeout".
+    pub(crate) const VERY_LARGE: Self = Self {
+        // See far_future() in pausable_sleep.rs for why this is roughly 30 years.
+        period: Duration::from_secs(86400 * 365 * 30),
+        terminate_after: None,
+        grace_period: Duration::from_secs(10),
+    };
+}
+
 fn default_grace_period() -> Duration {
     Duration::from_secs(10)
 }
@@ -174,8 +184,13 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
-        let nextest_config_result =
-            NextestConfig::from_sources(graph.workspace().root(), &graph, None, &[][..]);
+        let nextest_config_result = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            &[][..],
+            &Default::default(),
+        );
 
         match expected_default {
             Ok(expected_default) => {

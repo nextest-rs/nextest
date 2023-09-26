@@ -28,6 +28,9 @@ impl NextestExitCode {
     /// Creating a test list produced an error.
     pub const TEST_LIST_CREATION_FAILED: i32 = 104;
 
+    /// A setup script failed.
+    pub const SETUP_SCRIPT_FAILED: i32 = 105;
+
     /// Writing data to stdout or stderr produced an error.
     pub const WRITE_OUTPUT_ERROR: i32 = 110;
 

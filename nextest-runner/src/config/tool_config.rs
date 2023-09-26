@@ -208,8 +208,14 @@ mod tests {
             },
         );
 
-        let config = NextestConfig::from_sources(workspace_root, &graph, None, &tool_config_files)
-            .expect("config is valid");
+        let config = NextestConfig::from_sources(
+            workspace_root,
+            &graph,
+            None,
+            &tool_config_files,
+            &Default::default(),
+        )
+        .expect("config is valid");
 
         let default_profile = config
             .profile(NextestConfig::DEFAULT_PROFILE)

@@ -219,7 +219,7 @@ fn test_run_with_target_runner() -> Result<()> {
     let runner = runner
         .build(
             &test_list,
-            profile,
+            &profile,
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             target_runner,

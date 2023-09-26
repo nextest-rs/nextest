@@ -19,7 +19,9 @@ future-queue = "0.3.0"
 bytes = "1.5.0"
 camino = { version = "1.1.6", features = ["serde1"] }
 camino-tempfile = "1.0.2"
-config = { version = "0.13.3", default-features = false, features = ["toml"] }
+# config's "preserve_order" feature is needed for preserving the order of
+# setup scripts in .config/nextest.toml.
+config = { version = "0.13.3", default-features = false, features = ["toml", "preserve_order"] }
 cargo_metadata = "0.17.0"
 cfg-if = "1.0.0"
 chrono = "0.4.31"
@@ -59,6 +61,7 @@ target-spec-miette = "0.3.0"
 thiserror = "1.0.48"
 # For parsing of .cargo/config.toml files
 tokio = { version = "1.32.0", features = [
+    "fs",
     "io-util",
     "macros",
     "process",
@@ -91,7 +94,7 @@ nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 console-subscriber = { version = "0.1.10", optional = true }
 unicode-ident = "1.0.12"
 unicode-normalization = "0.1.22"
-indexmap = "2.0.0"
+indexmap = { version = "2.0.0", features = ["serde"] }
 smallvec = "1.11.1"
 
 [target.'cfg(unix)'.dependencies]

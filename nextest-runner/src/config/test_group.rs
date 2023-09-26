@@ -207,6 +207,7 @@ mod tests {
                 tool: "my-tool".to_owned(),
                 config_file: tool_path.clone(),
             }][..],
+            &Default::default(),
         );
         match expected {
             Ok(expected_groups) => {
@@ -294,7 +295,8 @@ mod tests {
         let graph = temp_workspace(workspace_path, config_contents);
         let workspace_root = graph.workspace().root();
 
-        let config_res = NextestConfig::from_sources(workspace_root, &graph, None, &[][..]);
+        let config_res =
+            NextestConfig::from_sources(workspace_root, &graph, None, &[][..], &Default::default());
         match expected {
             Ok(expected_groups) => {
                 let config = config_res.expect("config is valid");
@@ -452,6 +454,7 @@ mod tests {
                     config_file: tool2_path,
                 },
             ][..],
+            &Default::default(),
         )
         .expect_err("config is invalid");
         assert_eq!(config.tool(), tool);

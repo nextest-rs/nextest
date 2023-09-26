@@ -8,7 +8,7 @@ use crate::errors::{ConfigParseError, ConfigParseErrorKind};
 use camino::Utf8Path;
 use semver::Version;
 use serde::{Deserialize, Deserializer};
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::BTreeSet, fmt, str::FromStr};
 
 /// A "version-only" form of the nextest configuration.
 ///
@@ -18,6 +18,9 @@ use std::borrow::Cow;
 pub struct VersionOnlyConfig {
     /// The nextest version configuration.
     nextest_version: NextestVersionConfig,
+
+    /// Experimental features enabled.
+    experimental: BTreeSet<ConfigExperimental>,
 }
 
 impl VersionOnlyConfig {
@@ -33,9 +36,8 @@ impl VersionOnlyConfig {
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
         let tool_config_files_rev = tool_config_files.into_iter().rev();
-        let nextest_version =
-            Self::read_from_sources(workspace_root, config_file, tool_config_files_rev)?;
-        Ok(Self { nextest_version })
+
+        Self::read_from_sources(workspace_root, config_file, tool_config_files_rev)
     }
 
     /// Returns the nextest version requirement.
@@ -43,16 +45,22 @@ impl VersionOnlyConfig {
         &self.nextest_version
     }
 
+    /// Returns the experimental features enabled.
+    pub fn experimental(&self) -> &BTreeSet<ConfigExperimental> {
+        &self.experimental
+    }
+
     fn read_from_sources<'a>(
         workspace_root: &Utf8Path,
         config_file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
-    ) -> Result<NextestVersionConfig, ConfigParseError> {
+    ) -> Result<Self, ConfigParseError> {
         let mut nextest_version = NextestVersionConfig::default();
+        let mut experimental = BTreeSet::new();
 
         // Merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
-            if let Some(v) = Self::read_and_deserialize(config_file, Some(tool))? {
+            if let Some(v) = Self::read_and_deserialize(config_file, Some(tool))?.nextest_version {
                 nextest_version.accumulate(v, Some(tool));
             }
         }
@@ -66,18 +74,44 @@ impl VersionOnlyConfig {
             }
         };
         if let Some(config_file) = config_file {
-            if let Some(v) = Self::read_and_deserialize(&config_file, None)? {
+            let d = Self::read_and_deserialize(&config_file, None)?;
+            if let Some(v) = d.nextest_version {
                 nextest_version.accumulate(v, None);
+            }
+
+            // Check for unknown features.
+            let unknown: BTreeSet<_> = d
+                .experimental
+                .into_iter()
+                .filter(|feature| {
+                    if let Ok(feature) = feature.parse::<ConfigExperimental>() {
+                        experimental.insert(feature);
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .collect();
+            if !unknown.is_empty() {
+                let known = ConfigExperimental::known().collect();
+                return Err(ConfigParseError::new(
+                    config_file.into_owned(),
+                    None,
+                    ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known },
+                ));
             }
         }
 
-        Ok(nextest_version)
+        Ok(Self {
+            nextest_version,
+            experimental,
+        })
     }
 
     fn read_and_deserialize(
         config_file: &Utf8Path,
         tool: Option<&str>,
-    ) -> Result<Option<NextestVersionDeserialize>, ConfigParseError> {
+    ) -> Result<VersionOnlyDeserialize, ConfigParseError> {
         let toml_str = std::fs::read_to_string(config_file.as_str()).map_err(|error| {
             ConfigParseError::new(
                 config_file.clone(),
@@ -94,7 +128,17 @@ impl VersionOnlyConfig {
                     ConfigParseErrorKind::VersionOnlyDeserializeError(Box::new(error)),
                 )
             })?;
-        Ok(v.nextest_version)
+        if tool.is_some() && !v.experimental.is_empty() {
+            return Err(ConfigParseError::new(
+                config_file.clone(),
+                tool,
+                ConfigParseErrorKind::ExperimentalFeaturesInToolConfig {
+                    features: v.experimental,
+                },
+            ));
+        }
+
+        Ok(v)
     }
 }
 
@@ -104,6 +148,8 @@ impl VersionOnlyConfig {
 struct VersionOnlyDeserialize {
     #[serde(default)]
     nextest_version: Option<NextestVersionDeserialize>,
+    #[serde(default)]
+    experimental: BTreeSet<String>,
 }
 
 /// Nextest version configuration.
@@ -176,6 +222,39 @@ impl NextestVersionConfig {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Experimental configuration features.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[non_exhaustive]
+pub enum ConfigExperimental {
+    /// Enable support for setup scripts.
+    SetupScripts,
+}
+
+impl ConfigExperimental {
+    fn known() -> impl Iterator<Item = Self> {
+        vec![Self::SetupScripts].into_iter()
+    }
+}
+
+impl FromStr for ConfigExperimental {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "setup-scripts" => Ok(Self::SetupScripts),
+            _ => Err(()),
+        }
+    }
+}
+
+impl fmt::Display for ConfigExperimental {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SetupScripts => write!(f, "setup-scripts"),
         }
     }
 }

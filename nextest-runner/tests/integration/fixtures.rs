@@ -4,11 +4,11 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
-use maplit::btreemap;
+use maplit::{btreemap, btreeset};
 use nextest_metadata::{FilterMatch, MismatchReason, RustBinaryId};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
-    config::{get_num_cpus, NextestConfig},
+    config::{get_num_cpus, ConfigExperimental, NextestConfig},
     double_spawn::DoubleSpawnInfo,
     list::{
         BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
@@ -253,8 +253,15 @@ pub(crate) fn workspace_root() -> Utf8PathBuf {
 }
 
 pub(crate) fn load_config() -> NextestConfig {
-    NextestConfig::from_sources(workspace_root(), &PACKAGE_GRAPH, None, [])
-        .expect("loaded fixture config")
+    NextestConfig::from_sources(
+        workspace_root(),
+        &PACKAGE_GRAPH,
+        None,
+        [],
+        // Enable setup scripts.
+        &btreeset! { ConfigExperimental::SetupScripts },
+    )
+    .expect("loaded fixture config")
 }
 
 pub(crate) static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
@@ -364,6 +371,7 @@ impl FixtureTargets {
             test_bins,
             self.rust_build_meta.clone(),
             test_filter,
+            workspace_root(),
             self.env.to_owned(),
             get_num_cpus(),
         )

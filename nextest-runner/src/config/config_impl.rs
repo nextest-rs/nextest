@@ -2,21 +2,24 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    CompiledOverride, CompiledOverridesByProfile, CustomTestGroup, DeserializedOverride,
-    NextestVersionDeserialize, RetryPolicy, SettingSource, SlowTimeout, TestGroup, TestGroupConfig,
-    TestSettings, TestThreads, ThreadsRequired, ToolConfigFile,
+    CompiledByProfile, CompiledData, ConfigExperimental, CustomTestGroup, DeserializedOverride,
+    DeserializedProfileScriptConfig, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
+    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
+    TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
     errors::{
         provided_by_tool, ConfigParseError, ConfigParseErrorKind, ProfileNotFound,
-        UnknownTestGroupError,
+        UnknownConfigScriptError, UnknownTestGroupError,
     },
+    list::TestList,
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
 use guppy::graph::PackageGraph;
+use indexmap::IndexMap;
 use nextest_filtering::TestQuery;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
@@ -51,7 +54,7 @@ pub fn get_num_cpus() -> usize {
 pub struct NextestConfig {
     workspace_root: Utf8PathBuf,
     inner: NextestConfigImpl,
-    overrides: CompiledOverridesByProfile,
+    compiled: CompiledByProfile,
 }
 
 impl NextestConfig {
@@ -91,6 +94,7 @@ impl NextestConfig {
         graph: &PackageGraph,
         config_file: Option<&Utf8Path>,
         tool_config_files: impl IntoIterator<IntoIter = I>,
+        experimental: &BTreeSet<ConfigExperimental>,
     ) -> Result<Self, ConfigParseError>
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
@@ -100,6 +104,7 @@ impl NextestConfig {
             graph,
             config_file,
             tool_config_files,
+            experimental,
             |config_file, tool, unknown| {
                 let mut unknown_str = String::new();
                 if unknown.len() == 1 {
@@ -128,6 +133,7 @@ impl NextestConfig {
         graph: &PackageGraph,
         config_file: Option<&Utf8Path>,
         tool_config_files: impl IntoIterator<IntoIter = I>,
+        experimental: &BTreeSet<ConfigExperimental>,
         mut unknown_callback: impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
     ) -> Result<Self, ConfigParseError>
     where
@@ -135,17 +141,18 @@ impl NextestConfig {
     {
         let workspace_root = workspace_root.into();
         let tool_config_files_rev = tool_config_files.into_iter().rev();
-        let (inner, overrides) = Self::read_from_sources(
+        let (inner, compiled) = Self::read_from_sources(
             graph,
             &workspace_root,
             config_file,
             tool_config_files_rev,
+            experimental,
             &mut unknown_callback,
         )?;
         Ok(Self {
             workspace_root,
             inner,
-            overrides,
+            compiled,
         })
     }
 
@@ -178,7 +185,7 @@ impl NextestConfig {
             workspace_root: workspace_root.into(),
             inner: deserialized.into_config_impl(),
             // The default config does not (cannot) have overrides.
-            overrides: CompiledOverridesByProfile::default(),
+            compiled: CompiledByProfile::default(),
         }
     }
 
@@ -200,16 +207,18 @@ impl NextestConfig {
         workspace_root: &Utf8Path,
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
+        experimental: &BTreeSet<ConfigExperimental>,
         unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
-    ) -> Result<(NextestConfigImpl, CompiledOverridesByProfile), ConfigParseError> {
+    ) -> Result<(NextestConfigImpl, CompiledByProfile), ConfigParseError> {
         // First, get the default config.
         let mut composite_builder = Self::make_default_config();
 
         // Overrides are handled additively.
         // Note that they're stored in reverse order here, and are flipped over at the end.
-        let mut overrides = CompiledOverridesByProfile::default();
+        let mut compiled = CompiledByProfile::default();
 
         let mut known_groups = BTreeSet::new();
+        let mut known_scripts = BTreeSet::new();
 
         // Next, merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
@@ -220,9 +229,11 @@ impl NextestConfig {
                 config_file,
                 Some(tool),
                 source.clone(),
-                &mut overrides,
+                &mut compiled,
+                experimental,
                 unknown_callback,
                 &mut known_groups,
+                &mut known_scripts,
             )?;
 
             // This is the final, composite builder used at the end.
@@ -245,9 +256,11 @@ impl NextestConfig {
             &config_file,
             None,
             source.clone(),
-            &mut overrides,
+            &mut compiled,
+            experimental,
             unknown_callback,
             &mut known_groups,
+            &mut known_scripts,
         )?;
 
         composite_builder = composite_builder.add_source(source);
@@ -257,13 +270,13 @@ impl NextestConfig {
         let (config, _unknown) = Self::build_and_deserialize_config(&composite_builder)
             .map_err(|kind| ConfigParseError::new(config_file, None, kind))?;
 
-        // Reverse all the overrides at the end.
-        overrides.default.reverse();
-        for override_ in overrides.other.values_mut() {
-            override_.reverse();
+        // Reverse all the compiled data at the end.
+        compiled.default.reverse();
+        for data in compiled.other.values_mut() {
+            data.reverse();
         }
 
-        Ok((config.into_config_impl(), overrides))
+        Ok((config.into_config_impl(), compiled))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -273,9 +286,11 @@ impl NextestConfig {
         config_file: &Utf8Path,
         tool: Option<&str>,
         source: File<FileSourceFile, FileFormat>,
-        overrides_out: &mut CompiledOverridesByProfile,
+        compiled_out: &mut CompiledByProfile,
+        experimental: &BTreeSet<ConfigExperimental>,
         unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
         known_groups: &mut BTreeSet<CustomTestGroup>,
+        known_scripts: &mut BTreeSet<ScriptId>,
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
@@ -314,6 +329,45 @@ impl NextestConfig {
 
         known_groups.extend(valid_groups);
 
+        // If scripts are present, check that the experimental feature is enabled.
+        if !this_config.scripts.is_empty()
+            && !experimental.contains(&ConfigExperimental::SetupScripts)
+        {
+            return Err(ConfigParseError::new(
+                config_file,
+                tool,
+                ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
+                    feature: ConfigExperimental::SetupScripts,
+                },
+            ));
+        }
+
+        // Check that setup scripts are named as expected.
+        let (valid_scripts, invalid_scripts): (BTreeSet<_>, _) =
+            this_config.scripts.keys().cloned().partition(|script| {
+                if let Some(tool) = tool {
+                    // The first component must be the tool name.
+                    script
+                        .as_identifier()
+                        .tool_components()
+                        .map_or(false, |(tool_name, _)| tool_name == tool)
+                } else {
+                    // If a tool is not specified, it must *not* be a tool identifier.
+                    !script.as_identifier().is_tool_identifier()
+                }
+            });
+
+        if !invalid_scripts.is_empty() {
+            let kind = if tool.is_some() {
+                ConfigParseErrorKind::InvalidConfigScriptsDefinedByTool(invalid_scripts)
+            } else {
+                ConfigParseErrorKind::InvalidConfigScriptsDefined(invalid_scripts)
+            };
+            return Err(ConfigParseError::new(config_file, tool, kind));
+        }
+
+        known_scripts.extend(valid_scripts);
+
         let this_config = this_config.into_config_impl();
 
         let unknown_default_profiles: Vec<_> = this_config
@@ -335,7 +389,7 @@ impl NextestConfig {
         }
 
         // Compile the overrides for this file.
-        let this_overrides = CompiledOverridesByProfile::new(graph, &this_config)
+        let this_compiled = CompiledByProfile::new(graph, &this_config)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
 
         // Check that all overrides specify known test groups.
@@ -351,19 +405,20 @@ impl NextestConfig {
             }
         };
 
-        this_overrides.default.iter().for_each(|override_| {
-            check_test_group("default", override_.data.test_group.as_ref());
-        });
+        this_compiled
+            .default
+            .overrides
+            .iter()
+            .for_each(|override_| {
+                check_test_group("default", override_.data.test_group.as_ref());
+            });
 
         // Check that override test groups are known.
-        this_overrides
-            .other
-            .iter()
-            .for_each(|(profile_name, overrides)| {
-                overrides.iter().for_each(|override_| {
-                    check_test_group(profile_name, override_.data.test_group.as_ref());
-                });
+        this_compiled.other.iter().for_each(|(profile_name, data)| {
+            data.overrides.iter().for_each(|override_| {
+                check_test_group(profile_name, override_.data.test_group.as_ref());
             });
+        });
 
         // If there were any unknown groups, error out.
         if !unknown_group_errors.is_empty() {
@@ -378,16 +433,66 @@ impl NextestConfig {
             ));
         }
 
-        // Grab the overrides for this config. Add them in reversed order (we'll flip it around at the end).
-        overrides_out
+        // Check that scripts are known.
+        let mut unknown_script_errors = Vec::new();
+        let mut check_script_ids = |profile_name: &str, scripts: &[ScriptId]| {
+            if !scripts.is_empty() && !experimental.contains(&ConfigExperimental::SetupScripts) {
+                return Err(ConfigParseError::new(
+                    config_file,
+                    tool,
+                    ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
+                        feature: ConfigExperimental::SetupScripts,
+                    },
+                ));
+            }
+            for script in scripts {
+                if !known_scripts.contains(script) {
+                    unknown_script_errors.push(UnknownConfigScriptError {
+                        profile_name: profile_name.to_owned(),
+                        name: script.clone(),
+                    });
+                }
+            }
+
+            Ok(())
+        };
+
+        this_compiled
             .default
-            .extend(this_overrides.default.into_iter().rev());
-        for (name, overrides) in this_overrides.other {
-            overrides_out
+            .scripts
+            .iter()
+            .try_for_each(|scripts| check_script_ids("default", &scripts.setup))?;
+        this_compiled
+            .other
+            .iter()
+            .try_for_each(|(profile_name, data)| {
+                data.scripts
+                    .iter()
+                    .try_for_each(|scripts| check_script_ids(profile_name, &scripts.setup))
+            })?;
+
+        // If there were any unknown scripts, error out.
+        if !unknown_script_errors.is_empty() {
+            let known_scripts = known_scripts.iter().cloned().collect();
+            return Err(ConfigParseError::new(
+                config_file,
+                tool,
+                ConfigParseErrorKind::UnknownConfigScripts {
+                    errors: unknown_script_errors,
+                    known_scripts,
+                },
+            ));
+        }
+
+        // Grab the overrides and setup scripts for this config. Add them in reversed order (we'll
+        // flip it around at the end).
+        compiled_out.default.extend_reverse(this_compiled.default);
+        for (name, data) in this_compiled.other {
+            compiled_out
                 .other
                 .entry(name)
                 .or_default()
-                .extend(overrides.into_iter().rev());
+                .extend_reverse(data);
         }
 
         Ok(())
@@ -407,23 +512,22 @@ impl NextestConfig {
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
         store_dir.push(name);
 
-        // Grab the overrides as well.
-        let overrides = self
-            .overrides
+        // Grab the compiled data as well.
+        let compiled_data = self
+            .compiled
             .other
             .get(name)
-            .into_iter()
-            .flatten()
-            .chain(self.overrides.default.iter())
             .cloned()
-            .collect();
+            .unwrap_or_default()
+            .chain(self.compiled.default.clone());
 
         Ok(NextestProfile {
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
             test_groups: &self.inner.test_groups,
-            overrides,
+            scripts: &self.inner.scripts,
+            compiled_data,
         })
     }
 
@@ -448,7 +552,7 @@ impl NextestConfig {
 }
 
 /// The state of nextest profiles before build platforms have been applied.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PreBuildPlatform {}
 
 /// The state of nextest profiles after build platforms have been applied.
@@ -473,7 +577,9 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
-    pub(super) overrides: Vec<CompiledOverride<State>>,
+    // This is ordered because the scripts are used in the order they're defined.
+    scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
+    pub(super) compiled_data: CompiledData<State>,
 }
 
 impl<'cfg, State> NextestProfile<'cfg, State> {
@@ -482,9 +588,14 @@ impl<'cfg, State> NextestProfile<'cfg, State> {
         &self.store_dir
     }
 
-    /// Returns the test group configuration for this profile.
+    /// Returns the global test group configuration.
     pub fn test_group_config(&self) -> &'cfg BTreeMap<CustomTestGroup, TestGroupConfig> {
         self.test_groups
+    }
+
+    /// Returns the global script configuration.
+    pub fn script_config(&self) -> &'cfg IndexMap<ScriptId, ScriptConfig> {
+        self.scripts
     }
 
     #[allow(dead_code)]
@@ -499,17 +610,14 @@ impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
     /// This is a separate step from parsing the config and reading a profile so that cargo-nextest
     /// can tell users about configuration parsing errors before building the binary list.
     pub fn apply_build_platforms(self, build_platforms: &BuildPlatforms) -> NextestProfile<'cfg> {
-        let overrides = self
-            .overrides
-            .into_iter()
-            .map(|override_| override_.apply_build_platforms(build_platforms))
-            .collect();
+        let compiled_data = self.compiled_data.apply_build_platforms(build_platforms);
         NextestProfile {
             store_dir: self.store_dir,
             default_profile: self.default_profile,
             custom_profile: self.custom_profile,
+            scripts: self.scripts,
             test_groups: self.test_groups,
-            overrides,
+            compiled_data,
         }
     }
 }
@@ -584,6 +692,11 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
         self.custom_profile
             .and_then(|profile| profile.fail_fast)
             .unwrap_or(self.default_profile.fail_fast)
+    }
+
+    /// Returns the list of setup scripts.
+    pub fn setup_scripts(&self, test_list: &TestList<'_>) -> SetupScripts<'_> {
+        SetupScripts::new(self, test_list)
     }
 
     /// Returns settings for individual tests.
@@ -666,6 +779,7 @@ impl<'cfg> NextestJunitConfig<'cfg> {
 pub(super) struct NextestConfigImpl {
     store: StoreConfigImpl,
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
+    scripts: IndexMap<ScriptId, ScriptConfig>,
     default_profile: DefaultProfileImpl,
     other_profiles: HashMap<String, CustomProfileImpl>,
 }
@@ -706,13 +820,20 @@ impl NextestConfigImpl {
 #[serde(rename_all = "kebab-case")]
 struct NextestConfigDeserialize {
     store: StoreConfigImpl,
-    // This is parsed as part of NextestConfigVersionOnly. It's re-parsed here to avoid printing an
-    // "unknown key" message.
+
+    // These are parsed as part of NextestConfigVersionOnly. They're re-parsed here to avoid
+    // printing an "unknown key" message.
     #[allow(unused)]
     #[serde(default)]
     nextest_version: Option<NextestVersionDeserialize>,
+    #[allow(unused)]
+    #[serde(default)]
+    experimental: BTreeSet<String>,
+
     #[serde(default)]
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
+    #[serde(default, rename = "script")]
+    scripts: IndexMap<ScriptId, ScriptConfig>,
     #[serde(rename = "profile")]
     profiles: HashMap<String, CustomProfileImpl>,
 }
@@ -729,6 +850,7 @@ impl NextestConfigDeserialize {
             store: self.store,
             default_profile,
             test_groups: self.test_groups,
+            scripts: self.scripts,
             other_profiles: self.profiles,
         }
     }
@@ -753,6 +875,7 @@ pub(super) struct DefaultProfileImpl {
     slow_timeout: SlowTimeout,
     leak_timeout: Duration,
     overrides: Vec<DeserializedOverride>,
+    scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
 }
 
@@ -786,6 +909,7 @@ impl DefaultProfileImpl {
                 .leak_timeout
                 .expect("leak-timeout present in default profile"),
             overrides: p.overrides,
+            scripts: p.scripts,
             junit: DefaultJunitImpl {
                 path: p.junit.path,
                 report_name: p
@@ -806,6 +930,10 @@ impl DefaultProfileImpl {
 
     pub(super) fn overrides(&self) -> &[DeserializedOverride] {
         &self.overrides
+    }
+
+    pub(super) fn setup_scripts(&self) -> &[DeserializedProfileScriptConfig] {
+        &self.scripts
     }
 }
 
@@ -843,6 +971,8 @@ pub(super) struct CustomProfileImpl {
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
     #[serde(default)]
+    scripts: Vec<DeserializedProfileScriptConfig>,
+    #[serde(default)]
     junit: JunitImpl,
 }
 
@@ -854,6 +984,10 @@ impl CustomProfileImpl {
 
     pub(super) fn overrides(&self) -> &[DeserializedOverride] {
         &self.overrides
+    }
+
+    pub(super) fn scripts(&self) -> &[DeserializedProfileScriptConfig] {
+        &self.scripts
     }
 }
 
@@ -933,6 +1067,7 @@ mod tests {
                 tool: "my-tool".to_owned(),
                 config_file: tool_path,
             }][..],
+            &Default::default(),
             |_path, tool, ignored| {
                 unknown_keys.insert(tool.map(|s| s.to_owned()), ignored.clone());
             },

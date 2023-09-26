@@ -5,7 +5,7 @@
 
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
-    config::{CustomTestGroup, TestGroup},
+    config::{ConfigExperimental, CustomTestGroup, ScriptId, TestGroup},
     helpers::{dylib_path_envvar, extract_abort_status},
     reuse_build::ArchiveFormat,
     runner::AbortStatus,
@@ -90,9 +90,9 @@ pub enum ConfigParseErrorKind {
     /// An error occurred while deserializing the config (version only).
     #[error(transparent)]
     VersionOnlyDeserializeError(Box<serde_path_to_error::Error<toml::de::Error>>),
-    /// Errors occurred while parsing overrides.
-    #[error("error parsing overrides (destructure this variant for more details)")]
-    OverrideError(Vec<ConfigParseOverrideError>),
+    /// Errors occurred while parsing compiled data.
+    #[error("error parsing compiled data (destructure this variant for more details)")]
+    CompiledDataParseError(Vec<ConfigParseCompiledDataError>),
     /// An invalid set of test groups was defined by the user.
     #[error("invalid test groups defined: {}\n(test groups cannot start with '@tool:' unless specified by a tool)", .0.iter().join(", "))]
     InvalidTestGroupsDefined(BTreeSet<CustomTestGroup>),
@@ -109,15 +109,60 @@ pub enum ConfigParseErrorKind {
         /// Known groups up to this point.
         known_groups: BTreeSet<TestGroup>,
     },
+    /// An invalid set of config scripts was defined by the user.
+    #[error("invalid config scripts defined: {}\n(config scripts cannot start with '@tool:' unless specified by a tool)", .0.iter().join(", "))]
+    InvalidConfigScriptsDefined(BTreeSet<ScriptId>),
+    /// An invalid set of config scripts was defined by a tool config file.
+    #[error(
+        "invalid config scripts defined by tool: {}\n(config scripts must start with '@tool:<tool-name>:')", .0.iter().join(", "))]
+    InvalidConfigScriptsDefinedByTool(BTreeSet<ScriptId>),
+    /// Some config scripts were unknown.
+    #[error(
+        "unknown config scripts specified by config (destructure this variant for more details)"
+    )]
+    UnknownConfigScripts {
+        /// The list of errors that occurred.
+        errors: Vec<UnknownConfigScriptError>,
+
+        /// Known scripts up to this point.
+        known_scripts: BTreeSet<ScriptId>,
+    },
+    /// An unknown experimental feature or features were defined.
+    #[error("unknown experimental features defined (destructure this variant for more details)")]
+    UnknownExperimentalFeatures {
+        /// The set of unknown features.
+        unknown: BTreeSet<String>,
+
+        /// The set of known features.
+        known: BTreeSet<ConfigExperimental>,
+    },
+    /// A tool specified an experimental feature.
+    ///
+    /// Tools are not allowed to specify experimental features.
+    #[error(
+        "tool config file specifies experimental features `{}` \
+         -- only repository config files can do so",
+        .features.iter().join(", "),
+    )]
+    ExperimentalFeaturesInToolConfig {
+        /// The name of the experimental feature.
+        features: BTreeSet<String>,
+    },
+    /// An experimental feature was used but not enabled.
+    #[error("experimental feature `{feature}` is used but not enabled")]
+    ExperimentalFeatureNotEnabled {
+        /// The feature that was not enabled.
+        feature: ConfigExperimental,
+    },
 }
 
-/// An error that occurred while parsing config overrides.
+/// An error that occurred while parsing config overrides or setup scripts.
 ///
-/// Part of [`ConfigParseErrorKind::OverrideError`].
+/// Part of [`ConfigParseErrorKind::CompiledDataParseError`].
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct ConfigParseOverrideError {
-    /// The name of the profile under which the override was found.
+pub struct ConfigParseCompiledDataError {
+    /// The name of the profile under which the data was found.
     pub profile_name: String,
 
     /// True if neither the platform nor the filter have been specified.
@@ -133,7 +178,7 @@ pub struct ConfigParseOverrideError {
     pub parse_errors: Option<FilterExpressionParseErrors>,
 }
 
-impl ConfigParseOverrideError {
+impl ConfigParseCompiledDataError {
     /// Returns [`miette::Report`]s for each error recorded by self.
     pub fn reports(&self) -> impl Iterator<Item = miette::Report> + '_ {
         let not_specified_report = self.not_specified.then(|| {
@@ -181,6 +226,56 @@ pub(crate) enum RunTestError {
     CollectOutput(#[from] CollectTestOutputError),
 }
 
+/// An error that occurred while setting up or running a setup script.
+#[derive(Debug, Error)]
+pub(crate) enum SetupScriptError {
+    /// An error occurred while creating a temporary path for the setup script.
+    #[error("error creating temporary path for setup script")]
+    TempPath(#[source] std::io::Error),
+
+    /// An error occurred while executing the setup script.
+    #[error("error executing setup script")]
+    ExecFail(#[source] std::io::Error),
+
+    /// An error occurred while collecting the output of the setup script.
+    #[error("error collecting setup script output")]
+    CollectOutput(#[from] CollectTestOutputError),
+
+    /// An error occurred while waiting for the setup script to exit.
+    #[error("error waiting for setup script to exit")]
+    Wait(#[source] std::io::Error),
+
+    /// An error occurred while opening the setup script environment file.
+    #[error("error opening environment file `{path}`")]
+    EnvFileOpen {
+        /// The path to the environment file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while reading the setup script environment file.
+    #[error("error reading environment file `{path}`")]
+    EnvFileRead {
+        /// The path to the environment file.
+        path: Utf8PathBuf,
+
+        /// The underlying error.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// An error occurred while parsing the setup script environment file.
+    #[error("line `{line}` in environment file `{path}` not in KEY=VALUE format")]
+    EnvFileParse { path: Utf8PathBuf, line: String },
+
+    /// An environment variable key was reserved.
+    #[error("key `{key}` begins with `NEXTEST`, which is reserved for internal use")]
+    EnvFileReservedKey { key: String },
+}
+
 /// An error was returned while collecting test output.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -203,6 +298,17 @@ pub struct UnknownTestGroupError {
 
     /// The name of the unknown test group.
     pub name: TestGroup,
+}
+
+/// An unknown script was specified in the config.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub struct UnknownConfigScriptError {
+    /// The name of the profile under which the unknown script was found.
+    pub profile_name: String,
+
+    /// The name of the unknown script.
+    pub name: ScriptId,
 }
 
 /// An error which indicates that a profile was requested but not known to nextest.
@@ -255,6 +361,11 @@ pub enum InvalidIdentifier {
 #[derive(Clone, Debug, Error)]
 #[error("invalid custom test group name: {0}")]
 pub struct InvalidCustomTestGroupName(pub InvalidIdentifier);
+
+/// The name of a configuration script is invalid (not a valid identifier).
+#[derive(Clone, Debug, Error)]
+#[error("invalid configuration script name: {0}")]
+pub struct InvalidConfigScriptName(pub InvalidIdentifier);
 
 /// Error returned while parsing a [`ToolConfigFile`](crate::config::ToolConfigFile) value.
 #[derive(Clone, Debug, Error)]

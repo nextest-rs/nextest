@@ -65,6 +65,9 @@ impl<'cfg> MetadataJunit<'cfg> {
             TestEventKind::RunStarted { .. }
             | TestEventKind::RunPaused { .. }
             | TestEventKind::RunContinued { .. } => {}
+            TestEventKind::SetupScriptStarted { .. }
+            | TestEventKind::SetupScriptSlow { .. }
+            | TestEventKind::SetupScriptFinished { .. } => {}
             TestEventKind::TestStarted { .. } => {}
             TestEventKind::TestSlow { .. } => {}
             TestEventKind::TestAttemptFailedWillRetry { .. }

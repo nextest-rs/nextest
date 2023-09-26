@@ -1,10 +1,12 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{NextestConfigImpl, NextestProfile};
+use super::{
+    CompiledProfileScripts, DeserializedProfileScriptConfig, NextestConfigImpl, NextestProfile,
+};
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
-    errors::{ConfigParseErrorKind, ConfigParseOverrideError},
+    errors::{ConfigParseCompiledDataError, ConfigParseErrorKind},
     platform::BuildPlatforms,
     reporter::TestOutputDisplay,
 };
@@ -131,7 +133,7 @@ impl<Source: Copy> TestSettings<Source> {
         let mut junit_store_success_output = None;
         let mut junit_store_failure_output = None;
 
-        for override_ in &profile.overrides {
+        for override_ in &profile.compiled_data.overrides {
             if !override_.state.host_eval {
                 continue;
             }
@@ -259,21 +261,22 @@ impl<Source: Copy> TestSettings<Source> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct CompiledOverridesByProfile {
-    pub(super) default: Vec<CompiledOverride<PreBuildPlatform>>,
-    pub(super) other: HashMap<String, Vec<CompiledOverride<PreBuildPlatform>>>,
+pub(super) struct CompiledByProfile {
+    pub(super) default: CompiledData<PreBuildPlatform>,
+    pub(super) other: HashMap<String, CompiledData<PreBuildPlatform>>,
 }
 
-impl CompiledOverridesByProfile {
+impl CompiledByProfile {
     pub(super) fn new(
         graph: &PackageGraph,
         config: &NextestConfigImpl,
     ) -> Result<Self, ConfigParseErrorKind> {
         let mut errors = vec![];
-        let default = Self::compile_overrides(
+        let default = CompiledData::new(
             graph,
             "default",
             config.default_profile().overrides(),
+            config.default_profile().setup_scripts(),
             &mut errors,
         );
         let other: HashMap<_, _> = config
@@ -281,7 +284,13 @@ impl CompiledOverridesByProfile {
             .map(|(profile_name, profile)| {
                 (
                     profile_name.to_owned(),
-                    Self::compile_overrides(graph, profile_name, profile.overrides(), &mut errors),
+                    CompiledData::new(
+                        graph,
+                        profile_name,
+                        profile.overrides(),
+                        profile.scripts(),
+                        &mut errors,
+                    ),
                 )
             })
             .collect();
@@ -289,23 +298,78 @@ impl CompiledOverridesByProfile {
         if errors.is_empty() {
             Ok(Self { default, other })
         } else {
-            Err(ConfigParseErrorKind::OverrideError(errors))
+            Err(ConfigParseErrorKind::CompiledDataParseError(errors))
         }
     }
+}
 
-    fn compile_overrides(
+#[derive(Clone, Debug, Default)]
+pub(super) struct CompiledData<State> {
+    pub(super) overrides: Vec<CompiledOverride<State>>,
+    pub(super) scripts: Vec<CompiledProfileScripts<State>>,
+}
+
+impl CompiledData<PreBuildPlatform> {
+    fn new(
         graph: &PackageGraph,
         profile_name: &str,
         overrides: &[DeserializedOverride],
-        errors: &mut Vec<ConfigParseOverrideError>,
-    ) -> Vec<CompiledOverride<PreBuildPlatform>> {
-        overrides
+        scripts: &[DeserializedProfileScriptConfig],
+        errors: &mut Vec<ConfigParseCompiledDataError>,
+    ) -> Self {
+        let overrides = overrides
             .iter()
             .enumerate()
             .filter_map(|(index, source)| {
                 CompiledOverride::new(graph, profile_name, index, source, errors)
             })
-            .collect()
+            .collect();
+        let scripts = scripts
+            .iter()
+            .filter_map(|source| CompiledProfileScripts::new(graph, profile_name, source, errors))
+            .collect();
+        Self { overrides, scripts }
+    }
+
+    pub(super) fn extend_reverse(&mut self, other: Self) {
+        self.overrides.extend(other.overrides.into_iter().rev());
+        self.scripts.extend(other.scripts.into_iter().rev());
+    }
+
+    pub(super) fn reverse(&mut self) {
+        self.overrides.reverse();
+        self.scripts.reverse();
+    }
+
+    pub(super) fn chain(self, other: Self) -> Self {
+        let mut overrides = self.overrides;
+        let mut setup_scripts = self.scripts;
+        overrides.extend(other.overrides);
+        setup_scripts.extend(other.scripts);
+        Self {
+            overrides,
+            scripts: setup_scripts,
+        }
+    }
+
+    pub(super) fn apply_build_platforms(
+        self,
+        build_platforms: &BuildPlatforms,
+    ) -> CompiledData<FinalConfig> {
+        let overrides = self
+            .overrides
+            .into_iter()
+            .map(|override_| override_.apply_build_platforms(build_platforms))
+            .collect();
+        let setup_scripts = self
+            .scripts
+            .into_iter()
+            .map(|setup_script| setup_script.apply_build_platforms(build_platforms))
+            .collect();
+        CompiledData {
+            overrides,
+            scripts: setup_scripts,
+        }
     }
 }
 
@@ -349,13 +413,13 @@ impl CompiledOverride<PreBuildPlatform> {
         profile_name: &str,
         index: usize,
         source: &DeserializedOverride,
-        errors: &mut Vec<ConfigParseOverrideError>,
+        errors: &mut Vec<ConfigParseCompiledDataError>,
     ) -> Option<Self> {
         if source.platform.host.is_none()
             && source.platform.target.is_none()
             && source.filter.is_none()
         {
-            errors.push(ConfigParseOverrideError {
+            errors.push(ConfigParseCompiledDataError {
                 profile_name: profile_name.to_owned(),
                 not_specified: true,
                 host_parse_error: None,
@@ -397,7 +461,7 @@ impl CompiledOverride<PreBuildPlatform> {
                 let platform_parse_error = maybe_platform_err.err();
                 let parse_errors = maybe_parse_err.err();
 
-                errors.push(ConfigParseOverrideError {
+                errors.push(ConfigParseCompiledDataError {
                     profile_name: profile_name.to_owned(),
                     not_specified: false,
                     host_parse_error: host_platform_parse_error,
@@ -455,7 +519,7 @@ pub(crate) enum MaybeTargetSpec {
 }
 
 impl MaybeTargetSpec {
-    fn new(platform_str: Option<&str>) -> Result<Self, target_spec::Error> {
+    pub(super) fn new(platform_str: Option<&str>) -> Result<Self, target_spec::Error> {
         Ok(match platform_str {
             Some(platform_str) => {
                 MaybeTargetSpec::Provided(TargetSpec::new(platform_str.to_owned())?)
@@ -464,7 +528,7 @@ impl MaybeTargetSpec {
         })
     }
 
-    fn eval(&self, platform: &Platform) -> bool {
+    pub(super) fn eval(&self, platform: &Platform) -> bool {
         match self {
             MaybeTargetSpec::Provided(spec) => spec
                 .eval(platform)
@@ -513,8 +577,8 @@ pub(super) struct DeserializedJunitOutput {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct PlatformStrings {
-    host: Option<String>,
-    target: Option<String>,
+    pub(super) host: Option<String>,
+    pub(super) target: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for PlatformStrings {
@@ -632,9 +696,14 @@ mod tests {
         let graph = temp_workspace(workspace_dir.path(), config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
 
-        let nextest_config_result =
-            NextestConfig::from_sources(graph.workspace().root(), &graph, None, &[][..])
-                .expect("config is valid");
+        let nextest_config_result = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .expect("config is valid");
         let profile = nextest_config_result
             .profile("default")
             .expect("valid profile name")
@@ -826,19 +895,25 @@ mod tests {
 
         let graph = temp_workspace(workspace_path, config_contents);
 
-        let err = NextestConfig::from_sources(graph.workspace().root(), &graph, None, [])
-            .expect_err("config is invalid");
+        let err = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            [],
+            &Default::default(),
+        )
+        .expect_err("config is invalid");
         match err.kind() {
-            ConfigParseErrorKind::OverrideError(override_errors) => {
+            ConfigParseErrorKind::CompiledDataParseError(compile_errors) => {
                 assert_eq!(
-                    override_errors.len(),
+                    compile_errors.len(),
                     1,
                     "exactly one override error must be produced"
                 );
-                let error = override_errors.first().unwrap();
+                let error = compile_errors.first().unwrap();
                 assert_eq!(
                     error.profile_name, faulty_profile,
-                    "override error profile matches"
+                    "compile error profile matches"
                 );
                 let handler = miette::JSONReportHandler::new();
                 let reports = error
@@ -859,7 +934,7 @@ mod tests {
                 assert_eq!(&reports, expected_reports, "reports match");
             }
             other => {
-                panic!("for config error {other:?}, expected ConfigParseErrorKind::OverrideError");
+                panic!("for config error {other:?}, expected ConfigParseErrorKind::CompiledDataParseError");
             }
         };
     }
