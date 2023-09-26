@@ -114,13 +114,14 @@ impl<'g> RustTestArtifact<'g> {
                 match rust_build_meta.non_test_binaries.get(package_id.repr()) {
                     Some(binaries) => binaries
                         .iter()
-                        .filter_map(|binary| {
+                        .filter(|binary| {
                             // Only expose BIN_EXE non-test files.
-                            (binary.kind == RustNonTestBinaryKind::BIN_EXE).then(|| {
-                                // Convert relative paths to absolute ones by joining with the target directory.
-                                let abs_path = rust_build_meta.target_directory.join(&binary.path);
-                                (binary.name.clone(), abs_path)
-                            })
+                            binary.kind == RustNonTestBinaryKind::BIN_EXE
+                        })
+                        .map(|binary| {
+                            // Convert relative paths to absolute ones by joining with the target directory.
+                            let abs_path = rust_build_meta.target_directory.join(&binary.path);
+                            (binary.name.clone(), abs_path)
                         })
                         .collect(),
                     None => BTreeSet::new(),

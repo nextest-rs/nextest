@@ -114,7 +114,7 @@ impl VersionOnlyConfig {
     ) -> Result<VersionOnlyDeserialize, ConfigParseError> {
         let toml_str = std::fs::read_to_string(config_file.as_str()).map_err(|error| {
             ConfigParseError::new(
-                config_file.clone(),
+                config_file,
                 tool,
                 ConfigParseErrorKind::VersionOnlyReadError(error),
             )
@@ -123,14 +123,14 @@ impl VersionOnlyConfig {
         let v: VersionOnlyDeserialize =
             serde_path_to_error::deserialize(toml_de).map_err(|error| {
                 ConfigParseError::new(
-                    config_file.clone(),
+                    config_file,
                     tool,
                     ConfigParseErrorKind::VersionOnlyDeserializeError(Box::new(error)),
                 )
             })?;
         if tool.is_some() && !v.experimental.is_empty() {
             return Err(ConfigParseError::new(
-                config_file.clone(),
+                config_file,
                 tool,
                 ConfigParseErrorKind::ExperimentalFeaturesInToolConfig {
                     features: v.experimental,

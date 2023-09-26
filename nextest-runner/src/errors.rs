@@ -1333,9 +1333,8 @@ mod self_update_errors {
 
         let display_versions: Vec<_> = versions
             .iter()
-            .filter_map(|(v, status)| {
-                (v.pre.is_empty() && *status == ReleaseStatus::Active).then(|| v.to_string())
-            })
+            .filter(|(v, status)| v.pre.is_empty() && *status == ReleaseStatus::Active)
+            .map(|(v, _)| v.to_string())
             .take(DISPLAY_COUNT)
             .collect();
         let mut display_str = display_versions.join(", ");

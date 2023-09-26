@@ -259,7 +259,7 @@ fn to_datetime(system_time: SystemTime) -> DateTime<FixedOffset> {
 
 // This regex works for the default panic handler for Rust -- other panic handlers may not work,
 // which is why this is heuristic.
-static PANICKED_AT_REGEX_STR: &str = "^thread '([^']+)' panicked at '";
+static PANICKED_AT_REGEX_STR: &str = "^thread '([^']+)' panicked at ";
 static PANICKED_AT_REGEX: Lazy<Regex> = Lazy::new(|| {
     let mut builder = RegexBuilder::new(PANICKED_AT_REGEX_STR);
     builder.multi_line(true);

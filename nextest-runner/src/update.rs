@@ -126,7 +126,8 @@ impl NextestReleases {
                 let known_triples = version_data
                     .locations
                     .iter()
-                    .filter_map(|data| (data.format == TAR_GZ_SUFFIX).then(|| data.target.clone()))
+                    .filter(|data| data.format == TAR_GZ_SUFFIX)
+                    .map(|data| data.target.clone())
                     .collect();
                 UpdateError::NoTargetData {
                     version: version.clone(),
