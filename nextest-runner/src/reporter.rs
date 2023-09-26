@@ -570,17 +570,8 @@ impl<'a> TestReporterImpl<'a> {
 
                 let count_style = self.styles.count;
 
-                let tests_str: &str = if test_list.run_count() == 1 {
-                    "test"
-                } else {
-                    "tests"
-                };
-
-                let binaries_str = if test_list.binary_count() == 1 {
-                    "binary"
-                } else {
-                    "binaries"
-                };
+                let tests_str = tests_str(test_list.run_count());
+                let binaries_str = binaries_str(test_list.binary_count());
 
                 write!(
                     writer,
@@ -781,27 +772,30 @@ impl<'a> TestReporterImpl<'a> {
                     CancelReason::Signal => "signal",
                     CancelReason::Interrupt => "interrupt",
                 };
+                let tests_str = tests_str(*running);
 
                 writeln!(
                     writer,
-                    "due to {}: {} tests still running",
+                    "due to {}: {} {tests_str} still running",
                     reason_str.style(self.styles.fail),
                     running.style(self.styles.count)
                 )?;
             }
             TestEventKind::RunPaused { running } => {
+                let tests_str = tests_str(*running);
                 writeln!(
                     writer,
-                    "{:>12} {} running tests due to {}",
+                    "{:>12} {} running {tests_str} due to {}",
                     "Pausing".style(self.styles.pass),
                     running.style(self.styles.count),
                     "signal".style(self.styles.count),
                 )?;
             }
             TestEventKind::RunContinued { running } => {
+                let tests_str = tests_str(*running);
                 writeln!(
                     writer,
-                    "{:>12} {} running tests due to {}",
+                    "{:>12} {} running {tests_str} due to {}",
                     "Continuing".style(self.styles.pass),
                     running.style(self.styles.count),
                     "signal".style(self.styles.count),
@@ -1212,6 +1206,22 @@ impl<'a> TestReporterImpl<'a> {
 
     fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
         self.force_failure_output.unwrap_or(test_setting)
+    }
+}
+
+fn tests_str(count: usize) -> &'static str {
+    if count == 1 {
+        "test"
+    } else {
+        "tests"
+    }
+}
+
+fn binaries_str(count: usize) -> &'static str {
+    if count == 1 {
+        "binary"
+    } else {
+        "binaries"
     }
 }
 
