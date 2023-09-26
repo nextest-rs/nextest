@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [0.9.2] - 2023-09-26
+
+### Added
+
+- New exit code `SETUP_SCRIPT_FAILED`: A setup script failed to execute.
+
 ### Changed
 
 - MSRV updated to Rust 1.70.
@@ -177,6 +183,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.9.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.2
 [0.9.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.1
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.0
 [0.8.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.8.2
