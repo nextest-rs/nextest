@@ -757,24 +757,6 @@ mod tests {
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(0));
     }
 
-    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-    struct MietteJsonReport {
-        message: String,
-        labels: Vec<MietteJsonLabel>,
-    }
-
-    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-    struct MietteJsonLabel {
-        label: String,
-        span: MietteJsonSpan,
-    }
-
-    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-    struct MietteJsonSpan {
-        offset: usize,
-        length: usize,
-    }
-
     #[test_case(
         indoc! {r#"
             [[profile.default.overrides]]

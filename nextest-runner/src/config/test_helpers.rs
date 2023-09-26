@@ -8,6 +8,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::{graph::PackageGraph, MetadataCommand};
+use serde::Deserialize;
 use std::{io::Write, path::PathBuf, process::Command};
 use target_spec::{Platform, TargetFeatures};
 
@@ -56,4 +57,22 @@ pub(super) fn test_group(name: &str) -> TestGroup {
 pub(super) fn custom_test_group(name: &str) -> CustomTestGroup {
     CustomTestGroup::new(name.into())
         .unwrap_or_else(|error| panic!("invalid custom test group {name}: {error}"))
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(super) struct MietteJsonReport {
+    pub(super) message: String,
+    pub(super) labels: Vec<MietteJsonLabel>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(super) struct MietteJsonLabel {
+    pub(super) label: String,
+    pub(super) span: MietteJsonSpan,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(super) struct MietteJsonSpan {
+    pub(super) offset: usize,
+    pub(super) length: usize,
 }
