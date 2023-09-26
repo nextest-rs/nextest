@@ -41,12 +41,10 @@ impl<'profile> SetupScripts<'profile> {
     ) -> Self {
         Self::new_with_queries(
             profile,
-            test_list.iter_tests().filter_map(|test| {
-                test.test_info
-                    .filter_match
-                    .is_match()
-                    .then(|| test.to_test_query())
-            }),
+            test_list
+                .iter_tests()
+                .filter(|test| test.test_info.filter_match.is_match())
+                .map(|test| test.to_test_query()),
         )
     }
 

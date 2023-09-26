@@ -120,15 +120,17 @@ impl CargoConfigs {
         //
         // 2 and 3 used to be reversed in older versions of Rust, but this has been fixed as of Rust
         // 1.68 (https://github.com/rust-lang/cargo/pull/11077).
-        let cli_option_iter = self.cli_configs.iter().filter_map(|(source, config)| {
-            matches!(source, CargoConfigSource::CliOption)
-                .then(|| DiscoveredConfig::CliOption { config, source })
-        });
+        let cli_option_iter = self
+            .cli_configs
+            .iter()
+            .filter(|(source, _)| matches!(source, CargoConfigSource::CliOption))
+            .map(|(source, config)| DiscoveredConfig::CliOption { config, source });
 
-        let cli_file_iter = self.cli_configs.iter().filter_map(|(source, config)| {
-            matches!(source, CargoConfigSource::File(_))
-                .then(|| DiscoveredConfig::File { config, source })
-        });
+        let cli_file_iter = self
+            .cli_configs
+            .iter()
+            .filter(|(source, _)| matches!(source, CargoConfigSource::File(_)))
+            .map(|(source, config)| DiscoveredConfig::File { config, source });
 
         let cargo_config_file_iter = self
             .discovered
@@ -222,7 +224,7 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
                         return Err(CargoConfigError::InvalidCliConfig {
                             config_str: config_str.to_owned(),
                             reason: InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration,
-                        })?;
+                        });
                     }
                     table = nt;
                 }
@@ -230,14 +232,14 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
                     return Err(CargoConfigError::InvalidCliConfig {
                         config_str: config_str.to_owned(),
                         reason: InvalidCargoCliConfigReason::SetsValueToInlineTable,
-                    })?;
+                    });
                 }
                 Item::Value(v) => {
                     if non_empty_decor(v.decor()) {
                         return Err(CargoConfigError::InvalidCliConfig {
                             config_str: config_str.to_owned(),
                             reason: InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration,
-                        })?;
+                        });
                     }
                     got_to_value = true;
                     break;
@@ -246,13 +248,13 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
                     return Err(CargoConfigError::InvalidCliConfig {
                         config_str: config_str.to_owned(),
                         reason: InvalidCargoCliConfigReason::SetsValueToArrayOfTables,
-                    })?;
+                    });
                 }
                 Item::None => {
                     return Err(CargoConfigError::InvalidCliConfig {
                         config_str: config_str.to_owned(),
                         reason: InvalidCargoCliConfigReason::DoesntProvideValue,
-                    })?;
+                    });
                 }
             }
         }
@@ -262,7 +264,7 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
         return Err(CargoConfigError::InvalidCliConfig {
             config_str: config_str.to_owned(),
             reason: InvalidCargoCliConfigReason::NotDottedKv,
-        })?;
+        });
     }
 
     let cargo_config: CargoConfig =
