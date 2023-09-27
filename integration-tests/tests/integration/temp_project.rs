@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Path, Utf8PathBuf};
-use std::{convert::TryInto, fs, io, path::Path};
-use tempfile::TempDir;
+use camino_tempfile::Utf8TempDir;
+use std::{fs, io, path::Path};
 
 // This isn't general purpose -- it specifically excludes certain directories at the root and is
 // generally not race-free.
@@ -36,7 +36,7 @@ pub(super) fn copy_dir_all(
 /// This avoid concurrent accesses to the `target` folder.
 #[derive(Debug)]
 pub struct TempProject {
-    temp_dir: Option<TempDir>,
+    temp_dir: Option<Utf8TempDir>,
     temp_root: Utf8PathBuf,
     workspace_root: Utf8PathBuf,
     target_dir: Utf8PathBuf,
@@ -52,17 +52,12 @@ impl TempProject {
     }
 
     fn new_impl(custom_target_dir: Option<Utf8PathBuf>) -> color_eyre::Result<Self> {
-        let temp_dir = tempfile::Builder::new()
+        let temp_dir = camino_tempfile::Builder::new()
             .prefix("nextest-fixture")
             .tempdir()?;
         // Note: can't use canonicalize here because it ends up creating a UNC path on Windows,
         // which doesn't match compile time.
-        let temp_root: Utf8PathBuf = fixup_macos_path(
-            temp_dir
-                .path()
-                .try_into()
-                .expect("tempdir should be valid UTF-8"),
-        );
+        let temp_root: Utf8PathBuf = fixup_macos_path(temp_dir.path());
         let workspace_root = temp_root.join("src");
         let src_dir = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()

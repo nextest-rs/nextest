@@ -22,16 +22,16 @@
 //! cargo-nextest, except it isn't used as the actual test runner. We refer to it with
 //! `NEXTEST_BIN_EXE_cargo-nextest-dup`.
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use nextest_metadata::{BuildPlatform, NextestExitCode};
 use std::{fs::File, io::Write};
 
 mod fixtures;
 mod temp_project;
 
+use camino_tempfile::Utf8TempDir;
 use fixtures::*;
 use temp_project::TempProject;
-use tempfile::TempDir;
 
 #[test]
 fn test_list_default() {
@@ -281,11 +281,8 @@ fn test_run_after_build() {
 fn test_relocated_run() {
     set_env_vars();
 
-    let custom_target_dir = TempDir::new().unwrap();
-    let custom_target_path: &Utf8Path = custom_target_dir
-        .path()
-        .try_into()
-        .expect("tempdir is valid UTF-8");
+    let custom_target_dir = Utf8TempDir::new().unwrap();
+    let custom_target_path = custom_target_dir.path();
     let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
 
     build_tests(&p);
@@ -344,11 +341,8 @@ fn test_relocated_run() {
 fn test_run_from_archive() {
     set_env_vars();
 
-    let custom_target_dir = TempDir::new().unwrap();
-    let custom_target_path: &Utf8Path = custom_target_dir
-        .path()
-        .try_into()
-        .expect("tempdir is valid UTF-8");
+    let custom_target_dir = Utf8TempDir::new().unwrap();
+    let custom_target_path = custom_target_dir.path();
     let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
 
     let archive_file = p.temp_root().join("my-archive.tar.zst");
