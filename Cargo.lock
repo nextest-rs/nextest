@@ -1226,6 +1226,7 @@ name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "camino",
+ "camino-tempfile",
  "cargo-nextest",
  "cfg-if",
  "clap",
@@ -1238,7 +1239,6 @@ dependencies = [
  "pathdiff",
  "regex",
  "serde_json",
- "tempfile",
 ]
 
 [[package]]
