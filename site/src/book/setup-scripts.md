@@ -48,13 +48,15 @@ capture-stderr = false
 
 ## Setting up rules
 
-In configuration, you can create rules for when to use scripts on a per-profile basis. This is done via the `profile.<profile-name>.scripts` array. For example, you can set up a script that generates a database if tests from the `db-tests` package, or any packages that depend on it, are run. (This uses the `rdeps` [filter expression](filter-expressions.md) predicate):
+In configuration, you can create rules for when to use scripts on a per-profile basis. This is done via the `profile.<profile-name>.scripts` array. For example, you can set up a script that generates a database if tests from the `db-tests` package, or any packages that depend on it, are run.
 
 ```toml
 [[profile.default.scripts]]
 filter = 'rdeps(db-tests)'
 setup = 'db-generate'
 ```
+
+(This example uses the `rdeps` [filter expression](filter-expressions.md) predicate.)
 
 Setup scripts can also filter based on platform, using the rules listed in [Specifying platforms](specifying-platforms.md):
 
