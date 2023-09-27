@@ -1,7 +1,7 @@
 # Setup scripts
 
 * **Nextest version:** 0.9.59 and above
-* **Enable with:** adding `experimental = ["setup-scripts"]` to `.config/nextest.toml`
+* **Enable with:** Add `experimental = ["setup-scripts"]` to `.config/nextest.toml`
 * **Tracking issue:** [#978](https://github.com/nextest-rs/nextest/issues/978)
 
 Nextest supports running *setup scripts* before tests are run. Setup scripts can be scoped to
