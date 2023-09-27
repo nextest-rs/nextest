@@ -95,7 +95,7 @@ if [ -z "$NEXTEST_ENV" ]; then
 fi
 
 # Write out an environment variable to $NEXTEST_ENV.
-echo "NEXTEST_ENV_VAR=Hello, world!" >> "$NEXTEST_ENV"
+echo "MY_ENV_VAR=Hello, world!" >> "$NEXTEST_ENV"
 ```
 
 And you define a setup script and a corresponding rule:
@@ -114,6 +114,6 @@ Then, in tests which match this script, the environment variable will be availab
 ```rust
 #[test]
 fn my_env_test() {
-    assert_eq!(std::env::var("NEXTEST_ENV_VAR"), Ok("Hello, world!".to_string()));
+    assert_eq!(std::env::var("MY_ENV_VAR"), Ok("Hello, world!".to_string()));
 }
 ```
