@@ -3,7 +3,7 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.59] - 2023-09-26
+## [0.9.59] - 2023-09-27
 
 ### Added
 
@@ -12,7 +12,7 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ### Fixed
 
-- `deps()` and `rdeps()` predicates in [per-test overrides](https://nexte.st/book/per-test-overrides) now work.
+- `deps()` and `rdeps()` predicates in [per-test overrides](https://nexte.st/book/per-test-overrides) were previously not working correctly. With this version they now work.
 
 ## [0.9.58] - 2023-09-20
 
