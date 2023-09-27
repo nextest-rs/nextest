@@ -64,7 +64,7 @@ platform = { host = "cfg(unix)" }
 setup = 'script1'
 ```
 
-A list of scripts can also be specified:
+A set of scripts can also be specified. All scripts in the set will be executed.
 
 ```toml
 [[profile.default.scripts]]
@@ -74,7 +74,7 @@ setup = ['script1', 'script2']
 
 ## Script execution
 
-A given setup script *S* is only executed if the current profile has at least one rule where the `filter` and `platform` predicates match the current execution environment, and the setup script is selected.
+A given setup script *S* is only executed if the current profile has at least one rule where the `filter` and `platform` predicates match the current execution environment, and the setup script *S* is listed in `setup`.
 
 Setup scripts are executed serially, in the order they are defined (*not* the order they're specified in the rules). If any setup script exits with a non-zero exit code, the entire test run is terminated.
 
