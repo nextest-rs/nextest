@@ -94,7 +94,7 @@ nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 console-subscriber = { version = "0.1.10", optional = true }
 unicode-ident = "1.0.12"
 unicode-normalization = "0.1.22"
-indexmap = { version = "2.0.0", features = ["serde"] }
+indexmap = { version = "2.0.2", features = ["serde"] }
 smallvec = "1.11.1"
 
 [target.'cfg(unix)'.dependencies]
