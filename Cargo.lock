@@ -363,6 +363,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo_metadata"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb9ac64500cc83ce4b9f8dafa78186aa008c8dea77a09b94cd307fd0cd5022a8"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -902,7 +916,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0831ad7ff3b6af88fdc493844f02f7ca0ccfe0852cdf19f8c80a0f6223d41fa3"
 dependencies = [
  "camino",
- "cargo_metadata",
+ "cargo_metadata 0.17.0",
  "cfg-if",
  "debug-ignore",
  "fixedbitset",
@@ -1530,7 +1544,7 @@ dependencies = [
  "bytes",
  "camino",
  "camino-tempfile",
- "cargo_metadata",
+ "cargo_metadata 0.18.0",
  "cfg-if",
  "chrono",
  "color-eyre",
