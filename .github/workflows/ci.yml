@@ -16,7 +16,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -43,7 +43,7 @@ jobs:
         os: [ ubuntu-latest ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -64,7 +64,7 @@ jobs:
         rust-version: [ "1.70", stable ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
@@ -103,7 +103,7 @@ jobs:
     # gcc-mingw-w64-x86-64-win32 requires Ubuntu 22.04
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:

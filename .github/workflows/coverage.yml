@@ -17,7 +17,7 @@ jobs:
       RUSTFLAGS: -D warnings
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
