@@ -1,4 +1,5 @@
 {
+    "extends": ["github>nextest-rs/renovate"],
     "ignorePaths": [
         "workspace-hack/**"
     ],
