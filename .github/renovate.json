@@ -1,0 +1,15 @@
+{
+    "ignorePaths": [
+        "workspace-hack/**"
+    ],
+    "packageRules": [
+        {
+            "matchManagers": ["cargo"],
+            "postUpgradeTasks": {
+                "commands": ["./scripts/renovate-post-update.sh"],
+                "fileFilters": ["^Cargo.lock$", "^workspace-hack/Cargo.toml$"],
+                "executionMode": "branch"
+            }
+        }
+    ]
+}
