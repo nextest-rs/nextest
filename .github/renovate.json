@@ -6,9 +6,7 @@
         {
             "matchManagers": ["cargo"],
             "postUpgradeTasks": {
-                "commands": ["./scripts/renovate-post-upgrade.sh"],
-                "fileFilters": ["^Cargo.lock$", "^workspace-hack/Cargo.toml$"],
-                "executionMode": "branch"
+                "commands": ["scripts/renovate-post-upgrade.sh"]
             }
         }
     ]
