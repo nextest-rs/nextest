@@ -87,7 +87,7 @@ pub(crate) fn perform_update(
                 true
             } else {
                 let colorful_theme = dialoguer::theme::ColorfulTheme::default();
-                let mut confirm = if output.color.should_colorize(supports_color::Stream::Stderr) {
+                let confirm = if output.color.should_colorize(supports_color::Stream::Stderr) {
                     dialoguer::Confirm::with_theme(&colorful_theme)
                 } else {
                     dialoguer::Confirm::with_theme(&dialoguer::theme::SimpleTheme)

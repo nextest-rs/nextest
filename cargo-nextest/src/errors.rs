@@ -203,7 +203,7 @@ pub enum ExpectedError {
     #[error("error reading prompt")]
     DialoguerError {
         #[source]
-        err: std::io::Error,
+        err: dialoguer::Error,
     },
     #[error("failed to set up Ctrl-C handler")]
     SignalHandlerSetupError {
