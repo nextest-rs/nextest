@@ -11,13 +11,13 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'quick-junit-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v2
         with:
           crate: cargo-release
           # Version 0.21.4 has the idempotency behavior we want, until
@@ -40,13 +40,13 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-filtering-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v2
         with:
           crate: cargo-release
           version: =0.21.4
@@ -67,13 +67,13 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-metadata-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v2
         with:
           crate: cargo-release
           version: =0.21.4
@@ -94,13 +94,13 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-runner-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v2
         with:
           crate: cargo-release
           version: =0.21.4
@@ -121,7 +121,7 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       # Note: do not publish this until binaries are built and uploaded below. This is so that
@@ -184,7 +184,7 @@ jobs:
       - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.0'
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/upload-rust-binary-action@v1
@@ -228,11 +228,11 @@ jobs:
       - build-cargo-nextest-binaries
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v2
         with:
           crate: cargo-release
           version: =0.21.4
