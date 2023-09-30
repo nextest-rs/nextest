@@ -1,8 +1,5 @@
 {
     "extends": ["github>nextest-rs/renovate"],
-    "ignorePaths": [
-        "workspace-hack/**"
-    ],
     "packageRules": [
         {
             "matchManagers": ["cargo"],
