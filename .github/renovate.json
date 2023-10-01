@@ -1,11 +1,6 @@
 {
-    "extends": ["github>nextest-rs/renovate"],
-    "packageRules": [
-        {
-            "matchManagers": ["cargo"],
-            "postUpgradeTasks": {
-                "commands": ["scripts/renovate-post-upgrade.sh"]
-            }
-        }
+    "extends": [
+        "github>nextest-rs/renovate",
+        "github>nextest-rs/renovate:post-upgrade"
     ]
 }
