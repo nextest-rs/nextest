@@ -16,17 +16,17 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43 # v2
       - name: Lint (clippy)
         run: cargo clippy --all-features --all-targets
       - name: Lint (rustfmt)
         run: cargo xfmt --check
       - name: Install cargo readme
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@57aaba576a0253b74662df51e62715622f02127b # v2
         with:
           tool: cargo-readme
       - name: Run cargo readme
@@ -42,11 +42,11 @@ jobs:
         os: [ ubuntu-latest ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43 # v2
       - name: Build rustdoc
         run: cargo doc --all-features --workspace
 
@@ -63,11 +63,11 @@ jobs:
         rust-version: [ "1.70", stable ]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43 # v2
         with:
           # Matrix instances (other than OS) need to be added to this explicitly
           key: ${{ matrix.rust-version }}
@@ -102,13 +102,13 @@ jobs:
     # gcc-mingw-w64-x86-64-win32 requires Ubuntu 22.04
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           targets: x86_64-pc-windows-gnu
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43 # v2
       - name: Install wine and gcc-mingw-w64-x86-64-win32
         run: |
           sudo apt-get update
