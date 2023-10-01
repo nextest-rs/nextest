@@ -11,20 +11,20 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'quick-junit-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
         with:
           persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@2cfb0024938d23011106cbf127b393bc83fddba1 # v1
         with:
           crate: cargo-release
           # Version 0.21.4 has the idempotency behavior we want, until
           # https://github.com/crate-ci/cargo-release/issues/594 is addressed.
           version: =0.21.4
           locked: true
-      - uses: taiki-e/create-gh-release-action@v1
+      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
         with:
           prefix: quick-junit
           changelog: quick-junit/CHANGELOG.md
@@ -40,18 +40,18 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-filtering-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
         with:
           persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@2cfb0024938d23011106cbf127b393bc83fddba1 # v1
         with:
           crate: cargo-release
           version: =0.21.4
           locked: true
-      - uses: taiki-e/create-gh-release-action@v1
+      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
         with:
           prefix: nextest-filtering
           changelog: nextest-filtering/CHANGELOG.md
@@ -67,18 +67,18 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-metadata-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
         with:
           persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@2cfb0024938d23011106cbf127b393bc83fddba1 # v1
         with:
           crate: cargo-release
           version: =0.21.4
           locked: true
-      - uses: taiki-e/create-gh-release-action@v1
+      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
         with:
           prefix: nextest-metadata
           changelog: nextest-metadata/CHANGELOG.md
@@ -94,18 +94,18 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-runner-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
         with:
           persist-credentials: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@2cfb0024938d23011106cbf127b393bc83fddba1 # v1
         with:
           crate: cargo-release
           version: =0.21.4
           locked: true
-      - uses: taiki-e/create-gh-release-action@v1
+      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
         with:
           prefix: nextest-runner
           changelog: nextest-runner/CHANGELOG.md
@@ -121,12 +121,12 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
         with:
           persist-credentials: false
       # Note: do not publish this until binaries are built and uploaded below. This is so that
       # `cargo binstall` keeps working.
-      - uses: taiki-e/create-gh-release-action@v1
+      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
         id: create-gh-release
         with:
           prefix: cargo-nextest
@@ -184,10 +184,10 @@ jobs:
       - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.0'
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/upload-rust-binary-action@v1
+      - uses: taiki-e/upload-rust-binary-action@c53aeb3a143a2b61773f7833bae48f4d66e255ce # v1
         with:
           bin: cargo-nextest
           # The tag name contains the binary name so just use that.
@@ -228,11 +228,11 @@ jobs:
       - build-cargo-nextest-binaries
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@2cfb0024938d23011106cbf127b393bc83fddba1 # v1
         with:
           crate: cargo-release
           version: =0.21.4
@@ -287,7 +287,7 @@ jobs:
         run: |
           rsync -avH site/release-meta-static/ out-dir
       - name: Deploy release metadata
-        uses: JamesIves/github-pages-deploy-action@v4
+        uses: JamesIves/github-pages-deploy-action@a1ea191d508feb8485aceba848389d49f80ca2dc # v4
         with:
           branch: release-meta
           folder: out-dir
