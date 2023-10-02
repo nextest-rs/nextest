@@ -260,8 +260,8 @@ impl FilteringExpr {
     /// * `Some(false)` if this binary is definitely not accepted.
     /// * `None` if this binary might or might not be accepted.
     pub fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
-        use ExprLayer::*;
-        Wrapped(&self.compiled).collapse_frames(|layer: ExprLayer<&FilteringSet, Option<bool>>| {
+        use ExprFrame::*;
+        Wrapped(&self.compiled).collapse_frames(|layer: ExprFrame<&FilteringSet, Option<bool>>| {
             match layer {
                 Set(set) => set.matches_binary(query),
                 Not(a) => a.logic_not(),
@@ -276,8 +276,8 @@ impl FilteringExpr {
 
     /// Returns true if the given test is accepted by this filter expression.
     pub fn matches_test(&self, query: &TestQuery<'_>) -> bool {
-        use ExprLayer::*;
-        Wrapped(&self.compiled).collapse_frames(|layer: ExprLayer<&FilteringSet, bool>| match layer
+        use ExprFrame::*;
+        Wrapped(&self.compiled).collapse_frames(|layer: ExprFrame<&FilteringSet, bool>| match layer
         {
             Set(set) => set.matches_test(query),
             Not(a) => !a,
@@ -389,7 +389,7 @@ impl Logic for Option<bool> {
     }
 }
 
-pub(crate) enum ExprLayer<Set, A> {
+pub(crate) enum ExprFrame<Set, A> {
     Not(A),
     Union(A, A),
     Intersection(A, A),
@@ -398,11 +398,11 @@ pub(crate) enum ExprLayer<Set, A> {
     Set(Set),
 }
 
-impl<Set> MappableFrame for ExprLayer<Set, PartiallyApplied> {
-    type Frame<Next> = ExprLayer<Set, Next>;
+impl<Set> MappableFrame for ExprFrame<Set, PartiallyApplied> {
+    type Frame<Next> = ExprFrame<Set, Next>;
 
     fn map_frame<A, B>(input: Self::Frame<A>, mut f: impl FnMut(A) -> B) -> Self::Frame<B> {
-        use ExprLayer::*;
+        use ExprFrame::*;
         match input {
             Not(a) => Not(f(a)),
             Union(a, b) => Union(f(a), f(b)),
@@ -418,37 +418,37 @@ impl<Set> MappableFrame for ExprLayer<Set, PartiallyApplied> {
 pub(crate) struct Wrapped<T>(pub(crate) T);
 
 impl<'a> Collapsable for Wrapped<&'a CompiledExpr> {
-    type FrameToken = ExprLayer<&'a FilteringSet, PartiallyApplied>;
+    type FrameToken = ExprFrame<&'a FilteringSet, PartiallyApplied>;
 
     fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
         match self.0 {
-            CompiledExpr::Not(a) => ExprLayer::Not(Wrapped(a.as_ref())),
-            CompiledExpr::Union(a, b) => ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref())),
+            CompiledExpr::Not(a) => ExprFrame::Not(Wrapped(a.as_ref())),
+            CompiledExpr::Union(a, b) => ExprFrame::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref())),
             CompiledExpr::Intersection(a, b) => {
-                ExprLayer::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
+                ExprFrame::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
             }
-            CompiledExpr::Set(f) => ExprLayer::Set(f),
+            CompiledExpr::Set(f) => ExprFrame::Set(f),
         }
     }
 }
 
 impl<'a> Collapsable for Wrapped<&'a ParsedExpr> {
-    type FrameToken = ExprLayer<&'a SetDef, PartiallyApplied>;
+    type FrameToken = ExprFrame<&'a SetDef, PartiallyApplied>;
 
     fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
         match self.0 {
-            ParsedExpr::Not(_, a) => ExprLayer::Not(Wrapped(a.as_ref())),
+            ParsedExpr::Not(_, a) => ExprFrame::Not(Wrapped(a.as_ref())),
             ParsedExpr::Union(_, a, b) => {
-                ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
+                ExprFrame::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
             }
             ParsedExpr::Intersection(_, a, b) => {
-                ExprLayer::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
+                ExprFrame::Intersection(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
             }
             ParsedExpr::Difference(_, a, b) => {
-                ExprLayer::Difference(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
+                ExprFrame::Difference(Wrapped(a.as_ref()), Wrapped(b.as_ref()))
             }
-            ParsedExpr::Parens(a) => ExprLayer::Parens(Wrapped(a.as_ref())),
-            ParsedExpr::Set(f) => ExprLayer::Set(f),
+            ParsedExpr::Parens(a) => ExprFrame::Parens(Wrapped(a.as_ref())),
+            ParsedExpr::Set(f) => ExprFrame::Set(f),
         }
     }
 }

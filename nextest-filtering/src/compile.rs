@@ -133,10 +133,10 @@ fn compile_expr(
     cache: &mut DependsCache,
     errors: &mut Vec<ParseSingleError>,
 ) -> CompiledExpr {
-    use crate::expression::ExprLayer::*;
+    use crate::expression::ExprFrame::*;
     use recursion_schemes::recursive::collapse::Collapsable;
 
-    Wrapped(expr).collapse_frames(|layer: ExprLayer<&SetDef, CompiledExpr>| match layer {
+    Wrapped(expr).collapse_frames(|layer: ExprFrame<&SetDef, CompiledExpr>| match layer {
         Set(set) => CompiledExpr::Set(compile_set_def(set, packages, cache, errors)),
         Not(expr) => CompiledExpr::Not(Box::new(expr)),
         Union(expr_1, expr_2) => CompiledExpr::Union(Box::new(expr_1), Box::new(expr_2)),
