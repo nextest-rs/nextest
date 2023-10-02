@@ -12,9 +12,8 @@ use guppy::{
     PackageId,
 };
 use miette::SourceSpan;
-use recursion::{
-    map_layer::{MapLayer, Project},
-    Collapse,
+use recursion_schemes::{
+    frame::MappableFrame, frame::PartiallyApplied, recursive::collapse::Collapsable,
 };
 use std::{cell::RefCell, collections::HashSet, fmt};
 
@@ -262,7 +261,7 @@ impl FilteringExpr {
     /// * `None` if this binary might or might not be accepted.
     pub fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
         use ExprLayer::*;
-        Wrapped(&self.compiled).collapse_layers(|layer: ExprLayer<&FilteringSet, Option<bool>>| {
+        Wrapped(&self.compiled).collapse_frames(|layer: ExprLayer<&FilteringSet, Option<bool>>| {
             match layer {
                 Set(set) => set.matches_binary(query),
                 Not(a) => a.logic_not(),
@@ -278,7 +277,7 @@ impl FilteringExpr {
     /// Returns true if the given test is accepted by this filter expression.
     pub fn matches_test(&self, query: &TestQuery<'_>) -> bool {
         use ExprLayer::*;
-        Wrapped(&self.compiled).collapse_layers(|layer: ExprLayer<&FilteringSet, bool>| match layer
+        Wrapped(&self.compiled).collapse_frames(|layer: ExprLayer<&FilteringSet, bool>| match layer
         {
             Set(set) => set.matches_test(query),
             Not(a) => !a,
@@ -399,15 +398,12 @@ pub(crate) enum ExprLayer<Set, A> {
     Set(Set),
 }
 
-impl<A, Set, B> MapLayer<B> for ExprLayer<Set, A> {
-    type Unwrapped = A;
+impl<Set> MappableFrame for ExprLayer<Set, PartiallyApplied> {
+    type Frame<Next> = ExprLayer<Set, Next>;
 
-    type To = ExprLayer<Set, B>;
-
-    #[inline(always)]
-    fn map_layer<F: FnMut(Self::Unwrapped) -> B>(self, mut f: F) -> Self::To {
+    fn map_frame<A, B>(input: Self::Frame<A>, mut f: impl FnMut(A) -> B) -> Self::Frame<B> {
         use ExprLayer::*;
-        match self {
+        match input {
             Not(a) => Not(f(a)),
             Union(a, b) => Union(f(a), f(b)),
             Intersection(a, b) => Intersection(f(a), f(b)),
@@ -421,10 +417,10 @@ impl<A, Set, B> MapLayer<B> for ExprLayer<Set, A> {
 // Wrapped struct to prevent trait impl leakages.
 pub(crate) struct Wrapped<T>(pub(crate) T);
 
-impl<'a> Project for Wrapped<&'a CompiledExpr> {
-    type To = ExprLayer<&'a FilteringSet, Wrapped<&'a CompiledExpr>>;
+impl<'a> Collapsable for Wrapped<&'a CompiledExpr> {
+    type FrameToken = ExprLayer<&'a FilteringSet, PartiallyApplied>;
 
-    fn project(self) -> Self::To {
+    fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
         match self.0 {
             CompiledExpr::Not(a) => ExprLayer::Not(Wrapped(a.as_ref())),
             CompiledExpr::Union(a, b) => ExprLayer::Union(Wrapped(a.as_ref()), Wrapped(b.as_ref())),
@@ -436,10 +432,10 @@ impl<'a> Project for Wrapped<&'a CompiledExpr> {
     }
 }
 
-impl<'a> Project for Wrapped<&'a ParsedExpr> {
-    type To = ExprLayer<&'a SetDef, Wrapped<&'a ParsedExpr>>;
+impl<'a> Collapsable for Wrapped<&'a ParsedExpr> {
+    type FrameToken = ExprLayer<&'a SetDef, PartiallyApplied>;
 
-    fn project(self) -> Self::To {
+    fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
         match self.0 {
             ParsedExpr::Not(_, a) => ExprLayer::Not(Wrapped(a.as_ref())),
             ParsedExpr::Union(_, a, b) => {

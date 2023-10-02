@@ -1499,7 +1499,7 @@ dependencies = [
  "nom-tracable",
  "nom_locate",
  "proptest",
- "recursion",
+ "recursion-schemes",
  "regex",
  "regex-syntax 0.8.0",
  "test-case",
@@ -2066,12 +2066,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "recursion"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90cacf5ac2a9a00425506c7adf1d06ccab8a8fc7117cd2c0c6517ca6ac86d60c"
+name = "recursion-schemes"
+version = "0.1.3"
 dependencies = [
  "futures",
+ "tokio",
 ]
 
 [[package]]
