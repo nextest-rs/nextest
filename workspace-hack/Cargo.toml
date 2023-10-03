@@ -24,7 +24,7 @@ futures-sink = { version = "0.3.28", default-features = false, features = ["std"
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1.9.3", default-features = false, features = ["serde-1"] }
 indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2.0.2", features = ["serde"] }
 log = { version = "0.4.20", default-features = false, features = ["std"] }
-memchr = { version = "2.6.3", features = ["use_std"] }
+memchr = { version = "2.6.4", features = ["use_std"] }
 miette = { version = "5.10.0", features = ["fancy"] }
 num-traits = { version = "0.2.16", default-features = false, features = ["libm", "std"] }
 owo-colors = { version = "3.5.0", default-features = false, features = ["supports-colors"] }
@@ -51,7 +51,7 @@ futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1.9.3", default-features = false, features = ["std"] }
 libc = { version = "0.2.148", features = ["extra_traits"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
-rustix = { version = "0.38.14", features = ["fs", "termios"] }
+rustix = { version = "0.38.15", features = ["fs", "termios"] }
 tokio = { version = "1.32.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -64,7 +64,7 @@ futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1.9.3", default-features = false, features = ["std"] }
 libc = { version = "0.2.148", features = ["extra_traits"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
-rustix = { version = "0.38.14", features = ["fs", "termios"] }
+rustix = { version = "0.38.15", features = ["fs", "termios"] }
 tokio = { version = "1.32.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
