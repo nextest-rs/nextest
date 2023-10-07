@@ -98,7 +98,7 @@ indexmap = { version = "2.0.2", features = ["serde"] }
 smallvec = "1.11.1"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.148"
+libc = "0.2.149"
 nix = { version = "0.27.1", default-features = false, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
