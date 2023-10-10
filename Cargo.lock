@@ -1499,7 +1499,7 @@ dependencies = [
  "nom-tracable",
  "nom_locate",
  "proptest",
- "recursion-schemes",
+ "recursion",
  "regex",
  "regex-syntax 0.8.0",
  "test-case",
@@ -2066,12 +2066,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "recursion-schemes"
-version = "0.1.3"
-dependencies = [
- "futures",
- "tokio",
-]
+name = "recursion"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f53e857b2b1b92a9265c645b3d5aa76d8435f81d06af5ca08f9027b1225351c2"
 
 [[package]]
 name = "redox_syscall"

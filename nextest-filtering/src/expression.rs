@@ -12,9 +12,7 @@ use guppy::{
     PackageId,
 };
 use miette::SourceSpan;
-use recursion_schemes::{
-    frame::MappableFrame, frame::PartiallyApplied, recursive::collapse::Collapsable,
-};
+use recursion::{MappableFrame, PartiallyApplied, Collapsible, CollapsibleExt};
 use std::{cell::RefCell, collections::HashSet, fmt};
 
 /// Matcher for name
@@ -417,7 +415,7 @@ impl<Set> MappableFrame for ExprFrame<Set, PartiallyApplied> {
 // Wrapped struct to prevent trait impl leakages.
 pub(crate) struct Wrapped<T>(pub(crate) T);
 
-impl<'a> Collapsable for Wrapped<&'a CompiledExpr> {
+impl<'a> Collapsible for Wrapped<&'a CompiledExpr> {
     type FrameToken = ExprFrame<&'a FilteringSet, PartiallyApplied>;
 
     fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
@@ -432,7 +430,7 @@ impl<'a> Collapsable for Wrapped<&'a CompiledExpr> {
     }
 }
 
-impl<'a> Collapsable for Wrapped<&'a ParsedExpr> {
+impl<'a> Collapsible for Wrapped<&'a ParsedExpr> {
     type FrameToken = ExprFrame<&'a SetDef, PartiallyApplied>;
 
     fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
