@@ -12,7 +12,7 @@ rust-version = "1.70"
 # directory.
 
 [dependencies]
-atomicwrites = "0.4.1"
+atomicwrites = "0.4.2"
 aho-corasick = "1.1.2"
 async-scoped = { version = "0.7.1", features = ["use-tokio"] }
 future-queue = "0.3.0"
