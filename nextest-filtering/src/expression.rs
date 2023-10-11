@@ -12,7 +12,7 @@ use guppy::{
     PackageId,
 };
 use miette::SourceSpan;
-use recursion::{MappableFrame, PartiallyApplied, Collapsible, CollapsibleExt};
+use recursion::{Collapsible, CollapsibleExt, MappableFrame, PartiallyApplied};
 use std::{cell::RefCell, collections::HashSet, fmt};
 
 /// Matcher for name
