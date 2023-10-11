@@ -11,7 +11,6 @@ use guppy::{
     PackageId,
 };
 use miette::SourceSpan;
-use recursion::Collapse;
 use std::collections::HashSet;
 
 pub(crate) fn compile(
@@ -134,8 +133,10 @@ fn compile_expr(
     cache: &mut DependsCache,
     errors: &mut Vec<ParseSingleError>,
 ) -> CompiledExpr {
-    use crate::expression::ExprLayer::*;
-    Wrapped(expr).collapse_layers(|layer: ExprLayer<&SetDef, CompiledExpr>| match layer {
+    use crate::expression::ExprFrame::*;
+    use recursion::CollapsibleExt;
+
+    Wrapped(expr).collapse_frames(|layer: ExprFrame<&SetDef, CompiledExpr>| match layer {
         Set(set) => CompiledExpr::Set(compile_set_def(set, packages, cache, errors)),
         Not(expr) => CompiledExpr::Not(Box::new(expr)),
         Union(expr_1, expr_2) => CompiledExpr::Union(Box::new(expr_1), Box::new(expr_2)),
