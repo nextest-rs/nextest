@@ -24,7 +24,7 @@ jobs:
           # https://github.com/crate-ci/cargo-release/issues/594 is addressed.
           version: =0.21.4
           locked: true
-      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
+      - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
         with:
           prefix: quick-junit
           changelog: quick-junit/CHANGELOG.md
@@ -51,7 +51,7 @@ jobs:
           crate: cargo-release
           version: =0.21.4
           locked: true
-      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
+      - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
         with:
           prefix: nextest-filtering
           changelog: nextest-filtering/CHANGELOG.md
@@ -78,7 +78,7 @@ jobs:
           crate: cargo-release
           version: =0.21.4
           locked: true
-      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
+      - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
         with:
           prefix: nextest-metadata
           changelog: nextest-metadata/CHANGELOG.md
@@ -105,7 +105,7 @@ jobs:
           crate: cargo-release
           version: =0.21.4
           locked: true
-      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
+      - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
         with:
           prefix: nextest-runner
           changelog: nextest-runner/CHANGELOG.md
@@ -126,7 +126,7 @@ jobs:
           persist-credentials: false
       # Note: do not publish this until binaries are built and uploaded below. This is so that
       # `cargo binstall` keeps working.
-      - uses: taiki-e/create-gh-release-action@9762dfdfe60a96b3fef6c4a0aaafd9840f1195b7 # v1
+      - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
         id: create-gh-release
         with:
           prefix: cargo-nextest
