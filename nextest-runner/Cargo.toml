@@ -22,7 +22,7 @@ camino-tempfile = "1.0.2"
 # config's "preserve_order" feature is needed for preserving the order of
 # setup scripts in .config/nextest.toml.
 config = { version = "0.13.3", default-features = false, features = ["toml", "preserve_order"] }
-cargo_metadata = "0.18.0"
+cargo_metadata = "0.18.1"
 cfg-if = "1.0.0"
 chrono = "0.4.31"
 debug-ignore = "1.0.5"
