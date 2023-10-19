@@ -803,7 +803,7 @@ impl<'a> TestRunnerInner<'a> {
                             // attempt to terminate the slow test.
                             // as there is a race between shutting down a slow test and its own completion
                             // we silently ignore errors to avoid printing false warnings.
-                            imp::terminate_child(&mut child, TerminateMode::Timeout(slow_timeout.grace_period), forward_receiver, job.as_ref()).await;
+                            imp::terminate_child(&mut child, TerminateMode::Timeout, forward_receiver, job.as_ref(), slow_timeout.grace_period).await;
                             status = Some(ExecutionResult::Timeout);
                             if slow_timeout.grace_period.is_zero() {
                                 break child.wait().await;
@@ -821,6 +821,7 @@ impl<'a> TestRunnerInner<'a> {
                             interval_sleep.as_mut(),
                             forward_receiver,
                             job.as_ref(),
+                            slow_timeout.grace_period
                         ).await;
                     }
                 }
@@ -1024,7 +1025,7 @@ impl<'a> TestRunnerInner<'a> {
                             // attempt to terminate the slow test.
                             // as there is a race between shutting down a slow test and its own completion
                             // we silently ignore errors to avoid printing false warnings.
-                            imp::terminate_child(&mut child, TerminateMode::Timeout(slow_timeout.grace_period), forward_receiver, job.as_ref()).await;
+                            imp::terminate_child(&mut child, TerminateMode::Timeout, forward_receiver, job.as_ref(), slow_timeout.grace_period).await;
                             status = Some(ExecutionResult::Timeout);
                             if slow_timeout.grace_period.is_zero() {
                                 break child.wait().await;
@@ -1042,6 +1043,7 @@ impl<'a> TestRunnerInner<'a> {
                             interval_sleep.as_mut(),
                             forward_receiver,
                             job.as_ref(),
+                            slow_timeout.grace_period
                         ).await;
                     }
                 };
@@ -1114,6 +1116,7 @@ async fn handle_forward_event(
     #[allow(unused_mut, unused_variables)] mut interval_sleep: Pin<&mut PausableSleep>,
     forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
     job: Option<&imp::Job>,
+    grace_period: Duration,
 ) {
     // The sender stays open longer than the whole loop, and the buffer is big
     // enough for all messages ever sent through this channel, so a RecvError
@@ -1143,7 +1146,14 @@ async fn handle_forward_event(
             }
         }
         SignalForwardEvent::Shutdown(event) => {
-            imp::terminate_child(child, TerminateMode::Signal(event), forward_receiver, job).await;
+            imp::terminate_child(
+                child,
+                TerminateMode::Signal(event),
+                forward_receiver,
+                job,
+                grace_period,
+            )
+            .await;
         }
     }
 }
@@ -2177,10 +2187,11 @@ mod imp {
         mode: TerminateMode,
         _forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
         job: Option<&Job>,
+        _grace_period: Duration,
     ) {
         // Ignore signal events since Windows propagates them to child processes (this may change if
         // we start assigning processes to groups on Windows).
-        if !matches!(mode, TerminateMode::Timeout(_)) {
+        if !matches!(mode, TerminateMode::Timeout) {
             return;
         }
         if let Some(job) = job {
@@ -2262,19 +2273,13 @@ mod imp {
         mode: TerminateMode,
         forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
         _job: Option<&Job>,
+        grace_period: Duration,
     ) {
         if let Some(pid) = child.id() {
             let pid = pid as i32;
-            let mut grace_period = Duration::from_secs(10);
             let term_signal = match mode {
-                TerminateMode::Timeout(grace) => {
-                    grace_period = grace;
-                    if grace.is_zero() {
-                        SIGKILL
-                    } else {
-                        SIGTERM
-                    }
-                }
+                _ if grace_period.is_zero() => SIGKILL,
+                TerminateMode::Timeout => SIGTERM,
                 TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Hangup)) => SIGHUP,
                 TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Term)) => SIGTERM,
                 TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Interrupt)) => {
@@ -2347,7 +2352,7 @@ mod imp {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TerminateMode {
-    Timeout(Duration),
+    Timeout,
     Signal(ShutdownForwardEvent),
 }
 
