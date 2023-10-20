@@ -15,7 +15,7 @@ rust-version = "1.66"
 chrono = "0.4.31"
 indexmap = "2.0.2"
 quick-xml = "0.30.0"
-thiserror = "1.0.49"
+thiserror = "1.0.50"
 uuid = "1.4.1"
 nextest-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
