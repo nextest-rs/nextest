@@ -689,9 +689,10 @@ pub struct Output {
 }
 
 impl Output {
-    /// Creates a new output, removing any non-printable characters from it.
+    /// Creates a new output, removing any ANSI escapes and non-printable characters from it.
     pub fn new(output: impl AsRef<str>) -> Self {
         let output = output.as_ref();
+        let output = strip_ansi_escapes::strip_str(output);
         let output = output
             .replace(
                 |c| matches!(c, '\x00'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f'),
