@@ -86,7 +86,7 @@ self_update = { version = "0.38.0", optional = true, default-features = false, f
     "compression-flate2",
 ] }
 
-nextest-filtering = { version = "0.5.0", path = "../nextest-filtering" }
+nextest-filtering = { version = "0.5.1", path = "../nextest-filtering" }
 nextest-metadata = { version = "0.9.2", path = "../nextest-metadata" }
 quick-junit = { version = "0.3.4", path = "../quick-junit" }
 uuid = { version = "1.5.0", features = ["v4"] }
