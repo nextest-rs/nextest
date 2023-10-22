@@ -150,7 +150,7 @@ jobs:
           # Native builds
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
-            container: ghcr.io/nextest-rs/ubuntu-18.04:1.0.1
+            container: ghcr.io/nextest-rs/ubuntu-18.04:1.0.2
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             container:
@@ -181,16 +181,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     steps:
-      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.1'
+      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.2'
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
-      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.1'
+      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.2'
         # NOTE: This *cannot* be updated because v4 uses node20, which is incompatible with Ubuntu
         # 18.04. (That's because node20 uses glibc 2.28, but Ubuntu 18.04 is on glibc 2.27.)
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
 
-      - if: matrix.container != 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.1'
+      - if: matrix.container != 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.2'
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
 
       - name: Install Rust

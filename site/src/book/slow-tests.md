@@ -89,7 +89,7 @@ To send SIGKILL to a process immediately, without a grace period, set `slow-time
 slow-timeout = { period = "60s", terminate-after = 5, grace-period = "0s" }
 ```
 
-> **Note:** Starting nextest 0.9.60, the `slow-timeout.grace-period` setting is also applied to terminations due to Ctrl-C or other signals. With older versions, nextest always waits 10 seconds before sending SIGKILL.
+> **Note:** Starting nextest 0.9.61, the `slow-timeout.grace-period` setting is also applied to terminations due to Ctrl-C or other signals. With older versions, nextest always waits 10 seconds before sending SIGKILL.
 
 On other platforms including Windows, nextest terminates the test immediately in a manner akin to SIGKILL. (On Windows, nextest uses [job objects] to kill the test process and all its descendants.) The `slow-timeout.grace-period` configuration setting is ignored.
 
