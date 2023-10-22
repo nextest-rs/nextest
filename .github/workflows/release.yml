@@ -181,13 +181,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     steps:
-      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.0'
+      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.1'
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
-      # NOTE: v4 of actions/checkout uses node v20, which is typically not compatible with Ubuntu
-      # 18.04 but we've installed in our container by hand.
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.1'
+        # NOTE: This *cannot* be updated because v4 uses node20, which is incompatible with Ubuntu
+        # 18.04. (That's because node20 uses glibc 2.28, but Ubuntu 18.04 is on glibc 2.27.)
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+
+      - if: matrix.container != 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.1'
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
