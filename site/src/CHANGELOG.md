@@ -3,6 +3,16 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.60] - 2023-10-22
+
+### Changed
+
+- The grace period in `slow-timeout.grace-period` now applies to terminations as well. Thanks [@kallisti-dev](https://github.com/kallisti-dev) for your first contribution!
+
+### Fixed
+
+- `Output::new` now strips ANSI escapes as well. Thanks [@MaienM](https://github.com/MaienM) for your first contribution!
+
 ## [0.9.59] - 2023-09-27
 
 ### Added
@@ -55,8 +65,8 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 #### Custom targets
 
-* Nextest now supports custom targets specified via `--target`, `CARGO_BUILD_TARGET`, or configuration. See the Rust Embedonomicon for [how to create a custom target](https://docs.rust-embedded.org/embedonomicon/custom-target.html).
-* For [per-test overrides](https://nexte.st/book/per-test-overrides), platform filters now support custom target triples.
+- Nextest now supports custom targets specified via `--target`, `CARGO_BUILD_TARGET`, or configuration. See the Rust Embedonomicon for [how to create a custom target](https://docs.rust-embedded.org/embedonomicon/custom-target.html).
+- For [per-test overrides](https://nexte.st/book/per-test-overrides), platform filters now support custom target triples.
 
 ## [0.9.53] - 2023-05-15
 
@@ -115,7 +125,7 @@ filter = '''
 
 ### Added
 
-- You can now mark certain *groups* of tests to be run with a limited amount of concurrency within the group. This can be used to run tests within a group serially, similar to the [`serial_test` crate](https://crates.io/crates/serial_test).
+- You can now mark certain _groups_ of tests to be run with a limited amount of concurrency within the group. This can be used to run tests within a group serially, similar to the [`serial_test` crate](https://crates.io/crates/serial_test).
 
   For more about test groups, see [Test groups and mutual exclusion](https://nexte.st/book/test-groups).
 
@@ -127,7 +137,7 @@ filter = '''
 
 ### Changed
 
-- On Unix platforms, nextest now uses a new *double-spawn* test execution mode. This mode resolves some race conditions around signal handling without an apparent performance cost.
+- On Unix platforms, nextest now uses a new _double-spawn_ test execution mode. This mode resolves some race conditions around signal handling without an apparent performance cost.
 
   This mode is not expected to cause any issues. However, if it does, you can turn it off by setting `NEXTEST_DOUBLE_SPAWN=0` in your environment. (Please [report an issue](https://github.com/nextest-rs/nextest/issues/new) if it does!)
 
@@ -147,8 +157,8 @@ This version was not published due to a packaging issue.
 
 ### Added
 
-* Support for listing and running tests in examples with the `--examples` and `--example <EXAMPLE>` command-line arguments. Thanks [Jed Brown](https://github.com/jedbrown) for your first contribution!
-* [Pre-built binaries](https://nexte.st/book/pre-built-binaries) are now available for FreeBSD and illumos. Due to GitHub Actions limitations, nextest is not tested on these platforms and might be broken.
+- Support for listing and running tests in examples with the `--examples` and `--example <EXAMPLE>` command-line arguments. Thanks [Jed Brown](https://github.com/jedbrown) for your first contribution!
+- [Pre-built binaries](https://nexte.st/book/pre-built-binaries) are now available for FreeBSD and illumos. Due to GitHub Actions limitations, nextest is not tested on these platforms and might be broken.
 
 ## [0.9.44] - 2022-11-23
 
@@ -171,6 +181,7 @@ Note that, by default, pressing Ctrl-Z in the middle of a test run can lead to [
 - Nextest is built with Rust 1.66 (currently in beta) or above. Rust 1.66 contains [a required fix to upstream Rust](https://github.com/rust-lang/rust/pull/101077).
 
   Note that the [pre-built binaries](https://nexte.st/book/pre-built-binaries) for this version are built with beta Rust to pick this fix up.
+
 - The double-spawn approach is enabled (see above) with `NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1`.
 
 **Call for testing:** Please try out the double-spawn approach by setting `NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1` in your environment. It has been extensively tested and should not cause any breakages, but if it does, please [report an issue](https://github.com/nextest-rs/nextest/issues/new). Thank you!
@@ -228,6 +239,7 @@ This release ran into an issue during publishing and was skipped.
 - Nextest now reads environment variables specified in [the `[env]` section](https://doc.rust-lang.org/cargo/reference/config.html#env) from `.cargo/config.toml` files. The full syntax is supported including `force` and `relative`.
 
   Thanks to [Waleed Khan](https://github.com/arxanas) for your first contribution!
+
 - Nextest now sets the `CARGO_PKG_RUST_VERSION` environment variable when it runs tests. For `cargo test` this was added in Rust 1.64, but nextest sets it across all versions of Rust.
 
 ## [0.9.39] - 2022-10-14
@@ -296,6 +308,7 @@ This release ran into an issue during publishing and was skipped.
   determine e.g. [the target runner](https://nexte.st/book/target-runners.html) for a platform.
 
   `--config` is also how [Miri](https://nexte.st/book/miri.html) communicates with nextest.
+
 - [Target runners](https://nexte.st/book/target-runners.html) for cross-compilation now work with
   [build archives](https://nexte.st/book/reusing-builds.html). Thanks [Pascal
   Kuthe](https://github.com/pascalkuthe) for your first contribution!
@@ -361,7 +374,7 @@ This release ran into an issue during publishing and was skipped.
 
   However, because process groups aren't nested, if a test creates a process group itself, those groups won't be signaled. This is a relatively uncommon situation.
 
-- On Windows, each test process is now associated with a [job object]. On timeouts, the entire job object is terminated. Since job objects *are* nested in recent versions of Windows, this should result in all subprocesses spawned by tests being killed.
+- On Windows, each test process is now associated with a [job object]. On timeouts, the entire job object is terminated. Since job objects _are_ nested in recent versions of Windows, this should result in all subprocesses spawned by tests being killed.
 
   (On Windows, the Ctrl-C behavior hasn't changed. Nextest also doesn't do graceful shutdowns on Windows yet, though this may change in the future.)
 
@@ -441,16 +454,16 @@ This release includes a number of additions and changes to filter expressions.
 
 #### Added
 
-* The expression language supports several new [predicates](https://nexte.st/book/filter-expressions#basic-predicates):
+- The expression language supports several new [predicates](https://nexte.st/book/filter-expressions#basic-predicates):
   - `kind(name-matcher)`: include all tests in binary kinds (e.g. `lib`, `test`, `bench`) matching `name-matcher`.
   - `binary(name-matcher)`: include all tests in binary names matching `name-matcher`.
   - `platform(host)` or `platform(target)`: include all tests that are [built for the host or target platform](running.md#filtering-by-build-platform), respectively.
 
 #### Changed
 
-* If a filter expression is guaranteed not to match a particular binary, it will not be listed by nextest. (This allows `platform(host)` and `platform(target)` to work correctly.)
+- If a filter expression is guaranteed not to match a particular binary, it will not be listed by nextest. (This allows `platform(host)` and `platform(target)` to work correctly.)
 
-* If both filter expressions and standard substring filters are passed in, a test must match filter expressions AND substring filters to be executed. For example:
+- If both filter expressions and standard substring filters are passed in, a test must match filter expressions AND substring filters to be executed. For example:
 
 ```
 cargo nextest run -E 'package(nextest-runner)' test_foo test_bar
@@ -547,7 +560,7 @@ Currently, only `retries` are supported. In the future, more kinds of customizat
 ### Added
 
 - Nextest can now update itself! Once this version is installed, simply run `cargo nextest self update` to update to the latest version.
-    > Note to distributors: you can disable self-update by building cargo-nextest with `--no-default-features`.
+  > Note to distributors: you can disable self-update by building cargo-nextest with `--no-default-features`.
 - Partial, emulated support for test binary arguments passed in after `cargo nextest run --` ([#265], thanks [@tabokie](https://github.com/tabokie) for your contribution!).
 
   For example, `cargo nextest run -- my_test --ignored` will run ignored tests containing `my_test`, similar to `cargo test -- my_test --ignored`.
@@ -572,11 +585,11 @@ This is a test release.
 
 - Support for terminating tests if they take too long, via the configuration parameter `slow-timeout.terminate-after`. For example, to time out after 120 seconds:
 
-    ```toml
-    slow-timeout = { period = "60s", terminate-after = 2 }
-    ```
+  ```toml
+  slow-timeout = { period = "60s", terminate-after = 2 }
+  ```
 
-    Thanks [steveeJ](https://github.com/steveeJ) for your contribution ([#214])!
+  Thanks [steveeJ](https://github.com/steveeJ) for your contribution ([#214])!
 
 [#214]: https://github.com/nextest-rs/nextest/pull/214
 
@@ -634,6 +647,7 @@ This release contains a number of user experience improvements.
 ### Fixed
 
 Fix for experimental feature [filter expressions](https://nexte.st/book/filter-expressions.html):
+
 - Fix test filtering when expression filters are set but name-based filters aren't.
 
 ## [0.9.14] - 2022-04-18
@@ -651,7 +665,7 @@ Fixes related to path remapping:
 
 - Support for [reusing builds](https://nexte.st/book/reusing-builds) is now production-ready. Build on one machine and run tests on another, including cross-compiling and test partitioning.
 
-    To see how builds can be reused in GitHub Actions, see [this example](https://github.com/nextest-rs/reuse-build-partition-example/blob/main/.github/workflows/ci.yml).
+  To see how builds can be reused in GitHub Actions, see [this example](https://github.com/nextest-rs/reuse-build-partition-example/blob/main/.github/workflows/ci.yml).
 
 - Experimental support for [filter expressions](https://nexte.st/book/filter-expressions.html), allowing fine-grained specifications for which tests to run.
 
@@ -802,11 +816,11 @@ The big new change is that release binaries are now available! Head over to [Pre
 
 Supported in this initial release:
 
-* [Listing tests](book/listing.md)
-* [Running tests in parallel](book/running.md) for faster results
-* [Partitioning tests](book/partitioning.md) across multiple CI jobs
-* [Test retries](book/retries.md) and flaky test detection
-* [JUnit support](book/junit.md) for integration with other test tooling
+- [Listing tests](book/listing.md)
+- [Running tests in parallel](book/running.md) for faster results
+- [Partitioning tests](book/partitioning.md) across multiple CI jobs
+- [Test retries](book/retries.md) and flaky test detection
+- [JUnit support](book/junit.md) for integration with other test tooling
 
 [0.9.59]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.59
 [0.9.58]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.58

@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## [0.3.4] - 2023-10-22
+
+### Fixed
+
+- `Output::new` now strips ANSI escapes as well. Thanks [@MaienM](https://github.com/MaienM) for your first contribution!
 
 ### Changed
 
@@ -76,6 +80,7 @@
 
 - Initial version.
 
+[0.3.4]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.4
 [0.3.3]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.3
 [0.3.2]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.2
 [0.3.1]: https://github.com/nextest-rs/nextest/releases/tag/quick-junit-0.3.1
