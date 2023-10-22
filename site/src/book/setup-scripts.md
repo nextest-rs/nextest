@@ -1,13 +1,13 @@
 # Setup scripts
 
-* **Nextest version:** 0.9.59 and above
-* **Enable with:** Add `experimental = ["setup-scripts"]` to `.config/nextest.toml`
-* **Tracking issue:** [#978](https://github.com/nextest-rs/nextest/issues/978)
+- **Nextest version:** 0.9.59 and above
+- **Enable with:** Add `experimental = ["setup-scripts"]` to `.config/nextest.toml`
+- **Tracking issue:** [#978](https://github.com/nextest-rs/nextest/issues/978)
 
-Nextest supports running *setup scripts* before tests are run. Setup scripts can be scoped to
+Nextest supports running _setup scripts_ before tests are run. Setup scripts can be scoped to
 particular tests via [filter expressions](filter-expressions.md).
 
-Setup scripts are configured in two parts: *defining scripts*, and *setting up rules* for when they should be executed.
+Setup scripts are configured in two parts: _defining scripts_, and _setting up rules_ for when they should be executed.
 
 ## Defining scripts
 
@@ -30,10 +30,10 @@ command = ['script.sh', '-c', 'Hello, world!']
 
 Setup scripts can have the following configuration options attached to them:
 
-* **`slow-timeout`**: Mark a setup script [as slow](slow-tests.md) or [terminate it](slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, setup scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
-* **`leak-timeout`**: Mark setup scripts [leaky](leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.
-* **`capture-stdout`**: `true` if the script's standard output should be captured, `false` if not. By default, this is `false`.
-* **`capture-stderr`**: `true` if the script's standard error should be captured, `false` if not. By default, this is `false`.
+- **`slow-timeout`**: Mark a setup script [as slow](slow-tests.md) or [terminate it](slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, setup scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
+- **`leak-timeout`**: Mark setup scripts [leaky](leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.
+- **`capture-stdout`**: `true` if the script's standard output should be captured, `false` if not. By default, this is `false`.
+- **`capture-stderr`**: `true` if the script's standard error should be captured, `false` if not. By default, this is `false`.
 
 ### Example
 
@@ -76,9 +76,9 @@ setup = ['script1', 'script2']
 
 ## Script execution
 
-A given setup script *S* is only executed if the current profile has at least one rule where the `filter` and `platform` predicates match the current execution environment, and the setup script *S* is listed in `setup`.
+A given setup script _S_ is only executed if the current profile has at least one rule where the `filter` and `platform` predicates match the current execution environment, and the setup script _S_ is listed in `setup`.
 
-Setup scripts are executed serially, in the order they are defined (*not* the order they're specified in the rules). If any setup script exits with a non-zero exit code, the entire test run is terminated.
+Setup scripts are executed serially, in the order they are defined (_not_ the order they're specified in the rules). If any setup script exits with a non-zero exit code, the entire test run is terminated.
 
 ### Environment variables
 

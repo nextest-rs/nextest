@@ -1,6 +1,6 @@
 # Heavy tests and `threads-required`
 
-Nextest achieves [its performance](benchmarks.md) through running [many tests in parallel](how-it-works.md). However, some projects have tests that consume a disproportionate amount of resources like CPU or memory. If too many of these *heavy tests* are run concurrently, your machine's CPU might be overwhelmed, or it might run out of memory.
+Nextest achieves [its performance](benchmarks.md) through running [many tests in parallel](how-it-works.md). However, some projects have tests that consume a disproportionate amount of resources like CPU or memory. If too many of these _heavy tests_ are run concurrently, your machine's CPU might be overwhelmed, or it might run out of memory.
 
 With nextest, you can mark heavy tests as taking up multiple threads or "slots" out of the total amount of available parallelism. In other words, you can assign those tests a higher "weight". This is done by using the `threads-required` [per-test override](per-test-overrides.md).
 
@@ -16,8 +16,8 @@ Then each test in the `tests::heavy` module will take up 2 of those 16 threads.
 
 The `threads-required` configuration can also be set to one of two special values:
 
-* `"num-cpus"` — The number of logical CPUs on the system.
-* `"num-test-threads"` — The number of test threads nextest is currently running with.
+- `"num-cpus"` — The number of logical CPUs on the system.
+- `"num-test-threads"` — The number of test threads nextest is currently running with.
 
 > NOTE: `threads-required` is not meant to ensure mutual exclusion across subsets of tests. See [Test groups and mutual exclusion](test-groups.md).
 

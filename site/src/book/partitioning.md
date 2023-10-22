@@ -1,8 +1,8 @@
 # Partitioning test runs in CI
 
-For CI scenarios where test runs take too long on a single machine, nextest supports automatically *partitioning* or *sharding* tests into buckets, using the `--partition` option.
+For CI scenarios where test runs take too long on a single machine, nextest supports automatically _partitioning_ or _sharding_ tests into buckets, using the `--partition` option.
 
-cargo-nextest supports two kinds of partitioning: *counted* and *hashed*.
+cargo-nextest supports two kinds of partitioning: _counted_ and _hashed_.
 
 ## Counted partitioning
 
@@ -14,7 +14,7 @@ Here's an example of running tests in bucket 1 of 2:
 
 Tests not in the current bucket are marked skipped.
 
-Counted partitioning is done *per test binary*. This means that the tests in one binary *do not* influence counting for other binaries.
+Counted partitioning is done _per test binary_. This means that the tests in one binary _do not_ influence counting for other binaries.
 
 Counted partitioning also applies after all other test filters. For example, if you specify `cargo nextest run --partition count:1/3 test_parsing`, nextest first selects tests that match the substring `test_parsing`, then buckets this subset of tests into 3 partitions and runs the tests in partition 1.
 

@@ -1,9 +1,9 @@
 # Target runners
 
-If you're cross-compiling Rust code, you may wish to run tests through a wrapper executable or script. For this purpose, nextest supports *target runners*, using the same configuration options used by Cargo:
+If you're cross-compiling Rust code, you may wish to run tests through a wrapper executable or script. For this purpose, nextest supports _target runners_, using the same configuration options used by Cargo:
 
-* The environment variable `CARGO_TARGET_<triple>_RUNNER`, if it matches the target platform, takes highest precedence.
-* Otherwise, nextest reads [the `target.<triple>.runner` and `target.<cfg>.runner` settings](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner) from `.cargo/config.toml`.
+- The environment variable `CARGO_TARGET_<triple>_RUNNER`, if it matches the target platform, takes highest precedence.
+- Otherwise, nextest reads [the `target.<triple>.runner` and `target.<cfg>.runner` settings](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner) from `.cargo/config.toml`.
 
 ## Example
 

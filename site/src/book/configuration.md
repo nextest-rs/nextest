@@ -12,7 +12,7 @@ The default configuration shipped with cargo-nextest is:
 
 With cargo-nextest, local and CI runs often need to use different settings. For example, CI test runs should not be cancelled as soon as the first test failure is seen.
 
-cargo-nextest supports multiple *profiles*, where each profile is a set of options for cargo-nextest. Profiles are selected on the command line with the `-P` or `--profile` option. Most individual configuration settings can also be overridden at the command line.
+cargo-nextest supports multiple _profiles_, where each profile is a set of options for cargo-nextest. Profiles are selected on the command line with the `-P` or `--profile` option. Most individual configuration settings can also be overridden at the command line.
 
 Here is a recommended profile for CI runs:
 
@@ -46,22 +46,25 @@ The `--tool-config-file` argument may be specified multiple times. Config files 
 For this example:
 
 Configuration is resolved in the following order:
+
 1. Command-line arguments. For example, if `--retries=3` is specified on the command line, failing tests are retried up to 3 times.
 2. Environment variables. For example, if `NEXTEST_RETRIES=4` is specified on the command line, failing tests are retried up to 4 times.
 3. [Per-test overrides](per-test-overrides.md), if they're supported for this configuration variable.
 4. If a profile is specified, profile-specific configuration in `.config/nextest.toml`. For example, if the repository-specific configuration looks like:
-    ```toml
-    [profile.ci]
-    retries = 2
-    ```
 
-    then, if `--profile ci` is selected, failing tests are retried up to 2 times.
+   ```toml
+   [profile.ci]
+   retries = 2
+   ```
+
+   then, if `--profile ci` is selected, failing tests are retried up to 2 times.
+
 5. If a profile is specified, tool-specific configuration for the given profile.
 6. Repository-specific configuration for the `default` profile. For example, if the repository-specific configuration looks like:
-    ```toml
-    [profile.default]
-    retries = 5
-    ```
-    then failing tests are retried up to 5 times.
+   ```toml
+   [profile.default]
+   retries = 5
+   ```
+   then failing tests are retried up to 5 times.
 7. Tool-specific configuration for the `default` profile.
 8. The default configuration listed above, which is that tests are never retried.

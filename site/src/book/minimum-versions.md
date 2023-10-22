@@ -1,12 +1,12 @@
 # Minimum nextest versions
 
-Starting version 0.9.55, nextest lets you set minimum *required* and *recommended* versions
+Starting version 0.9.55, nextest lets you set minimum _required_ and _recommended_ versions
 per-repository. This is similar to the [`rust-version`
 field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) in
 `Cargo.toml`.
 
-* If the current version of nextest is lower than the required version, nextest will produce an error and exit with code 92 ([`REQUIRED_VERSION_NOT_MET`]).
-* If the current version of nextest is lower than the recommended version, nextest will produce a warning, but will run as normal.
+- If the current version of nextest is lower than the required version, nextest will produce an error and exit with code 92 ([`REQUIRED_VERSION_NOT_MET`]).
+- If the current version of nextest is lower than the recommended version, nextest will produce a warning, but will run as normal.
 
 ## Setting minimum versions
 
@@ -59,9 +59,9 @@ with --override-version-check
 
 This command exits with:
 
-* Exit code 92 ([`REQUIRED_VERSION_NOT_MET`]) if the current version of nextest is lower than the required version.
-* Exit code 10 ([`RECOMMENDED_VERSION_NOT_MET`]) if the current version of nextest is lower than the recommended version. This is an advisory exit code that does not necessarily indicate failure.
-* Exit code 0 if the version check was satisfied, or if the check was overridden.
+- Exit code 92 ([`REQUIRED_VERSION_NOT_MET`]) if the current version of nextest is lower than the required version.
+- Exit code 10 ([`RECOMMENDED_VERSION_NOT_MET`]) if the current version of nextest is lower than the recommended version. This is an advisory exit code that does not necessarily indicate failure.
+- Exit code 0 if the version check was satisfied, or if the check was overridden.
 
 ## Note for tool developers
 
@@ -71,9 +71,9 @@ If you're building a tool on top of nextest, you can use [tool-specific configur
 
 For example, if:
 
-* The repository requires nextest 0.9.54.
-* There are two tool config files, and the first one requires nextest 0.9.57.
-* The second one requires nextest 0.9.60.
+- The repository requires nextest 0.9.54.
+- There are two tool config files, and the first one requires nextest 0.9.57.
+- The second one requires nextest 0.9.60.
 
 Then, nextest will produce an error unless it is at 0.9.60.
 

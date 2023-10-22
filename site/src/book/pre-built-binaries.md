@@ -1,27 +1,27 @@
 # Installing pre-built binaries
 
 The quickest way to get going with nextest is to download a pre-built binary for your platform. The latest nextest release is available at:
-* [**get.nexte.st/latest/linux**](https://get.nexte.st/latest/linux) for Linux x86_64, including Windows Subsystem for Linux (WSL)[^glibc]
-* [**get.nexte.st/latest/linux-arm**](https://get.nexte.st/latest/linux-arm) for Linux aarch64[^glibc]
-* [**get.nexte.st/latest/mac**](https://get.nexte.st/latest/mac) for macOS, both x86_64 and Apple Silicon
-* [**get.nexte.st/latest/windows**](https://get.nexte.st/latest/windows) for Windows x86_64
+
+- [**get.nexte.st/latest/linux**](https://get.nexte.st/latest/linux) for Linux x86_64, including Windows Subsystem for Linux (WSL)[^glibc]
+- [**get.nexte.st/latest/linux-arm**](https://get.nexte.st/latest/linux-arm) for Linux aarch64[^glibc]
+- [**get.nexte.st/latest/mac**](https://get.nexte.st/latest/mac) for macOS, both x86_64 and Apple Silicon
+- [**get.nexte.st/latest/windows**](https://get.nexte.st/latest/windows) for Windows x86_64
 
 <details>
 <summary><i>Other platforms</i></summary>
 
 Nextest's CI isn't run on these platforms -- these binaries most likely work but aren't guaranteed to do so.
 
-* [**get.nexte.st/latest/linux-musl**](https://get.nexte.st/latest/linux-musl) for Linux x86_64, with musl libc[^musl]
-* [**get.nexte.st/latest/windows-x86**](https://get.nexte.st/latest/windows-x86) for Windows i686
-* [**get.nexte.st/latest/freebsd**](https://get.nexte.st/latest/freebsd) for FreeBSD x86_64
-* [**get.nexte.st/latest/illumos**](https://get.nexte.st/latest/illumos) for illumos x86_64
+- [**get.nexte.st/latest/linux-musl**](https://get.nexte.st/latest/linux-musl) for Linux x86_64, with musl libc[^musl]
+- [**get.nexte.st/latest/windows-x86**](https://get.nexte.st/latest/windows-x86) for Windows i686
+- [**get.nexte.st/latest/freebsd**](https://get.nexte.st/latest/freebsd) for FreeBSD x86_64
+- [**get.nexte.st/latest/illumos**](https://get.nexte.st/latest/illumos) for illumos x86_64
 
 </details>
 
 These archives contain a single binary called `cargo-nextest` (`cargo-nextest.exe` on Windows). Add this binary to a location on your PATH.
 
 [^glibc]: The standard Linux binaries target glibc, and have a minimum requirement of glibc 2.27 (Ubuntu 18.04).
-
 [^musl]: Rust targeting Linux with musl currently has [a bug](https://github.com/rust-lang/rust/issues/99740) that Rust targeting Linux with glibc doesn't have. This bug means that nextest's linux-musl binary has slower test runs and is susceptible to signal-related races. Only use the linux-musl binary if the standard Linux binary doesn't work in your environment.
 
 ## Downloading and installing from your terminal
@@ -66,7 +66,7 @@ $tmp | Remove-Item
 
 #### Windows x86_64 using Unix tools
 
-If you have access to a Unix shell, `curl` and `tar` *natively* on Windows (for example if you're using `shell: bash` on GitHub Actions):
+If you have access to a Unix shell, `curl` and `tar` _natively_ on Windows (for example if you're using `shell: bash` on GitHub Actions):
 
 ```
 curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -105,7 +105,7 @@ cargo binstall cargo-nextest --secure
 
 ## Community-maintained binaries
 
-These binaries are maintained by the community—*thank you!*
+These binaries are maintained by the community—_thank you!_
 
 ### Homebrew
 

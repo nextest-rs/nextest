@@ -11,14 +11,17 @@ This will produce output that looks like:
 ![Output of cargo nextest run](../static/nextest-run.png)
 
 In the output above:
-* Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.052 seconds to execute.
-* Tests that take more than a specified amount of time are marked **SLOW**. The timeout is 60 seconds by default, and can be [changed through configuration](configuration.md).
-* The part of the test in purple is the *test binary*. A test binary is either:
-  * a *unit test binary* built from tests inline within `lib.rs`. These test binaries are shown by nextest as just the crate name, without a `::` separator inside them.
-  * an *integration test binary* built from tests in the `[[test]]` section of `Cargo.toml` (typically tests in the `tests` directory.) These tests are shown by nextest in the format `crate-name::bin-name`[^bin-example].
+
+- Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.052 seconds to execute.
+- Tests that take more than a specified amount of time are marked **SLOW**. The timeout is 60 seconds by default, and can be [changed through configuration](configuration.md).
+- The part of the test in purple is the _test binary_. A test binary is either:
+
+  - a _unit test binary_ built from tests inline within `lib.rs`. These test binaries are shown by nextest as just the crate name, without a `::` separator inside them.
+  - an _integration test binary_ built from tests in the `[[test]]` section of `Cargo.toml` (typically tests in the `tests` directory.) These tests are shown by nextest in the format `crate-name::bin-name`[^bin-example].
 
   For more about unit and integration tests, see [the documentation for `cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html).
-* The part after the test binary is the *test name*, including the module the test is in. The final part of the test name is highlighted in bold blue text.
+
+- The part after the test binary is the _test name_, including the module the test is in. The final part of the test name is highlighted in bold blue text.
 
 `cargo nextest run` supports all the options that `cargo test` does. For example, to only execute tests for a package called `my-package`:
 
@@ -46,10 +49,10 @@ Nextest does not support `--skip` and `--exact` directly; instead, it supports m
 
 Here are some examples:
 
-|                Cargo test command               |                     Nextest command                     |
-|:-----------------------------------------------:|:-------------------------------------------------------:|
+|               Cargo test command                |                     Nextest command                     |
+| :---------------------------------------------: | :-----------------------------------------------------: |
 | `cargo test -- --skip skip1 --skip skip2 test3` | `cargo nextest run -E 'test(test3) - test(/skip[12]/)'` |
-| `cargo test -- --exact test1 test2`             |   `cargo nextest run -E 'test(=test1) + test(=test2)'`  |
+|       `cargo test -- --exact test1 test2`       |  `cargo nextest run -E 'test(=test1) + test(=test2)'`   |
 
 ### Filtering by build platform
 
@@ -65,16 +68,15 @@ cargo nextest run -E 'platform(host)'
 
 ## Displaying live test output
 
-By default, `cargo nextest run` will capture test output and only display it on failure. If you do *not* want to capture test output:
+By default, `cargo nextest run` will capture test output and only display it on failure. If you do _not_ want to capture test output:
 
 ```
 cargo nextest run --no-capture
 ```
 
-In this mode, cargo-nextest will run tests *serially* so that output from different tests isn't interspersed. This is different from `cargo test -- --nocapture`, which will run tests in parallel.
+In this mode, cargo-nextest will run tests _serially_ so that output from different tests isn't interspersed. This is different from `cargo test -- --nocapture`, which will run tests in parallel.
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
-
 
 ## Options and arguments
 

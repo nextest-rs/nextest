@@ -1,8 +1,8 @@
 # Test groups and mutual exclusion
 
-Starting version 0.9.48, nextest allows users to specify test *groups* for sets of tests. This lets you configure groups of tests to run serially or with a limited amount of concurrency.
+Starting version 0.9.48, nextest allows users to specify test _groups_ for sets of tests. This lets you configure groups of tests to run serially or with a limited amount of concurrency.
 
-In other words, nextest lets you define logical *semaphores* and *mutexes* that apply to certain subsets of tests.
+In other words, nextest lets you define logical _semaphores_ and _mutexes_ that apply to certain subsets of tests.
 
 Tests that aren't part of a test group are not affected by these concurrency limits.
 
@@ -108,7 +108,7 @@ threads-required = 1  # this is the default, shown for clarity
 With this configuration:
 
 - Tests whose names start with `group::heavy::`, and tests that start with `group::light::`, are both part of `my-group`.
-- The `group::heavy::` tests will take up two slots within *both* global and group concurrency limits.
+- The `group::heavy::` tests will take up two slots within _both_ global and group concurrency limits.
 - The `group::light::` tests will take up one slot within both limits.
 
 > NOTE: Setting `threads-required` to be greater than a test group's `max-threads` will not cause issues; a test that does so will take up all slots available.

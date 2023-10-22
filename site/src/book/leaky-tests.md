@@ -1,12 +1,13 @@
 # Leaky tests
 
 Some tests create subprocesses but may not clean them up properly. Typical scenarios include:
-* A test creates a server process to test against, but does not shut it down at the end of the test.
-* A test starts a subprocess with the intent to shut it down, but panics, and does not use the [RAII pattern](https://doc.rust-lang.org/rust-by-example/scope/raii.html) to clean up subprocesses.
-  * Note that `std::process::Child` [does **not** kill subprocesses](https://doc.rust-lang.org/std/process/struct.Child.html#warning) on being dropped. Some alternatives, such as `tokio::process::Command`, [can be configured](https://docs.rs/tokio/1/tokio/process/struct.Command.html#method.kill_on_drop) to do so.
-* This can happen transitively as well: a test creates a process which creates its own subprocess, and so on.
 
-Nextest can detect some, but not all, such situations. If nextest detects a subprocess leak, it marks the corresponding test as *leaky*.
+- A test creates a server process to test against, but does not shut it down at the end of the test.
+- A test starts a subprocess with the intent to shut it down, but panics, and does not use the [RAII pattern](https://doc.rust-lang.org/rust-by-example/scope/raii.html) to clean up subprocesses.
+  - Note that `std::process::Child` [does **not** kill subprocesses](https://doc.rust-lang.org/std/process/struct.Child.html#warning) on being dropped. Some alternatives, such as `tokio::process::Command`, [can be configured](https://docs.rs/tokio/1/tokio/process/struct.Command.html#method.kill_on_drop) to do so.
+- This can happen transitively as well: a test creates a process which creates its own subprocess, and so on.
+
+Nextest can detect some, but not all, such situations. If nextest detects a subprocess leak, it marks the corresponding test as _leaky_.
 
 ## Leaky tests nextest detects
 

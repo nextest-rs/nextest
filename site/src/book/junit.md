@@ -12,17 +12,18 @@ path = "junit.xml"
 If `--profile ci` is selected on the command line, a JUnit report will be written out to `target/nextest/ci/junit.xml` within the workspace root.
 
 Some notes about the JUnit support:
-* There are several slightly different formats all called "JUnit" or "XUnit". Nextest adheres to the [Jenkins XML format](https://llg.cubic.org/docs/junit/).
-* Every test binary forms a single `<testsuite>`. Every test forms a single `<testcase>`.
-* Standard output and standard error are included for failed and retried tests. (However, [invalid XML characters](https://en.wikipedia.org/wiki/Valid_characters_in_XML) are stripped out.)
+
+- There are several slightly different formats all called "JUnit" or "XUnit". Nextest adheres to the [Jenkins XML format](https://llg.cubic.org/docs/junit/).
+- Every test binary forms a single `<testsuite>`. Every test forms a single `<testcase>`.
+- Standard output and standard error are included for failed and retried tests. (However, [invalid XML characters](https://en.wikipedia.org/wiki/Valid_characters_in_XML) are stripped out.)
 
 ## Configuration
 
 Configuration options supported for JUnit reports, within the `junit` section:
 
-* `report-name` — The name of the report. Defaults to `"nextest-run"`.
-* `store-success-output` — Whether to store output for successful tests in the `<system-out>` and `<system-err>` elements. Defaults to false.
-* `store-failure-output` — Whether to store output for failing tests in the `<system-out>` and `<system-err>` elements. Defaults to true.
+- `report-name` — The name of the report. Defaults to `"nextest-run"`.
+- `store-success-output` — Whether to store output for successful tests in the `<system-out>` and `<system-err>` elements. Defaults to false.
+- `store-failure-output` — Whether to store output for failing tests in the `<system-out>` and `<system-err>` elements. Defaults to true.
 
 `store-success-output` and `store-failure-output` can also be configured as [per-test overrides](per-test-overrides.md).
 
@@ -45,7 +46,8 @@ In this example, the JUnit report will contain the output for all failing tests,
 ## Post-processing
 
 Some tools that read JUnit files don't follow the Jenkins standard. You can post-process the JUnit file in such cases. Here's some recommendations for post-processing tools written by community members:
-* CircleCI: [`circleci-junit-fix`](https://github.com/conradludgate/circleci-junit-fix)
+
+- CircleCI: [`circleci-junit-fix`](https://github.com/conradludgate/circleci-junit-fix)
 
 ## Example
 

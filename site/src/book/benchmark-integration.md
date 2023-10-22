@@ -10,13 +10,13 @@ However, it can still be good to verify in CI that benchmarks compile correctly,
 
 For criterion and nextest, benchmarks are run with the following settings:
 
-* With the `test` Cargo profile. This is typically the same as the `dev` profile, and can be overridden with `--cargo-profile`.
-* With one iteration of the benchmark.
+- With the `test` Cargo profile. This is typically the same as the `dev` profile, and can be overridden with `--cargo-profile`.
+- With one iteration of the benchmark.
 
 ## Requirements
 
-* Criterion 0.5.0 or above; previous versions are not compatible with nextest.
-* Any recent version of cargo-nextest.
+- Criterion 0.5.0 or above; previous versions are not compatible with nextest.
+- Any recent version of cargo-nextest.
 
 ## Running benchmarks
 

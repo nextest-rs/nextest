@@ -1,6 +1,6 @@
 # Retries and flaky tests
 
-Sometimes, tests fail nondeterministically, which can be quite annoying to developers locally and in CI. cargo-nextest supports *retrying* failed tests with the `--retries` option. If a test succeeds during a retry, the test is marked *flaky*. Here's an example:
+Sometimes, tests fail nondeterministically, which can be quite annoying to developers locally and in CI. cargo-nextest supports _retrying_ failed tests with the `--retries` option. If a test succeeds during a retry, the test is marked _flaky_. Here's an example:
 
 ![Output of cargo nextest run --retries 2](../static/nextest-retry.png)
 
@@ -9,8 +9,9 @@ Sometimes, tests fail nondeterministically, which can be quite annoying to devel
 Flaky tests are treated as ultimately successful. If there are no other tests that failed, the exit code for the test run is 0.
 
 Retries can also be:
-* passed in via the environment variable `NEXTEST_RETRIES`.
-* [configured in `.config/nextest.toml`](configuration.md).
+
+- passed in via the environment variable `NEXTEST_RETRIES`.
+- [configured in `.config/nextest.toml`](configuration.md).
 
 For the order that configuration parameters are resolved in, see [Hierarchical configuration](configuration.md#hierarchical-configuration).
 

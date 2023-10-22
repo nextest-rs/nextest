@@ -4,10 +4,10 @@ This page covers common performance issues caused by anti-malware protections on
 
 ## Windows
 
-
 Your antivirus software—typically Windows Security, also known as Microsoft Defender—might interfere with process execution, making your test runs significantly slower. For optimal performance, exclude the following directories from checks:
-* The directory with all your code in it
-* Your `.cargo\bin` directory, typically within your home directory (see [this Rust issue](https://github.com/rust-lang/cargo/issues/5028)).
+
+- The directory with all your code in it
+- Your `.cargo\bin` directory, typically within your home directory (see [this Rust issue](https://github.com/rust-lang/cargo/issues/5028)).
 
 [Here's how to exclude directories from Windows Security.](https://support.microsoft.com/en-us/windows/add-an-exclusion-to-windows-security-811816c0-4dfd-af4a-47e4-c301afe13b26)
 
@@ -30,6 +30,5 @@ Adding your terminal to Developer Tools will cause any processes run by it to be
 [See this comment on Hacker News for more.](https://news.ycombinator.com/item?id=24394150)
 
 ![macOS Developer Tools with Terminal.app enabled](../static/macos-exclusions.png)
-
 
 > There are still some reports of performance issues on macOS after Developer Tools have been enabled. If you're seeing this, please [add a note to this issue](https://github.com/nextest-rs/nextest/issues/63)!

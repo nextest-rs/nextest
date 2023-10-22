@@ -10,11 +10,11 @@ To run all tests in `my-crate` and its dependencies, run:
 cargo nextest run -E 'deps(my-crate)'
 ```
 
-The argument passed into the `-E` command-line option is called a *filter expression*. The rest of this page describes the full syntax for the expression DSL.
+The argument passed into the `-E` command-line option is called a _filter expression_. The rest of this page describes the full syntax for the expression DSL.
 
 ## The filter expression DSL
 
-A *filter expression* defines a set of tests. A test will be run if it matches a filter expression.
+A _filter expression_ defines a set of tests. A test will be run if it matches a filter expression.
 
 On the command line, multiple filter expressions can be passed in. A test will be run if it matches any of these expressions. For example, to run tests whose names contain the string `my_test` as well as all tests in package `my-crate`, run:
 
@@ -83,8 +83,8 @@ This section contains the full set of operators supported by the DSL.
 - `=string`: match a package or test name that's equal to `string`
 - `/regex/`: match a package or test name if any part of it matches the regular expression `regex`. To match the entire string against a regular expression, use `/^regex$/`. The implementation uses the [regex](https://github.com/rust-lang/regex) crate.
 - `string`: default matching strategy.
-    - For tests (`test()`), this is equivalent to `~string`.
-    - For packages (`package()`, `deps()` and `rdeps()`), binary kinds (`kind()`), and `platform()`, this is equivalent to `=string`.
+  - For tests (`test()`), this is equivalent to `~string`.
+  - For packages (`package()`, `deps()` and `rdeps()`), binary kinds (`kind()`), and `platform()`, this is equivalent to `=string`.
 
 If you're constructing an expression string programmatically, it is recommended that you always use a prefix to avoid ambiguity.
 
@@ -92,18 +92,18 @@ If you're constructing an expression string programmatically, it is recommended 
 
 The `~string` and `=string` name matchers can contain escape sequences, preceded by a backslash (`\`).
 
-* `\n`: line feed
-* `\r`: carriage return
-* `\t`: tab
-* `\\`: backslash
-* `\/`: forward slash
-* `\)`: closing parenthesis
-* `\,`: comma
-* `\u{7FFF}`: 24-bit Unicode character code (up to 6 hex digits)
+- `\n`: line feed
+- `\r`: carriage return
+- `\t`: tab
+- `\\`: backslash
+- `\/`: forward slash
+- `\)`: closing parenthesis
+- `\,`: comma
+- `\u{7FFF}`: 24-bit Unicode character code (up to 6 hex digits)
 
 All other escape sequences are invalid.
 
-The *regular expression* matcher supports the same escape sequences that [the regex crate does](https://docs.rs/regex/latest/regex/#escape-sequences). This includes character classes like `\d`. Additionally, `\/` is interpreted as an escaped `/`.
+The _regular expression_ matcher supports the same escape sequences that [the regex crate does](https://docs.rs/regex/latest/regex/#escape-sequences). This includes character classes like `\d`. Additionally, `\/` is interpreted as an escaped `/`.
 
 ### Operators
 
