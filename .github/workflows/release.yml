@@ -4,7 +4,7 @@ name: Publish releases to GitHub
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 jobs:
   quick-junit-release:
@@ -150,7 +150,7 @@ jobs:
           # Native builds
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
-            container: ghcr.io/nextest-rs/ubuntu-18.04:1.0.0
+            container: ghcr.io/nextest-rs/ubuntu-18.04:1.0.1
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             container:
@@ -184,7 +184,11 @@ jobs:
       - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.0'
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      # NOTE: v4 of actions/checkout uses node v20, which is typically not compatible with Ubuntu
+      # 18.04 but we've installed in our container by hand.
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/upload-rust-binary-action@f6b013bbda0fb47fb0e7a25a1e437b51971fb241 # v1
