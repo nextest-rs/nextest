@@ -11,7 +11,7 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ### Fixed
 
-- `Output::new` now strips ANSI escapes as well. Thanks [@MaienM](https://github.com/MaienM) for your first contribution!
+- JUnit output now strips ANSI escapes as well. Thanks [@MaienM](https://github.com/MaienM) for your first contribution!
 
 ## [0.9.59] - 2023-09-27
 
@@ -822,6 +822,7 @@ Supported in this initial release:
 - [Test retries](book/retries.md) and flaky test detection
 - [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.60]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.60
 [0.9.59]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.59
 [0.9.58]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.58
 [0.9.57]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.57
