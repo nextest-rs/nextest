@@ -10,7 +10,7 @@ Run the following command:
 cargo install cargo-nextest --locked
 ```
 
-> Note: A plain `cargo install cargo-nextest` without `--locked` is **not supported**. If you run into build issues, please try with `--locked` before reporting an issue.
+> **Note:** A plain `cargo install cargo-nextest` without `--locked` is **not supported**. If you run into build issues, please try with `--locked` before reporting an issue.
 
 `cargo nextest` must be compiled and installed with **Rust 1.70** or later (see [Stability policy] for more), but it can build and run
 tests against any version of Rust.

@@ -28,7 +28,7 @@ These archives contain a single binary called `cargo-nextest` (`cargo-nextest.ex
 
 The instructions below are suitable for both end users and CI. These links will stay stable.
 
-> NOTE: The instructions below assume that your Rust installation is managed via rustup. You can extract the archive to a different directory in your PATH if required.
+> **Note:** The instructions below assume that your Rust installation is managed via rustup. You can extract the archive to a different directory in your PATH if required.
 >
 > If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](stability.md) for more), replace `latest` in the URL with `0.9`.
 

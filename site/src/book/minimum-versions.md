@@ -31,7 +31,7 @@ Both required and recommended versions can be set simultaneously:
 nextest-version = { required = "0.9.53", recommended = "0.9.55" }
 ```
 
-> NOTE: Versions of nextest prior to 0.9.55 do not support the `nextest-version` configuration. Depending on how old the version is, nextest may print an "unknown configuration" warning or ignore nextest-version entirely.
+> **Note:** Versions of nextest prior to 0.9.55 do not support the `nextest-version` configuration. Depending on how old the version is, nextest may print an "unknown configuration" warning or ignore nextest-version entirely.
 
 ## Bypassing the version check
 

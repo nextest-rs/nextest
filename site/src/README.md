@@ -33,7 +33,7 @@ cargo nextest run
 
 For more detailed installation instructions, see [Installation](book/installation.md).
 
-> Note: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
+> **Note:** Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
 
 ## Crates in this project
 

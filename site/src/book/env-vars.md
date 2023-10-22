@@ -40,7 +40,7 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 
   This is a workaround for [macOS's System Integrity Protection](https://developer.apple.com/library/archive/documentation/Security/Conceptual/System_Integrity_Protection_Guide/RuntimeProtections/RuntimeProtections.html) sanitizing dynamic linker environment variables for processes like the system `bash`, and is particularly relevant for [target runners](target-runners.md). See [this blog post](https://briandfoy.github.io/macos-s-system-integrity-protection-sanitizes-your-environment/) for more about how sanitization works.
 
-  > Note: The `NEXTEST_LD_*` and `NEXTEST_DYLD_*` variables are set on all platforms, not just macOS.
+  > **Note:** The `NEXTEST_LD_*` and `NEXTEST_DYLD_*` variables are set on all platforms, not just macOS.
 
 [#27]: https://github.com/nextest-rs/nextest/issues/27
 [integration test]: https://doc.rust-lang.org/cargo/reference/cargo-targets.html#integration-tests

@@ -8,7 +8,7 @@ Tests that aren't part of a test group are not affected by these concurrency lim
 
 If the limit is set to 1, this is similar to `cargo test` with [the `serial_test` crate](https://crates.io/crates/serial_test), or a global mutex.
 
-> NOTE: Nextest does not support in-process mutexes (or semaphores), directly. Instead, you can emulate these features by using test groups.
+> **Note:** Nextest does not support in-process mutexes (or semaphores), directly. Instead, you can emulate these features by using test groups.
 
 ## Use cases
 
@@ -111,4 +111,4 @@ With this configuration:
 - The `group::heavy::` tests will take up two slots within _both_ global and group concurrency limits.
 - The `group::light::` tests will take up one slot within both limits.
 
-> NOTE: Setting `threads-required` to be greater than a test group's `max-threads` will not cause issues; a test that does so will take up all slots available.
+> **Note:** Setting `threads-required` to be greater than a test group's `max-threads` will not cause issues; a test that does so will take up all slots available.
