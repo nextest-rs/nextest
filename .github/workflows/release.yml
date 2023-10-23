@@ -149,41 +149,49 @@ jobs:
         include:
           # Native builds
 
-          # On Linux, we use glibc 2.27, as the minimum of
-          # - Ubuntu 18.04 (glibc 2.27)
-          # - CentOS 8 (glibc 2.28)
-          # - Debian 10 (glibc 2.28)
-          #
-          # See https://repology.org/project/glibc/versions.
-          #
-          # We used to use an Ubuntu 18.04 container, but that became untenable over time:
-          # https://github.com/nextest-rs/nextest/issues/1055
-          - target: x86_64-unknown-linux-gnu.2.27
+          - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
+            # On Linux, we use glibc 2.27, as the minimum of
+            # - Ubuntu 18.04 (glibc 2.27)
+            # - CentOS 8 (glibc 2.28)
+            # - Debian 10 (glibc 2.28)
+            #
+            # See https://repology.org/project/glibc/versions.
+            #
+            # We used to use an Ubuntu 18.04 container, but that became untenable over time:
+            # https://github.com/nextest-rs/nextest/issues/1055
+            build-target: x86_64-unknown-linux-gnu.2.27
             build-tool: cargo-zigbuild
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+            build-target: x86_64-pc-windows-msvc
             build-tool: cargo
           - target: i686-pc-windows-msvc
             os: windows-latest
+            build-target: i686-pc-windows-msvc
             build-tool: cargo
           - target: universal-apple-darwin
             os: macos-latest
+            build-target: universal-apple-darwin
             build-tool: cargo
 
           # Builds using cross
           - target: x86_64-unknown-linux-musl
             os: ubuntu-22.04
+            build-target: x86_64-unknown-linux-musl
             # musl is statically linked and uses cross
             build-tool: cross
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
+            build-target: aarch64-unknown-linux-gnu
             build-tool: cross
           - target: x86_64-unknown-freebsd
             os: ubuntu-22.04
+            build-target: x86_64-unknown-freebsd
             build-tool: cross
           - target: x86_64-unknown-illumos
             os: ubuntu-22.04
+            build-target: x86_64-unknown-illumos
             build-tool: cross
     runs-on: ${{ matrix.os }}
     steps:
@@ -195,7 +203,8 @@ jobs:
           bin: cargo-nextest
           # The tag name contains the binary name so just use that.
           archive: $tag-$target
-          target: ${{ matrix.target }}
+          build-tool: ${{ matrix.build-tool }}
+          target: ${{ matrix.build-target }}
           tar: all
           zip: windows
         env:
