@@ -5,3 +5,8 @@ local-nt = "run --package cargo-nextest -- nextest"
 [build]
 # Required for tokio_console support
 rustflags = ["--cfg", "tokio_unstable"]
+
+[target.x86_64-unknown-linux-musl]
+# See https://github.com/rust-lang/compiler-team/issues/422 for why we're specifying +crt-static. We
+# always want musl builds to be static.
+rustflags = ["-C", "target-feature=+crt-static", "--cfg", "tokio_unstable"]
