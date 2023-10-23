@@ -148,51 +148,46 @@ jobs:
       matrix:
         include:
           # Native builds
-          - target: x86_64-unknown-linux-gnu
+
+          # On Linux, we use glibc 2.27, as the minimum of
+          # - Ubuntu 18.04 (glibc 2.27)
+          # - CentOS 8 (glibc 2.28)
+          # - Debian 10 (glibc 2.28)
+          #
+          # See https://repology.org/project/glibc/versions.
+          #
+          # We used to use an Ubuntu 18.04 container, but that became untenable over time:
+          # https://github.com/nextest-rs/nextest/issues/1055
+          - target: x86_64-unknown-linux-gnu.2.27
             os: ubuntu-22.04
-            container: ghcr.io/nextest-rs/ubuntu-18.04:1.0.2
+            build-tool: cargo-zigbuild
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            container:
+            build-tool: cargo
           - target: i686-pc-windows-msvc
             os: windows-latest
-            container:
+            build-tool: cargo
           - target: universal-apple-darwin
             os: macos-latest
-            container:
+            build-tool: cargo
 
           # Builds using cross
           - target: x86_64-unknown-linux-musl
             os: ubuntu-22.04
             # musl is statically linked and uses cross
-            container:
+            build-tool: cross
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
-            # uses cross
-            container:
+            build-tool: cross
           - target: x86_64-unknown-freebsd
             os: ubuntu-22.04
-            # uses cross
-            container:
+            build-tool: cross
           - target: x86_64-unknown-illumos
             os: ubuntu-22.04
-            # uses cross
-            container:
+            build-tool: cross
     runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
     steps:
-      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.2'
-        run: |
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-      - if: matrix.container == 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.2'
-        # NOTE: This *cannot* be updated because v4 uses node20, which is incompatible with Ubuntu
-        # 18.04. (That's because node20 uses glibc 2.28, but Ubuntu 18.04 is on glibc 2.27.)
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
-
-      - if: matrix.container != 'ghcr.io/nextest-rs/ubuntu-18.04:1.0.2'
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/upload-rust-binary-action@f6b013bbda0fb47fb0e7a25a1e437b51971fb241 # v1
