@@ -35,14 +35,14 @@ Nextest uses the `humantime` parser: see [its documentation](https://docs.rs/hum
 
 ## Terminating tests after a timeout
 
-Nextest lets you optionally specify a timeout after which a test is terminated. For example, to configure a slow timeout of 60 seconds and for tests to be terminated after 3 minutes, add this to `.config/nextest.toml`:
+Nextest lets you optionally specify a number of `slow-timeout` periods after which a test is terminated. For example, to configure a slow timeout of 30 seconds and for tests to be terminated after 120 seconds, add this to `.config/nextest.toml`:
 
 ```toml
 [profile.default]
-slow-timeout = { period = "60s", terminate-after = 3 }
+slow-timeout = { period = "30s", terminate-after = 4 }
 ```
 
-`terminate-after` indicates the number of slow-timeout periods after which the test is terminated.
+### Example
 
 The run below is configured with:
 
@@ -98,7 +98,7 @@ On other platforms including Windows, nextest terminates the test immediately in
 
 ## Per-test overrides
 
-Nextest supports [per-test overrides](per-test-overrides.md) for the slow-timeout and terminate-after settings.
+Nextest supports [per-test overrides](per-test-overrides.md) for the `slow-timeout` and `terminate-after` settings.
 
 For example, some end-to-end tests might take longer to run and sometimes get stuck. For tests containing the substring `test_e2e`, to configure a slow timeout of 120 seconds, and to terminate tests after 10 minutes:
 
