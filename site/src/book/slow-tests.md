@@ -35,7 +35,7 @@ Nextest uses the `humantime` parser: see [its documentation](https://docs.rs/hum
 
 ## Terminating tests after a timeout
 
-Nextest lets you optionally specify a number of `slow-timeout` periods after which a test is terminated. For example, to configure a slow timeout of 30 seconds and for tests to be terminated after 120 seconds, add this to `.config/nextest.toml`:
+Nextest lets you optionally specify a number of `slow-timeout` periods after which a test is terminated. For example, to configure a slow timeout of 30 seconds and for tests to be terminated after 120 seconds (4 periods of 30 seconds), add this to `.config/nextest.toml`:
 
 ```toml
 [profile.default]
