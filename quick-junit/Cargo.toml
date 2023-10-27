@@ -9,7 +9,7 @@ documentation = "https://docs.rs/quick-junit"
 keywords = ["junit", "xunit", "xml", "serializer", "flaky-tests"]
 categories = ["encoding", "development-tools"]
 edition = "2021"
-rust-version = "1.66"
+rust-version = "1.70"
 
 [dependencies]
 chrono = { version = "0.4.31", default-features = false, features = ["std"] }
