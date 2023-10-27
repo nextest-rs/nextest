@@ -19,8 +19,8 @@ clap = { version = "4.4.7", features = ["derive", "env"] }
 clap_builder = { version = "4.4.7", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 console = { version = "0.15.7" }
 either = { version = "1.9.0" }
-futures-channel = { version = "0.3.28", features = ["sink"] }
-futures-sink = { version = "0.3.28", default-features = false, features = ["std"] }
+futures-channel = { version = "0.3.29", features = ["sink"] }
+futures-sink = { version = "0.3.29", default-features = false, features = ["std"] }
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1.9.3", default-features = false, features = ["serde-1"] }
 indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2.0.2", features = ["serde"] }
 log = { version = "0.4.20", default-features = false, features = ["std"] }
@@ -45,9 +45,9 @@ syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extr
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.38", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-futures-core = { version = "0.3.28" }
-futures-sink = { version = "0.3.28" }
-futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
+futures-core = { version = "0.3.29" }
+futures-sink = { version = "0.3.29" }
+futures-util = { version = "0.3.29", features = ["channel", "io", "sink"] }
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1.9.3", default-features = false, features = ["std"] }
 libc = { version = "0.2.149", features = ["extra_traits"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
@@ -58,9 +58,9 @@ tokio = { version = "1.33.0", default-features = false, features = ["net"] }
 libc = { version = "0.2.149", features = ["extra_traits"] }
 
 [target.x86_64-apple-darwin.dependencies]
-futures-core = { version = "0.3.28" }
-futures-sink = { version = "0.3.28" }
-futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
+futures-core = { version = "0.3.29" }
+futures-sink = { version = "0.3.29" }
+futures-util = { version = "0.3.29", features = ["channel", "io", "sink"] }
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1.9.3", default-features = false, features = ["std"] }
 libc = { version = "0.2.149", features = ["extra_traits"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
@@ -71,9 +71,9 @@ tokio = { version = "1.33.0", default-features = false, features = ["net"] }
 libc = { version = "0.2.149", features = ["extra_traits"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
-futures-core = { version = "0.3.28" }
-futures-sink = { version = "0.3.28" }
-futures-util = { version = "0.3.28", features = ["channel", "io", "sink"] }
+futures-core = { version = "0.3.29" }
+futures-sink = { version = "0.3.29" }
+futures-util = { version = "0.3.29", features = ["channel", "io", "sink"] }
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1.9.3", default-features = false, features = ["std"] }
 tokio = { version = "1.33.0", default-features = false, features = ["net"] }
 winapi = { version = "0.3.9", default-features = false, features = ["basetsd", "consoleapi", "handleapi", "jobapi2", "minwinbase", "minwindef", "ntsecapi", "processenv", "processthreadsapi", "psapi", "std", "synchapi", "winbase", "wincon", "winerror", "winnt", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
