@@ -28,7 +28,7 @@ chrono = "0.4.31"
 debug-ignore = "1.0.5"
 display-error-chain = "0.2.0"
 either = "1.9.0"
-futures = "0.3.28"
+futures = "0.3.29"
 guppy = "0.17.1"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
