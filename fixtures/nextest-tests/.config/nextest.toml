@@ -21,6 +21,11 @@ platform = { host = "cfg(windows)" }
 filter = "test(=test_cargo_env_vars)"
 setup = "my-script-windows"
 
+[[profile.default.overrides]]
+# See https://github.com/nextest-rs/nextest/issues/984.
+platform = { host = 'cfg(windows)' }
+leak-timeout = '1s'
+
 [profile.with-retries]
 retries = 2
 
