@@ -17,7 +17,8 @@ use crate::{
     },
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::{
-        CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestEventKind, TestOutputDisplay,
+        CancelReason, FinalStatusLevel, ForceOutput, StatusLevel, TestEvent, TestEventKind,
+        TestOutputDisplay,
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
@@ -162,6 +163,7 @@ impl TestRunnerBuilder {
         test_list: &'a TestList,
         profile: &'a NextestProfile<'a>,
         handler_kind: SignalHandlerKind,
+        force_output: ForceOutput,
         double_spawn: DoubleSpawnInfo,
         target_runner: TargetRunner,
     ) -> Result<TestRunner<'a>, TestRunnerBuildError> {
@@ -185,6 +187,7 @@ impl TestRunnerBuilder {
                 no_capture: self.no_capture,
                 profile,
                 test_threads,
+                force_output,
                 force_retries: self.retries,
                 fail_fast,
                 test_list,
@@ -245,6 +248,7 @@ struct TestRunnerInner<'a> {
     no_capture: bool,
     profile: &'a NextestProfile<'a>,
     test_threads: usize,
+    force_output: ForceOutput,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
     fail_fast: bool,
@@ -530,6 +534,21 @@ impl<'a> TestRunnerInner<'a> {
                             let total_attempts = retry_policy.count() + 1;
                             let mut backoff_iter = BackoffIter::new(retry_policy);
 
+                            // We use the success output in particular to determine whether to pass
+                            // in --nocapture.
+                            let success_output = self
+                                .force_output
+                                .success
+                                .unwrap_or_else(|| settings.success_output());
+                            let failure_output = self
+                                .force_output
+                                .failure
+                                .unwrap_or_else(|| settings.failure_output());
+                            let junit_store_success_output = settings.junit_store_success_output();
+                            let junit_store_failure_output = settings.junit_store_failure_output();
+                            let needs_no_capture =
+                                needs_no_capture(success_output, junit_store_success_output);
+
                             if let FilterMatch::Mismatch { reason } =
                                 test_instance.test_info.filter_match
                             {
@@ -570,6 +589,7 @@ impl<'a> TestRunnerInner<'a> {
                                         test_instance,
                                         retry_data,
                                         &settings,
+                                        needs_no_capture,
                                         &setup_script_data,
                                         &this_run_sender,
                                         &mut this_forward_receiver,
@@ -622,10 +642,10 @@ impl<'a> TestRunnerInner<'a> {
                             // In either case, the test is finished.
                             let _ = this_run_sender.send(InternalTestEvent::Finished {
                                 test_instance,
-                                success_output: settings.success_output(),
-                                failure_output: settings.failure_output(),
-                                junit_store_success_output: settings.junit_store_success_output(),
-                                junit_store_failure_output: settings.junit_store_failure_output(),
+                                success_output,
+                                failure_output,
+                                junit_store_success_output,
+                                junit_store_failure_output,
                                 run_statuses: ExecutionStatuses::new(run_statuses),
                             });
 
@@ -883,6 +903,7 @@ impl<'a> TestRunnerInner<'a> {
         test: TestInstance<'a>,
         retry_data: RetryData,
         settings: &TestSettings,
+        needs_no_capture: bool,
         setup_script_data: &SetupScriptExecuteData<'a>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
@@ -896,6 +917,7 @@ impl<'a> TestRunnerInner<'a> {
                 retry_data,
                 &mut stopwatch,
                 settings,
+                needs_no_capture,
                 setup_script_data,
                 run_sender,
                 forward_receiver,
@@ -928,6 +950,7 @@ impl<'a> TestRunnerInner<'a> {
         retry_data: RetryData,
         stopwatch: &mut StopwatchStart,
         settings: &TestSettings,
+        needs_no_capture: bool,
         setup_script_data: &SetupScriptExecuteData<'a>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
@@ -937,7 +960,7 @@ impl<'a> TestRunnerInner<'a> {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
         };
-        let mut cmd = test.make_command(&ctx, self.test_list);
+        let mut cmd = test.make_command(&ctx, self.test_list, needs_no_capture);
         let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.
@@ -1088,6 +1111,13 @@ impl<'a> TestRunnerInner<'a> {
             delay_before_start,
         })
     }
+}
+
+/// This is used to determine whether the test needs --nocapture passed in. Most of the time,
+/// success_output is Never and junit_store_success is false, in which case we can speed up test
+/// runs by skipping --nocapture.
+fn needs_no_capture(success_output: TestOutputDisplay, junit_store_success_output: bool) -> bool {
+    !(success_output.is_never() && !junit_store_success_output)
 }
 
 /// Drains the forward receiver of any messages, including those that are related to SIGTSTP.
@@ -2372,19 +2402,37 @@ mod tests {
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
         let build_platforms = BuildPlatforms::new(None).unwrap();
-        let handler_kind = SignalHandlerKind::Noop;
         let profile = profile.apply_build_platforms(&build_platforms);
+
+        let handler_kind = SignalHandlerKind::Noop;
+
+        let mut force_output = ForceOutput::default();
+        force_output.set_no_capture();
+
         let runner = builder
             .build(
                 &test_list,
                 &profile,
                 handler_kind,
+                force_output,
                 DoubleSpawnInfo::disabled(),
                 TargetRunner::empty(),
             )
             .unwrap();
         assert!(runner.inner.no_capture, "no_capture is true");
         assert_eq!(runner.inner.test_threads, 1, "tests run serially");
+    }
+
+    #[test]
+    fn test_needs_no_capture() {
+        assert!(!needs_no_capture(TestOutputDisplay::Never, false));
+        assert!(needs_no_capture(TestOutputDisplay::Never, true));
+        assert!(needs_no_capture(TestOutputDisplay::Immediate, false));
+        assert!(needs_no_capture(TestOutputDisplay::Immediate, true));
+        assert!(needs_no_capture(TestOutputDisplay::Final, false));
+        assert!(needs_no_capture(TestOutputDisplay::Final, true));
+        assert!(needs_no_capture(TestOutputDisplay::ImmediateFinal, false));
+        assert!(needs_no_capture(TestOutputDisplay::ImmediateFinal, true));
     }
 
     #[test]

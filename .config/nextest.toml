@@ -25,7 +25,7 @@ retries = { count = 3, backoff = "fixed", delay = "1s" }
 slow-timeout = "1s"
 
 [profile.test-slow-with-timeout]
-slow-timeout = { period = "1s", terminate-after = 2 }
+slow-timeout = { period = "10ms", terminate-after = 2 }
 retries = 2
 
 [profile.with-junit]

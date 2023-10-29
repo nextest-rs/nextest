@@ -11,7 +11,7 @@ use nextest_runner::{
     double_spawn::DoubleSpawnInfo,
     list::BinaryList,
     platform::BuildPlatforms,
-    reporter::heuristic_extract_description,
+    reporter::{heuristic_extract_description, ForceOutput},
     runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
@@ -102,6 +102,7 @@ fn test_run() -> Result<()> {
             &test_list,
             &profile,
             SignalHandlerKind::Noop,
+            ForceOutput::default(),
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
@@ -206,6 +207,7 @@ fn test_run_ignored() -> Result<()> {
             &test_list,
             &profile,
             SignalHandlerKind::Noop,
+            ForceOutput::default(),
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
@@ -414,6 +416,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
             &test_list,
             &profile,
             SignalHandlerKind::Noop,
+            ForceOutput::default(),
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
@@ -552,6 +555,7 @@ fn test_termination() -> Result<()> {
             &test_list,
             &profile,
             SignalHandlerKind::Noop,
+            ForceOutput::default(),
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )

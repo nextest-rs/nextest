@@ -376,6 +376,9 @@ mod tests {
         "`max-delay` cannot be less than delay"
         ; "max-delay greater than delay")]
     fn parse_retries_invalid(config_contents: &str, expected_message: &str) {
+        println!("YAY");
+        eprintln!("WTF");
+        std::thread::sleep(std::time::Duration::from_secs(5));
         let workspace_dir = tempdir().unwrap();
         let workspace_path: &Utf8Path = workspace_dir.path();
 

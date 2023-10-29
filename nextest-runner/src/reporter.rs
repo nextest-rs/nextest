@@ -33,43 +33,6 @@ use std::{
 };
 use uuid::Uuid;
 
-/// When to display test output in the reporter.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum TestOutputDisplay {
-    /// Show output immediately on execution completion.
-    ///
-    /// This is the default for failing tests.
-    Immediate,
-
-    /// Show output immediately, and at the end of a test run.
-    ImmediateFinal,
-
-    /// Show output at the end of execution.
-    Final,
-
-    /// Never show output.
-    Never,
-}
-
-impl TestOutputDisplay {
-    /// Returns true if test output is shown immediately.
-    pub fn is_immediate(self) -> bool {
-        match self {
-            TestOutputDisplay::Immediate | TestOutputDisplay::ImmediateFinal => true,
-            TestOutputDisplay::Final | TestOutputDisplay::Never => false,
-        }
-    }
-
-    /// Returns true if test output is shown at the end of the run.
-    pub fn is_final(self) -> bool {
-        match self {
-            TestOutputDisplay::Final | TestOutputDisplay::ImmediateFinal => true,
-            TestOutputDisplay::Immediate | TestOutputDisplay::Never => false,
-        }
-    }
-}
-
 /// Status level to show in the reporter output.
 ///
 /// Status levels are incremental: each level causes all the statuses listed above it to be output. For example,
@@ -157,8 +120,6 @@ pub enum ReporterStderr<'a> {
 #[derive(Debug, Default)]
 pub struct TestReporterBuilder {
     no_capture: bool,
-    failure_output: Option<TestOutputDisplay>,
-    success_output: Option<TestOutputDisplay>,
     status_level: Option<StatusLevel>,
     final_status_level: Option<FinalStatusLevel>,
     verbose: bool,
@@ -172,18 +133,6 @@ impl TestReporterBuilder {
     /// will be at least [`StatusLevel::Pass`].
     pub fn set_no_capture(&mut self, no_capture: bool) -> &mut Self {
         self.no_capture = no_capture;
-        self
-    }
-
-    /// Sets the conditions under which test failures are output.
-    pub fn set_failure_output(&mut self, failure_output: TestOutputDisplay) -> &mut Self {
-        self.failure_output = Some(failure_output);
-        self
-    }
-
-    /// Sets the conditions under which test successes are output.
-    pub fn set_success_output(&mut self, success_output: TestOutputDisplay) -> &mut Self {
-        self.success_output = Some(success_output);
         self
     }
 
@@ -240,17 +189,6 @@ impl TestReporterBuilder {
         let final_status_level = self
             .final_status_level
             .unwrap_or_else(|| profile.final_status_level());
-
-        // failure_output and success_output are meaningless if the runner isn't capturing any
-        // output.
-        let force_success_output = match self.no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.success_output,
-        };
-        let force_failure_output = match self.no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.failure_output,
-        };
 
         let stderr = match output {
             ReporterStderr::Terminal if self.no_capture => {
@@ -310,8 +248,6 @@ impl TestReporterBuilder {
             inner: TestReporterImpl {
                 status_level,
                 final_status_level,
-                force_success_output,
-                force_failure_output,
                 no_capture: self.no_capture,
                 binary_id_width,
                 styles,
@@ -561,8 +497,6 @@ impl FinalOutput {
 struct TestReporterImpl<'a> {
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
-    force_success_output: Option<TestOutputDisplay>,
-    force_failure_output: Option<TestOutputDisplay>,
     no_capture: bool,
     binary_id_width: usize,
     styles: Box<Styles>,
@@ -732,7 +666,7 @@ impl<'a> TestReporterImpl<'a> {
                         !run_status.result.is_success(),
                         "only failing tests are retried"
                     );
-                    if self.failure_output(*failure_output).is_immediate() {
+                    if failure_output.is_immediate() {
                         self.write_stdout_stderr(test_instance, run_status, true, writer)?;
                     }
 
@@ -784,8 +718,8 @@ impl<'a> TestReporterImpl<'a> {
                 let describe = run_statuses.describe();
                 let last_status = run_statuses.last_status();
                 let test_output_display = match last_status.result.is_success() {
-                    true => self.success_output(*success_output),
-                    false => self.failure_output(*failure_output),
+                    true => success_output,
+                    false => failure_output,
                 };
 
                 if self.status_level >= describe.status_level() {
@@ -809,7 +743,7 @@ impl<'a> TestReporterImpl<'a> {
                         *test_instance,
                         FinalOutput::Executed {
                             run_statuses: run_statuses.clone(),
-                            test_output_display,
+                            test_output_display: *test_output_display,
                         },
                     ));
                 }
@@ -1409,14 +1343,6 @@ impl<'a> TestReporterImpl<'a> {
             Ok(0)
         }
     }
-
-    fn success_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_success_output.unwrap_or(test_setting)
-    }
-
-    fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_failure_output.unwrap_or(test_setting)
-    }
 }
 
 fn setup_scripts_str(count: usize) -> &'static str {
@@ -1774,6 +1700,83 @@ pub enum CancelReason {
     Interrupt,
 }
 
+/// When to display test output in the reporter.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TestOutputDisplay {
+    /// Show output immediately on execution completion.
+    ///
+    /// This is the default for failing tests.
+    Immediate,
+
+    /// Show output immediately, and at the end of a test run.
+    ImmediateFinal,
+
+    /// Show output at the end of execution.
+    Final,
+
+    /// Never show output.
+    Never,
+}
+
+impl TestOutputDisplay {
+    /// Returns true if test output is shown immediately.
+    pub fn is_immediate(self) -> bool {
+        match self {
+            TestOutputDisplay::Immediate | TestOutputDisplay::ImmediateFinal => true,
+            TestOutputDisplay::Final | TestOutputDisplay::Never => false,
+        }
+    }
+
+    /// Returns true if test output is shown at the end of the run.
+    pub fn is_final(self) -> bool {
+        match self {
+            TestOutputDisplay::Final | TestOutputDisplay::ImmediateFinal => true,
+            TestOutputDisplay::Immediate | TestOutputDisplay::Never => false,
+        }
+    }
+
+    /// Returns true if test output is never shown.
+    pub fn is_never(self) -> bool {
+        match self {
+            TestOutputDisplay::Never => true,
+            TestOutputDisplay::Immediate
+            | TestOutputDisplay::ImmediateFinal
+            | TestOutputDisplay::Final => false,
+        }
+    }
+}
+
+/// State about whether output is forced via command line options.
+///
+/// This is logically part of the reporter, but in reality is tracked by the runner.
+#[derive(Debug, Default)]
+pub struct ForceOutput {
+    /// Whether success output is forced.
+    pub success: Option<TestOutputDisplay>,
+
+    /// Whether failure output is forced.
+    pub failure: Option<TestOutputDisplay>,
+}
+
+impl ForceOutput {
+    /// Sets a value for forced success output.
+    pub fn set_success(&mut self, success: TestOutputDisplay) {
+        self.success = Some(success);
+    }
+
+    /// Sets a value for forced failure output.
+    pub fn set_failure(&mut self, failure: TestOutputDisplay) {
+        self.failure = Some(failure);
+    }
+
+    /// Sets values assuming no capture.
+    pub fn set_no_capture(&mut self) {
+        self.success = Some(TestOutputDisplay::Never);
+        self.failure = Some(TestOutputDisplay::Never);
+    }
+}
+
 #[derive(Debug, Default)]
 struct Styles {
     is_colorized: bool,
@@ -1816,8 +1819,6 @@ mod tests {
         let mut builder = TestReporterBuilder::default();
         builder
             .set_no_capture(true)
-            .set_failure_output(TestOutputDisplay::Immediate)
-            .set_success_output(TestOutputDisplay::Immediate)
             .set_status_level(StatusLevel::Fail);
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
@@ -1833,19 +1834,23 @@ mod tests {
         );
         assert!(reporter.inner.no_capture, "no_capture is true");
         assert_eq!(
-            reporter.inner.force_failure_output,
+            reporter.inner.status_level,
+            StatusLevel::Pass,
+            "status level is pass, overriding other settings"
+        );
+
+        let mut force_output = ForceOutput::default();
+        force_output.set_failure(TestOutputDisplay::Immediate);
+        force_output.set_no_capture();
+        assert_eq!(
+            force_output.failure,
             Some(TestOutputDisplay::Never),
             "failure output is never, overriding other settings"
         );
         assert_eq!(
-            reporter.inner.force_success_output,
+            force_output.success,
             Some(TestOutputDisplay::Never),
             "success output is never, overriding other settings"
-        );
-        assert_eq!(
-            reporter.inner.status_level,
-            StatusLevel::Pass,
-            "status level is pass, overriding other settings"
         );
     }
 }

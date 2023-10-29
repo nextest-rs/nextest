@@ -28,7 +28,9 @@ use nextest_runner::{
     },
     partition::PartitionerBuilder,
     platform::BuildPlatforms,
-    reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
+    reporter::{
+        FinalStatusLevel, ForceOutput, StatusLevel, TestOutputDisplay, TestReporterBuilder,
+    },
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, RunStatsFailureKind, TestRunnerBuilder},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
@@ -783,12 +785,6 @@ impl TestReporterOpts {
     fn to_builder(&self, no_capture: bool) -> TestReporterBuilder {
         let mut builder = TestReporterBuilder::default();
         builder.set_no_capture(no_capture);
-        if let Some(failure_output) = self.failure_output {
-            builder.set_failure_output(failure_output.into());
-        }
-        if let Some(success_output) = self.success_output {
-            builder.set_success_output(success_output.into());
-        }
         if let Some(status_level) = self.status_level {
             builder.set_status_level(status_level.into());
         }
@@ -797,6 +793,21 @@ impl TestReporterOpts {
         }
         builder.set_hide_progress_bar(self.hide_progress_bar);
         builder
+    }
+
+    fn to_force_output(&self, no_capture: bool) -> ForceOutput {
+        let mut force_output = ForceOutput::default();
+        if let Some(failure_output) = self.failure_output {
+            force_output.set_failure(failure_output.into());
+        }
+        if let Some(success_output) = self.success_output {
+            force_output.set_success(success_output.into());
+        }
+        if no_capture {
+            // This must be set at the end because it overrides all other settings.
+            force_output.set_no_capture();
+        }
+        force_output
     }
 }
 
@@ -1489,6 +1500,7 @@ impl App {
             &test_list,
             &profile,
             handler,
+            reporter_opts.to_force_output(no_capture),
             double_spawn.clone(),
             target_runner.clone(),
         )?;

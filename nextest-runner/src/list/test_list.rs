@@ -899,6 +899,7 @@ impl<'a> TestInstance<'a> {
         &self,
         ctx: &TestExecuteContext<'_>,
         test_list: &TestList<'_>,
+        needs_no_capture: bool,
     ) -> TestCommand {
         let platform_runner = ctx
             .target_runner
@@ -916,7 +917,10 @@ impl<'a> TestInstance<'a> {
             None => self.suite_info.binary_path.to_owned().into(),
         };
 
-        args.extend(["--exact", self.name, "--nocapture"]);
+        args.extend(["--exact", self.name]);
+        if needs_no_capture {
+            args.push("--nocapture");
+        }
         if self.test_info.ignored {
             args.push("--ignored");
         }

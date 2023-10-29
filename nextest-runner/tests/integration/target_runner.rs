@@ -9,6 +9,7 @@ use nextest_runner::{
     config::NextestConfig,
     double_spawn::DoubleSpawnInfo,
     platform::BuildPlatforms,
+    reporter::ForceOutput,
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -221,6 +222,7 @@ fn test_run_with_target_runner() -> Result<()> {
             &test_list,
             &profile,
             SignalHandlerKind::Noop,
+            ForceOutput::default(),
             DoubleSpawnInfo::disabled(),
             target_runner,
         )
