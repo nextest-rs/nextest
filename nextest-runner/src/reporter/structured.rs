@@ -4,7 +4,6 @@
 mod libtest;
 
 use super::*;
-
 pub use libtest::{EmitNextestObject, LibtestReporter};
 
 /// Error returned when a user-supplied format version fails to be parsed to a
