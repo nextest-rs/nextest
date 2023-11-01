@@ -381,8 +381,6 @@ impl<'cfg> LibtestReporter<'cfg> {
                     }
                 }
 
-                if self.emit_nextest_obj {}
-
                 *running == 0
             }
             TestEventKind::TestSkipped { reason, .. } => {
