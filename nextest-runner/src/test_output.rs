@@ -117,6 +117,7 @@ pub struct TestOutputAccumulator {
 
 impl TestOutputAccumulator {
     /// Creates a new test accumulator to capture output from a child process
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             buf: BytesMut::with_capacity(4 * 1024),
@@ -139,7 +140,7 @@ impl TestOutputAccumulator {
     /// Gets a writer the can be used to write to the accumulator as if a child
     /// process was writing to stdout
     #[inline]
-    pub fn stdout<'acc>(&'acc mut self) -> TestOutputWriter<'acc> {
+    pub fn stdout(&mut self) -> TestOutputWriter<'_> {
         TestOutputWriter {
             acc: self,
             stdout: true,
@@ -149,7 +150,7 @@ impl TestOutputAccumulator {
     /// Gets a writer the can be used to write to the accumulator as if a child
     /// process was writing to stderr
     #[inline]
-    pub fn stderr<'acc>(&'acc mut self) -> TestOutputWriter<'acc> {
+    pub fn stderr(&mut self) -> TestOutputWriter<'_> {
         TestOutputWriter {
             acc: self,
             stdout: false,
@@ -192,6 +193,7 @@ impl<'acc> std::fmt::Write for TestOutputWriter<'acc> {
 }
 
 /// Collects the stdout and/or stderr streams into a single buffer
+#[allow(clippy::needless_lifetimes, clippy::let_and_return)]
 pub fn collect_test_output<'a>(
     mut stdout: Option<tokio::process::ChildStdout>,
     mut stderr: Option<tokio::process::ChildStderr>,
@@ -234,7 +236,7 @@ pub fn collect_test_output<'a>(
             }
         }
 
-        return Ok(());
+        Ok(())
     };
 
     read_loop

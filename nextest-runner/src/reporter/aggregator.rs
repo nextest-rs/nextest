@@ -175,10 +175,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 // we may have to update this format to handle that.
                 let is_success = main_status.result.is_success();
 
-                if !is_success
-                    || (junit_store_success_output && is_success)
-                    || (junit_store_failure_output && !is_success)
-                {
+                if !is_success || junit_store_success_output {
                     let stdout = main_status.output.stdout_lossy();
                     let stderr = main_status.output.stderr_lossy();
 
