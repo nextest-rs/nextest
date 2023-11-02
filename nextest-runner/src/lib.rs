@@ -27,6 +27,7 @@ pub mod signal;
 pub mod target_runner;
 mod test_command;
 pub mod test_filter;
+pub mod test_output;
 mod time;
 #[cfg(feature = "self-update")]
 pub mod update;

@@ -1343,36 +1343,42 @@ impl<'a> TestReporterImpl<'a> {
             (self.styles.fail, self.styles.fail_output)
         };
 
-        if !run_status.stdout.is_empty() {
-            write!(writer, "\n{}", "--- ".style(header_style))?;
-            let out_len = self.write_attempt(run_status, header_style, writer)?;
-            // The width is to align test instances.
-            write!(
-                writer,
-                "{:width$}",
-                "STDOUT:".style(header_style),
-                width = (21 - out_len)
-            )?;
-            self.write_instance(*test_instance, writer)?;
-            writeln!(writer, "{}", " ---".style(header_style))?;
+        {
+            let stdout = run_status.output.stdout();
+            if !stdout.is_empty() {
+                write!(writer, "\n{}", "--- ".style(header_style))?;
+                let out_len = self.write_attempt(run_status, header_style, writer)?;
+                // The width is to align test instances.
+                write!(
+                    writer,
+                    "{:width$}",
+                    "STDOUT:".style(header_style),
+                    width = (21 - out_len)
+                )?;
+                self.write_instance(*test_instance, writer)?;
+                writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_output(&run_status.stdout, writer)?;
+                self.write_test_output(&stdout, writer)?;
+            }
         }
 
-        if !run_status.stderr.is_empty() {
-            write!(writer, "\n{}", "--- ".style(header_style))?;
-            let out_len = self.write_attempt(run_status, header_style, writer)?;
-            // The width is to align test instances.
-            write!(
-                writer,
-                "{:width$}",
-                "STDERR:".style(header_style),
-                width = (21 - out_len)
-            )?;
-            self.write_instance(*test_instance, writer)?;
-            writeln!(writer, "{}", " ---".style(header_style))?;
+        {
+            let stderr = run_status.output.stderr();
+            if !stderr.is_empty() {
+                write!(writer, "\n{}", "--- ".style(header_style))?;
+                let out_len = self.write_attempt(run_status, header_style, writer)?;
+                // The width is to align test instances.
+                write!(
+                    writer,
+                    "{:width$}",
+                    "STDERR:".style(header_style),
+                    width = (21 - out_len)
+                )?;
+                self.write_instance(*test_instance, writer)?;
+                writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_output(&run_status.stderr, writer)?;
+                self.write_test_output(&stderr, writer)?;
+            }
         }
 
         writeln!(writer)

@@ -349,8 +349,8 @@ impl<'cfg> LibtestReporter<'cfg> {
                 match last_status.result {
                     ExecutionResult::Fail { .. } | ExecutionResult::ExecFail => {
                         test_suite.failed += 1;
-                        let stdout = String::from_utf8_lossy(&last_status.stdout);
-                        let stderr = String::from_utf8_lossy(&last_status.stderr);
+
+                        let output = last_status.output.lossy();
 
                         // TODO: Get the combined stdout and stderr streams, in the order they
                         // are supposed to be, to accurately replicate libtest's output
@@ -367,13 +367,8 @@ impl<'cfg> LibtestReporter<'cfg> {
                         // \n\nfailures:\n\nfailures:\n    <name>\n\ntest result: FAILED
                         // ```
 
-                        write!(
-                            out,
-                            r#","stdout":"{}{}""#,
-                            EscapedString(&stdout),
-                            EscapedString(&stderr)
-                        )
-                        .map_err(fmt_err)?;
+                        write!(out, r#","stdout":"{}""#, EscapedString(&output),)
+                            .map_err(fmt_err)?;
                     }
                     ExecutionResult::Timeout => {
                         test_suite.failed += 1;

@@ -21,6 +21,7 @@ use crate::{
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
+    test_output::TestOutput,
     time::{PausableSleep, StopwatchEnd, StopwatchStart},
 };
 use async_scoped::TokioScope;
@@ -906,12 +907,14 @@ impl<'a> TestRunnerInner<'a> {
             Ok(run_status) => run_status,
             Err(error) => {
                 // Put the error chain inside stderr.
-                let mut stderr = bytes::BytesMut::new();
-                writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
+                let mut acc = crate::test_output::TestOutputAccumulator::new();
+                {
+                    let mut stderr = acc.stderr();
+                    writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
+                }
 
                 InternalExecuteStatus {
-                    stdout: Bytes::new(),
-                    stderr: stderr.freeze(),
+                    output: acc.freeze(),
                     result: ExecutionResult::ExecFail,
                     stopwatch_end: stopwatch.end(),
                     is_slow: false,
@@ -977,15 +980,14 @@ impl<'a> TestRunnerInner<'a> {
 
         let child_stdout = child.stdout.take();
         let child_stderr = child.stderr.take();
-        let mut stdout = bytes::BytesMut::new();
-        let mut stderr = bytes::BytesMut::new();
+
+        let mut acc = crate::test_output::TestOutputAccumulator::new();
 
         let (res, leaked) = {
-            let mut collect_output_fut = std::pin::pin!(collect_output(
+            let mut collect_output_fut = std::pin::pin!(crate::test_output::collect_test_output(
                 child_stdout,
-                &mut stdout,
                 child_stderr,
-                &mut stderr
+                &mut acc,
             ));
             let mut collect_output_done = false;
 
@@ -1080,8 +1082,7 @@ impl<'a> TestRunnerInner<'a> {
         let status = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
 
         Ok(InternalExecuteStatus {
-            stdout: stdout.freeze(),
-            stderr: stderr.freeze(),
+            output: acc.freeze(),
             result: status,
             stopwatch_end: stopwatch.end(),
             is_slow,
@@ -1400,10 +1401,8 @@ impl<'a> ExecutionDescription<'a> {
 pub struct ExecuteStatus {
     /// Retry-related data.
     pub retry_data: RetryData,
-    /// Standard output for this test.
-    pub stdout: Bytes,
-    /// Standard error for this test.
-    pub stderr: Bytes,
+    /// The stdout and stderr output for this test.
+    pub output: TestOutput,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
@@ -1417,8 +1416,7 @@ pub struct ExecuteStatus {
 }
 
 struct InternalExecuteStatus {
-    stdout: Bytes,
-    stderr: Bytes,
+    output: TestOutput,
     result: ExecutionResult,
     stopwatch_end: StopwatchEnd,
     is_slow: bool,
@@ -1429,8 +1427,7 @@ impl InternalExecuteStatus {
     fn into_external(self, retry_data: RetryData) -> ExecuteStatus {
         ExecuteStatus {
             retry_data,
-            stdout: self.stdout,
-            stderr: self.stderr,
+            output: self.output,
             result: self.result,
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,

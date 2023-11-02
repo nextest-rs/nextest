@@ -409,8 +409,8 @@ impl fmt::Debug for InstanceStatus {
                         run_status.retry_data.attempt,
                         run_status.retry_data.total_attempts,
                         run_status.result,
-                        String::from_utf8_lossy(&run_status.stdout),
-                        String::from_utf8_lossy(&run_status.stderr)
+                        run_status.output.stdout_lossy(),
+                        run_status.output.stderr_lossy(),
                     )?;
                 }
                 Ok(())

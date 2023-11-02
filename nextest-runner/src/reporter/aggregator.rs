@@ -145,8 +145,8 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 for rerun in reruns {
                     let (kind, ty) = kind_ty(rerun);
-                    let stdout = String::from_utf8_lossy(&rerun.stdout);
-                    let stderr = String::from_utf8_lossy(&rerun.stderr);
+                    let stdout = rerun.output.stdout_lossy();
+                    let stderr = rerun.output.stderr_lossy();
                     let stack_trace = heuristic_extract_description(rerun.result, &stdout, &stderr);
 
                     let mut test_rerun = TestRerun::new(kind);
@@ -174,22 +174,29 @@ impl<'cfg> MetadataJunit<'cfg> {
                 // https://github.com/allure-framework/allure2/blob/master/plugins/junit-xml-plugin/src/main/java/io/qameta/allure/junitxml/JunitXmlPlugin.java#L192-L196
                 // we may have to update this format to handle that.
                 let is_success = main_status.result.is_success();
-                if !is_success {
-                    let stdout = String::from_utf8_lossy(&main_status.stdout);
-                    let stderr = String::from_utf8_lossy(&main_status.stderr);
-                    let description =
-                        heuristic_extract_description(main_status.result, &stdout, &stderr);
-                    if let Some(description) = description {
-                        testcase.status.set_description(description);
-                    }
-                }
 
-                if (junit_store_success_output && is_success)
+                if !is_success
+                    || (junit_store_success_output && is_success)
                     || (junit_store_failure_output && !is_success)
                 {
-                    testcase
-                        .set_system_out_lossy(&main_status.stdout)
-                        .set_system_err_lossy(&main_status.stderr);
+                    let stdout = main_status.output.stdout_lossy();
+                    let stderr = main_status.output.stderr_lossy();
+
+                    if !is_success {
+                        let description =
+                            heuristic_extract_description(main_status.result, &stdout, &stderr);
+                        if let Some(description) = description {
+                            testcase.status.set_description(description);
+                        }
+                    }
+
+                    if (junit_store_success_output && is_success)
+                        || (junit_store_failure_output && !is_success)
+                    {
+                        testcase
+                            .set_system_out(&stdout)
+                            .set_system_err_lossy(&stderr);
+                    }
                 }
 
                 testsuite.add_test_case(testcase);
