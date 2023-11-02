@@ -1,8 +1,7 @@
 //! Utilities for capture output from tests run in a child process
 
 use bytes::{Bytes, BytesMut};
-use std::io::Write as _;
-use std::time::Instant;
+use std::{io::Write as _, time::Instant};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 /// A single chunk of captured output, this may represent 0 or more lines
