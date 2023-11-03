@@ -978,17 +978,13 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        let child_stdout = child.stdout.take();
-        let child_stderr = child.stderr.take();
+        let streams = child.stdout.take().zip(child.stderr.take());
 
         let mut acc = crate::test_output::TestOutputAccumulator::new();
 
         let (res, leaked) = {
-            let mut collect_output_fut = std::pin::pin!(crate::test_output::collect_test_output(
-                child_stdout,
-                child_stderr,
-                &mut acc,
-            ));
+            let mut collect_output_fut =
+                std::pin::pin!(crate::test_output::collect_test_output(streams, &mut acc));
             let mut collect_output_done = false;
 
             let res = loop {
