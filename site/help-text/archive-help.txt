@@ -3,40 +3,53 @@ Build and archive tests
 Usage: cargo nextest archive [OPTIONS] --archive-file <PATH>
 
 Options:
-      --manifest-path <PATH>  Path to Cargo.toml
-  -v, --verbose               Verbose output [env: NEXTEST_VERBOSE=]
-      --color <WHEN>          Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
-  -h, --help                  Print help (see more with '--help')
+  -v, --verbose       Verbose output [env: NEXTEST_VERBOSE=]
+      --color <WHEN>  Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
+  -h, --help          Print help (see more with '--help')
 
-Cargo options:
-      --lib                     Test only this package's library unit tests
-      --bin <BIN>               Test only the specified binary
-      --bins                    Test all binaries
-      --example <EXAMPLE>       Test only the specified example
-      --examples                Test all examples
-      --test <TEST>             Test only the specified test target
-      --tests                   Test all targets
-      --bench <BENCH>           Test only the specified bench target
-      --benches                 Test all benches
-      --all-targets             Test all targets
-  -p, --package <PACKAGES>      Package to test
-      --workspace               Build all packages in the workspace
-      --exclude <EXCLUDE>       Exclude packages from the test
-      --all                     Alias for workspace (deprecated)
-  -r, --release                 Build artifacts in release mode, with optimizations
-      --cargo-profile <NAME>    Build artifacts with the specified Cargo profile
-      --build-jobs <JOBS>       Number of build jobs to run
-  -F, --features <FEATURES>     Space or comma separated list of features to activate
-      --all-features            Activate all available features
-      --no-default-features     Do not activate the `default` feature
-      --target <TRIPLE>         Build for the target triple
-      --target-dir <DIR>        Directory for all generated artifacts
+Package selection:
+  -p, --package <PACKAGES>  Package to test
+      --workspace           Test all packages in the workspace
+      --exclude <EXCLUDE>   Exclude packages from the test
+      --all                 Alias for --workspace (deprecated)
+
+Target selection:
+      --lib                Test only this package's library unit tests
+      --bin <BIN>          Test only the specified binary
+      --bins               Test all binaries
+      --example <EXAMPLE>  Test only the specified example
+      --examples           Test all examples
+      --test <TEST>        Test only the specified test target
+      --tests              Test all targets
+      --bench <BENCH>      Test only the specified bench target
+      --benches            Test all benches
+      --all-targets        Test all targets
+
+Feature selection:
+  -F, --features <FEATURES>  Space or comma separated list of features to activate
+      --all-features         Activate all available features
+      --no-default-features  Do not activate the `default` feature
+
+Compilation options:
+      --build-jobs <N>        Number of build jobs to run
+  -r, --release               Build artifacts in release mode, with optimizations
+      --cargo-profile <NAME>  Build artifacts with the specified Cargo profile
+      --target <TRIPLE>       Build for the target triple
+      --target-dir <DIR>      Directory for all generated artifacts
+      --unit-graph            Output build graph in JSON (unstable)
+      --timings[=<FMTS>]      Timing output formats (unstable) (comma separated): html, json
+
+Manifest options:
+      --manifest-path <PATH>  Path to Cargo.toml
+      --frozen                Require Cargo.lock and cache are up to date
+      --locked                Require Cargo.lock is up to date
+      --offline               Run without accessing the network
+
+Other Cargo options:
+      --cargo-quiet             Do not print cargo log messages
+      --cargo-verbose...        Use cargo verbose output (specify twice for very verbose/build.rs output)
       --ignore-rust-version     Ignore `rust-version` specification in packages
-      --unit-graph              Output build graph in JSON (unstable)
       --future-incompat-report  Outputs a future incompatibility report at the end of the build
-      --frozen                  Require Cargo.lock and cache are up to date
-      --locked                  Require Cargo.lock is up to date
-      --offline                 Run without accessing the network
       --config <KEY=VALUE>      Override a configuration value
   -Z <FLAG>                     Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
 
@@ -46,5 +59,9 @@ Archive options:
       --zstd-level <LEVEL>       Zstandard compression level (-7 to 22, higher is more compressed + slower) [default: 0]
 
 Config options:
-      --config-file <PATH>                Config file [default: workspace-root/.config/nextest.toml]
-      --tool-config-file <TOOL:ABS_PATH>  Tool-specific config files
+      --config-file <PATH>
+          Config file [default: workspace-root/.config/nextest.toml]
+      --tool-config-file <TOOL:ABS_PATH>
+          Tool-specific config files
+      --override-version-check
+          Override checks for the minimum version defined in nextest's config

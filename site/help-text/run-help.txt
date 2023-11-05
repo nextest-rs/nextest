@@ -7,57 +7,70 @@ Arguments:
   [TEST-BINARY-ARGS]...  Emulated cargo test binary arguments (partially supported)
 
 Options:
+  -P, --profile <PROFILE>  Nextest profile to use [env: NEXTEST_PROFILE=]
+  -v, --verbose            Verbose output [env: NEXTEST_VERBOSE=]
+      --color <WHEN>       Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
+  -h, --help               Print help (see more with '--help')
+
+Package selection:
+  -p, --package <PACKAGES>  Package to test
+      --workspace           Test all packages in the workspace
+      --exclude <EXCLUDE>   Exclude packages from the test
+      --all                 Alias for --workspace (deprecated)
+
+Target selection:
+      --lib                Test only this package's library unit tests
+      --bin <BIN>          Test only the specified binary
+      --bins               Test all binaries
+      --example <EXAMPLE>  Test only the specified example
+      --examples           Test all examples
+      --test <TEST>        Test only the specified test target
+      --tests              Test all targets
+      --bench <BENCH>      Test only the specified bench target
+      --benches            Test all benches
+      --all-targets        Test all targets
+
+Feature selection:
+  -F, --features <FEATURES>  Space or comma separated list of features to activate
+      --all-features         Activate all available features
+      --no-default-features  Do not activate the `default` feature
+
+Compilation options:
+      --build-jobs <N>        Number of build jobs to run
+  -r, --release               Build artifacts in release mode, with optimizations
+      --cargo-profile <NAME>  Build artifacts with the specified Cargo profile
+      --target <TRIPLE>       Build for the target triple
+      --target-dir <DIR>      Directory for all generated artifacts
+      --unit-graph            Output build graph in JSON (unstable)
+      --timings[=<FMTS>]      Timing output formats (unstable) (comma separated): html, json
+
+Manifest options:
       --manifest-path <PATH>  Path to Cargo.toml
-  -P, --profile <PROFILE>     Nextest profile to use [env: NEXTEST_PROFILE=]
-  -v, --verbose               Verbose output [env: NEXTEST_VERBOSE=]
-      --color <WHEN>          Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
-  -h, --help                  Print help (see more with '--help')
+      --frozen                Require Cargo.lock and cache are up to date
+      --locked                Require Cargo.lock is up to date
+      --offline               Run without accessing the network
 
-Runner options:
-      --no-run                  Compile, but don't run tests
-  -j, --test-threads <THREADS>  Number of tests to run simultaneously [possible values: integer or "num-cpus"] [default: from profile] [env: NEXTEST_TEST_THREADS=] [aliases: jobs]
-      --retries <RETRIES>       Number of retries for failing tests [default: from profile] [env: NEXTEST_RETRIES=]
-      --fail-fast               Cancel test run on the first failure
-      --no-fail-fast            Run all tests regardless of failure
-      --no-capture              Run tests serially and do not capture output
-
-Cargo options:
-      --lib                     Test only this package's library unit tests
-      --bin <BIN>               Test only the specified binary
-      --bins                    Test all binaries
-      --example <EXAMPLE>       Test only the specified example
-      --examples                Test all examples
-      --test <TEST>             Test only the specified test target
-      --tests                   Test all targets
-      --bench <BENCH>           Test only the specified bench target
-      --benches                 Test all benches
-      --all-targets             Test all targets
-  -p, --package <PACKAGES>      Package to test
-      --workspace               Build all packages in the workspace
-      --exclude <EXCLUDE>       Exclude packages from the test
-      --all                     Alias for workspace (deprecated)
-  -r, --release                 Build artifacts in release mode, with optimizations
-      --cargo-profile <NAME>    Build artifacts with the specified Cargo profile
-      --build-jobs <JOBS>       Number of build jobs to run
-  -F, --features <FEATURES>     Space or comma separated list of features to activate
-      --all-features            Activate all available features
-      --no-default-features     Do not activate the `default` feature
-      --target <TRIPLE>         Build for the target triple
-      --target-dir <DIR>        Directory for all generated artifacts
+Other Cargo options:
+      --cargo-quiet             Do not print cargo log messages
+      --cargo-verbose...        Use cargo verbose output (specify twice for very verbose/build.rs output)
       --ignore-rust-version     Ignore `rust-version` specification in packages
-      --unit-graph              Output build graph in JSON (unstable)
       --future-incompat-report  Outputs a future incompatibility report at the end of the build
-      --frozen                  Require Cargo.lock and cache are up to date
-      --locked                  Require Cargo.lock is up to date
-      --offline                 Run without accessing the network
       --config <KEY=VALUE>      Override a configuration value
   -Z <FLAG>                     Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
 
 Filter options:
-      --run-ignored <WHICH>       Run ignored tests [possible values: default, ignored-only, all]
-      --partition <PARTITION>     Test partition, e.g. hash:1/2 or count:2/3
-  -E, --filter-expr <EXPRESSION>  Test filter expression (see 
-                                  <https://nexte.st/book/filter-expressions>)
+      --run-ignored <WHICH>    Run ignored tests [possible values: default, ignored-only, all]
+      --partition <PARTITION>  Test partition, e.g. hash:1/2 or count:2/3
+  -E, --filter-expr <EXPR>     Test filter expression (see 
+                               <https://nexte.st/book/filter-expressions>)
+
+Runner options:
+      --no-run            Compile, but don't run tests
+  -j, --test-threads <N>  Number of tests to run simultaneously [possible values: integer or "num-cpus"] [default: from profile] [env: NEXTEST_TEST_THREADS=] [aliases: jobs]
+      --retries <N>       Number of retries for failing tests [default: from profile] [env: NEXTEST_RETRIES=]
+      --fail-fast         Cancel test run on the first failure
+      --no-fail-fast      Run all tests regardless of failure
+      --no-capture        Run tests serially and do not capture output
 
 Reporter options:
       --failure-output <WHEN>       Output stdout and stderr on failure [env: NEXTEST_FAILURE_OUTPUT=] [possible values: immediate, immediate-final, final, never]
@@ -71,12 +84,16 @@ Reuse build options:
       --archive-format <FORMAT>   Archive format [default: auto] [possible values: auto, tar-zst]
       --extract-to <DIR>          Destination directory to extract archive to [default: temporary directory]
       --extract-overwrite         Overwrite files in destination directory while extracting archive
-      --persist-extract-tempdir   Persist temporary directory destination is extracted to
+      --persist-extract-tempdir   Persist extracted temporary directory
       --cargo-metadata <PATH>     Path to cargo metadata JSON
       --workspace-remap <PATH>    Remapping for the workspace root
       --binaries-metadata <PATH>  Path to binaries-metadata JSON
       --target-dir-remap <PATH>   Remapping for the target directory
 
 Config options:
-      --config-file <PATH>                Config file [default: workspace-root/.config/nextest.toml]
-      --tool-config-file <TOOL:ABS_PATH>  Tool-specific config files
+      --config-file <PATH>
+          Config file [default: workspace-root/.config/nextest.toml]
+      --tool-config-file <TOOL:ABS_PATH>
+          Tool-specific config files
+      --override-version-check
+          Override checks for the minimum version defined in nextest's config

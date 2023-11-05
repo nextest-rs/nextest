@@ -11,146 +11,192 @@ use std::{borrow::Cow, path::PathBuf};
 /// Options passed down to cargo.
 #[derive(Debug, Args)]
 #[command(
-    next_help_heading = "Cargo options",
     group = clap::ArgGroup::new("cargo-opts").multiple(true),
 )]
 pub(crate) struct CargoOptions {
-    /// Test only this package's library unit tests
-    #[arg(long, group = "cargo-opts")]
-    lib: bool,
-
-    /// Test only the specified binary
-    #[arg(long, group = "cargo-opts")]
-    bin: Vec<String>,
-
-    /// Test all binaries
-    #[arg(long, group = "cargo-opts")]
-    bins: bool,
-
-    /// Test only the specified example
-    #[arg(long, group = "cargo-opts")]
-    example: Vec<String>,
-
-    /// Test all examples
-    #[arg(long, group = "cargo-opts")]
-    examples: bool,
-
-    /// Test only the specified test target
-    #[arg(long, group = "cargo-opts")]
-    test: Vec<String>,
-
-    /// Test all targets
-    #[arg(long, group = "cargo-opts")]
-    tests: bool,
-
-    /// Test only the specified bench target
-    #[arg(long, group = "cargo-opts")]
-    bench: Vec<String>,
-
-    /// Test all benches
-    #[arg(long, group = "cargo-opts")]
-    benches: bool,
-
-    /// Test all targets
-    #[arg(long, group = "cargo-opts")]
-    all_targets: bool,
-
-    //  TODO: doc?
-    // no-run is handled by test runner
     /// Package to test
-    #[arg(short = 'p', long = "package", group = "cargo-opts")]
+    #[arg(
+        short = 'p',
+        long = "package",
+        group = "cargo-opts",
+        help_heading = "Package selection"
+    )]
     packages: Vec<String>,
 
-    /// Build all packages in the workspace
-    #[arg(long, group = "cargo-opts")]
+    /// Test all packages in the workspace
+    #[arg(long, group = "cargo-opts", help_heading = "Package selection")]
     workspace: bool,
 
     /// Exclude packages from the test
-    #[arg(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts", help_heading = "Package selection")]
     exclude: Vec<String>,
 
-    /// Alias for workspace (deprecated)
-    #[arg(long, group = "cargo-opts")]
+    /// Alias for --workspace (deprecated)
+    #[arg(long, group = "cargo-opts", help_heading = "Package selection")]
     all: bool,
 
-    // jobs is handled by test runner
-    /// Build artifacts in release mode, with optimizations
-    #[arg(long, short = 'r', group = "cargo-opts")]
-    release: bool,
+    /// Test only this package's library unit tests
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    lib: bool,
 
-    /// Build artifacts with the specified Cargo profile
-    #[arg(long, value_name = "NAME", group = "cargo-opts")]
-    cargo_profile: Option<String>,
+    /// Test only the specified binary
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    bin: Vec<String>,
 
-    /// Do not print cargo log messages
-    #[arg(long, group = "cargo-opts")]
-    cargo_quiet: bool,
+    /// Test all binaries
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    bins: bool,
 
-    /// Use cargo verbose output (specify twice for very verbose/build.rs output)
-    #[arg(long, action = ArgAction::Count, group = "cargo-opts")]
-    cargo_verbose: u8,
+    /// Test only the specified example
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    example: Vec<String>,
 
-    /// Number of build jobs to run
-    #[arg(long, value_name = "JOBS", group = "cargo-opts")]
-    build_jobs: Option<String>,
+    /// Test all examples
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    examples: bool,
+
+    /// Test only the specified test target
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    test: Vec<String>,
+
+    /// Test all targets
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    tests: bool,
+
+    /// Test only the specified bench target
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    bench: Vec<String>,
+
+    /// Test all benches
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    benches: bool,
+
+    /// Test all targets
+    #[arg(long, group = "cargo-opts", help_heading = "Target selection")]
+    all_targets: bool,
 
     /// Space or comma separated list of features to activate
-    #[arg(long, short = 'F', group = "cargo-opts")]
+    #[arg(
+        long,
+        short = 'F',
+        group = "cargo-opts",
+        help_heading = "Feature selection"
+    )]
     features: Vec<String>,
 
     /// Activate all available features
-    #[arg(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts", help_heading = "Feature selection")]
     all_features: bool,
 
     /// Do not activate the `default` feature
-    #[arg(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts", help_heading = "Feature selection")]
     no_default_features: bool,
 
+    // jobs is handled by test runner
+    /// Number of build jobs to run
+    #[arg(
+        long,
+        value_name = "N",
+        group = "cargo-opts",
+        help_heading = "Compilation options"
+    )]
+    build_jobs: Option<String>,
+
+    /// Build artifacts in release mode, with optimizations
+    #[arg(
+        long,
+        short = 'r',
+        group = "cargo-opts",
+        help_heading = "Compilation options"
+    )]
+    release: bool,
+
+    /// Build artifacts with the specified Cargo profile
+    #[arg(
+        long,
+        // This is shortened from PROFILE-NAME to NAME to reduce option column width.
+        value_name = "NAME",
+        group = "cargo-opts",
+        help_heading = "Compilation options"
+    )]
+    cargo_profile: Option<String>,
+
     /// Build for the target triple
-    #[arg(long, value_name = "TRIPLE", group = "cargo-opts")]
+    #[arg(
+        long,
+        value_name = "TRIPLE",
+        group = "cargo-opts",
+        help_heading = "Compilation options"
+    )]
     pub(crate) target: Option<String>,
 
     /// Directory for all generated artifacts
-    #[arg(long, value_name = "DIR", group = "cargo-opts")]
+    #[arg(
+        long,
+        value_name = "DIR",
+        group = "cargo-opts",
+        help_heading = "Compilation options"
+    )]
     pub(crate) target_dir: Option<Utf8PathBuf>,
 
-    /// Ignore `rust-version` specification in packages
-    #[arg(long, group = "cargo-opts")]
-    ignore_rust_version: bool,
-    // --message-format is captured by nextest
     /// Output build graph in JSON (unstable)
-    #[arg(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts", help_heading = "Compilation options")]
     unit_graph: bool,
 
-    /// Outputs a future incompatibility report at the end of the build
-    #[arg(long, group = "cargo-opts")]
-    future_incompat_report: bool,
-
     /// Timing output formats (unstable) (comma separated): html, json
-    #[arg(long, require_equals = true, value_name = "FMTS", group = "cargo-opts")]
+    #[arg(
+        long,
+        require_equals = true,
+        value_name = "FMTS",
+        group = "cargo-opts",
+        help_heading = "Compilation options"
+    )]
     timings: Option<Option<String>>,
 
     // --color is handled by runner
     /// Require Cargo.lock and cache are up to date
-    #[arg(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts", help_heading = "Manifest options")]
     frozen: bool,
 
     /// Require Cargo.lock is up to date
-    #[arg(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts", help_heading = "Manifest options")]
     locked: bool,
 
     /// Run without accessing the network
-    #[arg(long, group = "cargo-opts")]
+    #[arg(long, group = "cargo-opts", help_heading = "Manifest options")]
     offline: bool,
 
-    // NOTE: this does not conflict with reuse build opts since we let target.runner be specified
-    // this way
+    //  TODO: doc?
+    // no-run is handled by test runner
+    /// Do not print cargo log messages
+    #[arg(long, group = "cargo-opts", help_heading = "Other Cargo options")]
+    cargo_quiet: bool,
+
+    /// Use cargo verbose output (specify twice for very verbose/build.rs output)
+    #[arg(long, action = ArgAction::Count, group = "cargo-opts", help_heading = "Other Cargo options")]
+    cargo_verbose: u8,
+
+    /// Ignore `rust-version` specification in packages
+    #[arg(long, group = "cargo-opts", help_heading = "Other Cargo options")]
+    ignore_rust_version: bool,
+    // --message-format is captured by nextest
+    /// Outputs a future incompatibility report at the end of the build
+    #[arg(long, group = "cargo-opts", help_heading = "Other Cargo options")]
+    future_incompat_report: bool,
+
+    // NOTE: this does not conflict with reuse build opts (not part of the cargo-opts group) since
+    // we let target.runner be specified this way
     /// Override a configuration value
-    #[arg(long, value_name = "KEY=VALUE")]
+    #[arg(long, value_name = "KEY=VALUE", help_heading = "Other Cargo options")]
     pub(crate) config: Vec<String>,
 
     /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
-    #[clap(short = 'Z', value_name = "FLAG", group = "cargo-opts")]
+    #[clap(
+        short = 'Z',
+        value_name = "FLAG",
+        group = "cargo-opts",
+        help_heading = "Other Cargo options"
+    )]
     unstable_flags: Vec<String>,
 }
 
@@ -191,6 +237,31 @@ impl<'a> CargoCli<'a> {
     }
 
     pub(crate) fn add_options(&mut self, options: &'a CargoOptions) -> &mut Self {
+        // ---
+        // Package selection
+        // ---
+        self.add_args(
+            options
+                .packages
+                .iter()
+                .flat_map(|s| ["--package", s.as_str()]),
+        );
+        if options.workspace {
+            self.add_arg("--workspace");
+        }
+        self.add_args(
+            options
+                .exclude
+                .iter()
+                .flat_map(|s| ["--exclude", s.as_str()]),
+        );
+        if options.all {
+            self.add_arg("--all");
+        }
+
+        // ---
+        // Target selection
+        // ---
         if options.lib {
             self.add_arg("--lib");
         }
@@ -218,39 +289,10 @@ impl<'a> CargoCli<'a> {
         if options.all_targets {
             self.add_arg("--all-targets");
         }
-        self.add_args(
-            options
-                .packages
-                .iter()
-                .flat_map(|s| ["--package", s.as_str()]),
-        );
-        if options.workspace {
-            self.add_arg("--workspace");
-        }
-        self.add_args(
-            options
-                .exclude
-                .iter()
-                .flat_map(|s| ["--exclude", s.as_str()]),
-        );
-        if options.all {
-            self.add_arg("--all");
-        }
-        if options.release {
-            self.add_arg("--release");
-        }
-        if let Some(profile) = &options.cargo_profile {
-            self.add_args(["--profile", profile]);
-        }
-        if options.cargo_quiet {
-            self.add_arg("--quiet");
-        }
-        if options.cargo_verbose > 0 {
-            self.add_args(std::iter::repeat("--verbose").take(options.cargo_verbose.into()));
-        }
-        if let Some(build_jobs) = &options.build_jobs {
-            self.add_args(["--jobs", build_jobs.as_str()]);
-        }
+
+        // ---
+        // Feature selection
+        // ---
         self.add_args(options.features.iter().flat_map(|s| ["--features", s]));
         if options.all_features {
             self.add_arg("--all-features");
@@ -258,14 +300,24 @@ impl<'a> CargoCli<'a> {
         if options.no_default_features {
             self.add_arg("--no-default-features");
         }
+
+        // ---
+        // Compilation options
+        // ---
+        if let Some(build_jobs) = &options.build_jobs {
+            self.add_args(["--jobs", build_jobs.as_str()]);
+        }
+        if options.release {
+            self.add_arg("--release");
+        }
+        if let Some(profile) = &options.cargo_profile {
+            self.add_args(["--profile", profile]);
+        }
         if let Some(target) = &options.target {
             self.add_args(["--target", target]);
         }
         if let Some(target_dir) = &options.target_dir {
             self.add_args(["--target-dir", target_dir.as_str()]);
-        }
-        if options.ignore_rust_version {
-            self.add_arg("--ignore-rust-version");
         }
         if options.unit_graph {
             self.add_arg("--unit-graph");
@@ -283,9 +335,10 @@ impl<'a> CargoCli<'a> {
                 }
             }
         }
-        if options.future_incompat_report {
-            self.add_arg("--future-incompat-report");
-        }
+
+        // ---
+        // Manifest options
+        // ---
         if options.frozen {
             self.add_arg("--frozen");
         }
@@ -295,6 +348,22 @@ impl<'a> CargoCli<'a> {
         if options.offline {
             self.add_arg("--offline");
         }
+
+        // ---
+        // Other Cargo options
+        // ---
+        if options.cargo_quiet {
+            self.add_arg("--quiet");
+        }
+        if options.cargo_verbose > 0 {
+            self.add_args(std::iter::repeat("--verbose").take(options.cargo_verbose.into()));
+        }
+        if options.ignore_rust_version {
+            self.add_arg("--ignore-rust-version");
+        }
+        if options.future_incompat_report {
+            self.add_arg("--future-incompat-report");
+        }
         self.add_args(options.config.iter().flat_map(|s| ["--config", s.as_str()]));
         self.add_args(
             options
@@ -302,8 +371,6 @@ impl<'a> CargoCli<'a> {
                 .iter()
                 .flat_map(|s| ["-Z", s.as_str()]),
         );
-
-        // TODO: other options
 
         self
     }

@@ -87,7 +87,12 @@ enum NextestSubcommand {
 #[command(version)]
 struct AppOpts {
     /// Path to Cargo.toml
-    #[arg(long, global = true, value_name = "PATH")]
+    #[arg(
+        long,
+        global = true,
+        value_name = "PATH",
+        help_heading = "Manifest options"
+    )]
     manifest_path: Option<Utf8PathBuf>,
 
     #[clap(flatten)]
@@ -299,6 +304,15 @@ enum Command {
         #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
         profile: Option<String>,
 
+        #[clap(flatten)]
+        cargo_options: CargoOptions,
+
+        #[clap(flatten)]
+        build_filter: TestBuildFilter,
+
+        #[clap(flatten)]
+        runner_opts: TestRunnerOpts,
+
         /// Run tests serially and do not capture output
         #[arg(
             long,
@@ -308,15 +322,6 @@ enum Command {
             display_order = 100
         )]
         no_capture: bool,
-
-        #[clap(flatten)]
-        cargo_options: CargoOptions,
-
-        #[clap(flatten)]
-        build_filter: TestBuildFilter,
-
-        #[clap(flatten)]
-        runner_opts: TestRunnerOpts,
 
         #[clap(flatten)]
         reporter_opts: TestReporterOpts,
@@ -468,12 +473,7 @@ struct TestBuildFilter {
     pub(crate) platform_filter: PlatformFilterOpts,
 
     /// Test filter expression (see {n}<https://nexte.st/book/filter-expressions>)
-    #[arg(
-        long,
-        short = 'E',
-        value_name = "EXPRESSION",
-        action(ArgAction::Append)
-    )]
+    #[arg(long, short = 'E', value_name = "EXPR", action(ArgAction::Append))]
     filter_expr: Vec<String>,
 
     // TODO: add regex-based filtering in the future?
@@ -680,7 +680,7 @@ pub struct TestRunnerOpts {
         long,
         short = 'j',
         visible_alias = "jobs",
-        value_name = "THREADS",
+        value_name = "N",
         conflicts_with_all = &["no-capture", "no-run"],
         env = "NEXTEST_TEST_THREADS",
         allow_negative_numbers = true,
@@ -688,7 +688,12 @@ pub struct TestRunnerOpts {
     test_threads: Option<TestThreads>,
 
     /// Number of retries for failing tests [default: from profile]
-    #[arg(long, env = "NEXTEST_RETRIES", conflicts_with = "no-run")]
+    #[arg(
+        long,
+        env = "NEXTEST_RETRIES",
+        value_name = "N",
+        conflicts_with = "no-run"
+    )]
     retries: Option<usize>,
 
     /// Cancel test run on the first failure

@@ -55,7 +55,7 @@ pub(crate) struct ReuseBuildOpts {
     #[arg(long, conflicts_with = "cargo-opts", requires_all = &["archive_file", "extract_to"])]
     pub(crate) extract_overwrite: bool,
 
-    /// Persist temporary directory destination is extracted to
+    /// Persist extracted temporary directory
     #[arg(long, conflicts_with_all = &["cargo-opts", "extract_to"], requires = "archive_file")]
     pub(crate) persist_extract_tempdir: bool,
 
