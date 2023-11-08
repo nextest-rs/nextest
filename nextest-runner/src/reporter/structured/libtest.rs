@@ -73,6 +73,8 @@ struct LibtestSuite {
     ignored: usize,
     /// The number of tests that were not executed due to filters
     filtered: usize,
+    /// The number of tests in this suite that are still running
+    running: usize,
     /// The accumulated duration of every test that has been executed
     total: std::time::Duration,
     /// Libtest outputs outputs a `started` event for every test that isn't
@@ -277,6 +279,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                 out.extend_from_slice(b"}\n");
 
                 e.insert(LibtestSuite {
+                    running: suite_info.status.test_count(),
                     failed: 0,
                     succeeded: 0,
                     ignored: 0,
@@ -322,15 +325,12 @@ impl<'cfg> LibtestReporter<'cfg> {
             out.extend_from_slice(b"\"");
         }
 
-        let done = match &event.kind {
-            TestEventKind::TestFinished {
-                run_statuses,
-                running,
-                ..
-            } => {
+        match &event.kind {
+            TestEventKind::TestFinished { run_statuses, .. } => {
                 let last_status = run_statuses.last_status();
 
                 test_suite.total += last_status.time_taken;
+                test_suite.running -= 1;
 
                 // libtest actually requires an additional `--report-time` flag to be
                 // passed for the exec_time information to be written. This doesn't
@@ -380,8 +380,6 @@ impl<'cfg> LibtestReporter<'cfg> {
                         test_suite.succeeded += 1;
                     }
                 }
-
-                *running == 0
             }
             TestEventKind::TestSkipped { reason, .. } => {
                 if matches!(reason, MismatchReason::Ignored) {
@@ -389,6 +387,8 @@ impl<'cfg> LibtestReporter<'cfg> {
                 } else {
                     test_suite.filtered += 1;
                 }
+
+                test_suite.running -= 1;
 
                 if test_suite.ignore_block.is_none() {
                     test_suite.ignore_block = Some(bytes::BytesMut::with_capacity(1024));
@@ -406,17 +406,15 @@ impl<'cfg> LibtestReporter<'cfg> {
                     test_instance.name,
                 )
                 .map_err(fmt_err)?;
-
-                false
             }
-            _ => false,
+            _ => {}
         };
 
         out.extend_from_slice(b"}\n");
 
         // If this is the last test of the suite, emit the test suite summary
         // before emitting the entire block
-        if !done {
+        if test_suite.running > 0 {
             return Ok(());
         }
 
@@ -448,10 +446,13 @@ impl<'cfg> LibtestReporter<'cfg> {
 
         out.extend_from_slice(b"}\n");
 
-        use std::io::Write as _;
-        std::io::stdout()
-            .write_all(out)
-            .map_err(WriteEventError::Io)?;
+        {
+            use std::io::Write as _;
+
+            let mut stdout = std::io::stdout().lock();
+            stdout.write_all(out).map_err(WriteEventError::Io)?;
+            stdout.flush().map_err(WriteEventError::Io)?;
+        }
 
         // Once we've emitted the output block we can remove the suite accumulator
         // to free up memory since we won't use it again
