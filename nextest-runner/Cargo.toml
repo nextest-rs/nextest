@@ -33,7 +33,7 @@ guppy = "0.17.1"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
 home = "0.5.5"
-http = "0.2.9"
+http = "0.2.10"
 humantime-serde = "1.1.1"
 indent_write = "2.2.0"
 indicatif = "0.17.7"
