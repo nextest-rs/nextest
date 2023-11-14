@@ -67,6 +67,7 @@ impl CargoNextestApp {
 
         match self.subcommand {
             NextestSubcommand::Nextest(app) => app.exec(output_writer),
+            NextestSubcommand::Ntr(opts) => opts.exec(output_writer),
             #[cfg(unix)]
             NextestSubcommand::DoubleSpawn(opts) => opts.exec(),
         }
@@ -77,6 +78,8 @@ impl CargoNextestApp {
 enum NextestSubcommand {
     /// A next-generation test runner for Rust. <https://nexte.st>
     Nextest(Box<AppOpts>),
+    /// Build and run tests: a shortcut for `cargo nextest run`.
+    Ntr(Box<NtrOpts>),
     /// Private command, used to double-spawn test processes.
     #[cfg(unix)]
     #[command(name = nextest_runner::double_spawn::DoubleSpawnInfo::SUBCOMMAND_NAME, hide = true)]
@@ -86,20 +89,8 @@ enum NextestSubcommand {
 #[derive(Debug, Args)]
 #[command(version)]
 struct AppOpts {
-    /// Path to Cargo.toml
-    #[arg(
-        long,
-        global = true,
-        value_name = "PATH",
-        help_heading = "Manifest options"
-    )]
-    manifest_path: Option<Utf8PathBuf>,
-
     #[clap(flatten)]
-    output: OutputOpts,
-
-    #[clap(flatten)]
-    config_opts: ConfigOpts,
+    common: CommonOpts,
 
     #[clap(subcommand)]
     command: Command,
@@ -110,7 +101,7 @@ impl AppOpts {
     ///
     /// Returns the exit code.
     fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
-        let output = self.output.init();
+        let output = self.common.output.init();
 
         match self.command {
             Command::List {
@@ -125,38 +116,29 @@ impl AppOpts {
                     output,
                     reuse_build,
                     cargo_options,
-                    self.config_opts,
-                    self.manifest_path,
+                    self.common.config_opts,
+                    self.common.manifest_path,
                     output_writer,
                 )?;
                 let app = App::new(base, build_filter)?;
                 app.exec_list(message_format, list_type, output_writer)?;
                 Ok(0)
             }
-            Command::Run {
-                profile,
-                no_capture,
-                cargo_options,
-                build_filter,
-                runner_opts,
-                reporter_opts,
-                reuse_build,
-                ..
-            } => {
+            Command::Run(run_opts) => {
                 let base = BaseApp::new(
                     output,
-                    reuse_build,
-                    cargo_options,
-                    self.config_opts,
-                    self.manifest_path,
+                    run_opts.reuse_build,
+                    run_opts.cargo_options,
+                    self.common.config_opts,
+                    self.common.manifest_path,
                     output_writer,
                 )?;
-                let app = App::new(base, build_filter)?;
+                let app = App::new(base, run_opts.build_filter)?;
                 app.exec_run(
-                    profile.as_deref(),
-                    no_capture,
-                    &runner_opts,
-                    &reporter_opts,
+                    run_opts.profile.as_deref(),
+                    run_opts.no_capture,
+                    &run_opts.runner_opts,
+                    &run_opts.reporter_opts,
                     output_writer,
                 )?;
                 Ok(0)
@@ -171,22 +153,41 @@ impl AppOpts {
                     output,
                     ReuseBuildOpts::default(),
                     cargo_options,
-                    self.config_opts,
-                    self.manifest_path,
+                    self.common.config_opts,
+                    self.common.manifest_path,
                     output_writer,
                 )?;
                 app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
                 Ok(0)
             }
             Command::ShowConfig { command } => command.exec(
-                self.manifest_path,
-                self.output,
-                self.config_opts,
+                self.common.manifest_path,
+                self.common.output,
+                self.common.config_opts,
                 output_writer,
             ),
-            Command::Self_ { command } => command.exec(self.output),
+            Command::Self_ { command } => command.exec(self.common.output),
         }
     }
+}
+
+// Options shared between cargo nextest and cargo ntr.
+#[derive(Debug, Args)]
+struct CommonOpts {
+    /// Path to Cargo.toml
+    #[arg(
+        long,
+        global = true,
+        value_name = "PATH",
+        help_heading = "Manifest options"
+    )]
+    manifest_path: Option<Utf8PathBuf>,
+
+    #[clap(flatten)]
+    output: OutputOpts,
+
+    #[clap(flatten)]
+    config_opts: ConfigOpts,
 }
 
 #[derive(Debug, Args)]
@@ -299,36 +300,7 @@ enum Command {
     ///
     /// For more information, see <https://nexte.st/book/running>.
     #[command(visible_alias = "r")]
-    Run {
-        /// Nextest profile to use
-        #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
-        profile: Option<String>,
-
-        #[clap(flatten)]
-        cargo_options: CargoOptions,
-
-        #[clap(flatten)]
-        build_filter: TestBuildFilter,
-
-        #[clap(flatten)]
-        runner_opts: TestRunnerOpts,
-
-        /// Run tests serially and do not capture output
-        #[arg(
-            long,
-            name = "no-capture",
-            alias = "nocapture",
-            help_heading = "Runner options",
-            display_order = 100
-        )]
-        no_capture: bool,
-
-        #[clap(flatten)]
-        reporter_opts: TestReporterOpts,
-
-        #[clap(flatten)]
-        reuse_build: ReuseBuildOpts,
-    },
+    Run(RunOpts),
     /// Build and archive tests
     ///
     /// This command builds test binaries and archives them to a file. The archive can then be
@@ -389,6 +361,71 @@ enum Command {
         #[clap(subcommand)]
         command: SelfCommand,
     },
+}
+
+#[derive(Debug, Args)]
+struct NtrOpts {
+    #[clap(flatten)]
+    common: CommonOpts,
+
+    #[clap(flatten)]
+    run_opts: RunOpts,
+}
+
+impl NtrOpts {
+    fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
+        let output = self.common.output.init();
+
+        let base = BaseApp::new(
+            output,
+            self.run_opts.reuse_build,
+            self.run_opts.cargo_options,
+            self.common.config_opts,
+            self.common.manifest_path,
+            output_writer,
+        )?;
+        let app = App::new(base, self.run_opts.build_filter)?;
+        app.exec_run(
+            self.run_opts.profile.as_deref(),
+            self.run_opts.no_capture,
+            &self.run_opts.runner_opts,
+            &self.run_opts.reporter_opts,
+            output_writer,
+        )?;
+        Ok(0)
+    }
+}
+
+#[derive(Debug, Args)]
+struct RunOpts {
+    /// Nextest profile to use
+    #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
+    profile: Option<String>,
+
+    #[clap(flatten)]
+    cargo_options: CargoOptions,
+
+    #[clap(flatten)]
+    build_filter: TestBuildFilter,
+
+    #[clap(flatten)]
+    runner_opts: TestRunnerOpts,
+
+    /// Run tests serially and do not capture output
+    #[arg(
+        long,
+        name = "no-capture",
+        alias = "nocapture",
+        help_heading = "Runner options",
+        display_order = 100
+    )]
+    no_capture: bool,
+
+    #[clap(flatten)]
+    reporter_opts: TestReporterOpts,
+
+    #[clap(flatten)]
+    reuse_build: ReuseBuildOpts,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
