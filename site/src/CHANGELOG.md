@@ -5,6 +5,12 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ## [0.9.62] - 2023-11-14
 
+### Added
+
+- If you create a symlink manually named `cargo-ntr` and pointing to `cargo-nextest`, you can now
+  shorten `cargo nextest run` to `cargo ntr`. In the future, this symlink will be automatically
+  created at install time.
+
 ### Changed
 
 - Deprecated test name filters passed in before `--`. For example, `cargo nextest run my_test` is deprecated; use `cargo nextest run -- my_test` instead. See [#1109] for motivation and more information.
