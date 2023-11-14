@@ -476,7 +476,6 @@ struct TestBuildFilter {
     #[arg(long, short = 'E', value_name = "EXPR", action(ArgAction::Append))]
     filter_expr: Vec<String>,
 
-    // TODO: add regex-based filtering in the future?
     /// Test name filter
     #[arg(name = "FILTERS", help_heading = None)]
     filter: Vec<String>,
