@@ -38,7 +38,7 @@ cargo nextest run -E 'test(my_test) + package(my-crate)'
 >
 > For example, the command:
 >
->     cargo nextest run -E 'package(foo)' test_bar test_baz
+>     cargo nextest run -E 'package(foo)' -- test_bar test_baz
 >
 > will run all tests that are both in package `foo` and match `test_bar` or `test_baz`.
 

@@ -38,10 +38,8 @@ For a full list of options accepted by `cargo nextest run`, see `cargo nextest r
 To only run tests that match certain names:
 
 ```
-cargo nextest run <test-name1> <test-name2>...
+cargo nextest run -- <test-name1> <test-name2>...
 ```
-
-This is different from `cargo test`, where you have to specify a `--`, for example: `cargo test -- <test-name1> <test-name2>...`.
 
 ### `--skip` and `--exact`
 

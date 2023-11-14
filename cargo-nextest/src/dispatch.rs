@@ -476,13 +476,13 @@ struct TestBuildFilter {
     #[arg(long, short = 'E', value_name = "EXPR", action(ArgAction::Append))]
     filter_expr: Vec<String>,
 
-    /// Test name filter
-    #[arg(name = "FILTERS", help_heading = None)]
-    filter: Vec<String>,
+    /// Test name filters (deprecated, use filters after -- instead)
+    #[arg(name = "FILTERS", hide = true)]
+    pre_double_dash_filters: Vec<String>,
 
-    /// Emulated cargo test binary arguments (partially supported)
-    #[arg(help_heading = None, value_name = "TEST-BINARY-ARGS", last = true)]
-    test_binary_args: Vec<String>,
+    /// Test name filters and emulated test binary arguments (partially supported)
+    #[arg(help_heading = None, value_name = "FILTERS", last = true)]
+    filters: Vec<String>,
 }
 
 impl TestBuildFilter {
@@ -530,7 +530,7 @@ impl TestBuildFilter {
     ) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
-        let mut patterns = self.filter.clone();
+        let mut patterns = self.pre_double_dash_filters.clone();
         self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
 
         Ok(TestFilterBuilder::new(
@@ -553,7 +553,7 @@ impl TestBuildFilter {
         let mut unsupported_args = Vec::new();
 
         patterns.extend(
-            self.test_binary_args
+            self.filters
                 .iter()
                 .filter(|&s| {
                     if read_trailing_filters || !s.starts_with('-') {
