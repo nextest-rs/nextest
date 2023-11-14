@@ -3,6 +3,20 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.62] - 2023-11-14
+
+### Changed
+
+- Deprecated test name filters passed in before `--`. For example, `cargo nextest run my_test` is deprecated; use `cargo nextest run -- my_test` instead. See [#1109] for motivation and more information.
+- `x86_64-unknown-linux-gnu` builds are now performed using `cargo zigbuild`. The minimum glibc version remains unchanged at 2.27. Please [file a bug report](https://github.com/nextest-rs/nextest/issues/new) if you encounter any issues with this change.
+
+### Fixed
+
+- Fixed crashes under some Cargo edge cases, e.g. [#1090].
+
+[#1109]: https://github.com/nextest-rs/nextest/issues/1109
+[#1090]: https://github.com/nextest-rs/nextest/issues/1090
+
 ## [0.9.61] - 2023-10-22
 
 ### Changed
@@ -826,6 +840,7 @@ Supported in this initial release:
 - [Test retries](book/retries.md) and flaky test detection
 - [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.62]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.62
 [0.9.61]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.61
 [0.9.60]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.60
 [0.9.59]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.59
