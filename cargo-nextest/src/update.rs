@@ -13,6 +13,18 @@ use semver::Version;
 use std::cmp::Ordering;
 use supports_color::Stream;
 
+// Returns the smallest version with a `self setup` command.
+fn min_version_with_setup() -> Version {
+    // For testing, we allow this to be overridden via an environment variable.
+    if let Ok(version) = std::env::var("__NEXTEST_SETUP_MIN_VERSION") {
+        version
+            .parse()
+            .expect("__NEXTEST_SETUP_MIN_VERSION must be a valid semver version")
+    } else {
+        Version::parse("0.9.62").unwrap()
+    }
+}
+
 /// Perform an update.
 pub(crate) fn perform_update(
     version: &str,
@@ -44,7 +56,10 @@ pub(crate) fn perform_update(
     let mut bin_path_in_archive = Utf8PathBuf::from("cargo-nextest");
     bin_path_in_archive.set_extension(std::env::consts::EXE_EXTENSION);
 
-    let status = releases.check(&version, force, &bin_path_in_archive)?;
+    let status = releases.check(&version, force, &bin_path_in_archive, |v| {
+        // Use cmp_precedence here to disregard build metadata.
+        v.cmp_precedence(&min_version_with_setup()).is_ge()
+    })?;
 
     match status {
         CheckStatus::AlreadyOnRequested(version) => {

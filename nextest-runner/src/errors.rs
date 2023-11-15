@@ -1334,6 +1334,10 @@ mod self_update_errors {
             #[source]
             error: std::io::Error,
         },
+
+        /// An error occurred while running `cargo nextest self setup`.
+        #[error("cargo-nextest binary updated, but error running `cargo nextest self setup`")]
+        SelfSetup(#[source] std::io::Error),
     }
 
     fn known_versions(versions: &[(Version, ReleaseStatus)]) -> String {

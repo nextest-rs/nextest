@@ -1694,6 +1694,13 @@ impl ShowConfigCommand {
 
 #[derive(Debug, Subcommand)]
 enum SelfCommand {
+    #[clap(hide = true)]
+    /// Perform setup actions (currently a no-op)
+    Setup {
+        /// The entity running the setup command.
+        #[arg(long, value_enum, default_value_t = SetupSource::User)]
+        source: SetupSource,
+    },
     #[cfg_attr(
         not(feature = "self-update"),
         doc = "This version of nextest does not have self-update enabled\n\
@@ -1734,12 +1741,23 @@ enum SelfCommand {
     },
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum SetupSource {
+    User,
+    SelfUpdate,
+    PackageManager,
+}
+
 impl SelfCommand {
     #[allow(unused_variables)]
     fn exec(self, output: OutputOpts) -> Result<i32> {
         let output = output.init();
 
         match self {
+            Self::Setup { source: _source } => {
+                // Currently a no-op.
+                Ok(0)
+            }
             Self::Update {
                 version,
                 check,
