@@ -1728,7 +1728,7 @@ enum SelfCommand {
         #[arg(short, long)]
         force: bool,
 
-        /// URL to download releases.json from
+        /// URL or path to fetch releases.json from
         #[arg(long)]
         releases_url: Option<String>,
     },
