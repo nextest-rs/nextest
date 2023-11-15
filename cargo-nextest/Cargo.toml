@@ -24,7 +24,7 @@ enable-ansi-support = "0.2.1"
 env_logger = { version = "0.10.1", default-features = false }
 guppy = "0.17.2"
 log = "0.4.20"
-itertools = "0.11.0"
+itertools = "0.12.0"
 miette = { version = "5.10.0", features = ["fancy"] }
 nextest-filtering = { version = "=0.5.1", path = "../nextest-filtering" }
 nextest-runner = { version = "=0.49.0", path = "../nextest-runner" }
