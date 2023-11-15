@@ -5,9 +5,10 @@
 
 use crate::errors::{UpdateError, UpdateVersionParseError};
 use camino::{Utf8Path, Utf8PathBuf};
-use mukti_metadata::{MuktiProject, MuktiReleasesJson, ReleaseLocation, ReleaseVersionData};
+use mukti_metadata::{MuktiProject, MuktiReleasesJson, ReleaseLocation, ReleaseStatus};
 use self_update::{ArchiveKind, Compression, Download, Extract};
 use semver::{Version, VersionReq};
+use serde::Deserialize;
 use std::{
     fs,
     io::{self, BufWriter},
@@ -107,6 +108,7 @@ impl NextestReleases {
         version: &UpdateVersion,
         force: bool,
         bin_path_in_archive: &'a Utf8Path,
+        perform_setup_fn: impl FnOnce(&Version) -> bool,
     ) -> Result<CheckStatus<'a>, UpdateError> {
         let (version, version_data) = self.get_version_data(version)?;
         log::debug!(
@@ -147,11 +149,17 @@ impl NextestReleases {
                 }
             })?;
 
+        let force_disable_setup = version_data
+            .metadata
+            .map_or(false, |metadata| metadata.force_disable_setup);
+        let perform_setup = !force_disable_setup && perform_setup_fn(version);
+
         Ok(CheckStatus::Success(MuktiUpdateContext {
             context: self,
             version: version.clone(),
-            location,
+            location: location.clone(),
             bin_path_in_archive,
+            perform_setup,
         }))
     }
 
@@ -162,8 +170,8 @@ impl NextestReleases {
     fn get_version_data(
         &self,
         version: &UpdateVersion,
-    ) -> Result<(&Version, &ReleaseVersionData), UpdateError> {
-        match version {
+    ) -> Result<(&Version, ReleaseVersionData), UpdateError> {
+        let (version, release_data) = match version {
             UpdateVersion::Exact(version) => {
                 self.project.get_version_data(version).ok_or_else(|| {
                     let known = self
@@ -175,13 +183,38 @@ impl NextestReleases {
                         version: version.clone(),
                         known,
                     }
-                })
+                })?
             }
             UpdateVersion::Req(req) => self
                 .project
                 .get_latest_matching(req)
-                .ok_or_else(|| UpdateError::NoMatchForVersionReq { req: req.clone() }),
-        }
+                .ok_or_else(|| UpdateError::NoMatchForVersionReq { req: req.clone() })?,
+        };
+
+        // Parse the metadata into our custom format.
+        let metadata = if release_data.metadata.is_null() {
+            None
+        } else {
+            // Attempt to parse the metadata.
+            match serde_json::from_value::<NextestReleaseMetadata>(release_data.metadata.clone()) {
+                Ok(metadata) => Some(metadata),
+                Err(error) => {
+                    log::warn!(
+                        target: "nextest-runner::update",
+                        "failed to parse custom release metadata: {error}",
+                    );
+                    None
+                }
+            }
+        };
+
+        let release_data = ReleaseVersionData {
+            release_url: release_data.release_url.clone(),
+            status: release_data.status,
+            locations: release_data.locations.clone(),
+            metadata,
+        };
+        Ok((version, release_data))
     }
 
     fn target_triple(&self) -> String {
@@ -194,6 +227,30 @@ impl NextestReleases {
             triple_str.to_owned()
         }
     }
+}
+
+/// Like `mukti-metadata`'s `ReleaseVersionData`, except with parsed metadata.
+#[derive(Clone, Debug)]
+pub struct ReleaseVersionData {
+    /// Canonical URL for this release
+    pub release_url: String,
+
+    /// The status of a release
+    pub status: ReleaseStatus,
+
+    /// Release locations
+    pub locations: Vec<ReleaseLocation>,
+
+    /// Custom domain-specific information stored about this release.
+    pub metadata: Option<NextestReleaseMetadata>,
+}
+
+/// Nextest-specific release metadata.
+#[derive(Clone, Debug, Deserialize)]
+pub struct NextestReleaseMetadata {
+    /// Whether to force disable `cargo nextest self setup` for this version.
+    #[serde(default)]
+    pub force_disable_setup: bool,
 }
 
 /// The result of [`NextestReleases::check`].
@@ -227,10 +284,13 @@ pub struct MuktiUpdateContext<'a> {
     pub version: Version,
 
     /// The target-specific release location from which the package will be downloaded.
-    pub location: &'a ReleaseLocation,
+    pub location: ReleaseLocation,
 
     /// The path to the binary within the archive.
     pub bin_path_in_archive: &'a Utf8Path,
+
+    /// Whether to run `cargo nextest self setup` as part of the update.
+    pub perform_setup: bool,
 }
 
 impl<'a> MuktiUpdateContext<'a> {
@@ -342,6 +402,25 @@ impl<'a> MuktiUpdateContext<'a> {
         Move::from_source(&new_exe)
             .replace_using_temp(&tmp_file_path)
             .to_dest(&self.context.bin_install_path)?;
+
+        // Finally, run `cargo nextest self setup` if requested.
+        if self.perform_setup {
+            log::info!(target: "nextest-runner::update", "running `cargo nextest self setup`");
+            let mut cmd = std::process::Command::new(&self.context.bin_install_path);
+            cmd.args(["nextest", "self", "setup", "--source", "self-update"]);
+            let status = cmd.status().map_err(UpdateError::SelfSetup)?;
+            if !status.success() {
+                return Err(UpdateError::SelfSetup(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "`cargo nextest self setup` failed with exit code {}",
+                        status
+                            .code()
+                            .map_or("(unknown)".to_owned(), |c| c.to_string())
+                    ),
+                )));
+            }
+        }
 
         Ok(())
     }
