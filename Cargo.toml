@@ -10,6 +10,8 @@ members = [
   "workspace-hack",
 ]
 
+[workspace.dependencies]
+
 # make backtrace + color-eyre faster on debug builds
 [profile.dev.package.backtrace]
 opt-level = 3

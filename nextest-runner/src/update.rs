@@ -29,10 +29,21 @@ impl MuktiBackend {
     /// Fetch releases.
     pub fn fetch_releases(&self, current_version: Version) -> Result<NextestReleases, UpdateError> {
         log::info!(target: "nextest-runner::update", "checking for self-updates");
-        let mut releases_buf: Vec<u8> = Vec::new();
-        Download::from_url(&self.url)
-            .download_to(&mut releases_buf)
-            .map_err(UpdateError::SelfUpdate)?;
+        // Is the URL a file that exists on disk? If so, use that.
+        let as_path = Utf8Path::new(&self.url);
+        let releases_buf = if as_path.exists() {
+            fs::read(as_path).map_err(|error| UpdateError::ReadLocalMetadata {
+                path: as_path.to_owned(),
+                error,
+            })?
+        } else {
+            let mut releases_buf: Vec<u8> = Vec::new();
+            Download::from_url(&self.url)
+                .download_to(&mut releases_buf)
+                .map_err(UpdateError::SelfUpdate)?;
+            releases_buf
+        };
+
         let mut releases_json: MuktiReleasesJson =
             serde_json::from_slice(&releases_buf).map_err(UpdateError::ReleaseMetadataDe)?;
 
