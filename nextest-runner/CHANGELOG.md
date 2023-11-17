@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.50.0] - 2023-11-16
+
+See the changelog for [cargo-nextest 0.9.63](https://nexte.st/CHANGELOG.html#0963---2023-11-17).
+
 ## [0.49.0] - 2023-11-14
 
 See the changelog for [cargo-nextest 0.9.62](https://nexte.st/CHANGELOG.html#0962---2023-11-14).
@@ -110,13 +114,11 @@ See the changelog for [cargo-nextest 0.9.38](https://nexte.st/CHANGELOG.html#093
 
 See the changelog for [cargo-nextest 0.9.37](https://nexte.st/CHANGELOG.html#0937---2022-09-30).
 
-
 ## [0.24.0] - 2022-09-07
 
 ### Changed
 
 See the changelog for [cargo-nextest 0.9.36](https://nexte.st/CHANGELOG.html#0936---2022-09-07).
-
 
 ## [0.23.0] - 2022-08-17
 
@@ -170,7 +172,7 @@ See the changelog for [cargo-nextest 0.9.27](https://nexte.st/CHANGELOG.html#092
 
 ### Changed
 
-* nextest-metadata updated to 0.5.0.
+- nextest-metadata updated to 0.5.0.
 
 ## [0.16.0] - 2022-07-13
 
@@ -232,7 +234,7 @@ See the changelog for [cargo-nextest 0.9.25](https://nexte.st/CHANGELOG.html#092
 ### Added
 
 - Nextest can now update itself! Once this version is installed, simply run `cargo nextest self update` to update to the latest version.
-    > Note to distributors: you can disable self-update by building cargo-nextest with `--no-default-features`.
+  > Note to distributors: you can disable self-update by building cargo-nextest with `--no-default-features`.
 - Partial, emulated support for test binary arguments passed in after `cargo nextest run --` ([#265], thanks [@tabokie](https://github.com/tabokie) for your contribution!).
 
   For example, `cargo nextest run -- my_test --ignored` will run ignored tests containing `my_test`, similar to `cargo test -- my_test --ignored`.
@@ -255,11 +257,11 @@ See the changelog for [cargo-nextest 0.9.25](https://nexte.st/CHANGELOG.html#092
 
 - Support for terminating tests if they take too long, via the configuration parameter `slow-timeout.terminate-after`. For example, to time out after 120 seconds:
 
-    ```toml
-    slow-timeout = { period = "60s", terminate-after = 2 }
-    ```
+  ```toml
+  slow-timeout = { period = "60s", terminate-after = 2 }
+  ```
 
-    Thanks [steveeJ](https://github.com/steveeJ) for your contribution ([#214])!
+  Thanks [steveeJ](https://github.com/steveeJ) for your contribution ([#214])!
 
 [#214]: https://github.com/nextest-rs/nextest/pull/214
 
@@ -316,6 +318,7 @@ This release contains a number of user experience improvements.
 ### Fixed
 
 Fix for experimental feature [filter expressions](https://nexte.st/book/filter-expressions.html):
+
 - Fix test filtering when expression filters are set but name-based filters aren't.
 
 ### Changed
@@ -397,6 +400,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.50.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.50.0
 [0.49.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.49.0
 [0.48.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.48.0
 [0.47.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.47.0

@@ -3,6 +3,12 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.63-rc.1] - 2023-11-16
+
+### Fixed
+
+- Fixed regressions under some Cargo edge cases, e.g. [guppy-rs/guppy#157](https://github.com/guppy-rs/guppy/issues/157).
+
 ## [0.9.62] - 2023-11-14
 
 ### Added
@@ -846,6 +852,7 @@ Supported in this initial release:
 - [Test retries](book/retries.md) and flaky test detection
 - [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.63-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.63-rc.1
 [0.9.62]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.62
 [0.9.61]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.61
 [0.9.60]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.60
