@@ -7,6 +7,63 @@
           "latest": "0.9.62",
           "is_prerelease": false,
           "versions": {
+            "0.9.63-rc.1": {
+              "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.63-rc.1",
+              "status": "active",
+              "locations": [
+                {
+                  "target": "x86_64-unknown-linux-gnu",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-x86_64-unknown-linux-gnu.tar.gz"
+                },
+                {
+                  "target": "x86_64-unknown-linux-musl",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-x86_64-unknown-linux-musl.tar.gz"
+                },
+                {
+                  "target": "aarch64-unknown-linux-gnu",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-aarch64-unknown-linux-gnu.tar.gz"
+                },
+                {
+                  "target": "x86_64-pc-windows-msvc",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-x86_64-pc-windows-msvc.tar.gz"
+                },
+                {
+                  "target": "x86_64-pc-windows-msvc",
+                  "format": "zip",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-x86_64-pc-windows-msvc.zip"
+                },
+                {
+                  "target": "i686-pc-windows-msvc",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-i686-pc-windows-msvc.tar.gz"
+                },
+                {
+                  "target": "i686-pc-windows-msvc",
+                  "format": "zip",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-i686-pc-windows-msvc.zip"
+                },
+                {
+                  "target": "universal-apple-darwin",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-universal-apple-darwin.tar.gz"
+                },
+                {
+                  "target": "x86_64-unknown-freebsd",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-x86_64-unknown-freebsd.tar.gz"
+                },
+                {
+                  "target": "x86_64-unknown-illumos",
+                  "format": "tar.gz",
+                  "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.63-rc.1/cargo-nextest-0.9.63-rc.1-x86_64-unknown-illumos.tar.gz"
+                }
+              ],
+              "metadata": null
+            },
             "0.9.62": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.62",
               "status": "active",
@@ -61,7 +118,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.62/cargo-nextest-0.9.62-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.62-a.2": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.62-a.2",
@@ -117,7 +175,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.62-a.2/cargo-nextest-0.9.62-a.2-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.61": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.61",
@@ -173,7 +232,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.61/cargo-nextest-0.9.61-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.59": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.59",
@@ -229,7 +289,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.59/cargo-nextest-0.9.59-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.58": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.58",
@@ -285,7 +346,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.58/cargo-nextest-0.9.58-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.58-rc.2": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.58-rc.2",
@@ -341,7 +403,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.58-rc.2/cargo-nextest-0.9.58-rc.2-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.57": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.57",
@@ -397,7 +460,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.57/cargo-nextest-0.9.57-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.56": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.56",
@@ -453,7 +517,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.56/cargo-nextest-0.9.56-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.55": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.55",
@@ -509,7 +574,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.55/cargo-nextest-0.9.55-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.54": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.54",
@@ -565,7 +631,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.54/cargo-nextest-0.9.54-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.53": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.53",
@@ -621,7 +688,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.53/cargo-nextest-0.9.53-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.52": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.52",
@@ -677,7 +745,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.52/cargo-nextest-0.9.52-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.51": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.51",
@@ -733,7 +802,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.51/cargo-nextest-0.9.51-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.50": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.50",
@@ -789,7 +859,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.50/cargo-nextest-0.9.50-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.49": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.49",
@@ -845,7 +916,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.49/cargo-nextest-0.9.49-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.49-rc.3": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.49-rc.3",
@@ -901,7 +973,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.49-rc.3/cargo-nextest-0.9.49-rc.3-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.48": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.48",
@@ -957,7 +1030,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.48/cargo-nextest-0.9.48-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.47": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.47",
@@ -1013,7 +1087,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.47/cargo-nextest-0.9.47-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.45": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.45",
@@ -1069,7 +1144,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.45/cargo-nextest-0.9.45-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.45-rc.1": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.45-rc.1",
@@ -1125,7 +1201,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.45-rc.1/cargo-nextest-0.9.45-rc.1-x86_64-unknown-illumos.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.44": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.44",
@@ -1171,7 +1248,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.44/cargo-nextest-0.9.44-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.43": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.43",
@@ -1217,7 +1295,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.43/cargo-nextest-0.9.43-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.43-rc.3": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.43-rc.3",
@@ -1263,7 +1342,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.43-rc.3/cargo-nextest-0.9.43-rc.3-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.43-rc.2": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.43-rc.2",
@@ -1309,7 +1389,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.43-rc.2/cargo-nextest-0.9.43-rc.2-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.43-rc.1": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.43-rc.1",
@@ -1355,7 +1436,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.43-rc.1/cargo-nextest-0.9.43-rc.1-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.42": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.42",
@@ -1401,7 +1483,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.42/cargo-nextest-0.9.42-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.41-a.6": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.41-a.6",
@@ -1447,7 +1530,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.41-a.6/cargo-nextest-0.9.41-a.6-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.40": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.40",
@@ -1493,7 +1577,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.40/cargo-nextest-0.9.40-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.39": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.39",
@@ -1539,7 +1624,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.39/cargo-nextest-0.9.39-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.38": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.38",
@@ -1585,7 +1671,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.38/cargo-nextest-0.9.38-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.37": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.37",
@@ -1631,7 +1718,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.37/cargo-nextest-0.9.37-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.36": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.36",
@@ -1677,7 +1765,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.36/cargo-nextest-0.9.36-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.35": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.35",
@@ -1723,7 +1812,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.35/cargo-nextest-0.9.35-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.34": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.34",
@@ -1769,7 +1859,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.34/cargo-nextest-0.9.34-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.33": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.33",
@@ -1815,7 +1906,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.33/cargo-nextest-0.9.33-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.32": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.32",
@@ -1861,7 +1953,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.32/cargo-nextest-0.9.32-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.31": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.31",
@@ -1897,7 +1990,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.31/cargo-nextest-0.9.31-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.30": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.30",
@@ -1933,7 +2027,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.30/cargo-nextest-0.9.30-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.30-rc.3": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.30-rc.3",
@@ -1969,7 +2064,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.30-rc.3/cargo-nextest-0.9.30-rc.3-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.29": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.29",
@@ -2005,7 +2101,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.29/cargo-nextest-0.9.29-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.29-rc.1": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.29-rc.1",
@@ -2041,7 +2138,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.29-rc.1/cargo-nextest-0.9.29-rc.1-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.28": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.28",
@@ -2067,7 +2165,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.28/cargo-nextest-0.9.28-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.27": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.27",
@@ -2093,7 +2192,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.27/cargo-nextest-0.9.27-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.26": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.26",
@@ -2119,7 +2219,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.26/cargo-nextest-0.9.26-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.25": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.25",
@@ -2145,7 +2246,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.25/cargo-nextest-0.9.25-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.24": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.24",
@@ -2171,7 +2273,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.24/cargo-nextest-0.9.24-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.23": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.23",
@@ -2197,7 +2300,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.23/cargo-nextest-0.9.23-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.22": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.22",
@@ -2223,7 +2327,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.22/cargo-nextest-0.9.22-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.21": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.21",
@@ -2249,7 +2354,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.21/cargo-nextest-0.9.21-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.20": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.20",
@@ -2275,7 +2381,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.20/cargo-nextest-0.9.20-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.19": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.19",
@@ -2301,7 +2408,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.19/cargo-nextest-0.9.19-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.19-b.2": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.19-b.2",
@@ -2327,7 +2435,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.19-b.2/cargo-nextest-0.9.19-b.2-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.19-b.1": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.19-b.1",
@@ -2353,7 +2462,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.19-b.1/cargo-nextest-0.9.19-b.1-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.18": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.18",
@@ -2379,7 +2489,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.18/cargo-nextest-0.9.18-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.17": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.17",
@@ -2405,7 +2516,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.17/cargo-nextest-0.9.17-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.16": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.16",
@@ -2431,7 +2543,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.16/cargo-nextest-0.9.16-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.15": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.15",
@@ -2457,7 +2570,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.15/cargo-nextest-0.9.15-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.14": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.14",
@@ -2483,7 +2597,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.14/cargo-nextest-0.9.14-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.13": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.13",
@@ -2509,7 +2624,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.13/cargo-nextest-0.9.13-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.12": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.12",
@@ -2535,7 +2651,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.12/cargo-nextest-0.9.12-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.11": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.11",
@@ -2561,7 +2678,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.11/cargo-nextest-0.9.11-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.10": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.10",
@@ -2587,7 +2705,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.10/cargo-nextest-0.9.10-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.9": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.9",
@@ -2613,7 +2732,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.9/cargo-nextest-0.9.9-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.8": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.8",
@@ -2639,7 +2759,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.8/cargo-nextest-0.9.8-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.7": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.7",
@@ -2665,7 +2786,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.7/cargo-nextest-0.9.7-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.6": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.6",
@@ -2691,7 +2813,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.6/cargo-nextest-0.9.6-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.5": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.5",
@@ -2717,7 +2840,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.5/cargo-nextest-0.9.5-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.5-rc.2": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.5-rc.2",
@@ -2743,7 +2867,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.5-rc.2/cargo-nextest-0.9.5-rc.2-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.5-rc.1": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.5-rc.1",
@@ -2769,7 +2894,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.5-rc.1/cargo-nextest-0.9.5-rc.1-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             },
             "0.9.4": {
               "release_url": "https://github.com/nextest-rs/nextest/releases/cargo-nextest-0.9.4",
@@ -2795,7 +2921,8 @@
                   "format": "tar.gz",
                   "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.4/cargo-nextest-0.9.4-universal-apple-darwin.tar.gz"
                 }
-              ]
+              ],
+              "metadata": null
             }
           }
         }
