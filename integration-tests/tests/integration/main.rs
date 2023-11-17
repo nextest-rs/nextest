@@ -604,7 +604,7 @@ fn test_show_config_version() {
         .append(true)
         .write(true)
         .create(false)
-        .open(&config_path)
+        .open(config_path)
         .unwrap();
     f.write_all(
         r#"
