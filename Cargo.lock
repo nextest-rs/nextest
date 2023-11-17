@@ -1052,9 +1052,9 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.17.2"
+version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "093c803ef6b36383ad83b2393f0def4d0d49a6af5a153cbc4147b644bf0fa9c1"
+checksum = "f2e77d05e22e97b4d677c2f95ff6886e6edb498ef77b159affc64141db97d871"
 dependencies = [
  "ahash",
  "camino",
@@ -1064,7 +1064,7 @@ dependencies = [
  "fixedbitset",
  "guppy-workspace-hack",
  "indexmap 2.1.0",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "nested",
  "once_cell",
  "pathdiff",
