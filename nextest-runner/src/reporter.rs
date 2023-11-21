@@ -379,7 +379,7 @@ impl<'a> TestReporter<'a> {
             }
             ReporterStderrImpl::Buffer(buf) => {
                 self.inner
-                    .write_event_impl(&event, * buf)
+                    .write_event_impl(&event, *buf)
                     .map_err(WriteEventError::Io)?;
             }
         }
