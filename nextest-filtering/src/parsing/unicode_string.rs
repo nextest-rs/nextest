@@ -103,7 +103,8 @@ impl fmt::Display for DisplayParsedString<'_> {
 #[tracable_parser]
 fn parse_literal(input: Span) -> IResult<Span> {
     let not_quote_slash = is_not(",)\\");
-    verify(not_quote_slash, |s: &Span| !s.fragment().is_empty())(input)
+    let res = verify(not_quote_slash, |s: &Span| !s.fragment().is_empty())(input.clone());
+    res
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

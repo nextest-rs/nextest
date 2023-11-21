@@ -27,8 +27,10 @@ use nom::{
 use nom_tracable::tracable_parser;
 use std::{cell::RefCell, fmt};
 
+mod glob;
 mod unicode_string;
 use crate::{errors::*, NameMatcher};
+pub(crate) use glob::GenericGlob;
 pub(crate) use unicode_string::DisplayParsedString;
 
 pub(crate) type Span<'a> = nom_locate::LocatedSpan<&'a str, State<'a>>;
@@ -465,6 +467,11 @@ fn parse_regex_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ))(input)
 }
 
+#[tracable_parser]
+fn parse_glob_matcher(input: Span) -> IResult<Option<NameMatcher>> {
+    ws(preceded(char('#'), glob::parse_glob))(input)
+}
+
 // This parse will never fail (because default_matcher won't)
 fn set_matcher(
     make: fn(String) -> NameMatcher,
@@ -472,6 +479,7 @@ fn set_matcher(
     move |input: Span| {
         ws(alt((
             parse_regex_matcher,
+            parse_glob_matcher,
             parse_equal_matcher,
             parse_contains_matcher,
             default_matcher(make),
@@ -850,6 +858,57 @@ mod tests {
     }
 
     #[track_caller]
+    fn parse_glob(input: &str) -> NameMatcher {
+        let errors = RefCell::new(Vec::new());
+        let matcher = parse_glob_matcher(Span::new_extra(input, State::new(&errors)))
+            .unwrap_or_else(|error| {
+                panic!("for input {input}, parse_glob_matcher returned an error: {error}")
+            })
+            .1
+            .unwrap_or_else(|| {
+                panic!(
+                    "for input {input}, parse_glob_matcher returned None \
+                     (reported errors: {errors:?})"
+                )
+            });
+        if errors.borrow().len() > 0 {
+            panic!("for input {input}, parse_glob_matcher reported errors: {errors:?}");
+        }
+
+        matcher
+    }
+
+    fn make_glob_matcher(glob: &str, implicit: bool) -> NameMatcher {
+        NameMatcher::Glob {
+            glob: GenericGlob::new(glob.to_owned()).unwrap(),
+            implicit,
+        }
+    }
+
+    #[test]
+    fn test_parse_glob_matcher() {
+        #[track_caller]
+        fn assert_glob(input: &str, expected: &str) {
+            assert_eq!(
+                make_glob_matcher(expected, false),
+                parse_glob(input),
+                "expected matches actual for input {input:?}",
+            );
+        }
+
+        // Need the closing ) since that's used as the delimiter.
+        assert_glob(r"#something)", "something");
+        assert_glob(r"#something*)", "something*");
+        assert_glob(r"#something?)", "something?");
+        assert_glob(r"#something[abc])", "something[abc]");
+        assert_glob(r"#something[!abc])", "something[!abc]");
+        assert_glob(r"#something[a-c])", "something[a-c]");
+        assert_glob(r"#foobar\b)", "foobar\u{08}");
+        assert_glob(r"#foobar\\b)", "foobar\\b");
+        assert_glob(r"#foobar\))", "foobar)");
+    }
+
+    #[track_caller]
     fn parse_set(input: &str) -> SetDef {
         let errors = RefCell::new(Vec::new());
         parse_set_def(Span::new_extra(input, State::new(&errors)))
@@ -888,6 +947,21 @@ mod tests {
             parse_set("test(/some.*/)"),
             Test,
             NameMatcher::Regex(regex::Regex::new("some.*").unwrap())
+        );
+        assert_set_def!(
+            parse_set("test(#something)"),
+            Test,
+            make_glob_matcher("something", false)
+        );
+        assert_set_def!(
+            parse_set("test(#something*)"),
+            Test,
+            make_glob_matcher("something*", false)
+        );
+        assert_set_def!(
+            parse_set(r"test(#something/[?])"),
+            Test,
+            make_glob_matcher("something/[?]", false)
         );
 
         // Default matchers
@@ -941,6 +1015,14 @@ mod tests {
                 implicit: false,
             }
         );
+        assert_set_def!(
+            parse_set("test(~#something)"),
+            Test,
+            NameMatcher::Contains {
+                value: "#something".to_string(),
+                implicit: false,
+            }
+        );
 
         // Explicit equals matching.
         assert_set_def!(
@@ -974,6 +1056,36 @@ mod tests {
                 value: "/something/".to_string(),
                 implicit: false,
             }
+        );
+        assert_set_def!(
+            parse_set("test(=#something)"),
+            Test,
+            NameMatcher::Equal {
+                value: "#something".to_string(),
+                implicit: false,
+            }
+        );
+
+        // Explicit glob matching.
+        assert_set_def!(
+            parse_set("test(#~something)"),
+            Test,
+            make_glob_matcher("~something", false)
+        );
+        assert_set_def!(
+            parse_set("test(#=something)"),
+            Test,
+            make_glob_matcher("=something", false)
+        );
+        assert_set_def!(
+            parse_set("test(#/something/)"),
+            Test,
+            make_glob_matcher("/something/", false)
+        );
+        assert_set_def!(
+            parse_set("test(##something)"),
+            Test,
+            make_glob_matcher("#something", false)
         );
     }
 
@@ -1328,6 +1440,26 @@ mod tests {
         };
         assert_eq!(span, (12, 1).into(), "span matches");
         assert_eq!(message, "unclosed group");
+    }
+
+    #[test]
+    fn test_invalid_glob() {
+        let src = "package(#)";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidString, 9, 0);
+
+        let src = "package(#foo[)";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        let (span, error) = match error {
+            ParseSingleError::InvalidGlob { span, error } => (span, error),
+            other => panic!("expected InvalidGlob with details, found {other}"),
+        };
+        assert_eq!(span, (9, 4).into(), "span matches");
+        assert_eq!(error.to_string(), "unclosed character class; missing ']'");
     }
 
     #[test]

@@ -4,7 +4,8 @@
 use crate::{
     errors::{FilterExpressionParseErrors, ParseSingleError, State},
     parsing::{
-        parse, DisplayParsedRegex, DisplayParsedString, ExprResult, ParsedExpr, SetDef, Span,
+        parse, DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob, ParsedExpr,
+        SetDef, Span,
     },
 };
 use guppy::{
@@ -24,6 +25,8 @@ pub enum NameMatcher {
     Equal { value: String, implicit: bool },
     /// Simple contains test
     Contains { value: String, implicit: bool },
+    /// Test against a glob
+    Glob { glob: GenericGlob, implicit: bool },
     /// Test against a regex
     Regex(regex::Regex),
 }
@@ -68,6 +71,9 @@ impl PartialEq for NameMatcher {
                 },
             ) => s1 == s2 && default1 == default2,
             (Self::Regex(r1), Self::Regex(r2)) => r1.as_str() == r2.as_str(),
+            (Self::Glob { glob: g1, .. }, Self::Glob { glob: g2, .. }) => {
+                g1.regex().as_str() == g2.regex().as_str()
+            }
             _ => false,
         }
     }
@@ -89,6 +95,12 @@ impl fmt::Display for NameMatcher {
                 "{}{}",
                 if *implicit { "" } else { "~" },
                 DisplayParsedString(value)
+            ),
+            Self::Glob { glob, implicit } => write!(
+                f,
+                "{}{}",
+                if *implicit { "" } else { "#" },
+                DisplayParsedString(glob.glob_str())
             ),
             Self::Regex(r) => write!(f, "/{}/", DisplayParsedRegex(r)),
         }
@@ -172,6 +184,7 @@ impl NameMatcher {
         match self {
             Self::Equal { value, .. } => value == input,
             Self::Contains { value, .. } => input.contains(value),
+            Self::Glob { glob, .. } => glob.is_match(input),
             Self::Regex(reg) => reg.is_match(input),
         }
     }

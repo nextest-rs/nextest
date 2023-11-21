@@ -11,6 +11,7 @@ members = [
 ]
 
 [workspace.dependencies]
+globset = "0.4.14"
 nextest-workspace-hack = "0.1.0"
 
 # make backtrace + color-eyre faster on debug builds

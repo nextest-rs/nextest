@@ -26,6 +26,7 @@ internal-testing = ["dep:proptest", "dep:test-strategy", "dep:twox-hash"]
 # trace = ["nom-tracable/trace"]
 
 [dependencies]
+globset.workspace = true
 guppy = "0.17.3"
 miette = "5.10.0"
 nom = "7.1.3"

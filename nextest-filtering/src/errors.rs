@@ -41,6 +41,17 @@ pub enum ParseSingleError {
         message: String,
     },
 
+    /// An invalid glob pattern was encountered.
+    #[error("invalid glob")]
+    InvalidGlob {
+        /// The part of the input that failed.
+        #[label("{}", error)]
+        span: SourceSpan,
+
+        /// The underlying error.
+        error: GlobConstructError,
+    },
+
     /// An invalid regex was encountered but we couldn't determine a better error message.
     #[error("invalid regex")]
     InvalidRegexWithoutMessage(#[label("invalid regex")] SourceSpan),
@@ -121,6 +132,15 @@ impl ParseSingleError {
             }
         }
     }
+}
+
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum GlobConstructError {
+    #[error("{}", .0.kind())]
+    InvalidGlob(globset::Error),
+
+    #[error("{}", .0)]
+    RegexError(String),
 }
 
 #[derive(Debug, Clone)]
