@@ -379,7 +379,7 @@ impl<'a> TestReporter<'a> {
             }
             ReporterStderrImpl::Buffer(buf) => {
                 self.inner
-                    .write_event_impl(&event, buf)
+                    .write_event_impl(&event, * buf)
                     .map_err(WriteEventError::Io)?;
             }
         }
@@ -574,7 +574,7 @@ impl<'a> TestReporterImpl<'a> {
     fn write_event_impl(
         &mut self,
         event: &TestEvent<'a>,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         match &event.kind {
             TestEventKind::RunStarted { test_list, .. } => {
@@ -1028,7 +1028,7 @@ impl<'a> TestReporterImpl<'a> {
     fn write_skip_line(
         &self,
         test_instance: TestInstance<'a>,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
         // same spacing [   0.034s]
@@ -1049,7 +1049,7 @@ impl<'a> TestReporterImpl<'a> {
         command: &str,
         args: &[String],
         status: &SetupScriptExecuteStatus,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         match status.result {
             ExecutionResult::Pass => {
@@ -1080,7 +1080,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
         match describe {
@@ -1142,7 +1142,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         let last_status = describe.last_status();
         match describe {
@@ -1213,11 +1213,7 @@ impl<'a> TestReporterImpl<'a> {
         Ok(())
     }
 
-    fn write_instance(
-        &self,
-        instance: TestInstance<'a>,
-        writer: &mut impl Write,
-    ) -> io::Result<()> {
+    fn write_instance(&self, instance: TestInstance<'a>, writer: &mut dyn Write) -> io::Result<()> {
         write!(
             writer,
             "{:>width$} ",
@@ -1236,7 +1232,7 @@ impl<'a> TestReporterImpl<'a> {
         script_id: &ScriptId,
         command: &str,
         args: &[String],
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         let full_command =
             shell_words::join(std::iter::once(command).chain(args.iter().map(|arg| arg.as_ref())));
@@ -1248,21 +1244,21 @@ impl<'a> TestReporterImpl<'a> {
         )
     }
 
-    fn write_duration(&self, duration: Duration, writer: &mut impl Write) -> io::Result<()> {
+    fn write_duration(&self, duration: Duration, writer: &mut dyn Write) -> io::Result<()> {
         // * > means right-align.
         // * 8 is the number of characters to pad to.
         // * .3 means print three digits after the decimal point.
         write!(writer, "[{:>8.3?}s] ", duration.as_secs_f64())
     }
 
-    fn write_duration_by(&self, duration: Duration, writer: &mut impl Write) -> io::Result<()> {
+    fn write_duration_by(&self, duration: Duration, writer: &mut dyn Write) -> io::Result<()> {
         // * > means right-align.
         // * 7 is the number of characters to pad to.
         // * .3 means print three digits after the decimal point.
         write!(writer, "by {:>7.3?}s ", duration.as_secs_f64())
     }
 
-    fn write_slow_duration(&self, duration: Duration, writer: &mut impl Write) -> io::Result<()> {
+    fn write_slow_duration(&self, duration: Duration, writer: &mut dyn Write) -> io::Result<()> {
         // Inside the curly braces:
         // * > means right-align.
         // * 7 is the number of characters to pad to.
@@ -1274,7 +1270,7 @@ impl<'a> TestReporterImpl<'a> {
     fn write_windows_message_line(
         &self,
         nt_status: windows::Win32::Foundation::NTSTATUS,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         write!(writer, "{:>12} ", "Message".style(self.styles.fail))?;
         write!(writer, "[         ] ")?;
@@ -1293,7 +1289,7 @@ impl<'a> TestReporterImpl<'a> {
         command: &str,
         args: &[String],
         run_status: &SetupScriptExecuteStatus,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         let (header_style, _output_style) = if run_status.result.is_success() {
             (self.styles.pass, self.styles.pass_output)
@@ -1326,7 +1322,7 @@ impl<'a> TestReporterImpl<'a> {
         test_instance: &TestInstance<'a>,
         run_status: &ExecuteStatus,
         is_retry: bool,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<()> {
         let (header_style, _output_style) = if is_retry {
             (self.styles.retry, self.styles.retry_output)
@@ -1371,7 +1367,7 @@ impl<'a> TestReporterImpl<'a> {
         writeln!(writer)
     }
 
-    fn write_test_output(&self, output: &[u8], writer: &mut impl Write) -> io::Result<()> {
+    fn write_test_output(&self, output: &[u8], writer: &mut dyn Write) -> io::Result<()> {
         if self.styles.is_colorized {
             const RESET_COLOR: &[u8] = b"\x1b[0m";
             // Output the text without stripping ANSI escapes, then reset the color afterwards in case
@@ -1392,7 +1388,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         run_status: &ExecuteStatus,
         style: Style,
-        writer: &mut impl Write,
+        writer: &mut dyn Write,
     ) -> io::Result<usize> {
         if run_status.retry_data.total_attempts > 1 {
             // 3 for 'TRY' + 1 for ' ' + length of the current attempt + 1 for following space.
