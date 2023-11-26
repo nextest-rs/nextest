@@ -373,13 +373,6 @@ fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
     ))(input)
 }
 
-// This parse will never fail
-fn default_matcher(
-    make: fn(String) -> NameMatcher,
-) -> impl FnMut(Span) -> IResult<Option<NameMatcher>> {
-    move |input: Span| map(parse_matcher_text, |res: Option<String>| res.map(make))(input)
-}
-
 #[tracable_parser]
 fn parse_regex_inner(input: Span) -> IResult<String> {
     enum Frag<'a> {
@@ -469,12 +462,12 @@ fn parse_regex_matcher(input: Span) -> IResult<Option<NameMatcher>> {
 
 #[tracable_parser]
 fn parse_glob_matcher(input: Span) -> IResult<Option<NameMatcher>> {
-    ws(preceded(char('#'), glob::parse_glob))(input)
+    ws(preceded(char('#'), |input| glob::parse_glob(input, false)))(input)
 }
 
 // This parse will never fail (because default_matcher won't)
 fn set_matcher(
-    make: fn(String) -> NameMatcher,
+    default_matcher: DefaultMatcher,
 ) -> impl FnMut(Span) -> IResult<Option<NameMatcher>> {
     move |input: Span| {
         ws(alt((
@@ -482,7 +475,7 @@ fn set_matcher(
             parse_glob_matcher,
             parse_equal_matcher,
             parse_contains_matcher,
-            default_matcher(make),
+            default_matcher.into_parser(),
         )))(input)
     }
 }
@@ -525,16 +518,38 @@ fn nullary_set_def(
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+enum DefaultMatcher {
+    // Equal is no longer used and glob is always favored.
+    Equal,
+    Contains,
+    Glob,
+}
+
+impl DefaultMatcher {
+    fn into_parser(self) -> impl FnMut(Span) -> IResult<Option<NameMatcher>> {
+        move |input| match self {
+            Self::Equal => map(parse_matcher_text, |res: Option<String>| {
+                res.map(NameMatcher::implicit_equal)
+            })(input),
+            Self::Contains => map(parse_matcher_text, |res: Option<String>| {
+                res.map(NameMatcher::implicit_contains)
+            })(input),
+            Self::Glob => glob::parse_glob(input, true),
+        }
+    }
+}
+
 fn unary_set_def(
     name: &'static str,
-    make_default_matcher: fn(String) -> NameMatcher,
+    default_matcher: DefaultMatcher,
     make_set: fn(NameMatcher, SourceSpan) -> SetDef,
 ) -> impl FnMut(Span) -> IResult<Option<SetDef>> {
     move |i| {
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
         let start = i.location_offset();
-        let (i, res) = set_matcher(make_default_matcher)(i)?;
+        let (i, res) = set_matcher(default_matcher)(i)?;
         let end = i.location_offset();
         let (i, _) = recover_unexpected_comma(i)?;
         let (i, _) = expect_char(')', ParseSingleError::ExpectedCloseParenthesis)(i)?;
@@ -580,12 +595,12 @@ fn platform_def(i: Span) -> IResult<Option<SetDef>> {
 #[tracable_parser]
 fn parse_set_def(input: Span) -> IResult<Option<SetDef>> {
     ws(alt((
-        unary_set_def("package", NameMatcher::implicit_equal, SetDef::Package),
-        unary_set_def("deps", NameMatcher::implicit_equal, SetDef::Deps),
-        unary_set_def("rdeps", NameMatcher::implicit_equal, SetDef::Rdeps),
-        unary_set_def("kind", NameMatcher::implicit_equal, SetDef::Kind),
-        unary_set_def("binary", NameMatcher::implicit_equal, SetDef::Binary),
-        unary_set_def("test", NameMatcher::implicit_contains, SetDef::Test),
+        unary_set_def("package", DefaultMatcher::Glob, SetDef::Package),
+        unary_set_def("deps", DefaultMatcher::Glob, SetDef::Deps),
+        unary_set_def("rdeps", DefaultMatcher::Glob, SetDef::Rdeps),
+        unary_set_def("kind", DefaultMatcher::Equal, SetDef::Kind),
+        unary_set_def("binary", DefaultMatcher::Glob, SetDef::Binary),
+        unary_set_def("test", DefaultMatcher::Contains, SetDef::Test),
         platform_def,
         nullary_set_def("all", || SetDef::All),
         nullary_set_def("none", || SetDef::None),
@@ -976,10 +991,7 @@ mod tests {
         assert_set_def!(
             parse_set("package(something)"),
             Package,
-            NameMatcher::Equal {
-                value: "something".to_string(),
-                implicit: true,
-            }
+            make_glob_matcher("something", true)
         );
 
         // Explicit contains matching
@@ -1125,28 +1137,22 @@ mod tests {
         assert_eq!(SetDef::None, parse_set("none()"));
 
         assert_set_def!(
-            parse_set("package(something)"),
+            parse_set("package(=something)"),
             Package,
             NameMatcher::Equal {
                 value: "something".to_string(),
-                implicit: true,
+                implicit: false,
             }
         );
         assert_set_def!(
             parse_set("deps(something)"),
             Deps,
-            NameMatcher::Equal {
-                value: "something".to_string(),
-                implicit: true,
-            }
+            make_glob_matcher("something", true)
         );
         assert_set_def!(
             parse_set("rdeps(something)"),
             Rdeps,
-            NameMatcher::Equal {
-                value: "something".to_string(),
-                implicit: true,
-            }
+            make_glob_matcher("something", true)
         );
         assert_set_def!(
             parse_set("test(something)"),
@@ -1341,9 +1347,9 @@ mod tests {
         fn parse_future_syntax(input: Span) -> IResult<(Option<NameMatcher>, Option<NameMatcher>)> {
             let (i, _) = tag("something")(input)?;
             let (i, _) = char('(')(i)?;
-            let (i, n1) = set_matcher(NameMatcher::implicit_contains)(i)?;
+            let (i, n1) = set_matcher(DefaultMatcher::Contains)(i)?;
             let (i, _) = ws(char(','))(i)?;
-            let (i, n2) = set_matcher(NameMatcher::implicit_contains)(i)?;
+            let (i, n2) = set_matcher(DefaultMatcher::Contains)(i)?;
             let (i, _) = char(')')(i)?;
             Ok((i, (n1, n2)))
         }

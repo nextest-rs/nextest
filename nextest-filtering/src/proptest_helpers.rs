@@ -110,11 +110,11 @@ impl ParsedExpr<()> {
 impl SetDef<()> {
     pub(crate) fn strategy() -> impl Strategy<Value = Self> {
         prop_oneof![
-            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Package(s, ())),
-            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Deps(s, ())),
-            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Rdeps(s, ())),
+            1 => NameMatcher::default_glob_strategy().prop_map(|s| Self::Package(s, ())),
+            1 => NameMatcher::default_glob_strategy().prop_map(|s| Self::Deps(s, ())),
+            1 => NameMatcher::default_glob_strategy().prop_map(|s| Self::Rdeps(s, ())),
             1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Kind(s, ())),
-            1 => NameMatcher::default_equal_strategy().prop_map(|s| Self::Binary(s, ())),
+            1 => NameMatcher::default_glob_strategy().prop_map(|s| Self::Binary(s, ())),
             1 => build_platform_strategy().prop_map(|p| Self::Platform(p, ())),
             1 => NameMatcher::default_contains_strategy().prop_map(|s| Self::Test(s, ())),
             1 => Just(Self::All),
@@ -162,6 +162,29 @@ impl NameMatcher {
             }),
             1 => regex_strategy().prop_map(Self::Regex),
             1 => glob_strategy().prop_map(|glob| { Self::Glob { glob, implicit: false }}),
+        ]
+    }
+
+    pub(crate) fn default_glob_strategy() -> impl Strategy<Value = Self> {
+        prop_oneof![
+            1 => name_strategy().prop_map(|value| {
+                Self::Equal { value, implicit: false }
+            }),
+            1 => name_strategy().prop_map(|value| {
+                Self::Contains { value, implicit: false }
+            }),
+            1 => regex_strategy().prop_map(Self::Regex),
+            1 => (glob_strategy(), any::<bool>()).prop_filter_map(
+                "implicit = true can't begin with operators",
+                |(glob, implicit)| {
+                    let accept = match (implicit, begins_with_operator(glob.as_str())) {
+                        (false, _) => true,
+                        (true, false) => true,
+                        (true, true) => false,
+                    };
+                    accept.then_some(Self::Glob { glob, implicit })
+                },
+            ),
         ]
     }
 }

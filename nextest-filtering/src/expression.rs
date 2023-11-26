@@ -100,7 +100,7 @@ impl fmt::Display for NameMatcher {
                 f,
                 "{}{}",
                 if *implicit { "" } else { "#" },
-                DisplayParsedString(glob.glob_str())
+                DisplayParsedString(glob.as_str())
             ),
             Self::Regex(r) => write!(f, "/{}/", DisplayParsedRegex(r)),
         }
