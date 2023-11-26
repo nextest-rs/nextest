@@ -42,7 +42,7 @@ impl GenericGlob {
     }
 
     /// Returns the glob string.
-    pub fn glob_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         &self.glob_str
     }
 
@@ -59,7 +59,7 @@ impl GenericGlob {
 
 // This never returns Err(()) -- instead, it reports an error to the parsing state.
 #[tracable_parser]
-pub(super) fn parse_glob(input: Span) -> IResult<Option<NameMatcher>> {
+pub(super) fn parse_glob(input: Span, implicit: bool) -> IResult<Option<NameMatcher>> {
     let (i, res) = match parse_matcher_text(input.clone()) {
         Ok((i, res)) => (i, res),
         Err(_) => {
@@ -72,13 +72,7 @@ pub(super) fn parse_glob(input: Span) -> IResult<Option<NameMatcher>> {
     };
 
     match GenericGlob::new(parsed_value) {
-        Ok(glob) => Ok((
-            i,
-            Some(NameMatcher::Glob {
-                glob,
-                implicit: false,
-            }),
-        )),
+        Ok(glob) => Ok((i, Some(NameMatcher::Glob { glob, implicit }))),
         Err(error) => {
             let start = input.location_offset();
             let end = i.location_offset();
