@@ -69,6 +69,10 @@ pub enum ParseSingleError {
     #[error("expected close parenthesis")]
     ExpectedCloseParenthesis(#[label("missing `)`")] SourceSpan),
 
+    /// An invalid escape character was found.
+    #[error("invalid escape character")]
+    InvalidEscapeCharacter(#[label("invalid escape character")] SourceSpan),
+
     /// An expression was expected in this position but not found.
     #[error("expected expression")]
     ExpectedExpr(#[label("missing expression")] SourceSpan),

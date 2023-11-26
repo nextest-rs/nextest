@@ -212,6 +212,7 @@ impl ExprResult {
 enum SpanLength {
     Unknown,
     Exact(usize),
+    Offset(isize, usize),
 }
 
 fn expect_inner<'a, F, T>(
@@ -226,11 +227,21 @@ where
         Ok((remaining, out)) => Ok((remaining, Some(out))),
         Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
             let nom::error::Error { input, .. } = err;
-            let start = input.location_offset();
-            let len = input.fragment().len();
+            let fragment_start = input.location_offset();
+            let fragment_length = input.fragment().len();
             let span = match limit {
-                SpanLength::Unknown => (start, len).into(),
-                SpanLength::Exact(x) => (start, x.min(len)).into(),
+                SpanLength::Unknown => (fragment_start, fragment_length).into(),
+                SpanLength::Exact(x) => (fragment_start, x.min(fragment_length)).into(),
+                SpanLength::Offset(offset, x) => {
+                    // e.g. fragment_start = 5, fragment_length = 2, offset = -1, x = 3.
+                    // Here, start = 4.
+                    let effective_start = fragment_start.saturating_add_signed(offset);
+                    // end = 6.
+                    let effective_end = effective_start + fragment_length;
+                    // len = min(3, 6 - 4) = 2.
+                    let len = (effective_end - effective_start).min(x);
+                    (effective_start, len).into()
+                }
             };
             let err = make_err(span);
             input.extra.report_error(err);
@@ -248,6 +259,17 @@ where
     F: FnMut(Span<'a>) -> IResult<T>,
 {
     expect_inner(parser, make_err, SpanLength::Unknown)
+}
+
+fn expect_n<'a, F, T>(
+    parser: F,
+    make_err: fn(SourceSpan) -> ParseSingleError,
+    limit: SpanLength,
+) -> impl FnMut(Span<'a>) -> IResult<'a, Option<T>>
+where
+    F: FnMut(Span<'a>) -> IResult<T>,
+{
+    expect_inner(parser, make_err, limit)
 }
 
 fn expect_char<'a>(
@@ -305,7 +327,7 @@ fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
         ParseSingleError::InvalidString,
     )(input.clone())
     {
-        Ok((i, res)) => (i, res),
+        Ok((i, res)) => (i, res.flatten()),
         Err(nom::Err::Incomplete(_)) => {
             let i = input.slice(input.fragment().len()..);
             // No need for error reporting, missing closing ')' will be detected after
@@ -319,6 +341,7 @@ fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
         i.extra
             .report_error(ParseSingleError::InvalidString((start..0).into()));
     }
+
     Ok((i, res))
 }
 
@@ -1227,9 +1250,15 @@ mod tests {
     }
 
     macro_rules! assert_error {
-        ($error:ident, $name:ident, $start:literal, $end:literal) => {
-            assert!(matches!($error, ParseSingleError::$name(span) if span == ($start, $end).into()));
-        };
+        ($error:ident, $name:ident, $start:literal, $end:literal) => {{
+            let matches = matches!($error, ParseSingleError::$name(span) if span == ($start, $end).into());
+            assert!(
+                matches,
+                "expected: {:?}, actual: error: {:?}",
+                ParseSingleError::$name(($start, $end).into()),
+                $error,
+            );
+        }};
     }
 
     #[test]
@@ -1259,6 +1288,23 @@ mod tests {
         assert_error!(error, ExpectedOpenParenthesis, 3, 0);
         let error = errors.remove(0);
         assert_error!(error, ExpectedCloseParenthesis, 3, 0);
+    }
+
+    #[test]
+    fn test_invalid_escapes() {
+        let src = r"package(foobar\$\#\@baz)";
+        let mut errors = parse_err(src);
+        assert_eq!(3, errors.len());
+
+        // Ensure all three errors are reported.
+        let error = errors.remove(0);
+        assert_error!(error, InvalidEscapeCharacter, 14, 2);
+
+        let error = errors.remove(0);
+        assert_error!(error, InvalidEscapeCharacter, 16, 2);
+
+        let error = errors.remove(0);
+        assert_error!(error, InvalidEscapeCharacter, 18, 2);
     }
 
     #[test]
