@@ -11,6 +11,7 @@ members = [
 ]
 
 [workspace.dependencies]
+nextest-workspace-hack = "0.1.0"
 
 # make backtrace + color-eyre faster on debug builds
 [profile.dev.package.backtrace]
@@ -22,6 +23,9 @@ opt-level = 3
 
 [profile.dev.package.similar]
 opt-level = 3
+
+[patch.crates-io]
+nextest-workspace-hack = { path = "workspace-hack" }
 
 # Uncomment for testing.
 # [patch.crates-io]

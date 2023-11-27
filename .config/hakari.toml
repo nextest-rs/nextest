@@ -4,6 +4,7 @@
 hakari-package = "nextest-workspace-hack"
 
 dep-format-version = "4"
+workspace-hack-line-style = "workspace-dotted"
 
 # Setting workspace.resolver = "2" in the root Cargo.toml is HIGHLY recommended.
 # Hakari works much better with the new feature resolver.
