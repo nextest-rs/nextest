@@ -12,6 +12,7 @@ use nextest_filtering::{
     errors::{FilterExpressionParseErrors, ParseSingleError},
     BinaryQuery, FilteringExpr, TestQuery,
 };
+use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use test_case::test_case;
 
 #[track_caller]
@@ -35,6 +36,45 @@ fn parse(input: &str, graph: &PackageGraph) -> FilteringExpr {
     expr
 }
 
+struct BinaryQueryCreator<'a> {
+    package_id: &'a PackageId,
+    binary_id: RustBinaryId,
+    kind: RustTestBinaryKind,
+    binary_name: &'a str,
+    platform: BuildPlatform,
+}
+
+impl<'a> BinaryQueryCreator<'a> {
+    fn to_query(&self) -> BinaryQuery<'_> {
+        BinaryQuery {
+            package_id: self.package_id,
+            binary_id: &self.binary_id,
+            kind: &self.kind,
+            binary_name: self.binary_name,
+            platform: self.platform,
+        }
+    }
+}
+
+fn binary_query<'a>(
+    graph: &'a PackageGraph,
+    package_id: &'a PackageId,
+    kind: &str,
+    binary_name: &'a str,
+    platform: BuildPlatform,
+) -> BinaryQueryCreator<'a> {
+    let package_name = graph.metadata(package_id).unwrap().name();
+    let kind = RustTestBinaryKind::new(kind.to_owned());
+    let binary_id = RustBinaryId::from_parts(package_name, &kind, binary_name);
+    BinaryQueryCreator {
+        package_id,
+        binary_id,
+        kind,
+        binary_name,
+        platform,
+    }
+}
+
 #[test]
 fn test_expr_package_contains() {
     let graph = load_graph();
@@ -44,30 +84,18 @@ fn test_expr_package_contains() {
     let pid_b = mk_pid('b');
     let pid_c = mk_pid('c');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_b,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_c,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 }
@@ -81,30 +109,18 @@ fn test_expr_package_equal() {
     let pid_b = mk_pid('b');
     let pid_c = mk_pid('c');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_b,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_c,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 }
@@ -118,30 +134,44 @@ fn test_expr_package_regex() {
     let pid_b = mk_pid('b');
     let pid_c = mk_pid('c');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_b,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_c,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
+        binary_query: binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
+        test_name: "test_something"
+    }));
+}
+
+#[test]
+fn test_expr_binary_id_glob() {
+    let graph = load_graph();
+    let expr = parse("binary_id(crate_[ab])", &graph);
+    println!("{:?}", expr);
+
+    let pid_a = mk_pid('a');
+    let pid_b = mk_pid('b');
+    let pid_c = mk_pid('c');
+    assert!(expr.matches_test(&TestQuery {
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
+        test_name: "test_something"
+    }));
+    assert!(expr.matches_test(&TestQuery {
+        binary_query: binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
+        test_name: "test_something"
+    }));
+    assert!(!expr.matches_test(&TestQuery {
+        binary_query: binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 }
@@ -160,75 +190,40 @@ fn test_expr_deps() {
     let pid_g = mk_pid('g');
     // a-d are deps of d
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_b,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_c,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_d,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_d, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 
     // e-g are not deps of d
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_e,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_e, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_f,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_f, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_g,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_g, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 }
@@ -247,75 +242,40 @@ fn test_expr_rdeps() {
     let pid_g = mk_pid('g');
     // a-c are not rdeps of d
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_b,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_c,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_c, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 
     // d-g are rdeps of d
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_d,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_d, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_e,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_e, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_f,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_f, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_g,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_g, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 }
@@ -352,33 +312,18 @@ fn test_expr_kind() {
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "test",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "test", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib2",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib2", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 }
@@ -390,33 +335,18 @@ fn test_expr_binary() {
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "test",
-            binary_name: "my-binary2",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "test", "my-binary2", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib2",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib2", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 }
@@ -428,23 +358,13 @@ fn test_expr_platform() {
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Host,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Host)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
 
@@ -452,23 +372,13 @@ fn test_expr_platform() {
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Host,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Host)
+            .to_query(),
         test_name: "test_something"
     }));
 }
@@ -480,23 +390,13 @@ fn test_expr_kind_partial() {
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "test",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "test", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_something"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
 }
@@ -510,33 +410,18 @@ fn test_expr_test() {
     let pid_b = mk_pid('b');
 
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_b,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_b, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_run"
     }));
 }
@@ -548,23 +433,13 @@ fn test_expr_test_not() {
 
     let pid_a = mk_pid('a');
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_run"
     }));
 }
@@ -578,33 +453,18 @@ fn test_expr_test_union(input: &str) {
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_run"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_build"
     }));
 }
@@ -617,33 +477,18 @@ fn test_expr_test_difference(input: &str) {
 
     let pid_a = mk_pid('a');
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse_set"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse_expr"
     }));
 }
@@ -656,33 +501,18 @@ fn test_expr_test_intersect(input: &str) {
 
     let pid_a = mk_pid('a');
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse"
     }));
     assert!(!expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_expr"
     }));
     assert!(expr.matches_test(&TestQuery {
-        binary_query: BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "my-binary",
-            platform: BuildPlatform::Target,
-        },
-
+        binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            .to_query(),
         test_name: "test_parse_expr"
     }));
 }
@@ -699,63 +529,45 @@ fn test_binary_query() {
     let pid_b = mk_pid('b');
     // binary = foo should match the first predicate (pid_a should not be relevant).
     assert_eq!(
-        expr.matches_binary(&BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "foo",
-            platform: BuildPlatform::Target,
-        }),
+        expr.matches_binary(
+            &binary_query(&graph, &pid_a, "lib", "foo", BuildPlatform::Target).to_query()
+        ),
         Some(true)
     );
     // platform = host should match the second predicate.
     assert_eq!(
-        expr.matches_binary(&BinaryQuery {
-            package_id: &pid_b,
-            kind: "lib",
-            binary_name: "bar",
-            platform: BuildPlatform::Host,
-        }),
+        expr.matches_binary(
+            &binary_query(&graph, &pid_b, "lib", "bar", BuildPlatform::Host).to_query()
+        ),
         Some(true)
     );
     // kind = bench should match the third predicate.
     assert_eq!(
-        expr.matches_binary(&BinaryQuery {
-            package_id: &pid_a,
-            kind: "bench",
-            binary_name: "baz",
-            platform: BuildPlatform::Target,
-        }),
+        expr.matches_binary(
+            &binary_query(&graph, &pid_b, "bench", "baz", BuildPlatform::Target).to_query()
+        ),
         Some(true)
     );
     // This should result in an unknown result since it involves a test predicate.
     assert_eq!(
-        expr.matches_binary(&BinaryQuery {
-            package_id: &pid_a,
-            kind: "lib",
-            binary_name: "baz",
-            platform: BuildPlatform::Target,
-        }),
+        expr.matches_binary(
+            &binary_query(&graph, &pid_a, "lib", "baz", BuildPlatform::Target,).to_query()
+        ),
         None
     );
     // This should not result in an unknown result because no matter what the test predicate is,
     // kind(bin) resolves to true.
     assert_eq!(
-        expr.matches_binary(&BinaryQuery {
-            package_id: &pid_a,
-            kind: "bin",
-            binary_name: "baz",
-            platform: BuildPlatform::Target,
-        }),
+        expr.matches_binary(
+            &binary_query(&graph, &pid_a, "bin", "baz", BuildPlatform::Target,).to_query()
+        ),
         Some(true)
     );
     // This should result in Some(false) since it doesn't match anything.
     assert_eq!(
-        expr.matches_binary(&BinaryQuery {
-            package_id: &pid_b,
-            kind: "lib",
-            binary_name: "baz",
-            platform: BuildPlatform::Target,
-        }),
+        expr.matches_binary(
+            &binary_query(&graph, &pid_b, "lib", "baz", BuildPlatform::Target,).to_query()
+        ),
         Some(false)
     );
 }

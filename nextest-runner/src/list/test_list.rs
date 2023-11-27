@@ -145,6 +145,17 @@ impl<'g> RustTestArtifact<'g> {
         Ok(binaries)
     }
 
+    /// Returns a [`BinaryQuery`] corresponding to this test artifact.
+    pub fn to_binary_query(&self) -> BinaryQuery<'_> {
+        BinaryQuery {
+            package_id: self.package.id(),
+            binary_id: &self.binary_id,
+            kind: &self.kind,
+            binary_name: &self.binary_name,
+            platform: convert_build_platform(self.build_platform),
+        }
+    }
+
     // ---
     // Helper methods
     // ---
@@ -886,7 +897,8 @@ impl<'a> TestInstance<'a> {
         TestQuery {
             binary_query: BinaryQuery {
                 package_id: self.suite_info.package.id(),
-                kind: self.suite_info.kind.as_str(),
+                binary_id: &self.suite_info.binary_id,
+                kind: &self.suite_info.kind,
                 binary_name: &self.suite_info.binary_name,
                 platform: convert_build_platform(self.suite_info.build_platform),
             },

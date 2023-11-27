@@ -9,7 +9,7 @@ use std::{
     borrow::Cow,
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
-    fmt,
+    fmt::{self, Write as _},
     path::PathBuf,
     process::Command,
 };
@@ -276,6 +276,62 @@ impl RustBinaryId {
     /// Creates a new `RustBinaryId` from a string.
     #[inline]
     pub fn new(id: &str) -> Self {
+        Self(id.into())
+    }
+
+    /// Creates a new `RustBinaryId` from its constituent parts:
+    ///
+    /// * `package_name`: The name of the package as defined in `Cargo.toml`.
+    /// * `kind`: The kind of the target (see [`RustTestBinaryKind`]).
+    /// * `target_name`: The name of the target.
+    ///
+    /// The algorithm is as follows:
+    ///
+    /// 1. If the target is the `lib` target (for unit tests), the binary ID is the same as the
+    ///    package name. There can only be one library per package, so this will always be unique.
+    /// 2. If the target is an integration test, the binary ID is `package_name::target_name`.
+    /// 3. Otherwise, the binary ID is `package_name::{kind}/{target_name}`.
+    ///
+    /// This format is part of nextest's stable API.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
+    ///
+    /// assert_eq!(
+    ///     RustBinaryId::from_parts("foo-lib", &RustTestBinaryKind::LIB, "foo_lib"),
+    ///     RustBinaryId::new("foo-lib"),
+    /// );
+    ///
+    /// assert_eq!(
+    ///    RustBinaryId::from_parts("foo-lib", &RustTestBinaryKind::TEST, "foo_test"),
+    ///    RustBinaryId::new("foo-lib::foo_test"),
+    /// );
+    ///
+    /// assert_eq!(
+    ///     RustBinaryId::from_parts("foo-lib", &RustTestBinaryKind::BIN, "foo_bin"),
+    ///     RustBinaryId::new("foo-lib::foo_bin"),
+    /// );
+    /// ```
+    pub fn from_parts(package_name: &str, kind: &RustTestBinaryKind, target_name: &str) -> Self {
+        let mut id = package_name.to_owned();
+        // To ensure unique binary IDs, we use the following scheme:
+        if kind == &RustTestBinaryKind::LIB {
+            // 1. If the target is a lib, use the package name. There can only be one
+            //    lib per package, so this will always be unique.
+        } else if kind == &RustTestBinaryKind::TEST {
+            // 2. For integration tests, use package_name::target_name. Cargo enforces unique names
+            //    for the same kind of targets in a package, so these will always be unique.
+            id.push_str("::");
+            id.push_str(target_name);
+        } else {
+            // 3. For all other target kinds, use a combination of the target kind and
+            //      the target name. For the same reason as above, these will always be
+            //      unique.
+            write!(id, "::{kind}/{target_name}").unwrap();
+        }
+
         Self(id.into())
     }
 

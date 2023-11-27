@@ -639,7 +639,6 @@ mod tests {
     use camino::Utf8Path;
     use camino_tempfile::tempdir;
     use indoc::indoc;
-    use nextest_filtering::BinaryQuery;
     use std::num::NonZeroUsize;
     use test_case::test_case;
 
@@ -710,13 +709,10 @@ mod tests {
             .apply_build_platforms(&build_platforms());
 
         // This query matches override 2.
+        let host_binary_query =
+            binary_query(&graph, package_id, "lib", "my-binary", BuildPlatform::Host);
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Host,
-            },
+            binary_query: host_binary_query.to_query(),
             test_name: "test",
         };
         let overrides = profile.settings_for(&query);
@@ -743,13 +739,15 @@ mod tests {
         }
 
         // This query matches override 1 and 2.
+        let target_binary_query = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "my-binary",
+            BuildPlatform::Target,
+        );
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: target_binary_query.to_query(),
             test_name: "test",
         };
         let overrides = profile.settings_for(&query);
@@ -788,12 +786,7 @@ mod tests {
 
         // This query matches override 3.
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: target_binary_query.to_query(),
             test_name: "override3",
         };
         let overrides = profile.settings_for(&query);
@@ -801,12 +794,7 @@ mod tests {
 
         // This query matches override 5.
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: target_binary_query.to_query(),
             test_name: "override5",
         };
         let overrides = profile.settings_for(&query);
@@ -814,12 +802,7 @@ mod tests {
 
         // This query does not match any overrides.
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: target_binary_query.to_query(),
             test_name: "no_match",
         };
         let overrides = profile.settings_for(&query);

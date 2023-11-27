@@ -167,7 +167,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            test_helpers::{build_platforms, temp_workspace},
+            test_helpers::{binary_query, build_platforms, temp_workspace},
             NextestConfig,
         },
         errors::ConfigParseErrorKind,
@@ -177,7 +177,7 @@ mod tests {
     use config::ConfigError;
     use guppy::graph::cargo::BuildPlatform;
     use indoc::indoc;
-    use nextest_filtering::{BinaryQuery, TestQuery};
+    use nextest_filtering::TestQuery;
     use test_case::test_case;
 
     #[test]
@@ -626,13 +626,9 @@ mod tests {
             &Default::default(),
         )
         .unwrap();
+        let binary_query = binary_query(&graph, package_id, "lib", "my-binary", build_platform);
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: build_platform,
-            },
+            binary_query: binary_query.to_query(),
             test_name: "my_test",
         };
         let settings_for = config
