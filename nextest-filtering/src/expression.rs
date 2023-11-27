@@ -13,6 +13,7 @@ use guppy::{
     PackageId,
 };
 use miette::SourceSpan;
+use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use recursion::{Collapsible, CollapsibleExt, MappableFrame, PartiallyApplied};
 use std::{cell::RefCell, collections::HashSet, fmt};
 
@@ -118,6 +119,8 @@ pub enum FilteringSet {
     Platform(BuildPlatform, SourceSpan),
     /// All binaries matching a name
     Binary(NameMatcher, SourceSpan),
+    /// All binary IDs matching a name
+    BinaryId(NameMatcher, SourceSpan),
     /// All tests matching a name
     Test(NameMatcher, SourceSpan),
     /// All tests
@@ -132,11 +135,14 @@ pub struct BinaryQuery<'a> {
     /// The package ID.
     pub package_id: &'a PackageId,
 
+    /// The binary ID.
+    pub binary_id: &'a RustBinaryId,
+
     /// The name of the binary.
     pub binary_name: &'a str,
 
     /// The kind of binary this test is (lib, test etc).
-    pub kind: &'a str,
+    pub kind: &'a RustTestBinaryKind,
 
     /// The platform this test is built for.
     pub platform: BuildPlatform,
@@ -197,8 +203,9 @@ impl FilteringSet {
             Self::None => false,
             Self::Test(matcher, _) => matcher.is_match(query.test_name),
             Self::Binary(matcher, _) => matcher.is_match(query.binary_query.binary_name),
+            Self::BinaryId(matcher, _) => matcher.is_match(query.binary_query.binary_id.as_str()),
             Self::Platform(platform, _) => query.binary_query.platform == *platform,
-            Self::Kind(matcher, _) => matcher.is_match(query.binary_query.kind),
+            Self::Kind(matcher, _) => matcher.is_match(query.binary_query.kind.as_str()),
             Self::Packages(packages) => packages.contains(query.binary_query.package_id),
         }
     }
@@ -209,8 +216,9 @@ impl FilteringSet {
             Self::None => Logic::bottom(),
             Self::Test(_, _) => None,
             Self::Binary(matcher, _) => Some(matcher.is_match(query.binary_name)),
+            Self::BinaryId(matcher, _) => Some(matcher.is_match(query.binary_id.as_str())),
             Self::Platform(platform, _) => Some(query.platform == *platform),
-            Self::Kind(matcher, _) => Some(matcher.is_match(query.kind)),
+            Self::Kind(matcher, _) => Some(matcher.is_match(query.kind.as_str())),
             Self::Packages(packages) => Some(packages.contains(query.package_id)),
         }
     }

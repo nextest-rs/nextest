@@ -15,7 +15,7 @@ use nextest_metadata::{
     RustNonTestBinarySummary, RustTestBinaryKind, RustTestBinarySummary,
 };
 use owo_colors::OwoColorize;
-use std::{fmt::Write as _, io, io::Write};
+use std::{io, io::Write};
 
 /// A Rust test binary built by Cargo.
 #[derive(Clone, Debug)]
@@ -195,14 +195,13 @@ impl<'g> BinaryListBuildState<'g> {
                 let package_id = artifact.package_id.repr;
 
                 // Look up the executable by package ID.
+
+                let name = artifact.target.name;
+
                 let package = self
                     .graph
                     .metadata(&guppy::PackageId::new(package_id.clone()))
                     .map_err(FromMessagesError::PackageGraph)?;
-
-                // Construct the binary ID from the package and build target.
-                let mut id = package.name().to_owned();
-                let name = artifact.target.name;
 
                 let kind = artifact.target.kind;
                 if kind.is_empty() {
@@ -231,24 +230,8 @@ impl<'g> BinaryListBuildState<'g> {
                     )
                 };
 
-                // To ensure unique binary IDs, we use the following scheme:
-                if computed_kind == RustTestBinaryKind::LIB {
-                    // 1. If the target is a lib, use the package name. There can only be one
-                    //    lib per package, so this will always be unique.
-                } else if computed_kind == RustTestBinaryKind::TEST {
-                    // 2. For integration tests, use the target name. Cargo enforces unique
-                    //    names for the same kind of targets in a package, so these will always
-                    //    be unique.
-                    id.push_str("::");
-                    id.push_str(&name);
-                } else {
-                    // 3. For all other target kinds, use a combination of the target kind and
-                    //      the target name. For the same reason as above, these will always be
-                    //      unique.
-                    write!(id, "::{computed_kind}/{name}").unwrap();
-                }
-
-                let id = RustBinaryId::new(&id);
+                // Construct the binary ID from the package and build target.
+                let id = RustBinaryId::from_parts(package.name(), &computed_kind, &name);
 
                 self.rust_binaries.push(RustTestBinary {
                     path,

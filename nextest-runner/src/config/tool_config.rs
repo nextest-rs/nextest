@@ -62,7 +62,7 @@ mod tests {
     };
     use camino_tempfile::tempdir;
     use guppy::graph::cargo::BuildPlatform;
-    use nextest_filtering::{BinaryQuery, TestQuery};
+    use nextest_filtering::TestQuery;
 
     #[test]
     fn parse_tool_config_file() {
@@ -226,40 +226,27 @@ mod tests {
 
         let package_id = graph.workspace().iter().next().unwrap().id();
 
+        let binary_query = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "my-binary",
+            BuildPlatform::Target,
+        );
         let test_foo_query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: binary_query.to_query(),
             test_name: "test_foo",
         };
         let test_bar_query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: binary_query.to_query(),
             test_name: "test_bar",
         };
         let test_baz_query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: binary_query.to_query(),
             test_name: "test_baz",
         };
         let test_quux_query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: binary_query.to_query(),
             test_name: "test_quux",
         };
 

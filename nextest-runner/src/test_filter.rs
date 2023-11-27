@@ -11,12 +11,11 @@
 
 use crate::{
     errors::TestFilterBuilderError,
-    helpers::convert_build_platform,
     list::RustTestArtifact,
     partition::{Partitioner, PartitionerBuilder},
 };
 use aho_corasick::AhoCorasick;
-use nextest_filtering::{BinaryQuery, FilteringExpr, TestQuery};
+use nextest_filtering::{FilteringExpr, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 
 /// Whether to run ignored tests.
@@ -114,19 +113,16 @@ impl TestFilterBuilder {
     /// This method is implemented directly on `TestFilterBuilder`. The statefulness of `TestFilter`
     /// is only used for counted test partitioning, and is not currently relevant for binaries.
     pub fn should_obtain_test_list_from_binary(&self, test_binary: &RustTestArtifact<'_>) -> bool {
-        let query = BinaryQuery {
-            package_id: test_binary.package.id(),
-            kind: test_binary.kind.as_str(),
-            binary_name: &test_binary.binary_name,
-            platform: convert_build_platform(test_binary.build_platform),
-        };
         if self.exprs.is_empty() {
             // No expressions means match all tests.
             return true;
         }
         for expr in &self.exprs {
             // If this is a definite or probable match, then we should run this binary
-            if expr.matches_binary(&query).unwrap_or(true) {
+            if expr
+                .matches_binary(&test_binary.to_binary_query())
+                .unwrap_or(true)
+            {
                 return true;
             }
         }
@@ -248,12 +244,7 @@ impl<'filter> TestFilter<'filter> {
         test_name: &str,
     ) -> FilterNameMatch {
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id: test_binary.package.id(),
-                kind: test_binary.kind.as_str(),
-                binary_name: &test_binary.binary_name,
-                platform: convert_build_platform(test_binary.build_platform),
-            },
+            binary_query: test_binary.to_binary_query(),
             test_name,
         };
         if self.builder.exprs.is_empty() {

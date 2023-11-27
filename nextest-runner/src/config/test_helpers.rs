@@ -7,7 +7,12 @@ use crate::{
     platform::BuildPlatforms,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use guppy::{graph::PackageGraph, MetadataCommand};
+use guppy::{
+    graph::{cargo::BuildPlatform, PackageGraph},
+    MetadataCommand, PackageId,
+};
+use nextest_filtering::BinaryQuery;
+use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use serde::Deserialize;
 use std::{io::Write, path::PathBuf, process::Command};
 use target_spec::{Platform, TargetFeatures};
@@ -36,6 +41,45 @@ pub(super) fn cargo_path() -> Utf8PathBuf {
             .try_into()
             .expect("CARGO env var is not valid UTF-8"),
         None => Utf8PathBuf::from("cargo"),
+    }
+}
+
+pub(super) struct BinaryQueryCreator<'a> {
+    package_id: &'a PackageId,
+    binary_id: RustBinaryId,
+    kind: RustTestBinaryKind,
+    binary_name: &'a str,
+    platform: BuildPlatform,
+}
+
+impl<'a> BinaryQueryCreator<'a> {
+    pub(super) fn to_query(&self) -> BinaryQuery<'_> {
+        BinaryQuery {
+            package_id: self.package_id,
+            binary_id: &self.binary_id,
+            kind: &self.kind,
+            binary_name: self.binary_name,
+            platform: self.platform,
+        }
+    }
+}
+
+pub(super) fn binary_query<'a>(
+    graph: &'a PackageGraph,
+    package_id: &'a PackageId,
+    kind: &str,
+    binary_name: &'a str,
+    platform: BuildPlatform,
+) -> BinaryQueryCreator<'a> {
+    let package_name = graph.metadata(package_id).unwrap().name();
+    let kind = RustTestBinaryKind::new(kind.to_owned());
+    let binary_id = RustBinaryId::from_parts(package_name, &kind, binary_name);
+    BinaryQueryCreator {
+        package_id,
+        binary_id,
+        kind,
+        binary_name,
+        platform,
     }
 }
 

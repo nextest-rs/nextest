@@ -623,7 +623,6 @@ mod tests {
     use display_error_chain::DisplayErrorChain;
     use indoc::indoc;
     use maplit::btreeset;
-    use nextest_filtering::BinaryQuery;
     use test_case::test_case;
 
     #[test]
@@ -710,13 +709,10 @@ mod tests {
             .apply_build_platforms(&build_platforms());
 
         // This query matches the foo and bar scripts.
+        let host_binary_query =
+            binary_query(&graph, package_id, "lib", "my-binary", BuildPlatform::Host);
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Host,
-            },
+            binary_query: host_binary_query.to_query(),
             test_name: "script1",
         };
         let scripts = SetupScripts::new_with_queries(&profile, std::iter::once(query));
@@ -732,14 +728,17 @@ mod tests {
             "second script should be bar"
         );
 
+        let target_binary_query = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "my-binary",
+            BuildPlatform::Target,
+        );
+
         // This query matches the baz script.
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: target_binary_query.to_query(),
             test_name: "script2",
         };
         let scripts = SetupScripts::new_with_queries(&profile, std::iter::once(query));
@@ -752,12 +751,7 @@ mod tests {
 
         // This query matches the baz, foo and tool scripts (but note the order).
         let query = TestQuery {
-            binary_query: BinaryQuery {
-                package_id,
-                kind: "lib",
-                binary_name: "my-binary",
-                platform: BuildPlatform::Target,
-            },
+            binary_query: target_binary_query.to_query(),
             test_name: "script3",
         };
         let scripts = SetupScripts::new_with_queries(&profile, std::iter::once(query));
