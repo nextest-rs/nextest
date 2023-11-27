@@ -69,7 +69,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
             ],
         ),
         TestInfo::new(
-            "nextest-derive::proc-macro/nextest-derive",
+            "nextest-derive",
             BuildPlatform::Host,
             vec![("it_works", false)],
         ),
@@ -419,7 +419,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
         (true, "nextest-tests::other other_test_success"),
         (true, "nextest-tests::basic test_success"),
         (false, "nextest-tests::segfault test_segfault"),
-        (true, "nextest-derive::proc-macro/nextest-derive it_works"),
+        (true, "nextest-derive it_works"),
         (
             true,
             "nextest-tests::example/other tests::other_example_success",

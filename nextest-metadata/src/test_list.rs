@@ -202,8 +202,8 @@ pub struct RustTestBinarySummary {
 
 /// Information about the kind of a Rust test binary.
 ///
-/// Kinds are used to generate binary IDs and to figure out whether some environment variables
-/// should be set.
+/// Kinds are used to generate [`RustBinaryId`] instances, and to figure out whether some
+/// environment variables should be set.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct RustTestBinaryKind(pub Cow<'static, str>);
@@ -287,8 +287,9 @@ impl RustBinaryId {
     ///
     /// The algorithm is as follows:
     ///
-    /// 1. If the target is the `lib` target (for unit tests), the binary ID is the same as the
-    ///    package name. There can only be one library per package, so this will always be unique.
+    /// 1. If the kind is `lib` or `proc-macro` (i.e. for unit tests), the binary ID is the same as
+    ///    the package name. There can only be one library per package, so this will always be
+    ///    unique.
     /// 2. If the target is an integration test, the binary ID is `package_name::target_name`.
     /// 3. Otherwise, the binary ID is `package_name::{kind}/{target_name}`.
     ///
@@ -299,27 +300,33 @@ impl RustBinaryId {
     /// ```
     /// use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
     ///
+    /// // The lib and proc-macro kinds.
     /// assert_eq!(
     ///     RustBinaryId::from_parts("foo-lib", &RustTestBinaryKind::LIB, "foo_lib"),
     ///     RustBinaryId::new("foo-lib"),
     /// );
+    /// assert_eq!(
+    ///    RustBinaryId::from_parts("foo-derive", &RustTestBinaryKind::PROC_MACRO, "derive"),
+    ///    RustBinaryId::new("foo-derive"),
+    /// );
     ///
+    /// // Integration tests.
     /// assert_eq!(
     ///    RustBinaryId::from_parts("foo-lib", &RustTestBinaryKind::TEST, "foo_test"),
     ///    RustBinaryId::new("foo-lib::foo_test"),
     /// );
     ///
+    /// // Other kinds.
     /// assert_eq!(
     ///     RustBinaryId::from_parts("foo-lib", &RustTestBinaryKind::BIN, "foo_bin"),
-    ///     RustBinaryId::new("foo-lib::foo_bin"),
+    ///     RustBinaryId::new("foo-lib::bin/foo_bin"),
     /// );
     /// ```
     pub fn from_parts(package_name: &str, kind: &RustTestBinaryKind, target_name: &str) -> Self {
         let mut id = package_name.to_owned();
         // To ensure unique binary IDs, we use the following scheme:
-        if kind == &RustTestBinaryKind::LIB {
-            // 1. If the target is a lib, use the package name. There can only be one
-            //    lib per package, so this will always be unique.
+        if kind == &RustTestBinaryKind::LIB || kind == &RustTestBinaryKind::PROC_MACRO {
+            // 1. The binary ID is the same as the package name.
         } else if kind == &RustTestBinaryKind::TEST {
             // 2. For integration tests, use package_name::target_name. Cargo enforces unique names
             //    for the same kind of targets in a package, so these will always be unique.
@@ -327,8 +334,8 @@ impl RustBinaryId {
             id.push_str(target_name);
         } else {
             // 3. For all other target kinds, use a combination of the target kind and
-            //      the target name. For the same reason as above, these will always be
-            //      unique.
+            //    the target name. For the same reason as above, these will always be
+            //    unique.
             write!(id, "::{kind}/{target_name}").unwrap();
         }
 

@@ -12,7 +12,7 @@ group: @global
           tests::test_multiply_two_cdylib
       cdylib-link:
           test_multiply_two
-      nextest-derive::proc-macro/nextest-derive:
+      nextest-derive:
           it_works
       nextest-tests:
           tests::call_dylib_add_two
@@ -46,4 +46,3 @@ group: @global
           tests::example_success
       nextest-tests::example/other:
           tests::other_example_success
-

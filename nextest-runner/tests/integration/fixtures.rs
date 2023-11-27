@@ -157,7 +157,7 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<RustBinaryId, Vec<TestFixture>>>
                 TestFixture { name: "tests::test_execute_bin", status: FixtureStatus::Pass },
             ],
             // Proc-macro tests
-            "nextest-derive::proc-macro/nextest-derive".into() => vec![
+            "nextest-derive".into() => vec![
                 TestFixture { name: "it_works", status: FixtureStatus::Pass },
             ],
             // Dynamic library tests
@@ -182,11 +182,7 @@ pub(crate) fn get_expected_test(binary_id: &RustBinaryId, test_name: &str) -> &'
 }
 
 pub(crate) static EXPECTED_BINARY_LIST: [(&str, &str, bool); 8] = [
-    (
-        "nextest-derive::proc-macro/nextest-derive",
-        "nextest-derive",
-        false,
-    ),
+    ("nextest-derive", "nextest-derive", false),
     ("nextest-tests", "nextest-tests", true),
     ("nextest-tests::basic", "basic", true),
     ("nextest-tests::bin/nextest-tests", "nextest-tests", true),
