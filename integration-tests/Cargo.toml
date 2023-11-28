@@ -19,7 +19,7 @@ nextest-workspace-hack.workspace = true
 
 [dev-dependencies]
 camino = "1.1.6"
-camino-tempfile = "1.0.2"
+camino-tempfile = "1.1.1"
 cfg-if = "1.0.0"
 pathdiff = { version = "0.2.1", features = ["camino"] }
 nextest-metadata = { version = "=0.9.2", path = "../nextest-metadata" }
