@@ -223,7 +223,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                 reason: MismatchReason::Ignored,
             } => {
                 // Note: unfortunately, libtest does not expose the message test in `#[ignore = "<message>"]`
-                // so we can't replicate the behavior of libtest exactly be emitting
+                // so we can't replicate the behavior of libtest exactly by emitting
                 // that message as additional metadata
                 (KIND_TEST, EVENT_STARTED, test_instance)
             }
