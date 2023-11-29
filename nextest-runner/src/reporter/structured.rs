@@ -8,8 +8,6 @@ pub use libtest::{EmitNextestObject, LibtestReporter};
 
 /// Error returned when a user-supplied format version fails to be parsed to a
 /// valid and supported version
-///
-/// This
 #[derive(Clone, Debug, thiserror::Error)]
 #[error("invalid format version: {input}")]
 pub struct FormatVersionError {

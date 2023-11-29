@@ -13,11 +13,14 @@
 //! Since there already existed tooling using the libtest output format, this
 //! event aggregator replicates that format so that projects can seamlessly
 //! integrate cargo-nextest into their project, as well as get the benefit of
-//! running their tests on stable instead of being forced to nightly.
+//! running their tests on stable instead of being forced to use nightly.
 //!
 //! This implementation will attempt to follow the libtest format as it changes,
 //! but the rate of changes is quite low (see <https://github.com/rust-lang/rust/blob/master/library/test/src/formatters/json.rs>)
-//! so this should not be a big issue to users.
+//! so this should not be a big issue to users, however, if the format is changed,
+//! the changes will be replicated in this file with a new minor version allowing
+//! users to move to the new format or stick to the format version(s) they were
+//! using before
 
 use super::{
     FormatVersionError, FormatVersionErrorInner, TestEvent, TestEventKind, WriteEventError,
@@ -220,7 +223,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                 reason: MismatchReason::Ignored,
             } => {
                 // Note: unfortunately, libtest does not expose the message test in `#[ignore = "<message>"]`
-                // so we can't replicate the behavior of libtest excactly be emitting
+                // so we can't replicate the behavior of libtest exactly be emitting
                 // that message as additional metadata
                 (KIND_TEST, EVENT_STARTED, test_instance)
             }
@@ -463,6 +466,8 @@ impl<'cfg> LibtestReporter<'cfg> {
 }
 
 /// Copy of the same string escaper used in libtest
+///
+/// <https://github.com/rust-lang/rust/blob/f440b5f0ea042cb2087a36631b20878f9847ee28/library/test/src/formatters/json.rs#L222-L285>
 struct EscapedString<'s>(&'s str);
 
 impl<'s> std::fmt::Display for EscapedString<'s> {
