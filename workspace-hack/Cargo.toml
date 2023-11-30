@@ -22,7 +22,7 @@ console = { version = "0.15.7" }
 either = { version = "1.9.0" }
 futures-channel = { version = "0.3.29", features = ["sink"] }
 futures-sink = { version = "0.3.29", default-features = false, features = ["std"] }
-getrandom = { version = "0.2.10", default-features = false, features = ["std"] }
+getrandom = { version = "0.2.11", default-features = false, features = ["std"] }
 indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2.1.0", features = ["serde"] }
 log = { version = "0.4.20", default-features = false, features = ["std"] }
 memchr = { version = "2.6.4", features = ["use_std"] }
@@ -39,7 +39,7 @@ uuid = { version = "1.6.1", features = ["v4"] }
 
 [build-dependencies]
 cc = { version = "1.0.83", default-features = false, features = ["parallel"] }
-proc-macro2 = { version = "1.0.69" }
+proc-macro2 = { version = "1.0.70" }
 quote = { version = "1.0.33" }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extra-traits", "fold", "full", "visit"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.39", features = ["extra-traits", "full", "visit", "visit-mut"] }
