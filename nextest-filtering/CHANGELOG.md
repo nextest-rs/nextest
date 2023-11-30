@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0] - 2023-12-03
+
+### Added
+
+- Support for glob matchers.
+- Support for a new `binary_id` predicate.
+
+For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte.st/CHANGELOG.html#0964---2023-12-03).
+
 ## [0.5.1] - 2023-10-22
 
 ### Changed
@@ -68,6 +77,7 @@
 
 Initial release.
 
+[0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.6.0
 [0.5.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.5.1
 [0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.5.0
 [0.4.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.4.0

@@ -3,6 +3,29 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.64] - 2023-12-03
+
+### Added
+
+- Stabilized and documented [the binary ID format](https://nexte.st/book/running#binary-ids).
+- Support for glob matchers in [filter expressions](https://nexte.st/book/filter-expressions). For example, `package(foo*)` will match all tests whose names start with `foo`.
+- A new `binary_id()` predicate matches against the binary ID.
+
+### Changed
+
+- Unit tests in proc-macro crates now have a binary ID that consists of just the crate name, similar to unit tests in normal crates.
+
+- The default string matcher for the following predicates has changed from _equality_ to _glob_:
+
+  - Package-related matchers: `package()`, `deps()`, and `rdeps()`
+  - Binary-related matchers: `binary()`
+
+  The new `binary_id()` predicate also uses the glob matcher by default.
+
+### Fixed
+
+- Fixed a regression with some Cargo nightly-only features: see [guppy-rs/guppy#174](https://github.com/guppy-rs/guppy/pull/174) for more details.
+
 ## [0.9.63] - 2023-11-17
 
 ### Fixed
@@ -852,6 +875,7 @@ Supported in this initial release:
 - [Test retries](book/retries.md) and flaky test detection
 - [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.64]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.64
 [0.9.63]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.63
 [0.9.62]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.62
 [0.9.61]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.61

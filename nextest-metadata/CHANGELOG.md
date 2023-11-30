@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## [0.9.3] - 2023-12-03
+
+### Added
+
+- New method `RustBinaryId::from_parts` to construct a `RustBinaryId` from its constituent parts.
+- Stabilized and documented [the binary ID format](https://docs.rs/nextest-metadata/latest/nextest_metadata/struct.RustBinaryId.html#method.from_parts).
 
 ## [0.9.2] - 2023-09-26
 
@@ -39,7 +44,6 @@
 ## [0.8.1] - 2023-04-08
 
 (This was not released due to a publishing issue.)
-
 
 ## [0.8.0] - 2023-01-02
 
@@ -183,6 +187,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.9.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.3
 [0.9.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.2
 [0.9.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.1
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.0

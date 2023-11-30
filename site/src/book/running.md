@@ -14,14 +14,9 @@ In the output above:
 
 - Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.052 seconds to execute.
 - Tests that take more than a specified amount of time are marked **SLOW**. The timeout is 60 seconds by default, and can be [changed through configuration](configuration.md).
-- The part of the test in purple is the _test binary_. A test binary is either:
+- The part of the test in purple is the _binary ID_ for a unit test binary (see [Binary IDs](#binary-ids) below).
 
-  - a _unit test binary_ built from tests inline within `lib.rs`. These test binaries are shown by nextest as just the crate name, without a `::` separator inside them.
-  - an _integration test binary_ built from tests in the `[[test]]` section of `Cargo.toml` (typically tests in the `tests` directory.) These tests are shown by nextest in the format `crate-name::bin-name`[^bin-example].
-
-  For more about unit and integration tests, see [the documentation for `cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html).
-
-- The part after the test binary is the _test name_, including the module the test is in. The final part of the test name is highlighted in bold blue text.
+- The part after the binary ID is the _test name_, including the module the test is in. The final part of the test name is highlighted in bold blue text.
 
 `cargo nextest run` supports all the options that `cargo test` does. For example, to only execute tests for a package called `my-package`:
 
@@ -31,7 +26,15 @@ cargo nextest run -p my-package
 
 For a full list of options accepted by `cargo nextest run`, see `cargo nextest run --help`.
 
-[^bin-example]: `bin` and `example` targets can also contain tests. Those are represented as `crate-name::bin/bin-name` and `crate-name::example/example-name`, respectively.
+## Binary IDs
+
+A test binary can be any of:
+
+- A _unit test binary_ built from tests within `lib.rs` or its submodules. The binary ID for these are shown by nextest as just the crate name, without a `::` separator inside them.
+- An _integration test binary_ built from tests in the `[[test]]` section of `Cargo.toml` (typically tests in the `tests` directory.) The binary ID for these is has the format `crate-name::bin-name`.
+- Some other kind of test binary, such as a benchmark. In this case, the binary ID is `crate-name::kind/bin-name`. For example, `nextest-runner::bench/my-bench` or `quick-junit::example/show-junit`.
+
+For more about unit and integration tests, see [the documentation for `cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html).
 
 ## Filtering tests
 

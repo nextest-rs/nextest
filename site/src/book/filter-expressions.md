@@ -31,6 +31,7 @@ cargo nextest run -E 'test(my_test) + package(my-crate)'
 ### Examples
 
 - `package(serde) and test(deserialize)`: every test containing the string `deserialize` in the package `serde`
+- `deps(nextest*)`: all tests in packages whose names start with `nextest`, and all of their (possibly transitive) dependencies
 - `not (test(/parse[0-9]*/) | test(run))`: every test name not matching the regex `parse[0-9]*` or the substring `run`
 
 > **Note:** If you pass in both a filter expression and a standard, substring-based filter, tests
@@ -62,6 +63,7 @@ This section contains the full set of operators supported by the DSL.
 - `binary(name-matcher)`: include all tests in binary names matching `name-matcher`.
   - For tests of kind `lib` and `proc-macro`, the binary name is the same as the name of the crate.
   - Otherwise, it's the name of the integration test, benchmark, or binary target.
+- `binary_id(name-matcher)`: include all tests in [binary IDs](running.md#binary-ids) matching `name-matcher`.
 - `platform(host)` or `platform(target)`: include all tests that are [built for the host or target platform](running.md#filtering-by-build-platform), respectively.
 - `none()`: include no tests.
 
@@ -79,18 +81,22 @@ This section contains the full set of operators supported by the DSL.
 
 ### Name matchers
 
-- `~string`: match a package or test name containing `string`
-- `=string`: match a package or test name that's equal to `string`
-- `/regex/`: match a package or test name if any part of it matches the regular expression `regex`. To match the entire string against a regular expression, use `/^regex$/`. The implementation uses the [regex](https://github.com/rust-lang/regex) crate.
-- `string`: default matching strategy.
-  - For tests (`test()`), this is equivalent to `~string`.
-  - For packages (`package()`, `deps()` and `rdeps()`), binary kinds (`kind()`), and `platform()`, this is equivalent to `=string`.
+- `=string`: *equality matcher*—match a package or test name that's equal to `string`.
+- `~string`: *contains matcher*—match a package or test name containing `string`.
+- `/regex/`: *regex matcher*—match a package or test name if any part of it matches the regular expression `regex`. To match the entire string against a regular expression, use `/^regex$/`. The implementation uses the [regex](https://github.com/rust-lang/regex) crate.
+- `#glob`: *glob matcher*—match a package or test name if the full name matches the glob expression `glob`. The implementation uses the [globset crate](https://docs.rs/globset).
+- `string`: Default matching strategy.
+  - For `test()` predicates, this is the *contains matcher*, equivalent to `~string`.
+  - For package-related predicates (`package()`, `deps()`, and `rdeps()`), this is the *glob matcher*, equivalent to `#string`.
+  - For binary-related predicates (`binary()` and `binary_id()`), this is also the *glob matcher*.
+  - For `kind()` and `platform()`, this is the *equality matcher*, equivalent to `=string`.
 
-If you're constructing an expression string programmatically, it is recommended that you always use a prefix to avoid ambiguity.
+If you're constructing an expression string programmatically, **always use a prefix** to avoid ambiguity.
 
 #### Escape sequences
 
-The `~string` and `=string` name matchers can contain escape sequences, preceded by a backslash (`\`).
+The *equality*, *contains*, and *glob* matchers can contain escape sequences, preceded by a
+backslash (`\`).
 
 - `\n`: line feed
 - `\r`: carriage return
@@ -100,6 +106,8 @@ The `~string` and `=string` name matchers can contain escape sequences, preceded
 - `\)`: closing parenthesis
 - `\,`: comma
 - `\u{7FFF}`: 24-bit Unicode character code (up to 6 hex digits)
+
+For the *glob matcher*, to match against a literal glob metacharacter such as `*` or `?`, enclose it in square brackets: `[*]` or `[?]`.
 
 All other escape sequences are invalid.
 
@@ -130,3 +138,29 @@ Within a precedence group, operators bind from left to right.
 - `test(a) | test(b) & test(c)` is equivalent to `test(a) | (test(b) & test(c))`.
 - `test(a) & test(b) - test(c)` is equivalent to `(test(a) & test(b)) - test(c)`.
 - `not test(a) | test(b)` is equivalent to `(not test(a)) | test(b)`.
+
+## More information about filter expressions
+
+This section covers additional information that is of interest to nextest's developers and curious readers.
+
+<details>
+<summary>Click to expand</summary>
+
+### Motivation
+
+Developer tools often work with some notion of sets, and many of them have grown some kind of domain-specific query language to be able to efficiently specify those sets.
+
+The biggest advantage of a query language is *orthogonality*: rather than every command having to grow a number of options such as `--include` and `--exclude`, developers can learn the query language once and use it everywhere.
+
+### Design decisions
+
+Nextest's filter expressions are meant to be specified at the command line as well as in configuration. This led to the following design decisions:
+
+* **No quotes:** Filter expressions do not have embedded quotes. This lets users use either single (`''`) or double quotes (`""`) to specify filter expressions, without having to worry about escaping them.
+* **Minimize nesting of parens:** If an expression language uses parentheses or other brackets heavily (e.g. Rust's [`cfg()` expressions]), getting them wrong can be annoying when trying to write an expression. Text editors typically highlight matching and missing parens, but there's so such immediate feedback on the command line.
+* **Infix operators:** Nextest's filter expressions use infix operators, which are more natural to read and write for most people. (As an alternative, Rust's [`cfg()` expressions] use the prefix operators `all()` and `any()`).
+* **Operator aliases:** Operators are supported as both words (`and`, `or`, `not`) and symbols (`&`, `|`, `+`, `-`, `!`), letting users write expressions in the style most natural to them. Filter expressions are a small language, so there's no need to be particularly opinionated.
+
+[`cfg()` expressions]: https://doc.rust-lang.org/reference/conditional-compilation.html
+
+</details>
