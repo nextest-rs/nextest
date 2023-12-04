@@ -14,6 +14,7 @@ use std::{borrow::Cow, collections::HashMap, ffi::OsString, fmt, process::Comman
 pub struct TestInfo {
     id: RustBinaryId,
     platform: BuildPlatform,
+    // The bool represents whether the test is ignored.
     test_cases: Vec<(&'static str, bool)>,
 }
 
@@ -115,6 +116,11 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
             "nextest-tests::example/other",
             BuildPlatform::Target,
             vec![("tests::other_example_success", false)],
+        ),
+        TestInfo::new(
+            "with-build-script",
+            BuildPlatform::Target,
+            vec![("tests::test_out_dir_present", false)],
         ),
     ]
 });
@@ -246,6 +252,10 @@ pub(super) fn set_env_vars() {
     // Disable the tests which check for environment variables being set in `config.toml`, as they
     // won't be in the search path when running integration tests.
     std::env::set_var("__NEXTEST_NO_CHECK_CARGO_ENV_VARS", "1");
+
+    // Remove OUT_DIR from the environment, as it interferes with tests (some of them expect that
+    // OUT_DIR isn't set.)
+    std::env::remove_var("OUT_DIR");
 }
 
 #[track_caller]
@@ -433,10 +443,10 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     }
 
     let summary_reg = if relocated {
-        Regex::new(r"Summary \[.*\] *26 tests run: 18 passed \(1 leaky\), 8 failed, 5 skipped")
+        Regex::new(r"Summary \[.*\] *27 tests run: 19 passed \(1 leaky\), 8 failed, 5 skipped")
             .unwrap()
     } else {
-        Regex::new(r"Summary \[.*\] *26 tests run: 19 passed \(1 leaky\), 7 failed, 5 skipped")
+        Regex::new(r"Summary \[.*\] *27 tests run: 20 passed \(1 leaky\), 7 failed, 5 skipped")
             .unwrap()
     };
     assert!(

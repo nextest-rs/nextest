@@ -12,6 +12,56 @@ use std::{
     time::Duration,
 };
 
+pub(crate) mod plural {
+    pub(crate) fn setup_scripts_str(count: usize) -> &'static str {
+        if count == 1 {
+            "setup script"
+        } else {
+            "setup scripts"
+        }
+    }
+
+    pub(crate) fn tests_str(count: usize) -> &'static str {
+        if count == 1 {
+            "test"
+        } else {
+            "tests"
+        }
+    }
+
+    pub(crate) fn binaries_str(count: usize) -> &'static str {
+        if count == 1 {
+            "binary"
+        } else {
+            "binaries"
+        }
+    }
+
+    pub(crate) fn paths_str(count: usize) -> &'static str {
+        if count == 1 {
+            "path"
+        } else {
+            "paths"
+        }
+    }
+
+    pub(crate) fn files_str(count: usize) -> &'static str {
+        if count == 1 {
+            "file"
+        } else {
+            "files"
+        }
+    }
+
+    pub(crate) fn directories_str(count: usize) -> &'static str {
+        if count == 1 {
+            "directory"
+        } else {
+            "directories"
+        }
+    }
+}
+
 /// Write out a test name.
 pub(crate) fn write_test_name(
     name: &str,
@@ -117,6 +167,13 @@ pub(crate) fn convert_rel_path_to_main_sep(rel_path: &Utf8Path) -> Utf8PathBuf {
 #[cfg(not(windows))]
 pub(crate) fn convert_rel_path_to_main_sep(rel_path: &Utf8Path) -> Utf8PathBuf {
     rel_path.to_path_buf()
+}
+
+/// Join relative paths using forward slashes.
+pub(crate) fn rel_path_join(rel_path: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
+    assert!(rel_path.is_relative(), "rel_path {rel_path} is relative");
+    assert!(path.is_relative(), "path {path} is relative",);
+    format!("{}/{}", rel_path, path).into()
 }
 
 pub(crate) fn format_duration(duration: Duration) -> String {

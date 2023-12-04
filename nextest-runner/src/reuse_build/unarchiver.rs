@@ -126,12 +126,15 @@ impl<'a> Unarchiver<'a> {
                 let test_binary_count = this_binary_list.rust_binaries.len();
                 let non_test_binary_count =
                     this_binary_list.rust_build_meta.non_test_binaries.len();
+                let build_script_out_dir_count =
+                    this_binary_list.rust_build_meta.build_script_out_dirs.len();
                 let linked_path_count = this_binary_list.rust_build_meta.linked_paths.len();
 
                 // Report begin extraction.
                 callback(ArchiveEvent::ExtractStarted {
                     test_binary_count,
                     non_test_binary_count,
+                    build_script_out_dir_count,
                     linked_path_count,
                     dest_dir: &dest_dir,
                 })

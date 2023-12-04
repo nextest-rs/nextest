@@ -9,7 +9,7 @@ mod aggregator;
 use crate::{
     config::{NextestProfile, ScriptId},
     errors::WriteEventError,
-    helpers::write_test_name,
+    helpers::{plural, write_test_name},
     list::{TestInstance, TestList},
     reporter::aggregator::EventAggregator,
     runner::{
@@ -582,8 +582,8 @@ impl<'a> TestReporterImpl<'a> {
 
                 let count_style = self.styles.count;
 
-                let tests_str = tests_str(test_list.run_count());
-                let binaries_str = binaries_str(test_list.binary_count());
+                let tests_str = plural::tests_str(test_list.run_count());
+                let binaries_str = plural::binaries_str(test_list.binary_count());
 
                 write!(
                     writer,
@@ -850,14 +850,14 @@ impl<'a> TestReporterImpl<'a> {
 
                 // At the moment, we can have either setup scripts or tests running, but not both.
                 if *setup_scripts_running > 0 {
-                    let s = setup_scripts_str(*setup_scripts_running);
+                    let s = plural::setup_scripts_str(*setup_scripts_running);
                     write!(
                         writer,
                         ": {} {s} still running",
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
-                    let tests_str = tests_str(*running);
+                    let tests_str = plural::tests_str(*running);
                     write!(
                         writer,
                         ": {} {tests_str} still running",
@@ -879,14 +879,14 @@ impl<'a> TestReporterImpl<'a> {
 
                 // At the moment, we can have either setup scripts or tests running, but not both.
                 if *setup_scripts_running > 0 {
-                    let s = setup_scripts_str(*setup_scripts_running);
+                    let s = plural::setup_scripts_str(*setup_scripts_running);
                     write!(
                         writer,
                         ": {} {s} running",
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
-                    let tests_str = tests_str(*running);
+                    let tests_str = plural::tests_str(*running);
                     write!(
                         writer,
                         ": {} {tests_str} running",
@@ -908,14 +908,14 @@ impl<'a> TestReporterImpl<'a> {
 
                 // At the moment, we can have either setup scripts or tests running, but not both.
                 if *setup_scripts_running > 0 {
-                    let s = setup_scripts_str(*setup_scripts_running);
+                    let s = plural::setup_scripts_str(*setup_scripts_running);
                     write!(
                         writer,
                         ": {} {s} running",
                         setup_scripts_running.style(self.styles.count),
                     )?;
                 } else if *running > 0 {
-                    let tests_str = tests_str(*running);
+                    let tests_str = plural::tests_str(*running);
                     write!(
                         writer,
                         ": {} {tests_str} running",
@@ -1412,30 +1412,6 @@ impl<'a> TestReporterImpl<'a> {
 
     fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
         self.force_failure_output.unwrap_or(test_setting)
-    }
-}
-
-fn setup_scripts_str(count: usize) -> &'static str {
-    if count == 1 {
-        "setup script"
-    } else {
-        "setup scripts"
-    }
-}
-
-fn tests_str(count: usize) -> &'static str {
-    if count == 1 {
-        "test"
-    } else {
-        "tests"
-    }
-}
-
-fn binaries_str(count: usize) -> &'static str {
-    if count == 1 {
-        "binary"
-    } else {
-        "binaries"
     }
 }
 

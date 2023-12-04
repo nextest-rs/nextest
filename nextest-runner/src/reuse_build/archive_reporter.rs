@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::helpers::format_duration;
+use crate::helpers::{format_duration, plural};
 use camino::Utf8Path;
 use owo_colors::{OwoColorize, Style};
 use std::{
@@ -39,6 +39,7 @@ impl ArchiveReporter {
             ArchiveEvent::ArchiveStarted {
                 test_binary_count,
                 non_test_binary_count,
+                build_script_out_dir_count,
                 linked_path_count,
                 output_file,
             } => {
@@ -47,6 +48,7 @@ impl ArchiveReporter {
                 self.report_binary_counts(
                     test_binary_count,
                     non_test_binary_count,
+                    build_script_out_dir_count,
                     linked_path_count,
                     &mut writer,
                 )?;
@@ -70,6 +72,7 @@ impl ArchiveReporter {
             ArchiveEvent::ExtractStarted {
                 test_binary_count,
                 non_test_binary_count,
+                build_script_out_dir_count,
                 linked_path_count,
                 dest_dir: destination_dir,
             } => {
@@ -78,6 +81,7 @@ impl ArchiveReporter {
                 self.report_binary_counts(
                     test_binary_count,
                     non_test_binary_count,
+                    build_script_out_dir_count,
                     linked_path_count,
                     &mut writer,
                 )?;
@@ -92,8 +96,9 @@ impl ArchiveReporter {
                 write!(writer, "{:>12} ", "Extracted".style(self.styles.success))?;
                 writeln!(
                     writer,
-                    "{} files to {} in {}",
+                    "{} {} to {} in {}",
                     file_count.style(self.styles.bold),
+                    plural::files_str(file_count),
                     destination_dir.style(self.styles.bold),
                     format_duration(elapsed),
                 )?;
@@ -107,32 +112,57 @@ impl ArchiveReporter {
         &mut self,
         test_binary_count: usize,
         non_test_binary_count: usize,
+        build_script_out_dir_count: usize,
         linked_path_count: usize,
         mut writer: impl Write,
     ) -> io::Result<()> {
         let total_binary_count = test_binary_count + non_test_binary_count;
         let non_test_text = if non_test_binary_count > 0 {
             format!(
-                " (including {} non-test binaries)",
-                non_test_binary_count.style(self.styles.bold)
+                " (including {} non-test {})",
+                non_test_binary_count.style(self.styles.bold),
+                plural::binaries_str(non_test_binary_count),
             )
         } else {
             "".to_owned()
         };
-        let linked_path_text = if linked_path_count > 0 {
-            format!(
-                " and {} linked paths",
-                linked_path_count.style(self.styles.bold)
-            )
-        } else {
-            "".to_owned()
-        };
+        let mut more = Vec::new();
+        if build_script_out_dir_count > 0 {
+            more.push(format!(
+                "{} build script output {}",
+                build_script_out_dir_count.style(self.styles.bold),
+                plural::directories_str(build_script_out_dir_count),
+            ));
+        }
+        if linked_path_count > 0 {
+            more.push(format!(
+                "{} linked {}",
+                linked_path_count.style(self.styles.bold),
+                plural::paths_str(linked_path_count),
+            ));
+        }
 
         write!(
             writer,
-            "{} binaries{non_test_text}{linked_path_text}",
+            "{} {}{non_test_text}",
             total_binary_count.style(self.styles.bold),
-        )
+            plural::binaries_str(total_binary_count),
+        )?;
+
+        match more.len() {
+            0 => Ok(()),
+            1 => {
+                write!(writer, " and {}", more[0])
+            }
+            _ => {
+                write!(
+                    writer,
+                    ", {}, and {}",
+                    more[..more.len() - 1].join(", "),
+                    more.last().unwrap(),
+                )
+            }
+        }
     }
 }
 
@@ -163,6 +193,9 @@ pub enum ArchiveEvent<'a> {
         /// The number of non-test binaries to archive.
         non_test_binary_count: usize,
 
+        /// The number of build script output directories to archive.
+        build_script_out_dir_count: usize,
+
         /// The number of linked paths to archive.
         linked_path_count: usize,
 
@@ -189,6 +222,9 @@ pub enum ArchiveEvent<'a> {
 
         /// The number of non-test binaries to extract.
         non_test_binary_count: usize,
+
+        /// The number of build script output directories to archive.
+        build_script_out_dir_count: usize,
 
         /// The number of linked paths to extract.
         linked_path_count: usize,
