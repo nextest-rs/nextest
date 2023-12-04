@@ -5,7 +5,7 @@ use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME}
 use crate::{
     config::get_num_cpus,
     errors::{ArchiveCreateError, UnknownArchiveFormat},
-    helpers::convert_rel_path_to_forward_slash,
+    helpers::{convert_rel_path_to_forward_slash, rel_path_join},
     list::{BinaryList, OutputFormat, SerializableFormat},
     reuse_build::PathMapper,
 };
@@ -64,6 +64,7 @@ where
     let file = AtomicFile::new(output_file, OverwriteBehavior::AllowOverwrite);
     let test_binary_count = binary_list.rust_binaries.len();
     let non_test_binary_count = binary_list.rust_build_meta.non_test_binaries.len();
+    let build_script_out_dir_count = binary_list.rust_build_meta.build_script_out_dirs.len();
     let linked_path_count = binary_list.rust_build_meta.linked_paths.len();
     let start_time = Instant::now();
 
@@ -72,6 +73,7 @@ where
             callback(ArchiveEvent::ArchiveStarted {
                 test_binary_count,
                 non_test_binary_count,
+                build_script_out_dir_count,
                 linked_path_count,
                 output_file,
             })
@@ -199,9 +201,33 @@ impl<'a, W: Write> Archiver<'a, W> {
             self.append_path(&src_path, &rel_path)?;
         }
 
+        // Write build script output directories to the archive.
+        for build_script_out_dir in self
+            .binary_list
+            .rust_build_meta
+            .build_script_out_dirs
+            .values()
+        {
+            let src_path = self
+                .binary_list
+                .rust_build_meta
+                .target_directory
+                .join(build_script_out_dir);
+            let src_path = self.path_mapper.map_binary(src_path);
+
+            let rel_path = Utf8Path::new("target").join(build_script_out_dir);
+            let rel_path = convert_rel_path_to_forward_slash(&rel_path);
+
+            // XXX: For now, we only archive one level of build script output directories as a
+            // conservative solution. If necessary, we may have to either broaden this by default or
+            // add configuration for this. Archiving too much can cause unnecessary slowdowns.
+            self.append_dir_one_level(&rel_path, &src_path)?;
+        }
+
         // Write linked paths to the archive.
         for (linked_path, requested_by) in &self.binary_list.rust_build_meta.linked_paths {
-            // linked paths are e.g. debug/foo/bar. We need to prepend the target directory.
+            // Linked paths are relative, e.g. debug/foo/bar. We need to prepend the target
+            // directory.
             let src_path = self
                 .binary_list
                 .rust_build_meta
@@ -274,20 +300,21 @@ impl<'a, W: Write> Archiver<'a, W> {
         rel_path: &Utf8Path,
         src_path: &Utf8Path,
     ) -> Result<(), ArchiveCreateError> {
-        // In case of a symlink pointing to a directory, is_dir is false, but src.is_dir() will return true
-        for entry in
+        let entries =
             src_path
                 .read_dir_utf8()
                 .map_err(|error| ArchiveCreateError::InputFileRead {
                     path: src_path.to_owned(),
                     is_dir: Some(true),
                     error,
-                })?
-        {
+                })?;
+        for entry in entries {
             let entry = entry.map_err(|error| ArchiveCreateError::DirEntryRead {
                 path: src_path.to_owned(),
                 error,
             })?;
+            // In case of a symlink pointing to a directory, entry.file_type.is_dir() is false, but
+            // src.is_dir() will return true. We want to use entry.file_type.is_dir().
             let src = entry.path();
             let file_type =
                 entry
@@ -298,7 +325,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                         error,
                     })?;
             if !file_type.is_dir() {
-                let dest = rel_path.join(src.file_name().expect("entries should have a file name"));
+                let dest = rel_path_join(rel_path, entry.file_name().as_ref());
                 self.append_path(src, &dest)?;
             }
         }

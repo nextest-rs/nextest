@@ -222,6 +222,7 @@ impl<'g> TestList<'g> {
             updated_dylib_path.to_string_lossy(),
         );
         let lctx = LocalExecuteContext {
+            rust_build_meta: &rust_build_meta,
             double_spawn: ctx.double_spawn,
             dylib_path: &updated_dylib_path,
             env: &env,
@@ -934,6 +935,7 @@ impl<'a> TestInstance<'a> {
         }
 
         let lctx = LocalExecuteContext {
+            rust_build_meta: &test_list.rust_build_meta,
             double_spawn: ctx.double_spawn,
             dylib_path: test_list.updated_dylib_path(),
             env: &test_list.env,
@@ -1143,6 +1145,7 @@ mod tests {
                 "target-directory": "/fake",
                 "base-output-directories": [],
                 "non-test-binaries": {},
+                "build-script-out-dirs": {},
                 "linked-paths": [],
                 "target-platforms": [
                   {

@@ -151,6 +151,7 @@ impl<'profile> SetupScript<'profile> {
         test_list: &TestList<'_>,
     ) -> Result<SetupScriptCommand, SetupScriptError> {
         let lctx = LocalExecuteContext {
+            rust_build_meta: test_list.rust_build_meta(),
             double_spawn,
             dylib_path: test_list.updated_dylib_path(),
             env: test_list.cargo_env(),

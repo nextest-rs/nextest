@@ -5,6 +5,7 @@ use crate::{
     cargo_config::EnvironmentMap,
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
+    list::{RustBuildMeta, TestListState},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::graph::PackageMetadata;
@@ -16,6 +17,8 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
+    // Note: Must use TestListState here to get remapped paths.
+    pub(crate) rust_build_meta: &'a RustBuildMeta<TestListState>,
     pub(crate) double_spawn: &'a DoubleSpawnInfo,
     pub(crate) dylib_path: &'a OsStr,
     pub(crate) env: &'a EnvironmentMap,
@@ -57,7 +60,18 @@ impl TestCommand {
             );
 
         apply_package_env(&mut cmd, package);
+
         apply_ld_dyld_env(&mut cmd, lctx.dylib_path);
+
+        if let Some(out_dir) = lctx
+            .rust_build_meta
+            .build_script_out_dirs
+            .get(package.id().repr())
+        {
+            // Convert the output directory to an absolute path.
+            let out_dir = lctx.rust_build_meta.target_directory.join(out_dir);
+            cmd.env("OUT_DIR", out_dir);
+        }
 
         // Expose paths to non-test binaries at runtime so that relocated paths work.
         // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.

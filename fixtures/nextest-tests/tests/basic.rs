@@ -128,6 +128,7 @@ fn test_cargo_env_vars() {
     for (k, v) in std::env::vars() {
         println!("{} = {}", k, v);
     }
+
     assert_eq!(
         std::env::var("NEXTEST").as_deref(),
         Ok("1"),
@@ -244,6 +245,19 @@ fn test_cargo_env_vars() {
             Ok("test-PASSED-value-set-by-environment"),
         );
     }
+
+    // Since this test doesn't have a build script, assert that OUT_DIR isn't present at either
+    // compile time or runtime.
+    assert_eq!(
+        option_env!("OUT_DIR"),
+        None,
+        "OUT_DIR not present at compile time"
+    );
+    assert_eq!(
+        std::env::var("OUT_DIR"),
+        Err(std::env::VarError::NotPresent),
+        "OUT_DIR not present at runtime"
+    );
 
     assert_eq!(std::env::var("MY_ENV_VAR").as_deref(), Ok("my-env-var"));
 }

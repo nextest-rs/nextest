@@ -9,6 +9,7 @@ use std::{
 fn main() {
     // Set the target directory to be within the output directory.
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR is valid"));
+
     std::env::set_var("CARGO_TARGET_DIR", out_dir.join("target"));
 
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());

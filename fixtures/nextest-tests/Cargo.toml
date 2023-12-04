@@ -33,6 +33,7 @@ members = [
     "cdylib/cdylib-link",
     "derive",
     "dylib-test",
+    "with-build-script",
 ]
 
 [dependencies]

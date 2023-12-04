@@ -15,7 +15,7 @@ use nextest_metadata::{
     RustNonTestBinarySummary, RustTestBinaryKind, RustTestBinarySummary,
 };
 use owo_colors::OwoColorize;
-use std::{io, io::Write};
+use std::{collections::HashSet, io, io::Write};
 
 /// A Rust test binary built by Cargo.
 #[derive(Clone, Debug)]
@@ -313,6 +313,34 @@ impl<'g> BinaryListBuildState<'g> {
         for path in build_script.linked_paths {
             self.detect_linked_path(&build_script.package_id, &path);
         }
+
+        // We only care about build scripts for workspace packages.
+        let package_id = guppy::PackageId::new(build_script.package_id.repr);
+        let in_workspace = self.graph.metadata(&package_id).map_or_else(
+            |_| {
+                // Warn about processing a package that isn't in the package graph.
+                log::warn!(
+                    target: "nextest-runner::list",
+                    "warning: saw package ID `{}` which wasn't produced by cargo metadata",
+                    package_id
+                );
+                false
+            },
+            |p| p.in_workspace(),
+        );
+        if in_workspace {
+            // Ignore this build script if it's not in the target directory.
+            if let Ok(rel_out_dir) = build_script
+                .out_dir
+                .strip_prefix(&self.rust_build_meta.target_directory)
+            {
+                self.rust_build_meta.build_script_out_dirs.insert(
+                    package_id.repr().to_owned(),
+                    convert_rel_path_to_forward_slash(rel_out_dir),
+                );
+            }
+        }
+
         Ok(())
     }
 
@@ -338,6 +366,18 @@ impl<'g> BinaryListBuildState<'g> {
 
     fn finish(mut self) -> BinaryList {
         self.rust_binaries.sort_by(|b1, b2| b1.id.cmp(&b2.id));
+
+        // Clean out any build script output directories for which there's no corresponding binary.
+        let relevant_package_ids = self
+            .rust_binaries
+            .iter()
+            .map(|bin| bin.package_id.clone())
+            .collect::<HashSet<_>>();
+
+        self.rust_build_meta
+            .build_script_out_dirs
+            .retain(|package_id, _| relevant_package_ids.contains(package_id));
+
         BinaryList {
             rust_build_meta: self.rust_build_meta,
             rust_binaries: self.rust_binaries,
@@ -452,6 +492,7 @@ mod tests {
                 }
               ]
             },
+            "build-script-out-dirs": {},
             "linked-paths": [],
             "target-platforms": [
               {

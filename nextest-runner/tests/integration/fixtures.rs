@@ -167,7 +167,11 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<RustBinaryId, Vec<TestFixture>>>
             "dylib-test".into() => vec![],
             "cdylib-example".into() => vec![
                 TestFixture { name: "tests::test_multiply_two_cdylib", status: FixtureStatus::Pass },
-            ]
+            ],
+            // Build script tests
+            "with-build-script".into() => vec![
+                TestFixture { name: "tests::test_out_dir_present", status: FixtureStatus::Pass },
+            ],
         }
     },
 );
@@ -238,6 +242,10 @@ pub(crate) fn set_env_vars() {
         "__NEXTEST_TESTING_EXTRA_CONFIG_OVERRIDE_FORCE_FALSE",
         "test-PASSED-value-set-by-environment",
     );
+
+    // Remove OUT_DIR from the environment, as it interferes with tests (some of them expect that
+    // OUT_DIR isn't set.)
+    std::env::remove_var("OUT_DIR");
 }
 
 pub(crate) fn workspace_root() -> Utf8PathBuf {

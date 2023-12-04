@@ -3,6 +3,29 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+### Added
+
+Improvements to [build script `OUT_DIR`](https://doc.rust-lang.org/cargo/reference/build-scripts.html#outputs-of-the-build-script)
+support:
+
+- Matching the behavior of `cargo test`, nextest now sets the `OUT_DIR` environment variable at
+  runtime if there's a corresponding build script.
+
+- While [creating archives](https://nexte.st/book/reusing-builds), nextest now archives `OUT_DIR`s if:
+
+  - The build script is for a crate in the workspace, and
+  - There's at least one test binary for that crate.
+
+  This is so that the `OUT_DIR` environment variable continues to be relevant for test runs out of
+  archives.
+
+  Currently, `OUT_DIR`s are only archived one level deep to avoid bloating archives too much. In the
+  future, we may add configuration to archive more or less of the output directory. If you have a
+  use case that would benefit from this, please [file an
+  issue](https://github.com/nextest-rs/nextest/issues/new).
+
 ## [0.9.64] - 2023-12-03
 
 ### Added

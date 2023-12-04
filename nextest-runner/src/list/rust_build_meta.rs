@@ -29,6 +29,10 @@ pub struct RustBuildMeta<State> {
     /// Information about non-test executables, keyed by package ID.
     pub non_test_binaries: BTreeMap<String, BTreeSet<RustNonTestBinarySummary>>,
 
+    /// Build script output directory, relative to the target directory and keyed by package ID.
+    /// Only present for workspace packages that have build scripts.
+    pub build_script_out_dirs: BTreeMap<String, Utf8PathBuf>,
+
     /// A list of linked paths, relative to the target directory. These directories are
     /// added to the dynamic library path.
     ///
@@ -54,6 +58,7 @@ impl RustBuildMeta<BinaryListState> {
             target_directory: target_directory.into(),
             base_output_directories: BTreeSet::new(),
             non_test_binaries: BTreeMap::new(),
+            build_script_out_dirs: BTreeMap::new(),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
             target_triple,
@@ -70,6 +75,7 @@ impl RustBuildMeta<BinaryListState> {
             // Since these are relative paths, they don't need to be mapped.
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
+            build_script_out_dirs: self.build_script_out_dirs.clone(),
             linked_paths: self.linked_paths.clone(),
             state: PhantomData,
             target_triple: self.target_triple.clone(),
@@ -85,6 +91,7 @@ impl RustBuildMeta<TestListState> {
             target_directory: Utf8PathBuf::new(),
             base_output_directories: BTreeSet::new(),
             non_test_binaries: BTreeMap::new(),
+            build_script_out_dirs: BTreeMap::new(),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
             target_triple: None,
@@ -142,6 +149,7 @@ impl<State> RustBuildMeta<State> {
         Ok(Self {
             target_directory: summary.target_directory,
             base_output_directories: summary.base_output_directories,
+            build_script_out_dirs: summary.build_script_out_dirs,
             non_test_binaries: summary.non_test_binaries,
             linked_paths: summary
                 .linked_paths
@@ -159,6 +167,7 @@ impl<State> RustBuildMeta<State> {
             target_directory: self.target_directory.clone(),
             base_output_directories: self.base_output_directories.clone(),
             non_test_binaries: self.non_test_binaries.clone(),
+            build_script_out_dirs: self.build_script_out_dirs.clone(),
             linked_paths: self.linked_paths.keys().cloned().collect(),
             target_platform: self
                 .target_triple

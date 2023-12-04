@@ -473,6 +473,13 @@ pub struct RustBuildMetaSummary {
     /// Information about non-test binaries, keyed by package ID.
     pub non_test_binaries: BTreeMap<String, BTreeSet<RustNonTestBinarySummary>>,
 
+    /// Build script output directory, relative to the target directory and keyed by package ID.
+    /// Only present for workspace packages that have build scripts.
+    ///
+    /// Added in cargo-nextest 0.9.65.
+    #[serde(default)]
+    pub build_script_out_dirs: BTreeMap<String, Utf8PathBuf>,
+
     /// Linked paths, relative to the target directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
@@ -694,6 +701,7 @@ mod tests {
         target_directory: "/foo".into(),
         base_output_directories: BTreeSet::new(),
         non_test_binaries: BTreeMap::new(),
+        build_script_out_dirs: BTreeMap::new(),
         linked_paths: BTreeSet::new(),
         target_platform: None,
         target_platforms: vec![],
@@ -708,6 +716,7 @@ mod tests {
         target_directory: "/foo".into(),
         base_output_directories: BTreeSet::new(),
         non_test_binaries: BTreeMap::new(),
+        build_script_out_dirs: BTreeMap::new(),
         linked_paths: BTreeSet::new(),
         target_platform: Some("x86_64-unknown-linux-gnu".to_owned()),
         target_platforms: vec![],
