@@ -29,7 +29,7 @@ miette = { version = "5.10.0", features = ["fancy"] }
 nextest-filtering = { version = "=0.6.0", path = "../nextest-filtering" }
 nextest-runner = { version = "=0.51.0", path = "../nextest-runner" }
 nextest-metadata = { version = "=0.9.3", path = "../nextest-metadata" }
-once_cell = "1.18.0"
+once_cell = "1.19.0"
 owo-colors = { version = "3.5.0", features = ["supports-colors"] }
 pathdiff = { version = "0.2.1", features = ["camino"] }
 semver = "1.0.20"
