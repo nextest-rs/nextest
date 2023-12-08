@@ -19,11 +19,11 @@ use winnow::{
     Parser,
 };
 
-fn run_str_parser<'a, T, I>(mut inner: I) -> impl FnMut(Span<'a>) -> IResult<'a, T>
+fn run_str_parser<'a, T, I>(mut inner: I) -> impl Parser<Span<'a>, T, super::Error<'a>>
 where
-    I: FnMut(&'a str) -> winnow::IResult<&'a str, T>,
+    I: Parser<&'a str, T, winnow::error::Error<&'a str>>,
 {
-    move |input| match inner(input.next_slice(input.slice_len()).1) {
+    move |input: Span<'a>| match inner.parse_next(input.next_slice(input.slice_len()).1) {
         Ok((i, res)) => {
             let eaten = input.slice_len() - i.len();
             Ok((input.next_slice(eaten).0, res))
@@ -55,7 +55,7 @@ fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
         let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
         let parse_delimited_hex = preceded(char('u'), delimited(char('{'), parse_hex, char('}')));
         let parse_u32 = map_res(parse_delimited_hex, |hex| u32::from_str_radix(hex, 16));
-        run_str_parser(map_opt(parse_u32, std::char::from_u32))(input)
+        run_str_parser(map_opt(parse_u32, std::char::from_u32)).parse_next(input)
     })
     .parse_next(input)
 }
