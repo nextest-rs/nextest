@@ -1,8 +1,12 @@
 # Changelog
 
-## [0.52.0] - 2023-12-09
+## [0.52.1] - 2023-12-10
 
 See the changelog for [cargo-nextest 0.9.65](https://nexte.st/CHANGELOG.html#0965---2023-12-10).
+
+## [0.52.0] - 2023-12-09
+
+This version was not published on crates.io due to a missing nextest-filtering update.
 
 ## [0.51.0] - 2023-12-03
 
@@ -408,6 +412,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.52.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.52.1
 [0.52.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.52.0
 [0.51.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.51.0
 [0.50.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.50.0
