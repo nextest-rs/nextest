@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.0] - 2023-12-09
+
+### Added
+
+- `RustBuildMetaSummary` has a new field called `build_script_out_dirs`. This is a map of workspace package IDs to their corresponding build script `OUT_DIR`s.
+
+### Misc
+
+- The `.crate` files uploaded to crates.io now contain the `LICENSE-APACHE` and `LICENSE-MIT` license files. Thanks [@musicinmybrain](https://github.com/musicinmybrain) for your first contribution!
+
 ## [0.9.3] - 2023-12-03
 
 ### Added
@@ -187,6 +197,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.10.0
 [0.9.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.3
 [0.9.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.2
 [0.9.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.1

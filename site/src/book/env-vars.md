@@ -49,7 +49,7 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 
 Nextest delegates to Cargo for the build, which controls the environment variables that are set. See [Environment variables Cargo sets for crates](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates) for a full list.
 
-Nextest also sets these environment variables at runtime, matching the behavior of cargo test:
+Nextest also sets these environment variables at runtime, matching the behavior of `cargo test`:
 
 - `CARGO` — Path to the `cargo` binary performing the build.
 - `CARGO_MANIFEST_DIR` — The directory containing the manifest of your package. If [`--workspace-remap`](reusing-builds.md#specifying-a-new-location-for-the-workspace) is passed in, this is set to the remapped manifest directory. You can obtain the non-remapped directory using the value of this variable at compile-time, e.g. `env!("CARGO_MANIFEST_DIR")`.
@@ -66,6 +66,7 @@ Nextest also sets these environment variables at runtime, matching the behavior 
 - `CARGO_PKG_LICENSE` — The license from the manifest of your package.
 - `CARGO_PKG_LICENSE_FILE` — The license file from the manifest of your package.
 - Environment variables specified in [the `[env]` section of `.cargo/config.toml`](https://doc.rust-lang.org/cargo/reference/config.html#env).
+- `OUT_DIR` — The path to the package's build script output directory. Only set if the crate has a build script.
 
 ### Dynamic library paths
 

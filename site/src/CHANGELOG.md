@@ -36,6 +36,10 @@ support:
   use case that would benefit from this, please [file an
   issue](https://github.com/nextest-rs/nextest/issues/new).
 
+### Misc
+
+- The `.crate` files uploaded to crates.io now contain the `LICENSE-APACHE` and `LICENSE-MIT` license files. Thanks [@musicinmybrain](https://github.com/musicinmybrain) for your first contribution!
+
 ## [0.9.64] - 2023-12-03
 
 ### Added

@@ -4,51 +4,71 @@ cargo-nextest can be configured to produce machine-readable JSON output, readabl
 
 ## Listing tests
 
-To produce a list of tests in the JSON output format `cargo nextest list --message-format json` (or `json-pretty` for nicely formatted output). Here's some example output for the [tokio repository](https://github.com/tokio-rs/tokio):
+To produce a list of tests using the JSON output, use `cargo nextest list --message-format json` (or `json-pretty` for nicely formatted output). Here's some example output for [camino](https://github.com/camino-rs/camino):
 
 ```json
-% cargo nextest list -p tokio-util --features full --lib --message-format json-pretty
+% cargo nextest list --all-features --lib --message-format json-pretty
 {
   "rust-build-meta": {
-    "target-directory": "/home/rain/dev/tokio/target",
+    "target-directory": "/home/rain/dev/camino/target",
     "base-output-directories": [
       "debug"
     ],
     "non-test-binaries": {},
-    "linked-paths": []
+    "build-script-out-dirs": {
+      "camino 1.1.6 (path+file:///home/rain/dev/camino)": "debug/build/camino-02991de38c555ca1/out"
+    },
+    "linked-paths": [],
+    "target-platforms": [
+      {
+        "triple": "x86_64-unknown-linux-gnu",
+        "target-features": [
+          "fxsr",
+          "sse",
+          "sse2"
+        ]
+      }
+    ],
+    "target-platform": null
   },
-  "test-count": 4,
+  "test-count": 5,
   "rust-suites": {
-    "tokio-util": {
-      "package-name": "tokio-util",
-      "binary-id": "tokio-util",
-      "binary-name": "tokio-util",
-      "package-id": "tokio-util 0.7.3 (path+file:///home/rain/dev/tokio/tokio-util)",
+    "camino": {
+      "package-name": "camino",
+      "binary-id": "camino",
+      "binary-name": "camino",
+      "package-id": "camino 1.1.6 (path+file:///home/rain/dev/camino)",
       "kind": "lib",
-      "binary-path": "/home/me/dev/tokio/target/debug/deps/tokio_util-9dd5cbf268a3ffb4",
+      "binary-path": "/home/rain/dev/camino/target/debug/deps/camino-1bdca073ddd4474a",
       "build-platform": "target",
-      "cwd": "/home/me/dev/tokio/tokio-util",
+      "cwd": "/home/rain/dev/camino",
       "status": "listed",
       "testcases": {
-        "either::tests::either_is_async_read": {
+        "serde_impls::tests::invalid_utf8": {
           "ignored": false,
           "filter-match": {
             "status": "matches"
           }
         },
-        "either::tests::either_is_stream": {
+        "serde_impls::tests::valid_utf8": {
           "ignored": false,
           "filter-match": {
             "status": "matches"
           }
         },
-        "time::wheel::level::test::test_slot_for": {
+        "tests::test_borrowed_into": {
           "ignored": false,
           "filter-match": {
             "status": "matches"
           }
         },
-        "time::wheel::test::test_level_for": {
+        "tests::test_deref_mut": {
+          "ignored": false,
+          "filter-match": {
+            "status": "matches"
+          }
+        },
+        "tests::test_owned_into": {
           "ignored": false,
           "filter-match": {
             "status": "matches"
