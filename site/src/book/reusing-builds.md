@@ -34,7 +34,7 @@ In some cases, it can be useful to separate out building tests from running them
 
   - Dynamic libraries that test binaries might link to
   - Non-test binaries used by integration tests
-  - Starting nextest 0.9.65, build script output directories for workspace packages that have associated test binaries
+  - Starting nextest 0.9.66, build script output directories for workspace packages that have associated test binaries
 
     > **NOTE:** Currently, `OUT_DIR`s are only archived one level deep to avoid bloating archives too much. In the future, we may add configuration to archive more or less of the output directory. If you have a use case that would benefit from this, please [file an issue](https://github.com/nextest-rs/nextest/issues/new).
 
