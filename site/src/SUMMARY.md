@@ -38,7 +38,7 @@
 - [Stability policy](book/stability.md)
 - [Experimental features](book/experimental-features.md)
   - [Setup scripts](book/setup-scripts.md)
-  - [Libtest JSON output](book/run-machine-readable.md)
+  - [Machine-readable output for test runs](book/run-machine-readable.md)
 ---
 - [How nextest works](book/how-it-works.md)
   - [Benchmarks](book/benchmarks.md)
