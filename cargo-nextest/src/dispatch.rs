@@ -773,13 +773,13 @@ enum IgnoreOverridesOpt {
 
 #[derive(Clone, Copy, Debug, ValueEnum, Default)]
 enum MessageFormat {
-    /// The default output format
+    /// The default output format.
     #[default]
     Human,
-    /// Output test information in the same format as libtest itself
+    /// Output test information in the same format as libtest.
     LibtestJson,
-    /// Output test information in the same format as libtest itself, with an
-    /// `nextest` subobject that includes additional metadata
+    /// Output test information in the same format as libtest, with a `nextest` subobject that
+    /// includes additional metadata.
     LibtestJsonPlus,
 }
 
