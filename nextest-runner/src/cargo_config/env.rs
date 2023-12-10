@@ -204,7 +204,7 @@ mod imp {
         fn cmp(&self, other: &Self) -> cmp::Ordering {
             unsafe {
                 let result = CompareStringOrdinal(&self.utf16, &other.utf16, true);
-                match result as u32 {
+                match result {
                     CSTR_LESS_THAN => cmp::Ordering::Less,
                     CSTR_EQUAL => cmp::Ordering::Equal,
                     CSTR_GREATER_THAN => cmp::Ordering::Greater,
