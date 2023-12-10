@@ -84,6 +84,4 @@ The value of `"package-id"` can be matched up to the package IDs produced by run
 
 ## Running tests
 
-This is currently an experimental feature: see [Machine-readable output for test runs](run-machine-readable.md).
-
-This is [currently not implemented](https://github.com/nextest-rs/nextest/issues/20). **Help wanted**: please post in the issue if you'd like to work on this!
+This is currently an experimental feature. For more information, see [Machine-readable output for test runs](run-machine-readable.md).
