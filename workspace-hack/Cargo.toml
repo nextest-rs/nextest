@@ -48,7 +48,6 @@ syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.39", features = ["extra
 futures-core = { version = "0.3.29" }
 futures-sink = { version = "0.3.29" }
 libc = { version = "0.2.151", features = ["extra_traits"] }
-linux-raw-sys = { version = "0.4.12", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
 once_cell = { version = "1.19.0", features = ["unstable"] }
 rustix = { version = "0.38.28", features = ["fs", "termios"] }
