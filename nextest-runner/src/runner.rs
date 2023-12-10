@@ -2130,15 +2130,7 @@ mod imp {
     ) -> Result<(), ConfigureHandleInheritanceError> {
         fn set_handle_inherit(handle: HANDLE, inherit: bool) -> windows::core::Result<()> {
             let flags = if inherit { HANDLE_FLAG_INHERIT.0 } else { 0 };
-            unsafe {
-                if SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(flags))
-                    .as_bool()
-                {
-                    Ok(())
-                } else {
-                    Err(windows::core::Error::from_win32())
-                }
-            }
+            unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(flags)) }
         }
 
         unsafe {
@@ -2199,7 +2191,7 @@ mod imp {
             unsafe {
                 // Ignore the error here -- it's likely due to the process exiting.
                 // Note: 1 is the exit code returned by Windows.
-                TerminateJobObject(HANDLE(handle as isize), 1);
+                _ = TerminateJobObject(HANDLE(handle as isize), 1);
             }
         }
         // Start killing the process directly for good measure.
