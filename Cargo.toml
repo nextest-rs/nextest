@@ -12,7 +12,7 @@ members = [
 
 [workspace.dependencies]
 globset = "0.4.14"
-nextest-metadata = { version = "0.9.3", path = "nextest-metadata" }
+nextest-metadata = { version = "0.10.0", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
 
 # make backtrace + color-eyre faster on debug builds
