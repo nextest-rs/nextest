@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.52.2] - 2023-12-10
+
+See the changelog for [cargo-nextest 0.9.65](https://nexte.st/CHANGELOG.html#0965---2023-12-10).
+
+### Fixed
+
+Downgraded tar to 0.4.39, which compiles on illumos (0.4.40 does not due to an update to the xattr
+transitive dependency, which has [a bug](https://github.com/Stebalien/xattr/pull/48) on unsupported
+platforms.)
+
 ## [0.52.1] - 2023-12-10
 
 See the changelog for [cargo-nextest 0.9.65](https://nexte.st/CHANGELOG.html#0965---2023-12-10).
@@ -412,6 +422,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.52.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.52.2
 [0.52.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.52.1
 [0.52.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.52.0
 [0.51.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.51.0
