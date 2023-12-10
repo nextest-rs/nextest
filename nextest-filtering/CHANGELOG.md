@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0] - 2023-12-10
+
+### Changed
+
+- `nextest-metadata` updated to 0.10.
+
+### Misc
+
+- The `.crate` files uploaded to crates.io now contain the `LICENSE-APACHE` and `LICENSE-MIT` license files. Thanks [@musicinmybrain](https://github.com/musicinmybrain) for your first contribution!
+
 ## [0.6.0] - 2023-12-03
 
 ### Added
@@ -77,6 +87,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.7.0
 [0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.6.0
 [0.5.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.5.1
 [0.5.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.5.0
