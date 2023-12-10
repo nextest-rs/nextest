@@ -242,6 +242,11 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
+    #[error("message format version is not valid")]
+    InvalidMessageFormatVersion {
+        #[from]
+        err: FormatVersionError,
+    },
 }
 
 impl ExpectedError {
@@ -394,7 +399,8 @@ impl ExpectedError {
             | Self::TestBinaryArgsParseError { .. }
             | Self::DialoguerError { .. }
             | Self::SignalHandlerSetupError { .. }
-            | Self::ShowTestGroupsError { .. } => NextestExitCode::SETUP_ERROR,
+            | Self::ShowTestGroupsError { .. }
+            | Self::InvalidMessageFormatVersion { .. } => NextestExitCode::SETUP_ERROR,
             Self::ConfigParseError { err } => {
                 // Experimental features not being enabled are their own error.
                 match err.kind() {
@@ -833,6 +839,10 @@ impl ExpectedError {
             }
             Self::DoubleSpawnExecError { command, err } => {
                 log::error!("[double-spawn] failed to exec `{command:?}`");
+                Some(err as &dyn Error)
+            }
+            Self::InvalidMessageFormatVersion { err } => {
+                log::error!("error parsing message format version`");
                 Some(err as &dyn Error)
             }
         };

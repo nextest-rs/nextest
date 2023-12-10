@@ -6,6 +6,8 @@
 //! The main structure in this module is [`TestReporter`].
 
 mod aggregator;
+pub mod structured;
+
 use crate::{
     config::{NextestProfile, ScriptId},
     errors::WriteEventError,
@@ -161,6 +163,7 @@ pub struct TestReporterBuilder {
     success_output: Option<TestOutputDisplay>,
     status_level: Option<StatusLevel>,
     final_status_level: Option<FinalStatusLevel>,
+
     verbose: bool,
     hide_progress_bar: bool,
 }
@@ -220,6 +223,7 @@ impl TestReporterBuilder {
         test_list: &TestList,
         profile: &NextestProfile<'a>,
         output: ReporterStderr<'a>,
+        structured_reporter: structured::StructuredReporter<'a>,
     ) -> TestReporter<'a> {
         let styles = Box::default();
         let binary_id_width = test_list
@@ -319,6 +323,7 @@ impl TestReporterBuilder {
                 final_outputs: DebugIgnore(vec![]),
             },
             stderr,
+            structured_reporter,
             metadata_reporter: aggregator,
         }
     }
@@ -330,11 +335,15 @@ enum ReporterStderrImpl<'a> {
     Buffer(&'a mut Vec<u8>),
 }
 
-/// Functionality to report test results to stderr and JUnit
+/// Functionality to report test results to stderr, JUnit, and/or structured,
+/// machine-readable results to stdout
 pub struct TestReporter<'a> {
     inner: TestReporterImpl<'a>,
     stderr: ReporterStderrImpl<'a>,
+    /// Used to aggregate events for JUnit reports written to disk
     metadata_reporter: EventAggregator<'a>,
+    /// Used to emit test events in machine-readable format(s) to stdout
+    structured_reporter: structured::StructuredReporter<'a>,
 }
 
 impl<'a> TestReporter<'a> {
@@ -383,6 +392,8 @@ impl<'a> TestReporter<'a> {
                     .map_err(WriteEventError::Io)?;
             }
         }
+
+        self.structured_reporter.write_event(&event)?;
         self.metadata_reporter.write_event(event)?;
         Ok(())
     }
@@ -1780,7 +1791,9 @@ impl Styles {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::NextestConfig, platform::BuildPlatforms};
+    use crate::{
+        config::NextestConfig, platform::BuildPlatforms, reporter::structured::StructuredReporter,
+    };
 
     #[test]
     fn no_capture_settings() {
@@ -1802,6 +1815,7 @@ mod tests {
             &test_list,
             &profile.apply_build_platforms(&build_platforms),
             output,
+            StructuredReporter::Disabled,
         );
         assert!(reporter.inner.no_capture, "no_capture is true");
         assert_eq!(

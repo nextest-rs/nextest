@@ -28,7 +28,7 @@ use nextest_runner::{
     },
     partition::PartitionerBuilder,
     platform::BuildPlatforms,
-    reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
+    reporter::{structured, FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, RunStatsFailureKind, TestRunnerBuilder},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
@@ -771,6 +771,18 @@ enum IgnoreOverridesOpt {
     All,
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum, Default)]
+enum MessageFormat {
+    /// The default output format
+    #[default]
+    Human,
+    /// Output test information in the same format as libtest itself
+    LibtestJson,
+    /// Output test information in the same format as libtest itself, with an
+    /// `nextest` subobject that includes additional metadata
+    LibtestJsonPlus,
+}
+
 #[derive(Debug, Default, Args)]
 #[command(next_help_heading = "Reporter options")]
 struct TestReporterOpts {
@@ -818,6 +830,32 @@ struct TestReporterOpts {
     /// Do not display the progress bar
     #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR")]
     hide_progress_bar: bool,
+
+    /// The format to use for outputting test results
+    #[arg(
+        long,
+        name = "message-format",
+        value_enum,
+        default_value_t,
+        conflicts_with = "no-run",
+        value_name = "FORMAT",
+        env = "NEXTEST_MESSAGE_FORMAT"
+    )]
+    message_format: MessageFormat,
+
+    /// The specific version of the `message-format` to use
+    ///
+    /// This version string allows the machine-readable formats to use a stable
+    /// structure for consistent consumption across changes to nextest. If not
+    /// specified the latest version for the selected message format is used
+    #[arg(
+        long,
+        conflicts_with = "no-run",
+        requires = "message-format",
+        value_name = "VERSION",
+        env = "NEXTEST_MESSAGE_FORMAT_VERSION"
+    )]
+    message_format_version: Option<String>,
 }
 
 impl TestReporterOpts {
@@ -1504,10 +1542,24 @@ impl App {
         let output = output_writer.reporter_output();
         let profile = profile.apply_build_platforms(&build_platforms);
 
+        let structured_reporter = match reporter_opts.message_format {
+            MessageFormat::Human => structured::StructuredReporter::Disabled,
+            MessageFormat::LibtestJson | MessageFormat::LibtestJsonPlus => {
+                structured::StructuredReporter::Libtest(structured::LibtestReporter::new(
+                    reporter_opts.message_format_version.as_deref(),
+                    if matches!(reporter_opts.message_format, MessageFormat::LibtestJsonPlus) {
+                        structured::EmitNextestObject::Yes
+                    } else {
+                        structured::EmitNextestObject::No
+                    },
+                )?)
+            }
+        };
+
         let mut reporter = reporter_opts
             .to_builder(no_capture)
             .set_verbose(self.base.output.verbose)
-            .build(&test_list, &profile, output);
+            .build(&test_list, &profile, output, structured_reporter);
         if self
             .base
             .output

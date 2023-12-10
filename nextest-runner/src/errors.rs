@@ -1411,5 +1411,6 @@ mod self_update_errors {
     }
 }
 
+pub use crate::reporter::structured::FormatVersionError;
 #[cfg(feature = "self-update")]
 pub use self_update_errors::*;
