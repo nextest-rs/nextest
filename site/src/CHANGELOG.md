@@ -7,6 +7,16 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ### Added
 
+#### Experimental feature: machine-readable output for test runs
+
+Nextest now has experimental support for machine-readable output during `cargo nextest run` invocations ([#1086]), in a format similar to `cargo test`'s libtest JSON output. For more information, see [the documentation](https://nexte.st/book/run-machine-readable).
+
+Thanks [Jake Shadle](https://github.com/Jake-Shadle) for your contribution!
+
+[#1086]: https://github.com/nextest-rs/nextest/pull/1086
+
+#### `OUT_DIR` support
+
 Improvements to [build script `OUT_DIR`](https://doc.rust-lang.org/cargo/reference/build-scripts.html#outputs-of-the-build-script)
 support:
 

@@ -842,7 +842,7 @@ impl ExpectedError {
                 Some(err as &dyn Error)
             }
             Self::InvalidMessageFormatVersion { err } => {
-                log::error!("error parsing message format version`");
+                log::error!("error parsing message format version");
                 Some(err as &dyn Error)
             }
         };

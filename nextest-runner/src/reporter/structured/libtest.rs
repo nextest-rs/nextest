@@ -179,7 +179,7 @@ impl<'cfg> LibtestReporter<'cfg> {
         };
 
         let minor = match minor {
-            0 => FormatMinorVersion::First,
+            1 => FormatMinorVersion::First,
             o => {
                 return Err(FormatVersionError {
                     input: version.into(),

@@ -831,7 +831,7 @@ struct TestReporterOpts {
     #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR")]
     hide_progress_bar: bool,
 
-    /// The format to use for outputting test results
+    /// Format to use for test results (experimental).
     #[arg(
         long,
         name = "message-format",
@@ -843,11 +843,10 @@ struct TestReporterOpts {
     )]
     message_format: MessageFormat,
 
-    /// The specific version of the `message-format` to use
+    /// Version of structured message-format to use (experimental).
     ///
-    /// This version string allows the machine-readable formats to use a stable
-    /// structure for consistent consumption across changes to nextest. If not
-    /// specified the latest version for the selected message format is used
+    /// This allows the machine-readable formats to use a stable structure for consistent
+    /// consumption across changes to nextest. If not specified, the latest version is used.
     #[arg(
         long,
         conflicts_with = "no-run",
@@ -1525,6 +1524,30 @@ impl App {
         let (version_only_config, config) = self.base.load_config()?;
         let profile = self.load_profile(profile_name, &config)?;
 
+        // Construct this here so that errors are reported before the build step.
+        let structured_reporter = match reporter_opts.message_format {
+            MessageFormat::Human => structured::StructuredReporter::Disabled,
+            MessageFormat::LibtestJson | MessageFormat::LibtestJsonPlus => {
+                // This is currently an experimental feature, and is gated on this environment
+                // variable.
+                const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_LIBTEST_JSON";
+                if std::env::var(EXPERIMENTAL_ENV).as_deref() != Ok("1") {
+                    return Err(ExpectedError::ExperimentalFeatureNotEnabled {
+                        name: "libtest JSON output",
+                        var_name: EXPERIMENTAL_ENV,
+                    });
+                }
+                structured::StructuredReporter::Libtest(structured::LibtestReporter::new(
+                    reporter_opts.message_format_version.as_deref(),
+                    if matches!(reporter_opts.message_format, MessageFormat::LibtestJsonPlus) {
+                        structured::EmitNextestObject::Yes
+                    } else {
+                        structured::EmitNextestObject::No
+                    },
+                )?)
+            }
+        };
+
         let filter_exprs = self.build_filtering_expressions()?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
@@ -1541,20 +1564,6 @@ impl App {
 
         let output = output_writer.reporter_output();
         let profile = profile.apply_build_platforms(&build_platforms);
-
-        let structured_reporter = match reporter_opts.message_format {
-            MessageFormat::Human => structured::StructuredReporter::Disabled,
-            MessageFormat::LibtestJson | MessageFormat::LibtestJsonPlus => {
-                structured::StructuredReporter::Libtest(structured::LibtestReporter::new(
-                    reporter_opts.message_format_version.as_deref(),
-                    if matches!(reporter_opts.message_format, MessageFormat::LibtestJsonPlus) {
-                        structured::EmitNextestObject::Yes
-                    } else {
-                        structured::EmitNextestObject::No
-                    },
-                )?)
-            }
-        };
 
         let mut reporter = reporter_opts
             .to_builder(no_capture)
