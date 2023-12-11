@@ -1,7 +1,7 @@
 //! Utilities for capture output from tests run in a child process
 
 use bytes::{Bytes, BytesMut};
-use std::{io::Write as _, time::Instant};
+use std::{io::Write as _, ops::Range, time::Instant};
 use tokio::io::AsyncBufReadExt;
 
 /// A single chunk of captured output, this may represent 0 or more lines
@@ -9,11 +9,11 @@ use tokio::io::AsyncBufReadExt;
 #[allow(dead_code)]
 pub struct OutputChunk {
     /// The byte range the chunk occupies in the buffer
-    range: std::ops::Range<usize>,
+    range: Range<usize>,
     /// The timestamp the chunk was read
-    timestamp: Instant,
+    pub timestamp: Instant,
     /// True if stdout, false if stderr
-    stdout: bool,
+    pub stdout: bool,
 }
 
 /// The complete captured output of a child process
@@ -103,6 +103,12 @@ impl TestOutput {
                 acc
             })
             .freeze()
+    }
+
+    /// Retrieves an iterator over the lines in the output
+    #[inline]
+    pub fn lines(&self) -> LinesIterator<'_> {
+        LinesIterator::new(self)
     }
 }
 
@@ -255,4 +261,138 @@ fn push_chunk(acc: &mut TestOutputAccumulator, chunk: &[u8], stdout: bool) {
         timestamp: Instant::now(),
         stdout,
     });
+}
+
+struct ChunkIterator<'acc> {
+    chunk: &'acc OutputChunk,
+    haystack: &'acc [u8],
+    continues: bool,
+}
+
+impl<'acc> ChunkIterator<'acc> {
+    fn new(buf: &'acc [u8], chunk: &'acc OutputChunk, continues: bool) -> Self {
+        Self {
+            chunk,
+            haystack: &buf[chunk.range.clone()],
+            continues,
+        }
+    }
+}
+
+const LF: u8 = b'\n';
+
+impl<'acc> Iterator for ChunkIterator<'acc> {
+    type Item = Line<'acc>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.haystack.is_empty() {
+            return None;
+        }
+
+        let (ret, remaining, has) = match memchr::memchr(LF, self.haystack) {
+            Some(pos) => (&self.haystack[..pos + 1], &self.haystack[pos + 1..], true),
+            None => (self.haystack, &[][..], false),
+        };
+        self.haystack = remaining;
+
+        let kind = if self.continues {
+            self.continues = false;
+
+            if has {
+                LineKind::End
+            } else {
+                LineKind::None
+            }
+        } else if has {
+            LineKind::Complete
+        } else {
+            LineKind::Begin
+        };
+
+        Some(Line {
+            chunk: self.chunk,
+            raw: ret,
+            kind,
+        })
+    }
+}
+
+pub struct LinesIterator<'acc> {
+    acc: &'acc TestOutput,
+    cur_chunk: usize,
+    chunk_iter: Option<ChunkIterator<'acc>>,
+}
+
+impl<'acc> LinesIterator<'acc> {
+    fn new(acc: &'acc TestOutput) -> Self {
+        let mut this = Self {
+            acc,
+            cur_chunk: 0,
+            chunk_iter: None,
+        };
+
+        this.advance(0);
+        this
+    }
+
+    fn advance(&mut self, chunk_ind: usize) {
+        let Some(chunk) = self.acc.chunks.get(chunk_ind) else {
+            self.chunk_iter = None;
+            return;
+        };
+
+        let continues = self.chunk_iter.take().map_or(false, |ci| {
+            !self.acc.buf[ci.chunk.range.clone()].ends_with(&[LF])
+        });
+        self.chunk_iter = Some(ChunkIterator::new(&self.acc.buf, chunk, continues));
+        self.cur_chunk = chunk_ind;
+    }
+}
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum LineKind {
+    /// The raw data encompasses a complete line from beginning to end
+    Complete,
+    /// The raw data begins a line, but the output chunk ends before a newline
+    Begin,
+    /// The raw data ends a line that was started in a different chunk
+    End,
+    /// No line feeds were present in the chunk
+    None,
+}
+
+pub struct Line<'acc> {
+    /// The parent chunk which this line is a subslice of
+    pub chunk: &'acc OutputChunk,
+    /// The raw data for this line entry
+    pub raw: &'acc [u8],
+    pub kind: LineKind,
+}
+
+impl<'acc> Line<'acc> {
+    #[inline]
+    pub fn lossy(&self) -> std::borrow::Cow<'acc, str> {
+        String::from_utf8_lossy(self.raw)
+    }
+}
+
+impl<'acc> Iterator for LinesIterator<'acc> {
+    type Item = Line<'acc>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            {
+                let Some(chunk) = &mut self.chunk_iter else {
+                    return None;
+                };
+
+                if let Some(line) = chunk.next() {
+                    return Some(line);
+                }
+            }
+
+            self.advance(self.cur_chunk + 1);
+        }
+    }
 }

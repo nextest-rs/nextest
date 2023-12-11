@@ -25,9 +25,11 @@
 use super::{
     FormatVersionError, FormatVersionErrorInner, TestEvent, TestEventKind, WriteEventError,
 };
+use crate::list::RustTestSuite;
 use crate::runner::ExecutionResult;
 use nextest_metadata::MismatchReason;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 /// To support pinning the version of the output, we just use this simple enum
 /// to document changes as libtest output changes
@@ -67,7 +69,7 @@ enum FormatMajorVersion {
 }
 
 /// The accumulated stats for a single test binary
-struct LibtestSuite {
+struct LibtestSuite<'cfg> {
     /// The number of tests that failed
     failed: usize,
     /// The number of tests that succeeded
@@ -78,6 +80,7 @@ struct LibtestSuite {
     filtered: usize,
     /// The number of tests in this suite that are still running
     running: usize,
+    meta: &'cfg RustTestSuite<'cfg>,
     /// The accumulated duration of every test that has been executed
     total: std::time::Duration,
     /// Libtest outputs outputs a `started` event for every test that isn't
@@ -102,12 +105,25 @@ pub enum EmitNextestObject {
     No,
 }
 
+const KIND_TEST: &str = "test";
+const KIND_SUITE: &str = "suite";
+
+const EVENT_STARTED: &str = "started";
+const EVENT_IGNORED: &str = "ignored";
+const EVENT_OK: &str = "ok";
+const EVENT_FAILED: &str = "failed";
+
+#[inline]
+fn fmt_err(err: std::fmt::Error) -> WriteEventError {
+    WriteEventError::Io(std::io::Error::new(std::io::ErrorKind::OutOfMemory, err))
+}
+
 /// A reporter that reports test runs in the same line-by-line JSON format as
 /// libtest itself
 pub struct LibtestReporter<'cfg> {
     _minor: FormatMinorVersion,
     _major: FormatMajorVersion,
-    test_suites: BTreeMap<&'cfg str, LibtestSuite>,
+    test_suites: BTreeMap<&'cfg str, LibtestSuite<'cfg>>,
     /// If true, we emit a `nextest` subobject with additional metadata in it
     /// that consumers can use for easier integration if they wish
     emit_nextest_obj: bool,
@@ -201,16 +217,6 @@ impl<'cfg> LibtestReporter<'cfg> {
     }
 
     pub(crate) fn write_event(&mut self, event: &TestEvent<'cfg>) -> Result<(), WriteEventError> {
-        use std::fmt::Write as _;
-
-        const KIND_TEST: &str = "test";
-        const KIND_SUITE: &str = "suite";
-
-        const EVENT_STARTED: &str = "started";
-        const EVENT_IGNORED: &str = "ignored";
-        const EVENT_OK: &str = "ok";
-        const EVENT_FAILED: &str = "failed";
-
         let mut retries = None;
 
         // Write the pieces of data that are the same across all events
@@ -247,13 +253,17 @@ impl<'cfg> LibtestReporter<'cfg> {
                     test_instance,
                 )
             }
+            TestEventKind::RunFinished { .. } => {
+                for test_suite in
+                    std::mem::replace(&mut self.test_suites, BTreeMap::new()).into_values()
+                {
+                    self.finalize(test_suite)?;
+                }
+
+                return Ok(());
+            }
             _ => return Ok(()),
         };
-
-        #[inline]
-        fn fmt_err(err: std::fmt::Error) -> WriteEventError {
-            WriteEventError::Io(std::io::Error::new(std::io::ErrorKind::OutOfMemory, err))
-        }
 
         let suite_info = test_instance.suite_info;
         let crate_name = suite_info.package.name();
@@ -262,11 +272,22 @@ impl<'cfg> LibtestReporter<'cfg> {
         // Emit the suite start if this is the first test of the suite
         let test_suite = match self.test_suites.entry(suite_info.binary_id.as_str()) {
             std::collections::btree_map::Entry::Vacant(e) => {
+                let (running, ignored, filtered) =
+                    suite_info.status.test_cases().fold((0, 0, 0), |acc, tc| {
+                        if tc.1.ignored {
+                            (acc.0, acc.1 + 1, acc.2)
+                        } else if tc.1.filter_match.is_match() {
+                            (acc.0 + 1, acc.1, acc.2)
+                        } else {
+                            (acc.0, acc.1, acc.2 + 1)
+                        }
+                    });
+
                 let mut out = bytes::BytesMut::with_capacity(1024);
                 write!(
                     &mut out,
                     r#"{{"type":"{KIND_SUITE}","event":"{EVENT_STARTED}","test_count":{}"#,
-                    suite_info.status.test_count()
+                    running + ignored,
                 )
                 .map_err(fmt_err)?;
 
@@ -282,11 +303,12 @@ impl<'cfg> LibtestReporter<'cfg> {
                 out.extend_from_slice(b"}\n");
 
                 e.insert(LibtestSuite {
-                    running: suite_info.status.test_count(),
+                    running,
                     failed: 0,
                     succeeded: 0,
-                    ignored: 0,
-                    filtered: 0,
+                    ignored,
+                    filtered,
+                    meta: test_instance.suite_info,
                     total: std::time::Duration::new(0, 0),
                     ignore_block: None,
                     output_block: out,
@@ -350,25 +372,46 @@ impl<'cfg> LibtestReporter<'cfg> {
                     ExecutionResult::Fail { .. } | ExecutionResult::ExecFail => {
                         test_suite.failed += 1;
 
-                        let output = last_status.output.lossy();
+                        // Write the output from the test into the `stdout` (even
+                        // though it could contain stderr output as well).
+                        // Unfortunately to replicate the libtest json output,
+                        // we need to do our own filtering of the output to strip
+                        // out the data emitted by libtest in the human format
+                        write!(out, r#","stdout":""#).map_err(fmt_err)?;
 
-                        // TODO: Get the combined stdout and stderr streams, in the order they
-                        // are supposed to be, to accurately replicate libtest's output
+                        let mut in_test_output = false;
 
-                        // TODO: Strip libtest stdout output
-                        // libtest outputs various things when _not_ using the
-                        // unstable json format that we need to strip to emulate
-                        // that json output, eg.
-                        //
-                        // ```
-                        // running <n> tests
-                        // <test output>
-                        // test <name> ... FAILED
-                        // \n\nfailures:\n\nfailures:\n    <name>\n\ntest result: FAILED
-                        // ```
+                        for line in last_status.output.lines() {
+                            let line = if in_test_output {
+                                let data = line.lossy();
 
-                        write!(out, r#","stdout":"{}""#, EscapedString(&output),)
-                            .map_err(fmt_err)?;
+                                if line.chunk.stdout {
+                                    if let Some(unprefixed) = data.strip_prefix("test ") {
+                                        if let Some(test_name) =
+                                            unprefixed.strip_suffix(" ... FAILED\n")
+                                        {
+                                            if test_name == test_instance.name {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                data
+                            } else {
+                                let data = line.lossy();
+                                if line.chunk.stdout && data == "running 1 test\n" {
+                                    in_test_output = true;
+                                }
+
+                                // There is also an empty line before the "running <> test(s)" is written
+                                continue;
+                            };
+
+                            write!(out, "{}", EscapedString(&line)).map_err(fmt_err)?;
+                        }
+
+                        out.extend_from_slice(b"\"");
                     }
                     ExecutionResult::Timeout => {
                         test_suite.failed += 1;
@@ -379,13 +422,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                     }
                 }
             }
-            TestEventKind::TestSkipped { reason, .. } => {
-                if matches!(reason, MismatchReason::Ignored) {
-                    test_suite.ignored += 1;
-                } else {
-                    test_suite.filtered += 1;
-                }
-
+            TestEventKind::TestSkipped { .. } => {
                 test_suite.running -= 1;
 
                 if test_suite.ignore_block.is_none() {
@@ -416,11 +453,29 @@ impl<'cfg> LibtestReporter<'cfg> {
             return Ok(());
         }
 
+        if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
+            self.finalize(test_suite)?;
+        }
+
+        Ok(())
+    }
+
+    fn finalize(&self, mut test_suite: LibtestSuite) -> Result<(), WriteEventError> {
         let event = if test_suite.failed > 0 {
             EVENT_FAILED
         } else {
             EVENT_OK
         };
+
+        let out = &mut test_suite.output_block;
+        let suite_info = test_suite.meta;
+
+        // It's possible that a test failure etc has cancelled the run, in which
+        // case we might still have tests that are "running", even ones that are
+        // actually skipped, so we just add those to the ignored list
+        if test_suite.running > 0 {
+            test_suite.filtered += test_suite.running;
+        }
 
         write!(
             out,
@@ -434,6 +489,8 @@ impl<'cfg> LibtestReporter<'cfg> {
         .map_err(fmt_err)?;
 
         if self.emit_nextest_obj {
+            let crate_name = suite_info.package.name();
+            let binary_name = &suite_info.binary_name;
             write!(
                 out,
                 r#","nextest":{{"crate":"{crate_name}","test_binary":"{binary_name}","kind":"{}"}}"#,
@@ -451,10 +508,6 @@ impl<'cfg> LibtestReporter<'cfg> {
             stdout.write_all(out).map_err(WriteEventError::Io)?;
             stdout.flush().map_err(WriteEventError::Io)?;
         }
-
-        // Once we've emitted the output block we can remove the suite accumulator
-        // to free up memory since we won't use it again
-        self.test_suites.remove(suite_info.binary_id.as_str());
 
         Ok(())
     }
