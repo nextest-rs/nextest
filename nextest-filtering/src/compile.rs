@@ -34,7 +34,7 @@ pub(crate) fn compile(
 
 fn matching_packages(
     matcher: &NameMatcher,
-    all_packages: &[PackageMetadata],
+    all_packages: &[PackageMetadata<'_>],
 ) -> HashSet<PackageId> {
     all_packages
         .iter()
@@ -45,8 +45,8 @@ fn matching_packages(
 
 fn dependencies_packages(
     matcher: &NameMatcher,
-    all_packages: &[PackageMetadata],
-    cache: &mut DependsCache,
+    all_packages: &[PackageMetadata<'_>],
+    cache: &mut DependsCache<'_>,
 ) -> HashSet<PackageId> {
     let packages = all_packages
         .iter()
@@ -66,8 +66,8 @@ fn dependencies_packages(
 
 fn rdependencies_packages(
     matcher: &NameMatcher,
-    all_packages: &[PackageMetadata],
-    cache: &mut DependsCache,
+    all_packages: &[PackageMetadata<'_>],
+    cache: &mut DependsCache<'_>,
 ) -> HashSet<PackageId> {
     let packages = all_packages
         .iter()
@@ -87,8 +87,8 @@ fn rdependencies_packages(
 
 fn compile_set_def(
     set: &SetDef,
-    packages: &[PackageMetadata],
-    cache: &mut DependsCache,
+    packages: &[PackageMetadata<'_>],
+    cache: &mut DependsCache<'_>,
     errors: &mut Vec<ParseSingleError>,
 ) -> FilteringSet {
     match set {
@@ -130,8 +130,8 @@ fn expect_non_empty(
 
 fn compile_expr(
     expr: &ParsedExpr,
-    packages: &[PackageMetadata],
-    cache: &mut DependsCache,
+    packages: &[PackageMetadata<'_>],
+    cache: &mut DependsCache<'_>,
     errors: &mut Vec<ParseSingleError>,
 ) -> CompiledExpr {
     use crate::expression::ExprFrame::*;

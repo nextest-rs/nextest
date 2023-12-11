@@ -49,7 +49,7 @@ where
 }
 
 #[tracable_parser]
-fn parse_unicode(input: Span) -> IResult<char> {
+fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
     let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
     let parse_delimited_hex = preceded(char('u'), delimited(char('{'), parse_hex, char('}')));
     let parse_u32 = map_res(parse_delimited_hex, |hex| u32::from_str_radix(hex, 16));
@@ -57,7 +57,7 @@ fn parse_unicode(input: Span) -> IResult<char> {
 }
 
 #[tracable_parser]
-fn parse_escaped_char(input: Span) -> IResult<Option<char>> {
+fn parse_escaped_char(input: Span<'_>) -> IResult<'_, Option<char>> {
     let valid = alt((
         parse_unicode,
         value('\n', char('n')),
@@ -101,9 +101,9 @@ impl fmt::Display for DisplayParsedString<'_> {
     }
 }
 #[tracable_parser]
-fn parse_literal(input: Span) -> IResult<Span> {
+fn parse_literal(input: Span<'_>) -> IResult<'_, Span<'_>> {
     let not_quote_slash = is_not(",)\\");
-    let res = verify(not_quote_slash, |s: &Span| !s.fragment().is_empty())(input.clone());
+    let res = verify(not_quote_slash, |s: &Span<'_>| !s.fragment().is_empty())(input.clone());
     res
 }
 
@@ -114,7 +114,7 @@ enum StringFragment<'a> {
 }
 
 #[tracable_parser]
-fn parse_fragment(input: Span) -> IResult<Option<StringFragment<'_>>> {
+fn parse_fragment(input: Span<'_>) -> IResult<'_, Option<StringFragment<'_>>> {
     alt((
         map(parse_literal, |span| {
             Some(StringFragment::Literal(span.fragment()))
@@ -131,7 +131,7 @@ fn parse_fragment(input: Span) -> IResult<Option<StringFragment<'_>>> {
 ///
 /// Returns Err(Incomplete(1)) if an ending delimiter ) or , is not found.
 #[tracable_parser]
-pub(super) fn parse_string(input: Span) -> IResult<Option<String>> {
+pub(super) fn parse_string(input: Span<'_>) -> IResult<'_, Option<String>> {
     fold_many0(
         parse_fragment,
         || Some(String::new()),

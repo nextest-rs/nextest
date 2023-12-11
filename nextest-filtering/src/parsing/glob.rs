@@ -59,7 +59,7 @@ impl GenericGlob {
 
 // This never returns Err(()) -- instead, it reports an error to the parsing state.
 #[tracable_parser]
-pub(super) fn parse_glob(input: Span, implicit: bool) -> IResult<Option<NameMatcher>> {
+pub(super) fn parse_glob(input: Span<'_>, implicit: bool) -> IResult<'_, Option<NameMatcher>> {
     let (i, res) = match parse_matcher_text(input.clone()) {
         Ok((i, res)) => (i, res),
         Err(_) => {
