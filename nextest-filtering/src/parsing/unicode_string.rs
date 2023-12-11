@@ -107,7 +107,7 @@ impl fmt::Display for DisplayParsedString<'_> {
 }
 fn parse_literal<'i>(input: Span<'i>) -> IResult<'i, &str> {
     trace("parse_literal", |input: Span<'i>| {
-        let not_quote_slash = take_till1(",)\\");
+        let not_quote_slash = take_till1((',', ')', '\\'));
         let res = not_quote_slash
             .verify(|s: &str| !s.is_empty())
             .parse_next(input.clone());

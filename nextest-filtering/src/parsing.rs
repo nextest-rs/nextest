@@ -400,7 +400,7 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
         }
 
         let parse_escape = alt((r"\/".value('/'), '\\')).map(Frag::Escape);
-        let parse_literal = take_till1("\\/")
+        let parse_literal = take_till1(('\\', '/'))
             .verify(|s: &str| !s.is_empty())
             .map(|s: &str| Frag::Literal(s));
         let parse_frag = alt((parse_escape, parse_literal));
