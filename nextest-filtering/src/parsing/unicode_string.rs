@@ -7,8 +7,8 @@ use super::{expect_n, IResult, Span, SpanLength};
 use crate::errors::ParseSingleError;
 use nom::{
     branch::alt,
-    bytes::streaming::{is_not, take_while_m_n},
-    character::streaming::char,
+    bytes::complete::{is_not, take_while_m_n},
+    character::complete::char,
     combinator::{map, map_opt, map_res, value, verify},
     multi::fold_many0,
     sequence::{delimited, preceded},
@@ -128,8 +128,6 @@ fn parse_fragment(input: Span) -> IResult<Option<StringFragment<'_>>> {
 /// Construct a string by consuming the input until the next unescaped ) or ,.
 ///
 /// Returns None if the string isn't valid.
-///
-/// Returns Err(Incomplete(1)) if an ending delimiter ) or , is not found.
 #[tracable_parser]
 pub(super) fn parse_string(input: Span) -> IResult<Option<String>> {
     fold_many0(
