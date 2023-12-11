@@ -98,7 +98,7 @@ smallvec = "1.11.2"
 nextest-workspace-hack.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.150"
+libc = "0.2.151"
 nix = { version = "0.27.1", default-features = false, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
