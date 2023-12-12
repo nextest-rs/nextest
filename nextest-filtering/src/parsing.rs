@@ -226,7 +226,7 @@ fn expect_inner<'a, F, T>(
     limit: SpanLength,
 ) -> impl FnMut(Span<'a>) -> IResult<'a, Option<T>>
 where
-    F: FnMut(Span<'a>) -> IResult<T>,
+    F: FnMut(Span<'a>) -> IResult<'_, T>,
 {
     move |input| match parser(input) {
         Ok((remaining, out)) => Ok((remaining, Some(out))),
@@ -261,7 +261,7 @@ fn expect<'a, F, T>(
     make_err: fn(SourceSpan) -> ParseSingleError,
 ) -> impl FnMut(Span<'a>) -> IResult<'a, Option<T>>
 where
-    F: FnMut(Span<'a>) -> IResult<T>,
+    F: FnMut(Span<'a>) -> IResult<'_, T>,
 {
     expect_inner(parser, make_err, SpanLength::Unknown)
 }
@@ -272,7 +272,7 @@ fn expect_n<'a, F, T>(
     limit: SpanLength,
 ) -> impl FnMut(Span<'a>) -> IResult<'a, Option<T>>
 where
-    F: FnMut(Span<'a>) -> IResult<T>,
+    F: FnMut(Span<'a>) -> IResult<'_, T>,
 {
     expect_inner(parser, make_err, limit)
 }
@@ -284,9 +284,9 @@ fn expect_char<'a>(
     expect_inner(ws(char(c)), make_err, SpanLength::Exact(0))
 }
 
-fn silent_expect<'a, F, T>(mut parser: F) -> impl FnMut(Span<'a>) -> IResult<Option<T>>
+fn silent_expect<'a, F, T>(mut parser: F) -> impl FnMut(Span<'a>) -> IResult<'_, Option<T>>
 where
-    F: FnMut(Span<'a>) -> IResult<T>,
+    F: FnMut(Span<'a>) -> IResult<'_, T>,
 {
     move |input| match parser(input) {
         Ok((remaining, out)) => Ok((remaining, Some(out))),
@@ -326,7 +326,7 @@ fn ws<'a, T, P: FnMut(Span<'a>) -> IResult<'a, T>>(
 
 // This parse will never fail
 #[tracable_parser]
-fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
+fn parse_matcher_text(input: Span<'_>) -> IResult<'_, Option<String>> {
     let (i, res) = match expect(
         unicode_string::parse_string,
         ParseSingleError::InvalidString,
@@ -351,7 +351,7 @@ fn parse_matcher_text(input: Span) -> IResult<Option<String>> {
 }
 
 #[tracable_parser]
-fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
+fn parse_contains_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     map(
         preceded(char('~'), parse_matcher_text),
         |res: Option<String>| {
@@ -364,7 +364,7 @@ fn parse_contains_matcher(input: Span) -> IResult<Option<NameMatcher>> {
 }
 
 #[tracable_parser]
-fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
+fn parse_equal_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     ws(map(
         preceded(char('='), parse_matcher_text),
         |res: Option<String>| {
@@ -377,7 +377,7 @@ fn parse_equal_matcher(input: Span) -> IResult<Option<NameMatcher>> {
 }
 
 #[tracable_parser]
-fn parse_regex_inner(input: Span) -> IResult<String> {
+fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
     enum Frag<'a> {
         Literal(&'a str),
         Escape(char),
@@ -385,8 +385,8 @@ fn parse_regex_inner(input: Span) -> IResult<String> {
 
     let parse_escape = map(alt((map(tag(r"\/"), |_| '/'), char('\\'))), Frag::Escape);
     let parse_literal = map(
-        verify(is_not("\\/"), |s: &Span| !s.fragment().is_empty()),
-        |s: Span| Frag::Literal(s.fragment()),
+        verify(is_not("\\/"), |s: &Span<'_>| !s.fragment().is_empty()),
+        |s: Span<'_>| Frag::Literal(s.fragment()),
     );
     let parse_frag = alt((parse_escape, parse_literal));
 
@@ -429,10 +429,11 @@ impl fmt::Display for DisplayParsedRegex<'_> {
 }
 
 #[tracable_parser]
-fn parse_regex(input: Span) -> IResult<Option<NameMatcher>> {
+fn parse_regex(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     let (i, res) = match parse_regex_inner(input.clone()) {
         Ok((i, res)) => (i, res),
-        Err(_) => match take_till::<_, _, nom::error::Error<Span>>(|c| c == ')')(input.clone()) {
+        Err(_) => match take_till::<_, _, nom::error::Error<Span<'_>>>(|c| c == ')')(input.clone())
+        {
             Ok((i, _)) => {
                 let start = i.location_offset();
                 let err = ParseSingleError::ExpectedCloseRegex((start, 0).into());
@@ -455,7 +456,7 @@ fn parse_regex(input: Span) -> IResult<Option<NameMatcher>> {
 }
 
 #[tracable_parser]
-fn parse_regex_matcher(input: Span) -> IResult<Option<NameMatcher>> {
+fn parse_regex_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     ws(delimited(
         char('/'),
         parse_regex,
@@ -464,15 +465,15 @@ fn parse_regex_matcher(input: Span) -> IResult<Option<NameMatcher>> {
 }
 
 #[tracable_parser]
-fn parse_glob_matcher(input: Span) -> IResult<Option<NameMatcher>> {
+fn parse_glob_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     ws(preceded(char('#'), |input| glob::parse_glob(input, false)))(input)
 }
 
 // This parse will never fail (because default_matcher won't)
 fn set_matcher(
     default_matcher: DefaultMatcher,
-) -> impl FnMut(Span) -> IResult<Option<NameMatcher>> {
-    move |input: Span| {
+) -> impl FnMut(Span<'_>) -> IResult<'_, Option<NameMatcher>> {
+    move |input: Span<'_>| {
         ws(alt((
             parse_regex_matcher,
             parse_glob_matcher,
@@ -484,13 +485,13 @@ fn set_matcher(
 }
 
 #[tracable_parser]
-fn recover_unexpected_comma(input: Span) -> IResult<()> {
+fn recover_unexpected_comma(input: Span<'_>) -> IResult<'_, ()> {
     match peek(ws(char(',')))(input.clone()) {
         Ok((i, _)) => {
             let pos = i.location_offset();
             i.extra
                 .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
-            match take_till::<_, _, nom::error::Error<Span>>(|c| c == ')')(i) {
+            match take_till::<_, _, nom::error::Error<Span<'_>>>(|c| c == ')')(i) {
                 Ok((i, _)) => Ok((i, ())),
                 Err(_) => unreachable!(),
             }
@@ -502,11 +503,12 @@ fn recover_unexpected_comma(input: Span) -> IResult<()> {
 fn nullary_set_def(
     name: &'static str,
     make_set: fn() -> SetDef,
-) -> impl FnMut(Span) -> IResult<Option<SetDef>> {
+) -> impl FnMut(Span<'_>) -> IResult<'_, Option<SetDef>> {
     move |i| {
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
-        let i = match recognize::<_, _, nom::error::Error<Span>, _>(take_till(|c| c == ')'))(i) {
+        let i = match recognize::<_, _, nom::error::Error<Span<'_>>, _>(take_till(|c| c == ')'))(i)
+        {
             Ok((i, res)) => {
                 if !res.fragment().trim().is_empty() {
                     let err = ParseSingleError::UnexpectedArgument(res.to_span());
@@ -530,7 +532,7 @@ enum DefaultMatcher {
 }
 
 impl DefaultMatcher {
-    fn into_parser(self) -> impl FnMut(Span) -> IResult<Option<NameMatcher>> {
+    fn into_parser(self) -> impl FnMut(Span<'_>) -> IResult<'_, Option<NameMatcher>> {
         move |input| match self {
             Self::Equal => map(parse_matcher_text, |res: Option<String>| {
                 res.map(NameMatcher::implicit_equal)
@@ -547,7 +549,7 @@ fn unary_set_def(
     name: &'static str,
     default_matcher: DefaultMatcher,
     make_set: fn(NameMatcher, SourceSpan) -> SetDef,
-) -> impl FnMut(Span) -> IResult<Option<SetDef>> {
+) -> impl FnMut(Span<'_>) -> IResult<'_, Option<SetDef>> {
     move |i| {
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
@@ -563,7 +565,7 @@ fn unary_set_def(
     }
 }
 
-fn platform_def(i: Span) -> IResult<Option<SetDef>> {
+fn platform_def(i: Span<'_>) -> IResult<'_, Option<SetDef>> {
     let (i, _) = tag("platform")(i)?;
     let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
     let start = i.location_offset();
@@ -596,7 +598,7 @@ fn platform_def(i: Span) -> IResult<Option<SetDef>> {
 }
 
 #[tracable_parser]
-fn parse_set_def(input: Span) -> IResult<Option<SetDef>> {
+fn parse_set_def(input: Span<'_>) -> IResult<'_, Option<SetDef>> {
     ws(alt((
         unary_set_def("package", DefaultMatcher::Glob, SetDef::Package),
         unary_set_def("deps", DefaultMatcher::Glob, SetDef::Deps),
@@ -621,7 +623,7 @@ fn expect_expr<'a, P: FnMut(Span<'a>) -> IResult<'a, ExprResult>>(
 }
 
 #[tracable_parser]
-fn parse_parentheses_expr(input: Span) -> IResult<ExprResult> {
+fn parse_parentheses_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
     map(
         delimited(
             char('('),
@@ -633,7 +635,7 @@ fn parse_parentheses_expr(input: Span) -> IResult<ExprResult> {
 }
 
 #[tracable_parser]
-fn parse_basic_expr(input: Span) -> IResult<ExprResult> {
+fn parse_basic_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
     ws(alt((
         map(parse_set_def, |set| {
             set.map(|set| ExprResult::Valid(ParsedExpr::Set(set)))
@@ -664,7 +666,7 @@ impl fmt::Display for NotOperator {
 }
 
 #[tracable_parser]
-fn parse_expr_not(input: Span) -> IResult<ExprResult> {
+fn parse_expr_not(input: Span<'_>) -> IResult<'_, ExprResult> {
     map(
         pair(
             alt((
@@ -701,7 +703,7 @@ impl fmt::Display for OrOperator {
 }
 
 #[tracable_parser]
-fn parse_expr(input: Span) -> IResult<ExprResult> {
+fn parse_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
     // "or" binds less tightly than "and", so parse and within or.
     let (input, expr) = expect_expr(parse_and_or_difference_expr)(input)?;
 
@@ -725,7 +727,7 @@ fn parse_expr(input: Span) -> IResult<ExprResult> {
 }
 
 #[tracable_parser]
-fn parse_or_operator(input: Span) -> IResult<OrOperator> {
+fn parse_or_operator(input: Span<'_>) -> IResult<'_, OrOperator> {
     ws(alt((
         value(OrOperator::LiteralOr, tag("or ")),
         value(OrOperator::Pipe, tag("|")),
@@ -778,7 +780,7 @@ enum AndOrDifferenceOperator {
 }
 
 #[tracable_parser]
-fn parse_and_or_difference_expr(input: Span) -> IResult<ExprResult> {
+fn parse_and_or_difference_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
     let (input, expr) = expect_expr(parse_basic_expr)(input)?;
 
     let (input, ops) = fold_many0(
@@ -808,7 +810,7 @@ fn parse_and_or_difference_expr(input: Span) -> IResult<ExprResult> {
 }
 
 #[tracable_parser]
-fn parse_and_or_difference_operator(input: Span) -> IResult<AndOrDifferenceOperator> {
+fn parse_and_or_difference_operator(input: Span<'_>) -> IResult<'_, AndOrDifferenceOperator> {
     ws(alt((
         value(
             AndOrDifferenceOperator::And(AndOperator::LiteralAnd),
@@ -827,7 +829,7 @@ fn parse_and_or_difference_operator(input: Span) -> IResult<AndOrDifferenceOpera
 
 // ---
 
-pub(crate) fn parse(input: Span) -> Result<ExprResult, nom::Err<nom::error::Error<Span>>> {
+pub(crate) fn parse(input: Span<'_>) -> Result<ExprResult, nom::Err<nom::error::Error<Span<'_>>>> {
     let (_, expr) = terminated(
         parse_expr,
         expect(ws(eof), ParseSingleError::ExpectedEndOfExpression),
@@ -1349,7 +1351,9 @@ mod tests {
         assert_eq_both_ways(&expr, r"test(~a\,)");
 
         // string parsing is compatible with possible future syntax
-        fn parse_future_syntax(input: Span) -> IResult<(Option<NameMatcher>, Option<NameMatcher>)> {
+        fn parse_future_syntax(
+            input: Span<'_>,
+        ) -> IResult<'_, (Option<NameMatcher>, Option<NameMatcher>)> {
             let (i, _) = tag("something")(input)?;
             let (i, _) = char('(')(i)?;
             let (i, n1) = set_matcher(DefaultMatcher::Contains)(i)?;
