@@ -374,7 +374,7 @@ impl<'cfg> LibtestReporter<'cfg> {
 
                         // Write the output from the test into the `stdout` (even
                         // though it could contain stderr output as well).
-                        // Unfortunately to replicate the libtest json output,
+                        // Unfortunately, to replicate the libtest json output,
                         // we need to do our own filtering of the output to strip
                         // out the data emitted by libtest in the human format
                         write!(out, r#","stdout":""#).map_err(fmt_err)?;
@@ -472,7 +472,7 @@ impl<'cfg> LibtestReporter<'cfg> {
 
         // It's possible that a test failure etc has cancelled the run, in which
         // case we might still have tests that are "running", even ones that are
-        // actually skipped, so we just add those to the ignored list
+        // actually skipped, so we just add those to the filtered list
         if test_suite.running > 0 {
             test_suite.filtered += test_suite.running;
         }
