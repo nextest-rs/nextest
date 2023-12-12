@@ -254,9 +254,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                 )
             }
             TestEventKind::RunFinished { .. } => {
-                for test_suite in
-                    std::mem::replace(&mut self.test_suites, BTreeMap::new()).into_values()
-                {
+                for test_suite in std::mem::take(&mut self.test_suites).into_values() {
                     self.finalize(test_suite)?;
                 }
 

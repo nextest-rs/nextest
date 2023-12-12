@@ -431,6 +431,8 @@ impl<'acc> Iterator for LinesIterator<'acc> {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unused_io_amount)]
+
     use super::*;
     use pretty_assertions::assert_str_eq;
     use std::fmt::Write as _;
