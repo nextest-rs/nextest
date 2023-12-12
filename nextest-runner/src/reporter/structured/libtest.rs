@@ -25,11 +25,9 @@
 use super::{
     FormatVersionError, FormatVersionErrorInner, TestEvent, TestEventKind, WriteEventError,
 };
-use crate::list::RustTestSuite;
-use crate::runner::ExecutionResult;
+use crate::{list::RustTestSuite, runner::ExecutionResult};
 use nextest_metadata::MismatchReason;
-use std::collections::BTreeMap;
-use std::fmt::Write as _;
+use std::{collections::BTreeMap, fmt::Write as _};
 
 /// To support pinning the version of the output, we just use this simple enum
 /// to document changes as libtest output changes
