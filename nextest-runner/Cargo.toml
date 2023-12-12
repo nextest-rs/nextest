@@ -54,7 +54,7 @@ serde_path_to_error = "0.1.14"
 shell-words = "1.1.0"
 smol_str = { version = "0.2.0", features = ["serde"] }
 strip-ansi-escapes = "0.2.0"
-tar = "0.4.39"
+tar = "0.4.40"
 # For cfg expression evaluation for [target.'cfg()'] expressions
 target-spec = { version = "3.0.1", features = ["custom", "summaries"] }
 target-spec-miette = "0.3.0"
