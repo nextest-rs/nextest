@@ -183,6 +183,24 @@ impl<'acc> std::io::Write for TestOutputWriter<'acc> {
         Ok(buf.len())
     }
 
+    fn write_vectored(&mut self, bufs: &[std::io::IoSlice<'_>]) -> std::io::Result<usize> {
+        let start = self.acc.buf.len();
+
+        let mut len = 0;
+        for buf in bufs {
+            self.acc.buf.extend_from_slice(buf);
+            len += buf.len();
+        }
+
+        self.acc.chunks.push(OutputChunk {
+            range: start..self.acc.buf.len(),
+            timestamp: Instant::now(),
+            stdout: self.stdout,
+        });
+
+        Ok(len)
+    }
+
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
@@ -318,10 +336,13 @@ impl<'acc> Iterator for ChunkIterator<'acc> {
     }
 }
 
+/// Iterator over the lines for a [`TestOutput`]
 pub struct LinesIterator<'acc> {
     acc: &'acc TestOutput,
     cur_chunk: usize,
     chunk_iter: Option<ChunkIterator<'acc>>,
+    stdout_newline: bool,
+    stderr_newline: bool,
 }
 
 impl<'acc> LinesIterator<'acc> {
@@ -330,6 +351,8 @@ impl<'acc> LinesIterator<'acc> {
             acc,
             cur_chunk: 0,
             chunk_iter: None,
+            stdout_newline: true,
+            stderr_newline: true,
         };
 
         this.advance(0);
@@ -342,15 +365,20 @@ impl<'acc> LinesIterator<'acc> {
             return;
         };
 
-        let continues = self.chunk_iter.take().map_or(false, |ci| {
-            !self.acc.buf[ci.chunk.range.clone()].ends_with(&[LF])
-        });
-        self.chunk_iter = Some(ChunkIterator::new(&self.acc.buf, chunk, continues));
+        let ewnl = if chunk.stdout {
+            &mut self.stdout_newline
+        } else {
+            &mut self.stderr_newline
+        };
+        self.chunk_iter = Some(ChunkIterator::new(&self.acc.buf, chunk, !*ewnl));
         self.cur_chunk = chunk_ind;
+        *ewnl = self.acc.buf[chunk.range.clone()].ends_with(&[LF]);
     }
 }
 
+/// The [`Line`] kind, which can help consumers processing lines
 #[derive(Copy, Clone, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub enum LineKind {
     /// The raw data encompasses a complete line from beginning to end
     Complete,
@@ -362,15 +390,19 @@ pub enum LineKind {
     None,
 }
 
+/// A single line of output for a test. Note that the linefeed (`\n`) is present
+/// in the raw data
 pub struct Line<'acc> {
     /// The parent chunk which this line is a subslice of
     pub chunk: &'acc OutputChunk,
     /// The raw data for this line entry
     pub raw: &'acc [u8],
+    /// The line kind
     pub kind: LineKind,
 }
 
 impl<'acc> Line<'acc> {
+    /// Gets the lossy string for the raw data
     #[inline]
     pub fn lossy(&self) -> std::borrow::Cow<'acc, str> {
         String::from_utf8_lossy(self.raw)
@@ -393,6 +425,202 @@ impl<'acc> Iterator for LinesIterator<'acc> {
             }
 
             self.advance(self.cur_chunk + 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use pretty_assertions::assert_str_eq;
+    use std::fmt::Write as _;
+
+    macro_rules! wb {
+        ($o:expr, $b:expr) => {
+            $o.write($b).unwrap();
+        };
+    }
+
+    /// Basic test for getting the combined, stream specific, and individual lines
+    /// from a [`TestOutput`]
+    #[test]
+    fn normal_failure_output() {
+        let mut acc = TestOutputAccumulator::new();
+
+        wb!(acc.stdout(), b"\nrunning 1 test\n");
+
+        const TEST_OUTPUT: &[&str] = &[
+            "thread 'normal_failing' panicked at tests/path.rs:44:10:",
+            "called `Result::unwrap()` on an `Err` value: oops",
+            "stack bactrace:",
+            "   0: rust_begin_unwind",
+            "             at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/std/src/panicking.rs:597:5",
+            "   1: core::panicking::panic_fmt",
+            "             at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/panicking.rs:72:14",
+            "   2: core::result::unwrap_failed",
+            "             at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/result.rs:1652:5",
+            "   3: core::result::Result<T,E>::unwrap",
+            "             at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/result.rs:1077:23",
+            "   4: path::load",
+            "             at ./tests/path.rs:39:9",
+            "   5: path::normal_failing",
+            "             at ./tests/path.rs:224:35",
+            "   6: path::normal_failing::{{closure}}",
+            "             at ./tests/path.rs:223:30",
+            "   7: core::ops::function::FnOnce::call_once",
+            "             at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5",
+            "   8: core::ops::function::FnOnce::call_once",
+            "             at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5",
+            "note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.",
+        ];
+
+        {
+            let err = &mut acc.stderr();
+            for line in &TEST_OUTPUT[..2] {
+                err.write_vectored(&[
+                    std::io::IoSlice::new(line.as_bytes()),
+                    std::io::IoSlice::new(b"\n"),
+                ])
+                .unwrap();
+            }
+
+            let mut backtrace_chunk = String::new();
+            for line in &TEST_OUTPUT[2..TEST_OUTPUT.len() - 1] {
+                backtrace_chunk.push_str(line);
+                backtrace_chunk.push('\n');
+            }
+
+            err.write(backtrace_chunk.as_bytes()).unwrap();
+            err.write_vectored(&[
+                std::io::IoSlice::new(TEST_OUTPUT[TEST_OUTPUT.len() - 1].as_bytes()),
+                std::io::IoSlice::new(b"\n"),
+            ])
+            .unwrap();
+        }
+
+        wb!(acc.stdout(), b"test normal_failing ... FAILED\n");
+
+        let test_output = acc.freeze();
+
+        assert_str_eq!(
+            test_output.stdout_lossy(),
+            "\nrunning 1 test\ntest normal_failing ... FAILED\n"
+        );
+        assert_str_eq!(test_output.stderr_lossy(), {
+            let mut to = TEST_OUTPUT.join("\n");
+            to.push('\n');
+            to
+        });
+
+        {
+            let mut combined = String::new();
+            writeln!(&mut combined, "\nrunning 1 test").unwrap();
+
+            for line in TEST_OUTPUT {
+                combined.push_str(line);
+                combined.push('\n');
+            }
+
+            writeln!(&mut combined, "test normal_failing ... FAILED").unwrap();
+
+            assert_str_eq!(combined, test_output.lossy());
+        }
+
+        let mut lines = test_output.lines();
+
+        assert_str_eq!(lines.next().unwrap().lossy(), "\n");
+        assert_str_eq!(lines.next().unwrap().lossy(), "running 1 test\n");
+
+        for expected in TEST_OUTPUT {
+            let actual = lines.next().unwrap();
+
+            assert_str_eq!(*expected, {
+                let mut lossy = actual.lossy().to_string();
+                lossy.pop();
+                lossy
+            });
+
+            assert_eq!(actual.kind, LineKind::Complete);
+            assert!(!actual.chunk.stdout);
+        }
+
+        assert_str_eq!(
+            lines.next().unwrap().lossy(),
+            "test normal_failing ... FAILED\n"
+        );
+        assert!(lines.next().is_none());
+    }
+
+    /// Tests that "split output" ie, output that is either excessively long and
+    /// could not be written in an individual write syscall, or even "non-typical"
+    /// user code that did unbuffered writes without flushing, possibly from multiple
+    /// threads, causing stdout and stderr output to be mixed together
+    #[test]
+    fn split_output() {
+        let mut acc = TestOutputAccumulator::new();
+
+        const CHUNKS: &[(bool, LineKind, &str)] = &[
+            // Normal writes
+            (true, LineKind::Complete, "stdout line\n"),
+            (false, LineKind::Complete, "stderr line\n"),
+            // Writes that are split over multiple writes, but still represent a
+            // contiguous stream
+            (true, LineKind::Begin, "stdout begin..."),
+            (true, LineKind::None, "..."),
+            (true, LineKind::End, "...stdout end\n"),
+            (false, LineKind::Begin, "stderr begin..."),
+            (false, LineKind::None, "..."),
+            (false, LineKind::End, "...stderr end\n"),
+            // Writes that are split over multiple writes, but interspersed
+            (true, LineKind::Begin, "stdout begin..."),
+            (false, LineKind::Begin, "stderr begin..."),
+            (false, LineKind::None, "..."),
+            (true, LineKind::None, "..."),
+            (true, LineKind::None, "...\n..."),
+            (false, LineKind::None, "...\n..."),
+            (false, LineKind::End, "...stderr end\n"),
+            (true, LineKind::End, "...stdout end\n"),
+            // Normal writes
+            (true, LineKind::Complete, "stdout boop\nstdout end\n"),
+            (false, LineKind::Complete, "stderr boop\nstderr end\n"),
+        ];
+
+        for (stdout, _, chunk) in CHUNKS {
+            push_chunk(&mut acc, chunk.as_bytes(), *stdout);
+        }
+
+        let to = acc.freeze();
+
+        {
+            let mut combined = String::new();
+            for (_, _, chunk) in CHUNKS {
+                combined.push_str(chunk);
+            }
+
+            assert_str_eq!(combined, to.lossy());
+        }
+
+        let mut lines = to.lines();
+
+        let timestamp = Instant::now();
+
+        for (stdout, kind, data) in CHUNKS {
+            let chunk = OutputChunk {
+                stdout: *stdout,
+                range: 0..data.len(),
+                timestamp,
+            };
+
+            for expected in ChunkIterator::new(
+                data.as_bytes(),
+                &chunk,
+                matches!(kind, LineKind::None | LineKind::End),
+            ) {
+                let line = lines.next().unwrap();
+                assert_str_eq!(line.lossy(), expected.lossy());
+                assert_eq!(line.kind, expected.kind, "{data}");
+                assert_eq!(line.chunk.stdout, *stdout, "{data}");
+            }
         }
     }
 }
