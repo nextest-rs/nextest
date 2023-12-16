@@ -58,7 +58,7 @@ tar = "0.4.40"
 # For cfg expression evaluation for [target.'cfg()'] expressions
 target-spec = { version = "3.0.1", features = ["custom", "summaries"] }
 target-spec-miette = "0.3.0"
-thiserror = "1.0.50"
+thiserror = "1.0.51"
 # For parsing of .cargo/config.toml files
 tokio = { version = "1.35.0", features = [
     "fs",
