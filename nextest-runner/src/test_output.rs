@@ -2,7 +2,6 @@
 
 use bytes::{Bytes, BytesMut};
 use std::{io::Write as _, ops::Range, time::Instant};
-use tokio::io::AsyncBufReadExt;
 
 /// A single chunk of captured output, this may represent 0 or more lines
 #[derive(Clone, Debug)]
@@ -27,6 +26,16 @@ pub struct TestOutput {
     /// The start of the beginning of the capture, so that each individual
     /// chunk can get an elapsed time if needed
     pub start: Instant,
+}
+
+impl Default for TestOutput {
+    fn default() -> Self {
+        Self {
+            buf: Bytes::new(),
+            chunks: Vec::new(),
+            start: Instant::now(),
+        }
+    }
 }
 
 impl TestOutput {
@@ -145,7 +154,7 @@ impl TestOutputAccumulator {
     /// Gets a writer the can be used to write to the accumulator as if a child
     /// process was writing to stdout
     #[inline]
-    pub fn stdout(&mut self) -> TestOutputWriter<'_> {
+    pub fn stdout_mut(&mut self) -> TestOutputWriter<'_> {
         TestOutputWriter {
             acc: self,
             stdout: true,
@@ -155,11 +164,28 @@ impl TestOutputAccumulator {
     /// Gets a writer the can be used to write to the accumulator as if a child
     /// process was writing to stderr
     #[inline]
-    pub fn stderr(&mut self) -> TestOutputWriter<'_> {
+    pub fn stderr_mut(&mut self) -> TestOutputWriter<'_> {
         TestOutputWriter {
             acc: self,
             stdout: false,
         }
+    }
+
+    /// Pushes a single chunk of output
+    #[inline]
+    pub fn push_chunk(&mut self, chunk: &[u8], stdout: bool) {
+        let start = self.buf.len();
+
+        if self.buf.capacity() - start < chunk.len() {
+            self.buf.reserve(CHUNK_SIZE);
+        }
+
+        self.buf.extend_from_slice(chunk);
+        self.chunks.push(OutputChunk {
+            range: start..start + chunk.len(),
+            timestamp: Instant::now(),
+            stdout,
+        });
     }
 }
 
@@ -225,10 +251,11 @@ const CHUNK_SIZE: usize = 4 * 1024;
 /// Collects the stdout and/or stderr streams into a single buffer
 pub async fn collect_test_output(
     streams: Option<(tokio::process::ChildStdout, tokio::process::ChildStderr)>,
-    acc: &mut TestOutputAccumulator,
-) -> Result<(), crate::errors::CollectTestOutputError> {
+) -> Result<TestOutput, crate::errors::CollectTestOutputError> {
+    use tokio::io::AsyncBufReadExt as _;
+
     let Some((stdout, stderr)) = streams else {
-        return Ok(());
+        return Ok(TestOutput::default());
     };
 
     let mut stdout = tokio::io::BufReader::with_capacity(CHUNK_SIZE, stdout);
@@ -237,12 +264,14 @@ pub async fn collect_test_output(
     let mut out_done = false;
     let mut err_done = false;
 
+    let mut acc = TestOutputAccumulator::new();
+
     while !out_done || !err_done {
         tokio::select! {
             res = stdout.fill_buf() => {
                 let read = {
                     let buf = res.map_err(crate::errors::CollectTestOutputError::ReadStdout)?;
-                    push_chunk(acc, buf, true);
+                    acc.push_chunk(buf, true);
                     buf.len()
                 };
 
@@ -252,7 +281,7 @@ pub async fn collect_test_output(
             res = stderr.fill_buf() => {
                 let read = {
                     let buf = res.map_err(crate::errors::CollectTestOutputError::ReadStderr)?;
-                    push_chunk(acc, buf, false);
+                    acc.push_chunk(buf, false);
                     buf.len()
                 };
 
@@ -262,23 +291,7 @@ pub async fn collect_test_output(
         };
     }
 
-    Ok(())
-}
-
-#[inline]
-fn push_chunk(acc: &mut TestOutputAccumulator, chunk: &[u8], stdout: bool) {
-    let start = acc.buf.len();
-
-    if acc.buf.capacity() - start < chunk.len() {
-        acc.buf.reserve(CHUNK_SIZE);
-    }
-
-    acc.buf.extend_from_slice(chunk);
-    acc.chunks.push(OutputChunk {
-        range: start..start + chunk.len(),
-        timestamp: Instant::now(),
-        stdout,
-    });
+    Ok(acc.freeze())
 }
 
 struct ChunkIterator<'acc> {
@@ -449,7 +462,7 @@ mod test {
     fn normal_failure_output() {
         let mut acc = TestOutputAccumulator::new();
 
-        wb!(acc.stdout(), b"\nrunning 1 test\n");
+        wb!(acc.stdout_mut(), b"\nrunning 1 test\n");
 
         const TEST_OUTPUT: &[&str] = &[
             "thread 'normal_failing' panicked at tests/path.rs:44:10:",
@@ -477,7 +490,7 @@ mod test {
         ];
 
         {
-            let err = &mut acc.stderr();
+            let err = &mut acc.stderr_mut();
             for line in &TEST_OUTPUT[..2] {
                 err.write_vectored(&[
                     std::io::IoSlice::new(line.as_bytes()),
@@ -500,7 +513,7 @@ mod test {
             .unwrap();
         }
 
-        wb!(acc.stdout(), b"test normal_failing ... FAILED\n");
+        wb!(acc.stdout_mut(), b"test normal_failing ... FAILED\n");
 
         let test_output = acc.freeze();
 
@@ -588,7 +601,7 @@ mod test {
         ];
 
         for (stdout, _, chunk) in CHUNKS {
-            push_chunk(&mut acc, chunk.as_bytes(), *stdout);
+            acc.push_chunk(chunk.as_bytes(), *stdout);
         }
 
         let to = acc.freeze();

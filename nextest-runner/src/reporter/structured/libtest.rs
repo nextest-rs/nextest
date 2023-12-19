@@ -370,43 +370,17 @@ impl<'cfg> LibtestReporter<'cfg> {
 
                         // Write the output from the test into the `stdout` (even
                         // though it could contain stderr output as well).
-                        // Unfortunately, to replicate the libtest json output,
-                        // we need to do our own filtering of the output to strip
-                        // out the data emitted by libtest in the human format
                         write!(out, r#","stdout":""#).map_err(fmt_err)?;
 
-                        let mut in_test_output = false;
-
                         for line in last_status.output.lines() {
-                            let line = if in_test_output {
-                                let data = line.lossy();
-
-                                if line.chunk.stdout {
-                                    if let Some(unprefixed) = data.strip_prefix("test ") {
-                                        if let Some(test_name) =
-                                            unprefixed.strip_suffix(" ... FAILED\n")
-                                        {
-                                            if test_name == test_instance.name {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                data
-                            } else {
-                                let data = line.lossy();
-                                if line.chunk.stdout && data == "running 1 test\n" {
-                                    in_test_output = true;
-                                }
-
-                                // There is also an empty line before the "running <> test(s)" is written
-                                continue;
-                            };
-
-                            write!(out, "{}", EscapedString(&line)).map_err(fmt_err)?;
+                            dbg!(line.chunk.stdout, line.lossy());
                         }
 
+                        strip_human_output_from_failed_test(
+                            &last_status.output,
+                            out,
+                            test_instance.name,
+                        )?;
                         out.extend_from_slice(b"\"");
                     }
                     ExecutionResult::Timeout => {
@@ -509,6 +483,48 @@ impl<'cfg> LibtestReporter<'cfg> {
     }
 }
 
+/// Unfortunately, to replicate the libtest json output, we need to do our own
+/// filtering of the output to strip out the data emitted by libtest in the
+/// human format
+///
+/// This function relies on the fact that nextest runs every individual test in
+/// isolation
+fn strip_human_output_from_failed_test(
+    output: &crate::test_output::TestOutput,
+    out: &mut bytes::BytesMut,
+    test_name: &str,
+) -> Result<(), WriteEventError> {
+    let line_stripper = output
+        .lines()
+        .skip_while(|line| line.raw != b"running 1 test\n")
+        .skip(1)
+        .take_while(|line| {
+            if !line.chunk.stdout {
+                return true;
+            }
+
+            if let Some(name) = line
+                .raw
+                .strip_prefix(b"test ")
+                .and_then(|np| np.strip_suffix(b" ... FAILED\n"))
+            {
+                if test_name.as_bytes() == name {
+                    return false;
+                }
+            }
+
+            true
+        })
+        .map(|line| line.lossy());
+
+    for line in line_stripper {
+        // This will never fail unless we are OOM
+        write!(out, "{}", EscapedString(&line)).map_err(fmt_err)?;
+    }
+
+    Ok(())
+}
+
 /// Copy of the same string escaper used in libtest
 ///
 /// <https://github.com/rust-lang/rust/blob/f440b5f0ea042cb2087a36631b20878f9847ee28/library/test/src/formatters/json.rs#L222-L285>
@@ -575,5 +591,52 @@ impl<'s> std::fmt::Display for EscapedString<'s> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    /// Validates that the human output portion from a failed test is stripped
+    /// out when writing a JSON string, as it is not part of the output when
+    /// libtest itself outputs the JSON, so we have 100% identical output to libtest
+    #[test]
+    fn strips_human_output() {
+        const TEST_OUTPUT: &[(bool, &str)] = &[
+            (true, "\n"),
+            (true, "running 1 test\n"),
+            (true, "test index::test::download_url_crates_io ... FAILED\n"),
+            (true, "\nfailures:\n\n---- index::test::download_url_crates_io stdout ----\n"),
+            (false, "[src/index.rs:185] \"boop\" = \"boop\"\n"),
+            (true, "this is stdout\n"),
+            (false, "this i stderr\nok?\n"),
+            (false, r#"thread 'index::test::download_url_crates_io' panicked at src/index.rs:206:9:
+oh no
+stack backtrace:
+    0: rust_begin_unwind
+                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/std/src/panicking.rs:597:5
+    1: core::panicking::panic_fmt
+                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/panicking.rs:72:14
+    2: tame_index::index::test::download_url_crates_io
+                at ./src/index.rs:206:9
+    3: tame_index::index::test::download_url_crates_io::{{closure}}
+                at ./src/index.rs:179:33
+    4: core::ops::function::FnOnce::call_once
+                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5
+    5: core::ops::function::FnOnce::call_once
+                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+"#),
+            (true, "\n\nfailures:\n    index::test::download_url_crates_io\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.01s\n"),
+        ];
+
+        let _output = {
+            let mut acc = crate::test_output::TestOutputAccumulator::new();
+
+            for (stdout, line) in TEST_OUTPUT {
+                acc.push_chunk(line.as_bytes(), *stdout);
+            }
+
+            acc.freeze()
+        };
     }
 }

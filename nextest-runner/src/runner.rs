@@ -909,7 +909,7 @@ impl<'a> TestRunnerInner<'a> {
                 // Put the error chain inside stderr.
                 let mut acc = crate::test_output::TestOutputAccumulator::new();
                 {
-                    let mut stderr = acc.stderr();
+                    let mut stderr = acc.stderr_mut();
                     writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
                 }
 
@@ -979,19 +979,18 @@ impl<'a> TestRunnerInner<'a> {
         let mut timeout_hit = 0;
 
         let streams = child.stdout.take().zip(child.stderr.take());
-
-        let mut acc = crate::test_output::TestOutputAccumulator::new();
+        let mut test_output = TestOutput::default();
 
         let (res, leaked) = {
             let mut collect_output_fut =
-                std::pin::pin!(crate::test_output::collect_test_output(streams, &mut acc));
+                std::pin::pin!(crate::test_output::collect_test_output(streams));
             let mut collect_output_done = false;
 
             let res = loop {
                 tokio::select! {
                     res = &mut collect_output_fut, if !collect_output_done => {
                         collect_output_done = true;
-                        res?;
+                        test_output = res?;
                     }
                     res = child.wait() => {
                         // The test finished executing.
@@ -1058,7 +1057,7 @@ impl<'a> TestRunnerInner<'a> {
                 tokio::select! {
                     res = &mut collect_output_fut, if !collect_output_done => {
                         collect_output_done = true;
-                        res?;
+                        test_output = res?;
                     }
                     () = sleep, if !collect_output_done => {
                         break true;
@@ -1078,7 +1077,7 @@ impl<'a> TestRunnerInner<'a> {
         let status = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
 
         Ok(InternalExecuteStatus {
-            output: acc.freeze(),
+            output: test_output,
             result: status,
             stopwatch_end: stopwatch.end(),
             is_slow,
