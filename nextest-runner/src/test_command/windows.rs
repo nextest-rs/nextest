@@ -1,4 +1,3 @@
-use super::Stdio;
 use std::{
     io,
     os::windows::{ffi::OsStrExt as _, io::FromRawHandle as _, prelude::OwnedHandle},
