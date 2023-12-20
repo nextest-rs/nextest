@@ -1,9 +1,8 @@
+use super::Stdio;
 use std::{
     io,
     os::fd::{AsRawFd, FromRawFd, OwnedFd},
 };
-
-use super::Stdio;
 
 pub(super) struct State {
     ours: OwnedFd,
