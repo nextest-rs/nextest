@@ -751,7 +751,7 @@ impl<'g> RustTestArtifact<'g> {
             argv.push("--ignored");
         }
 
-        let mut cmd = TestCommand::new(
+        let cmd = TestCommand::new(
             lctx,
             program.clone(),
             &argv,
@@ -759,31 +759,17 @@ impl<'g> RustTestArtifact<'g> {
             &self.package,
             &self.non_test_binaries,
         );
-        // Capture stdout and stderr, and close stdin.
-        cmd.command_mut()
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
 
-        let child = cmd
-            .spawn()
-            .map_err(|error| CreateTestListError::CommandExecFail {
-                binary_id: self.binary_id.clone(),
-                command: std::iter::once(program.clone())
-                    .chain(argv.iter().map(|&s| s.to_owned()))
-                    .collect(),
-                error,
-            })?;
-
-        let output = child.wait_with_output().await.map_err(|error| {
-            CreateTestListError::CommandExecFail {
-                binary_id: self.binary_id.clone(),
-                command: std::iter::once(program.clone())
-                    .chain(argv.iter().map(|&s| s.to_owned()))
-                    .collect(),
-                error,
-            }
-        })?;
+        let output =
+            cmd.wait_with_output()
+                .await
+                .map_err(|error| CreateTestListError::CommandExecFail {
+                    binary_id: self.binary_id.clone(),
+                    command: std::iter::once(program.clone())
+                        .chain(argv.iter().map(|&s| s.to_owned()))
+                        .collect(),
+                    error,
+                })?;
 
         if output.status.success() {
             String::from_utf8(output.stdout).map_err(|err| CreateTestListError::CommandNonUtf8 {

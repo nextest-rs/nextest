@@ -21,7 +21,7 @@ use crate::{
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
-    test_output::TestOutput,
+    test_output::{CaptureStrategy, TestOutput},
     time::{PausableSleep, StopwatchEnd, StopwatchStart},
 };
 use async_scoped::TokioScope;
@@ -124,18 +124,25 @@ impl Iterator for BackoffIter {
 /// Test runner options.
 #[derive(Debug, Default)]
 pub struct TestRunnerBuilder {
-    no_capture: bool,
+    capture_strategy: CaptureStrategy,
     retries: Option<RetryPolicy>,
     fail_fast: Option<bool>,
     test_threads: Option<TestThreads>,
 }
 
 impl TestRunnerBuilder {
-    /// Sets no-capture mode.
+    /// Sets the capture strategy for the test runner
     ///
-    /// In this mode, tests will always be run serially: `test_threads` will always be 1.
-    pub fn set_no_capture(&mut self, no_capture: bool) -> &mut Self {
-        self.no_capture = no_capture;
+    /// * [`CaptureStrategy::Split`]
+    ///   * pro: output from `stdout` and `stderr` can be identified and easily split
+    ///   * con: ordering between the streams cannot be guaranteed
+    /// * [`CaptureStrategy::Combined`]
+    ///   * pro: output is guaranteed to be ordered as it would in a terminal emulator
+    ///   * con: distinction between `stdout` and `stderr` is lost
+    /// * [`CaptureStrategy::None`] -
+    ///   * In this mode, tests will always be run serially: `test_threads` will always be 1.
+    pub fn set_capture_strategy(&mut self, strategy: CaptureStrategy) -> &mut Self {
+        self.capture_strategy = strategy;
         self
     }
 
@@ -166,9 +173,9 @@ impl TestRunnerBuilder {
         double_spawn: DoubleSpawnInfo,
         target_runner: TargetRunner,
     ) -> Result<TestRunner<'a>, TestRunnerBuildError> {
-        let test_threads = match self.no_capture {
-            true => 1,
-            false => self
+        let test_threads = match self.capture_strategy {
+            CaptureStrategy::None => 1,
+            CaptureStrategy::Combined | CaptureStrategy::Split => self
                 .test_threads
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
@@ -183,7 +190,7 @@ impl TestRunnerBuilder {
 
         Ok(TestRunner {
             inner: TestRunnerInner {
-                no_capture: self.no_capture,
+                capture_strategy: self.capture_strategy,
                 profile,
                 test_threads,
                 force_retries: self.retries,
@@ -243,7 +250,7 @@ impl<'a> TestRunner<'a> {
 
 #[derive(Debug)]
 struct TestRunnerInner<'a> {
-    no_capture: bool,
+    capture_strategy: CaptureStrategy,
     profile: &'a NextestProfile<'a>,
     test_threads: usize,
     // This is Some if the user specifies a retry policy over the command-line.
@@ -718,7 +725,7 @@ impl<'a> TestRunnerInner<'a> {
         let job = imp::Job::create().ok();
 
         // The --no-capture CLI argument overrides the config.
-        if !self.no_capture {
+        if self.capture_strategy != CaptureStrategy::None {
             if script.config.capture_stdout {
                 command_mut.stdout(std::process::Stdio::piped());
             }
@@ -954,14 +961,9 @@ impl<'a> TestRunnerInner<'a> {
         // best-effort thing.
         let job = imp::Job::create().ok();
 
-        if !self.no_capture {
-            // Capture stdout and stderr.
-            command_mut
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped());
-        };
-
-        let mut child = cmd.spawn().map_err(RunTestError::Spawn)?;
+        let crate::test_command::Child { mut child, output } = cmd
+            .spawn(self.capture_strategy)
+            .map_err(RunTestError::Spawn)?;
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
@@ -978,12 +980,11 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        let streams = child.stdout.take().zip(child.stderr.take());
         let mut test_output = TestOutput::default();
 
         let (res, leaked) = {
             let mut collect_output_fut =
-                std::pin::pin!(crate::test_output::collect_test_output(streams));
+                std::pin::pin!(crate::test_output::collect_test_output(output));
             let mut collect_output_done = false;
 
             let res = loop {
@@ -2350,7 +2351,7 @@ mod tests {
         // Ensure that output settings are ignored with no-capture.
         let mut builder = TestRunnerBuilder::default();
         builder
-            .set_no_capture(true)
+            .set_capture_strategy(CaptureStrategy::None)
             .set_test_threads(TestThreads::Count(20));
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
@@ -2367,7 +2368,7 @@ mod tests {
                 TargetRunner::empty(),
             )
             .unwrap();
-        assert!(runner.inner.no_capture, "no_capture is true");
+        assert_eq!(runner.inner.capture_strategy, CaptureStrategy::None);
         assert_eq!(runner.inner.test_threads, 1, "tests run serially");
     }
 

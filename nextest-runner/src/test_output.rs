@@ -3,6 +3,27 @@
 use bytes::{Bytes, BytesMut};
 use std::{io::Write as _, ops::Range, time::Instant};
 
+/// The strategy used to capture test executable output
+#[derive(Copy, Clone, PartialEq, Default, Debug)]
+pub enum CaptureStrategy {
+    /// Captures `stdout` and `stderr` separately
+    ///
+    /// * pro: output from `stdout` and `stderr` can be identified and easily split
+    /// * con: ordering between the streams cannot be guaranteed
+    #[default]
+    Split,
+    /// Captures `stdout` and `stderr` in a single stream
+    ///
+    /// * pro: output is guaranteed to be ordered as it would in a terminal emulator
+    /// * con: distinction between `stdout` and `stderr` is lost, all output is attributed to `stdout`
+    Combined,
+    /// Output is not captured
+    ///
+    /// This mode is used when using --no-capture, causing nextest to execute
+    /// tests serially without capturing output
+    None,
+}
+
 /// A single chunk of captured output, this may represent 0 or more lines
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -248,47 +269,69 @@ impl<'acc> std::fmt::Write for TestOutputWriter<'acc> {
 /// most linux, windows, and macos systems.
 const CHUNK_SIZE: usize = 4 * 1024;
 
+use crate::errors::CollectTestOutputError as Err;
+
 /// Collects the stdout and/or stderr streams into a single buffer
 pub async fn collect_test_output(
-    streams: Option<(tokio::process::ChildStdout, tokio::process::ChildStderr)>,
-) -> Result<TestOutput, crate::errors::CollectTestOutputError> {
+    streams: Option<crate::test_command::Output>,
+) -> Result<TestOutput, Err> {
     use tokio::io::AsyncBufReadExt as _;
 
-    let Some((stdout, stderr)) = streams else {
+    let Some(output) = streams else {
         return Ok(TestOutput::default());
     };
 
-    let mut stdout = tokio::io::BufReader::with_capacity(CHUNK_SIZE, stdout);
-    let mut stderr = tokio::io::BufReader::with_capacity(CHUNK_SIZE, stderr);
-
-    let mut out_done = false;
-    let mut err_done = false;
-
     let mut acc = TestOutputAccumulator::new();
 
-    while !out_done || !err_done {
-        tokio::select! {
-            res = stdout.fill_buf() => {
+    match output {
+        crate::test_command::Output::Split { stdout, stderr } => {
+            let mut stdout = tokio::io::BufReader::with_capacity(CHUNK_SIZE, stdout);
+            let mut stderr = tokio::io::BufReader::with_capacity(CHUNK_SIZE, stderr);
+
+            let mut out_done = false;
+            let mut err_done = false;
+
+            while !out_done || !err_done {
+                tokio::select! {
+                    res = stdout.fill_buf() => {
+                        let read = {
+                            let buf = res.map_err(Err::ReadStdout)?;
+                            acc.push_chunk(buf, true);
+                            buf.len()
+                        };
+
+                        stdout.consume(read);
+                        out_done = read == 0;
+                    }
+                    res = stderr.fill_buf() => {
+                        let read = {
+                            let buf = res.map_err(Err::ReadStderr)?;
+                            acc.push_chunk(buf, false);
+                            buf.len()
+                        };
+
+                        stderr.consume(read);
+                        err_done = read == 0;
+                    }
+                };
+            }
+        }
+        crate::test_command::Output::Combined(output) => {
+            let mut stdout = tokio::io::BufReader::with_capacity(CHUNK_SIZE, output);
+
+            loop {
                 let read = {
-                    let buf = res.map_err(crate::errors::CollectTestOutputError::ReadStdout)?;
+                    let buf = stdout.fill_buf().await.map_err(Err::ReadStdout)?;
                     acc.push_chunk(buf, true);
                     buf.len()
                 };
 
                 stdout.consume(read);
-                out_done = read == 0;
+                if read == 0 {
+                    break;
+                }
             }
-            res = stderr.fill_buf() => {
-                let read = {
-                    let buf = res.map_err(crate::errors::CollectTestOutputError::ReadStderr)?;
-                    acc.push_chunk(buf, false);
-                    buf.len()
-                };
-
-                stderr.consume(read);
-                err_done = read == 0;
-            }
-        };
+        }
     }
 
     Ok(acc.freeze())
