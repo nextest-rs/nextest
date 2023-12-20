@@ -194,8 +194,7 @@ pub(crate) fn extract_abort_status(exit_status: ExitStatus) -> Option<AbortStatu
             exit_status.signal().map(AbortStatus::UnixSignal)
         } else if #[cfg(windows)] {
             exit_status.code().and_then(|code| {
-                let exception = windows::Win32::Foundation::NTSTATUS(code);
-                exception.is_err().then(|| AbortStatus::WindowsNtStatus(exception))
+                (code < 0).then(|| AbortStatus::WindowsNtStatus(code))
             })
         } else {
             None
@@ -226,19 +225,18 @@ pub(crate) fn signal_str(signal: i32) -> Option<&'static str> {
 }
 
 #[cfg(windows)]
-pub(crate) fn display_nt_status(nt_status: windows::Win32::Foundation::NTSTATUS) -> String {
+pub(crate) fn display_nt_status(nt_status: windows_sys::Win32::Foundation::NTSTATUS) -> String {
     // Convert the NTSTATUS to a Win32 error code.
-    let win32_code = unsafe { windows::Win32::Foundation::RtlNtStatusToDosError(nt_status) };
+    let win32_code = unsafe { windows_sys::Win32::Foundation::RtlNtStatusToDosError(nt_status) };
 
-    if win32_code == windows::Win32::Foundation::ERROR_MR_MID_NOT_FOUND.0 {
+    if win32_code == windows_sys::Win32::Foundation::ERROR_MR_MID_NOT_FOUND {
         // The Win32 code was not found.
-        let nt_status = nt_status.0;
         return format!("{nt_status:#x} ({nt_status})");
     }
 
     return format!(
         "{:#x}: {}",
-        nt_status.0,
+        nt_status,
         io::Error::from_raw_os_error(win32_code as i32)
     );
 }

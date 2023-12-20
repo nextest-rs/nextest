@@ -1280,7 +1280,7 @@ impl<'a> TestReporterImpl<'a> {
     #[cfg(windows)]
     fn write_windows_message_line(
         &self,
-        nt_status: windows::Win32::Foundation::NTSTATUS,
+        nt_status: windows_sys::Win32::Foundation::NTSTATUS,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         write!(writer, "{:>12} ", "Message".style(self.styles.fail))?;

@@ -1170,8 +1170,7 @@ fn create_execution_result(exit_status: ExitStatus, leaked: bool) -> ExecutionRe
                 let abort_status = exit_status.signal().map(AbortStatus::UnixSignal);
             } else if #[cfg(windows)] {
                 let abort_status = exit_status.code().and_then(|code| {
-                    let exception = windows::Win32::Foundation::NTSTATUS(code);
-                    exception.is_err().then(|| AbortStatus::WindowsNtStatus(exception))
+                    (code < 0).then(|| AbortStatus::WindowsNtStatus(code))
                 });
             } else {
                 let abort_status = None;
@@ -2084,7 +2083,7 @@ pub enum AbortStatus {
 
     /// The test was determined to have aborted because the high bit was set on Windows.
     #[cfg(windows)]
-    WindowsNtStatus(windows::Win32::Foundation::NTSTATUS),
+    WindowsNtStatus(windows_sys::Win32::Foundation::NTSTATUS),
 }
 
 /// Configures stdout, stdin and stderr inheritance by test processes on Windows.
@@ -2110,8 +2109,8 @@ mod imp {
     use super::*;
     pub(super) use win32job::Job;
     use win32job::JobError;
-    use windows::Win32::{
-        Foundation::{SetHandleInformation, HANDLE, HANDLE_FLAGS, HANDLE_FLAG_INHERIT},
+    use windows_sys::Win32::{
+        Foundation::{SetHandleInformation, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE},
         System::{
             Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
             JobObjects::TerminateJobObject,
@@ -2121,22 +2120,26 @@ mod imp {
     pub(super) fn configure_handle_inheritance_impl(
         no_capture: bool,
     ) -> Result<(), ConfigureHandleInheritanceError> {
-        fn set_handle_inherit(handle: HANDLE, inherit: bool) -> windows::core::Result<()> {
-            let flags = if inherit { HANDLE_FLAG_INHERIT.0 } else { 0 };
-            unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(flags)) }
+        unsafe fn set_handle_inherit(handle: u32, inherit: bool) -> std::io::Result<()> {
+            let handle = GetStdHandle(handle);
+            if handle == INVALID_HANDLE_VALUE {
+                return Err(std::io::Error::last_os_error());
+            }
+            let flags = if inherit { HANDLE_FLAG_INHERIT } else { 0 };
+            if SetHandleInformation(handle, HANDLE_FLAG_INHERIT, flags) == 0 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
         }
 
         unsafe {
-            let stdin = GetStdHandle(STD_INPUT_HANDLE)?;
             // Never inherit stdin.
-            set_handle_inherit(stdin, false)?;
+            set_handle_inherit(STD_INPUT_HANDLE, false)?;
 
             // Inherit stdout and stderr if and only if no_capture is true.
-
-            let stdout = GetStdHandle(STD_OUTPUT_HANDLE)?;
-            set_handle_inherit(stdout, no_capture)?;
-            let stderr = GetStdHandle(STD_ERROR_HANDLE)?;
-            set_handle_inherit(stderr, no_capture)?;
+            set_handle_inherit(STD_OUTPUT_HANDLE, no_capture)?;
+            set_handle_inherit(STD_ERROR_HANDLE, no_capture)?;
         }
 
         Ok(())
@@ -2184,7 +2187,7 @@ mod imp {
             unsafe {
                 // Ignore the error here -- it's likely due to the process exiting.
                 // Note: 1 is the exit code returned by Windows.
-                _ = TerminateJobObject(HANDLE(handle as isize), 1);
+                _ = TerminateJobObject(handle as _, 1);
             }
         }
         // Start killing the process directly for good measure.
