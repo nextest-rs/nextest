@@ -75,7 +75,7 @@ impl FixtureStatus {
                     } else if #[cfg(windows)] {
                         // A segfault is an access violation on Windows.
                         let abort_status = Some(AbortStatus::WindowsNtStatus(
-                            windows::Win32::Foundation::STATUS_ACCESS_VIOLATION,
+                            windows_sys::Win32::Foundation::STATUS_ACCESS_VIOLATION,
                         ));
                     } else {
                         let abort_status = None;
