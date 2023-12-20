@@ -26,20 +26,6 @@ pub struct Child {
     pub output: Option<Output>,
 }
 
-impl std::ops::Deref for Child {
-    type Target = TokioChild;
-
-    fn deref(&self) -> &Self::Target {
-        &self.child
-    }
-}
-
-impl std::ops::DerefMut for Child {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.child
-    }
-}
-
 pub(super) fn spawn(
     mut cmd: std::process::Command,
     strategy: CaptureStrategy,
