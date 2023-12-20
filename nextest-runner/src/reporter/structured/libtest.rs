@@ -372,10 +372,6 @@ impl<'cfg> LibtestReporter<'cfg> {
                         // though it could contain stderr output as well).
                         write!(out, r#","stdout":""#).map_err(fmt_err)?;
 
-                        for line in last_status.output.lines() {
-                            dbg!(line.chunk.stdout, line.lossy());
-                        }
-
                         strip_human_output_from_failed_test(
                             &last_status.output,
                             out,
@@ -601,15 +597,14 @@ mod test {
     /// libtest itself outputs the JSON, so we have 100% identical output to libtest
     #[test]
     fn strips_human_output() {
-        const TEST_OUTPUT: &[(bool, &str)] = &[
-            (true, "\n"),
-            (true, "running 1 test\n"),
-            (true, "test index::test::download_url_crates_io ... FAILED\n"),
-            (true, "\nfailures:\n\n---- index::test::download_url_crates_io stdout ----\n"),
-            (false, "[src/index.rs:185] \"boop\" = \"boop\"\n"),
-            (true, "this is stdout\n"),
-            (false, "this i stderr\nok?\n"),
-            (false, r#"thread 'index::test::download_url_crates_io' panicked at src/index.rs:206:9:
+        const TEST_OUTPUT: &[&str] = &[
+            "\n",
+            "running 1 test\n",
+            "[src/index.rs:185] \"boop\" = \"boop\"\n",
+            "this is stdout\n",
+            "this i stderr\nok?\n",
+            "thread 'index::test::download_url_crates_io'",
+            r#" panicked at src/index.rs:206:9:
 oh no
 stack backtrace:
     0: rust_begin_unwind
@@ -625,18 +620,29 @@ stack backtrace:
     5: core::ops::function::FnOnce::call_once
                 at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5
 note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
-"#),
-            (true, "\n\nfailures:\n    index::test::download_url_crates_io\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.01s\n"),
+"#,
+            "test index::test::download_url_crates_io ... FAILED\n",
+            "\n\nfailures:\n\nfailures:\n    index::test::download_url_crates_io\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.01s\n",
         ];
 
-        let _output = {
+        let output = {
             let mut acc = crate::test_output::TestOutputAccumulator::new();
 
-            for (stdout, line) in TEST_OUTPUT {
-                acc.push_chunk(line.as_bytes(), *stdout);
+            for line in TEST_OUTPUT {
+                acc.push_chunk(line.as_bytes(), true);
             }
 
             acc.freeze()
         };
+
+        let mut actual = bytes::BytesMut::new();
+        super::strip_human_output_from_failed_test(
+            &output,
+            &mut actual,
+            "index::test::download_url_crates_io",
+        )
+        .unwrap();
+
+        insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
     }
 }

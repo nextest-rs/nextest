@@ -1698,6 +1698,7 @@ dependencies = [
  "indexmap 2.1.0",
  "indicatif",
  "indoc",
+ "insta",
  "is_ci",
  "itertools 0.12.0",
  "libc",

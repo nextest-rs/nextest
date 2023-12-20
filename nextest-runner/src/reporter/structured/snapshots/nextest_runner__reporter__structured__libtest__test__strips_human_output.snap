@@ -1,0 +1,5 @@
+---
+source: nextest-runner/src/reporter/structured/libtest.rs
+expression: "std::str::from_utf8(&actual).unwrap()"
+---
+[src/index.rs:185] \"boop\" = \"boop\"\nthis is stdout\nthis i stderr\nok?\nthread 'index::test::download_url_crates_io' panicked at src/index.rs:206:9:\noh no\nstack backtrace:\n    0: rust_begin_unwind\n                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/std/src/panicking.rs:597:5\n    1: core::panicking::panic_fmt\n                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/panicking.rs:72:14\n    2: tame_index::index::test::download_url_crates_io\n                at ./src/index.rs:206:9\n    3: tame_index::index::test::download_url_crates_io::{{closure}}\n                at ./src/index.rs:179:33\n    4: core::ops::function::FnOnce::call_once\n                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5\n    5: core::ops::function::FnOnce::call_once\n                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5\nnote: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.\n
