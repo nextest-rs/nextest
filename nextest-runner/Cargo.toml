@@ -113,8 +113,10 @@ winapi = { version = "0.3.9", features = ["std"] }
 windows-sys = { version = "0.52.0", features = [
     "Win32_Foundation",
     "Win32_Globalization",
+    "Win32_Security",
     "Win32_System_Console",
     "Win32_System_JobObjects",
+    "Win32_System_Pipes",
 ] }
 win32job = "1.0.2"
 dunce = "1.0.4"

@@ -46,7 +46,7 @@ pub(super) fn spawn(
 ) -> std::io::Result<Child> {
     cmd.stdin(Stdio::null());
 
-    let state = match strategy {
+    let state: Option<os::State> = match strategy {
         CaptureStrategy::None => None,
         CaptureStrategy::Split => {
             cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -67,13 +67,9 @@ pub(super) fn spawn(
 
             Some(Output::Split { stdout, stderr })
         }
-        CaptureStrategy::Combined => {
-            // It doesn't matter which stream we take since they are both the same
-            // handle, so we take the easy one
-            Some(Output::Combined(os::state_to_stdout(
-                state.expect("state was set"),
-            )?))
-        }
+        CaptureStrategy::Combined => Some(Output::Combined(os::state_to_stdout(
+            state.expect("state was set"),
+        )?)),
     };
 
     Ok(Child { child, output })
