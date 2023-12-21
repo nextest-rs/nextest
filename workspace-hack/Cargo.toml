@@ -28,7 +28,7 @@ log = { version = "0.4.20", default-features = false, features = ["std"] }
 memchr = { version = "2.6.4", features = ["use_std"] }
 miette = { version = "5.10.0", features = ["fancy"] }
 num-traits = { version = "0.2.17", default-features = false, features = ["libm", "std"] }
-owo-colors = { version = "3.5.0", default-features = false, features = ["supports-colors"] }
+owo-colors = { version = "4.0.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
 serde = { version = "1.0.193", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.108", features = ["preserve_order", "unbounded_depth"] }
@@ -74,7 +74,7 @@ futures-core = { version = "0.3.29" }
 futures-sink = { version = "0.3.29" }
 once_cell = { version = "1.19.0", features = ["unstable"] }
 tokio = { version = "1.35.1", default-features = false, features = ["net"] }
-winapi = { version = "0.3.9", default-features = false, features = ["basetsd", "consoleapi", "handleapi", "jobapi2", "minwinbase", "minwindef", "processenv", "processthreadsapi", "psapi", "std", "synchapi", "winbase", "wincon", "winerror", "winnt", "ws2ipdef", "ws2tcpip"] }
+winapi = { version = "0.3.9", default-features = false, features = ["basetsd", "handleapi", "jobapi2", "processenv", "processthreadsapi", "psapi", "std", "synchapi", "winbase", "wincon", "winerror", "winnt", "ws2ipdef", "ws2tcpip"] }
 windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_UI_Shell"] }
 windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Environment", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 

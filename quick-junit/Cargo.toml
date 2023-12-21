@@ -22,4 +22,4 @@ nextest-workspace-hack.workspace = true
 
 [dev-dependencies]
 goldenfile = "1.6.0"
-owo-colors = "3.5.0"
+owo-colors = "4.0.0"
