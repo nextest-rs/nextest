@@ -377,6 +377,7 @@ dependencies = [
  "nextest-runner",
  "nextest-workspace-hack",
  "once_cell",
+ "owo-colors 3.5.0",
  "owo-colors 4.0.0",
  "pathdiff",
  "semver",
