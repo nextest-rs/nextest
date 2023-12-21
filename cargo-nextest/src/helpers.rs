@@ -3,14 +3,12 @@
 
 #[cfg(feature = "self-update")]
 pub(crate) fn log_needs_update(level: log::Level, extra: &str) {
-    use crate::output::SupportsColorsV2;
-    use owo_colors::OwoColorize;
+    use owo_colors::{OwoColorize, Stream};
 
     log::log!(
         level,
         "update nextest with {}{}",
-        "cargo nextest self update"
-            .if_supports_color_2(supports_color::Stream::Stderr, |x| x.bold()),
+        "cargo nextest self update".if_supports_color(Stream::Stderr, |x| x.bold()),
         extra,
     );
 }
