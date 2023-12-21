@@ -11,7 +11,7 @@ dir = "target/nextest"
 [profile.default]
 # "retries" defines the number of times a test should be retried. If set to a
 # non-zero value, tests that succeed on a subsequent attempt will be marked as
-# non-flaky. Can be overridden through the `--retries` option.
+# flaky. Can be overridden through the `--retries` option.
 # Examples
 # * retries = 3
 # * retries = { backoff = "fixed", count = 2, delay = "1s" }
