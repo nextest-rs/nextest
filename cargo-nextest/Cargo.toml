@@ -32,7 +32,7 @@ nextest-metadata = { version = "=0.10.0", path = "../nextest-metadata" }
 once_cell = "1.19.0"
 owo-colors = { version = "4.0.0", features = ["supports-colors"] }
 # owo-colors 3 is required for miette v5 styling
-owo-colors-3 = { package = "owo-colors", version = "3.5.0" }
+owo-colors-3 = { package = "owo-colors", version = "4.0.0" }
 pathdiff = { version = "0.2.1", features = ["camino"] }
 semver = "1.0.20"
 shell-words = "1.1.0"
