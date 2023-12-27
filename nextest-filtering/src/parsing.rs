@@ -717,21 +717,35 @@ fn parse_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
     )(input)?;
 
     let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| {
-        expr_1.combine(
-            |expr_1, expr_2| ParsedExpr::union(op, expr_1, expr_2),
-            expr_2,
-        )
+        if let Some(op) = op {
+            expr_1.combine(
+                |expr_1, expr_2| ParsedExpr::union(op, expr_1, expr_2),
+                expr_2,
+            )
+        } else {
+            ExprResult::Error
+        }
     });
 
     Ok((input, expr))
 }
 
 #[tracable_parser]
-fn parse_or_operator(input: Span<'_>) -> IResult<'_, OrOperator> {
+fn parse_or_operator(input: Span<'_>) -> IResult<'_, Option<OrOperator>> {
     ws(alt((
-        value(OrOperator::LiteralOr, tag("or ")),
-        value(OrOperator::Pipe, tag("|")),
-        value(OrOperator::Plus, tag("+")),
+        // This is not a valid OR operator in this position, but catch it to provide a better
+        // experience.
+        map(alt((tag("||"), tag("OR "))), |op: Span<'_>| {
+            // || is not supported in filter expressions: suggest using | instead.
+            let start = op.location_offset();
+            let length = op.fragment().len();
+            let err = ParseSingleError::InvalidOrOperator((start, length).into());
+            op.extra.report_error(err);
+            None
+        }),
+        value(Some(OrOperator::LiteralOr), tag("or ")),
+        value(Some(OrOperator::Pipe), tag("|")),
+        value(Some(OrOperator::Plus), tag("+")),
     )))(input)
 }
 
@@ -796,32 +810,45 @@ fn parse_and_or_difference_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
     )(input)?;
 
     let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| match op {
-        AndOrDifferenceOperator::And(op) => expr_1.combine(
+        Some(AndOrDifferenceOperator::And(op)) => expr_1.combine(
             |expr_1, expr_2| ParsedExpr::intersection(op, expr_1, expr_2),
             expr_2,
         ),
-        AndOrDifferenceOperator::Difference(op) => expr_1.combine(
+        Some(AndOrDifferenceOperator::Difference(op)) => expr_1.combine(
             |expr_1, expr_2| ParsedExpr::difference(op, expr_1, expr_2),
             expr_2,
         ),
+        None => ExprResult::Error,
     });
 
     Ok((input, expr))
 }
 
 #[tracable_parser]
-fn parse_and_or_difference_operator(input: Span<'_>) -> IResult<'_, AndOrDifferenceOperator> {
+fn parse_and_or_difference_operator(
+    input: Span<'_>,
+) -> IResult<'_, Option<AndOrDifferenceOperator>> {
     ws(alt((
+        map(alt((tag("&&"), tag("AND "))), |op: Span<'_>| {
+            // && is not supported in filter expressions: suggest using & instead.
+            let start = op.location_offset();
+            let length = op.fragment().len();
+            let err = ParseSingleError::InvalidAndOperator((start, length).into());
+            op.extra.report_error(err);
+            None
+        }),
         value(
-            AndOrDifferenceOperator::And(AndOperator::LiteralAnd),
+            Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd)),
             tag("and "),
         ),
         value(
-            AndOrDifferenceOperator::And(AndOperator::Ampersand),
+            Some(AndOrDifferenceOperator::And(AndOperator::Ampersand)),
             char('&'),
         ),
         value(
-            AndOrDifferenceOperator::Difference(DifferenceOperator::Minus),
+            Some(AndOrDifferenceOperator::Difference(
+                DifferenceOperator::Minus,
+            )),
             char('-'),
         ),
     )))(input)
@@ -1386,6 +1413,36 @@ mod tests {
                 $error,
             );
         }};
+    }
+
+    #[test]
+    fn test_invalid_and_operator() {
+        let src = "all() && none()";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidAndOperator, 6, 2);
+
+        let src = "all() AND none()";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidAndOperator, 6, 4);
+    }
+
+    #[test]
+    fn test_invalid_or_operator() {
+        let src = "all() || none()";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidOrOperator, 6, 2);
+
+        let src = "all() OR none()";
+        let mut errors = parse_err(src);
+        assert_eq!(1, errors.len());
+        let error = errors.remove(0);
+        assert_error!(error, InvalidOrOperator, 6, 3);
     }
 
     #[test]

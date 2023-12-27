@@ -60,6 +60,14 @@ pub enum ParseSingleError {
     #[error("expected close regex")]
     ExpectedCloseRegex(#[label("missing `/`")] SourceSpan),
 
+    /// An unexpected OR operator was found.
+    #[error("invalid OR operator")]
+    InvalidOrOperator(#[label("expected `|`, `+`, or `or`")] SourceSpan),
+
+    /// An unexpected AND operator was found.
+    #[error("invalid AND operator")]
+    InvalidAndOperator(#[label("expected `&` or `and`")] SourceSpan),
+
     /// An unexpected argument was found.
     #[error("unexpected argument")]
     UnexpectedArgument(#[label("this set doesn't take an argument")] SourceSpan),
