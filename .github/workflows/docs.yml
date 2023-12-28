@@ -20,7 +20,7 @@ jobs:
       - name: Build rustdoc
         run: cargo doc --all-features --workspace
       - name: Install mdbook
-        uses: taiki-e/install-action@9046b62ce9061896bf491e6d4966b4d2dab6daf1 # v2
+        uses: taiki-e/install-action@181b17afd138ad1b9f6d6d5db0eb26251f67e5d8 # v2
         with:
           tool: mdbook@0.4
       - name: Run mdbook
