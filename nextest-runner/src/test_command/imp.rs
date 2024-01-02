@@ -1,6 +1,9 @@
 use crate::test_output::CaptureStrategy;
 use std::process::Stdio;
-use tokio::process::{Child as TokioChild, ChildStdout as Pipe};
+use tokio::{
+    fs::File,
+    process::{self as proc, Child as TokioChild},
+};
 
 cfg_if::cfg_if! {
     if #[cfg(unix)] {
@@ -17,8 +20,11 @@ cfg_if::cfg_if! {
 }
 
 pub enum Output {
-    Split { stdout: Pipe, stderr: Pipe },
-    Combined(Pipe),
+    Split {
+        stdout: proc::ChildStdout,
+        stderr: proc::ChildStderr,
+    },
+    Combined(File),
 }
 
 pub struct Child {
@@ -49,13 +55,12 @@ pub(super) fn spawn(
         CaptureStrategy::Split => {
             let stdout = child.stdout.take().expect("stdout was set");
             let stderr = child.stderr.take().expect("stderr was set");
-            let stderr = os::stderr_to_stdout(stderr)?;
 
             Some(Output::Split { stdout, stderr })
         }
-        CaptureStrategy::Combined => Some(Output::Combined(os::state_to_stdout(
-            state.expect("state was set"),
-        )?)),
+        CaptureStrategy::Combined => Some(Output::Combined(
+            std::fs::File::from(state.expect("state was set").ours).into(),
+        )),
     };
 
     Ok(Child { child, output })

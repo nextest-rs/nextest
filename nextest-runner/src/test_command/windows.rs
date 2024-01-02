@@ -9,7 +9,7 @@ use windows_sys::Win32::{
 };
 
 pub struct State {
-    ours: OwnedHandle,
+    pub(super) ours: OwnedHandle,
 }
 
 pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
@@ -124,16 +124,4 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
 
         Ok(State { ours })
     }
-}
-
-#[inline]
-pub(super) fn stderr_to_stdout(
-    stderr: tokio::process::ChildStderr,
-) -> std::io::Result<super::Pipe> {
-    super::Pipe::from_std(stderr.into_owned_handle()?.into())
-}
-
-#[inline]
-pub(super) fn state_to_stdout(state: State) -> io::Result<super::Pipe> {
-    super::Pipe::from_std(std::process::ChildStdout::from(state.ours))
 }

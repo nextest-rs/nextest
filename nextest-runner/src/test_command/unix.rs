@@ -5,7 +5,7 @@ use std::{
 };
 
 pub(super) struct State {
-    ours: OwnedFd,
+    pub(super) ours: OwnedFd,
     #[allow(dead_code)]
     theirs: OwnedFd,
 }
@@ -112,16 +112,4 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
     }
 
     Ok(State { ours, theirs })
-}
-
-/// Immensely irritating, ChildStdout and ChildStderr are different types despite
-/// being identical internally :p (to be fair, this problem is in std as well)
-#[inline]
-pub(super) fn stderr_to_stdout(stderr: tokio::process::ChildStderr) -> io::Result<super::Pipe> {
-    super::Pipe::from_std(stderr.into_owned_fd()?.into())
-}
-
-#[inline]
-pub(super) fn state_to_stdout(state: State) -> io::Result<super::Pipe> {
-    super::Pipe::from_std(std::process::ChildStdout::from(state.ours))
 }
