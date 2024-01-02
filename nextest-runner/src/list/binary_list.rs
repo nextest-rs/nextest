@@ -216,7 +216,7 @@ impl<'g> BinaryListBuildState<'g> {
                     k == "lib" || k == "rlib" || k == "dylib" || k == "cdylib" || k == "staticlib"
                 }) {
                     (RustTestBinaryKind::LIB, BuildPlatform::Target)
-                } else if kind.get(0).map(String::as_str) == Some("proc-macro") {
+                } else if kind.first().map(String::as_str) == Some("proc-macro") {
                     (RustTestBinaryKind::PROC_MACRO, BuildPlatform::Host)
                 } else {
                     // Non-lib kinds should always have just one element. Grab the first one.
