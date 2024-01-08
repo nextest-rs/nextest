@@ -3,7 +3,7 @@
 
 // Adapted from https://github.com/Geal/nom/blob/294ffb3d9e0ade2c3b7ddfff52484b6d643dcce1/examples/string.rs
 
-use super::{expect_n, IResult, Span, SpanLength};
+use super::{expect_n, trace, IResult, Span, SpanLength};
 use crate::errors::ParseSingleError;
 use nom::{
     branch::alt,
@@ -50,36 +50,40 @@ where
 
 #[tracable_parser]
 fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
-    let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
-    let parse_delimited_hex = preceded(char('u'), delimited(char('{'), parse_hex, char('}')));
-    let parse_u32 = map_res(parse_delimited_hex, |hex| u32::from_str_radix(hex, 16));
-    run_str_parser(map_opt(parse_u32, std::char::from_u32))(input)
+    trace("parse_unicode", |input| {
+        let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
+        let parse_delimited_hex = preceded(char('u'), delimited(char('{'), parse_hex, char('}')));
+        let parse_u32 = map_res(parse_delimited_hex, |hex| u32::from_str_radix(hex, 16));
+        run_str_parser(map_opt(parse_u32, std::char::from_u32))(input)
+    })(input)
 }
 
 #[tracable_parser]
 fn parse_escaped_char(input: Span<'_>) -> IResult<'_, Option<char>> {
-    let valid = alt((
-        parse_unicode,
-        value('\n', char('n')),
-        value('\r', char('r')),
-        value('\t', char('t')),
-        value('\u{08}', char('b')),
-        value('\u{0C}', char('f')),
-        value('\\', char('\\')),
-        value('/', char('/')),
-        value(')', char(')')),
-        value(',', char(',')),
-    ));
-    preceded(
-        char('\\'),
-        // If none of the valid characters are found, this will report an error.
-        expect_n(
-            valid,
-            ParseSingleError::InvalidEscapeCharacter,
-            // -1 to account for the preceding backslash.
-            SpanLength::Offset(-1, 2),
-        ),
-    )(input)
+    trace("parse_escaped_char", |input| {
+        let valid = alt((
+            parse_unicode,
+            value('\n', char('n')),
+            value('\r', char('r')),
+            value('\t', char('t')),
+            value('\u{08}', char('b')),
+            value('\u{0C}', char('f')),
+            value('\\', char('\\')),
+            value('/', char('/')),
+            value(')', char(')')),
+            value(',', char(',')),
+        ));
+        preceded(
+            char('\\'),
+            // If none of the valid characters are found, this will report an error.
+            expect_n(
+                valid,
+                ParseSingleError::InvalidEscapeCharacter,
+                // -1 to account for the preceding backslash.
+                SpanLength::Offset(-1, 2),
+            ),
+        )(input)
+    })(input)
 }
 
 // This should match parse_escaped_char above.
@@ -102,9 +106,11 @@ impl fmt::Display for DisplayParsedString<'_> {
 }
 #[tracable_parser]
 fn parse_literal(input: Span<'_>) -> IResult<'_, Span<'_>> {
-    let not_quote_slash = is_not(",)\\");
-    let res = verify(not_quote_slash, |s: &Span<'_>| !s.fragment().is_empty())(input.clone());
-    res
+    trace("parse_literal", |input: Span<'_>| {
+        let not_quote_slash = is_not(",)\\");
+        let res = verify(not_quote_slash, |s: &Span<'_>| !s.fragment().is_empty())(input.clone());
+        res
+    })(input)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,14 +121,17 @@ enum StringFragment<'a> {
 
 #[tracable_parser]
 fn parse_fragment(input: Span<'_>) -> IResult<'_, Option<StringFragment<'_>>> {
-    alt((
-        map(parse_literal, |span| {
-            Some(StringFragment::Literal(span.fragment()))
-        }),
-        map(parse_escaped_char, |res| {
-            res.map(StringFragment::EscapedChar)
-        }),
-    ))(input)
+    trace(
+        "parse_fragment",
+        alt((
+            map(parse_literal, |span| {
+                Some(StringFragment::Literal(span.fragment()))
+            }),
+            map(parse_escaped_char, |res| {
+                res.map(StringFragment::EscapedChar)
+            }),
+        )),
+    )(input)
 }
 
 /// Construct a string by consuming the input until the next unescaped ) or ,.
@@ -130,26 +139,29 @@ fn parse_fragment(input: Span<'_>) -> IResult<'_, Option<StringFragment<'_>>> {
 /// Returns None if the string isn't valid.
 #[tracable_parser]
 pub(super) fn parse_string(input: Span<'_>) -> IResult<'_, Option<String>> {
-    fold_many0(
-        parse_fragment,
-        || Some(String::new()),
-        |string, fragment| {
-            match (string, fragment) {
-                (Some(mut string), Some(StringFragment::Literal(s))) => {
-                    string.push_str(s);
-                    Some(string)
+    trace(
+        "parse_string",
+        fold_many0(
+            parse_fragment,
+            || Some(String::new()),
+            |string, fragment| {
+                match (string, fragment) {
+                    (Some(mut string), Some(StringFragment::Literal(s))) => {
+                        string.push_str(s);
+                        Some(string)
+                    }
+                    (Some(mut string), Some(StringFragment::EscapedChar(c))) => {
+                        string.push(c);
+                        Some(string)
+                    }
+                    (Some(_), None) => {
+                        // We encountered a parsing error, and at this point we'll stop returning
+                        // values.
+                        None
+                    }
+                    (None, _) => None,
                 }
-                (Some(mut string), Some(StringFragment::EscapedChar(c))) => {
-                    string.push(c);
-                    Some(string)
-                }
-                (Some(_), None) => {
-                    // We encountered a parsing error, and at this point we'll stop returning
-                    // values.
-                    None
-                }
-                (None, _) => None,
-            }
-        },
+            },
+        ),
     )(input)
 }

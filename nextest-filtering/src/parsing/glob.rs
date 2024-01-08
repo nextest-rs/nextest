@@ -3,7 +3,7 @@
 
 //! Glob matching.
 
-use super::{parse_matcher_text, IResult, Span};
+use super::{parse_matcher_text, trace, IResult, Span};
 use crate::{
     errors::{GlobConstructError, ParseSingleError},
     NameMatcher,
@@ -60,28 +60,30 @@ impl GenericGlob {
 // This never returns Err(()) -- instead, it reports an error to the parsing state.
 #[tracable_parser]
 pub(super) fn parse_glob(input: Span<'_>, implicit: bool) -> IResult<'_, Option<NameMatcher>> {
-    let (i, res) = match parse_matcher_text(input.clone()) {
-        Ok((i, res)) => (i, res),
-        Err(_) => {
-            unreachable!("parse_matcher_text should never fail")
-        }
-    };
+    trace("parse_glob", |input: Span<'_>| {
+        let (i, res) = match parse_matcher_text(input.clone()) {
+            Ok((i, res)) => (i, res),
+            Err(_) => {
+                unreachable!("parse_matcher_text should never fail")
+            }
+        };
 
-    let Some(parsed_value) = res else {
-        return Ok((i, None));
-    };
+        let Some(parsed_value) = res else {
+            return Ok((i, None));
+        };
 
-    match GenericGlob::new(parsed_value) {
-        Ok(glob) => Ok((i, Some(NameMatcher::Glob { glob, implicit }))),
-        Err(error) => {
-            let start = input.location_offset();
-            let end = i.location_offset();
-            let err = ParseSingleError::InvalidGlob {
-                span: (start, end - start).into(),
-                error,
-            };
-            i.extra.report_error(err);
-            Ok((i, None))
+        match GenericGlob::new(parsed_value) {
+            Ok(glob) => Ok((i, Some(NameMatcher::Glob { glob, implicit }))),
+            Err(error) => {
+                let start = input.location_offset();
+                let end = i.location_offset();
+                let err = ParseSingleError::InvalidGlob {
+                    span: (start, end - start).into(),
+                    error,
+                };
+                i.extra.report_error(err);
+                Ok((i, None))
+            }
         }
-    }
+    })(input)
 }
