@@ -3,12 +3,14 @@
 
 //! Glob matching.
 
-use super::{parse_matcher_text, trace, IResult, Span};
+use super::{parse_matcher_text, IResult, Span};
 use crate::{
     errors::{GlobConstructError, ParseSingleError},
     NameMatcher,
 };
-use nom_tracable::tracable_parser;
+use winnow::stream::Location;
+use winnow::trace::trace;
+use winnow::Parser;
 
 /// A glob pattern.
 ///
@@ -58,9 +60,8 @@ impl GenericGlob {
 }
 
 // This never returns Err(()) -- instead, it reports an error to the parsing state.
-#[tracable_parser]
-pub(super) fn parse_glob(input: Span<'_>, implicit: bool) -> IResult<'_, Option<NameMatcher>> {
-    trace("parse_glob", |input: Span<'_>| {
+pub(super) fn parse_glob<'i>(input: Span<'i>, implicit: bool) -> IResult<'i, Option<NameMatcher>> {
+    trace("parse_glob", |input: Span<'i>| {
         let (i, res) = match parse_matcher_text(input.clone()) {
             Ok((i, res)) => (i, res),
             Err(_) => {
@@ -75,15 +76,16 @@ pub(super) fn parse_glob(input: Span<'_>, implicit: bool) -> IResult<'_, Option<
         match GenericGlob::new(parsed_value) {
             Ok(glob) => Ok((i, Some(NameMatcher::Glob { glob, implicit }))),
             Err(error) => {
-                let start = input.location_offset();
-                let end = i.location_offset();
+                let start = input.location();
+                let end = i.location();
                 let err = ParseSingleError::InvalidGlob {
                     span: (start, end - start).into(),
                     error,
                 };
-                i.extra.report_error(err);
+                i.state.report_error(err);
                 Ok((i, None))
             }
         }
-    })(input)
+    })
+    .parse_next(input)
 }

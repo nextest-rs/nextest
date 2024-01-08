@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use miette::{Diagnostic, SourceSpan};
-use nom_tracable::TracableInfo;
 use std::cell::RefCell;
 use thiserror::Error;
 
@@ -155,33 +154,15 @@ pub enum GlobConstructError {
 pub(crate) struct State<'a> {
     // A `RefCell` is required here because the state must implement `Clone` to work with nom.
     errors: &'a RefCell<Vec<ParseSingleError>>,
-    tracable_info: TracableInfo,
 }
 
 impl<'a> State<'a> {
     pub fn new(errors: &'a RefCell<Vec<ParseSingleError>>) -> Self {
-        let tracable_info = nom_tracable::TracableInfo::new()
-            .forward(true)
-            .backward(true);
-        Self {
-            errors,
-            tracable_info,
-        }
+        Self { errors }
     }
 
     pub fn report_error(&self, error: ParseSingleError) {
         self.errors.borrow_mut().push(error);
-    }
-}
-
-impl<'a> nom_tracable::HasTracableInfo for State<'a> {
-    fn get_tracable_info(&self) -> TracableInfo {
-        self.tracable_info.get_tracable_info()
-    }
-
-    fn set_tracable_info(mut self, info: TracableInfo) -> Self {
-        self.tracable_info = self.tracable_info.set_tracable_info(info);
-        self
     }
 }
 
