@@ -403,7 +403,7 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
             Escape(char),
         }
 
-        let parse_escape = map(alt((map(tag(r"\/"), |_| '/'), char('\\'))), Frag::Escape);
+        let parse_escape = map(alt((map(r"\/", |_| '/'), char('\\'))), Frag::Escape);
         let parse_literal = map(verify(is_not("\\/"), |s: &str| !s.is_empty()), |s: &str| {
             Frag::Literal(s)
         });
@@ -600,7 +600,7 @@ fn unary_set_def<'a>(
 }
 
 fn platform_def(i: Span<'_>) -> IResult<'_, Option<SetDef>> {
-    let (i, _) = tag("platform")(i)?;
+    let (i, _) = "platform".parse_next(i)?;
     let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
     let start = i.location();
     // Try parsing the argument as a string for better error messages.
@@ -714,8 +714,8 @@ fn parse_expr_not(input: Span<'_>) -> IResult<'_, ExprResult> {
         map(
             pair(
                 alt((
-                    value(NotOperator::LiteralNot, tag("not ")),
-                    value(NotOperator::Exclamation, tag("!")),
+                    value(NotOperator::LiteralNot, "not "),
+                    value(NotOperator::Exclamation, '!'),
                 )),
                 expect_expr(ws(parse_basic_expr)),
             ),
@@ -787,7 +787,7 @@ fn parse_or_operator<'i>(input: Span<'i>) -> IResult<'i, Option<OrOperator>> {
                 let i = input.clone();
                 // This is not a valid OR operator in this position, but catch it to provide a better
                 // experience.
-                map(alt((tag("||"), tag("OR "))), move |op: &str| {
+                map(alt(("||", "OR ")), move |op: &str| {
                     // || is not supported in filter expressions: suggest using | instead.
                     let length = op.len();
                     let err = ParseSingleError::InvalidOrOperator((start, length).into());
@@ -796,9 +796,9 @@ fn parse_or_operator<'i>(input: Span<'i>) -> IResult<'i, Option<OrOperator>> {
                 })
                 .parse_next(input)
             },
-            value(Some(OrOperator::LiteralOr), tag("or ")),
-            value(Some(OrOperator::Pipe), tag("|")),
-            value(Some(OrOperator::Plus), tag("+")),
+            value(Some(OrOperator::LiteralOr), "or "),
+            value(Some(OrOperator::Pipe), '|'),
+            value(Some(OrOperator::Plus), '+'),
         ))),
     )
     .parse_next(input)
@@ -890,7 +890,7 @@ fn parse_and_or_difference_operator<'i>(
             |input: Span<'i>| {
                 let start = input.location();
                 let i = input.clone();
-                map(alt((tag("&&"), tag("AND "))), move |op: &str| {
+                map(alt(("&&", "AND ")), move |op: &str| {
                     // && is not supported in filter expressions: suggest using & instead.
                     let length = op.len();
                     let err = ParseSingleError::InvalidAndOperator((start, length).into());
@@ -901,7 +901,7 @@ fn parse_and_or_difference_operator<'i>(
             },
             value(
                 Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd)),
-                tag("and "),
+                "and ",
             ),
             value(
                 Some(AndOrDifferenceOperator::And(AndOperator::Ampersand)),
@@ -1444,7 +1444,7 @@ mod tests {
         fn parse_future_syntax(
             input: Span<'_>,
         ) -> IResult<'_, (Option<NameMatcher>, Option<NameMatcher>)> {
-            let (i, _) = tag("something")(input)?;
+            let (i, _) = "something".parse_next(input)?;
             let (i, _) = char('(')(i)?;
             let (i, n1) = set_matcher(DefaultMatcher::Contains).parse_next(i)?;
             let (i, _) = ws(char(',')).parse_next(i)?;
