@@ -10,7 +10,16 @@ name = "cargo-nextest-dup"
 path = "test-helpers/cargo-nextest-dup.rs"
 
 [dependencies]
-cargo-nextest = { path = "../cargo-nextest" }
+# We specify default-no-update here because if users just run:
+#
+# cargo build --no-default-features --features default-no-update
+#
+# then cargo will unify features for cargo-nextest, and it will be built with self-update enabled.
+# We could ask distributors to always include `--package cargo-nextest` instead, but they're likely
+# to forget. None of our current tests depend on self-update, so just don't include it by default.
+cargo-nextest = { path = "../cargo-nextest", default-features = false, features = [
+    "default-no-update",
+] }
 # we don't use the tracing support
 color-eyre = { version = "0.6.2", default-features = false }
 clap = { version = "4.4.11", features = ["derive", "env"] }
