@@ -9,7 +9,6 @@ use std::fmt;
 use winnow::{
     branch::alt,
     bytes::complete::{is_not, take_while_m_n},
-    character::complete::char,
     combinator::{map, map_opt, map_res, value, verify},
     multi::fold_many0,
     sequence::{delimited, preceded},
@@ -55,7 +54,7 @@ where
 fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
     trace("parse_unicode", |input| {
         let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
-        let parse_delimited_hex = preceded(char('u'), delimited(char('{'), parse_hex, char('}')));
+        let parse_delimited_hex = preceded('u', delimited('{', parse_hex, '}'));
         let parse_u32 = map_res(parse_delimited_hex, |hex| u32::from_str_radix(hex, 16));
         run_str_parser(map_opt(parse_u32, std::char::from_u32)).parse_next(input)
     })
@@ -66,18 +65,18 @@ fn parse_escaped_char(input: Span<'_>) -> IResult<'_, Option<char>> {
     trace("parse_escaped_char", |input| {
         let valid = alt((
             parse_unicode,
-            value('\n', char('n')),
-            value('\r', char('r')),
-            value('\t', char('t')),
-            value('\u{08}', char('b')),
-            value('\u{0C}', char('f')),
-            value('\\', char('\\')),
-            value('/', char('/')),
-            value(')', char(')')),
-            value(',', char(',')),
+            value('\n', 'n'),
+            value('\r', 'r'),
+            value('\t', 't'),
+            value('\u{08}', 'b'),
+            value('\u{0C}', 'f'),
+            value('\\', '\\'),
+            value('/', '/'),
+            value(')', ')'),
+            value(',', ','),
         ));
         preceded(
-            char('\\'),
+            '\\',
             // If none of the valid characters are found, this will report an error.
             expect_n(
                 valid,

@@ -314,7 +314,7 @@ fn ws<'a, T, P: Parser<Span<'a>, T, Error<'a>>>(
     move |input: Span<'a>| {
         let (i, _): (_, ()) = many0(alt((
             // Match individual space characters.
-            value((), char(' ')),
+            value((), ' '),
             // Match CRLF and LF line endings. This allows filters to be specified as multiline TOML
             // strings.
             value((), line_ending),
@@ -367,15 +367,12 @@ fn parse_matcher_text<'i>(input: Span<'i>) -> IResult<'i, Option<String>> {
 fn parse_contains_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     trace(
         "parse_contains_matcher",
-        map(
-            preceded(char('~'), parse_matcher_text),
-            |res: Option<String>| {
-                res.map(|value| NameMatcher::Contains {
-                    value,
-                    implicit: false,
-                })
-            },
-        ),
+        map(preceded('~', parse_matcher_text), |res: Option<String>| {
+            res.map(|value| NameMatcher::Contains {
+                value,
+                implicit: false,
+            })
+        }),
     )
     .parse_next(input)
 }
@@ -384,7 +381,7 @@ fn parse_equal_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     trace(
         "parse_equal_matcher",
         ws(map(
-            preceded(char('='), parse_matcher_text),
+            preceded('=', parse_matcher_text),
             |res: Option<String>| {
                 res.map(|value| NameMatcher::Equal {
                     value,
@@ -403,7 +400,7 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
             Escape(char),
         }
 
-        let parse_escape = map(alt((map(r"\/", |_| '/'), char('\\'))), Frag::Escape);
+        let parse_escape = map(alt((map(r"\/", |_| '/'), '\\')), Frag::Escape);
         let parse_literal = map(verify(is_not("\\/"), |s: &str| !s.is_empty()), |s: &str| {
             Frag::Literal(s)
         });
@@ -417,7 +414,7 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
             string
         })(input)?;
 
-        let (i, _) = peek(char('/'))(i)?;
+        let (i, _) = peek('/')(i)?;
 
         Ok((i, res))
     })
@@ -483,11 +480,7 @@ fn parse_regex<'i>(input: Span<'i>) -> IResult<'i, Option<NameMatcher>> {
 fn parse_regex_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     trace(
         "parse_regex_matcher",
-        ws(delimited(
-            char('/'),
-            parse_regex,
-            silent_expect(ws(char('/'))),
-        )),
+        ws(delimited('/', parse_regex, silent_expect(ws('/')))),
     )
     .parse_next(input)
 }
@@ -495,7 +488,7 @@ fn parse_regex_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
 fn parse_glob_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     trace(
         "parse_glob_matcher",
-        ws(preceded(char('#'), |input| glob::parse_glob(input, false))),
+        ws(preceded('#', |input| glob::parse_glob(input, false))),
     )
     .parse_next(input)
 }
@@ -515,7 +508,7 @@ fn set_matcher<'a>(
 
 fn recover_unexpected_comma<'i>(input: Span<'i>) -> IResult<'i, ()> {
     trace("recover_unexpected_comma", |input: Span<'i>| {
-        match peek(ws(char(',')))(input.clone()) {
+        match peek(ws(','))(input.clone()) {
             Ok((i, _)) => {
                 let pos = i.location();
                 i.state
@@ -664,7 +657,7 @@ fn parse_parentheses_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
         "parse_parentheses_expr",
         map(
             delimited(
-                char('('),
+                '(',
                 expect_expr(parse_expr),
                 expect_char(')', ParseSingleError::ExpectedCloseParenthesis),
             ),
@@ -905,13 +898,13 @@ fn parse_and_or_difference_operator<'i>(
             ),
             value(
                 Some(AndOrDifferenceOperator::And(AndOperator::Ampersand)),
-                char('&'),
+                '&',
             ),
             value(
                 Some(AndOrDifferenceOperator::Difference(
                     DifferenceOperator::Minus,
                 )),
-                char('-'),
+                '-',
             ),
         ))),
     )
@@ -1445,11 +1438,11 @@ mod tests {
             input: Span<'_>,
         ) -> IResult<'_, (Option<NameMatcher>, Option<NameMatcher>)> {
             let (i, _) = "something".parse_next(input)?;
-            let (i, _) = char('(')(i)?;
+            let (i, _) = '('.parse_next(i)?;
             let (i, n1) = set_matcher(DefaultMatcher::Contains).parse_next(i)?;
-            let (i, _) = ws(char(',')).parse_next(i)?;
+            let (i, _) = ws(',').parse_next(i)?;
             let (i, n2) = set_matcher(DefaultMatcher::Contains).parse_next(i)?;
-            let (i, _) = char(')')(i)?;
+            let (i, _) = ')'.parse_next(i)?;
             Ok((i, (n1, n2)))
         }
 
