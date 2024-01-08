@@ -240,7 +240,7 @@ where
 {
     move |input| match parser.parse_next(input) {
         Ok((remaining, out)) => Ok((remaining, Some(out))),
-        Err(winnow::Err::Backtrack(err)) | Err(winnow::Err::Cut(err)) => {
+        Err(winnow::error::ErrMode::Backtrack(err)) | Err(winnow::error::ErrMode::Cut(err)) => {
             let winnow::error::Error { input, .. } = err;
             let fragment_start = input.location();
             let fragment_length = input.slice_len();
@@ -300,7 +300,7 @@ where
 {
     move |input| match parser.parse_next(input) {
         Ok((remaining, out)) => Ok((remaining, Some(out))),
-        Err(winnow::Err::Backtrack(err)) | Err(winnow::Err::Cut(err)) => {
+        Err(winnow::error::ErrMode::Backtrack(err)) | Err(winnow::error::ErrMode::Cut(err)) => {
             let winnow::error::Error { input, .. } = err;
             Ok((input, None))
         }
@@ -321,13 +321,19 @@ fn ws<'a, T, P: Parser<Span<'a>, T, Error<'a>>>(
         )))(input.clone())?;
         match inner.parse_next(i) {
             Ok(res) => Ok(res),
-            Err(winnow::Err::Backtrack(err)) => {
+            Err(winnow::error::ErrMode::Backtrack(err)) => {
                 let winnow::error::Error { kind, .. } = err;
-                Err(winnow::Err::Backtrack(winnow::error::Error { input, kind }))
+                Err(winnow::error::ErrMode::Backtrack(winnow::error::Error {
+                    input,
+                    kind,
+                }))
             }
-            Err(winnow::Err::Cut(err)) => {
+            Err(winnow::error::ErrMode::Cut(err)) => {
                 let winnow::error::Error { kind, .. } = err;
-                Err(winnow::Err::Cut(winnow::error::Error { input, kind }))
+                Err(winnow::error::ErrMode::Cut(winnow::error::Error {
+                    input,
+                    kind,
+                }))
             }
             Err(err) => Err(err),
         }
@@ -916,7 +922,7 @@ fn parse_and_or_difference_operator<'i>(
 
 pub(crate) fn parse(
     input: Span<'_>,
-) -> Result<ExprResult, winnow::Err<winnow::error::Error<Span<'_>>>> {
+) -> Result<ExprResult, winnow::error::ErrMode<winnow::error::Error<Span<'_>>>> {
     let (_, expr) = terminated(
         parse_expr,
         expect(ws(eof), ParseSingleError::ExpectedEndOfExpression),

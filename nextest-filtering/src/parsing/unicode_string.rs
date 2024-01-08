@@ -28,25 +28,27 @@ where
             let eaten = input.slice_len() - i.len();
             Ok((input.next_slice(eaten).0, res))
         }
-        Err(winnow::Err::Backtrack(err)) => {
+        Err(winnow::error::ErrMode::Backtrack(err)) => {
             let winnow::error::Error { input: i, kind } = err;
             let eaten = input.slice_len() - i.len();
             let err = winnow::error::Error {
                 input: input.next_slice(eaten).0,
                 kind,
             };
-            Err(winnow::Err::Backtrack(err))
+            Err(winnow::error::ErrMode::Backtrack(err))
         }
-        Err(winnow::Err::Cut(err)) => {
+        Err(winnow::error::ErrMode::Cut(err)) => {
             let winnow::error::Error { input: i, kind } = err;
             let eaten = input.slice_len() - i.len();
             let err = winnow::error::Error {
                 input: input.next_slice(eaten).0,
                 kind,
             };
-            Err(winnow::Err::Cut(err))
+            Err(winnow::error::ErrMode::Cut(err))
         }
-        Err(winnow::Err::Incomplete(err)) => Err(winnow::Err::Incomplete(err)),
+        Err(winnow::error::ErrMode::Incomplete(err)) => {
+            Err(winnow::error::ErrMode::Incomplete(err))
+        }
     }
 }
 
