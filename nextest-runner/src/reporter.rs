@@ -444,7 +444,7 @@ fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &Pr
 #[derive(Copy, Clone, Debug)]
 enum RunningState<'a> {
     Running(&'a RunStats),
-    Canceling(CancelReason),
+    Canceling(#[allow(dead_code)] CancelReason),
 }
 
 impl<'a> RunningState<'a> {
@@ -553,7 +553,7 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) ->
 
 #[derive(Debug)]
 enum FinalOutput {
-    Skipped(MismatchReason),
+    Skipped(#[allow(dead_code)] MismatchReason),
     Executed {
         run_statuses: ExecutionStatuses,
         test_output_display: TestOutputDisplay,
