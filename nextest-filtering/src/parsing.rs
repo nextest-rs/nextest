@@ -19,8 +19,8 @@ use std::{cell::RefCell, fmt};
 use winnow::{
     branch::alt,
     bytes::complete::{is_not, take_till},
-    bytes::tag,
-    character::complete::{char, line_ending},
+    bytes::{one_of, tag},
+    character::complete::line_ending,
     combinator::{eof, map, peek, recognize, value, verify},
     multi::{fold_many0, many0},
     sequence::{delimited, preceded, terminated},
@@ -292,7 +292,7 @@ fn expect_char<'a>(
     c: char,
     make_err: fn(SourceSpan) -> ParseSingleError,
 ) -> impl Parser<Span<'a>, Option<char>, Error<'a>> {
-    expect_inner(ws(char(c)), make_err, SpanLength::Exact(0))
+    expect_inner(ws(one_of(c)), make_err, SpanLength::Exact(0))
 }
 
 fn silent_expect<'a, F, T>(mut parser: F) -> impl Parser<Span<'a>, Option<T>, Error<'a>>
