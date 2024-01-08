@@ -4,8 +4,8 @@
 use crate::{
     errors::{FilterExpressionParseErrors, ParseSingleError, State},
     parsing::{
-        parse, DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob, ParsedExpr,
-        SetDef, Span,
+        new_span, parse, DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob,
+        ParsedExpr, SetDef,
     },
 };
 use guppy::{
@@ -228,7 +228,7 @@ impl FilteringExpr {
     /// Parse a filtering expression
     pub fn parse(input: String, graph: &PackageGraph) -> Result<Self, FilterExpressionParseErrors> {
         let errors = RefCell::new(Vec::new());
-        match parse(Span::new_extra(&input, State::new(&errors))) {
+        match parse(new_span(&input, State::new(&errors))) {
             Ok(parsed_expr) => {
                 let errors = errors.into_inner();
 
