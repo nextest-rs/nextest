@@ -5,7 +5,8 @@
 
 use super::{expect_n, IResult, Span, SpanLength};
 use crate::errors::ParseSingleError;
-use nom::{
+use std::fmt;
+use winnow::{
     branch::alt,
     bytes::complete::{is_not, take_while_m_n},
     character::complete::char,
@@ -17,37 +18,35 @@ use nom::{
     trace::trace,
     Parser,
 };
-use std::fmt;
-use winnow as nom;
 
 fn run_str_parser<'a, T, I>(mut inner: I) -> impl FnMut(Span<'a>) -> IResult<'a, T>
 where
-    I: FnMut(&'a str) -> nom::IResult<&'a str, T>,
+    I: FnMut(&'a str) -> winnow::IResult<&'a str, T>,
 {
     move |input| match inner(input.next_slice(input.slice_len()).1) {
         Ok((i, res)) => {
             let eaten = input.slice_len() - i.len();
             Ok((input.next_slice(eaten).0, res))
         }
-        Err(nom::Err::Backtrack(err)) => {
-            let nom::error::Error { input: i, kind } = err;
+        Err(winnow::Err::Backtrack(err)) => {
+            let winnow::error::Error { input: i, kind } = err;
             let eaten = input.slice_len() - i.len();
-            let err = nom::error::Error {
+            let err = winnow::error::Error {
                 input: input.next_slice(eaten).0,
                 kind,
             };
-            Err(nom::Err::Backtrack(err))
+            Err(winnow::Err::Backtrack(err))
         }
-        Err(nom::Err::Cut(err)) => {
-            let nom::error::Error { input: i, kind } = err;
+        Err(winnow::Err::Cut(err)) => {
+            let winnow::error::Error { input: i, kind } = err;
             let eaten = input.slice_len() - i.len();
-            let err = nom::error::Error {
+            let err = winnow::error::Error {
                 input: input.next_slice(eaten).0,
                 kind,
             };
-            Err(nom::Err::Cut(err))
+            Err(winnow::Err::Cut(err))
         }
-        Err(nom::Err::Incomplete(err)) => Err(nom::Err::Incomplete(err)),
+        Err(winnow::Err::Incomplete(err)) => Err(winnow::Err::Incomplete(err)),
     }
 }
 

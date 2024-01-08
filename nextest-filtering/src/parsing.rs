@@ -15,7 +15,8 @@
 
 use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
-use nom::{
+use std::{cell::RefCell, fmt};
+use winnow::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till},
     character::complete::{char, line_ending},
@@ -27,8 +28,6 @@ use nom::{
     trace::trace,
     Parser,
 };
-use std::{cell::RefCell, fmt};
-use winnow as nom;
 
 mod glob;
 mod unicode_string;
@@ -240,8 +239,8 @@ where
 {
     move |input| match parser(input) {
         Ok((remaining, out)) => Ok((remaining, Some(out))),
-        Err(nom::Err::Backtrack(err)) | Err(nom::Err::Cut(err)) => {
-            let nom::error::Error { input, .. } = err;
+        Err(winnow::Err::Backtrack(err)) | Err(winnow::Err::Cut(err)) => {
+            let winnow::error::Error { input, .. } = err;
             let fragment_start = input.location();
             let fragment_length = input.slice_len();
             let span = match limit {
@@ -300,8 +299,8 @@ where
 {
     move |input| match parser(input) {
         Ok((remaining, out)) => Ok((remaining, Some(out))),
-        Err(nom::Err::Backtrack(err)) | Err(nom::Err::Cut(err)) => {
-            let nom::error::Error { input, .. } = err;
+        Err(winnow::Err::Backtrack(err)) | Err(winnow::Err::Cut(err)) => {
+            let winnow::error::Error { input, .. } = err;
             Ok((input, None))
         }
         Err(err) => Err(err),
@@ -321,13 +320,13 @@ fn ws<'a, T, P: FnMut(Span<'a>) -> IResult<'a, T>>(
         )))(input.clone())?;
         match inner(i) {
             Ok(res) => Ok(res),
-            Err(nom::Err::Backtrack(err)) => {
-                let nom::error::Error { kind, .. } = err;
-                Err(nom::Err::Backtrack(nom::error::Error { input, kind }))
+            Err(winnow::Err::Backtrack(err)) => {
+                let winnow::error::Error { kind, .. } = err;
+                Err(winnow::Err::Backtrack(winnow::error::Error { input, kind }))
             }
-            Err(nom::Err::Cut(err)) => {
-                let nom::error::Error { kind, .. } = err;
-                Err(nom::Err::Cut(nom::error::Error { input, kind }))
+            Err(winnow::Err::Cut(err)) => {
+                let winnow::error::Error { kind, .. } = err;
+                Err(winnow::Err::Cut(winnow::error::Error { input, kind }))
             }
             Err(err) => Err(err),
         }
@@ -447,7 +446,8 @@ fn parse_regex<'i>(input: Span<'i>) -> IResult<'i, Option<NameMatcher>> {
         let (i, res) = match parse_regex_inner(input.clone()) {
             Ok((i, res)) => (i, res),
             Err(_) => {
-                match take_till::<_, _, nom::error::Error<Span<'_>>>(|c| c == ')')(input.clone()) {
+                match take_till::<_, _, winnow::error::Error<Span<'_>>>(|c| c == ')')(input.clone())
+                {
                     Ok((i, _)) => {
                         let start = i.location();
                         let err = ParseSingleError::ExpectedCloseRegex((start, 0).into());
@@ -514,7 +514,7 @@ fn recover_unexpected_comma<'i>(input: Span<'i>) -> IResult<'i, ()> {
                 let pos = i.location();
                 i.state
                     .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
-                match take_till::<_, _, nom::error::Error<Span<'_>>>(|c| c == ')')(i) {
+                match take_till::<_, _, winnow::error::Error<Span<'_>>>(|c| c == ')')(i) {
                     Ok((i, _)) => Ok((i, ())),
                     Err(_) => unreachable!(),
                 }
@@ -533,8 +533,9 @@ fn nullary_set_def(
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis)(i)?;
         let err_loc = i.location();
-        let i = match recognize::<_, _, nom::error::Error<Span<'_>>, _>(take_till(|c| c == ')'))(i)
-        {
+        let i = match recognize::<_, _, winnow::error::Error<Span<'_>>, _>(take_till(|c| c == ')'))(
+            i,
+        ) {
             Ok((i, res)) => {
                 if !res.trim().is_empty() {
                     let span = (err_loc, res.len()).into();
@@ -913,7 +914,9 @@ fn parse_and_or_difference_operator<'i>(
 
 // ---
 
-pub(crate) fn parse(input: Span<'_>) -> Result<ExprResult, nom::Err<nom::error::Error<Span<'_>>>> {
+pub(crate) fn parse(
+    input: Span<'_>,
+) -> Result<ExprResult, winnow::Err<winnow::error::Error<Span<'_>>>> {
     let (_, expr) = terminated(
         parse_expr,
         expect(ws(eof), ParseSingleError::ExpectedEndOfExpression),
