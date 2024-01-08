@@ -18,7 +18,8 @@ use miette::SourceSpan;
 use std::{cell::RefCell, fmt};
 use winnow::{
     branch::alt,
-    bytes::complete::{is_not, tag, take_till},
+    bytes::complete::{is_not, take_till},
+    bytes::tag,
     character::complete::{char, line_ending},
     combinator::{eof, map, peek, recognize, value, verify},
     multi::{fold_many0, many0},
