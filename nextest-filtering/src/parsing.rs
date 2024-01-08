@@ -22,7 +22,7 @@ use winnow::{
     character::complete::{char, line_ending},
     combinator::{eof, map, peek, recognize, value, verify},
     multi::{fold_many0, many0},
-    sequence::{delimited, pair, preceded, terminated},
+    sequence::{delimited, preceded, terminated},
     stream::Location,
     stream::SliceLen,
     trace::trace,
@@ -705,7 +705,7 @@ fn parse_expr_not(input: Span<'_>) -> IResult<'_, ExprResult> {
     trace(
         "parse_expr_not",
         map(
-            pair(
+            (
                 alt((
                     value(NotOperator::LiteralNot, "not "),
                     value(NotOperator::Exclamation, '!'),
@@ -747,7 +747,7 @@ fn parse_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
         let (input, expr) = expect_expr(parse_and_or_difference_expr).parse_next(input)?;
 
         let (input, ops) = fold_many0(
-            pair(parse_or_operator, expect_expr(parse_and_or_difference_expr)),
+            (parse_or_operator, expect_expr(parse_and_or_difference_expr)),
             Vec::new,
             |mut ops, (op, expr)| {
                 ops.push((op, expr));
@@ -846,7 +846,7 @@ fn parse_and_or_difference_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
         let (input, expr) = expect_expr(parse_basic_expr).parse_next(input)?;
 
         let (input, ops) = fold_many0(
-            pair(
+            (
                 parse_and_or_difference_operator,
                 expect_expr(parse_basic_expr),
             ),
