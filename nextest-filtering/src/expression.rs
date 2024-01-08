@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    errors::{FilterExpressionParseErrors, ParseSingleError, State},
+    errors::{FilterExpressionParseErrors, ParseSingleError},
     parsing::{
         new_span, parse, DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob,
         ParsedExpr, SetDef,
@@ -228,7 +228,7 @@ impl FilteringExpr {
     /// Parse a filtering expression
     pub fn parse(input: String, graph: &PackageGraph) -> Result<Self, FilterExpressionParseErrors> {
         let errors = RefCell::new(Vec::new());
-        match parse(new_span(&input, State::new(&errors))) {
+        match parse(new_span(&input, &errors)) {
             Ok(parsed_expr) => {
                 let errors = errors.into_inner();
 
