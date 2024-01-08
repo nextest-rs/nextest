@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# Run test_cargo_env_vars in the cargo test environment.
+# Run test_cargo_env_vars in the cargo test environment. This is intended for development, to get a
+# list of environment variables set in the `cargo test` environment.
+
+set -euo pipefail
 
 export __NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_NO_OVERRIDE=test-PASSED-value-set-by-environment
 export __NEXTEST_ENV_VAR_FOR_TESTING_IN_PARENT_ENV_OVERRIDDEN=test-FAILED-value-set-by-environment
