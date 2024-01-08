@@ -18,8 +18,8 @@ use miette::SourceSpan;
 use std::{cell::RefCell, fmt};
 use winnow::{
     branch::alt,
-    bytes::complete::{is_not, take_till},
-    bytes::{one_of, tag},
+    bytes::complete::is_not,
+    bytes::{one_of, tag, take_till0},
     character::complete::line_ending,
     combinator::{eof, map, peek, recognize, value, verify},
     multi::{fold_many0, many0},
@@ -452,8 +452,9 @@ fn parse_regex<'i>(input: Span<'i>) -> IResult<'i, Option<NameMatcher>> {
         let (i, res) = match parse_regex_inner(input.clone()) {
             Ok((i, res)) => (i, res),
             Err(_) => {
-                match take_till::<_, _, winnow::error::Error<Span<'_>>>(|c| c == ')')(input.clone())
-                {
+                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(|c| c == ')')(
+                    input.clone(),
+                ) {
                     Ok((i, _)) => {
                         let start = i.location();
                         let err = ParseSingleError::ExpectedCloseRegex((start, 0).into());
@@ -514,7 +515,7 @@ fn recover_unexpected_comma<'i>(input: Span<'i>) -> IResult<'i, ()> {
                 let pos = i.location();
                 i.state
                     .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
-                match take_till::<_, _, winnow::error::Error<Span<'_>>>(|c| c == ')')(i) {
+                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(|c| c == ')')(i) {
                     Ok((i, _)) => Ok((i, ())),
                     Err(_) => unreachable!(),
                 }
@@ -533,19 +534,19 @@ fn nullary_set_def<'a>(
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
         let err_loc = i.location();
-        let i = match recognize::<_, _, winnow::error::Error<Span<'_>>, _>(take_till(|c| c == ')'))(
-            i,
-        ) {
-            Ok((i, res)) => {
-                if !res.trim().is_empty() {
-                    let span = (err_loc, res.len()).into();
-                    let err = ParseSingleError::UnexpectedArgument(span);
-                    i.state.report_error(err);
+        let i =
+            match recognize::<_, _, winnow::error::Error<Span<'_>>, _>(take_till0(|c| c == ')'))(i)
+            {
+                Ok((i, res)) => {
+                    if !res.trim().is_empty() {
+                        let span = (err_loc, res.len()).into();
+                        let err = ParseSingleError::UnexpectedArgument(span);
+                        i.state.report_error(err);
+                    }
+                    i
                 }
-                i
-            }
-            Err(_) => unreachable!(),
-        };
+                Err(_) => unreachable!(),
+            };
         let (i, _) = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
         Ok((i, Some(make_set())))
     }
