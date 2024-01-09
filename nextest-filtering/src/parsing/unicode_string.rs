@@ -7,12 +7,11 @@ use super::{expect_n, IResult, Span, SpanLength};
 use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
-    bytes::take_while_m_n,
     combinator::{alt, delimited, preceded},
     multi::fold_many0,
     stream::SliceLen,
     stream::Stream,
-    token::{one_of, take_till1},
+    token::{one_of, take_till1, take_while},
     trace::trace,
     Parser,
 };
@@ -52,7 +51,7 @@ where
 
 fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
     trace("parse_unicode", |input| {
-        let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
+        let parse_hex = take_while(1..=6, |c: char| c.is_ascii_hexdigit());
         let parse_delimited_hex = preceded('u', delimited('{', parse_hex, '}'));
         let parse_u32 = parse_delimited_hex.map_res(|hex| u32::from_str_radix(hex, 16));
         run_str_parser(parse_u32.verify_map(std::char::from_u32)).parse_next(input)
