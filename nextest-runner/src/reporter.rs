@@ -37,6 +37,7 @@ use uuid::Uuid;
 
 /// When to display test output in the reporter.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[serde(rename_all = "kebab-case")]
 pub enum TestOutputDisplay {
     /// Show output immediately on execution completion.
@@ -77,6 +78,7 @@ impl TestOutputDisplay {
 /// Status levels are incremental: each level causes all the statuses listed above it to be output. For example,
 /// [`Slow`](Self::Slow) implies [`Retry`](Self::Retry) and [`Fail`](Self::Fail).
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum StatusLevel {
@@ -113,6 +115,7 @@ pub enum StatusLevel {
 /// * It has a "flaky" test indicator that's different from "retry" (though "retry" works as an alias.)
 /// * It has a different ordering: skipped tests are prioritized over passing ones.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum FinalStatusLevel {
@@ -312,8 +315,10 @@ impl TestReporterBuilder {
 
         TestReporter {
             inner: TestReporterImpl {
-                status_level,
-                final_status_level,
+                status_levels: StatusLevels {
+                    status_level,
+                    final_status_level,
+                },
                 force_success_output,
                 force_failure_output,
                 no_capture: self.no_capture,
@@ -444,7 +449,7 @@ fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &Pr
 #[derive(Copy, Clone, Debug)]
 enum RunningState<'a> {
     Running(&'a RunStats),
-    Canceling(CancelReason),
+    Canceling(#[allow(dead_code)] CancelReason),
 }
 
 impl<'a> RunningState<'a> {
@@ -553,10 +558,10 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) ->
 
 #[derive(Debug)]
 enum FinalOutput {
-    Skipped(MismatchReason),
+    Skipped(#[allow(dead_code)] MismatchReason),
     Executed {
         run_statuses: ExecutionStatuses,
-        test_output_display: TestOutputDisplay,
+        display_output: bool,
     },
 }
 
@@ -570,8 +575,7 @@ impl FinalOutput {
 }
 
 struct TestReporterImpl<'a> {
-    status_level: StatusLevel,
-    final_status_level: FinalStatusLevel,
+    status_levels: StatusLevels,
     force_success_output: Option<TestOutputDisplay>,
     force_failure_output: Option<TestOutputDisplay>,
     no_capture: bool,
@@ -632,7 +636,7 @@ impl<'a> TestReporterImpl<'a> {
                 elapsed,
                 will_terminate,
             } => {
-                if !*will_terminate && self.status_level >= StatusLevel::Slow {
+                if !*will_terminate && self.status_levels.status_level >= StatusLevel::Slow {
                     write!(writer, "{:>12} ", "SETUP SLOW".style(self.styles.skip))?;
                 } else if *will_terminate {
                     write!(writer, "{:>12} ", "TERMINATING".style(self.styles.fail))?;
@@ -681,7 +685,7 @@ impl<'a> TestReporterImpl<'a> {
                 elapsed,
                 will_terminate,
             } => {
-                if !*will_terminate && self.status_level >= StatusLevel::Slow {
+                if !*will_terminate && self.status_levels.status_level >= StatusLevel::Slow {
                     if retry_data.total_attempts > 1 {
                         write!(
                             writer,
@@ -697,7 +701,9 @@ impl<'a> TestReporterImpl<'a> {
                     } else {
                         (StatusLevel::Retry, self.styles.retry)
                     };
-                    if retry_data.total_attempts > 1 && self.status_level > required_status_level {
+                    if retry_data.total_attempts > 1
+                        && self.status_levels.status_level > required_status_level
+                    {
                         write!(
                             writer,
                             "{:>12} ",
@@ -719,7 +725,7 @@ impl<'a> TestReporterImpl<'a> {
                 delay_before_next_attempt,
                 failure_output,
             } => {
-                if self.status_level >= StatusLevel::Retry {
+                if self.status_levels.status_level >= StatusLevel::Retry {
                     let try_status_string = format!(
                         "TRY {} {}",
                         run_status.retry_data.attempt,
@@ -799,28 +805,27 @@ impl<'a> TestReporterImpl<'a> {
                     false => self.failure_output(*failure_output),
                 };
 
-                if self.status_level >= describe.status_level() {
+                let output_on_test_finished = self.status_levels.compute_output_on_test_finished(
+                    test_output_display,
+                    self.cancel_status,
+                    describe.status_level(),
+                    describe.final_status_level(),
+                );
+
+                if output_on_test_finished.write_status_line {
                     self.write_status_line(*test_instance, describe, writer)?;
-
-                    // If the test failed to execute, print its output and error status.
-                    // (don't print out test failures after Ctrl-C)
-                    if self.cancel_status < Some(CancelReason::Signal)
-                        && test_output_display.is_immediate()
-                    {
-                        self.write_stdout_stderr(test_instance, last_status, false, writer)?;
-                    }
                 }
-
-                // Store the output in final_outputs if test output display is requested, or if
-                // we have to print a one-line summary at the end.
-                if test_output_display.is_final()
-                    || self.final_status_level >= describe.final_status_level()
+                if output_on_test_finished.show_immediate {
+                    self.write_stdout_stderr(test_instance, last_status, true, writer)?;
+                }
+                if let OutputStoreFinal::Yes { display_output } =
+                    output_on_test_finished.store_final
                 {
                     self.final_outputs.push((
                         *test_instance,
                         FinalOutput::Executed {
                             run_statuses: run_statuses.clone(),
-                            test_output_display,
+                            display_output,
                         },
                     ));
                 }
@@ -829,10 +834,10 @@ impl<'a> TestReporterImpl<'a> {
                 test_instance,
                 reason,
             } => {
-                if self.status_level >= StatusLevel::Skip {
+                if self.status_levels.status_level >= StatusLevel::Skip {
                     self.write_skip_line(*test_instance, writer)?;
                 }
-                if self.final_status_level >= FinalStatusLevel::Skip {
+                if self.status_levels.final_status_level >= FinalStatusLevel::Skip {
                     self.final_outputs
                         .push((*test_instance, FinalOutput::Skipped(*reason)));
                 }
@@ -983,8 +988,9 @@ impl<'a> TestReporterImpl<'a> {
                 let _ = write_summary_str(run_stats, &self.styles, &mut summary_str);
                 writeln!(writer, " {tests_str} run: {summary_str}")?;
 
-                // Don't print out final outputs if canceled due to Ctrl-C.
-                if self.cancel_status < Some(CancelReason::Signal) {
+                // Don't print out test outputs after Ctrl-C, but *do* print them after SIGTERM or
+                // SIGHUP since those tend to be automated tasks performing kills.
+                if self.cancel_status < Some(CancelReason::Interrupt) {
                     // Sort the final outputs for a friendlier experience.
                     self.final_outputs
                         .sort_by_key(|(test_instance, final_output)| {
@@ -996,29 +1002,22 @@ impl<'a> TestReporterImpl<'a> {
                         });
 
                     for (test_instance, final_output) in &*self.final_outputs {
-                        let final_status_level = final_output.final_status_level();
                         match final_output {
                             FinalOutput::Skipped(_) => {
                                 self.write_skip_line(*test_instance, writer)?;
                             }
                             FinalOutput::Executed {
                                 run_statuses,
-                                test_output_display,
+                                display_output,
                             } => {
                                 let last_status = run_statuses.last_status();
 
-                                // Print out the final status line so that status lines are shown
-                                // for tests that e.g. failed due to signals.
-                                if self.final_status_level >= final_status_level
-                                    || test_output_display.is_final()
-                                {
-                                    self.write_final_status_line(
-                                        *test_instance,
-                                        run_statuses.describe(),
-                                        writer,
-                                    )?;
-                                }
-                                if test_output_display.is_final() {
+                                self.write_final_status_line(
+                                    *test_instance,
+                                    run_statuses.describe(),
+                                    writer,
+                                )?;
+                                if *display_output {
                                     self.write_stdout_stderr(
                                         test_instance,
                                         last_status,
@@ -1441,6 +1440,92 @@ impl<'a> fmt::Debug for TestReporter<'a> {
     }
 }
 
+struct StatusLevels {
+    status_level: StatusLevel,
+    final_status_level: FinalStatusLevel,
+}
+
+impl StatusLevels {
+    fn compute_output_on_test_finished(
+        &self,
+        display: TestOutputDisplay,
+        cancel_status: Option<CancelReason>,
+        test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) -> OutputOnTestFinished {
+        let write_status_line = self.status_level >= test_status_level;
+
+        let is_immediate = display.is_immediate();
+        // We store entries in the final output map if either the final status level is high enough or
+        // if `display` says we show the output at the end.
+        let is_final = display.is_final() || self.final_status_level >= test_final_status_level;
+
+        // This table is tested below. The basic invariant is that we generally follow what
+        // is_immediate and is_final suggests, except:
+        //
+        // - if the run is cancelled due to a non-interrupt signal, we display test output at most
+        //   once.
+        // - if the run is cancelled due to an interrupt, we hide the output because dumping a bunch
+        //   of output at the end is likely to not be helpful (though in the future we may want to
+        //   at least dump outputs into files and write their names out, or whenever nextest gains
+        //   the ability to replay test runs to be able to display it then.)
+        //
+        // is_immediate  is_final  cancel_status  |  show_immediate  store_final
+        //
+        //     false      false      <= Signal    |     false          false
+        //     false       true      <= Signal    |     false           true  [1]
+        //      true      false      <= Signal    |      true          false  [1]
+        //      true       true       < Signal    |      true           true
+        //      true       true         Signal    |      true          false  [2]
+        //       *           *       Interrupt    |     false          false
+        //
+        // [1] In non-interrupt cases, we want to display output if specified once.
+        //
+        // [2] If there's a signal, we shouldn't display output twice at the end since it's
+        // redundant -- instead, just show the output as part of the immediate display.
+        let show_immediate = is_immediate && cancel_status <= Some(CancelReason::Signal);
+
+        let store_final = if is_final && cancel_status < Some(CancelReason::Signal)
+            || !is_immediate && is_final && cancel_status == Some(CancelReason::Signal)
+        {
+            OutputStoreFinal::Yes {
+                display_output: display.is_final(),
+            }
+        } else if is_immediate && is_final && cancel_status == Some(CancelReason::Signal) {
+            // In this special case, we already display the output once as the test is being
+            // cancelled, so don't display it again at the end since that's redundant.
+            OutputStoreFinal::Yes {
+                display_output: false,
+            }
+        } else {
+            OutputStoreFinal::No
+        };
+
+        OutputOnTestFinished {
+            write_status_line,
+            show_immediate,
+            store_final,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct OutputOnTestFinished {
+    write_status_line: bool,
+    show_immediate: bool,
+    store_final: OutputStoreFinal,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum OutputStoreFinal {
+    /// Do not store the output.
+    No,
+
+    /// Store the output. display_output controls whether stdout and stderr should actually be
+    /// displayed at the end.
+    Yes { display_output: bool },
+}
+
 fn status_str(result: ExecutionResult) -> Cow<'static, str> {
     // Max 12 characters here.
     match result {
@@ -1746,6 +1831,7 @@ pub enum TestEventKind<'a> {
 // Note: the order here matters -- it indicates severity of cancellation
 /// The reason why a test run is being cancelled.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 pub enum CancelReason {
     /// A setup script failed.
     SetupScriptFailure,
@@ -1800,6 +1886,263 @@ mod tests {
     use crate::{
         config::NextestConfig, platform::BuildPlatforms, reporter::structured::StructuredReporter,
     };
+    use test_strategy::proptest;
+
+    // ---
+    // The proptests here are probabilistically exhaustive, and it's just easier to express them
+    // as property-based tests. We could also potentially use a model checker like Kani here.
+    // ---
+
+    #[proptest(cases = 64)]
+    fn on_test_finished_dont_write_status_line(
+        display: TestOutputDisplay,
+        cancel_status: Option<CancelReason>,
+        #[filter(StatusLevel::Pass < #test_status_level)] test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            display,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+        );
+
+        assert!(!actual.write_status_line);
+    }
+
+    #[proptest(cases = 64)]
+    fn on_test_finished_write_status_line(
+        display: TestOutputDisplay,
+        cancel_status: Option<CancelReason>,
+        #[filter(StatusLevel::Pass >= #test_status_level)] test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            display,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+        );
+        assert!(actual.write_status_line);
+    }
+
+    #[proptest(cases = 64)]
+    fn on_test_finished_with_interrupt(
+        // We always hide output on interrupt.
+        display: TestOutputDisplay,
+        // cancel_status is fixed to Interrupt.
+
+        // In this case, the status levels are not relevant for is_immediate and is_final.
+        test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            display,
+            Some(CancelReason::Interrupt),
+            test_status_level,
+            test_final_status_level,
+        );
+        assert!(!actual.show_immediate);
+        assert_eq!(actual.store_final, OutputStoreFinal::No);
+    }
+
+    #[proptest(cases = 64)]
+    fn on_test_finished_dont_show_immediate(
+        #[filter(!#display.is_immediate())] display: TestOutputDisplay,
+        cancel_status: Option<CancelReason>,
+        // The status levels are not relevant for show_immediate.
+        test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            display,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+        );
+        assert!(!actual.show_immediate);
+    }
+
+    #[proptest(cases = 64)]
+    fn on_test_finished_show_immediate(
+        #[filter(#display.is_immediate())] display: TestOutputDisplay,
+        #[filter(#cancel_status <= Some(CancelReason::Signal))] cancel_status: Option<CancelReason>,
+        // The status levels are not relevant for show_immediate.
+        test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            display,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+        );
+        assert!(actual.show_immediate);
+    }
+
+    // Where we don't store final output: if display.is_final() is false, and if the test final
+    // status level is too high.
+    #[proptest(cases = 64)]
+    fn on_test_finished_dont_store_final(
+        #[filter(!#display.is_final())] display: TestOutputDisplay,
+        cancel_status: Option<CancelReason>,
+        // The status level is not relevant for store_final.
+        test_status_level: StatusLevel,
+        // But the final status level is.
+        #[filter(FinalStatusLevel::Fail < #test_final_status_level)]
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            display,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+        );
+        assert_eq!(actual.store_final, OutputStoreFinal::No);
+    }
+
+    // Case 1 where we store final output: if display is exactly TestOutputDisplay::Final, and if
+    // the cancel status is not Interrupt.
+    #[proptest(cases = 64)]
+    fn on_test_finished_store_final_1(
+        #[filter(#cancel_status <= Some(CancelReason::Signal))] cancel_status: Option<CancelReason>,
+        // In this case, it isn't relevant what test_status_level and test_final_status_level are.
+        test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            TestOutputDisplay::Final,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+        );
+        assert_eq!(
+            actual.store_final,
+            OutputStoreFinal::Yes {
+                display_output: true
+            }
+        );
+    }
+
+    // Case 2 where we store final output: if display is TestOutputDisplay::ImmediateFinal and the
+    // cancel status is not Signal or Interrupt
+    #[proptest(cases = 64)]
+    fn on_test_finished_store_final_2(
+        #[filter(#cancel_status < Some(CancelReason::Signal))] cancel_status: Option<CancelReason>,
+        test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            TestOutputDisplay::ImmediateFinal,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+        );
+        assert_eq!(
+            actual.store_final,
+            OutputStoreFinal::Yes {
+                display_output: true
+            }
+        );
+    }
+
+    // Case 3 where we store final output: if display is TestOutputDisplay::ImmediateFinal and the
+    // cancel status is exactly Signal. In this special case, we don't display the output.
+    #[proptest(cases = 64)]
+    fn on_test_finished_store_final_3(
+        test_status_level: StatusLevel,
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            TestOutputDisplay::ImmediateFinal,
+            Some(CancelReason::Signal),
+            test_status_level,
+            test_final_status_level,
+        );
+        assert_eq!(
+            actual.store_final,
+            OutputStoreFinal::Yes {
+                display_output: false,
+            }
+        );
+    }
+
+    // Case 4: if display.is_final() is *false* but the test_final_status_level is low enough.
+    #[proptest(cases = 64)]
+    fn on_test_finished_store_final_4(
+        #[filter(!#display.is_final())] display: TestOutputDisplay,
+        #[filter(#cancel_status <= Some(CancelReason::Signal))] cancel_status: Option<CancelReason>,
+        // The status level is not relevant for store_final.
+        test_status_level: StatusLevel,
+        // But the final status level is.
+        #[filter(FinalStatusLevel::Fail >= #test_final_status_level)]
+        test_final_status_level: FinalStatusLevel,
+    ) {
+        let status_levels = StatusLevels {
+            status_level: StatusLevel::Pass,
+            final_status_level: FinalStatusLevel::Fail,
+        };
+
+        let actual = status_levels.compute_output_on_test_finished(
+            display,
+            cancel_status,
+            test_status_level,
+            test_final_status_level,
+        );
+        assert_eq!(
+            actual.store_final,
+            OutputStoreFinal::Yes {
+                display_output: false,
+            }
+        );
+    }
+
+    // ---
 
     #[test]
     fn no_capture_settings() {
@@ -1835,7 +2178,7 @@ mod tests {
             "success output is never, overriding other settings"
         );
         assert_eq!(
-            reporter.inner.status_level,
+            reporter.inner.status_levels.status_level,
             StatusLevel::Pass,
             "status level is pass, overriding other settings"
         );

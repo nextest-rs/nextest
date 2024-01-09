@@ -10,7 +10,7 @@ use std::io;
 
 /// Output formats for nextest.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[non_exhaustive]
 pub enum OutputFormat {
     /// A human-readable output format.
@@ -25,7 +25,7 @@ pub enum OutputFormat {
 
 /// A serialized, machine-readable output format.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[non_exhaustive]
 pub enum SerializableFormat {
     /// JSON with no whitespace.

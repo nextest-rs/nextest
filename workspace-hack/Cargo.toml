@@ -16,8 +16,8 @@ publish = false
 [dependencies]
 backtrace = { version = "0.3.69", features = ["gimli-symbolize"] }
 chrono = { version = "0.4.31" }
-clap = { version = "4.4.11", features = ["derive", "env"] }
-clap_builder = { version = "4.4.11", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
+clap = { version = "4.4.14", features = ["derive", "env"] }
+clap_builder = { version = "4.4.14", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 console = { version = "0.15.7" }
 either = { version = "1.9.0" }
 futures-channel = { version = "0.3.30", features = ["sink"] }
@@ -30,8 +30,8 @@ miette = { version = "5.10.0", features = ["fancy"] }
 num-traits = { version = "0.2.17", default-features = false, features = ["libm", "std"] }
 owo-colors = { version = "4.0.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
-serde = { version = "1.0.193", features = ["alloc", "derive"] }
-serde_json = { version = "1.0.108", features = ["preserve_order", "unbounded_depth"] }
+serde = { version = "1.0.195", features = ["alloc", "derive"] }
+serde_json = { version = "1.0.111", features = ["preserve_order", "unbounded_depth"] }
 similar = { version = "2.3.0", features = ["inline", "unicode"] }
 tokio = { version = "1.35.1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 twox-hash = { version = "1.6.3" }
@@ -39,15 +39,14 @@ uuid = { version = "1.6.1", features = ["v4"] }
 
 [build-dependencies]
 cc = { version = "1.0.83", default-features = false, features = ["parallel"] }
-proc-macro2 = { version = "1.0.70" }
-quote = { version = "1.0.33" }
-syn-dff4ba8e3ae991db = { package = "syn", version = "1.0.109", features = ["extra-traits", "fold", "full", "visit"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2.0.41", features = ["extra-traits", "full", "visit", "visit-mut"] }
+proc-macro2 = { version = "1.0.76" }
+quote = { version = "1.0.35" }
+syn = { version = "2.0.48", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.30" }
 futures-sink = { version = "0.3.30" }
-libc = { version = "0.2.151", features = ["extra_traits"] }
+libc = { version = "0.2.152", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.4.12", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
 once_cell = { version = "1.19.0", features = ["unstable"] }
@@ -55,19 +54,19 @@ rustix = { version = "0.38.28", features = ["fs", "termios"] }
 tokio = { version = "1.35.1", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-libc = { version = "0.2.151", features = ["extra_traits"] }
+libc = { version = "0.2.152", features = ["extra_traits"] }
 
 [target.x86_64-apple-darwin.dependencies]
 futures-core = { version = "0.3.30" }
 futures-sink = { version = "0.3.30" }
-libc = { version = "0.2.151", features = ["extra_traits"] }
+libc = { version = "0.2.152", features = ["extra_traits"] }
 miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
 once_cell = { version = "1.19.0", features = ["unstable"] }
 rustix = { version = "0.38.28", features = ["fs", "termios"] }
 tokio = { version = "1.35.1", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
-libc = { version = "0.2.151", features = ["extra_traits"] }
+libc = { version = "0.2.152", features = ["extra_traits"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 futures-core = { version = "0.3.30" }

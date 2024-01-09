@@ -22,7 +22,6 @@ use nom::{
     combinator::{eof, map, peek, recognize, value, verify},
     multi::{fold_many0, many0},
     sequence::{delimited, pair, preceded, terminated},
-    Slice,
 };
 use nom_tracable::tracable_parser;
 use std::{cell::RefCell, fmt};
@@ -333,11 +332,6 @@ fn parse_matcher_text(input: Span<'_>) -> IResult<'_, Option<String>> {
     )(input.clone())
     {
         Ok((i, res)) => (i, res.flatten()),
-        Err(nom::Err::Incomplete(_)) => {
-            let i = input.slice(input.fragment().len()..);
-            // No need for error reporting, missing closing ')' will be detected after
-            (i, None)
-        }
         Err(_) => unreachable!(),
     };
 
