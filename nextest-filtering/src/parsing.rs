@@ -20,7 +20,7 @@ use winnow::{
     branch::alt,
     bytes::complete::is_not,
     bytes::{one_of, tag, take_till0},
-    character::complete::line_ending,
+    character::line_ending,
     combinator::{eof, map, peek, recognize, value, verify},
     multi::{fold_many0, many0},
     sequence::{delimited, preceded, terminated},

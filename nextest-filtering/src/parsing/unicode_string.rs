@@ -8,7 +8,8 @@ use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
     branch::alt,
-    bytes::complete::{is_not, take_while_m_n},
+    bytes::complete::is_not,
+    bytes::take_while_m_n,
     combinator::{map, map_opt, map_res, value, verify},
     multi::fold_many0,
     sequence::{delimited, preceded},
