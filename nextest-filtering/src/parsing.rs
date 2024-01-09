@@ -499,10 +499,7 @@ fn parse_regex_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
 fn parse_glob_matcher(input: Span<'_>) -> IResult<'_, Option<NameMatcher>> {
     trace(
         "parse_glob_matcher",
-        ws(preceded(
-            '#',
-            unpeek(|input| glob::parse_glob(input, false)),
-        )),
+        ws(preceded('#', glob::parse_glob(false))),
     )
     .parse_peek(input)
 }
@@ -584,7 +581,7 @@ impl DefaultMatcher {
             Self::Contains => unpeek(parse_matcher_text)
                 .map(|res: Option<String>| res.map(NameMatcher::implicit_contains))
                 .parse_peek(input),
-            Self::Glob => glob::parse_glob(input, true),
+            Self::Glob => glob::parse_glob(true).parse_peek(input),
         })
     }
 }

@@ -3,7 +3,7 @@
 
 //! Glob matching.
 
-use super::{parse_matcher_text, IResult, Span};
+use super::{parse_matcher_text, Error, Span};
 use crate::{
     errors::{GlobConstructError, ParseSingleError},
     NameMatcher,
@@ -61,10 +61,12 @@ impl GenericGlob {
 }
 
 // This never returns Err(()) -- instead, it reports an error to the parsing state.
-pub(super) fn parse_glob<'i>(input: Span<'i>, implicit: bool) -> IResult<'i, Option<NameMatcher>> {
+pub(super) fn parse_glob<'i>(
+    implicit: bool,
+) -> impl Parser<Span<'i>, Option<NameMatcher>, Error<'i>> {
     trace(
         "parse_glob",
-        unpeek(|input: Span<'i>| {
+        unpeek(move |input: Span<'i>| {
             let (i, res) = match parse_matcher_text(input.clone()) {
                 Ok((i, res)) => (i, res),
                 Err(_) => {
@@ -91,5 +93,4 @@ pub(super) fn parse_glob<'i>(input: Span<'i>, implicit: bool) -> IResult<'i, Opt
             }
         }),
     )
-    .parse_peek(input)
 }
