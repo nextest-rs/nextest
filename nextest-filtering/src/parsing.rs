@@ -18,8 +18,8 @@ use miette::SourceSpan;
 use std::{cell::RefCell, fmt};
 use winnow::{
     ascii::line_ending,
-    combinator::{alt, delimited, eof, peek, preceded, terminated},
-    multi::{fold_many0, many0},
+    combinator::{alt, delimited, eof, peek, preceded, repeat, terminated},
+    multi::fold_many0,
     stream::Location,
     stream::SliceLen,
     token::{one_of, tag, take_till0, take_till1},
@@ -310,13 +310,16 @@ fn ws<'a, T, P: Parser<Span<'a>, T, Error<'a>>>(
     mut inner: P,
 ) -> impl Parser<Span<'a>, T, Error<'a>> {
     move |input: Span<'a>| {
-        let (i, _): (_, ()) = many0(alt((
-            // Match individual space characters.
-            one_of(' ').void(),
-            // Match CRLF and LF line endings. This allows filters to be specified as multiline TOML
-            // strings.
-            line_ending.void(),
-        )))
+        let (i, _): (_, ()) = repeat(
+            0..,
+            alt((
+                // Match individual space characters.
+                one_of(' ').void(),
+                // Match CRLF and LF line endings. This allows filters to be specified as multiline TOML
+                // strings.
+                line_ending.void(),
+            )),
+        )
         .parse_next(input.clone())?;
         match inner.parse_next(i) {
             Ok(res) => Ok(res),
