@@ -1451,21 +1451,21 @@ mod tests {
         assert_eq_both_ways(&expr, r"test(~a\,)");
 
         // string parsing is compatible with possible future syntax
-        fn parse_future_syntax(
-            input: Span<'_>,
-        ) -> IResult<'_, (Option<NameMatcher>, Option<NameMatcher>)> {
-            let (i, _) = "something".parse_peek(input)?;
-            let (i, _) = '('.parse_peek(i)?;
-            let (i, n1) = set_matcher(DefaultMatcher::Contains).parse_peek(i)?;
-            let (i, _) = ws(',').parse_peek(i)?;
-            let (i, n2) = set_matcher(DefaultMatcher::Contains).parse_peek(i)?;
-            let (i, _) = ')'.parse_peek(i)?;
-            Ok((i, (n1, n2)))
+        fn parse_future_syntax<'i>(
+            input: &mut Span<'i>,
+        ) -> PResult<'i, (Option<NameMatcher>, Option<NameMatcher>)> {
+            let _ = "something".parse_next(input)?;
+            let _ = '('.parse_next(input)?;
+            let n1 = set_matcher(DefaultMatcher::Contains).parse_next(input)?;
+            let _ = ws(',').parse_next(input)?;
+            let n2 = set_matcher(DefaultMatcher::Contains).parse_next(input)?;
+            let _ = ')'.parse_next(input)?;
+            Ok((n1, n2))
         }
 
         let errors = RefCell::new(Vec::new());
-        let span = new_span("something(aa, bb)", &errors);
-        if parse_future_syntax(span).is_err() {
+        let mut span = new_span("something(aa, bb)", &errors);
+        if parse_future_syntax.parse_next(&mut span).is_err() {
             panic!("Failed to parse comma separated matchers");
         }
     }
