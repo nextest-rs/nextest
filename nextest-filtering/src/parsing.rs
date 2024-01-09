@@ -21,7 +21,7 @@ use winnow::{
     combinator::{alt, delimited, eof, fold_repeat, peek, preceded, repeat, terminated},
     stream::Location,
     stream::SliceLen,
-    token::{one_of, tag, take_till0, take_till1},
+    token::{tag, take_till0, take_till1},
     trace::trace,
     Parser,
 };
@@ -288,7 +288,7 @@ fn expect_char<'a>(
     c: char,
     make_err: fn(SourceSpan) -> ParseSingleError,
 ) -> impl Parser<Span<'a>, Option<char>, Error<'a>> {
-    expect_inner(ws(one_of(c)), make_err, SpanLength::Exact(0))
+    expect_inner(ws(c), make_err, SpanLength::Exact(0))
 }
 
 fn silent_expect<'a, F, T>(mut parser: F) -> impl Parser<Span<'a>, Option<T>, Error<'a>>
@@ -313,7 +313,7 @@ fn ws<'a, T, P: Parser<Span<'a>, T, Error<'a>>>(
             0..,
             alt((
                 // Match individual space characters.
-                one_of(' ').void(),
+                ' '.void(),
                 // Match CRLF and LF line endings. This allows filters to be specified as multiline TOML
                 // strings.
                 line_ending.void(),
@@ -400,7 +400,7 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
             Escape(char),
         }
 
-        let parse_escape = alt((tag(r"\/").value('/'), '\\')).map(Frag::Escape);
+        let parse_escape = alt((r"\/".value('/'), '\\')).map(Frag::Escape);
         let parse_literal = take_till1("\\/")
             .verify(|s: &str| !s.is_empty())
             .map(|s: &str| Frag::Literal(s));
@@ -702,8 +702,8 @@ fn parse_expr_not(input: Span<'_>) -> IResult<'_, ExprResult> {
         "parse_expr_not",
         (
             alt((
-                tag("not ").value(NotOperator::LiteralNot),
-                one_of('!').value(NotOperator::Exclamation),
+                "not ".value(NotOperator::LiteralNot),
+                '!'.value(NotOperator::Exclamation),
             )),
             expect_expr(ws(parse_basic_expr)),
         )
@@ -786,9 +786,9 @@ fn parse_or_operator<'i>(input: Span<'i>) -> IResult<'i, Option<OrOperator>> {
                     })
                     .parse_next(input)
             },
-            tag("or ").value(Some(OrOperator::LiteralOr)),
-            one_of('|').value(Some(OrOperator::Pipe)),
-            one_of('+').value(Some(OrOperator::Plus)),
+            "or ".value(Some(OrOperator::LiteralOr)),
+            '|'.value(Some(OrOperator::Pipe)),
+            '+'.value(Some(OrOperator::Plus)),
         ))),
     )
     .parse_next(input)
@@ -892,9 +892,9 @@ fn parse_and_or_difference_operator<'i>(
                     })
                     .parse_next(input)
             },
-            tag("and ").value(Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd))),
-            one_of('&').value(Some(AndOrDifferenceOperator::And(AndOperator::Ampersand))),
-            one_of('-').value(Some(AndOrDifferenceOperator::Difference(
+            "and ".value(Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd))),
+            '&'.value(Some(AndOrDifferenceOperator::And(AndOperator::Ampersand))),
+            '-'.value(Some(AndOrDifferenceOperator::Difference(
                 DifferenceOperator::Minus,
             ))),
         ))),

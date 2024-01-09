@@ -10,7 +10,7 @@ use winnow::{
     combinator::{alt, delimited, fold_repeat, preceded},
     stream::SliceLen,
     stream::Stream,
-    token::{one_of, take_till1, take_while},
+    token::{take_till1, take_while},
     trace::trace,
     Parser,
 };
@@ -62,15 +62,15 @@ fn parse_escaped_char(input: Span<'_>) -> IResult<'_, Option<char>> {
     trace("parse_escaped_char", |input| {
         let valid = alt((
             parse_unicode,
-            one_of('n').value('\n'),
-            one_of('r').value('\r'),
-            one_of('t').value('\t'),
-            one_of('b').value('\u{08}'),
-            one_of('f').value('\u{0C}'),
-            one_of('\\').value('\\'),
-            one_of('/').value('/'),
-            one_of(')').value(')'),
-            one_of(',').value(','),
+            'n'.value('\n'),
+            'r'.value('\r'),
+            't'.value('\t'),
+            'b'.value('\u{08}'),
+            'f'.value('\u{0C}'),
+            '\\'.value('\\'),
+            '/'.value('/'),
+            ')'.value(')'),
+            ','.value(','),
         ));
         preceded(
             '\\',
