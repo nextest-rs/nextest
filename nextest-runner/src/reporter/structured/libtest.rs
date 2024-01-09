@@ -25,7 +25,12 @@
 use super::{
     FormatVersionError, FormatVersionErrorInner, TestEvent, TestEventKind, WriteEventError,
 };
-use crate::{list::RustTestSuite, runner::ExecutionResult};
+use crate::{
+    list::RustTestSuite,
+    runner::ExecutionResult,
+    test_output::{TestOutput, TestSingleOutput},
+};
+use bstr::ByteSlice;
 use nextest_metadata::MismatchReason;
 use std::{collections::BTreeMap, fmt::Write as _};
 
@@ -373,7 +378,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                         write!(out, r#","stdout":""#).map_err(fmt_err)?;
 
                         strip_human_output_from_failed_test(
-                            &last_status.output,
+                            last_status.output.as_ref(),
                             out,
                             test_instance.name,
                         )?;
@@ -481,41 +486,77 @@ impl<'cfg> LibtestReporter<'cfg> {
 
 /// Unfortunately, to replicate the libtest json output, we need to do our own
 /// filtering of the output to strip out the data emitted by libtest in the
-/// human format
+/// human format.
 ///
 /// This function relies on the fact that nextest runs every individual test in
-/// isolation
+/// isolation.
 fn strip_human_output_from_failed_test(
-    output: &crate::test_output::TestOutput,
+    output: Option<&TestOutput>,
     out: &mut bytes::BytesMut,
     test_name: &str,
 ) -> Result<(), WriteEventError> {
-    let line_stripper = output
-        .lines()
-        .skip_while(|line| line.raw != b"running 1 test\n")
-        .skip(1)
-        .take_while(|line| {
-            if !line.chunk.stdout {
-                return true;
+    match output {
+        Some(TestOutput::Combined { output }) => {
+            strip_human_stdout_or_combined(output, out, test_name)?;
+        }
+        Some(TestOutput::Split { stdout, stderr }) => {
+            // This is not a case that we hit because we always set CaptureStrategy to Combined. But
+            // handle it in a reasonable fashion.
+            debug_assert!(false, "libtest output requires CaptureStrategy::Combined");
+            if !stdout.is_empty() {
+                write!(out, "--- STDOUT ---\\n").map_err(fmt_err)?;
+                strip_human_stdout_or_combined(stdout, out, test_name)?;
             }
+            // If stderr is not empty, just write all of it in.
+            if !stderr.is_empty() {
+                write!(out, "\\n--- STDERR ---\\n").map_err(fmt_err)?;
+                write!(out, "{}", EscapedString(&stderr.to_str_lossy())).map_err(fmt_err)?;
+            }
+        }
+        Some(TestOutput::ExecFail { description, .. }) => {
+            write!(out, "--- EXEC FAIL ---\\n").map_err(fmt_err)?;
+            write!(out, "{}", EscapedString(description)).map_err(fmt_err)?;
+        }
+        None => {
+            write!(out, "(output not captured)").map_err(fmt_err)?;
+        }
+    }
+    Ok(())
+}
 
-            if let Some(name) = line
-                .raw
-                .strip_prefix(b"test ")
-                .and_then(|np| np.strip_suffix(b" ... FAILED\n"))
-            {
-                if test_name.as_bytes() == name {
-                    return false;
+fn strip_human_stdout_or_combined(
+    output: &TestSingleOutput,
+    out: &mut bytes::BytesMut,
+    test_name: &str,
+) -> Result<(), WriteEventError> {
+    if output.buf.contains_str("running 1 test\n") {
+        // This is most likely the default test harness.
+        let lines = output
+            .lines()
+            .skip_while(|line| line != b"running 1 test")
+            .skip(1)
+            .take_while(|line| {
+                if let Some(name) = line
+                    .strip_prefix(b"test ")
+                    .and_then(|np| np.strip_suffix(b" ... FAILED"))
+                {
+                    if test_name.as_bytes() == name {
+                        return false;
+                    }
                 }
-            }
 
-            true
-        })
-        .map(|line| line.lossy());
+                true
+            })
+            .map(|line| line.to_str_lossy());
 
-    for line in line_stripper {
-        // This will never fail unless we are OOM
-        write!(out, "{}", EscapedString(&line)).map_err(fmt_err)?;
+        for line in lines {
+            // This will never fail unless we are OOM
+            write!(out, "{}\\n", EscapedString(&line)).map_err(fmt_err)?;
+        }
+    } else {
+        // This is most likely a custom test harness. Just write out the entire
+        // output.
+        write!(out, "{}", EscapedString(&output.to_str_lossy())).map_err(fmt_err)?;
     }
 
     Ok(())
@@ -592,6 +633,11 @@ impl<'s> std::fmt::Display for EscapedString<'s> {
 
 #[cfg(test)]
 mod test {
+    use crate::{
+        reporter::structured::libtest::strip_human_output_from_failed_test, test_output::TestOutput,
+    };
+    use bytes::BytesMut;
+
     /// Validates that the human output portion from a failed test is stripped
     /// out when writing a JSON string, as it is not part of the output when
     /// libtest itself outputs the JSON, so we have 100% identical output to libtest
@@ -626,22 +672,68 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         ];
 
         let output = {
-            let mut acc = crate::test_output::TestOutputAccumulator::new();
-
+            let mut acc = BytesMut::new();
             for line in TEST_OUTPUT {
-                acc.push_chunk(line.as_bytes(), true);
+                acc.extend_from_slice(line.as_bytes());
             }
 
-            acc.freeze()
+            TestOutput::Combined {
+                output: acc.freeze().into(),
+            }
         };
 
         let mut actual = bytes::BytesMut::new();
-        super::strip_human_output_from_failed_test(
-            &output,
+        strip_human_output_from_failed_test(
+            Some(&output),
             &mut actual,
             "index::test::download_url_crates_io",
         )
         .unwrap();
+
+        insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
+    }
+
+    #[test]
+    fn strips_human_output_custom_test_harness() {
+        // For a custom test harness, we don't strip the human output at all.
+        const TEST_OUTPUT: &[&str] = &["\n", "this is a custom test harness!!!\n", "1 test passed"];
+
+        let output = {
+            let mut acc = BytesMut::new();
+            for line in TEST_OUTPUT {
+                acc.extend_from_slice(line.as_bytes());
+            }
+
+            TestOutput::Combined {
+                output: acc.freeze().into(),
+            }
+        };
+
+        let mut actual = bytes::BytesMut::new();
+        strip_human_output_from_failed_test(Some(&output), &mut actual, "non-existent").unwrap();
+
+        insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
+    }
+
+    #[test]
+    fn strips_human_output_exec_fail() {
+        let output = {
+            TestOutput::ExecFail {
+                message: "this is a message".to_owned(),
+                description: "this is a message\nthis is a description\n".to_owned(),
+            }
+        };
+
+        let mut actual = bytes::BytesMut::new();
+        strip_human_output_from_failed_test(Some(&output), &mut actual, "non-existent").unwrap();
+
+        insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
+    }
+
+    #[test]
+    fn strips_human_output_none() {
+        let mut actual = bytes::BytesMut::new();
+        strip_human_output_from_failed_test(None, &mut actual, "non-existent").unwrap();
 
         insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
     }

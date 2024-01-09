@@ -18,6 +18,7 @@ use crate::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
         RetryData, RunStats, SetupScriptExecuteStatus,
     },
+    test_output::{TestOutput, TestSingleOutput},
 };
 pub use aggregator::heuristic_extract_description;
 use debug_ignore::DebugIgnore;
@@ -750,7 +751,7 @@ impl<'a> TestReporterImpl<'a> {
                         "only failing tests are retried"
                     );
                     if self.failure_output(*failure_output).is_immediate() {
-                        self.write_stdout_stderr(test_instance, run_status, true, writer)?;
+                        self.write_output(test_instance, run_status, true, writer)?;
                     }
 
                     // The final output doesn't show retries, so don't store this result in
@@ -816,7 +817,7 @@ impl<'a> TestReporterImpl<'a> {
                     self.write_status_line(*test_instance, describe, writer)?;
                 }
                 if output_on_test_finished.show_immediate {
-                    self.write_stdout_stderr(test_instance, last_status, true, writer)?;
+                    self.write_output(test_instance, last_status, true, writer)?;
                 }
                 if let OutputStoreFinal::Yes { display_output } =
                     output_on_test_finished.store_final
@@ -1018,12 +1019,7 @@ impl<'a> TestReporterImpl<'a> {
                                     writer,
                                 )?;
                                 if *display_output {
-                                    self.write_stdout_stderr(
-                                        test_instance,
-                                        last_status,
-                                        false,
-                                        writer,
-                                    )?;
+                                    self.write_output(test_instance, last_status, false, writer)?;
                                 }
                             }
                         }
@@ -1313,7 +1309,7 @@ impl<'a> TestReporterImpl<'a> {
             self.write_setup_script(script_id, command, args, writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_output(&run_status.stdout, writer)?;
+            self.write_test_single_output(&run_status.stdout, writer)?;
         }
         if !run_status.stderr.is_empty() {
             write!(writer, "\n{}", "--- ".style(header_style))?;
@@ -1321,13 +1317,13 @@ impl<'a> TestReporterImpl<'a> {
             self.write_setup_script(script_id, command, args, writer)?;
             writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_output(&run_status.stderr, writer)?;
+            self.write_test_single_output(&run_status.stderr, writer)?;
         }
 
         writeln!(writer)
     }
 
-    fn write_stdout_stderr(
+    fn write_output(
         &self,
         test_instance: &TestInstance<'a>,
         run_status: &ExecuteStatus,
@@ -1342,58 +1338,98 @@ impl<'a> TestReporterImpl<'a> {
             (self.styles.fail, self.styles.fail_output)
         };
 
-        {
-            let stdout = run_status.output.stdout();
-            if !stdout.is_empty() {
-                write!(writer, "\n{}", "--- ".style(header_style))?;
-                let out_len = self.write_attempt(run_status, header_style, writer)?;
-                // The width is to align test instances.
-                write!(
-                    writer,
-                    "{:width$}",
-                    "STDOUT:".style(header_style),
-                    width = (21 - out_len)
-                )?;
-                self.write_instance(*test_instance, writer)?;
-                writeln!(writer, "{}", " ---".style(header_style))?;
+        match &run_status.output {
+            Some(TestOutput::Split { stdout, stderr }) => {
+                if !stdout.is_empty() {
+                    write!(writer, "\n{}", "--- ".style(header_style))?;
+                    let out_len = self.write_attempt(run_status, header_style, writer)?;
+                    // The width is to align test instances.
+                    write!(
+                        writer,
+                        "{:width$}",
+                        "STDOUT:".style(header_style),
+                        width = (21 - out_len)
+                    )?;
+                    self.write_instance(*test_instance, writer)?;
+                    writeln!(writer, "{}", " ---".style(header_style))?;
 
-                self.write_test_output(&stdout, writer)?;
+                    self.write_test_single_output(stdout, writer)?;
+                }
+
+                if !stderr.is_empty() {
+                    write!(writer, "\n{}", "--- ".style(header_style))?;
+                    let out_len = self.write_attempt(run_status, header_style, writer)?;
+                    // The width is to align test instances.
+                    write!(
+                        writer,
+                        "{:width$}",
+                        "STDERR:".style(header_style),
+                        width = (21 - out_len)
+                    )?;
+                    self.write_instance(*test_instance, writer)?;
+                    writeln!(writer, "{}", " ---".style(header_style))?;
+
+                    self.write_test_single_output(stderr, writer)?;
+                }
             }
-        }
 
-        {
-            let stderr = run_status.output.stderr();
-            if !stderr.is_empty() {
+            Some(TestOutput::Combined { output }) => {
+                if !output.is_empty() {
+                    write!(writer, "\n{}", "--- ".style(header_style))?;
+                    let out_len = self.write_attempt(run_status, header_style, writer)?;
+                    // The width is to align test instances.
+                    write!(
+                        writer,
+                        "{:width$}",
+                        "OUTPUT:".style(header_style),
+                        width = (21 - out_len)
+                    )?;
+                    self.write_instance(*test_instance, writer)?;
+                    writeln!(writer, "{}", " ---".style(header_style))?;
+
+                    self.write_test_single_output(output, writer)?;
+                }
+            }
+
+            Some(TestOutput::ExecFail { description, .. }) => {
                 write!(writer, "\n{}", "--- ".style(header_style))?;
                 let out_len = self.write_attempt(run_status, header_style, writer)?;
                 // The width is to align test instances.
                 write!(
                     writer,
                     "{:width$}",
-                    "STDERR:".style(header_style),
+                    "EXECFAIL:".style(header_style),
                     width = (21 - out_len)
                 )?;
                 self.write_instance(*test_instance, writer)?;
                 writeln!(writer, "{}", " ---".style(header_style))?;
 
-                self.write_test_output(&stderr, writer)?;
+                writeln!(writer, "{}", description)?;
+            }
+
+            None => {
+                // The output wasn't captured.
             }
         }
 
         writeln!(writer)
     }
 
-    fn write_test_output(&self, output: &[u8], writer: &mut dyn Write) -> io::Result<()> {
+    fn write_test_single_output(
+        &self,
+        output: &TestSingleOutput,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
         if self.styles.is_colorized {
             const RESET_COLOR: &[u8] = b"\x1b[0m";
-            // Output the text without stripping ANSI escapes, then reset the color afterwards in case
-            // the output is malformed.
-            writer.write_all(output)?;
+            // Output the text without stripping ANSI escapes, then reset the color afterwards in
+            // case the output is malformed.
+            writer.write_all(&output.buf)?;
             writer.write_all(RESET_COLOR)?;
         } else {
             // Strip ANSI escapes from the output if nextest itself isn't colorized.
             let mut no_color = strip_ansi_escapes::Writer::new(writer);
-            no_color.write_all(output)?;
+            no_color.write_all(&output.buf)?;
         }
 
         Ok(())

@@ -21,7 +21,7 @@ use crate::{
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
-    test_output::{CaptureStrategy, TestOutput},
+    test_output::{CaptureStrategy, TestOutput, TestSingleOutput},
     time::{PausableSleep, StopwatchEnd, StopwatchStart},
 };
 use async_scoped::TokioScope;
@@ -913,15 +913,13 @@ impl<'a> TestRunnerInner<'a> {
         {
             Ok(run_status) => run_status,
             Err(error) => {
-                // Put the error chain inside stderr.
-                let mut acc = crate::test_output::TestOutputAccumulator::new();
-                {
-                    let mut stderr = acc.stderr_mut();
-                    writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
-                }
-
+                let message = error.to_string();
+                let description = DisplayErrorChain::new(error).to_string();
                 InternalExecuteStatus {
-                    output: acc.freeze(),
+                    output: Some(TestOutput::ExecFail {
+                        message,
+                        description,
+                    }),
                     result: ExecutionResult::ExecFail,
                     stopwatch_end: stopwatch.end(),
                     is_slow: false,
@@ -980,7 +978,7 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        let mut test_output = TestOutput::default();
+        let mut test_output = None;
 
         let (res, leaked) = {
             let mut collect_output_fut =
@@ -1397,7 +1395,9 @@ pub struct ExecuteStatus {
     /// Retry-related data.
     pub retry_data: RetryData,
     /// The stdout and stderr output for this test.
-    pub output: TestOutput,
+    ///
+    /// This is None if the output wasn't caught.
+    pub output: Option<TestOutput>,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
@@ -1411,7 +1411,8 @@ pub struct ExecuteStatus {
 }
 
 struct InternalExecuteStatus {
-    output: TestOutput,
+    // This is None if output wasn't captured.
+    output: Option<TestOutput>,
     result: ExecutionResult,
     stopwatch_end: StopwatchEnd,
     is_slow: bool,
@@ -1436,9 +1437,9 @@ impl InternalExecuteStatus {
 #[derive(Clone, Debug)]
 pub struct SetupScriptExecuteStatus {
     /// Standard output for this setup script.
-    pub stdout: Bytes,
+    pub stdout: TestSingleOutput,
     /// Standard error for this setup script.
-    pub stderr: Bytes,
+    pub stderr: TestSingleOutput,
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the script started.
@@ -1463,8 +1464,8 @@ struct InternalSetupScriptExecuteStatus {
 impl InternalSetupScriptExecuteStatus {
     fn into_external(self) -> SetupScriptExecuteStatus {
         SetupScriptExecuteStatus {
-            stdout: self.stdout,
-            stderr: self.stderr,
+            stdout: self.stdout.into(),
+            stderr: self.stderr.into(),
             result: self.result,
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,
