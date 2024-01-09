@@ -1,3 +1,6 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use std::{
     io,
     os::windows::{ffi::OsStrExt as _, io::FromRawHandle as _, prelude::OwnedHandle},

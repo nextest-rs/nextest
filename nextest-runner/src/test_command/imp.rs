@@ -1,3 +1,6 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use crate::test_output::CaptureStrategy;
 use std::process::Stdio;
 use tokio::{

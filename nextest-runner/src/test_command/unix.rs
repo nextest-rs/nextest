@@ -1,3 +1,6 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use super::Stdio;
 use std::{
     io,
@@ -91,7 +94,8 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
                 target_os = "linux",
                 target_os = "netbsd",
                 target_os = "openbsd",
-                target_os = "redox"
+                target_os = "redox",
+                target_os = "illumos"
             ))] {
                 cvt(libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC))?;
                 ours = std::os::fd::OwnedFd::from_raw_fd(fds[0]);
