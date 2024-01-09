@@ -20,7 +20,7 @@ use winnow::{
     branch::alt,
     bytes::{one_of, tag, take_till0, take_till1},
     character::line_ending,
-    combinator::{eof, map, peek, recognize, value, verify},
+    combinator::{eof, map, peek, value, verify},
     multi::{fold_many0, many0},
     sequence::{delimited, preceded, terminated},
     stream::Location,
@@ -532,19 +532,17 @@ fn nullary_set_def<'a>(
         let (i, _) = tag(name)(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
         let err_loc = i.location();
-        let i =
-            match recognize::<_, _, winnow::error::Error<Span<'_>>, _>(take_till0(|c| c == ')'))(i)
-            {
-                Ok((i, res)) => {
-                    if !res.trim().is_empty() {
-                        let span = (err_loc, res.len()).into();
-                        let err = ParseSingleError::UnexpectedArgument(span);
-                        i.state.report_error(err);
-                    }
-                    i
+        let i = match take_till0::<_, _, Error<'a>>(')').parse_next(i) {
+            Ok((i, res)) => {
+                if !res.trim().is_empty() {
+                    let span = (err_loc, res.len()).into();
+                    let err = ParseSingleError::UnexpectedArgument(span);
+                    i.state.report_error(err);
                 }
-                Err(_) => unreachable!(),
-            };
+                i
+            }
+            Err(_) => unreachable!(),
+        };
         let (i, _) = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
         Ok((i, Some(make_set())))
     }
