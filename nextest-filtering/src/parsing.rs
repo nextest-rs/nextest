@@ -35,6 +35,7 @@ pub(crate) use unicode_string::DisplayParsedString;
 pub(crate) type Span<'a> = winnow::Stateful<winnow::Located<&'a str>, State<'a>>;
 type Error<'a> = winnow::error::InputError<Span<'a>>;
 type IResult<'a, T> = winnow::IResult<Span<'a>, T, Error<'a>>;
+type PResult<'a, T> = winnow::PResult<T, Error<'a>>;
 
 impl<'a> ToSourceSpan for Span<'a> {
     fn to_span(&self) -> SourceSpan {
@@ -347,7 +348,7 @@ fn parse_matcher_text<'i>(input: Span<'i>) -> IResult<'i, Option<String>> {
         "parse_matcher_text",
         unpeek(|input: Span<'i>| {
             let (i, res) = match expect(
-                unpeek(unicode_string::parse_string),
+                unicode_string::parse_string,
                 ParseSingleError::InvalidString,
             )
             .parse_peek(input.clone())
