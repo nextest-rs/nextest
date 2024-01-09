@@ -64,33 +64,30 @@ impl GenericGlob {
 pub(super) fn parse_glob<'i>(
     implicit: bool,
 ) -> impl Parser<Span<'i>, Option<NameMatcher>, Error<'i>> {
-    trace(
-        "parse_glob",
-        unpeek(move |input: Span<'i>| {
-            let (i, res) = match parse_matcher_text(input.clone()) {
-                Ok((i, res)) => (i, res),
-                Err(_) => {
-                    unreachable!("parse_matcher_text should never fail")
-                }
-            };
-
-            let Some(parsed_value) = res else {
-                return Ok((i, None));
-            };
-
-            match GenericGlob::new(parsed_value) {
-                Ok(glob) => Ok((i, Some(NameMatcher::Glob { glob, implicit }))),
-                Err(error) => {
-                    let start = input.location();
-                    let end = i.location();
-                    let err = ParseSingleError::InvalidGlob {
-                        span: (start, end - start).into(),
-                        error,
-                    };
-                    i.state.report_error(err);
-                    Ok((i, None))
-                }
+    trace("parse_glob", move |input: &mut Span<'i>| {
+        let start = input.location();
+        let res = match unpeek(parse_matcher_text).parse_next(input) {
+            Ok(res) => res,
+            Err(_) => {
+                unreachable!("parse_matcher_text should never fail")
             }
-        }),
-    )
+        };
+
+        let Some(parsed_value) = res else {
+            return Ok(None);
+        };
+
+        match GenericGlob::new(parsed_value) {
+            Ok(glob) => Ok(Some(NameMatcher::Glob { glob, implicit })),
+            Err(error) => {
+                let end = input.location();
+                let err = ParseSingleError::InvalidGlob {
+                    span: (start, end - start).into(),
+                    error,
+                };
+                input.state.report_error(err);
+                Ok(None)
+            }
+        }
+    })
 }
