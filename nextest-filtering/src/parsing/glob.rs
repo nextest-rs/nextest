@@ -10,6 +10,7 @@ use crate::{
 };
 use winnow::stream::Location;
 use winnow::trace::trace;
+use winnow::unpeek;
 use winnow::Parser;
 
 /// A glob pattern.
@@ -61,31 +62,34 @@ impl GenericGlob {
 
 // This never returns Err(()) -- instead, it reports an error to the parsing state.
 pub(super) fn parse_glob<'i>(input: Span<'i>, implicit: bool) -> IResult<'i, Option<NameMatcher>> {
-    trace("parse_glob", |input: Span<'i>| {
-        let (i, res) = match parse_matcher_text(input.clone()) {
-            Ok((i, res)) => (i, res),
-            Err(_) => {
-                unreachable!("parse_matcher_text should never fail")
-            }
-        };
+    trace(
+        "parse_glob",
+        unpeek(|input: Span<'i>| {
+            let (i, res) = match parse_matcher_text(input.clone()) {
+                Ok((i, res)) => (i, res),
+                Err(_) => {
+                    unreachable!("parse_matcher_text should never fail")
+                }
+            };
 
-        let Some(parsed_value) = res else {
-            return Ok((i, None));
-        };
+            let Some(parsed_value) = res else {
+                return Ok((i, None));
+            };
 
-        match GenericGlob::new(parsed_value) {
-            Ok(glob) => Ok((i, Some(NameMatcher::Glob { glob, implicit }))),
-            Err(error) => {
-                let start = input.location();
-                let end = i.location();
-                let err = ParseSingleError::InvalidGlob {
-                    span: (start, end - start).into(),
-                    error,
-                };
-                i.state.report_error(err);
-                Ok((i, None))
+            match GenericGlob::new(parsed_value) {
+                Ok(glob) => Ok((i, Some(NameMatcher::Glob { glob, implicit }))),
+                Err(error) => {
+                    let start = input.location();
+                    let end = i.location();
+                    let err = ParseSingleError::InvalidGlob {
+                        span: (start, end - start).into(),
+                        error,
+                    };
+                    i.state.report_error(err);
+                    Ok((i, None))
+                }
             }
-        }
-    })
-    .parse_next(input)
+        }),
+    )
+    .parse_peek(input)
 }

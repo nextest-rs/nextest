@@ -12,79 +12,87 @@ use winnow::{
     stream::Stream,
     token::{take_till1, take_while},
     trace::trace,
-    Parser,
+    unpeek, Parser,
 };
 
 fn run_str_parser<'a, T, I>(mut inner: I) -> impl Parser<Span<'a>, T, super::Error<'a>>
 where
     I: Parser<&'a str, T, winnow::error::InputError<&'a str>>,
 {
-    move |input: Span<'a>| match inner.parse_next(input.next_slice(input.slice_len()).1) {
-        Ok((i, res)) => {
-            let eaten = input.slice_len() - i.len();
-            Ok((input.next_slice(eaten).0, res))
-        }
-        Err(winnow::error::ErrMode::Backtrack(err)) => {
-            let winnow::error::InputError { input: i, kind } = err;
-            let eaten = input.slice_len() - i.len();
-            let err = winnow::error::InputError {
-                input: input.next_slice(eaten).0,
-                kind,
-            };
-            Err(winnow::error::ErrMode::Backtrack(err))
-        }
-        Err(winnow::error::ErrMode::Cut(err)) => {
-            let winnow::error::InputError { input: i, kind } = err;
-            let eaten = input.slice_len() - i.len();
-            let err = winnow::error::InputError {
-                input: input.next_slice(eaten).0,
-                kind,
-            };
-            Err(winnow::error::ErrMode::Cut(err))
-        }
-        Err(winnow::error::ErrMode::Incomplete(err)) => {
-            Err(winnow::error::ErrMode::Incomplete(err))
-        }
-    }
+    unpeek(
+        move |input: Span<'a>| match inner.parse_peek(input.peek_slice(input.slice_len()).1) {
+            Ok((i, res)) => {
+                let eaten = input.slice_len() - i.len();
+                Ok((input.peek_slice(eaten).0, res))
+            }
+            Err(winnow::error::ErrMode::Backtrack(err)) => {
+                let winnow::error::InputError { input: i, kind } = err;
+                let eaten = input.slice_len() - i.len();
+                let err = winnow::error::InputError {
+                    input: input.peek_slice(eaten).0,
+                    kind,
+                };
+                Err(winnow::error::ErrMode::Backtrack(err))
+            }
+            Err(winnow::error::ErrMode::Cut(err)) => {
+                let winnow::error::InputError { input: i, kind } = err;
+                let eaten = input.slice_len() - i.len();
+                let err = winnow::error::InputError {
+                    input: input.peek_slice(eaten).0,
+                    kind,
+                };
+                Err(winnow::error::ErrMode::Cut(err))
+            }
+            Err(winnow::error::ErrMode::Incomplete(err)) => {
+                Err(winnow::error::ErrMode::Incomplete(err))
+            }
+        },
+    )
 }
 
 fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
-    trace("parse_unicode", |input| {
-        let parse_hex = take_while(1..=6, |c: char| c.is_ascii_hexdigit());
-        let parse_delimited_hex = preceded('u', delimited('{', parse_hex, '}'));
-        let parse_u32 = parse_delimited_hex.try_map(|hex| u32::from_str_radix(hex, 16));
-        run_str_parser(parse_u32.verify_map(std::char::from_u32)).parse_next(input)
-    })
-    .parse_next(input)
+    trace(
+        "parse_unicode",
+        unpeek(|input| {
+            let parse_hex = take_while(1..=6, |c: char| c.is_ascii_hexdigit());
+            let parse_delimited_hex = preceded('u', delimited('{', parse_hex, '}'));
+            let parse_u32 = parse_delimited_hex.try_map(|hex| u32::from_str_radix(hex, 16));
+            run_str_parser(parse_u32.verify_map(std::char::from_u32)).parse_peek(input)
+        }),
+    )
+    .parse_peek(input)
 }
 
 fn parse_escaped_char(input: Span<'_>) -> IResult<'_, Option<char>> {
-    trace("parse_escaped_char", |input| {
-        let valid = alt((
-            parse_unicode,
-            'n'.value('\n'),
-            'r'.value('\r'),
-            't'.value('\t'),
-            'b'.value('\u{08}'),
-            'f'.value('\u{0C}'),
-            '\\'.value('\\'),
-            '/'.value('/'),
-            ')'.value(')'),
-            ','.value(','),
-        ));
-        preceded(
-            '\\',
-            // If none of the valid characters are found, this will report an error.
-            expect_n(
-                valid,
-                ParseSingleError::InvalidEscapeCharacter,
-                // -1 to account for the preceding backslash.
-                SpanLength::Offset(-1, 2),
-            ),
-        )
-        .parse_next(input)
-    })
-    .parse_next(input)
+    trace(
+        "parse_escaped_char",
+        unpeek(|input| {
+            let valid = alt((
+                unpeek(parse_unicode),
+                'n'.value('\n'),
+                'r'.value('\r'),
+                't'.value('\t'),
+                'b'.value('\u{08}'),
+                'f'.value('\u{0C}'),
+                '\\'.value('\\'),
+                '/'.value('/'),
+                ')'.value(')'),
+                ','.value(','),
+            ));
+            preceded(
+                '\\',
+                // If none of the valid characters are found, this will report an error.
+                expect_n(
+                    valid,
+                    ParseSingleError::InvalidEscapeCharacter,
+                    // -1 to account for the preceding backslash.
+                    SpanLength::Offset(-1, 2),
+                ),
+            )
+            .parse_peek(input)
+        }),
+    )
+    .parse_peek(input)
 }
 
 // This should match parse_escaped_char above.
@@ -106,14 +114,17 @@ impl fmt::Display for DisplayParsedString<'_> {
     }
 }
 fn parse_literal<'i>(input: Span<'i>) -> IResult<'i, &str> {
-    trace("parse_literal", |input: Span<'i>| {
-        let not_quote_slash = take_till1((',', ')', '\\'));
-        let res = not_quote_slash
-            .verify(|s: &str| !s.is_empty())
-            .parse_next(input.clone());
-        res
-    })
-    .parse_next(input)
+    trace(
+        "parse_literal",
+        unpeek(|input: Span<'i>| {
+            let not_quote_slash = take_till1((',', ')', '\\'));
+            let res = not_quote_slash
+                .verify(|s: &str| !s.is_empty())
+                .parse_peek(input.clone());
+            res
+        }),
+    )
+    .parse_peek(input)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,11 +137,11 @@ fn parse_fragment(input: Span<'_>) -> IResult<'_, Option<StringFragment<'_>>> {
     trace(
         "parse_fragment",
         alt((
-            parse_literal.map(|span| Some(StringFragment::Literal(span))),
-            parse_escaped_char.map(|res| res.map(StringFragment::EscapedChar)),
+            unpeek(parse_literal).map(|span| Some(StringFragment::Literal(span))),
+            unpeek(parse_escaped_char).map(|res| res.map(StringFragment::EscapedChar)),
         )),
     )
-    .parse_next(input)
+    .parse_peek(input)
 }
 
 /// Construct a string by consuming the input until the next unescaped ) or ,.
@@ -141,7 +152,7 @@ pub(super) fn parse_string(input: Span<'_>) -> IResult<'_, Option<String>> {
         "parse_string",
         fold_repeat(
             0..,
-            parse_fragment,
+            unpeek(parse_fragment),
             || Some(String::new()),
             |string, fragment| {
                 match (string, fragment) {
@@ -163,5 +174,5 @@ pub(super) fn parse_string(input: Span<'_>) -> IResult<'_, Option<String>> {
             },
         ),
     )
-    .parse_next(input)
+    .parse_peek(input)
 }
