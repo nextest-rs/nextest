@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1] - 2024-01-09
+
+### Fixed
+
+Internal cleanups: remove reliance on Incomplete. Thanks [@epage](https://github.com/epage) for the
+contribution!
+
 ## [0.7.0] - 2023-12-10
 
 ### Changed
@@ -87,6 +94,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.7.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.7.1
 [0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.7.0
 [0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.6.0
 [0.5.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.5.1

@@ -3,6 +3,16 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.67-rc.1] - 2024-01-09
+
+### Added
+
+- More work on [machine-readable output for test runs](https://nexte.st/book/run-machine-readable): for failing tests, output is now included under the `stdout` field. This was a large effort which required figuring out how to combine stdout and stderr into the same buffer. Thanks again [Jake](https://github.com/Jake-Shadle) for your contribution!
+
+### Fixed
+
+- On SIGTERM and SIGHUP, outputs for cancelled and failed tests are now displayed. (Output is still hidden on SIGINT to match typical user expectations.)
+
 ## [0.9.66] - 2023-12-10
 
 ### Added
@@ -916,6 +926,7 @@ Supported in this initial release:
 - [Test retries](book/retries.md) and flaky test detection
 - [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.67-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.67-rc.1
 [0.9.66]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.66
 [0.9.65]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.65
 [0.9.64]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.64
