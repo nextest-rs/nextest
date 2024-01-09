@@ -115,7 +115,8 @@ pub enum ParsedExpr<S = SourceSpan> {
 impl ParsedExpr {
     pub fn parse(input: &str) -> Result<Self, Vec<ParseSingleError>> {
         let errors = RefCell::new(Vec::new());
-        match parse(new_span(input, &errors)).unwrap() {
+        let span = new_span(input, &errors);
+        match parse(span).unwrap() {
             ExprResult::Valid(expr) => Ok(expr),
             ExprResult::Error => Err(errors.into_inner()),
         }
@@ -922,10 +923,8 @@ mod tests {
     #[track_caller]
     fn parse_regex(input: &str) -> NameMatcher {
         let errors = RefCell::new(Vec::new());
-        parse_regex_matcher(new_span(input, &errors))
-            .unwrap()
-            .1
-            .unwrap()
+        let span = new_span(input, &errors);
+        parse_regex_matcher(span).unwrap().1.unwrap()
     }
 
     #[test]
@@ -959,7 +958,8 @@ mod tests {
     #[track_caller]
     fn parse_glob(input: &str) -> NameMatcher {
         let errors = RefCell::new(Vec::new());
-        let matcher = parse_glob_matcher(new_span(input, &errors))
+        let span = new_span(input, &errors);
+        let matcher = parse_glob_matcher(span)
             .unwrap_or_else(|error| {
                 panic!("for input {input}, parse_glob_matcher returned an error: {error}")
             })
@@ -1010,7 +1010,8 @@ mod tests {
     #[track_caller]
     fn parse_set(input: &str) -> SetDef {
         let errors = RefCell::new(Vec::new());
-        parse_set_def(new_span(input, &errors)).unwrap().1.unwrap()
+        let span = new_span(input, &errors);
+        parse_set_def(span).unwrap().1.unwrap()
     }
 
     macro_rules! assert_set_def {
@@ -1438,7 +1439,8 @@ mod tests {
         }
 
         let errors = RefCell::new(Vec::new());
-        if parse_future_syntax(new_span("something(aa, bb)", &errors)).is_err() {
+        let span = new_span("something(aa, bb)", &errors);
+        if parse_future_syntax(span).is_err() {
             panic!("Failed to parse comma separated matchers");
         }
     }
@@ -1446,7 +1448,8 @@ mod tests {
     #[track_caller]
     fn parse_err(input: &str) -> Vec<ParseSingleError> {
         let errors = RefCell::new(Vec::new());
-        super::parse(new_span(input, &errors)).unwrap();
+        let span = new_span(input, &errors);
+        super::parse(span).unwrap();
         errors.into_inner()
     }
 
