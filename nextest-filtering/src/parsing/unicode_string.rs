@@ -9,7 +9,7 @@ use std::fmt;
 use winnow::{
     branch::alt,
     bytes::{take_till1, take_while_m_n},
-    combinator::{map, map_opt, map_res, value},
+    combinator::{map_opt, map_res, value},
     multi::fold_many0,
     sequence::{delimited, preceded},
     stream::SliceLen,
@@ -128,10 +128,8 @@ fn parse_fragment(input: Span<'_>) -> IResult<'_, Option<StringFragment<'_>>> {
     trace(
         "parse_fragment",
         alt((
-            map(parse_literal, |span| Some(StringFragment::Literal(span))),
-            map(parse_escaped_char, |res| {
-                res.map(StringFragment::EscapedChar)
-            }),
+            parse_literal.map(|span| Some(StringFragment::Literal(span))),
+            parse_escaped_char.map(|res| res.map(StringFragment::EscapedChar)),
         )),
     )
     .parse_next(input)
