@@ -1643,7 +1643,7 @@ dependencies = [
  "test-strategy",
  "thiserror",
  "twox-hash",
- "winnow 0.3.8",
+ "winnow 0.4.11",
 ]
 
 [[package]]
@@ -3711,9 +3711,9 @@ checksum = "dff9641d1cd4be8d1a070daf9e3773c5f67e78b4d9d42263020c057706765c04"
 
 [[package]]
 name = "winnow"
-version = "0.3.8"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da01e24d23aeb852fb05609f2701ce4da9f73d58857239ed3853667cf178f204"
+checksum = "656953b22bcbfb1ec8179d60734981d1904494ecc91f8a3f0ee5c7389bb8eb4b"
 dependencies = [
  "memchr",
 ]
