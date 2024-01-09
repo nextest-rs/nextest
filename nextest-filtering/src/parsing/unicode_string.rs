@@ -9,7 +9,7 @@ use std::fmt;
 use winnow::{
     branch::alt,
     bytes::{take_till1, take_while_m_n},
-    combinator::{map_opt, map_res, value},
+    combinator::{map_res, value},
     multi::fold_many0,
     sequence::{delimited, preceded},
     stream::SliceLen,
@@ -56,7 +56,7 @@ fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
         let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
         let parse_delimited_hex = preceded('u', delimited('{', parse_hex, '}'));
         let parse_u32 = map_res(parse_delimited_hex, |hex| u32::from_str_radix(hex, 16));
-        run_str_parser(map_opt(parse_u32, std::char::from_u32)).parse_next(input)
+        run_str_parser(parse_u32.verify_map(std::char::from_u32)).parse_next(input)
     })
     .parse_next(input)
 }
