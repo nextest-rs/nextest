@@ -33,7 +33,7 @@ pub(crate) use glob::GenericGlob;
 pub(crate) use unicode_string::DisplayParsedString;
 
 pub(crate) type Span<'a> = winnow::Stateful<winnow::Located<&'a str>, State<'a>>;
-type Error<'a> = winnow::error::Error<Span<'a>>;
+type Error<'a> = winnow::error::InputError<Span<'a>>;
 type IResult<'a, T> = winnow::IResult<Span<'a>, T, Error<'a>>;
 
 impl<'a> ToSourceSpan for Span<'a> {
@@ -238,7 +238,7 @@ where
     move |input| match parser.parse_next(input) {
         Ok((remaining, out)) => Ok((remaining, Some(out))),
         Err(winnow::error::ErrMode::Backtrack(err)) | Err(winnow::error::ErrMode::Cut(err)) => {
-            let winnow::error::Error { input, .. } = err;
+            let winnow::error::InputError { input, .. } = err;
             let fragment_start = input.location();
             let fragment_length = input.slice_len();
             let span = match limit {
@@ -298,7 +298,7 @@ where
     move |input| match parser.parse_next(input) {
         Ok((remaining, out)) => Ok((remaining, Some(out))),
         Err(winnow::error::ErrMode::Backtrack(err)) | Err(winnow::error::ErrMode::Cut(err)) => {
-            let winnow::error::Error { input, .. } = err;
+            let winnow::error::InputError { input, .. } = err;
             Ok((input, None))
         }
         Err(err) => Err(err),
@@ -323,15 +323,14 @@ fn ws<'a, T, P: Parser<Span<'a>, T, Error<'a>>>(
         match inner.parse_next(i) {
             Ok(res) => Ok(res),
             Err(winnow::error::ErrMode::Backtrack(err)) => {
-                let winnow::error::Error { kind, .. } = err;
-                Err(winnow::error::ErrMode::Backtrack(winnow::error::Error {
-                    input,
-                    kind,
-                }))
+                let winnow::error::InputError { kind, .. } = err;
+                Err(winnow::error::ErrMode::Backtrack(
+                    winnow::error::InputError { input, kind },
+                ))
             }
             Err(winnow::error::ErrMode::Cut(err)) => {
-                let winnow::error::Error { kind, .. } = err;
-                Err(winnow::error::ErrMode::Cut(winnow::error::Error {
+                let winnow::error::InputError { kind, .. } = err;
+                Err(winnow::error::ErrMode::Cut(winnow::error::InputError {
                     input,
                     kind,
                 }))
@@ -452,7 +451,7 @@ fn parse_regex<'i>(input: Span<'i>) -> IResult<'i, Option<NameMatcher>> {
         let (i, res) = match parse_regex_inner(input.clone()) {
             Ok((i, res)) => (i, res),
             Err(_) => {
-                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(')')
+                match take_till0::<_, _, winnow::error::InputError<Span<'_>>>(')')
                     .parse_next(input.clone())
                 {
                     Ok((i, _)) => {
@@ -515,7 +514,7 @@ fn recover_unexpected_comma<'i>(input: Span<'i>) -> IResult<'i, ()> {
                 let pos = i.location();
                 i.state
                     .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
-                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(')').parse_next(i) {
+                match take_till0::<_, _, winnow::error::InputError<Span<'_>>>(')').parse_next(i) {
                     Ok((i, _)) => Ok((i, ())),
                     Err(_) => unreachable!(),
                 }
@@ -906,7 +905,7 @@ fn parse_and_or_difference_operator<'i>(
 
 pub(crate) fn parse(
     input: Span<'_>,
-) -> Result<ExprResult, winnow::error::ErrMode<winnow::error::Error<Span<'_>>>> {
+) -> Result<ExprResult, winnow::error::ErrMode<winnow::error::InputError<Span<'_>>>> {
     let (_, expr) = terminated(
         parse_expr,
         expect(ws(eof), ParseSingleError::ExpectedEndOfExpression),

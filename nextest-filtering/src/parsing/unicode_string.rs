@@ -17,7 +17,7 @@ use winnow::{
 
 fn run_str_parser<'a, T, I>(mut inner: I) -> impl Parser<Span<'a>, T, super::Error<'a>>
 where
-    I: Parser<&'a str, T, winnow::error::Error<&'a str>>,
+    I: Parser<&'a str, T, winnow::error::InputError<&'a str>>,
 {
     move |input: Span<'a>| match inner.parse_next(input.next_slice(input.slice_len()).1) {
         Ok((i, res)) => {
@@ -25,18 +25,18 @@ where
             Ok((input.next_slice(eaten).0, res))
         }
         Err(winnow::error::ErrMode::Backtrack(err)) => {
-            let winnow::error::Error { input: i, kind } = err;
+            let winnow::error::InputError { input: i, kind } = err;
             let eaten = input.slice_len() - i.len();
-            let err = winnow::error::Error {
+            let err = winnow::error::InputError {
                 input: input.next_slice(eaten).0,
                 kind,
             };
             Err(winnow::error::ErrMode::Backtrack(err))
         }
         Err(winnow::error::ErrMode::Cut(err)) => {
-            let winnow::error::Error { input: i, kind } = err;
+            let winnow::error::InputError { input: i, kind } = err;
             let eaten = input.slice_len() - i.len();
-            let err = winnow::error::Error {
+            let err = winnow::error::InputError {
                 input: input.next_slice(eaten).0,
                 kind,
             };
