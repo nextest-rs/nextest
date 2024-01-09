@@ -8,47 +8,10 @@ use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
     combinator::{alt, delimited, fold_repeat, preceded},
-    stream::SliceLen,
-    stream::Stream,
     token::{take_till, take_while},
     trace::trace,
     unpeek, Parser,
 };
-
-fn run_str_parser<'a, T, I>(mut inner: I) -> impl Parser<Span<'a>, T, super::Error<'a>>
-where
-    I: Parser<&'a str, T, winnow::error::InputError<&'a str>>,
-{
-    unpeek(
-        move |input: Span<'a>| match inner.parse_peek(input.peek_slice(input.slice_len()).1) {
-            Ok((i, res)) => {
-                let eaten = input.slice_len() - i.len();
-                Ok((input.peek_slice(eaten).0, res))
-            }
-            Err(winnow::error::ErrMode::Backtrack(err)) => {
-                let winnow::error::InputError { input: i, kind } = err;
-                let eaten = input.slice_len() - i.len();
-                let err = winnow::error::InputError {
-                    input: input.peek_slice(eaten).0,
-                    kind,
-                };
-                Err(winnow::error::ErrMode::Backtrack(err))
-            }
-            Err(winnow::error::ErrMode::Cut(err)) => {
-                let winnow::error::InputError { input: i, kind } = err;
-                let eaten = input.slice_len() - i.len();
-                let err = winnow::error::InputError {
-                    input: input.peek_slice(eaten).0,
-                    kind,
-                };
-                Err(winnow::error::ErrMode::Cut(err))
-            }
-            Err(winnow::error::ErrMode::Incomplete(err)) => {
-                Err(winnow::error::ErrMode::Incomplete(err))
-            }
-        },
-    )
-}
 
 fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
     trace(
@@ -57,7 +20,7 @@ fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
             let parse_hex = take_while(1..=6, |c: char| c.is_ascii_hexdigit());
             let parse_delimited_hex = preceded('u', delimited('{', parse_hex, '}'));
             let parse_u32 = parse_delimited_hex.try_map(|hex| u32::from_str_radix(hex, 16));
-            run_str_parser(parse_u32.verify_map(std::char::from_u32)).parse_peek(input)
+            parse_u32.verify_map(std::char::from_u32).parse_peek(input)
         }),
     )
     .parse_peek(input)
