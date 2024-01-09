@@ -11,6 +11,7 @@ members = [
 ]
 
 [workspace.dependencies]
+bstr = { version = "1.9.0", default-features = false, features = ["std"] }
 globset = "0.4.14"
 nextest-metadata = { version = "0.10.0", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"

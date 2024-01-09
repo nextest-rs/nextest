@@ -1,0 +1,5 @@
+---
+source: nextest-runner/src/reporter/structured/libtest.rs
+expression: "std::str::from_utf8(&actual).unwrap()"
+---
+\nthis is a custom test harness!!!\n1 test passed

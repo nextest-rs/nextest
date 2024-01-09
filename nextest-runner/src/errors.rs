@@ -759,7 +759,7 @@ pub enum ConfigureHandleInheritanceError {
     /// An error occurred. This can only happen on Windows.
     #[cfg(windows)]
     #[error("error configuring handle inheritance")]
-    WindowsError(#[from] windows::core::Error),
+    WindowsError(#[from] std::io::Error),
 }
 
 /// An error that occurs while building the test runner.

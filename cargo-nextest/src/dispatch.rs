@@ -741,13 +741,16 @@ pub struct TestRunnerOpts {
 }
 
 impl TestRunnerOpts {
-    fn to_builder(&self, no_capture: bool) -> Option<TestRunnerBuilder> {
+    fn to_builder(
+        &self,
+        cap_strat: nextest_runner::test_output::CaptureStrategy,
+    ) -> Option<TestRunnerBuilder> {
         if self.no_run {
             return None;
         }
 
         let mut builder = TestRunnerBuilder::default();
-        builder.set_no_capture(no_capture);
+        builder.set_capture_strategy(cap_strat);
         if let Some(retries) = self.retries {
             builder.set_retries(RetryPolicy::new_without_delay(retries));
         }
@@ -1546,6 +1549,15 @@ impl App {
                 )?)
             }
         };
+        use nextest_runner::test_output::CaptureStrategy;
+
+        let cap_strat = if no_capture {
+            CaptureStrategy::None
+        } else if matches!(reporter_opts.message_format, MessageFormat::Human) {
+            CaptureStrategy::Split
+        } else {
+            CaptureStrategy::Combined
+        };
 
         let filter_exprs = self.build_filtering_expressions()?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
@@ -1578,7 +1590,7 @@ impl App {
         }
 
         let handler = SignalHandlerKind::Standard;
-        let runner_builder = match runner_opts.to_builder(no_capture) {
+        let runner_builder = match runner_opts.to_builder(cap_strat) {
             Some(runner_builder) => runner_builder,
             None => {
                 // This means --no-run was passed in. Exit.

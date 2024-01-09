@@ -25,9 +25,14 @@
 use super::{
     FormatVersionError, FormatVersionErrorInner, TestEvent, TestEventKind, WriteEventError,
 };
-use crate::runner::ExecutionResult;
+use crate::{
+    list::RustTestSuite,
+    runner::ExecutionResult,
+    test_output::{TestOutput, TestSingleOutput},
+};
+use bstr::ByteSlice;
 use nextest_metadata::MismatchReason;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Write as _};
 
 /// To support pinning the version of the output, we just use this simple enum
 /// to document changes as libtest output changes
@@ -67,7 +72,7 @@ enum FormatMajorVersion {
 }
 
 /// The accumulated stats for a single test binary
-struct LibtestSuite {
+struct LibtestSuite<'cfg> {
     /// The number of tests that failed
     failed: usize,
     /// The number of tests that succeeded
@@ -78,6 +83,7 @@ struct LibtestSuite {
     filtered: usize,
     /// The number of tests in this suite that are still running
     running: usize,
+    meta: &'cfg RustTestSuite<'cfg>,
     /// The accumulated duration of every test that has been executed
     total: std::time::Duration,
     /// Libtest outputs outputs a `started` event for every test that isn't
@@ -102,12 +108,25 @@ pub enum EmitNextestObject {
     No,
 }
 
+const KIND_TEST: &str = "test";
+const KIND_SUITE: &str = "suite";
+
+const EVENT_STARTED: &str = "started";
+const EVENT_IGNORED: &str = "ignored";
+const EVENT_OK: &str = "ok";
+const EVENT_FAILED: &str = "failed";
+
+#[inline]
+fn fmt_err(err: std::fmt::Error) -> WriteEventError {
+    WriteEventError::Io(std::io::Error::new(std::io::ErrorKind::OutOfMemory, err))
+}
+
 /// A reporter that reports test runs in the same line-by-line JSON format as
 /// libtest itself
 pub struct LibtestReporter<'cfg> {
     _minor: FormatMinorVersion,
     _major: FormatMajorVersion,
-    test_suites: BTreeMap<&'cfg str, LibtestSuite>,
+    test_suites: BTreeMap<&'cfg str, LibtestSuite<'cfg>>,
     /// If true, we emit a `nextest` subobject with additional metadata in it
     /// that consumers can use for easier integration if they wish
     emit_nextest_obj: bool,
@@ -201,16 +220,6 @@ impl<'cfg> LibtestReporter<'cfg> {
     }
 
     pub(crate) fn write_event(&mut self, event: &TestEvent<'cfg>) -> Result<(), WriteEventError> {
-        use std::fmt::Write as _;
-
-        const KIND_TEST: &str = "test";
-        const KIND_SUITE: &str = "suite";
-
-        const EVENT_STARTED: &str = "started";
-        const EVENT_IGNORED: &str = "ignored";
-        const EVENT_OK: &str = "ok";
-        const EVENT_FAILED: &str = "failed";
-
         let mut retries = None;
 
         // Write the pieces of data that are the same across all events
@@ -247,13 +256,15 @@ impl<'cfg> LibtestReporter<'cfg> {
                     test_instance,
                 )
             }
+            TestEventKind::RunFinished { .. } => {
+                for test_suite in std::mem::take(&mut self.test_suites).into_values() {
+                    self.finalize(test_suite)?;
+                }
+
+                return Ok(());
+            }
             _ => return Ok(()),
         };
-
-        #[inline]
-        fn fmt_err(err: std::fmt::Error) -> WriteEventError {
-            WriteEventError::Io(std::io::Error::new(std::io::ErrorKind::OutOfMemory, err))
-        }
 
         let suite_info = test_instance.suite_info;
         let crate_name = suite_info.package.name();
@@ -262,11 +273,22 @@ impl<'cfg> LibtestReporter<'cfg> {
         // Emit the suite start if this is the first test of the suite
         let test_suite = match self.test_suites.entry(suite_info.binary_id.as_str()) {
             std::collections::btree_map::Entry::Vacant(e) => {
+                let (running, ignored, filtered) =
+                    suite_info.status.test_cases().fold((0, 0, 0), |acc, tc| {
+                        if tc.1.ignored {
+                            (acc.0, acc.1 + 1, acc.2)
+                        } else if tc.1.filter_match.is_match() {
+                            (acc.0 + 1, acc.1, acc.2)
+                        } else {
+                            (acc.0, acc.1, acc.2 + 1)
+                        }
+                    });
+
                 let mut out = bytes::BytesMut::with_capacity(1024);
                 write!(
                     &mut out,
                     r#"{{"type":"{KIND_SUITE}","event":"{EVENT_STARTED}","test_count":{}"#,
-                    suite_info.status.test_count()
+                    running + ignored,
                 )
                 .map_err(fmt_err)?;
 
@@ -282,11 +304,12 @@ impl<'cfg> LibtestReporter<'cfg> {
                 out.extend_from_slice(b"}\n");
 
                 e.insert(LibtestSuite {
-                    running: suite_info.status.test_count(),
+                    running,
                     failed: 0,
                     succeeded: 0,
-                    ignored: 0,
-                    filtered: 0,
+                    ignored,
+                    filtered,
+                    meta: test_instance.suite_info,
                     total: std::time::Duration::new(0, 0),
                     ignore_block: None,
                     output_block: out,
@@ -349,31 +372,17 @@ impl<'cfg> LibtestReporter<'cfg> {
                 match last_status.result {
                     ExecutionResult::Fail { .. } | ExecutionResult::ExecFail => {
                         test_suite.failed += 1;
-                        let stdout = String::from_utf8_lossy(&last_status.stdout);
-                        let stderr = String::from_utf8_lossy(&last_status.stderr);
 
-                        // TODO: Get the combined stdout and stderr streams, in the order they
-                        // are supposed to be, to accurately replicate libtest's output
+                        // Write the output from the test into the `stdout` (even
+                        // though it could contain stderr output as well).
+                        write!(out, r#","stdout":""#).map_err(fmt_err)?;
 
-                        // TODO: Strip libtest stdout output
-                        // libtest outputs various things when _not_ using the
-                        // unstable json format that we need to strip to emulate
-                        // that json output, eg.
-                        //
-                        // ```
-                        // running <n> tests
-                        // <test output>
-                        // test <name> ... FAILED
-                        // \n\nfailures:\n\nfailures:\n    <name>\n\ntest result: FAILED
-                        // ```
-
-                        write!(
+                        strip_human_output_from_failed_test(
+                            last_status.output.as_ref(),
                             out,
-                            r#","stdout":"{}{}""#,
-                            EscapedString(&stdout),
-                            EscapedString(&stderr)
-                        )
-                        .map_err(fmt_err)?;
+                            test_instance.name,
+                        )?;
+                        out.extend_from_slice(b"\"");
                     }
                     ExecutionResult::Timeout => {
                         test_suite.failed += 1;
@@ -384,13 +393,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                     }
                 }
             }
-            TestEventKind::TestSkipped { reason, .. } => {
-                if matches!(reason, MismatchReason::Ignored) {
-                    test_suite.ignored += 1;
-                } else {
-                    test_suite.filtered += 1;
-                }
-
+            TestEventKind::TestSkipped { .. } => {
                 test_suite.running -= 1;
 
                 if test_suite.ignore_block.is_none() {
@@ -421,11 +424,29 @@ impl<'cfg> LibtestReporter<'cfg> {
             return Ok(());
         }
 
+        if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
+            self.finalize(test_suite)?;
+        }
+
+        Ok(())
+    }
+
+    fn finalize(&self, mut test_suite: LibtestSuite) -> Result<(), WriteEventError> {
         let event = if test_suite.failed > 0 {
             EVENT_FAILED
         } else {
             EVENT_OK
         };
+
+        let out = &mut test_suite.output_block;
+        let suite_info = test_suite.meta;
+
+        // It's possible that a test failure etc has cancelled the run, in which
+        // case we might still have tests that are "running", even ones that are
+        // actually skipped, so we just add those to the filtered list
+        if test_suite.running > 0 {
+            test_suite.filtered += test_suite.running;
+        }
 
         write!(
             out,
@@ -439,6 +460,8 @@ impl<'cfg> LibtestReporter<'cfg> {
         .map_err(fmt_err)?;
 
         if self.emit_nextest_obj {
+            let crate_name = suite_info.package.name();
+            let binary_name = &suite_info.binary_name;
             write!(
                 out,
                 r#","nextest":{{"crate":"{crate_name}","test_binary":"{binary_name}","kind":"{}"}}"#,
@@ -457,12 +480,86 @@ impl<'cfg> LibtestReporter<'cfg> {
             stdout.flush().map_err(WriteEventError::Io)?;
         }
 
-        // Once we've emitted the output block we can remove the suite accumulator
-        // to free up memory since we won't use it again
-        self.test_suites.remove(suite_info.binary_id.as_str());
-
         Ok(())
     }
+}
+
+/// Unfortunately, to replicate the libtest json output, we need to do our own
+/// filtering of the output to strip out the data emitted by libtest in the
+/// human format.
+///
+/// This function relies on the fact that nextest runs every individual test in
+/// isolation.
+fn strip_human_output_from_failed_test(
+    output: Option<&TestOutput>,
+    out: &mut bytes::BytesMut,
+    test_name: &str,
+) -> Result<(), WriteEventError> {
+    match output {
+        Some(TestOutput::Combined { output }) => {
+            strip_human_stdout_or_combined(output, out, test_name)?;
+        }
+        Some(TestOutput::Split { stdout, stderr }) => {
+            // This is not a case that we hit because we always set CaptureStrategy to Combined. But
+            // handle it in a reasonable fashion.
+            debug_assert!(false, "libtest output requires CaptureStrategy::Combined");
+            if !stdout.is_empty() {
+                write!(out, "--- STDOUT ---\\n").map_err(fmt_err)?;
+                strip_human_stdout_or_combined(stdout, out, test_name)?;
+            }
+            // If stderr is not empty, just write all of it in.
+            if !stderr.is_empty() {
+                write!(out, "\\n--- STDERR ---\\n").map_err(fmt_err)?;
+                write!(out, "{}", EscapedString(&stderr.to_str_lossy())).map_err(fmt_err)?;
+            }
+        }
+        Some(TestOutput::ExecFail { description, .. }) => {
+            write!(out, "--- EXEC FAIL ---\\n").map_err(fmt_err)?;
+            write!(out, "{}", EscapedString(description)).map_err(fmt_err)?;
+        }
+        None => {
+            write!(out, "(output not captured)").map_err(fmt_err)?;
+        }
+    }
+    Ok(())
+}
+
+fn strip_human_stdout_or_combined(
+    output: &TestSingleOutput,
+    out: &mut bytes::BytesMut,
+    test_name: &str,
+) -> Result<(), WriteEventError> {
+    if output.buf.contains_str("running 1 test\n") {
+        // This is most likely the default test harness.
+        let lines = output
+            .lines()
+            .skip_while(|line| line != b"running 1 test")
+            .skip(1)
+            .take_while(|line| {
+                if let Some(name) = line
+                    .strip_prefix(b"test ")
+                    .and_then(|np| np.strip_suffix(b" ... FAILED"))
+                {
+                    if test_name.as_bytes() == name {
+                        return false;
+                    }
+                }
+
+                true
+            })
+            .map(|line| line.to_str_lossy());
+
+        for line in lines {
+            // This will never fail unless we are OOM
+            write!(out, "{}\\n", EscapedString(&line)).map_err(fmt_err)?;
+        }
+    } else {
+        // This is most likely a custom test harness. Just write out the entire
+        // output.
+        write!(out, "{}", EscapedString(&output.to_str_lossy())).map_err(fmt_err)?;
+    }
+
+    Ok(())
 }
 
 /// Copy of the same string escaper used in libtest
@@ -531,5 +628,113 @@ impl<'s> std::fmt::Display for EscapedString<'s> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        reporter::structured::libtest::strip_human_output_from_failed_test, test_output::TestOutput,
+    };
+    use bytes::BytesMut;
+
+    /// Validates that the human output portion from a failed test is stripped
+    /// out when writing a JSON string, as it is not part of the output when
+    /// libtest itself outputs the JSON, so we have 100% identical output to libtest
+    #[test]
+    fn strips_human_output() {
+        const TEST_OUTPUT: &[&str] = &[
+            "\n",
+            "running 1 test\n",
+            "[src/index.rs:185] \"boop\" = \"boop\"\n",
+            "this is stdout\n",
+            "this i stderr\nok?\n",
+            "thread 'index::test::download_url_crates_io'",
+            r#" panicked at src/index.rs:206:9:
+oh no
+stack backtrace:
+    0: rust_begin_unwind
+                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/std/src/panicking.rs:597:5
+    1: core::panicking::panic_fmt
+                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/panicking.rs:72:14
+    2: tame_index::index::test::download_url_crates_io
+                at ./src/index.rs:206:9
+    3: tame_index::index::test::download_url_crates_io::{{closure}}
+                at ./src/index.rs:179:33
+    4: core::ops::function::FnOnce::call_once
+                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5
+    5: core::ops::function::FnOnce::call_once
+                at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+"#,
+            "test index::test::download_url_crates_io ... FAILED\n",
+            "\n\nfailures:\n\nfailures:\n    index::test::download_url_crates_io\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.01s\n",
+        ];
+
+        let output = {
+            let mut acc = BytesMut::new();
+            for line in TEST_OUTPUT {
+                acc.extend_from_slice(line.as_bytes());
+            }
+
+            TestOutput::Combined {
+                output: acc.freeze().into(),
+            }
+        };
+
+        let mut actual = bytes::BytesMut::new();
+        strip_human_output_from_failed_test(
+            Some(&output),
+            &mut actual,
+            "index::test::download_url_crates_io",
+        )
+        .unwrap();
+
+        insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
+    }
+
+    #[test]
+    fn strips_human_output_custom_test_harness() {
+        // For a custom test harness, we don't strip the human output at all.
+        const TEST_OUTPUT: &[&str] = &["\n", "this is a custom test harness!!!\n", "1 test passed"];
+
+        let output = {
+            let mut acc = BytesMut::new();
+            for line in TEST_OUTPUT {
+                acc.extend_from_slice(line.as_bytes());
+            }
+
+            TestOutput::Combined {
+                output: acc.freeze().into(),
+            }
+        };
+
+        let mut actual = bytes::BytesMut::new();
+        strip_human_output_from_failed_test(Some(&output), &mut actual, "non-existent").unwrap();
+
+        insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
+    }
+
+    #[test]
+    fn strips_human_output_exec_fail() {
+        let output = {
+            TestOutput::ExecFail {
+                message: "this is a message".to_owned(),
+                description: "this is a message\nthis is a description\n".to_owned(),
+            }
+        };
+
+        let mut actual = bytes::BytesMut::new();
+        strip_human_output_from_failed_test(Some(&output), &mut actual, "non-existent").unwrap();
+
+        insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
+    }
+
+    #[test]
+    fn strips_human_output_none() {
+        let mut actual = bytes::BytesMut::new();
+        strip_human_output_from_failed_test(None, &mut actual, "non-existent").unwrap();
+
+        insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
     }
 }

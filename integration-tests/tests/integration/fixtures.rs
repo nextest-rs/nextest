@@ -439,7 +439,10 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
 
     for (result, name) in expected {
         let reg = make_check_result_regex(*result, name);
-        assert!(reg.is_match(&output), "{name}: result didn't match");
+        assert!(
+            reg.is_match(&output),
+            "{name}: result didn't match\n\n--- output ---\n{output}\n--- end output ---"
+        );
     }
 
     let summary_reg = if relocated {

@@ -21,6 +21,7 @@ use nextest_runner::{
     },
     target_runner::TargetRunner,
     test_filter::TestFilterBuilder,
+    test_output::TestOutput,
 };
 use once_cell::sync::Lazy;
 use std::{
@@ -75,7 +76,7 @@ impl FixtureStatus {
                     } else if #[cfg(windows)] {
                         // A segfault is an access violation on Windows.
                         let abort_status = Some(AbortStatus::WindowsNtStatus(
-                            windows::Win32::Foundation::STATUS_ACCESS_VIOLATION,
+                            windows_sys::Win32::Foundation::STATUS_ACCESS_VIOLATION,
                         ));
                     } else {
                         let abort_status = None;
@@ -403,14 +404,17 @@ impl fmt::Debug for InstanceStatus {
             InstanceStatus::Skipped(reason) => write!(f, "skipped: {reason}"),
             InstanceStatus::Finished(run_statuses) => {
                 for run_status in run_statuses.iter() {
+                    let Some(TestOutput::Split { stdout, stderr }) = &run_status.output else {
+                        panic!("this test should always use split output")
+                    };
                     write!(
                         f,
                         "({}/{}) {:?}\n---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",
                         run_status.retry_data.attempt,
                         run_status.retry_data.total_attempts,
                         run_status.result,
-                        String::from_utf8_lossy(&run_status.stdout),
-                        String::from_utf8_lossy(&run_status.stderr)
+                        stdout.to_str_lossy(),
+                        stderr.to_str_lossy(),
                     )?;
                 }
                 Ok(())

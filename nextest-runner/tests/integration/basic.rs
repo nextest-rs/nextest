@@ -16,6 +16,7 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
+    test_output::TestOutput,
 };
 use pretty_assertions::assert_eq;
 use std::{io::Cursor, time::Duration};
@@ -151,8 +152,12 @@ fn test_run() -> Result<()> {
 
                         if can_extract_description {
                             // Check that stderr can be parsed heuristically.
-                            let stdout = String::from_utf8_lossy(&run_status.stdout);
-                            let stderr = String::from_utf8_lossy(&run_status.stderr);
+                            let Some(TestOutput::Split { stdout, stderr }) = &run_status.output
+                            else {
+                                panic!("this test should always use split output")
+                            };
+                            let stdout = stdout.to_str_lossy();
+                            let stderr = stderr.to_str_lossy();
                             println!("stderr: {stderr}");
                             let description =
                                 heuristic_extract_description(run_status.result, &stdout, &stderr);

@@ -21,6 +21,7 @@ use crate::{
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
+    test_output::{CaptureStrategy, TestOutput, TestSingleOutput},
     time::{PausableSleep, StopwatchEnd, StopwatchStart},
 };
 use async_scoped::TokioScope;
@@ -123,18 +124,25 @@ impl Iterator for BackoffIter {
 /// Test runner options.
 #[derive(Debug, Default)]
 pub struct TestRunnerBuilder {
-    no_capture: bool,
+    capture_strategy: CaptureStrategy,
     retries: Option<RetryPolicy>,
     fail_fast: Option<bool>,
     test_threads: Option<TestThreads>,
 }
 
 impl TestRunnerBuilder {
-    /// Sets no-capture mode.
+    /// Sets the capture strategy for the test runner
     ///
-    /// In this mode, tests will always be run serially: `test_threads` will always be 1.
-    pub fn set_no_capture(&mut self, no_capture: bool) -> &mut Self {
-        self.no_capture = no_capture;
+    /// * [`CaptureStrategy::Split`]
+    ///   * pro: output from `stdout` and `stderr` can be identified and easily split
+    ///   * con: ordering between the streams cannot be guaranteed
+    /// * [`CaptureStrategy::Combined`]
+    ///   * pro: output is guaranteed to be ordered as it would in a terminal emulator
+    ///   * con: distinction between `stdout` and `stderr` is lost
+    /// * [`CaptureStrategy::None`] -
+    ///   * In this mode, tests will always be run serially: `test_threads` will always be 1.
+    pub fn set_capture_strategy(&mut self, strategy: CaptureStrategy) -> &mut Self {
+        self.capture_strategy = strategy;
         self
     }
 
@@ -165,9 +173,9 @@ impl TestRunnerBuilder {
         double_spawn: DoubleSpawnInfo,
         target_runner: TargetRunner,
     ) -> Result<TestRunner<'a>, TestRunnerBuildError> {
-        let test_threads = match self.no_capture {
-            true => 1,
-            false => self
+        let test_threads = match self.capture_strategy {
+            CaptureStrategy::None => 1,
+            CaptureStrategy::Combined | CaptureStrategy::Split => self
                 .test_threads
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
@@ -182,7 +190,7 @@ impl TestRunnerBuilder {
 
         Ok(TestRunner {
             inner: TestRunnerInner {
-                no_capture: self.no_capture,
+                capture_strategy: self.capture_strategy,
                 profile,
                 test_threads,
                 force_retries: self.retries,
@@ -242,7 +250,7 @@ impl<'a> TestRunner<'a> {
 
 #[derive(Debug)]
 struct TestRunnerInner<'a> {
-    no_capture: bool,
+    capture_strategy: CaptureStrategy,
     profile: &'a NextestProfile<'a>,
     test_threads: usize,
     // This is Some if the user specifies a retry policy over the command-line.
@@ -717,7 +725,7 @@ impl<'a> TestRunnerInner<'a> {
         let job = imp::Job::create().ok();
 
         // The --no-capture CLI argument overrides the config.
-        if !self.no_capture {
+        if self.capture_strategy != CaptureStrategy::None {
             if script.config.capture_stdout {
                 command_mut.stdout(std::process::Stdio::piped());
             }
@@ -905,13 +913,13 @@ impl<'a> TestRunnerInner<'a> {
         {
             Ok(run_status) => run_status,
             Err(error) => {
-                // Put the error chain inside stderr.
-                let mut stderr = bytes::BytesMut::new();
-                writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
-
+                let message = error.to_string();
+                let description = DisplayErrorChain::new(error).to_string();
                 InternalExecuteStatus {
-                    stdout: Bytes::new(),
-                    stderr: stderr.freeze(),
+                    output: Some(TestOutput::ExecFail {
+                        message,
+                        description,
+                    }),
                     result: ExecutionResult::ExecFail,
                     stopwatch_end: stopwatch.end(),
                     is_slow: false,
@@ -951,14 +959,9 @@ impl<'a> TestRunnerInner<'a> {
         // best-effort thing.
         let job = imp::Job::create().ok();
 
-        if !self.no_capture {
-            // Capture stdout and stderr.
-            command_mut
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped());
-        };
-
-        let mut child = cmd.spawn().map_err(RunTestError::Spawn)?;
+        let crate::test_command::Child { mut child, output } = cmd
+            .spawn(self.capture_strategy)
+            .map_err(RunTestError::Spawn)?;
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
@@ -975,25 +978,18 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        let child_stdout = child.stdout.take();
-        let child_stderr = child.stderr.take();
-        let mut stdout = bytes::BytesMut::new();
-        let mut stderr = bytes::BytesMut::new();
+        let mut test_output = None;
 
         let (res, leaked) = {
-            let mut collect_output_fut = std::pin::pin!(collect_output(
-                child_stdout,
-                &mut stdout,
-                child_stderr,
-                &mut stderr
-            ));
+            let mut collect_output_fut =
+                std::pin::pin!(crate::test_output::collect_test_output(output));
             let mut collect_output_done = false;
 
             let res = loop {
                 tokio::select! {
                     res = &mut collect_output_fut, if !collect_output_done => {
                         collect_output_done = true;
-                        res?;
+                        test_output = res?;
                     }
                     res = child.wait() => {
                         // The test finished executing.
@@ -1060,7 +1056,7 @@ impl<'a> TestRunnerInner<'a> {
                 tokio::select! {
                     res = &mut collect_output_fut, if !collect_output_done => {
                         collect_output_done = true;
-                        res?;
+                        test_output = res?;
                     }
                     () = sleep, if !collect_output_done => {
                         break true;
@@ -1080,8 +1076,7 @@ impl<'a> TestRunnerInner<'a> {
         let status = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
 
         Ok(InternalExecuteStatus {
-            stdout: stdout.freeze(),
-            stderr: stderr.freeze(),
+            output: test_output,
             result: status,
             stopwatch_end: stopwatch.end(),
             is_slow,
@@ -1173,8 +1168,7 @@ fn create_execution_result(exit_status: ExitStatus, leaked: bool) -> ExecutionRe
                 let abort_status = exit_status.signal().map(AbortStatus::UnixSignal);
             } else if #[cfg(windows)] {
                 let abort_status = exit_status.code().and_then(|code| {
-                    let exception = windows::Win32::Foundation::NTSTATUS(code);
-                    exception.is_err().then(|| AbortStatus::WindowsNtStatus(exception))
+                    (code < 0).then(|| AbortStatus::WindowsNtStatus(code))
                 });
             } else {
                 let abort_status = None;
@@ -1400,10 +1394,10 @@ impl<'a> ExecutionDescription<'a> {
 pub struct ExecuteStatus {
     /// Retry-related data.
     pub retry_data: RetryData,
-    /// Standard output for this test.
-    pub stdout: Bytes,
-    /// Standard error for this test.
-    pub stderr: Bytes,
+    /// The stdout and stderr output for this test.
+    ///
+    /// This is None if the output wasn't caught.
+    pub output: Option<TestOutput>,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
@@ -1417,8 +1411,8 @@ pub struct ExecuteStatus {
 }
 
 struct InternalExecuteStatus {
-    stdout: Bytes,
-    stderr: Bytes,
+    // This is None if output wasn't captured.
+    output: Option<TestOutput>,
     result: ExecutionResult,
     stopwatch_end: StopwatchEnd,
     is_slow: bool,
@@ -1429,8 +1423,7 @@ impl InternalExecuteStatus {
     fn into_external(self, retry_data: RetryData) -> ExecuteStatus {
         ExecuteStatus {
             retry_data,
-            stdout: self.stdout,
-            stderr: self.stderr,
+            output: self.output,
             result: self.result,
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,
@@ -1444,9 +1437,9 @@ impl InternalExecuteStatus {
 #[derive(Clone, Debug)]
 pub struct SetupScriptExecuteStatus {
     /// Standard output for this setup script.
-    pub stdout: Bytes,
+    pub stdout: TestSingleOutput,
     /// Standard error for this setup script.
-    pub stderr: Bytes,
+    pub stderr: TestSingleOutput,
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the script started.
@@ -1471,8 +1464,8 @@ struct InternalSetupScriptExecuteStatus {
 impl InternalSetupScriptExecuteStatus {
     fn into_external(self) -> SetupScriptExecuteStatus {
         SetupScriptExecuteStatus {
-            stdout: self.stdout,
-            stderr: self.stderr,
+            stdout: self.stdout.into(),
+            stderr: self.stderr.into(),
             result: self.result,
             start_time: self.stopwatch_end.start_time,
             time_taken: self.stopwatch_end.duration,
@@ -2091,7 +2084,7 @@ pub enum AbortStatus {
 
     /// The test was determined to have aborted because the high bit was set on Windows.
     #[cfg(windows)]
-    WindowsNtStatus(windows::Win32::Foundation::NTSTATUS),
+    WindowsNtStatus(windows_sys::Win32::Foundation::NTSTATUS),
 }
 
 /// Configures stdout, stdin and stderr inheritance by test processes on Windows.
@@ -2117,8 +2110,8 @@ mod imp {
     use super::*;
     pub(super) use win32job::Job;
     use win32job::JobError;
-    use windows::Win32::{
-        Foundation::{SetHandleInformation, HANDLE, HANDLE_FLAGS, HANDLE_FLAG_INHERIT},
+    use windows_sys::Win32::{
+        Foundation::{SetHandleInformation, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE},
         System::{
             Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
             JobObjects::TerminateJobObject,
@@ -2128,22 +2121,26 @@ mod imp {
     pub(super) fn configure_handle_inheritance_impl(
         no_capture: bool,
     ) -> Result<(), ConfigureHandleInheritanceError> {
-        fn set_handle_inherit(handle: HANDLE, inherit: bool) -> windows::core::Result<()> {
-            let flags = if inherit { HANDLE_FLAG_INHERIT.0 } else { 0 };
-            unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(flags)) }
+        unsafe fn set_handle_inherit(handle: u32, inherit: bool) -> std::io::Result<()> {
+            let handle = GetStdHandle(handle);
+            if handle == INVALID_HANDLE_VALUE {
+                return Err(std::io::Error::last_os_error());
+            }
+            let flags = if inherit { HANDLE_FLAG_INHERIT } else { 0 };
+            if SetHandleInformation(handle, HANDLE_FLAG_INHERIT, flags) == 0 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
         }
 
         unsafe {
-            let stdin = GetStdHandle(STD_INPUT_HANDLE)?;
             // Never inherit stdin.
-            set_handle_inherit(stdin, false)?;
+            set_handle_inherit(STD_INPUT_HANDLE, false)?;
 
             // Inherit stdout and stderr if and only if no_capture is true.
-
-            let stdout = GetStdHandle(STD_OUTPUT_HANDLE)?;
-            set_handle_inherit(stdout, no_capture)?;
-            let stderr = GetStdHandle(STD_ERROR_HANDLE)?;
-            set_handle_inherit(stderr, no_capture)?;
+            set_handle_inherit(STD_OUTPUT_HANDLE, no_capture)?;
+            set_handle_inherit(STD_ERROR_HANDLE, no_capture)?;
         }
 
         Ok(())
@@ -2191,7 +2188,7 @@ mod imp {
             unsafe {
                 // Ignore the error here -- it's likely due to the process exiting.
                 // Note: 1 is the exit code returned by Windows.
-                _ = TerminateJobObject(HANDLE(handle as isize), 1);
+                _ = TerminateJobObject(handle as _, 1);
             }
         }
         // Start killing the process directly for good measure.
@@ -2358,7 +2355,7 @@ mod tests {
         // Ensure that output settings are ignored with no-capture.
         let mut builder = TestRunnerBuilder::default();
         builder
-            .set_no_capture(true)
+            .set_capture_strategy(CaptureStrategy::None)
             .set_test_threads(TestThreads::Count(20));
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
@@ -2375,7 +2372,7 @@ mod tests {
                 TargetRunner::empty(),
             )
             .unwrap();
-        assert!(runner.inner.no_capture, "no_capture is true");
+        assert_eq!(runner.inner.capture_strategy, CaptureStrategy::None);
         assert_eq!(runner.inner.test_threads, 1, "tests run serially");
     }
 

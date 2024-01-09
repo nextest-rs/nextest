@@ -156,7 +156,7 @@ pub fn relative_dir_for(config_path: &Utf8Path) -> Option<&Utf8Path> {
 mod imp {
     use super::*;
     use std::{borrow::Borrow, cmp, ffi::OsStr, os::windows::prelude::OsStrExt};
-    use windows::Win32::Globalization::{
+    use windows_sys::Win32::Globalization::{
         CompareStringOrdinal, CSTR_EQUAL, CSTR_GREATER_THAN, CSTR_LESS_THAN,
     };
 
@@ -203,7 +203,13 @@ mod imp {
     impl Ord for EnvKey {
         fn cmp(&self, other: &Self) -> cmp::Ordering {
             unsafe {
-                let result = CompareStringOrdinal(&self.utf16, &other.utf16, true);
+                let result = CompareStringOrdinal(
+                    self.utf16.as_ptr(),
+                    self.utf16.len() as _,
+                    other.utf16.as_ptr(),
+                    other.utf16.len() as _,
+                    1, /* ignore case */
+                );
                 match result {
                     CSTR_LESS_THAN => cmp::Ordering::Less,
                     CSTR_EQUAL => cmp::Ordering::Equal,

@@ -1,0 +1,5 @@
+---
+source: nextest-runner/src/reporter/structured/libtest.rs
+expression: "std::str::from_utf8(&actual).unwrap()"
+---
+--- EXEC FAIL ---\nthis is a message\nthis is a description\n

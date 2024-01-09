@@ -6,6 +6,7 @@ use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     helpers::dylib_path_envvar,
     list::{RustBuildMeta, TestListState},
+    test_output::CaptureStrategy,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::graph::PackageMetadata;
@@ -14,6 +15,9 @@ use std::{
     collections::{BTreeSet, HashMap},
     ffi::{OsStr, OsString},
 };
+
+mod imp;
+pub use imp::{Child, Output};
 
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
@@ -92,13 +96,25 @@ impl TestCommand {
         &mut self.command
     }
 
-    pub(crate) fn spawn(self) -> std::io::Result<tokio::process::Child> {
-        let mut command = tokio::process::Command::from(self.command);
-        let res = command.spawn();
+    pub(crate) fn spawn(self, capture_strategy: CaptureStrategy) -> std::io::Result<imp::Child> {
+        let res = imp::spawn(self.command, capture_strategy);
         if let Some(ctx) = self.double_spawn {
             ctx.finish();
         }
         res
+    }
+
+    pub(crate) async fn wait_with_output(self) -> std::io::Result<std::process::Output> {
+        let mut cmd = self.command;
+        cmd.stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        let res = tokio::process::Command::from(cmd).spawn();
+
+        if let Some(ctx) = self.double_spawn {
+            ctx.finish();
+        }
+
+        res?.wait_with_output().await
     }
 }
 

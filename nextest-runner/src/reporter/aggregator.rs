@@ -12,6 +12,7 @@ use crate::{
     list::TestInstance,
     reporter::TestEventKind,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
+    test_output::TestOutput,
 };
 use camino::Utf8PathBuf;
 use chrono::{DateTime, FixedOffset, Utc};
@@ -145,20 +146,20 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 for rerun in reruns {
                     let (kind, ty) = kind_ty(rerun);
-                    let stdout = String::from_utf8_lossy(&rerun.stdout);
-                    let stderr = String::from_utf8_lossy(&rerun.stderr);
-                    let stack_trace = heuristic_extract_description(rerun.result, &stdout, &stderr);
-
                     let mut test_rerun = TestRerun::new(kind);
-                    if let Some(description) = stack_trace {
-                        test_rerun.set_description(description);
-                    }
                     test_rerun
                         .set_timestamp(to_datetime(rerun.start_time))
                         .set_time(rerun.time_taken)
-                        .set_type(ty)
-                        .set_system_out(stdout)
-                        .set_system_err(stderr);
+                        .set_type(ty);
+
+                    set_execute_status_props(
+                        rerun,
+                        // Reruns are always failures.
+                        false,
+                        junit_store_failure_output,
+                        TestcaseOrRerun::Rerun(&mut test_rerun),
+                    );
+
                     // TODO: also publish time? it won't be standard JUnit (but maybe that's ok?)
                     testcase_status.add_rerun(test_rerun);
                 }
@@ -174,23 +175,15 @@ impl<'cfg> MetadataJunit<'cfg> {
                 // https://github.com/allure-framework/allure2/blob/master/plugins/junit-xml-plugin/src/main/java/io/qameta/allure/junitxml/JunitXmlPlugin.java#L192-L196
                 // we may have to update this format to handle that.
                 let is_success = main_status.result.is_success();
-                if !is_success {
-                    let stdout = String::from_utf8_lossy(&main_status.stdout);
-                    let stderr = String::from_utf8_lossy(&main_status.stderr);
-                    let description =
-                        heuristic_extract_description(main_status.result, &stdout, &stderr);
-                    if let Some(description) = description {
-                        testcase.status.set_description(description);
-                    }
-                }
+                let store_stdout_stderr = (junit_store_success_output && is_success)
+                    || (junit_store_failure_output && !is_success);
 
-                if (junit_store_success_output && is_success)
-                    || (junit_store_failure_output && !is_success)
-                {
-                    testcase
-                        .set_system_out_lossy(&main_status.stdout)
-                        .set_system_err_lossy(&main_status.stderr);
-                }
+                set_execute_status_props(
+                    main_status,
+                    is_success,
+                    store_stdout_stderr,
+                    TestcaseOrRerun::Testcase(&mut testcase),
+                );
 
                 testsuite.add_test_case(testcase);
             }
@@ -248,6 +241,119 @@ impl<'cfg> MetadataJunit<'cfg> {
         self.test_suites
             .entry(test_instance.suite_info.binary_id.as_str())
             .or_insert_with(|| TestSuite::new(test_instance.suite_info.binary_id.as_str()))
+    }
+}
+
+enum TestcaseOrRerun<'a> {
+    Testcase(&'a mut TestCase),
+    Rerun(&'a mut TestRerun),
+}
+
+impl TestcaseOrRerun<'_> {
+    fn set_message(&mut self, message: impl Into<String>) -> &mut Self {
+        match self {
+            TestcaseOrRerun::Testcase(testcase) => {
+                testcase.status.set_message(message.into());
+            }
+            TestcaseOrRerun::Rerun(rerun) => {
+                rerun.set_message(message.into());
+            }
+        }
+        self
+    }
+
+    fn set_description(&mut self, description: impl Into<String>) -> &mut Self {
+        match self {
+            TestcaseOrRerun::Testcase(testcase) => {
+                testcase.status.set_description(description.into());
+            }
+            TestcaseOrRerun::Rerun(rerun) => {
+                rerun.set_description(description.into());
+            }
+        }
+        self
+    }
+
+    fn set_system_out(&mut self, system_out: impl Into<String>) -> &mut Self {
+        match self {
+            TestcaseOrRerun::Testcase(testcase) => {
+                testcase.set_system_out(system_out.into());
+            }
+            TestcaseOrRerun::Rerun(rerun) => {
+                rerun.set_system_out(system_out.into());
+            }
+        }
+        self
+    }
+
+    fn set_system_err(&mut self, system_err: impl Into<String>) -> &mut Self {
+        match self {
+            TestcaseOrRerun::Testcase(testcase) => {
+                testcase.set_system_err(system_err.into());
+            }
+            TestcaseOrRerun::Rerun(rerun) => {
+                rerun.set_system_err(system_err.into());
+            }
+        }
+        self
+    }
+}
+
+fn set_execute_status_props(
+    execute_status: &ExecuteStatus,
+    is_success: bool,
+    store_stdout_stderr: bool,
+    mut out: TestcaseOrRerun<'_>,
+) {
+    match &execute_status.output {
+        Some(TestOutput::Split { stdout, stderr }) => {
+            let stdout_lossy = stdout.to_str_lossy();
+            let stderr_lossy = stderr.to_str_lossy();
+            if !is_success {
+                let description = heuristic_extract_description(
+                    execute_status.result,
+                    &stdout_lossy,
+                    &stderr_lossy,
+                );
+                if let Some(description) = description {
+                    out.set_description(description);
+                }
+            }
+
+            if store_stdout_stderr {
+                out.set_system_out(stdout_lossy)
+                    .set_system_err(stderr_lossy);
+            }
+        }
+        Some(TestOutput::Combined { output }) => {
+            let output_lossy = output.to_str_lossy();
+            if !is_success {
+                let description = heuristic_extract_description(
+                    execute_status.result,
+                    // The output is combined so we just track all of it.
+                    &output_lossy,
+                    &output_lossy,
+                );
+                if let Some(description) = description {
+                    out.set_description(description);
+                }
+            }
+
+            if store_stdout_stderr {
+                out.set_system_out(output_lossy)
+                    .set_system_err("(stdout and stderr are combined)");
+            }
+        }
+        Some(TestOutput::ExecFail {
+            message,
+            description,
+        }) => {
+            out.set_message(format!("Test execution failed: {}", message));
+            out.set_description(description);
+        }
+        None => {
+            out.set_message("Test failed, but output was not captured");
+        }
     }
 }
 
