@@ -20,7 +20,7 @@ use winnow::{
     branch::alt,
     bytes::{one_of, tag, take_till0, take_till1},
     character::line_ending,
-    combinator::{eof, map, peek, value, verify},
+    combinator::{eof, map, peek, value},
     multi::{fold_many0, many0},
     sequence::{delimited, preceded, terminated},
     stream::Location,
@@ -402,7 +402,7 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
 
         let parse_escape = map(alt((map(r"\/", |_| '/'), '\\')), Frag::Escape);
         let parse_literal = map(
-            verify(take_till1("\\/"), |s: &str| !s.is_empty()),
+            take_till1("\\/").verify(|s: &str| !s.is_empty()),
             |s: &str| Frag::Literal(s),
         );
         let parse_frag = alt((parse_escape, parse_literal));

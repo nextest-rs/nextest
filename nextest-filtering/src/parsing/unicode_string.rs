@@ -9,7 +9,7 @@ use std::fmt;
 use winnow::{
     branch::alt,
     bytes::{take_till1, take_while_m_n},
-    combinator::{map, map_opt, map_res, value, verify},
+    combinator::{map, map_opt, map_res, value},
     multi::fold_many0,
     sequence::{delimited, preceded},
     stream::SliceLen,
@@ -110,7 +110,9 @@ impl fmt::Display for DisplayParsedString<'_> {
 fn parse_literal<'i>(input: Span<'i>) -> IResult<'i, &str> {
     trace("parse_literal", |input: Span<'i>| {
         let not_quote_slash = take_till1(",)\\");
-        let res = verify(not_quote_slash, |s: &str| !s.is_empty())(input.clone());
+        let res = not_quote_slash
+            .verify(|s: &str| !s.is_empty())
+            .parse_next(input.clone());
         res
     })
     .parse_next(input)
