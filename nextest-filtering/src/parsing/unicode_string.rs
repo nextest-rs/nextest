@@ -7,8 +7,7 @@ use super::{expect_n, IResult, Span, SpanLength};
 use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
-    combinator::{alt, delimited, preceded},
-    multi::fold_many0,
+    combinator::{alt, delimited, fold_repeat, preceded},
     stream::SliceLen,
     stream::Stream,
     token::{one_of, take_till1, take_while},
@@ -140,7 +139,8 @@ fn parse_fragment(input: Span<'_>) -> IResult<'_, Option<StringFragment<'_>>> {
 pub(super) fn parse_string(input: Span<'_>) -> IResult<'_, Option<String>> {
     trace(
         "parse_string",
-        fold_many0(
+        fold_repeat(
+            0..,
             parse_fragment,
             || Some(String::new()),
             |string, fragment| {

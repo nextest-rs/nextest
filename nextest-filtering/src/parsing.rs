@@ -18,8 +18,7 @@ use miette::SourceSpan;
 use std::{cell::RefCell, fmt};
 use winnow::{
     ascii::line_ending,
-    combinator::{alt, delimited, eof, peek, preceded, repeat, terminated},
-    multi::fold_many0,
+    combinator::{alt, delimited, eof, fold_repeat, peek, preceded, repeat, terminated},
     stream::Location,
     stream::SliceLen,
     token::{one_of, tag, take_till0, take_till1},
@@ -407,7 +406,7 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
             .map(|s: &str| Frag::Literal(s));
         let parse_frag = alt((parse_escape, parse_literal));
 
-        let (i, res) = fold_many0(parse_frag, String::new, |mut string, frag| {
+        let (i, res) = fold_repeat(0.., parse_frag, String::new, |mut string, frag| {
             match frag {
                 Frag::Escape(c) => string.push(c),
                 Frag::Literal(s) => string.push_str(s),
@@ -741,7 +740,8 @@ fn parse_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
         // "or" binds less tightly than "and", so parse and within or.
         let (input, expr) = expect_expr(parse_and_or_difference_expr).parse_next(input)?;
 
-        let (input, ops) = fold_many0(
+        let (input, ops) = fold_repeat(
+            0..,
             (parse_or_operator, expect_expr(parse_and_or_difference_expr)),
             Vec::new,
             |mut ops, (op, expr)| {
@@ -842,7 +842,8 @@ fn parse_and_or_difference_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
     trace("parse_and_or_difference_expr", |input| {
         let (input, expr) = expect_expr(parse_basic_expr).parse_next(input)?;
 
-        let (input, ops) = fold_many0(
+        let (input, ops) = fold_repeat(
+            0..,
             (
                 parse_and_or_difference_operator,
                 expect_expr(parse_basic_expr),
