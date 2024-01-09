@@ -153,7 +153,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                         .set_type(ty);
 
                     set_execute_status_props(
-                        main_status,
+                        rerun,
                         // Reruns are always failures.
                         false,
                         junit_store_failure_output,
