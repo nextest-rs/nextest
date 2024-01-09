@@ -83,7 +83,8 @@ fn parse_escaped_char(input: Span<'_>) -> IResult<'_, Option<char>> {
                 // -1 to account for the preceding backslash.
                 SpanLength::Offset(-1, 2),
             ),
-        )(input)
+        )
+        .parse_next(input)
     })
     .parse_next(input)
 }

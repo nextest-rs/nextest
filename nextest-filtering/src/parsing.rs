@@ -318,7 +318,8 @@ fn ws<'a, T, P: Parser<Span<'a>, T, Error<'a>>>(
             // Match CRLF and LF line endings. This allows filters to be specified as multiline TOML
             // strings.
             line_ending.void(),
-        )))(input.clone())?;
+        )))
+        .parse_next(input.clone())?;
         match inner.parse_next(i) {
             Ok(res) => Ok(res),
             Err(winnow::error::ErrMode::Backtrack(err)) => {
@@ -411,9 +412,10 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
                 Frag::Literal(s) => string.push_str(s),
             }
             string
-        })(input)?;
+        })
+        .parse_next(input)?;
 
-        let (i, _) = peek('/')(i)?;
+        let (i, _) = peek('/').parse_next(i)?;
 
         Ok((i, res))
     })
@@ -450,7 +452,9 @@ fn parse_regex<'i>(input: Span<'i>) -> IResult<'i, Option<NameMatcher>> {
         let (i, res) = match parse_regex_inner(input.clone()) {
             Ok((i, res)) => (i, res),
             Err(_) => {
-                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(')')(input.clone()) {
+                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(')')
+                    .parse_next(input.clone())
+                {
                     Ok((i, _)) => {
                         let start = i.location();
                         let err = ParseSingleError::ExpectedCloseRegex((start, 0).into());
@@ -506,12 +510,12 @@ fn set_matcher<'a>(
 
 fn recover_unexpected_comma<'i>(input: Span<'i>) -> IResult<'i, ()> {
     trace("recover_unexpected_comma", |input: Span<'i>| {
-        match peek(ws(','))(input.clone()) {
+        match peek(ws(',')).parse_next(input.clone()) {
             Ok((i, _)) => {
                 let pos = i.location();
                 i.state
                     .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
-                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(')')(i) {
+                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(')').parse_next(i) {
                     Ok((i, _)) => Ok((i, ())),
                     Err(_) => unreachable!(),
                 }
@@ -527,7 +531,7 @@ fn nullary_set_def<'a>(
     make_set: fn() -> SetDef,
 ) -> impl Parser<Span<'a>, Option<SetDef>, Error<'a>> {
     move |i| {
-        let (i, _) = tag(name)(i)?;
+        let (i, _) = tag(name).parse_next(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
         let err_loc = i.location();
         let i = match take_till0::<_, _, Error<'a>>(')').parse_next(i) {
@@ -574,7 +578,7 @@ fn unary_set_def<'a>(
     make_set: fn(NameMatcher, SourceSpan) -> SetDef,
 ) -> impl Parser<Span<'a>, Option<SetDef>, Error<'a>> {
     move |i| {
-        let (i, _) = tag(name)(i)?;
+        let (i, _) = tag(name).parse_next(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
         let start = i.location();
         let (i, res) = set_matcher(default_matcher).parse_next(i)?;
@@ -743,7 +747,8 @@ fn parse_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
                 ops.push((op, expr));
                 ops
             },
-        )(input)?;
+        )
+        .parse_next(input)?;
 
         let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| {
             if let Some(op) = op {
@@ -846,7 +851,8 @@ fn parse_and_or_difference_expr(input: Span<'_>) -> IResult<'_, ExprResult> {
                 ops.push((op, expr));
                 ops
             },
-        )(input)?;
+        )
+        .parse_next(input)?;
 
         let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| match op {
             Some(AndOrDifferenceOperator::And(op)) => expr_1.combine(
@@ -902,7 +908,8 @@ pub(crate) fn parse(
     let (_, expr) = terminated(
         parse_expr,
         expect(ws(eof), ParseSingleError::ExpectedEndOfExpression),
-    )(input)?;
+    )
+    .parse_next(input)?;
     Ok(expr)
 }
 
