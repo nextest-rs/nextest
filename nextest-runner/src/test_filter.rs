@@ -300,62 +300,59 @@ impl FilterNameMatch {
 mod tests {
     use super::*;
     use proptest::{collection::vec, prelude::*};
+    use test_strategy::proptest;
 
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(50))]
+    #[proptest(cases = 50)]
+    fn proptest_empty(#[strategy(vec(any::<String>(), 0..16))] test_names: Vec<String>) {
+        let patterns: &[String] = &[];
+        let test_filter =
+            TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new()).unwrap();
+        let single_filter = test_filter.build();
+        for test_name in test_names {
+            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
+        }
+    }
 
-        #[test]
-        fn proptest_empty(test_names in vec(any::<String>(), 0..16)) {
-            let patterns: &[String] = &[];
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new()).unwrap();
-            let single_filter = test_filter.build();
-            for test_name in test_names {
-                prop_assert!(single_filter.filter_name_match(&test_name).is_match());
-            }
+    // Test that exact names match.
+    #[proptest(cases = 50)]
+    fn proptest_exact(#[strategy(vec(any::<String>(), 0..16))] test_names: Vec<String>) {
+        let test_filter =
+            TestFilterBuilder::new(RunIgnored::Default, None, &test_names, Vec::new()).unwrap();
+        let single_filter = test_filter.build();
+        for test_name in test_names {
+            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
+        }
+    }
+
+    // Test that substrings match.
+    #[proptest(cases = 50)]
+    fn proptest_substring(
+        #[strategy(vec([any::<String>(); 3], 0..16))] substring_prefix_suffixes: Vec<[String; 3]>,
+    ) {
+        let mut patterns = Vec::with_capacity(substring_prefix_suffixes.len());
+        let mut test_names = Vec::with_capacity(substring_prefix_suffixes.len());
+        for [substring, prefix, suffix] in substring_prefix_suffixes {
+            test_names.push(prefix + &substring + &suffix);
+            patterns.push(substring);
         }
 
-        // Test that exact names match.
-        #[test]
-        fn proptest_exact(test_names in vec(any::<String>(), 0..16)) {
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &test_names, Vec::new()).unwrap();
-            let single_filter = test_filter.build();
-            for test_name in test_names {
-                prop_assert!(single_filter.filter_name_match(&test_name).is_match());
-            }
+        let test_filter =
+            TestFilterBuilder::new(RunIgnored::Default, None, &patterns, Vec::new()).unwrap();
+        let single_filter = test_filter.build();
+        for test_name in test_names {
+            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
         }
+    }
 
-        // Test that substrings match.
-        #[test]
-        fn proptest_substring(
-            substring_prefix_suffixes in vec([any::<String>(); 3], 0..16),
-        ) {
-            let mut patterns = Vec::with_capacity(substring_prefix_suffixes.len());
-            let mut test_names = Vec::with_capacity(substring_prefix_suffixes.len());
-            for [substring, prefix, suffix] in substring_prefix_suffixes {
-                test_names.push(prefix + &substring + &suffix);
-                patterns.push(substring);
-            }
-
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, &patterns, Vec::new()).unwrap();
-            let single_filter = test_filter.build();
-            for test_name in test_names {
-                prop_assert!(single_filter.filter_name_match(&test_name).is_match());
-            }
-        }
-
-        // Test that dropping a character from a string doesn't match.
-        #[test]
-        fn proptest_no_match(
-            substring in any::<String>(),
-            prefix in any::<String>(),
-            suffix in any::<String>(),
-        ) {
-            prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
-            let pattern = prefix + &substring + &suffix;
-            let test_filter = TestFilterBuilder::new(RunIgnored::Default, None, [pattern], Vec::new()).unwrap();
-            let single_filter = test_filter.build();
-            prop_assert!(!single_filter.filter_name_match(&substring).is_match());
-        }
+    // Test that dropping a character from a string doesn't match.
+    #[proptest(cases = 50)]
+    fn proptest_no_match(substring: String, prefix: String, suffix: String) {
+        prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
+        let pattern = prefix + &substring + &suffix;
+        let test_filter =
+            TestFilterBuilder::new(RunIgnored::Default, None, [pattern], Vec::new()).unwrap();
+        let single_filter = test_filter.build();
+        prop_assert!(!single_filter.filter_name_match(&substring).is_match());
     }
 
     // /// Creates a fake test binary instance.
