@@ -452,9 +452,7 @@ fn parse_regex<'i>(input: Span<'i>) -> IResult<'i, Option<NameMatcher>> {
         let (i, res) = match parse_regex_inner(input.clone()) {
             Ok((i, res)) => (i, res),
             Err(_) => {
-                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(|c| c == ')')(
-                    input.clone(),
-                ) {
+                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(')')(input.clone()) {
                     Ok((i, _)) => {
                         let start = i.location();
                         let err = ParseSingleError::ExpectedCloseRegex((start, 0).into());
@@ -515,7 +513,7 @@ fn recover_unexpected_comma<'i>(input: Span<'i>) -> IResult<'i, ()> {
                 let pos = i.location();
                 i.state
                     .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
-                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(|c| c == ')')(i) {
+                match take_till0::<_, _, winnow::error::Error<Span<'_>>>(')')(i) {
                     Ok((i, _)) => Ok((i, ())),
                     Err(_) => unreachable!(),
                 }
