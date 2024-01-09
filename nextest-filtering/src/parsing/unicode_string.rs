@@ -8,8 +8,7 @@ use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
     branch::alt,
-    bytes::{take_till1, take_while_m_n},
-    combinator::value,
+    bytes::{one_of, take_till1, take_while_m_n},
     multi::fold_many0,
     sequence::{delimited, preceded},
     stream::SliceLen,
@@ -65,15 +64,15 @@ fn parse_escaped_char(input: Span<'_>) -> IResult<'_, Option<char>> {
     trace("parse_escaped_char", |input| {
         let valid = alt((
             parse_unicode,
-            value('\n', 'n'),
-            value('\r', 'r'),
-            value('\t', 't'),
-            value('\u{08}', 'b'),
-            value('\u{0C}', 'f'),
-            value('\\', '\\'),
-            value('/', '/'),
-            value(')', ')'),
-            value(',', ','),
+            one_of('n').value('\n'),
+            one_of('r').value('\r'),
+            one_of('t').value('\t'),
+            one_of('b').value('\u{08}'),
+            one_of('f').value('\u{0C}'),
+            one_of('\\').value('\\'),
+            one_of('/').value('/'),
+            one_of(')').value(')'),
+            one_of(',').value(','),
         ));
         preceded(
             '\\',

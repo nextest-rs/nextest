@@ -20,7 +20,7 @@ use winnow::{
     branch::alt,
     bytes::{one_of, tag, take_till0, take_till1},
     character::line_ending,
-    combinator::{eof, peek, value},
+    combinator::{eof, peek},
     multi::{fold_many0, many0},
     sequence::{delimited, preceded, terminated},
     stream::Location,
@@ -314,10 +314,10 @@ fn ws<'a, T, P: Parser<Span<'a>, T, Error<'a>>>(
     move |input: Span<'a>| {
         let (i, _): (_, ()) = many0(alt((
             // Match individual space characters.
-            value((), ' '),
+            one_of(' ').void(),
             // Match CRLF and LF line endings. This allows filters to be specified as multiline TOML
             // strings.
-            value((), line_ending),
+            line_ending.void(),
         )))(input.clone())?;
         match inner.parse_next(i) {
             Ok(res) => Ok(res),
@@ -698,8 +698,8 @@ fn parse_expr_not(input: Span<'_>) -> IResult<'_, ExprResult> {
         "parse_expr_not",
         (
             alt((
-                value(NotOperator::LiteralNot, "not "),
-                value(NotOperator::Exclamation, '!'),
+                tag("not ").value(NotOperator::LiteralNot),
+                one_of('!').value(NotOperator::Exclamation),
             )),
             expect_expr(ws(parse_basic_expr)),
         )
@@ -780,9 +780,9 @@ fn parse_or_operator<'i>(input: Span<'i>) -> IResult<'i, Option<OrOperator>> {
                     })
                     .parse_next(input)
             },
-            value(Some(OrOperator::LiteralOr), "or "),
-            value(Some(OrOperator::Pipe), '|'),
-            value(Some(OrOperator::Plus), '+'),
+            tag("or ").value(Some(OrOperator::LiteralOr)),
+            one_of('|').value(Some(OrOperator::Pipe)),
+            one_of('+').value(Some(OrOperator::Plus)),
         ))),
     )
     .parse_next(input)
@@ -884,20 +884,11 @@ fn parse_and_or_difference_operator<'i>(
                     })
                     .parse_next(input)
             },
-            value(
-                Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd)),
-                "and ",
-            ),
-            value(
-                Some(AndOrDifferenceOperator::And(AndOperator::Ampersand)),
-                '&',
-            ),
-            value(
-                Some(AndOrDifferenceOperator::Difference(
-                    DifferenceOperator::Minus,
-                )),
-                '-',
-            ),
+            tag("and ").value(Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd))),
+            one_of('&').value(Some(AndOrDifferenceOperator::And(AndOperator::Ampersand))),
+            one_of('-').value(Some(AndOrDifferenceOperator::Difference(
+                DifferenceOperator::Minus,
+            ))),
         ))),
     )
     .parse_next(input)
