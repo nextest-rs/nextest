@@ -17,14 +17,12 @@ use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
 use std::{cell::RefCell, fmt};
 use winnow::{
-    branch::alt,
-    bytes::{one_of, tag, take_till0, take_till1},
-    character::line_ending,
-    combinator::{eof, peek},
+    ascii::line_ending,
+    combinator::{alt, delimited, eof, peek, preceded, terminated},
     multi::{fold_many0, many0},
-    sequence::{delimited, preceded, terminated},
     stream::Location,
     stream::SliceLen,
+    token::{one_of, tag, take_till0, take_till1},
     trace::trace,
     Parser,
 };

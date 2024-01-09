@@ -7,12 +7,12 @@ use super::{expect_n, IResult, Span, SpanLength};
 use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
-    branch::alt,
-    bytes::{one_of, take_till1, take_while_m_n},
+    bytes::take_while_m_n,
+    combinator::{alt, delimited, preceded},
     multi::fold_many0,
-    sequence::{delimited, preceded},
     stream::SliceLen,
     stream::Stream,
+    token::{one_of, take_till1},
     trace::trace,
     Parser,
 };
