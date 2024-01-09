@@ -21,7 +21,7 @@ use winnow::{
     combinator::{alt, delimited, eof, fold_repeat, peek, preceded, repeat, terminated},
     stream::Location,
     stream::SliceLen,
-    token::{tag, take_till0, take_till1},
+    token::{tag, take_till},
     trace::trace,
     unpeek, Parser,
 };
@@ -406,7 +406,7 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
             }
 
             let parse_escape = alt((r"\/".value('/'), '\\')).map(Frag::Escape);
-            let parse_literal = take_till1(('\\', '/'))
+            let parse_literal = take_till(1.., ('\\', '/'))
                 .verify(|s: &str| !s.is_empty())
                 .map(|s: &str| Frag::Literal(s));
             let parse_frag = alt((parse_escape, parse_literal));
@@ -460,7 +460,7 @@ fn parse_regex<'i>(input: Span<'i>) -> IResult<'i, Option<NameMatcher>> {
             let (i, res) = match parse_regex_inner(input.clone()) {
                 Ok((i, res)) => (i, res),
                 Err(_) => {
-                    match take_till0::<_, _, winnow::error::InputError<Span<'_>>>(')')
+                    match take_till::<_, _, winnow::error::InputError<Span<'_>>>(0.., ')')
                         .parse_peek(input.clone())
                     {
                         Ok((i, _)) => {
@@ -529,7 +529,8 @@ fn recover_unexpected_comma<'i>(input: Span<'i>) -> IResult<'i, ()> {
                     let pos = i.location();
                     i.state
                         .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
-                    match take_till0::<_, _, winnow::error::InputError<Span<'_>>>(')').parse_peek(i)
+                    match take_till::<_, _, winnow::error::InputError<Span<'_>>>(0.., ')')
+                        .parse_peek(i)
                     {
                         Ok((i, _)) => Ok((i, ())),
                         Err(_) => unreachable!(),
@@ -550,7 +551,7 @@ fn nullary_set_def<'a>(
         let (i, _) = tag(name).parse_peek(i)?;
         let (i, _) = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_peek(i)?;
         let err_loc = i.location();
-        let i = match take_till0::<_, _, Error<'a>>(')').parse_peek(i) {
+        let i = match take_till::<_, _, Error<'a>>(0.., ')').parse_peek(i) {
             Ok((i, res)) => {
                 if !res.trim().is_empty() {
                     let span = (err_loc, res.len()).into();

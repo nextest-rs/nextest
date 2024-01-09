@@ -10,7 +10,7 @@ use winnow::{
     combinator::{alt, delimited, fold_repeat, preceded},
     stream::SliceLen,
     stream::Stream,
-    token::{take_till1, take_while},
+    token::{take_till, take_while},
     trace::trace,
     unpeek, Parser,
 };
@@ -117,7 +117,7 @@ fn parse_literal<'i>(input: Span<'i>) -> IResult<'i, &str> {
     trace(
         "parse_literal",
         unpeek(|input: Span<'i>| {
-            let not_quote_slash = take_till1((',', ')', '\\'));
+            let not_quote_slash = take_till(1.., (',', ')', '\\'));
             let res = not_quote_slash
                 .verify(|s: &str| !s.is_empty())
                 .parse_peek(input.clone());
