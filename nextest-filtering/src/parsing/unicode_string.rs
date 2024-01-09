@@ -52,7 +52,7 @@ fn parse_unicode(input: Span<'_>) -> IResult<'_, char> {
     trace("parse_unicode", |input| {
         let parse_hex = take_while(1..=6, |c: char| c.is_ascii_hexdigit());
         let parse_delimited_hex = preceded('u', delimited('{', parse_hex, '}'));
-        let parse_u32 = parse_delimited_hex.map_res(|hex| u32::from_str_radix(hex, 16));
+        let parse_u32 = parse_delimited_hex.try_map(|hex| u32::from_str_radix(hex, 16));
         run_str_parser(parse_u32.verify_map(std::char::from_u32)).parse_next(input)
     })
     .parse_next(input)
