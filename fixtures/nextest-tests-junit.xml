@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="nextest-run" tests="3" failures="1" errors="0" uuid="9ea8d2ee-e485-4e5b-8dba-4985c12081f7" timestamp="2022-07-28T01:09:27.584+00:00" time="0.007">
+<testsuites name="nextest-run" tests="3" failures="1" errors="0" uuid="03540265-7c54-4df7-a49e-2b0f44422a24" timestamp="2024-01-09T07:46:35.523+00:00" time="0.022">
     <testsuite name="nextest-tests::basic" tests="3" disabled="0" errors="0" failures="1">
-        <testcase name="test_cwd" classname="nextest-tests::basic" timestamp="2022-07-28T01:09:27.584+00:00" time="0.002">
+        <testcase name="test_cwd" classname="nextest-tests::basic" timestamp="2024-01-09T07:46:35.524+00:00" time="0.004">
         </testcase>
-        <testcase name="test_failure_assert" classname="nextest-tests::basic" timestamp="2022-07-28T01:09:27.585+00:00" time="0.002">
-            <failure type="test failure">thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
-  left: `4`,
- right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
+        <testcase name="test_failure_assert" classname="nextest-tests::basic" timestamp="2024-01-09T07:46:35.524+00:00" time="0.004">
+            <failure type="test failure">thread &apos;test_failure_assert&apos; panicked at tests/basic.rs:19:5:
+assertion `left == right` failed: this is an assertion
+  left: 4
+ right: 5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</failure>
-            <rerunFailure timestamp="2022-07-28T01:09:27.586+00:00" time="0.002" type="test failure">thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
-  left: `4`,
- right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
+            <rerunFailure timestamp="2024-01-09T07:46:35.529+00:00" time="0.004" type="test failure">thread &apos;test_failure_assert&apos; panicked at tests/basic.rs:19:5:
+assertion `left == right` failed: this is an assertion
+  left: 4
+ right: 5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
                 <system-out>
 running 1 test
@@ -24,15 +26,17 @@ failures:
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
 
 </system-out>
-                <system-err>thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
-  left: `4`,
- right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
+                <system-err>thread &apos;test_failure_assert&apos; panicked at tests/basic.rs:19:5:
+assertion `left == right` failed: this is an assertion
+  left: 4
+ right: 5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 </system-err>
             </rerunFailure>
-            <rerunFailure timestamp="2022-07-28T01:09:27.588+00:00" time="0.002" type="test failure">thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
-  left: `4`,
- right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
+            <rerunFailure timestamp="2024-01-09T07:46:35.534+00:00" time="0.004" type="test failure">thread &apos;test_failure_assert&apos; panicked at tests/basic.rs:19:5:
+assertion `left == right` failed: this is an assertion
+  left: 4
+ right: 5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
                 <system-out>
 running 1 test
@@ -46,9 +50,10 @@ failures:
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
 
 </system-out>
-                <system-err>thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
-  left: `4`,
- right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
+                <system-err>thread &apos;test_failure_assert&apos; panicked at tests/basic.rs:19:5:
+assertion `left == right` failed: this is an assertion
+  left: 4
+ right: 5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 </system-err>
             </rerunFailure>
@@ -64,14 +69,16 @@ failures:
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
 
 </system-out>
-            <system-err>thread &apos;test_failure_assert&apos; panicked at &apos;assertion failed: `(left == right)`
-  left: `4`,
- right: `5`: this is an assertion&apos;, tests/basic.rs:9:5
+            <system-err>thread &apos;test_failure_assert&apos; panicked at tests/basic.rs:19:5:
+assertion `left == right` failed: this is an assertion
+  left: 4
+ right: 5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 </system-err>
         </testcase>
-        <testcase name="test_flaky_mod_4" classname="nextest-tests::basic" timestamp="2022-07-28T01:09:27.589+00:00" time="0.001">
-            <flakyFailure timestamp="2022-07-28T01:09:27.586+00:00" time="0.002" type="test failure">thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 1 % 4 != 0&apos;, tests/basic.rs:33:9
+        <testcase name="test_flaky_mod_4" classname="nextest-tests::basic" timestamp="2024-01-09T07:46:35.541+00:00" time="0.004">
+            <flakyFailure timestamp="2024-01-09T07:46:35.524+00:00" time="0.004" type="test failure">thread &apos;test_flaky_mod_4&apos; panicked at tests/basic.rs:43:9:
+Failed because attempt 1 % 4 != 0
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
                 <system-out>
 running 1 test
@@ -85,11 +92,13 @@ failures:
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
 
 </system-out>
-                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 1 % 4 != 0&apos;, tests/basic.rs:33:9
+                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at tests/basic.rs:43:9:
+Failed because attempt 1 % 4 != 0
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 </system-err>
             </flakyFailure>
-            <flakyFailure timestamp="2022-07-28T01:09:27.587+00:00" time="0.002" type="test failure">thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 2 % 4 != 0&apos;, tests/basic.rs:33:9
+            <flakyFailure timestamp="2024-01-09T07:46:35.529+00:00" time="0.004" type="test failure">thread &apos;test_flaky_mod_4&apos; panicked at tests/basic.rs:43:9:
+Failed because attempt 2 % 4 != 0
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
                 <system-out>
 running 1 test
@@ -103,7 +112,28 @@ failures:
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
 
 </system-out>
-                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at &apos;Failed because attempt 2 % 4 != 0&apos;, tests/basic.rs:33:9
+                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at tests/basic.rs:43:9:
+Failed because attempt 2 % 4 != 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+</system-err>
+            </flakyFailure>
+            <flakyFailure timestamp="2024-01-09T07:46:35.534+00:00" time="0.006" type="test failure">thread &apos;test_flaky_mod_4&apos; panicked at tests/basic.rs:43:9:
+Failed because attempt 3 % 4 != 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+                <system-out>
+running 1 test
+test test_flaky_mod_4 ... FAILED
+
+failures:
+
+failures:
+    test_flaky_mod_4
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+</system-out>
+                <system-err>thread &apos;test_flaky_mod_4&apos; panicked at tests/basic.rs:43:9:
+Failed because attempt 3 % 4 != 0
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 </system-err>
             </flakyFailure>

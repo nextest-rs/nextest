@@ -60,6 +60,10 @@ test-group = '@global'
 [profile.with-junit]
 retries = 2
 
+[[profile.with-junit.overrides]]
+filter = "test(test_flaky_mod_4)"
+retries = 3
+
 [profile.with-junit.junit]
 path = "junit.xml"
 
