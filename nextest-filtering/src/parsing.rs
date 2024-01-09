@@ -18,8 +18,7 @@ use miette::SourceSpan;
 use std::{cell::RefCell, fmt};
 use winnow::{
     branch::alt,
-    bytes::complete::is_not,
-    bytes::{one_of, tag, take_till0},
+    bytes::{one_of, tag, take_till0, take_till1},
     character::line_ending,
     combinator::{eof, map, peek, recognize, value, verify},
     multi::{fold_many0, many0},
@@ -402,9 +401,10 @@ fn parse_regex_inner(input: Span<'_>) -> IResult<'_, String> {
         }
 
         let parse_escape = map(alt((map(r"\/", |_| '/'), '\\')), Frag::Escape);
-        let parse_literal = map(verify(is_not("\\/"), |s: &str| !s.is_empty()), |s: &str| {
-            Frag::Literal(s)
-        });
+        let parse_literal = map(
+            verify(take_till1("\\/"), |s: &str| !s.is_empty()),
+            |s: &str| Frag::Literal(s),
+        );
         let parse_frag = alt((parse_escape, parse_literal));
 
         let (i, res) = fold_many0(parse_frag, String::new, |mut string, frag| {
