@@ -138,7 +138,6 @@ proptest = "1.4.0"
 test-strategy = "0.3.1"
 test-case = "3.3.1"
 
-
 [[bin]]
 name = "passthrough"
 path = "test-helpers/passthrough.rs"
