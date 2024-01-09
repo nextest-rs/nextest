@@ -31,7 +31,6 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
         if #[cfg(not(any(
             target_env = "newlib",
             target_os = "solaris",
-            target_os = "illumos",
             target_os = "emscripten",
             target_os = "fuchsia",
             target_os = "l4re",
@@ -52,7 +51,6 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
                 not(any(target_os = "espidf", target_os = "horizon", target_os = "vita"))
             ),
             target_os = "solaris",
-            target_os = "illumos",
             target_os = "emscripten",
             target_os = "fuchsia",
             target_os = "l4re",
