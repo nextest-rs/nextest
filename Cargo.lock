@@ -1705,7 +1705,6 @@ dependencies = [
  "libc",
  "log",
  "maplit",
- "memchr",
  "miette",
  "mukti-metadata",
  "nextest-filtering",
