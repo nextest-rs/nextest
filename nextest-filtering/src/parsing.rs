@@ -19,9 +19,7 @@ use std::fmt;
 use winnow::{
     ascii::line_ending,
     combinator::{alt, delimited, eof, fold_repeat, peek, preceded, repeat, terminated},
-    stream::Location,
-    stream::SliceLen,
-    stream::Stream,
+    stream::{Location, SliceLen, Stream},
     token::{tag, take_till},
     trace::trace,
     Parser,

@@ -8,9 +8,7 @@ use crate::{
     errors::{GlobConstructError, ParseSingleError},
     NameMatcher,
 };
-use winnow::stream::Location;
-use winnow::trace::trace;
-use winnow::Parser;
+use winnow::{stream::Location, trace::trace, Parser};
 
 /// A glob pattern.
 ///
