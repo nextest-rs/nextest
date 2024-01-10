@@ -306,7 +306,7 @@ where
 fn ws<'a, T, P: Parser<Span<'a>, T, Error>>(mut inner: P) -> impl Parser<Span<'a>, T, Error> {
     move |input: &mut Span<'a>| {
         let start = input.checkpoint();
-        let _: () = repeat(
+        repeat(
             0..,
             alt((
                 // Match individual space characters.
@@ -357,7 +357,7 @@ fn parse_matcher_text<'i>(input: &mut Span<'i>) -> PResult<Option<String>> {
     .parse_next(input)
 }
 
-fn parse_contains_matcher<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
+fn parse_contains_matcher(input: &mut Span<'_>) -> PResult<Option<NameMatcher>> {
     trace(
         "parse_contains_matcher",
         preceded('~', parse_matcher_text).map(|res: Option<String>| {
@@ -370,7 +370,7 @@ fn parse_contains_matcher<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatche
     .parse_next(input)
 }
 
-fn parse_equal_matcher<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
+fn parse_equal_matcher(input: &mut Span<'_>) -> PResult<Option<NameMatcher>> {
     trace(
         "parse_equal_matcher",
         ws(
@@ -385,7 +385,7 @@ fn parse_equal_matcher<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>>
     .parse_next(input)
 }
 
-fn parse_regex_inner<'i>(input: &mut Span<'i>) -> PResult<String> {
+fn parse_regex_inner(input: &mut Span<'_>) -> PResult<String> {
     trace("parse_regex_inner", |input: &mut _| {
         enum Frag<'a> {
             Literal(&'a str),
@@ -477,7 +477,7 @@ fn parse_regex<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
     .parse_next(input)
 }
 
-fn parse_regex_matcher<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
+fn parse_regex_matcher(input: &mut Span<'_>) -> PResult<Option<NameMatcher>> {
     trace(
         "parse_regex_matcher",
         ws(delimited('/', parse_regex, silent_expect(ws('/')))),
@@ -485,7 +485,7 @@ fn parse_regex_matcher<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>>
     .parse_next(input)
 }
 
-fn parse_glob_matcher<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
+fn parse_glob_matcher(input: &mut Span<'_>) -> PResult<Option<NameMatcher>> {
     trace(
         "parse_glob_matcher",
         ws(preceded('#', glob::parse_glob(false))),
@@ -585,20 +585,20 @@ fn unary_set_def<'a>(
         let start = i.location();
         let res = set_matcher(default_matcher).parse_next(i)?;
         let end = i.location();
-        let _ = recover_unexpected_comma.parse_next(i)?;
+        recover_unexpected_comma.parse_next(i)?;
         let _ = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
         Ok(res.map(|matcher| make_set(matcher, (start, end - start).into())))
     }
 }
 
-fn platform_def<'i>(i: &mut Span<'i>) -> PResult<Option<SetDef>> {
+fn platform_def(i: &mut Span<'_>) -> PResult<Option<SetDef>> {
     let _ = "platform".parse_next(i)?;
     let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
     let start = i.location();
     // Try parsing the argument as a string for better error messages.
     let res = ws(parse_matcher_text).parse_next(i)?;
     let end = i.location();
-    let _ = recover_unexpected_comma.parse_next(i)?;
+    recover_unexpected_comma.parse_next(i)?;
     let _ = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
 
     // The returned string will include leading and trailing whitespace.
@@ -620,7 +620,7 @@ fn platform_def<'i>(i: &mut Span<'i>) -> PResult<Option<SetDef>> {
     Ok(platform.map(|platform| SetDef::Platform(platform, (start, end - start).into())))
 }
 
-fn parse_set_def<'i>(input: &mut Span<'i>) -> PResult<Option<SetDef>> {
+fn parse_set_def(input: &mut Span<'_>) -> PResult<Option<SetDef>> {
     trace(
         "parse_set_def",
         ws(alt((
@@ -646,7 +646,7 @@ fn expect_expr<'a, P: Parser<Span<'a>, ExprResult, Error>>(
     expect(inner, ParseSingleError::ExpectedExpr).map(|res| res.unwrap_or(ExprResult::Error))
 }
 
-fn parse_parentheses_expr<'i>(input: &mut Span<'i>) -> PResult<ExprResult> {
+fn parse_parentheses_expr(input: &mut Span<'_>) -> PResult<ExprResult> {
     trace(
         "parse_parentheses_expr",
         delimited(
@@ -659,7 +659,7 @@ fn parse_parentheses_expr<'i>(input: &mut Span<'i>) -> PResult<ExprResult> {
     .parse_next(input)
 }
 
-fn parse_basic_expr<'i>(input: &mut Span<'i>) -> PResult<ExprResult> {
+fn parse_basic_expr(input: &mut Span<'_>) -> PResult<ExprResult> {
     trace(
         "parse_basic_expr",
         ws(alt((
@@ -693,7 +693,7 @@ impl fmt::Display for NotOperator {
     }
 }
 
-fn parse_expr_not<'i>(input: &mut Span<'i>) -> PResult<ExprResult> {
+fn parse_expr_not(input: &mut Span<'_>) -> PResult<ExprResult> {
     trace(
         "parse_expr_not",
         (
@@ -731,7 +731,7 @@ impl fmt::Display for OrOperator {
     }
 }
 
-fn parse_expr<'i>(input: &mut Span<'i>) -> PResult<ExprResult> {
+fn parse_expr(input: &mut Span<'_>) -> PResult<ExprResult> {
     trace("parse_expr", |input: &mut _| {
         // "or" binds less tightly than "and", so parse and within or.
         let expr = expect_expr(parse_and_or_difference_expr).parse_next(input)?;
@@ -830,7 +830,7 @@ enum AndOrDifferenceOperator {
     Difference(DifferenceOperator),
 }
 
-fn parse_and_or_difference_expr<'i>(input: &mut Span<'i>) -> PResult<ExprResult> {
+fn parse_and_or_difference_expr(input: &mut Span<'_>) -> PResult<ExprResult> {
     trace("parse_and_or_difference_expr", |input: &mut _| {
         let expr = expect_expr(parse_basic_expr).parse_next(input)?;
 
@@ -956,7 +956,7 @@ mod tests {
                      (reported errors: {errors:?})"
                 )
             });
-        if errors.len() > 0 {
+        if !errors.is_empty() {
             panic!("for input {input}, parse_glob_matcher reported errors: {errors:?}");
         }
 
@@ -1412,8 +1412,8 @@ mod tests {
         assert_eq_both_ways(&expr, r"test(~a\,)");
 
         // string parsing is compatible with possible future syntax
-        fn parse_future_syntax<'i>(
-            input: &mut Span<'i>,
+        fn parse_future_syntax(
+            input: &mut Span<'_>,
         ) -> PResult<(Option<NameMatcher>, Option<NameMatcher>)> {
             let _ = "something".parse_next(input)?;
             let _ = '('.parse_next(input)?;
