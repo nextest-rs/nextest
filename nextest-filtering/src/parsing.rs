@@ -785,18 +785,14 @@ fn parse_or_operator<'i>(input: &mut Span<'i>) -> PResult<'i, Option<OrOperator>
         ws(alt((
             |input: &mut Span<'i>| {
                 let start = input.location();
-                let i = input.clone();
                 // This is not a valid OR operator in this position, but catch it to provide a better
                 // experience.
-                alt(("||", "OR "))
-                    .map(move |op: &str| {
-                        // || is not supported in filter expressions: suggest using | instead.
-                        let length = op.len();
-                        let err = ParseSingleError::InvalidOrOperator((start, length).into());
-                        i.state.report_error(err);
-                        None
-                    })
-                    .parse_next(input)
+                let op = alt(("||", "OR ")).parse_next(input)?;
+                // || is not supported in filter expressions: suggest using | instead.
+                let length = op.len();
+                let err = ParseSingleError::InvalidOrOperator((start, length).into());
+                input.state.report_error(err);
+                Ok(None)
             },
             "or ".value(Some(OrOperator::LiteralOr)),
             '|'.value(Some(OrOperator::Pipe)),
@@ -893,16 +889,12 @@ fn parse_and_or_difference_operator<'i>(
         ws(alt((
             |input: &mut Span<'i>| {
                 let start = input.location();
-                let i = input.clone();
-                alt(("&&", "AND "))
-                    .map(move |op: &str| {
-                        // && is not supported in filter expressions: suggest using & instead.
-                        let length = op.len();
-                        let err = ParseSingleError::InvalidAndOperator((start, length).into());
-                        i.state.report_error(err);
-                        None
-                    })
-                    .parse_next(input)
+                let op = alt(("&&", "AND ")).parse_next(input)?;
+                // && is not supported in filter expressions: suggest using & instead.
+                let length = op.len();
+                let err = ParseSingleError::InvalidAndOperator((start, length).into());
+                input.state.report_error(err);
+                Ok(None)
             },
             "and ".value(Some(AndOrDifferenceOperator::And(AndOperator::LiteralAnd))),
             '&'.value(Some(AndOrDifferenceOperator::And(AndOperator::Ampersand))),
