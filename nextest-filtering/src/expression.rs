@@ -15,7 +15,7 @@ use guppy::{
 use miette::SourceSpan;
 use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use recursion::{Collapsible, CollapsibleExt, MappableFrame, PartiallyApplied};
-use std::{cell::RefCell, collections::HashSet, fmt};
+use std::{collections::HashSet, fmt};
 
 /// Matcher for name
 ///
@@ -227,11 +227,9 @@ impl FilteringSet {
 impl FilteringExpr {
     /// Parse a filtering expression
     pub fn parse(input: String, graph: &PackageGraph) -> Result<Self, FilterExpressionParseErrors> {
-        let errors = RefCell::new(Vec::new());
-        match parse(new_span(&input, &errors)) {
+        let mut errors = Vec::new();
+        match parse(new_span(&input, &mut errors)) {
             Ok(parsed_expr) => {
-                let errors = errors.into_inner();
-
                 if !errors.is_empty() {
                     return Err(FilterExpressionParseErrors::new(input.clone(), errors));
                 }

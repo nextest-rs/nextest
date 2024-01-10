@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use miette::{Diagnostic, SourceSpan};
-use std::cell::RefCell;
 use thiserror::Error;
 
 /// A set of errors that occurred while parsing a filter expression.
@@ -150,19 +149,19 @@ pub enum GlobConstructError {
     RegexError(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct State<'a> {
     // A `RefCell` is required here because the state must implement `Clone` to work with nom.
-    errors: &'a RefCell<Vec<ParseSingleError>>,
+    errors: &'a mut Vec<ParseSingleError>,
 }
 
 impl<'a> State<'a> {
-    pub fn new(errors: &'a RefCell<Vec<ParseSingleError>>) -> Self {
+    pub fn new(errors: &'a mut Vec<ParseSingleError>) -> Self {
         Self { errors }
     }
 
-    pub fn report_error(&self, error: ParseSingleError) {
-        self.errors.borrow_mut().push(error);
+    pub fn report_error(&mut self, error: ParseSingleError) {
+        self.errors.push(error);
     }
 }
 

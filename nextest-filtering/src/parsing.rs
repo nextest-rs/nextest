@@ -15,7 +15,7 @@
 
 use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
-use std::{cell::RefCell, fmt};
+use std::fmt;
 use winnow::{
     ascii::line_ending,
     combinator::{alt, delimited, eof, fold_repeat, peek, preceded, repeat, terminated},
@@ -43,7 +43,7 @@ impl<'a> ToSourceSpan for Span<'a> {
     }
 }
 
-pub(crate) fn new_span<'a>(input: &'a str, errors: &'a RefCell<Vec<ParseSingleError>>) -> Span<'a> {
+pub(crate) fn new_span<'a>(input: &'a str, errors: &'a mut Vec<ParseSingleError>) -> Span<'a> {
     Span {
         input: winnow::Located::new(input),
         state: State::new(errors),
@@ -115,11 +115,11 @@ pub enum ParsedExpr<S = SourceSpan> {
 
 impl ParsedExpr {
     pub fn parse(input: &str) -> Result<Self, Vec<ParseSingleError>> {
-        let errors = RefCell::new(Vec::new());
-        let span = new_span(input, &errors);
+        let mut errors = Vec::new();
+        let span = new_span(input, &mut errors);
         match parse(span).unwrap() {
             ExprResult::Valid(expr) => Ok(expr),
-            ExprResult::Error => Err(errors.into_inner()),
+            ExprResult::Error => Err(errors),
         }
     }
 
@@ -904,12 +904,11 @@ pub(crate) fn parse(input: Span<'_>) -> Result<ExprResult, winnow::error::ErrMod
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
 
     #[track_caller]
     fn parse_regex(input: &str) -> NameMatcher {
-        let errors = RefCell::new(Vec::new());
-        let span = new_span(input, &errors);
+        let mut errors = Vec::new();
+        let span = new_span(input, &mut errors);
         parse_regex_matcher.parse_peek(span).unwrap().1.unwrap()
     }
 
@@ -943,8 +942,8 @@ mod tests {
 
     #[track_caller]
     fn parse_glob(input: &str) -> NameMatcher {
-        let errors = RefCell::new(Vec::new());
-        let span = new_span(input, &errors);
+        let mut errors = Vec::new();
+        let span = new_span(input, &mut errors);
         let matcher = parse_glob_matcher
             .parse_peek(span)
             .unwrap_or_else(|error| {
@@ -957,7 +956,7 @@ mod tests {
                      (reported errors: {errors:?})"
                 )
             });
-        if errors.borrow().len() > 0 {
+        if errors.len() > 0 {
             panic!("for input {input}, parse_glob_matcher reported errors: {errors:?}");
         }
 
@@ -996,8 +995,8 @@ mod tests {
 
     #[track_caller]
     fn parse_set(input: &str) -> SetDef {
-        let errors = RefCell::new(Vec::new());
-        let span = new_span(input, &errors);
+        let mut errors = Vec::new();
+        let span = new_span(input, &mut errors);
         parse_set_def.parse_peek(span).unwrap().1.unwrap()
     }
 
@@ -1425,8 +1424,8 @@ mod tests {
             Ok((n1, n2))
         }
 
-        let errors = RefCell::new(Vec::new());
-        let mut span = new_span("something(aa, bb)", &errors);
+        let mut errors = Vec::new();
+        let mut span = new_span("something(aa, bb)", &mut errors);
         if parse_future_syntax.parse_next(&mut span).is_err() {
             panic!("Failed to parse comma separated matchers");
         }
@@ -1434,10 +1433,10 @@ mod tests {
 
     #[track_caller]
     fn parse_err(input: &str) -> Vec<ParseSingleError> {
-        let errors = RefCell::new(Vec::new());
-        let span = new_span(input, &errors);
+        let mut errors = Vec::new();
+        let span = new_span(input, &mut errors);
         super::parse(span).unwrap();
-        errors.into_inner()
+        errors
     }
 
     macro_rules! assert_error {
