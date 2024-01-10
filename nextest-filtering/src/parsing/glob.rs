@@ -10,7 +10,6 @@ use crate::{
 };
 use winnow::stream::Location;
 use winnow::trace::trace;
-use winnow::unpeek;
 use winnow::Parser;
 
 /// A glob pattern.
@@ -66,7 +65,7 @@ pub(super) fn parse_glob<'i>(
 ) -> impl Parser<Span<'i>, Option<NameMatcher>, Error<'i>> {
     trace("parse_glob", move |input: &mut Span<'i>| {
         let start = input.location();
-        let res = match unpeek(parse_matcher_text).parse_next(input) {
+        let res = match parse_matcher_text.parse_next(input) {
             Ok(res) => res,
             Err(_) => {
                 unreachable!("parse_matcher_text should never fail")
