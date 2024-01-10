@@ -60,9 +60,7 @@ impl GenericGlob {
 }
 
 // This never returns Err(()) -- instead, it reports an error to the parsing state.
-pub(super) fn parse_glob<'i>(
-    implicit: bool,
-) -> impl Parser<Span<'i>, Option<NameMatcher>, Error<'i>> {
+pub(super) fn parse_glob<'i>(implicit: bool) -> impl Parser<Span<'i>, Option<NameMatcher>, Error> {
     trace("parse_glob", move |input: &mut Span<'i>| {
         let start = input.location();
         let res = match parse_matcher_text.parse_next(input) {

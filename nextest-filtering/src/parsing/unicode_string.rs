@@ -13,7 +13,7 @@ use winnow::{
     Parser,
 };
 
-fn parse_unicode<'i>(input: &mut Span<'i>) -> PResult<'i, char> {
+fn parse_unicode<'i>(input: &mut Span<'i>) -> PResult<char> {
     trace("parse_unicode", |input: &mut _| {
         let parse_hex = take_while(1..=6, |c: char| c.is_ascii_hexdigit());
         let parse_delimited_hex = preceded('u', delimited('{', parse_hex, '}'));
@@ -23,7 +23,7 @@ fn parse_unicode<'i>(input: &mut Span<'i>) -> PResult<'i, char> {
     .parse_next(input)
 }
 
-fn parse_escaped_char<'i>(input: &mut Span<'i>) -> PResult<'i, Option<char>> {
+fn parse_escaped_char<'i>(input: &mut Span<'i>) -> PResult<Option<char>> {
     trace("parse_escaped_char", |input: &mut _| {
         let valid = alt((
             parse_unicode,
@@ -70,7 +70,7 @@ impl fmt::Display for DisplayParsedString<'_> {
         Ok(())
     }
 }
-fn parse_literal<'i>(input: &mut Span<'i>) -> PResult<'i, &'i str> {
+fn parse_literal<'i>(input: &mut Span<'i>) -> PResult<&'i str> {
     trace("parse_literal", |input: &mut _| {
         let not_quote_slash = take_till(1.., (',', ')', '\\'));
         let res = not_quote_slash
@@ -87,7 +87,7 @@ enum StringFragment<'a> {
     EscapedChar(char),
 }
 
-fn parse_fragment<'i>(input: &mut Span<'i>) -> PResult<'i, Option<StringFragment<'i>>> {
+fn parse_fragment<'i>(input: &mut Span<'i>) -> PResult<Option<StringFragment<'i>>> {
     trace(
         "parse_fragment",
         alt((
@@ -101,7 +101,7 @@ fn parse_fragment<'i>(input: &mut Span<'i>) -> PResult<'i, Option<StringFragment
 /// Construct a string by consuming the input until the next unescaped ) or ,.
 ///
 /// Returns None if the string isn't valid.
-pub(super) fn parse_string<'i>(input: &mut Span<'i>) -> PResult<'i, Option<String>> {
+pub(super) fn parse_string<'i>(input: &mut Span<'i>) -> PResult<Option<String>> {
     trace(
         "parse_string",
         fold_repeat(
