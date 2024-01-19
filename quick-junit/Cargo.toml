@@ -16,7 +16,7 @@ chrono = { version = "0.4.31", default-features = false, features = ["std"] }
 indexmap = "2.1.0"
 quick-xml = "0.31.0"
 thiserror = "1.0.56"
-uuid = "1.6.1"
+uuid = "1.7.0"
 strip-ansi-escapes = "0.2.0"
 nextest-workspace-hack.workspace = true
 
