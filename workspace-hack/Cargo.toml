@@ -35,7 +35,7 @@ serde_json = { version = "1.0.111", features = ["preserve_order", "unbounded_dep
 similar = { version = "2.3.0", features = ["inline", "unicode"] }
 tokio = { version = "1.35.1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 twox-hash = { version = "1.6.3" }
-uuid = { version = "1.6.1", features = ["v4"] }
+uuid = { version = "1.7.0", features = ["v4"] }
 
 [build-dependencies]
 cc = { version = "1.0.83", default-features = false, features = ["parallel"] }
