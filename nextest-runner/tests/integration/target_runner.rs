@@ -162,7 +162,7 @@ fn test_listing_with_target_runner() -> Result<()> {
     set_env_vars();
 
     let test_filter = TestFilterBuilder::any(RunIgnored::Default);
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty());
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
 
     let bin_count = test_list.binary_count();
     let test_count = test_list.test_count();
@@ -174,7 +174,7 @@ fn test_listing_with_target_runner() -> Result<()> {
         );
         let (_, target_runner) = runner_for_target(None).unwrap();
 
-        let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &target_runner);
+        let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &target_runner)?;
 
         assert_eq!(bin_count, test_list.binary_count());
         assert_eq!(test_count, test_list.test_count());
@@ -207,7 +207,7 @@ fn test_run_with_target_runner() -> Result<()> {
         assert_eq!(passthrough_path(), runner.binary());
     }
 
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &target_runner);
+    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &target_runner)?;
 
     let config = load_config();
     let profile = config

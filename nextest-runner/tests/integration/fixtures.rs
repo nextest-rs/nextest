@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Path, Utf8PathBuf};
+use color_eyre::eyre::{Context, Result};
 use duct::cmd;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::{btreemap, btreeset};
@@ -363,7 +364,7 @@ impl FixtureTargets {
         &self,
         test_filter: &TestFilterBuilder,
         target_runner: &TargetRunner,
-    ) -> TestList<'_> {
+    ) -> Result<TestList<'_>> {
         let test_bins: Vec<_> = self.test_artifacts.values().cloned().collect();
         let double_spawn = DoubleSpawnInfo::disabled();
         let ctx = TestExecuteContext {
@@ -380,7 +381,7 @@ impl FixtureTargets {
             self.env.to_owned(),
             get_num_cpus(),
         )
-        .expect("test list successfully created")
+        .context("Failed to make test list")
     }
 }
 

@@ -14,13 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43 # v2
+      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
       - name: Install static-sitemap-cli
         run: npm install static-sitemap-cli
       - name: Build rustdoc
         run: cargo doc --all-features --workspace
       - name: Install mdbook
-        uses: taiki-e/install-action@2f4c386a81aeab009d470320dfc6e0930ee4e064 # v2
+        uses: taiki-e/install-action@3ed9916b5427bc0679b294607ea47d1d8007b53f # v2
         with:
           tool: mdbook@0.4
       - name: Run mdbook
