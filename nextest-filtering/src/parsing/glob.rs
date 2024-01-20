@@ -3,12 +3,12 @@
 
 //! Glob matching.
 
-use super::{parse_matcher_text, IResult, Span};
+use super::{parse_matcher_text, Error, Span};
 use crate::{
     errors::{GlobConstructError, ParseSingleError},
     NameMatcher,
 };
-use nom_tracable::tracable_parser;
+use winnow::{stream::Location, trace::trace, Parser};
 
 /// A glob pattern.
 ///
@@ -58,30 +58,31 @@ impl GenericGlob {
 }
 
 // This never returns Err(()) -- instead, it reports an error to the parsing state.
-#[tracable_parser]
-pub(super) fn parse_glob(input: Span<'_>, implicit: bool) -> IResult<'_, Option<NameMatcher>> {
-    let (i, res) = match parse_matcher_text(input.clone()) {
-        Ok((i, res)) => (i, res),
-        Err(_) => {
-            unreachable!("parse_matcher_text should never fail")
-        }
-    };
+pub(super) fn parse_glob<'i>(implicit: bool) -> impl Parser<Span<'i>, Option<NameMatcher>, Error> {
+    trace("parse_glob", move |input: &mut Span<'i>| {
+        let start = input.location();
+        let res = match parse_matcher_text.parse_next(input) {
+            Ok(res) => res,
+            Err(_) => {
+                unreachable!("parse_matcher_text should never fail")
+            }
+        };
 
-    let Some(parsed_value) = res else {
-        return Ok((i, None));
-    };
+        let Some(parsed_value) = res else {
+            return Ok(None);
+        };
 
-    match GenericGlob::new(parsed_value) {
-        Ok(glob) => Ok((i, Some(NameMatcher::Glob { glob, implicit }))),
-        Err(error) => {
-            let start = input.location_offset();
-            let end = i.location_offset();
-            let err = ParseSingleError::InvalidGlob {
-                span: (start, end - start).into(),
-                error,
-            };
-            i.extra.report_error(err);
-            Ok((i, None))
+        match GenericGlob::new(parsed_value) {
+            Ok(glob) => Ok(Some(NameMatcher::Glob { glob, implicit })),
+            Err(error) => {
+                let end = input.location();
+                let err = ParseSingleError::InvalidGlob {
+                    span: (start, end - start).into(),
+                    error,
+                };
+                input.state.report_error(err);
+                Ok(None)
+            }
         }
-    }
+    })
 }
