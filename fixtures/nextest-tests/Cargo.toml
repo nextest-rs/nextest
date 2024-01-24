@@ -40,10 +40,10 @@ members = [
 dylib-test = { path = "dylib-test" }
 uuid = "1.2.1"
 
-# TODO: Introduce this test (regarding #910) once the MSRV is Rust 1.70.
-# [profile.dev]
-# debug = 1
+# Test that the "line-tables-only" debug setting works.
+[profile.dev]
+debug = 1
 
-# [profile.dev-line-tables-only]
-# inherits = "dev"
-# debug = "line-tables-only"
+[profile.dev-line-tables-only]
+inherits = "dev"
+debug = "line-tables-only"
