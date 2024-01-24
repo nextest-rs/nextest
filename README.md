@@ -29,7 +29,7 @@ This repository contains the source code for:
 
 The minimum supported Rust version to *run* nextest with is **Rust 1.38.** Nextest is not tested against versions that are that old, but it should work with any version of Rust released in the past year. (Please report a bug if not!)
 
-The minimum supported Rust version to *build* nextest with is **Rust 1.70.** For building, at least the last 3 versions of stable Rust are supported at any given time.
+The minimum supported Rust version to *build* nextest with is **Rust 1.73.** For building, at least the last 3 versions of stable Rust are supported at any given time.
 
 See the [stability policy](https://nexte.st/book/stability) for more details.
 
