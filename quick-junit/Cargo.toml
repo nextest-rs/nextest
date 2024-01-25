@@ -12,7 +12,7 @@ edition = "2021"
 rust-version.workspace = true
 
 [dependencies]
-chrono = { version = "0.4.32", default-features = false, features = ["std"] }
+chrono = { version = "0.4.33", default-features = false, features = ["std"] }
 indexmap = "2.1.0"
 quick-xml = "0.31.0"
 thiserror = "1.0.56"
