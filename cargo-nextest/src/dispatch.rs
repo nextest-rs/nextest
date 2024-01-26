@@ -1527,8 +1527,9 @@ impl App {
         let profile = self.load_profile(profile_name, &config)?;
 
         // Construct this here so that errors are reported before the build step.
-        let structured_reporter = match reporter_opts.message_format {
-            MessageFormat::Human => structured::StructuredReporter::Disabled,
+        let mut structured_reporter = structured::StructuredReporter::new();
+        match reporter_opts.message_format {
+            MessageFormat::Human => {}
             MessageFormat::LibtestJson | MessageFormat::LibtestJsonPlus => {
                 // This is currently an experimental feature, and is gated on this environment
                 // variable.
@@ -1539,14 +1540,16 @@ impl App {
                         var_name: EXPERIMENTAL_ENV,
                     });
                 }
-                structured::StructuredReporter::Libtest(structured::LibtestReporter::new(
+
+                let libtest = structured::LibtestReporter::new(
                     reporter_opts.message_format_version.as_deref(),
                     if matches!(reporter_opts.message_format, MessageFormat::LibtestJsonPlus) {
                         structured::EmitNextestObject::Yes
                     } else {
                         structured::EmitNextestObject::No
                     },
-                )?)
+                )?;
+                structured_reporter.set_libtest(libtest);
             }
         };
         use nextest_runner::test_output::CaptureStrategy;

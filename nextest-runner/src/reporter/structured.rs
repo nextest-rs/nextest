@@ -48,23 +48,32 @@ pub enum FormatVersionErrorInner {
     },
 }
 
-/// A reporter for structured, machine readable, output based on the user's
-/// preference
-pub enum StructuredReporter<'a> {
-    /// Libtest compatible output
-    Libtest(LibtestReporter<'a>),
-    // TODO: make a custom format that is easier to consume than libtest's
-    //Json(json::JsonReporter<'a>),
-    /// Variant that doesn't actually emit anything
-    Disabled,
+/// A reporter for structured, machine-readable formats.
+#[derive(Default)]
+pub struct StructuredReporter<'a> {
+    /// Libtest-compatible output written to stdout
+    libtest: Option<LibtestReporter<'a>>,
+    // Internal structured reporter.
+    // internal: Option<T>,
 }
 
 impl<'a> StructuredReporter<'a> {
+    /// Creates a new `StructuredReporter`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets libtest output for the `StructuredReporter`.
+    pub fn set_libtest(&mut self, libtest: LibtestReporter<'a>) -> &mut Self {
+        self.libtest = Some(libtest);
+        self
+    }
+
     #[inline]
     pub(super) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
-        match self {
-            Self::Disabled => Ok(()),
-            Self::Libtest(ltr) => ltr.write_event(event),
+        if let Some(libtest) = &mut self.libtest {
+            libtest.write_event(event)?;
         }
+        Ok(())
     }
 }
