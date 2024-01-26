@@ -2200,7 +2200,7 @@ mod tests {
             &test_list,
             &profile.apply_build_platforms(&build_platforms),
             output,
-            StructuredReporter::Disabled,
+            StructuredReporter::new(),
         );
         assert!(reporter.inner.no_capture, "no_capture is true");
         assert_eq!(
