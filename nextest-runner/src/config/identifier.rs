@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::errors::InvalidIdentifier;
+use serde::Serialize;
 use smol_str::SmolStr;
 use std::fmt;
 use unicode_normalization::{is_nfc_quick, IsNormalized, UnicodeNormalization};
@@ -13,7 +14,8 @@ use unicode_normalization::{is_nfc_quick, IsNormalized, UnicodeNormalization};
 /// * ensuring that it is of the form (XID_Start)(XID_Continue | -)*
 ///
 /// Identifiers can also be tool identifiers, which are of the form "@tool:tool-name:identifier".
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
 pub struct ConfigIdentifier(SmolStr);
 
 impl ConfigIdentifier {

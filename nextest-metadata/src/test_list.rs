@@ -146,6 +146,7 @@ impl TestListSummary {
             rust_suites: BTreeMap::new(),
         }
     }
+
     /// Parse JSON output from `cargo nextest list --message-format json`.
     pub fn parse_json(json: impl AsRef<str>) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json.as_ref())

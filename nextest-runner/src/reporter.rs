@@ -26,19 +26,20 @@ use debug_ignore::DebugIgnore;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     cmp::Reverse,
     fmt::{self, Write as _},
     io,
     io::{BufWriter, Write},
+    sync::Arc,
     time::Duration,
 };
 use uuid::Uuid;
 
 /// When to display test output in the reporter.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
 #[serde(rename_all = "kebab-case")]
 pub enum TestOutputDisplay {
@@ -359,9 +360,27 @@ impl<'a> TestReporter<'a> {
         self.inner.styles.colorize();
     }
 
-    /// Report a test event.
+    /// Reports test-related metadata.
+    ///
+    /// This is used by the structured reporter to emit metadata to the internal reporter, if
+    /// required.
+    pub fn report_meta(&mut self, cargo_metadata_json: &Arc<String>, test_list: &TestList) {
+        self.structured_reporter
+            .write_meta(cargo_metadata_json, test_list);
+    }
+
+    /// Reports a test event.
     pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
         self.write_event(event)
+    }
+
+    /// Finishes writing events and flushes all internal caches.
+    ///
+    /// Must be called at the end of the test run.
+    pub fn finish(self) -> Result<(), WriteEventError> {
+        self.structured_reporter.finish()?;
+        // The metadata reporter doesn't have a finish method.
+        Ok(())
     }
 
     // ---
@@ -400,7 +419,7 @@ impl<'a> TestReporter<'a> {
             }
         }
 
-        self.structured_reporter.write_event(&event)?;
+        self.structured_reporter.write_event(event.clone())?;
         self.metadata_reporter.write_event(event)?;
         Ok(())
     }
@@ -1890,8 +1909,9 @@ pub enum TestEventKind<'a> {
 
 // Note: the order here matters -- it indicates severity of cancellation
 /// The reason why a test run is being cancelled.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[cfg_attr(test, derive(test_strategy::Arbitrary))]
+#[serde(rename_all = "kebab-case")]
 pub enum CancelReason {
     /// A setup script failed.
     SetupScriptFailure,

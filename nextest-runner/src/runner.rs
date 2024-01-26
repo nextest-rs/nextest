@@ -26,12 +26,13 @@ use crate::{
 };
 use async_scoped::TokioScope;
 use bytes::{Bytes, BytesMut};
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Local};
 use display_error_chain::DisplayErrorChain;
 use future_queue::StreamExt;
 use futures::{future::try_join, prelude::*};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
+use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
     fmt::Write,
@@ -203,6 +204,7 @@ impl TestRunnerBuilder {
                 target_runner,
                 runtime,
                 run_id: Uuid::new_v4(),
+                stopwatch: crate::time::stopwatch(),
             },
             handler,
         })
@@ -219,6 +221,16 @@ pub struct TestRunner<'a> {
 }
 
 impl<'a> TestRunner<'a> {
+    /// Returns a UUID for the run.
+    pub fn run_id(&self) -> Uuid {
+        self.inner.run_id
+    }
+
+    /// Returns the time at which the run was started.
+    pub fn started_at(&self) -> DateTime<Local> {
+        self.inner.stopwatch.start_time()
+    }
+
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.
@@ -265,6 +277,7 @@ struct TestRunnerInner<'a> {
     target_runner: TargetRunner,
     runtime: Runtime,
     run_id: Uuid,
+    stopwatch: StopwatchStart,
 }
 
 impl<'a> TestRunnerInner<'a> {
@@ -290,6 +303,7 @@ impl<'a> TestRunnerInner<'a> {
             self.run_id,
             self.profile.name(),
             self.cli_args.clone(),
+            self.stopwatch.clone(),
             self.test_list.run_count(),
             self.fail_fast,
         );
@@ -1235,7 +1249,8 @@ async fn read_all_to_bytes(
 }
 
 /// Data related to retries.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct RetryData {
     /// The current attempt. In the range `[1, total_attempts]`.
     pub attempt: usize,
@@ -1255,7 +1270,7 @@ impl RetryData {
 #[derive(Clone, Debug)]
 pub struct ExecutionStatuses {
     /// This is guaranteed to be non-empty.
-    statuses: Vec<ExecuteStatus>,
+    pub(crate) statuses: Vec<ExecuteStatus>,
 }
 
 #[allow(clippy::len_without_is_empty)] // RunStatuses is never empty
@@ -1482,7 +1497,8 @@ impl InternalSetupScriptExecuteStatus {
 }
 
 /// Statistics for a test run.
-#[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct RunStats {
     /// The total number of tests that were expected to be run at the beginning.
     ///
@@ -1705,15 +1721,16 @@ where
         run_id: Uuid,
         profile_name: &str,
         cli_args: Vec<String>,
+        stopwatch: StopwatchStart,
         initial_run_count: usize,
         fail_fast: bool,
     ) -> Self {
         Self {
             callback,
             run_id,
-            stopwatch: crate::time::stopwatch(),
             profile_name: profile_name.to_owned(),
             cli_args,
+            stopwatch,
             run_stats: RunStats {
                 initial_run_count,
                 ..RunStats::default()
@@ -2056,7 +2073,8 @@ enum InternalError<E> {
 }
 
 /// Whether a test passed, failed or an error occurred while executing the test.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "result", rename_all = "kebab-case")]
 pub enum ExecutionResult {
     /// The test passed.
     Pass,
@@ -2067,6 +2085,7 @@ pub enum ExecutionResult {
     /// This is treated as a pass.
     Leak,
     /// The test failed.
+    #[serde(rename_all = "kebab-case")]
     Fail {
         /// The abort status of the test, if any (for example, the signal on Unix).
         abort_status: Option<AbortStatus>,
@@ -2097,7 +2116,8 @@ impl ExecutionResult {
 /// A regular exit code or Windows NT abort status for a test.
 ///
 /// Returned as part of the [`ExecutionResult::Fail`] variant.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind")]
 pub enum AbortStatus {
     /// The test was aborted due to a signal on Unix.
     #[cfg(unix)]

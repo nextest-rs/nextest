@@ -35,6 +35,10 @@ impl StopwatchStart {
         }
     }
 
+    pub(crate) fn start_time(&self) -> DateTime<Local> {
+        self.start_time
+    }
+
     pub(crate) fn is_paused(&self) -> bool {
         matches!(self.pause_state, StopwatchPauseState::Paused { .. })
     }

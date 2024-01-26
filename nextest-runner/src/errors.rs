@@ -90,6 +90,11 @@ pub enum ConfigParseErrorKind {
     /// An error occurred while deserializing the config (version only).
     #[error(transparent)]
     VersionOnlyDeserializeError(Box<serde_path_to_error::Error<toml::de::Error>>),
+
+    /// One or more reserved profile names were used.
+    #[error("reserved profile names used: {}", .0.iter().join(", "))]
+    ReservedProfileNamesUsed(BTreeSet<String>),
+
     /// Errors occurred while parsing compiled data.
     #[error("error parsing compiled data (destructure this variant for more details)")]
     CompiledDataParseError(Vec<ConfigParseCompiledDataError>),
@@ -1205,6 +1210,138 @@ pub enum ShowTestGroupsError {
         /// All known test groups.
         known_groups: BTreeSet<TestGroup>,
     },
+}
+
+/// An error occurred while managing the run store.
+#[allow(missing_docs)]
+#[derive(Debug, Error)]
+pub enum RunStoreError {
+    #[error("error creating run directory `{run_dir}`")]
+    RunDirCreate {
+        run_dir: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[error("error acquiring lock on `{path}`")]
+    FileLock {
+        path: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[error("error reading run list from `{path}`")]
+    RunListRead {
+        path: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[error("error deserializing run list from `{path}`")]
+    RunListDeserialize {
+        path: Utf8PathBuf,
+        #[source]
+        error: serde_json::Error,
+    },
+
+    #[error("error serializing run list to `{path}`")]
+    RunListSerialize {
+        path: Utf8PathBuf,
+        #[source]
+        error: serde_json::Error,
+    },
+
+    #[error("error serializing test list")]
+    TestListSerialize {
+        #[source]
+        error: serde_json::Error,
+    },
+
+    #[error("error serializing test event")]
+    TestEventSerialize {
+        #[source]
+        error: serde_json::Error,
+    },
+
+    #[error("error writing run list to `{path}`")]
+    RunListWrite {
+        path: Utf8PathBuf,
+        #[source]
+        error: atomicwrites::Error<std::io::Error>,
+    },
+
+    #[error("error writing to store at `{store_path}`")]
+    StoreWrite {
+        store_path: Utf8PathBuf,
+        #[source]
+        error: StoreWriterError,
+    },
+
+    #[error("error creating run log at `{path}`")]
+    RunLogCreate {
+        path: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[error("error writing to run log at `{path}`")]
+    RunLogWrite {
+        path: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[error("error flushing run log at `{path}`")]
+    RunLogFlush {
+        path: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+}
+
+/// An error occurred while writing to a zip store.
+#[allow(missing_docs)]
+#[derive(Debug, Error)]
+pub enum StoreWriterError {
+    #[error("error creating store")]
+    Create {
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[error("error creating path `{path}` in store")]
+    StartFile {
+        path: Utf8PathBuf,
+        #[source]
+        error: zip::result::ZipError,
+    },
+
+    #[error("error writing to path `{path}` in store")]
+    Write {
+        path: Utf8PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[error("error finalizing store")]
+    Finish {
+        #[source]
+        error: zip::result::ZipError,
+    },
+
+    #[error("error flushing store")]
+    Flush {
+        #[source]
+        error: std::io::Error,
+    },
+}
+
+/// An error occurred in an internal reporter.
+#[derive(Debug, Error)]
+pub enum RecordReporterError {
+    /// An error occurred while writing to the run store.
+    #[error(transparent)]
+    RunStore(RunStoreError),
 }
 
 #[cfg(feature = "self-update")]

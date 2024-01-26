@@ -76,9 +76,19 @@ impl NextestConfig {
     /// The name of the default profile used for miri.
     pub const DEFAULT_MIRI_PROFILE: &'static str = "default-miri";
 
+    /// The name of the global store directory.
+    ///
+    /// This name starts with "default-" because that's the namespace reserved by nextest.
+    pub const GLOBAL_STORE_DIR: &'static str = "default-global";
+
     /// A list containing the names of the Nextest defined reserved profile names.
     pub const DEFAULT_PROFILES: &'static [&'static str] =
         &[Self::DEFAULT_PROFILE, Self::DEFAULT_MIRI_PROFILE];
+
+    /// A list containing the names of other reserved profile names.
+    ///
+    /// These names, if used in the config section, will cause an error to happen.
+    pub const RESERVED_PROFILE_NAMES: &'static [&'static str] = &[Self::GLOBAL_STORE_DIR];
 
     /// Reads the nextest config from the given file, or if not specified from `.config/nextest.toml`
     /// in the workspace root.
@@ -370,6 +380,19 @@ impl NextestConfig {
 
         let this_config = this_config.into_config_impl();
 
+        let reserved_profiles_used: BTreeSet<_> = this_config
+            .all_profiles()
+            .filter(|&p| NextestConfig::RESERVED_PROFILE_NAMES.contains(&p))
+            .map(|p| p.to_owned())
+            .collect();
+        if !reserved_profiles_used.is_empty() {
+            return Err(ConfigParseError::new(
+                config_file,
+                tool,
+                ConfigParseErrorKind::ReservedProfileNamesUsed(reserved_profiles_used),
+            ));
+        }
+
         let unknown_default_profiles: Vec<_> = this_config
             .all_profiles()
             .filter(|p| p.starts_with("default-") && !NextestConfig::DEFAULT_PROFILES.contains(p))
@@ -509,8 +532,9 @@ impl NextestConfig {
         let custom_profile = self.inner.get_profile(name)?;
 
         // The profile was found: construct the NextestProfile.
-        let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
-        store_dir.push(name);
+        let abs_store_dir = self.workspace_root.join(&self.inner.store.dir);
+        let global_store_dir = abs_store_dir.join(NextestConfig::GLOBAL_STORE_DIR);
+        let store_dir = abs_store_dir.join(name);
 
         // Grab the compiled data as well.
         let compiled_data = self
@@ -523,6 +547,7 @@ impl NextestConfig {
 
         Ok(NextestProfile {
             name: name.to_owned(),
+            global_store_dir,
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
@@ -575,6 +600,7 @@ pub struct FinalConfig {
 #[derive(Clone, Debug)]
 pub struct NextestProfile<'cfg, State = FinalConfig> {
     name: String,
+    global_store_dir: Utf8PathBuf,
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
@@ -588,6 +614,11 @@ impl<'cfg, State> NextestProfile<'cfg, State> {
     /// Returns the name of the profile.
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Returns the global store directory.
+    pub fn global_store_dir(&self) -> &Utf8Path {
+        &self.global_store_dir
     }
 
     /// Returns the absolute profile-specific store directory.
@@ -620,6 +651,7 @@ impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
         let compiled_data = self.compiled_data.apply_build_platforms(build_platforms);
         NextestProfile {
             name: self.name,
+            global_store_dir: self.global_store_dir,
             store_dir: self.store_dir,
             default_profile: self.default_profile,
             custom_profile: self.custom_profile,
@@ -1024,6 +1056,31 @@ mod tests {
         default_config
             .profile(NextestConfig::DEFAULT_PROFILE)
             .expect("default profile should exist");
+    }
+
+    #[test]
+    fn reserved_profile_name() {
+        let config_contents = r#"
+        [profile.default-global]
+        retries = 3
+        "#;
+
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let workspace_root = graph.workspace().root();
+        let error =
+            NextestConfig::from_sources(workspace_root, &graph, None, [], &BTreeSet::default())
+                .expect_err("this should error out");
+        assert!(
+            matches!(
+                error.kind(),
+                ConfigParseErrorKind::ReservedProfileNamesUsed(names)
+                    if names == &maplit::btreeset! { "default-global".to_owned() }
+            ),
+            "expected config.kind ({}) to be ReservedProfileNamesUsed",
+            error.kind(),
+        );
     }
 
     #[test]

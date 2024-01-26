@@ -2,9 +2,11 @@
 //! formats
 
 mod libtest;
+mod recorder;
 
 use super::*;
 pub use libtest::{EmitNextestObject, LibtestReporter};
+pub use recorder::RecordReporter;
 
 /// Error returned when a user-supplied format version fails to be parsed to a
 /// valid and supported version
@@ -53,8 +55,8 @@ pub enum FormatVersionErrorInner {
 pub struct StructuredReporter<'a> {
     /// Libtest-compatible output written to stdout
     libtest: Option<LibtestReporter<'a>>,
-    // Internal structured reporter.
-    // internal: Option<T>,
+    // Recorder for test events.
+    record: Option<RecordReporter<'a>>,
 }
 
 impl<'a> StructuredReporter<'a> {
@@ -64,15 +66,47 @@ impl<'a> StructuredReporter<'a> {
     }
 
     /// Sets libtest output for the `StructuredReporter`.
+    #[inline]
     pub fn set_libtest(&mut self, libtest: LibtestReporter<'a>) -> &mut Self {
         self.libtest = Some(libtest);
         self
     }
 
+    /// Sets recorder output for the `StructuredReporter`.
     #[inline]
-    pub(super) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
+    pub fn set_record(&mut self, record: RecordReporter<'a>) -> &mut Self {
+        self.record = Some(record);
+        self
+    }
+
+    #[inline]
+    pub(super) fn write_meta(
+        &mut self,
+        cargo_metadata_json: &Arc<String>,
+        test_list: &TestList<'_>,
+    ) {
+        if let Some(internal) = &mut self.record {
+            let cargo_metadata_json = cargo_metadata_json.clone();
+            let test_list = test_list.to_summary();
+            internal.write_meta(cargo_metadata_json, test_list);
+        }
+    }
+
+    #[inline]
+    pub(super) fn write_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
         if let Some(libtest) = &mut self.libtest {
-            libtest.write_event(event)?;
+            libtest.write_event(&event)?;
+        }
+        if let Some(record) = &mut self.record {
+            record.write_event(event);
+        }
+        Ok(())
+    }
+
+    #[inline]
+    pub(super) fn finish(self) -> Result<(), WriteEventError> {
+        if let Some(internal) = self.record {
+            internal.finish();
         }
         Ok(())
     }

@@ -21,6 +21,7 @@ pub mod partition;
 pub mod platform;
 pub mod reporter;
 pub mod reuse_build;
+pub mod run_store;
 pub mod runner;
 pub mod show_config;
 pub mod signal;

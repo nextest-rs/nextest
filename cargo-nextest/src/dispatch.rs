@@ -30,11 +30,13 @@ use nextest_runner::{
     platform::BuildPlatforms,
     reporter::{structured, FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
+    run_store::RunStore,
     runner::{configure_handle_inheritance, RunStatsFailureKind, TestRunnerBuilder},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
+    test_output::CaptureStrategy,
 };
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Stream, Style};
@@ -743,10 +745,7 @@ pub struct TestRunnerOpts {
 }
 
 impl TestRunnerOpts {
-    fn to_builder(
-        &self,
-        cap_strat: nextest_runner::test_output::CaptureStrategy,
-    ) -> Option<TestRunnerBuilder> {
+    fn to_builder(&self, cap_strat: CaptureStrategy) -> Option<TestRunnerBuilder> {
         if self.no_run {
             return None;
         }
@@ -1557,7 +1556,6 @@ impl App {
                 structured_reporter.set_libtest(libtest);
             }
         };
-        use nextest_runner::test_output::CaptureStrategy;
 
         let cap_strat = if no_capture {
             CaptureStrategy::None
@@ -1584,19 +1582,6 @@ impl App {
         let output = output_writer.reporter_output();
         let profile = profile.apply_build_platforms(&build_platforms);
 
-        let mut reporter = reporter_opts
-            .to_builder(no_capture)
-            .set_verbose(self.base.output.verbose)
-            .build(&test_list, &profile, output, structured_reporter);
-        if self
-            .base
-            .output
-            .color
-            .should_colorize(supports_color::Stream::Stderr)
-        {
-            reporter.colorize();
-        }
-
         let handler = SignalHandlerKind::Standard;
         let runner_builder = match runner_opts.to_builder(cap_strat) {
             Some(runner_builder) => runner_builder,
@@ -1615,11 +1600,51 @@ impl App {
             target_runner.clone(),
         )?;
 
+        // Start recording runs if the environment variable is set.
+        {
+            const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_RECORD_RUNS";
+            if std::env::var(EXPERIMENTAL_ENV).as_deref() == Ok("1") {
+                // For the record reporter, use the global store dir to share runs across profiles.
+                let store = RunStore::new(profile.global_store_dir())
+                    .map_err(|err| ExpectedError::RunRecordError { err })?;
+                let locked_store = store
+                    .lock_exclusive()
+                    .map_err(|err| ExpectedError::RunRecordError { err })?;
+                let recorder = locked_store
+                    .create_run_recorder(
+                        runner.run_id(),
+                        self.base.current_version.clone(),
+                        runner.started_at().fixed_offset(),
+                    )
+                    .map_err(|err| ExpectedError::RunRecordError { err })?;
+
+                let record = structured::RecordReporter::new(recorder);
+                structured_reporter.set_record(record);
+            }
+        }
+
+        let mut reporter = reporter_opts
+            .to_builder(no_capture)
+            .set_verbose(self.base.output.verbose)
+            .build(&test_list, &profile, output, structured_reporter);
+        if self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr)
+        {
+            reporter.colorize();
+        }
+
         configure_handle_inheritance(no_capture)?;
+        reporter.report_meta(&self.base.cargo_metadata_json, &test_list);
+
         let run_stats = runner.try_execute(|event| {
             // Write and flush the event.
             reporter.report_event(event)
         })?;
+        reporter.finish()?;
+
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
         if !run_stats.is_success() {

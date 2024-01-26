@@ -28,11 +28,12 @@ config = { version = "0.13.4", default-features = false, features = [
 ] }
 cargo_metadata = "0.18.1"
 cfg-if = "1.0.0"
-chrono = "0.4.33"
+chrono = { version = "0.4.33", features = ["serde"] }
 debug-ignore = "1.0.5"
 display-error-chain = "0.2.0"
 either = "1.9.0"
 futures = "0.3.30"
+fs4 = "0.7.0"
 guppy = "0.17.4"
 # Used to find the cargo root directory, which is needed in case the user has
 # added a config.toml there
@@ -77,6 +78,7 @@ tokio = { version = "1.35.1", features = [
 toml = "0.8.8"
 toml_edit = { version = "0.21.0", features = ["serde"] }
 xxhash-rust = { version = "0.8.8", features = ["xxh64"] }
+zip = { version = "0.6.6", default-features = false, features = ["zstd"] }
 zstd = { version = "0.13.0", features = ["zstdmt"] }
 
 ###
@@ -93,7 +95,7 @@ self_update = { version = "0.39.0", optional = true, default-features = false, f
 nextest-filtering = { version = "0.7.1", path = "../nextest-filtering" }
 nextest-metadata = { version = "0.10.0", path = "../nextest-metadata" }
 quick-junit = { version = "0.3.5", path = "../quick-junit" }
-uuid = { version = "1.7.0", features = ["v4"] }
+uuid = { version = "1.7.0", features = ["v4", "serde"] }
 console-subscriber = { version = "0.2.0", optional = true }
 unicode-ident = "1.0.12"
 unicode-normalization = "0.1.22"

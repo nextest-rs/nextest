@@ -19,7 +19,7 @@ use camino_tempfile::Utf8TempPath;
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use indexmap::IndexMap;
 use nextest_filtering::{FilteringExpr, TestQuery};
-use serde::{de::Error, Deserialize};
+use serde::{de::Error, Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -28,6 +28,7 @@ use std::{
     time::Duration,
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
+use xxhash_rust::xxh3;
 
 /// Data about setup scripts, returned by a [`NextestProfile`].
 pub struct SetupScripts<'profile> {
@@ -425,7 +426,8 @@ impl CompiledProfileScripts<FinalConfig> {
 }
 
 /// The name of a configuration script.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize)]
+#[serde(transparent)]
 pub struct ScriptId(pub ConfigIdentifier);
 
 impl ScriptId {
@@ -443,6 +445,11 @@ impl ScriptId {
     #[cfg(test)]
     pub(super) fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+
+    pub(crate) fn to_hex_digest(&self) -> String {
+        let digest = xxh3::xxh3_64(self.0.as_str().as_bytes());
+        format!("{:016x}", digest)
     }
 }
 
