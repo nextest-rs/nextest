@@ -21,6 +21,7 @@ use crate::{
     test_output::{TestOutput, TestSingleOutput},
 };
 pub use aggregator::heuristic_extract_description;
+use chrono::{DateTime, FixedOffset};
 use debug_ignore::DebugIgnore;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::MismatchReason;
@@ -32,7 +33,7 @@ use std::{
     fmt::{self, Write as _},
     io,
     io::{BufWriter, Write},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 use uuid::Uuid;
 
@@ -1634,6 +1635,9 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
 /// [`TestReporter`].
 #[derive(Clone, Debug)]
 pub struct TestEvent<'a> {
+    /// The time at which the event was generated, including the offset from UTC.
+    pub timestamp: DateTime<FixedOffset>,
+
     /// The amount of time elapsed since the start of the test run.
     pub elapsed: Duration,
 
@@ -1854,7 +1858,7 @@ pub enum TestEventKind<'a> {
         run_id: Uuid,
 
         /// The time at which the run was started.
-        start_time: SystemTime,
+        start_time: DateTime<FixedOffset>,
 
         /// The amount of time it took for the tests to run.
         elapsed: Duration,

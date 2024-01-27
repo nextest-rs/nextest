@@ -7,7 +7,8 @@
 //! (realtime clock) and an `Instant` (monotonic clock). Once the stopwatch transitions to the "end"
 //! state, we can report the elapsed time using the monotonic clock.
 
-use std::time::{Duration, Instant, SystemTime};
+use chrono::{DateTime, Local};
+use std::time::{Duration, Instant};
 
 pub(crate) fn stopwatch() -> StopwatchStart {
     StopwatchStart::new()
@@ -16,7 +17,7 @@ pub(crate) fn stopwatch() -> StopwatchStart {
 /// The start state of a stopwatch.
 #[derive(Clone, Debug)]
 pub(crate) struct StopwatchStart {
-    start_time: SystemTime,
+    start_time: DateTime<Local>,
     instant: Instant,
     paused_time: Duration,
     pause_state: StopwatchPauseState,
@@ -27,7 +28,7 @@ impl StopwatchStart {
         Self {
             // These two syscalls will happen imperceptibly close to each other, which is good
             // enough for our purposes.
-            start_time: SystemTime::now(),
+            start_time: Local::now(),
             instant: Instant::now(),
             paused_time: Duration::ZERO,
             pause_state: StopwatchPauseState::Running,
@@ -63,12 +64,8 @@ impl StopwatchStart {
         }
     }
 
-    pub(crate) fn elapsed(&self) -> Duration {
-        self.instant.elapsed() - self.paused_time
-    }
-
-    pub(crate) fn end(&self) -> StopwatchEnd {
-        StopwatchEnd {
+    pub(crate) fn snapshot(&self) -> StopwatchSnapshot {
+        StopwatchSnapshot {
             start_time: self.start_time,
             duration: self.instant.elapsed() - self.paused_time,
         }
@@ -76,9 +73,15 @@ impl StopwatchStart {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct StopwatchEnd {
-    pub(crate) start_time: SystemTime,
+pub(crate) struct StopwatchSnapshot {
+    pub(crate) start_time: DateTime<Local>,
     pub(crate) duration: Duration,
+}
+
+impl StopwatchSnapshot {
+    pub(crate) fn end_time(&self) -> DateTime<Local> {
+        self.start_time + self.duration
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -104,8 +107,8 @@ mod tests {
         std::thread::sleep(Duration::from_millis(300));
         start.resume();
 
-        let end = start.end();
-        let unpaused_end = unpaused_start.end();
+        let end = start.snapshot();
+        let unpaused_end = unpaused_start.snapshot();
 
         // The total time we've paused is 550ms. We can assume that unpaused_end is at least 550ms
         // greater than end. Add a a fudge factor of 100ms.

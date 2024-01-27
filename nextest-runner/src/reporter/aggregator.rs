@@ -15,12 +15,11 @@ use crate::{
     test_output::TestOutput,
 };
 use camino::Utf8PathBuf;
-use chrono::{DateTime, FixedOffset, Utc};
 use debug_ignore::DebugIgnore;
 use once_cell::sync::Lazy;
 use quick_junit::{NonSuccessKind, Output, Report, TestCase, TestCaseStatus, TestRerun, TestSuite};
 use regex::{Regex, RegexBuilder};
-use std::{borrow::Cow, collections::HashMap, fs::File, time::SystemTime};
+use std::{borrow::Cow, collections::HashMap, fs::File};
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -148,7 +147,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     let (kind, ty) = kind_ty(rerun);
                     let mut test_rerun = TestRerun::new(kind);
                     test_rerun
-                        .set_timestamp(to_datetime(rerun.start_time))
+                        .set_timestamp(rerun.start_time)
                         .set_time(rerun.time_taken)
                         .set_type(ty);
 
@@ -167,7 +166,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 let mut testcase = TestCase::new(test_instance.name, testcase_status);
                 testcase
                     .set_classname(test_instance.suite_info.binary_id.as_str())
-                    .set_timestamp(to_datetime(main_status.start_time))
+                    .set_timestamp(main_status.start_time)
                     .set_time(main_status.time_taken);
 
                 // TODO: allure seems to want the output to be in a format where text files are
@@ -210,7 +209,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 let mut report = Report::new(self.config.report_name());
                 report
                     .set_uuid(run_id)
-                    .set_timestamp(to_datetime(start_time))
+                    .set_timestamp(start_time)
                     .set_time(elapsed)
                     .add_test_suites(self.test_suites.drain().map(|(_, testsuite)| testsuite));
 
@@ -355,12 +354,6 @@ fn set_execute_status_props(
             out.set_message("Test failed, but output was not captured");
         }
     }
-}
-
-fn to_datetime(system_time: SystemTime) -> DateTime<FixedOffset> {
-    // Serialize using UTC.
-    let datetime = DateTime::<Utc>::from(system_time);
-    datetime.into()
 }
 
 // This regex works for the default panic handler for Rust -- other panic handlers may not work,

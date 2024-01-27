@@ -22,10 +22,11 @@ use crate::{
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
     test_output::{CaptureStrategy, TestOutput, TestSingleOutput},
-    time::{PausableSleep, StopwatchEnd, StopwatchStart},
+    time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
 };
 use async_scoped::TokioScope;
 use bytes::{Bytes, BytesMut};
+use chrono::{DateTime, FixedOffset};
 use display_error_chain::DisplayErrorChain;
 use future_queue::StreamExt;
 use futures::{future::try_join, prelude::*};
@@ -42,7 +43,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 use tokio::{
     io::{AsyncRead, AsyncReadExt},
@@ -694,7 +695,7 @@ impl<'a> TestRunnerInner<'a> {
                         stdout: Bytes::new(),
                         stderr: stderr.freeze(),
                         result: ExecutionResult::ExecFail,
-                        stopwatch_end: stopwatch.end(),
+                        stopwatch_end: stopwatch.snapshot(),
                         is_slow: false,
                         env_count: 0,
                     },
@@ -876,7 +877,7 @@ impl<'a> TestRunnerInner<'a> {
                 stdout: stdout.freeze(),
                 stderr: stderr.freeze(),
                 result: status,
-                stopwatch_end: stopwatch.end(),
+                stopwatch_end: stopwatch.snapshot(),
                 is_slow,
                 env_count: env_map.as_ref().map(|map| map.len()).unwrap_or(0),
             },
@@ -921,7 +922,7 @@ impl<'a> TestRunnerInner<'a> {
                         description,
                     }),
                     result: ExecutionResult::ExecFail,
-                    stopwatch_end: stopwatch.end(),
+                    stopwatch_end: stopwatch.snapshot(),
                     is_slow: false,
                     delay_before_start,
                 }
@@ -1078,7 +1079,7 @@ impl<'a> TestRunnerInner<'a> {
         Ok(InternalExecuteStatus {
             output: test_output,
             result: status,
-            stopwatch_end: stopwatch.end(),
+            stopwatch_end: stopwatch.snapshot(),
             is_slow,
             delay_before_start,
         })
@@ -1401,7 +1402,7 @@ pub struct ExecuteStatus {
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
-    pub start_time: SystemTime,
+    pub start_time: DateTime<FixedOffset>,
     /// The time it took for the test to run.
     pub time_taken: Duration,
     /// Whether this test counts as slow.
@@ -1414,7 +1415,7 @@ struct InternalExecuteStatus {
     // This is None if output wasn't captured.
     output: Option<TestOutput>,
     result: ExecutionResult,
-    stopwatch_end: StopwatchEnd,
+    stopwatch_end: StopwatchSnapshot,
     is_slow: bool,
     delay_before_start: Duration,
 }
@@ -1425,7 +1426,7 @@ impl InternalExecuteStatus {
             retry_data,
             output: self.output,
             result: self.result,
-            start_time: self.stopwatch_end.start_time,
+            start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.duration,
             is_slow: self.is_slow,
             delay_before_start: self.delay_before_start,
@@ -1443,7 +1444,7 @@ pub struct SetupScriptExecuteStatus {
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the script started.
-    pub start_time: SystemTime,
+    pub start_time: DateTime<FixedOffset>,
     /// The time it took for the script to run.
     pub time_taken: Duration,
     /// Whether this script counts as slow.
@@ -1456,7 +1457,7 @@ struct InternalSetupScriptExecuteStatus {
     stdout: Bytes,
     stderr: Bytes,
     result: ExecutionResult,
-    stopwatch_end: StopwatchEnd,
+    stopwatch_end: StopwatchSnapshot,
     is_slow: bool,
     env_count: usize,
 }
@@ -1467,7 +1468,7 @@ impl InternalSetupScriptExecuteStatus {
             stdout: self.stdout.into(),
             stderr: self.stderr.into(),
             result: self.result,
-            start_time: self.stopwatch_end.start_time,
+            start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.duration,
             is_slow: self.is_slow,
             env_count: self.env_count,
@@ -1719,8 +1720,10 @@ where
 
     #[inline]
     fn basic_callback(&mut self, kind: TestEventKind<'a>) -> Result<(), E> {
+        let snapshot = self.stopwatch.snapshot();
         let event = TestEvent {
-            elapsed: self.stopwatch.elapsed(),
+            timestamp: snapshot.end_time().fixed_offset(),
+            elapsed: snapshot.duration,
             kind,
         };
         (self.callback)(event)
@@ -1956,9 +1959,9 @@ where
     }
 
     fn run_finished(&mut self) -> Result<(), E> {
-        let stopwatch_end = self.stopwatch.end();
+        let stopwatch_end = self.stopwatch.snapshot();
         self.basic_callback(TestEventKind::RunFinished {
-            start_time: stopwatch_end.start_time,
+            start_time: stopwatch_end.start_time.fixed_offset(),
             run_id: self.run_id,
             elapsed: stopwatch_end.duration,
             run_stats: self.run_stats,
