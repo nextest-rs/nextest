@@ -76,7 +76,7 @@ tokio = { version = "1.35.1", features = [
 ] }
 toml = "0.8.8"
 toml_edit = { version = "0.21.0", features = ["serde"] }
-twox-hash = { version = "1.6.3", default-features = false }
+xxhash-rust = { version = "0.8.8", features = ["xxh64"] }
 zstd = { version = "0.13.0", features = ["zstdmt"] }
 
 ###

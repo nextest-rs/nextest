@@ -10,7 +10,7 @@ use std::{
     hash::{Hash, Hasher},
     path::Path,
 };
-use twox_hash::XxHash64;
+use xxhash_rust::xxh3::Xxh3;
 
 static CORPUS_DIR: &str = "fuzz/corpus/fuzz_parsing";
 
@@ -62,7 +62,7 @@ impl ValueGenerator {
         // Convert the input seed into a 32-byte hash.
         let mut rng_seed = [0u8; 32];
         for hash_seed in 0usize..=3 {
-            let mut hasher = XxHash64::with_seed(hash_seed as u64);
+            let mut hasher = Xxh3::with_seed(hash_seed as u64);
             seed.hash(&mut hasher);
             rng_seed[hash_seed..(hash_seed + 8)].copy_from_slice(&hasher.finish().to_be_bytes());
         }

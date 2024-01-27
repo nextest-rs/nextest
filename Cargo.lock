@@ -1652,8 +1652,8 @@ dependencies = [
  "test-case",
  "test-strategy",
  "thiserror",
- "twox-hash",
  "winnow",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1741,13 +1741,13 @@ dependencies = [
  "tokio",
  "toml 0.8.8",
  "toml_edit",
- "twox-hash",
  "unicode-ident",
  "unicode-normalization",
  "uuid",
  "win32job",
  "winapi",
  "windows-sys 0.52.0",
+ "xxhash-rust",
  "zstd",
 ]
 
@@ -1785,11 +1785,11 @@ dependencies = [
  "similar",
  "syn",
  "tokio",
- "twox-hash",
  "uuid",
  "winapi",
  "windows-sys 0.48.0",
  "windows-sys 0.52.0",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -3211,17 +3211,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
-name = "twox-hash"
-version = "1.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
-dependencies = [
- "cfg-if",
- "rand",
- "static_assertions",
-]
-
-[[package]]
 name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3737,6 +3726,12 @@ dependencies = [
  "linux-raw-sys",
  "rustix",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53be06678ed9e83edb1745eb72efc0bbcd7b5c3c35711a860906aed827a13d61"
 
 [[package]]
 name = "yaml-rust"

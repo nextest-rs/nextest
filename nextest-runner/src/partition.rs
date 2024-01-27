@@ -8,12 +8,8 @@
 //! to run, with an aim to minimize total build and test times.
 
 use crate::errors::PartitionerBuilderParseError;
-use std::{
-    fmt,
-    hash::{Hash, Hasher},
-    str::FromStr,
-};
-use twox_hash::XxHash64;
+use std::{fmt, str::FromStr};
+use xxhash_rust::xxh64::xxh64;
 
 /// A builder for creating `Partitioner` instances.
 ///
@@ -178,9 +174,8 @@ impl HashPartitioner {
 
 impl Partitioner for HashPartitioner {
     fn test_matches(&mut self, test_name: &str) -> bool {
-        let mut hasher = XxHash64::default();
-        test_name.hash(&mut hasher);
-        hasher.finish() % self.total_shards == self.shard_minus_one
+        // NOTE: this is fixed to be xxhash64 for the entire cargo-nextest 0.9 series.
+        xxh64(test_name.as_bytes(), 0) % self.total_shards == self.shard_minus_one
     }
 }
 
