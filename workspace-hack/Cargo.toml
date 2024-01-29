@@ -23,7 +23,7 @@ either = { version = "1.9.0" }
 futures-channel = { version = "0.3.30", features = ["sink"] }
 futures-sink = { version = "0.3.30", default-features = false, features = ["std"] }
 getrandom = { version = "0.2.11", default-features = false, features = ["std"] }
-indexmap = { version = "2.1.0", features = ["serde"] }
+indexmap = { version = "2.2.1", features = ["serde"] }
 log = { version = "0.4.20", default-features = false, features = ["std"] }
 memchr = { version = "2.7.1" }
 miette = { version = "5.10.0", features = ["fancy"] }
@@ -31,7 +31,7 @@ num-traits = { version = "0.2.17", default-features = false, features = ["libm",
 owo-colors = { version = "4.0.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
 serde = { version = "1.0.196", features = ["alloc", "derive"] }
-serde_json = { version = "1.0.112", features = ["preserve_order", "unbounded_depth"] }
+serde_json = { version = "1.0.113", features = ["preserve_order", "unbounded_depth"] }
 similar = { version = "2.3.0", features = ["inline", "unicode"] }
 tokio = { version = "1.35.1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 twox-hash = { version = "1.6.3" }
