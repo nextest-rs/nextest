@@ -285,6 +285,7 @@ impl<'a> TestRunnerInner<'a> {
         let mut ctx = CallbackContext::new(
             callback,
             self.run_id,
+            self.profile.name(),
             self.test_list.run_count(),
             self.fail_fast,
         );
@@ -1679,6 +1680,7 @@ enum ShutdownForwardEvent {
 struct CallbackContext<F, E> {
     callback: F,
     run_id: Uuid,
+    profile_name: String,
     stopwatch: StopwatchStart,
     run_stats: RunStats,
     fail_fast: bool,
@@ -1693,11 +1695,18 @@ impl<'a, F, E> CallbackContext<F, E>
 where
     F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
 {
-    fn new(callback: F, run_id: Uuid, initial_run_count: usize, fail_fast: bool) -> Self {
+    fn new(
+        callback: F,
+        run_id: Uuid,
+        profile_name: &str,
+        initial_run_count: usize,
+        fail_fast: bool,
+    ) -> Self {
         Self {
             callback,
             run_id,
             stopwatch: crate::time::stopwatch(),
+            profile_name: profile_name.to_owned(),
             run_stats: RunStats {
                 initial_run_count,
                 ..RunStats::default()
@@ -1715,6 +1724,7 @@ where
         self.basic_callback(TestEventKind::RunStarted {
             test_list,
             run_id: self.run_id,
+            profile_name: self.profile_name.clone(),
         })
     }
 

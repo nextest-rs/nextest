@@ -522,6 +522,7 @@ impl NextestConfig {
             .chain(self.compiled.default.clone());
 
         Ok(NextestProfile {
+            name: name.to_owned(),
             store_dir,
             default_profile: &self.inner.default_profile,
             custom_profile,
@@ -573,6 +574,7 @@ pub struct FinalConfig {
 /// Returned by [`NextestConfig::profile`].
 #[derive(Clone, Debug)]
 pub struct NextestProfile<'cfg, State = FinalConfig> {
+    name: String,
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
@@ -583,6 +585,11 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
 }
 
 impl<'cfg, State> NextestProfile<'cfg, State> {
+    /// Returns the name of the profile.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Returns the absolute profile-specific store directory.
     pub fn store_dir(&self) -> &Utf8Path {
         &self.store_dir
@@ -612,6 +619,7 @@ impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
     pub fn apply_build_platforms(self, build_platforms: &BuildPlatforms) -> NextestProfile<'cfg> {
         let compiled_data = self.compiled_data.apply_build_platforms(build_platforms);
         NextestProfile {
+            name: self.name,
             store_dir: self.store_dir,
             default_profile: self.default_profile,
             custom_profile: self.custom_profile,

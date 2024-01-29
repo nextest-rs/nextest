@@ -594,7 +594,11 @@ impl<'a> TestReporterImpl<'a> {
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         match &event.kind {
-            TestEventKind::RunStarted { test_list, .. } => {
+            TestEventKind::RunStarted {
+                test_list,
+                run_id,
+                profile_name,
+            } => {
                 write!(writer, "{:>12} ", "Starting".style(self.styles.pass))?;
 
                 let count_style = self.styles.count;
@@ -611,8 +615,17 @@ impl<'a> TestReporterImpl<'a> {
 
                 let skip_count = test_list.skip_count();
                 if skip_count > 0 {
-                    write!(writer, " ({} skipped)", skip_count.style(count_style))?;
+                    write!(writer, " ({} skipped; ", skip_count.style(count_style))?;
+                } else {
+                    write!(writer, " (")?;
                 }
+
+                write!(
+                    writer,
+                    "run ID: {}, nextest profile: {})",
+                    run_id.style(self.styles.count),
+                    profile_name.style(self.styles.count),
+                )?;
 
                 writeln!(writer)?;
             }
@@ -1659,6 +1672,9 @@ pub enum TestEventKind<'a> {
 
         /// The UUID for this run.
         run_id: Uuid,
+
+        /// The nextest profile chosen for this run.
+        profile_name: String,
     },
 
     /// A setup script started.
