@@ -60,13 +60,13 @@ pub struct CargoNextestApp {
 
 impl CargoNextestApp {
     /// Executes the app.
-    pub fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
+    pub fn exec(self, cli_args: Vec<String>, output_writer: &mut OutputWriter) -> Result<i32> {
         #[cfg(feature = "experimental-tokio-console")]
         nextest_runner::console::init();
 
         match self.subcommand {
-            NextestSubcommand::Nextest(app) => app.exec(output_writer),
-            NextestSubcommand::Ntr(opts) => opts.exec(output_writer),
+            NextestSubcommand::Nextest(app) => app.exec(cli_args, output_writer),
+            NextestSubcommand::Ntr(opts) => opts.exec(cli_args, output_writer),
             #[cfg(unix)]
             NextestSubcommand::DoubleSpawn(opts) => opts.exec(),
         }
@@ -99,7 +99,7 @@ impl AppOpts {
     /// Execute the command.
     ///
     /// Returns the exit code.
-    fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
+    fn exec(self, cli_args: Vec<String>, output_writer: &mut OutputWriter) -> Result<i32> {
         let output = self.common.output.init();
 
         match self.command {
@@ -138,6 +138,7 @@ impl AppOpts {
                     run_opts.no_capture,
                     &run_opts.runner_opts,
                     &run_opts.reporter_opts,
+                    cli_args,
                     output_writer,
                 )?;
                 Ok(0)
@@ -372,7 +373,7 @@ struct NtrOpts {
 }
 
 impl NtrOpts {
-    fn exec(self, output_writer: &mut OutputWriter) -> Result<i32> {
+    fn exec(self, cli_args: Vec<String>, output_writer: &mut OutputWriter) -> Result<i32> {
         let output = self.common.output.init();
 
         let base = BaseApp::new(
@@ -389,6 +390,7 @@ impl NtrOpts {
             self.run_opts.no_capture,
             &self.run_opts.runner_opts,
             &self.run_opts.reporter_opts,
+            cli_args,
             output_writer,
         )?;
         Ok(0)
@@ -1523,6 +1525,7 @@ impl App {
         no_capture: bool,
         runner_opts: &TestRunnerOpts,
         reporter_opts: &TestReporterOpts,
+        cli_args: Vec<String>,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let (version_only_config, config) = self.base.load_config()?;
@@ -1606,6 +1609,7 @@ impl App {
         let runner = runner_builder.build(
             &test_list,
             &profile,
+            cli_args,
             handler,
             double_spawn.clone(),
             target_runner.clone(),

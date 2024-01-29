@@ -598,6 +598,7 @@ impl<'a> TestReporterImpl<'a> {
                 test_list,
                 run_id,
                 profile_name,
+                cli_args: _,
             } => {
                 write!(writer, "{:>12} ", "Starting".style(self.styles.pass))?;
 
@@ -1675,6 +1676,9 @@ pub enum TestEventKind<'a> {
 
         /// The nextest profile chosen for this run.
         profile_name: String,
+
+        /// The command-line arguments for the process.
+        cli_args: Vec<String>,
     },
 
     /// A setup script started.

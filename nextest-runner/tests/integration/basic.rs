@@ -102,6 +102,7 @@ fn test_run() -> Result<()> {
         .build(
             &test_list,
             &profile,
+            vec![], // we aren't testing CLI args at the moment
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
@@ -210,6 +211,7 @@ fn test_run_ignored() -> Result<()> {
         .build(
             &test_list,
             &profile,
+            vec![],
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
@@ -418,6 +420,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
         .build(
             &test_list,
             &profile,
+            vec![],
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
@@ -556,6 +559,7 @@ fn test_termination() -> Result<()> {
         .build(
             &test_list,
             &profile,
+            vec![],
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),

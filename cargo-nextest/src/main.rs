@@ -9,8 +9,12 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let _ = enable_ansi_support::enable_ansi_support();
 
+    let cli_args: Vec<_> = std::env::args_os()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+
     let opts = CargoNextestApp::parse();
-    match opts.exec(&mut OutputWriter::default()) {
+    match opts.exec(cli_args, &mut OutputWriter::default()) {
         Ok(code) => std::process::exit(code),
         Err(error) => {
             error.display_to_stderr();
