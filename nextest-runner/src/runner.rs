@@ -170,6 +170,7 @@ impl TestRunnerBuilder {
         self,
         test_list: &'a TestList,
         profile: &'a NextestProfile<'a>,
+        cli_args: Vec<String>,
         handler_kind: SignalHandlerKind,
         double_spawn: DoubleSpawnInfo,
         target_runner: TargetRunner,
@@ -193,6 +194,7 @@ impl TestRunnerBuilder {
             inner: TestRunnerInner {
                 capture_strategy: self.capture_strategy,
                 profile,
+                cli_args,
                 test_threads,
                 force_retries: self.retries,
                 fail_fast,
@@ -253,6 +255,7 @@ impl<'a> TestRunner<'a> {
 struct TestRunnerInner<'a> {
     capture_strategy: CaptureStrategy,
     profile: &'a NextestProfile<'a>,
+    cli_args: Vec<String>,
     test_threads: usize,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
@@ -286,6 +289,7 @@ impl<'a> TestRunnerInner<'a> {
             callback,
             self.run_id,
             self.profile.name(),
+            self.cli_args.clone(),
             self.test_list.run_count(),
             self.fail_fast,
         );
@@ -1681,6 +1685,7 @@ struct CallbackContext<F, E> {
     callback: F,
     run_id: Uuid,
     profile_name: String,
+    cli_args: Vec<String>,
     stopwatch: StopwatchStart,
     run_stats: RunStats,
     fail_fast: bool,
@@ -1699,6 +1704,7 @@ where
         callback: F,
         run_id: Uuid,
         profile_name: &str,
+        cli_args: Vec<String>,
         initial_run_count: usize,
         fail_fast: bool,
     ) -> Self {
@@ -1707,6 +1713,7 @@ where
             run_id,
             stopwatch: crate::time::stopwatch(),
             profile_name: profile_name.to_owned(),
+            cli_args,
             run_stats: RunStats {
                 initial_run_count,
                 ..RunStats::default()
@@ -1725,6 +1732,7 @@ where
             test_list,
             run_id: self.run_id,
             profile_name: self.profile_name.clone(),
+            cli_args: self.cli_args.clone(),
         })
     }
 
@@ -2380,6 +2388,7 @@ mod tests {
             .build(
                 &test_list,
                 &profile,
+                vec![],
                 handler_kind,
                 DoubleSpawnInfo::disabled(),
                 TargetRunner::empty(),

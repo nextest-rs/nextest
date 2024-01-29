@@ -220,6 +220,7 @@ fn test_run_with_target_runner() -> Result<()> {
         .build(
             &test_list,
             &profile,
+            vec![],
             SignalHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             target_runner,
