@@ -956,7 +956,8 @@ impl From<FinalStatusLevelOpt> for FinalStatusLevel {
 #[derive(Debug)]
 struct BaseApp {
     output: OutputContext,
-    graph_data: Arc<(String, PackageGraph)>,
+    cargo_metadata_json: Arc<String>,
+    package_graph: Arc<PackageGraph>,
     // Potentially remapped workspace root (might not be the same as the graph).
     workspace_root: Utf8PathBuf,
     manifest_path: Option<Utf8PathBuf>,
@@ -983,8 +984,8 @@ impl BaseApp {
 
         let reuse_build = reuse_build.process(output, writer)?;
 
-        let graph_data = match reuse_build.cargo_metadata() {
-            Some(MetadataOrPath::Metadata(graph_data)) => graph_data.clone(),
+        let (cargo_metadata_json, package_graph) = match reuse_build.cargo_metadata() {
+            Some(MetadataOrPath::Metadata(kind)) => (kind.json.clone(), kind.graph.clone()),
             Some(MetadataOrPath::Path(path)) => {
                 let json = std::fs::read_to_string(path).map_err(|err| {
                     ExpectedError::argument_file_read_error("cargo-metadata", path, err)
@@ -992,7 +993,7 @@ impl BaseApp {
                 let graph = PackageGraph::from_json(&json).map_err(|err| {
                     ExpectedError::cargo_metadata_parse_error(Some(path.clone()), err)
                 })?;
-                Arc::new((json, graph))
+                (Arc::new(json), Arc::new(graph))
             }
             None => {
                 let json = acquire_graph_data(
@@ -1002,19 +1003,19 @@ impl BaseApp {
                 )?;
                 let graph = PackageGraph::from_json(&json)
                     .map_err(|err| ExpectedError::cargo_metadata_parse_error(None, err))?;
-                Arc::new((json, graph))
+                (Arc::new(json), Arc::new(graph))
             }
         };
 
         let manifest_path = if reuse_build.cargo_metadata.is_some() {
-            Some(graph_data.1.workspace().root().join("Cargo.toml"))
+            Some(package_graph.workspace().root().join("Cargo.toml"))
         } else {
             manifest_path
         };
 
         let workspace_root = match reuse_build.workspace_remap() {
             Some(path) => path.to_owned(),
-            _ => graph_data.1.workspace().root().to_owned(),
+            _ => package_graph.workspace().root().to_owned(),
         };
 
         let root_manifest_path = workspace_root.join("Cargo.toml");
@@ -1041,7 +1042,8 @@ impl BaseApp {
 
         Ok(Self {
             output,
-            graph_data,
+            cargo_metadata_json,
+            package_graph,
             workspace_root,
             reuse_build,
             manifest_path,
@@ -1257,7 +1259,7 @@ impl BaseApp {
         let mut writer = output_writer.stderr_writer();
         archive_to_file(
             &binary_list,
-            &self.graph_data.0,
+            &self.cargo_metadata_json,
             // Note that path_mapper is currently a no-op -- we don't support reusing builds for
             // archive creation because it's too confusing.
             &path_mapper,
@@ -1279,7 +1281,7 @@ impl BaseApp {
 
     fn build_binary_list(&self) -> Result<Arc<BinaryList>> {
         let binary_list = match self.reuse_build.binaries_metadata() {
-            Some(MetadataOrPath::Metadata(binary_list)) => binary_list.clone(),
+            Some(MetadataOrPath::Metadata(binary_list)) => binary_list.binary_list.clone(),
             Some(MetadataOrPath::Path(path)) => {
                 let raw_binary_list = std::fs::read_to_string(path).map_err(|err| {
                     ExpectedError::argument_file_read_error("binaries-metadata", path, err)
@@ -1306,7 +1308,7 @@ impl BaseApp {
 
     #[inline]
     fn graph(&self) -> &PackageGraph {
-        &self.graph_data.1
+        &self.package_graph
     }
 }
 

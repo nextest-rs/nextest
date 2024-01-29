@@ -16,7 +16,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
 use guppy::graph::PackageGraph;
-use std::{fs, io, sync::Arc};
+use std::{fmt, fs, io, sync::Arc};
 
 mod archive_reporter;
 mod archiver;
@@ -36,10 +36,10 @@ pub const BINARIES_METADATA_FILE_NAME: &str = "target/nextest/binaries-metadata.
 #[derive(Debug, Default)]
 pub struct ReuseBuildInfo {
     /// Cargo metadata and remapping for the target directory.
-    pub cargo_metadata: Option<MetadataWithRemap<(String, PackageGraph)>>,
+    pub cargo_metadata: Option<MetadataWithRemap<CargoMetadataKind>>,
 
     /// Binaries metadata JSON and remapping for the target directory.
-    pub binaries_metadata: Option<MetadataWithRemap<BinaryList>>,
+    pub binaries_metadata: Option<MetadataWithRemap<BinaryListKind>>,
 
     /// Optional temporary directory used for cleanup.
     _temp_dir: Option<Utf8TempDir>,
@@ -48,8 +48,8 @@ pub struct ReuseBuildInfo {
 impl ReuseBuildInfo {
     /// Creates a new [`ReuseBuildInfo`] from the given cargo and binaries metadata information.
     pub fn new(
-        cargo_metadata: Option<MetadataWithRemap<(String, PackageGraph)>>,
-        binaries_metadata: Option<MetadataWithRemap<BinaryList>>,
+        cargo_metadata: Option<MetadataWithRemap<CargoMetadataKind>>,
+        binaries_metadata: Option<MetadataWithRemap<BinaryListKind>>,
     ) -> Self {
         Self {
             cargo_metadata,
@@ -98,12 +98,12 @@ impl ReuseBuildInfo {
     }
 
     /// Returns the Cargo metadata.
-    pub fn cargo_metadata(&self) -> Option<&MetadataOrPath<(String, PackageGraph)>> {
+    pub fn cargo_metadata(&self) -> Option<&MetadataOrPath<CargoMetadataKind>> {
         self.cargo_metadata.as_ref().map(|m| &m.metadata)
     }
 
     /// Returns the binaries metadata.
-    pub fn binaries_metadata(&self) -> Option<&MetadataOrPath<BinaryList>> {
+    pub fn binaries_metadata(&self) -> Option<&MetadataOrPath<BinaryListKind>> {
         self.binaries_metadata.as_ref().map(|m| &m.metadata)
     }
 
@@ -144,17 +144,17 @@ pub struct MetadataWithRemap<T> {
 #[derive(Clone, Debug)]
 pub enum MetadataOrPath<T> {
     /// Deserialized metadata.
-    Metadata(Arc<T>),
+    Metadata(T),
 
     /// Path to metadata.
     Path(Utf8PathBuf),
 }
 
-impl<T> MetadataOrPath<T> {
+impl<T: MetadataKind> MetadataOrPath<T> {
     /// Creates a new [`MetadataOrPath`] with actual metadata.
     #[inline]
-    pub fn metadata(metadata: T) -> Self {
-        Self::Metadata(Arc::new(metadata))
+    pub fn metadata(metadata: T::MetadataType) -> Self {
+        Self::Metadata(T::new(metadata))
     }
 }
 
@@ -162,6 +162,53 @@ impl<T> From<Utf8PathBuf> for MetadataOrPath<T> {
     #[inline]
     fn from(path: Utf8PathBuf) -> Self {
         Self::Path(path)
+    }
+}
+
+/// Type parameter for [`MetadataOrPath`] and [`MetadataWithRemap`].
+pub trait MetadataKind: Clone + fmt::Debug {
+    /// The type of metadata stored.
+    type MetadataType;
+
+    /// Constructs a new [`MetadataKind`] from the given metadata.
+    fn new(metadata: Self::MetadataType) -> Self;
+}
+
+/// [`MetadataKind`] for a [`BinaryList`].
+#[derive(Clone, Debug)]
+pub struct BinaryListKind {
+    /// The binary list.
+    pub binary_list: Arc<BinaryList>,
+}
+
+impl MetadataKind for BinaryListKind {
+    type MetadataType = BinaryList;
+
+    fn new(binary_list: Self::MetadataType) -> Self {
+        Self {
+            binary_list: Arc::new(binary_list),
+        }
+    }
+}
+
+/// [`MetadataKind`] for Cargo metadata.
+#[derive(Clone, Debug)]
+pub struct CargoMetadataKind {
+    /// Cargo metadata JSON.
+    pub json: Arc<String>,
+
+    /// The package graph.
+    pub graph: Arc<PackageGraph>,
+}
+
+impl MetadataKind for CargoMetadataKind {
+    type MetadataType = (String, PackageGraph);
+
+    fn new((json, graph): Self::MetadataType) -> Self {
+        Self {
+            json: Arc::new(json),
+            graph: Arc::new(graph),
+        }
     }
 }
 
