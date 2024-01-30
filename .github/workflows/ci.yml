@@ -1,7 +1,6 @@
-
 on:
   push:
-    branches: [ main, auto, canary ]
+    branches: [main, auto, canary]
   pull_request:
     branches:
       - main
@@ -39,7 +38,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ubuntu-latest]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -57,10 +56,11 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest
+          # macos-14 for M1 runners
+          - macos-14
           - windows-latest
         # 1.73 is the MSRV
-        rust-version: [ "1.73", stable ]
+        rust-version: ["1.73", stable]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -92,7 +92,7 @@ jobs:
       - name: Test with latest nextest release
         run: cargo nextest run --profile ci
       - name: Test without double-spawning
-        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-14' }}
         env:
           NEXTEST_DOUBLE_SPAWN: 0
         run: cargo local-nt run --profile ci
