@@ -18,10 +18,9 @@ use miette::SourceSpan;
 use std::fmt;
 use winnow::{
     ascii::line_ending,
-    combinator::{alt, delimited, eof, fold_repeat, peek, preceded, repeat, terminated},
+    combinator::{alt, delimited, eof, fold_repeat, peek, preceded, repeat, terminated, trace},
     stream::{Location, SliceLen, Stream},
     token::{tag, take_till},
-    trace::trace,
     Parser,
 };
 

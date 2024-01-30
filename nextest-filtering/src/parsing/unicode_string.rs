@@ -7,9 +7,8 @@ use super::{expect_n, PResult, Span, SpanLength};
 use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
-    combinator::{alt, delimited, fold_repeat, preceded},
+    combinator::{alt, delimited, fold_repeat, preceded, trace},
     token::{take_till, take_while},
-    trace::trace,
     Parser,
 };
 
