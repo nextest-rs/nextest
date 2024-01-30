@@ -161,7 +161,8 @@ jobs:
             build-target: i686-pc-windows-msvc
             build-tool: cargo
           - target: universal-apple-darwin
-            os: macos-latest
+            # macos-14 for M1 runners
+            os: macos-14
             build-target: universal-apple-darwin
             build-tool: cargo
 
