@@ -118,7 +118,7 @@ windows-sys = { version = "0.52.0", features = [
     "Win32_System_JobObjects",
     "Win32_System_Pipes",
 ] }
-win32job = "1.0.4"
+win32job = "2.0.0"
 dunce = "1.0.4"
 
 # Use rustls by default, OpenSSL on platforms where rustls isn't available:
