@@ -2186,7 +2186,7 @@ mod imp {
                 }
             };
 
-            job.assign_process(handle)?;
+            job.assign_process(handle as isize)?;
         }
 
         Ok(())
