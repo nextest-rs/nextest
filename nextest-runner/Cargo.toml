@@ -106,10 +106,6 @@ libc = "0.2.152"
 nix = { version = "0.27.1", default-features = false, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
-# This is needed to get the definition of c_void to be the same as the one in std:
-# https://docs.rs/winapi/0.3.9/src/winapi/lib.rs.html#35-37
-# Otherwise nextest-runner runs into compilation issues with win32job.
-winapi = { version = "0.3.9", features = ["std"] }
 windows-sys = { version = "0.52.0", features = [
     "Win32_Foundation",
     "Win32_Globalization",

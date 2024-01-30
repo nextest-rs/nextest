@@ -1745,7 +1745,6 @@ dependencies = [
  "unicode-normalization",
  "uuid",
  "win32job",
- "winapi",
  "windows-sys 0.52.0",
  "xxhash-rust",
  "zstd",
