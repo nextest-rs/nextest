@@ -17,7 +17,7 @@ For the order that configuration parameters are resolved in, see [Hierarchical c
 
 ## Delays and backoff
 
-In some situations, you may wish to add delays between retries. For example, if your test hits a network service which is rate limited.
+In some situations, you may wish to add delays between retries—for example, if your test hits a network service which is rate limited.
 
 In those cases, you can insert delays between test attempts with a backoff algorithm.
 
