@@ -55,7 +55,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-latest
+          - ubicloud-standard-8
           # macos-14 for M1 runners
           - macos-14
           - windows-latest

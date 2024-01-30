@@ -140,7 +140,7 @@ jobs:
           # Native builds
 
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
+            os: ubicloud-standard-8
             # On Linux, we use glibc 2.27, as the minimum of
             # - Ubuntu 18.04 (glibc 2.27)
             # - CentOS 8 (glibc 2.28)
