@@ -36,6 +36,6 @@ jobs:
           cargo llvm-cov --no-report --doc
           cargo llvm-cov report --doctests --lcov --output-path lcov.info
       - name: Upload coverage data to codecov
-        uses: codecov/codecov-action@4fe8c5f003fae66aa5ebb77cfd3e7bfbbda0b6b0 # v3
+        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3
         with:
           files: lcov.info
