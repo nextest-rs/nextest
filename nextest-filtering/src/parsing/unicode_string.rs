@@ -7,7 +7,7 @@ use super::{expect_n, PResult, Span, SpanLength};
 use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
-    combinator::{alt, delimited, fold_repeat, preceded, trace},
+    combinator::{alt, delimited, preceded, repeat, trace},
     token::{take_till, take_while},
     Parser,
 };
@@ -103,9 +103,7 @@ fn parse_fragment<'i>(input: &mut Span<'i>) -> PResult<Option<StringFragment<'i>
 pub(super) fn parse_string(input: &mut Span<'_>) -> PResult<Option<String>> {
     trace(
         "parse_string",
-        fold_repeat(
-            0..,
-            parse_fragment,
+        repeat(0.., parse_fragment).fold(
             || Some(String::new()),
             |string, fragment| {
                 match (string, fragment) {

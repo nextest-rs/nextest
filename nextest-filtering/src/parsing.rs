@@ -18,7 +18,7 @@ use miette::SourceSpan;
 use std::fmt;
 use winnow::{
     ascii::line_ending,
-    combinator::{alt, delimited, eof, fold_repeat, peek, preceded, repeat, terminated, trace},
+    combinator::{alt, delimited, eof, peek, preceded, repeat, terminated, trace},
     stream::{Location, SliceLen, Stream},
     token::{tag, take_till},
     Parser,
@@ -395,14 +395,15 @@ fn parse_regex_inner(input: &mut Span<'_>) -> PResult<String> {
             .map(|s: &str| Frag::Literal(s));
         let parse_frag = alt((parse_escape, parse_literal));
 
-        let res = fold_repeat(0.., parse_frag, String::new, |mut string, frag| {
-            match frag {
-                Frag::Escape(c) => string.push(c),
-                Frag::Literal(s) => string.push_str(s),
-            }
-            string
-        })
-        .parse_next(input)?;
+        let res = repeat(0.., parse_frag)
+            .fold(String::new, |mut string, frag| {
+                match frag {
+                    Frag::Escape(c) => string.push(c),
+                    Frag::Literal(s) => string.push_str(s),
+                }
+                string
+            })
+            .parse_next(input)?;
 
         let _ = peek('/').parse_next(input)?;
 
@@ -733,15 +734,14 @@ fn parse_expr(input: &mut Span<'_>) -> PResult<ExprResult> {
         // "or" binds less tightly than "and", so parse and within or.
         let expr = expect_expr(parse_and_or_difference_expr).parse_next(input)?;
 
-        let ops = fold_repeat(
+        let ops = repeat(
             0..,
             (parse_or_operator, expect_expr(parse_and_or_difference_expr)),
-            Vec::new,
-            |mut ops, (op, expr)| {
-                ops.push((op, expr));
-                ops
-            },
         )
+        .fold(Vec::new, |mut ops, (op, expr)| {
+            ops.push((op, expr));
+            ops
+        })
         .parse_next(input)?;
 
         let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| {
@@ -831,18 +831,17 @@ fn parse_and_or_difference_expr(input: &mut Span<'_>) -> PResult<ExprResult> {
     trace("parse_and_or_difference_expr", |input: &mut _| {
         let expr = expect_expr(parse_basic_expr).parse_next(input)?;
 
-        let ops = fold_repeat(
+        let ops = repeat(
             0..,
             (
                 parse_and_or_difference_operator,
                 expect_expr(parse_basic_expr),
             ),
-            Vec::new,
-            |mut ops, (op, expr)| {
-                ops.push((op, expr));
-                ops
-            },
         )
+        .fold(Vec::new, |mut ops, (op, expr)| {
+            ops.push((op, expr));
+            ops
+        })
         .parse_next(input)?;
 
         let expr = ops.into_iter().fold(expr, |expr_1, (op, expr_2)| match op {
