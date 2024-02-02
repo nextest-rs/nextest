@@ -34,6 +34,7 @@
   - [Test coverage](book/test-coverage.md)
   - [The Miri interpreter](book/miri.md)
   - [Criterion benchmarks](book/benchmark-integration.md)
+  - [Mutation testing with cargo-mutants](book/cargo-mutants.md)
 ---
 - [Stability policy](book/stability.md)
 - [Experimental features](book/experimental-features.md)
