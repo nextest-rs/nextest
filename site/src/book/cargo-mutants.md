@@ -6,7 +6,7 @@ This is complementary to coverage testing: coverage measures whether the tests e
 
 Mutation testing is typically slower than coverage testing because it runs the test suite many times, once for each mutation, but it is potentially more effective at finding gaps in your test suite, easier to set up, and may produce results that are easier to interpret or act on.
 
-## Using cargo-mutants with Nextest
+## Using cargo-mutants with nextest
 
 First, install cargo-mutants with `cargo install cargo-mutants`.
 
