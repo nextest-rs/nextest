@@ -397,7 +397,7 @@ impl<'g> TestList<'g> {
     pub fn write(
         &self,
         output_format: OutputFormat,
-        writer: impl Write,
+        writer: &mut dyn Write,
         colorize: bool,
     ) -> Result<(), WriteTestListError> {
         match output_format {
@@ -563,7 +563,12 @@ impl<'g> TestList<'g> {
     }
 
     /// Writes this test list out in a human-friendly format.
-    pub fn write_human(&self, writer: impl Write, verbose: bool, colorize: bool) -> io::Result<()> {
+    pub fn write_human(
+        &self,
+        writer: &mut dyn Write,
+        verbose: bool,
+        colorize: bool,
+    ) -> io::Result<()> {
         self.write_human_impl(None, writer, verbose, colorize)
     }
 
@@ -571,7 +576,7 @@ impl<'g> TestList<'g> {
     pub(crate) fn write_human_with_filter(
         &self,
         filter: &TestListDisplayFilter<'_>,
-        writer: impl Write,
+        writer: &mut dyn Write,
         verbose: bool,
         colorize: bool,
     ) -> io::Result<()> {
@@ -581,7 +586,7 @@ impl<'g> TestList<'g> {
     fn write_human_impl(
         &self,
         filter: Option<&TestListDisplayFilter<'_>>,
-        mut writer: impl Write,
+        mut writer: &mut dyn Write,
         verbose: bool,
         colorize: bool,
     ) -> io::Result<()> {
@@ -627,7 +632,7 @@ impl<'g> TestList<'g> {
                 )?;
             }
 
-            let mut indented = indent_write::io::IndentWriter::new("    ", &mut writer);
+            let mut indented = indent_write::io::IndentWriter::new("    ", writer);
 
             match &info.status {
                 RustTestSuiteStatus::Listed { test_cases } => {
@@ -662,6 +667,8 @@ impl<'g> TestList<'g> {
                     )?;
                 }
             }
+
+            writer = indented.into_inner();
         }
         Ok(())
     }
