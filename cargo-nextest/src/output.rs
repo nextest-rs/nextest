@@ -197,9 +197,7 @@ impl OutputWriter {
                 _lifetime: PhantomData,
             },
             #[cfg(test)]
-            Self::Test { ref mut stdout, .. } => StdoutWriter::Test {
-                buf: BufWriter::new(stdout),
-            },
+            Self::Test { ref mut stdout, .. } => StdoutWriter::Test { buf: stdout },
         }
     }
 
@@ -218,9 +216,7 @@ impl OutputWriter {
                 _lifetime: PhantomData,
             },
             #[cfg(test)]
-            Self::Test { ref mut stderr, .. } => StderrWriter::Test {
-                buf: BufWriter::new(stderr),
-            },
+            Self::Test { ref mut stderr, .. } => StderrWriter::Test { buf: stderr },
         }
     }
 }
@@ -231,7 +227,7 @@ pub(crate) enum StdoutWriter<'a> {
         _lifetime: PhantomData<&'a ()>,
     },
     #[cfg(test)]
-    Test { buf: BufWriter<&'a mut Vec<u8>> },
+    Test { buf: &'a mut Vec<u8> },
 }
 
 impl<'a> Write for StdoutWriter<'a> {
@@ -258,7 +254,7 @@ pub(crate) enum StderrWriter<'a> {
         _lifetime: PhantomData<&'a ()>,
     },
     #[cfg(test)]
-    Test { buf: BufWriter<&'a mut Vec<u8>> },
+    Test { buf: &'a mut Vec<u8> },
 }
 
 impl<'a> Write for StderrWriter<'a> {
