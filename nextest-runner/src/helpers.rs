@@ -1,16 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{list::Styles, runner::AbortStatus};
+use crate::{list::Styles, runner::AbortStatus, write_str::WriteStr};
 use camino::{Utf8Path, Utf8PathBuf};
 use owo_colors::OwoColorize;
-use std::{
-    fmt,
-    io::{self, Write},
-    path::PathBuf,
-    process::ExitStatus,
-    time::Duration,
-};
+use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
 
 pub(crate) mod plural {
     pub(crate) fn setup_scripts_str(count: usize) -> &'static str {
@@ -66,7 +60,29 @@ pub(crate) mod plural {
 pub(crate) fn write_test_name(
     name: &str,
     style: &Styles,
-    mut writer: impl Write,
+    writer: &mut dyn WriteStr,
+) -> io::Result<()> {
+    // Look for the part of the test after the last ::, if any.
+    let mut splits = name.rsplitn(2, "::");
+    let trailing = splits.next().expect("test should have at least 1 element");
+    if let Some(rest) = splits.next() {
+        write!(
+            writer,
+            "{}{}",
+            rest.style(style.module_path),
+            "::".style(style.module_path)
+        )?;
+    }
+    write!(writer, "{}", trailing.style(style.test_name))?;
+
+    Ok(())
+}
+
+/// Write out a test name, `std::io::Write` version.
+pub(crate) fn io_write_test_name(
+    name: &str,
+    style: &Styles,
+    writer: &mut dyn io::Write,
 ) -> io::Result<()> {
     // Look for the part of the test after the last ::, if any.
     let mut splits = name.rsplitn(2, "::");

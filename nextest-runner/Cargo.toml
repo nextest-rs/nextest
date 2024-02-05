@@ -29,7 +29,7 @@ config = { version = "0.14.0", default-features = false, features = [
 cargo_metadata = "0.18.1"
 cfg-if = "1.0.0"
 chrono = "0.4.33"
-debug-ignore = "1.0.5"
+debug-ignore.workspace = true
 display-error-chain = "0.2.0"
 either = "1.9.0"
 futures = "0.3.30"
@@ -38,7 +38,6 @@ guppy = "0.17.5"
 # added a config.toml there
 home = "0.5.9"
 humantime-serde = "1.1.1"
-indent_write = "2.2.0"
 indicatif = "0.17.7"
 is_ci = "1.2.0"
 itertools = "0.12.1"

@@ -376,6 +376,7 @@ dependencies = [
  "shell-words",
  "supports-color",
  "supports-unicode",
+ "swrite",
  "thiserror",
 ]
 
@@ -1309,12 +1310,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indent_write"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cfe9645a18782869361d9c8732246be7b410ad4e919d3609ebabdac00ba12c3"
-
-[[package]]
 name = "indenter"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1692,7 +1687,6 @@ dependencies = [
  "home",
  "http",
  "humantime-serde",
- "indent_write",
  "indexmap 2.2.2",
  "indicatif",
  "indoc",
@@ -2758,6 +2752,12 @@ checksum = "f850c19edd184a205e883199a261ed44471c81e39bd95b1357f5febbef00e77a"
 dependencies = [
  "is-terminal",
 ]
+
+[[package]]
+name = "swrite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f3fece30b2dc06d65ecbca97b602db15bf75f932711d60cc604534f1f8b7a03"
 
 [[package]]
 name = "syn"

@@ -4,9 +4,9 @@
 // clippy complains about the Arbitrary impl for OutputFormat
 #![allow(clippy::unit_arg)]
 
+use crate::{errors::WriteTestListError, write_str::WriteStr};
 use owo_colors::Style;
 use serde::Serialize;
-use std::io;
 
 /// Output formats for nextest.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -39,12 +39,19 @@ impl SerializableFormat {
     pub fn to_writer(
         self,
         value: &impl Serialize,
-        writer: impl io::Write,
-    ) -> serde_json::Result<()> {
-        match self {
-            SerializableFormat::Json => serde_json::to_writer(writer, value),
-            SerializableFormat::JsonPretty => serde_json::to_writer_pretty(writer, value),
-        }
+        writer: &mut dyn WriteStr,
+    ) -> Result<(), WriteTestListError> {
+        let out = match self {
+            SerializableFormat::Json => {
+                // TODO: convert WriteStr to io::Write rather than buffering the output in memory.
+                serde_json::to_string(value).map_err(WriteTestListError::Json)?
+            }
+            SerializableFormat::JsonPretty => {
+                serde_json::to_string_pretty(value).map_err(WriteTestListError::Json)?
+            }
+        };
+
+        writer.write_str(&out).map_err(WriteTestListError::Io)
     }
 }
 

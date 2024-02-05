@@ -8,13 +8,15 @@ use crate::{
     },
     errors::ShowTestGroupsError,
     helpers::QuotedDisplay,
+    indenter::indented,
     list::{TestInstance, TestList, TestListDisplayFilter},
+    write_str::WriteStr,
 };
 use indexmap::IndexMap;
 use owo_colors::{OwoColorize, Style};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::{self, Write},
+    io,
 };
 
 /// Shows sets of tests that are in various groups.
@@ -125,7 +127,7 @@ impl<'a> ShowTestGroups<'a> {
     }
 
     /// Writes the test groups to the given writer in a human-friendly format.
-    pub fn write_human(&self, mut writer: &mut dyn Write, colorize: bool) -> io::Result<()> {
+    pub fn write_human(&self, mut writer: &mut dyn WriteStr, colorize: bool) -> io::Result<()> {
         static INDENT: &str = "      ";
 
         let mut styles = Styles::default();
@@ -177,14 +179,14 @@ impl<'a> ShowTestGroups<'a> {
 
                 writeln!(writer, ":")?;
 
-                let mut inner_writer = indent_write::io::IndentWriter::new(INDENT, writer);
+                let mut inner_writer = indented(writer).with_str(INDENT);
                 self.test_list.write_human_with_filter(
                     &data.matching_tests,
                     &mut inner_writer,
                     false,
                     colorize,
                 )?;
-                inner_writer.flush()?;
+                inner_writer.write_str_flush()?;
                 writer = inner_writer.into_inner();
             }
 
@@ -193,14 +195,14 @@ impl<'a> ShowTestGroups<'a> {
                 if let Some(non_overrides) = &self.non_overrides {
                     any_printed = true;
                     writeln!(writer, "  * from default settings:")?;
-                    let mut inner_writer = indent_write::io::IndentWriter::new(INDENT, writer);
+                    let mut inner_writer = indented(writer).with_str(INDENT);
                     self.test_list.write_human_with_filter(
                         non_overrides,
                         &mut inner_writer,
                         false,
                         colorize,
                     )?;
-                    inner_writer.flush()?;
+                    inner_writer.write_str_flush()?;
                     writer = inner_writer.into_inner();
                 }
             }
