@@ -362,7 +362,7 @@ dependencies = [
  "guppy",
  "itertools 0.12.1",
  "log",
- "miette",
+ "miette 7.0.0",
  "nextest-filtering",
  "nextest-metadata",
  "nextest-runner",
@@ -374,8 +374,8 @@ dependencies = [
  "semver",
  "serde_json",
  "shell-words",
- "supports-color",
- "supports-unicode",
+ "supports-color 2.1.0",
+ "supports-unicode 2.1.0",
  "thiserror",
 ]
 
@@ -1535,15 +1535,25 @@ version = "5.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59bb584eaeeab6bd0226ccf3509a69d7936d148cf3d036ad350abe35e8c6856e"
 dependencies = [
+ "miette-derive 5.10.0",
+ "once_cell",
+ "thiserror",
+ "unicode-width",
+]
+
+[[package]]
+name = "miette"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98a72adfa0c7ae88ba0abcbd00047a476616c66b831d628b8ac7f1e9de0cfd67"
+dependencies = [
  "backtrace",
  "backtrace-ext",
- "is-terminal",
- "miette-derive",
- "once_cell",
- "owo-colors 3.5.0",
- "supports-color",
+ "miette-derive 7.0.0",
+ "owo-colors 4.0.0",
+ "supports-color 3.0.0",
  "supports-hyperlinks",
- "supports-unicode",
+ "supports-unicode 3.0.0",
  "terminal_size",
  "textwrap",
  "thiserror",
@@ -1555,6 +1565,17 @@ name = "miette-derive"
 version = "5.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "miette-derive"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "279def6bf114a34b3cf887489eb440d4dfcf709ab3ce9955e4a6f957ce5cce77"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1637,7 +1658,7 @@ dependencies = [
  "clap",
  "globset",
  "guppy",
- "miette",
+ "miette 7.0.0",
  "nextest-metadata",
  "nextest-workspace-hack",
  "proptest",
@@ -1702,7 +1723,7 @@ dependencies = [
  "libc",
  "log",
  "maplit",
- "miette",
+ "miette 7.0.0",
  "mukti-metadata",
  "nextest-filtering",
  "nextest-metadata",
@@ -1765,7 +1786,7 @@ dependencies = [
  "linux-raw-sys",
  "log",
  "memchr",
- "miette",
+ "miette 7.0.0",
  "miniz_oxide",
  "num-traits",
  "owo-colors 4.0.0",
@@ -1913,7 +1934,7 @@ version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caff54706df99d2a78a5a4e3455ff45448d81ef1bb63c22cd14052ca0e993a3f"
 dependencies = [
- "supports-color",
+ "supports-color 2.1.0",
 ]
 
 [[package]]
@@ -2019,9 +2040,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.76"
+version = "1.0.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95fc56cda0b5c3325f5fbbd7ff9fda9e02bb00bb3dac51252d2f1bfa1cb8cc8c"
+checksum = "e2422ad645d89c99f8f3e6b88a9fdeca7fabeac836b1002371c4367c8f984aae"
 dependencies = [
  "unicode-ident",
 ]
@@ -2742,13 +2763,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "supports-hyperlinks"
-version = "2.1.0"
+name = "supports-color"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f84231692eb0d4d41e4cdd0cabfdd2e6cd9e255e65f80c9aa7c98dd502b4233d"
+checksum = "9829b314621dfc575df4e409e79f9d6a66a3bd707ab73f23cb4aa3a854ac854f"
 dependencies = [
- "is-terminal",
+ "is_ci",
 ]
+
+[[package]]
+name = "supports-hyperlinks"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c0a1e5168041f5f3ff68ff7d95dcb9c8749df29f6e7e89ada40dd4c9de404ee"
 
 [[package]]
 name = "supports-unicode"
@@ -2758,6 +2785,12 @@ checksum = "f850c19edd184a205e883199a261ed44471c81e39bd95b1357f5febbef00e77a"
 dependencies = [
  "is-terminal",
 ]
+
+[[package]]
+name = "supports-unicode"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7401a30af6cb5818bb64852270bb722533397edcfc7344954a38f420819ece2"
 
 [[package]]
 name = "syn"
@@ -2835,7 +2868,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95c64700e74096db887671956972c404da35516fe0e75b10b9d6d55f7d905780"
 dependencies = [
  "guppy-workspace-hack",
- "miette",
+ "miette 5.10.0",
  "target-spec",
 ]
 
@@ -2854,12 +2887,12 @@ dependencies = [
 
 [[package]]
 name = "terminal_size"
-version = "0.1.17"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633c1a546cee861a1a6d0dc69ebeca693bf4296661ba7852b9d21d159e0506df"
+checksum = "21bebf2b7c9e0a515f6e0f8c51dc0f8e4696391e6f1ff30379559f8365fb0df7"
 dependencies = [
- "libc",
- "winapi",
+ "rustix",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -2909,9 +2942,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.15.2"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7b3e525a49ec206798b40326a44121291b530c963cfb01018f63e135bac543d"
+checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 dependencies = [
  "smawk",
  "unicode-linebreak",
