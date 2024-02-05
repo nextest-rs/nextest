@@ -6,11 +6,11 @@ use clap::{Args, ValueEnum};
 use env_logger::fmt::Formatter;
 use log::{Level, LevelFilter, Record};
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
-use nextest_runner::reporter::ReporterStderr;
+use nextest_runner::{reporter::ReporterStderr, write_str::WriteStr};
 use owo_colors::{OwoColorize, Stream, Style};
 use owo_colors_3::style;
 use std::{
-    io::{BufWriter, Stderr, Stdout, Write},
+    io::{self, BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,
 };
 
@@ -240,6 +240,24 @@ impl<'a> Write for StdoutWriter<'a> {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Normal { buf, .. } => buf.flush(),
+            #[cfg(test)]
+            Self::Test { .. } => Ok(()),
+        }
+    }
+}
+
+impl<'a> WriteStr for StdoutWriter<'a> {
+    fn write_str(&mut self, s: &str) -> io::Result<()> {
+        match self {
+            Self::Normal { buf, .. } => buf.write_all(s.as_bytes()),
+            #[cfg(test)]
+            Self::Test { buf } => buf.write_all(s.as_bytes()),
+        }
+    }
+
+    fn write_str_flush(&mut self) -> io::Result<()> {
         match self {
             Self::Normal { buf, .. } => buf.flush(),
             #[cfg(test)]

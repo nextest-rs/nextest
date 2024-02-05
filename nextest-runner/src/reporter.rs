@@ -11,7 +11,7 @@ pub mod structured;
 use crate::{
     config::{NextestProfile, ScriptId},
     errors::WriteEventError,
-    helpers::{plural, write_test_name},
+    helpers::{io_write_test_name, plural},
     list::{TestInstance, TestList},
     reporter::aggregator::EventAggregator,
     runner::{
@@ -1245,7 +1245,7 @@ impl<'a> TestReporterImpl<'a> {
             width = self.binary_id_width
         )?;
 
-        write_test_name(instance.name, &self.styles.list_styles, writer)
+        io_write_test_name(instance.name, &self.styles.list_styles, writer)
     }
 
     fn write_setup_script(

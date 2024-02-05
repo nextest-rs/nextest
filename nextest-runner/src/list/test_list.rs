@@ -7,11 +7,13 @@ use crate::{
     double_spawn::DoubleSpawnInfo,
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
+    indenter::indented,
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand},
     test_filter::TestFilterBuilder,
+    write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use futures::prelude::*;
@@ -30,7 +32,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
     io,
-    io::Write,
     path::PathBuf,
     sync::Arc,
 };
@@ -397,16 +398,14 @@ impl<'g> TestList<'g> {
     pub fn write(
         &self,
         output_format: OutputFormat,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
         colorize: bool,
     ) -> Result<(), WriteTestListError> {
         match output_format {
             OutputFormat::Human { verbose } => self
                 .write_human(writer, verbose, colorize)
                 .map_err(WriteTestListError::Io),
-            OutputFormat::Serializable(format) => format
-                .to_writer(&self.to_summary(), writer)
-                .map_err(WriteTestListError::Json),
+            OutputFormat::Serializable(format) => format.to_writer(&self.to_summary(), writer),
         }
     }
 
@@ -427,10 +426,9 @@ impl<'g> TestList<'g> {
 
     /// Outputs this list as a string with the given format.
     pub fn to_string(&self, output_format: OutputFormat) -> Result<String, WriteTestListError> {
-        // Ugh this sucks. String really should have an io::Write impl that errors on non-UTF8 text.
-        let mut buf = Vec::with_capacity(1024);
-        self.write(output_format, &mut buf, false)?;
-        Ok(String::from_utf8(buf).expect("buffer is valid UTF-8"))
+        let mut s = String::with_capacity(1024);
+        self.write(output_format, &mut s, false)?;
+        Ok(s)
     }
 
     // ---
@@ -565,7 +563,7 @@ impl<'g> TestList<'g> {
     /// Writes this test list out in a human-friendly format.
     pub fn write_human(
         &self,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
         verbose: bool,
         colorize: bool,
     ) -> io::Result<()> {
@@ -576,7 +574,7 @@ impl<'g> TestList<'g> {
     pub(crate) fn write_human_with_filter(
         &self,
         filter: &TestListDisplayFilter<'_>,
-        writer: &mut dyn Write,
+        writer: &mut dyn WriteStr,
         verbose: bool,
         colorize: bool,
     ) -> io::Result<()> {
@@ -586,7 +584,7 @@ impl<'g> TestList<'g> {
     fn write_human_impl(
         &self,
         filter: Option<&TestListDisplayFilter<'_>>,
-        mut writer: &mut dyn Write,
+        mut writer: &mut dyn WriteStr,
         verbose: bool,
         colorize: bool,
     ) -> io::Result<()> {
@@ -632,7 +630,7 @@ impl<'g> TestList<'g> {
                 )?;
             }
 
-            let mut indented = indent_write::io::IndentWriter::new("    ", writer);
+            let mut indented = indented(writer).with_str("    ");
 
             match &info.status {
                 RustTestSuiteStatus::Listed { test_cases } => {

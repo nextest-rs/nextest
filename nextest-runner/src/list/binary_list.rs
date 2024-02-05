@@ -6,6 +6,7 @@ use crate::{
     errors::{FromMessagesError, RustBuildMetaParseError, WriteTestListError},
     helpers::convert_rel_path_to_forward_slash,
     list::{BinaryListState, OutputFormat, RustBuildMeta, Styles},
+    write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use cargo_metadata::{Artifact, BuildScript, Message, PackageId};
@@ -15,7 +16,7 @@ use nextest_metadata::{
     RustNonTestBinarySummary, RustTestBinaryKind, RustTestBinarySummary,
 };
 use owo_colors::OwoColorize;
-use std::{collections::HashSet, io, io::Write};
+use std::{collections::HashSet, io};
 
 /// A Rust test binary built by Cargo.
 #[derive(Clone, Debug)]
@@ -86,16 +87,14 @@ impl BinaryList {
     pub fn write(
         &self,
         output_format: OutputFormat,
-        writer: impl Write,
+        writer: &mut dyn WriteStr,
         colorize: bool,
     ) -> Result<(), WriteTestListError> {
         match output_format {
             OutputFormat::Human { verbose } => self
                 .write_human(writer, verbose, colorize)
                 .map_err(WriteTestListError::Io),
-            OutputFormat::Serializable(format) => format
-                .to_writer(&self.to_summary(), writer)
-                .map_err(WriteTestListError::Json),
+            OutputFormat::Serializable(format) => format.to_writer(&self.to_summary(), writer),
         }
     }
 
@@ -122,7 +121,12 @@ impl BinaryList {
         }
     }
 
-    fn write_human(&self, mut writer: impl Write, verbose: bool, colorize: bool) -> io::Result<()> {
+    fn write_human(
+        &self,
+        writer: &mut dyn WriteStr,
+        verbose: bool,
+        colorize: bool,
+    ) -> io::Result<()> {
         let mut styles = Styles::default();
         if colorize {
             styles.colorize();
@@ -146,10 +150,9 @@ impl BinaryList {
 
     /// Outputs this list as a string with the given format.
     pub fn to_string(&self, output_format: OutputFormat) -> Result<String, WriteTestListError> {
-        // Ugh this sucks. String really should have an io::Write impl that errors on non-UTF8 text.
-        let mut buf = Vec::with_capacity(1024);
-        self.write(output_format, &mut buf, false)?;
-        Ok(String::from_utf8(buf).expect("buffer is valid UTF-8"))
+        let mut s = String::with_capacity(1024);
+        self.write(output_format, &mut s, false)?;
+        Ok(s)
     }
 }
 

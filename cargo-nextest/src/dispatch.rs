@@ -35,6 +35,7 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
+    write_str::WriteStr,
 };
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Stream, Style};
@@ -42,10 +43,10 @@ use semver::Version;
 use std::{
     collections::BTreeSet,
     env::VarError,
-    fmt::Write as _,
     io::{Cursor, Write},
     sync::Arc,
 };
+use swrite::{swrite, SWrite};
 
 /// A next-generation test runner for Rust.
 ///
@@ -1432,7 +1433,7 @@ impl App {
                         .color
                         .should_colorize(supports_color::Stream::Stdout),
                 )?;
-                writer.flush().map_err(WriteTestListError::Io)?;
+                writer.write_str_flush().map_err(WriteTestListError::Io)?;
             }
             ListType::Full => {
                 let double_spawn = self.base.load_double_spawn();
@@ -1455,7 +1456,7 @@ impl App {
                         .color
                         .should_colorize(supports_color::Stream::Stdout),
                 )?;
-                writer.flush().map_err(WriteTestListError::Io)?;
+                writer.write_str_flush().map_err(WriteTestListError::Io)?;
             }
         }
 
@@ -1514,7 +1515,7 @@ impl App {
                     .should_colorize(supports_color::Stream::Stdout),
             )
             .map_err(WriteTestListError::Io)?;
-        writer.flush().map_err(WriteTestListError::Io)?;
+        writer.write_str_flush().map_err(WriteTestListError::Io)?;
 
         Ok(())
     }
@@ -1919,7 +1920,7 @@ fn discover_target_triple(
             None
         }
         Err(err) => {
-            warn_on_err("target triple", &err).expect("writing to a string is infallible");
+            warn_on_err("target triple", &err);
             None
         }
     }
@@ -1948,7 +1949,7 @@ fn runner_for_target(
             runner
         }
         Err(err) => {
-            warn_on_err("target runner", &err).expect("writing to a string is infallible");
+            warn_on_err("target runner", &err);
             TargetRunner::empty()
         }
     }
@@ -1963,22 +1964,21 @@ fn log_platform_runner(prefix: &str, runner: &PlatformRunner) {
     )
 }
 
-fn warn_on_err(thing: &str, err: &(dyn std::error::Error)) -> Result<(), std::fmt::Error> {
+fn warn_on_err(thing: &str, err: &(dyn std::error::Error)) {
     let mut s = String::with_capacity(256);
-    write!(s, "could not determine {thing}: {err}")?;
+    swrite!(s, "could not determine {thing}: {err}");
     let mut next_error = err.source();
     while let Some(err) = next_error {
-        write!(
+        swrite!(
             s,
             "\n  {} {}",
             "caused by:".if_supports_color(Stream::Stderr, |s| s.style(Style::new().yellow())),
             err
-        )?;
+        );
         next_error = err.source();
     }
 
     log::warn!("{}", s);
-    Ok(())
 }
 
 #[cfg(test)]

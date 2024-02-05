@@ -16,6 +16,7 @@ pub mod console;
 pub mod double_spawn;
 pub mod errors;
 mod helpers;
+pub mod indenter;
 pub mod list;
 pub mod partition;
 pub mod platform;
@@ -31,3 +32,4 @@ pub mod test_output;
 mod time;
 #[cfg(feature = "self-update")]
 pub mod update;
+pub mod write_str;
