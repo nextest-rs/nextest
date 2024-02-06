@@ -374,7 +374,7 @@ dependencies = [
  "serde_json",
  "shell-words",
  "supports-color 2.1.0",
- "supports-unicode 2.1.0",
+ "supports-unicode",
  "swrite",
  "thiserror",
 ]
@@ -1535,7 +1535,7 @@ dependencies = [
  "owo-colors 4.0.0",
  "supports-color 3.0.0",
  "supports-hyperlinks",
- "supports-unicode 3.0.0",
+ "supports-unicode",
  "terminal_size",
  "textwrap",
  "thiserror",
@@ -2746,15 +2746,6 @@ name = "supports-hyperlinks"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c0a1e5168041f5f3ff68ff7d95dcb9c8749df29f6e7e89ada40dd4c9de404ee"
-
-[[package]]
-name = "supports-unicode"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f850c19edd184a205e883199a261ed44471c81e39bd95b1357f5febbef00e77a"
-dependencies = [
- "is-terminal",
-]
 
 [[package]]
 name = "supports-unicode"
