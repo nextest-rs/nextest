@@ -602,7 +602,7 @@ fn test_show_config_version() {
     let config_path = p.workspace_root().join(".config/nextest.toml");
     let mut f = File::options()
         .append(true)
-        .write(true)
+        
         .create(false)
         .open(config_path)
         .unwrap();

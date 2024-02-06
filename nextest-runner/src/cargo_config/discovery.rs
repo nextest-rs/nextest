@@ -111,7 +111,7 @@ impl CargoConfigs {
 
     pub(crate) fn discovered_configs(
         &self,
-    ) -> impl Iterator<Item = DiscoveredConfig<'_>> + DoubleEndedIterator + '_ {
+    ) -> impl DoubleEndedIterator<Item = DiscoveredConfig<'_>> + '_ {
         // NOTE: The order is:
         // 1. --config k=v
         // 2. --config <file>

@@ -1274,7 +1274,7 @@ impl ExecutionStatuses {
     }
 
     /// Iterates over all the statuses.
-    pub fn iter(&self) -> impl Iterator<Item = &'_ ExecuteStatus> + DoubleEndedIterator + '_ {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &'_ ExecuteStatus> + '_ {
         self.statuses.iter()
     }
 
