@@ -7,8 +7,7 @@ use env_logger::fmt::Formatter;
 use log::{Level, LevelFilter, Record};
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
 use nextest_runner::{reporter::ReporterStderr, write_str::WriteStr};
-use owo_colors::{OwoColorize, Stream, Style};
-use owo_colors_3::style;
+use owo_colors::{style, OwoColorize, Stream, Style};
 use std::{
     io::{self, BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,

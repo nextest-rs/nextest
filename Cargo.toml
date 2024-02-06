@@ -17,9 +17,12 @@ rust-version = "1.73"
 bstr = { version = "1.9.0", default-features = false, features = ["std"] }
 debug-ignore = "1.0.5"
 globset = "0.4.14"
+miette = "7.0.0"
+owo-colors = { version = "4.0.0", features = ["supports-colors"] }
 nextest-metadata = { version = "0.10.0", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
 swrite = "0.1.0"
+target-spec-miette = "0.4.0"
 
 # make backtrace + color-eyre faster on debug builds
 [profile.dev.package.backtrace]
