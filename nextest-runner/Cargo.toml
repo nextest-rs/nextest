@@ -38,7 +38,7 @@ guppy = "0.17.5"
 # added a config.toml there
 home = "0.5.9"
 humantime-serde = "1.1.1"
-indicatif = "0.17.7"
+indicatif = "0.17.8"
 is_ci = "1.2.0"
 itertools = "0.12.1"
 log = "0.4.20"
