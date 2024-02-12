@@ -34,12 +34,6 @@ pub(crate) type Span<'a> = winnow::Stateful<winnow::Located<&'a str>, State<'a>>
 type Error = ();
 type PResult<T> = winnow::PResult<T, Error>;
 
-impl<'a> ToSourceSpan for Span<'a> {
-    fn to_span(&self) -> SourceSpan {
-        (self.location(), self.slice_len()).into()
-    }
-}
-
 pub(crate) fn new_span<'a>(input: &'a str, errors: &'a mut Vec<ParseSingleError>) -> Span<'a> {
     Span {
         input: winnow::Located::new(input),

@@ -164,7 +164,3 @@ impl<'a> State<'a> {
         self.errors.push(error);
     }
 }
-
-pub(crate) trait ToSourceSpan {
-    fn to_span(&self) -> SourceSpan;
-}
