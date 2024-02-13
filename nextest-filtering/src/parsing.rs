@@ -20,7 +20,7 @@ use winnow::{
     ascii::line_ending,
     combinator::{alt, delimited, eof, peek, preceded, repeat, terminated, trace},
     stream::{Location, SliceLen, Stream},
-    token::{tag, take_till},
+    token::{literal, take_till},
     Parser,
 };
 
@@ -526,7 +526,7 @@ fn nullary_set_def<'a>(
     make_set: fn() -> SetDef,
 ) -> impl Parser<Span<'a>, Option<SetDef>, Error> {
     move |i: &mut _| {
-        let _ = tag(name).parse_next(i)?;
+        let _ = literal(name).parse_next(i)?;
         let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
         let err_loc = i.location();
         match take_till::<_, _, Error>(0.., ')').parse_next(i) {
@@ -572,7 +572,7 @@ fn unary_set_def<'a>(
     make_set: fn(NameMatcher, SourceSpan) -> SetDef,
 ) -> impl Parser<Span<'a>, Option<SetDef>, Error> {
     move |i: &mut _| {
-        let _ = tag(name).parse_next(i)?;
+        let _ = literal(name).parse_next(i)?;
         let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
         let start = i.location();
         let res = set_matcher(default_matcher).parse_next(i)?;
