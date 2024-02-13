@@ -311,11 +311,11 @@ fn ws<'a, T, P: Parser<Span<'a>, T, Error>>(mut inner: P) -> impl Parser<Span<'a
         match inner.parse_next(input) {
             Ok(res) => Ok(res),
             Err(winnow::error::ErrMode::Backtrack(err)) => {
-                input.reset(start);
+                input.reset(&start);
                 Err(winnow::error::ErrMode::Backtrack(err))
             }
             Err(winnow::error::ErrMode::Cut(err)) => {
-                input.reset(start);
+                input.reset(&start);
                 Err(winnow::error::ErrMode::Cut(err))
             }
             Err(err) => Err(err),
@@ -437,7 +437,7 @@ fn parse_regex<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
         let res = match parse_regex_inner.parse_next(input) {
             Ok(res) => res,
             Err(_) => {
-                input.reset(start);
+                input.reset(&start);
                 match take_till::<_, _, Error>(0.., ')').parse_next(input) {
                     Ok(_) => {
                         let start = input.location();
@@ -454,10 +454,10 @@ fn parse_regex<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
             Err(_) => {
                 let end = input.checkpoint();
 
-                input.reset(start);
+                input.reset(&start);
                 let start = input.location();
 
-                input.reset(end);
+                input.reset(&end);
                 let end = input.location();
 
                 let err = ParseSingleError::invalid_regex(&res, start, end);
@@ -513,7 +513,7 @@ fn recover_unexpected_comma<'i>(input: &mut Span<'i>) -> PResult<()> {
                 }
             }
             Err(_) => {
-                input.reset(start);
+                input.reset(&start);
                 Ok(())
             }
         }
