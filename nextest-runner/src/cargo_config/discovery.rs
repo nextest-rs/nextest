@@ -199,11 +199,14 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
                 error,
             })?;
 
+    fn non_empty(d: Option<&toml_edit::RawString>) -> bool {
+        d.map_or(false, |p| !p.as_str().unwrap_or_default().trim().is_empty())
+    }
     fn non_empty_decor(d: &toml_edit::Decor) -> bool {
-        d.prefix()
-            .map_or(false, |p| !p.as_str().unwrap_or_default().trim().is_empty())
-            || d.suffix()
-                .map_or(false, |s| !s.as_str().unwrap_or_default().trim().is_empty())
+        non_empty(d.prefix()) || non_empty(d.suffix())
+    }
+    fn non_empty_key_decor(k: &toml_edit::Key) -> bool {
+        non_empty_decor(k.leaf_decor()) || non_empty_decor(k.dotted_decor())
     }
 
     let ok = {
@@ -218,7 +221,7 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
             let (k, n) = table.iter().next().expect("len() == 1 above");
             match n {
                 Item::Table(nt) => {
-                    if table.key_decor(k).map_or(false, non_empty_decor)
+                    if table.key(k).map_or(false, non_empty_key_decor)
                         || non_empty_decor(nt.decor())
                     {
                         return Err(CargoConfigError::InvalidCliConfig {
@@ -235,7 +238,11 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
                     });
                 }
                 Item::Value(v) => {
-                    if non_empty_decor(v.decor()) {
+                    if table
+                        .key(k)
+                        .map_or(false, |k| non_empty(k.leaf_decor().prefix()))
+                        || non_empty_decor(v.decor())
+                    {
                         return Err(CargoConfigError::InvalidCliConfig {
                             config_str: config_str.to_owned(),
                             reason: InvalidCargoCliConfigReason::IncludesNonWhitespaceDecoration,
