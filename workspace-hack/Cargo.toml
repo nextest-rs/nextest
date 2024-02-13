@@ -23,7 +23,7 @@ either = { version = "1.10.0" }
 futures-channel = { version = "0.3.30", features = ["sink"] }
 futures-sink = { version = "0.3.30", default-features = false, features = ["std"] }
 getrandom = { version = "0.2.11", default-features = false, features = ["std"] }
-indexmap = { version = "2.2.2", features = ["serde"] }
+indexmap = { version = "2.2.3", features = ["serde"] }
 log = { version = "0.4.20", default-features = false, features = ["std"] }
 memchr = { version = "2.7.1" }
 miette = { version = "7.0.0", features = ["fancy"] }
