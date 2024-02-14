@@ -94,6 +94,9 @@ impl<S> fmt::Display for SetDef<S> {
 }
 
 /// A filter expression that hasn't been compiled against a package graph.
+///
+/// XXX: explain why `S` is required (for equality checking w/tests), or replace it with its own
+/// structure.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParsedExpr<S = SourceSpan> {
     Not(NotOperator, Box<ParsedExpr<S>>),

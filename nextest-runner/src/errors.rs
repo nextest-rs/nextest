@@ -1212,7 +1212,6 @@ mod self_update_errors {
     use super::*;
     use mukti_metadata::ReleaseStatus;
     use semver::{Version, VersionReq};
-    use std::collections::BTreeSet;
 
     /// An error that occurs while performing a self-update.
     ///
