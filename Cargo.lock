@@ -3733,9 +3733,9 @@ dependencies = [
 
 [[package]]
 name = "xxhash-rust"
-version = "0.8.8"
+version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53be06678ed9e83edb1745eb72efc0bbcd7b5c3c35711a860906aed827a13d61"
+checksum = "f2929c2ba5a5e8182c3168d8e8bca7ef621d817f3be10e8b813da9146de24e73"
 
 [[package]]
 name = "yaml-rust"
