@@ -35,7 +35,7 @@ serde_json = { version = "1.0.113", features = ["unbounded_depth"] }
 similar = { version = "2.3.0", features = ["inline", "unicode"] }
 tokio = { version = "1.36.0", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 uuid = { version = "1.7.0", features = ["v4"] }
-xxhash-rust = { version = "0.8.9", default-features = false, features = ["xxh3", "xxh64"] }
+xxhash-rust = { version = "0.8.10", default-features = false, features = ["xxh3", "xxh64"] }
 
 [build-dependencies]
 cc = { version = "1.0.83", default-features = false, features = ["parallel"] }
