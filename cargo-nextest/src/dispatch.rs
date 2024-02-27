@@ -53,7 +53,7 @@ use swrite::{swrite, SWrite};
 /// This binary should typically be invoked as `cargo nextest` (in which case
 /// this message will not be seen), not `cargo-nextest`.
 #[derive(Debug, Parser)]
-#[command(version, bin_name = "cargo")]
+#[command(version, bin_name = "cargo", styles = crate::output::clap_styles::style())]
 pub struct CargoNextestApp {
     #[clap(subcommand)]
     subcommand: NextestSubcommand,

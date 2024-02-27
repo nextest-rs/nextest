@@ -13,6 +13,35 @@ use std::{
     marker::PhantomData,
 };
 
+pub(crate) mod clap_styles {
+    use clap::builder::{
+        styling::{AnsiColor, Effects, Style},
+        Styles,
+    };
+
+    const HEADER: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
+    const USAGE: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
+    const LITERAL: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
+    const PLACEHOLDER: Style = AnsiColor::Cyan.on_default();
+    const ERROR: Style = AnsiColor::Red.on_default().effects(Effects::BOLD);
+    const VALID: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
+    const INVALID: Style = AnsiColor::Yellow.on_default().effects(Effects::BOLD);
+
+    pub(crate) const fn style() -> Styles {
+        // Copied from
+        // https://github.com/rust-lang/cargo/blob/98f6bf3700e2918678acd87b7e1a1450df579853/src/bin/cargo/cli.rs#L552-L561
+        // to match Cargo's style.
+        Styles::styled()
+            .header(HEADER)
+            .usage(USAGE)
+            .literal(LITERAL)
+            .placeholder(PLACEHOLDER)
+            .error(ERROR)
+            .valid(VALID)
+            .invalid(INVALID)
+    }
+}
+
 #[derive(Copy, Clone, Debug, Args)]
 #[must_use]
 pub(crate) struct OutputOpts {
