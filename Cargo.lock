@@ -302,9 +302,9 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "1.9.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c48f0051a4b4c5e0b6d365cd04af53aeaa209e3cc15ec2cdb69e73cc87fbd0dc"
+checksum = "05efc5cfd9110c8416e471df0e96702d58690178e206e61b7173706673c93706"
 dependencies = [
  "memchr",
  "serde",
@@ -1046,7 +1046,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57da3b9b5b85bd66f31093f8c408b90a74431672542466497dcbdfdc02034be1"
 dependencies = [
  "aho-corasick",
- "bstr 1.9.0",
+ "bstr 1.9.1",
  "log",
  "regex-automata 0.4.4",
  "regex-syntax 0.8.2",
@@ -1663,7 +1663,7 @@ dependencies = [
  "aho-corasick",
  "async-scoped",
  "atomicwrites",
- "bstr 1.9.0",
+ "bstr 1.9.1",
  "bytes",
  "camino",
  "camino-tempfile",
