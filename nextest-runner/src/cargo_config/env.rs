@@ -282,8 +282,7 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cargo_config::{test_helpers::setup_temp_dir, CargoConfigs};
-    use camino::Utf8PathBuf;
+    use crate::cargo_config::test_helpers::setup_temp_dir;
     use std::ffi::OsStr;
 
     #[test]

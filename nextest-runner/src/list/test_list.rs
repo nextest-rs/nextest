@@ -966,7 +966,6 @@ mod tests {
     use maplit::btreemap;
     use nextest_filtering::FilteringExpr;
     use nextest_metadata::{FilterMatch, MismatchReason};
-    use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use std::iter;
     use target_spec::Platform;

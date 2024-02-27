@@ -346,7 +346,6 @@ impl fmt::Display for PlatformRunnerSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use camino::Utf8Path;
     use camino_tempfile::Utf8TempDir;
     use color_eyre::eyre::{Context, Result};
     use target_spec::TargetFeatures;

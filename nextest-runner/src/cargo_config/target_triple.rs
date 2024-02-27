@@ -367,11 +367,7 @@ impl fmt::Display for TargetDefinitionLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cargo_config::{
-        test_helpers::{custom_target_path, setup_temp_dir},
-        CargoConfigs,
-    };
-    use camino::{Utf8Path, Utf8PathBuf};
+    use crate::cargo_config::test_helpers::{custom_target_path, setup_temp_dir};
 
     #[test]
     fn test_find_target_triple() {
