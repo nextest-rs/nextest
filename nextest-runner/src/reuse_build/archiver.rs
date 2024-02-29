@@ -3,7 +3,7 @@
 
 use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
-    config::get_num_cpus,
+    config::{get_num_cpus, ArchiveInclude, FinalConfig, NextestProfile},
     errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
     list::{BinaryList, OutputFormat, SerializableFormat},
@@ -49,6 +49,7 @@ impl ArchiveFormat {
 /// Archives test binaries along with metadata to the given file.
 ///
 /// The output file is a Zstandard-compressed tarball (`.tar.zst`).
+#[allow(clippy::too_many_arguments)]
 pub fn archive_to_file<'a, F>(
     binary_list: &'a BinaryList,
     cargo_metadata: &'a str,
@@ -56,6 +57,7 @@ pub fn archive_to_file<'a, F>(
     format: ArchiveFormat,
     zstd_level: i32,
     output_file: &'a Utf8Path,
+    profile: NextestProfile<'_, FinalConfig>,
     mut callback: F,
 ) -> Result<(), ArchiveCreateError>
 where
@@ -86,6 +88,7 @@ where
                 format,
                 zstd_level,
                 file,
+                &profile,
             )?;
             let (_, file_count) = archiver.archive()?;
             Ok(file_count)
@@ -114,9 +117,11 @@ struct Archiver<'a, W: Write> {
     builder: tar::Builder<Encoder<'static, BufWriter<W>>>,
     unix_timestamp: u64,
     added_files: HashSet<Utf8PathBuf>,
+    archive_include: Vec<ArchiveInclude>,
 }
 
 impl<'a, W: Write> Archiver<'a, W> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         binary_list: &'a BinaryList,
         cargo_metadata: &'a str,
@@ -124,6 +129,7 @@ impl<'a, W: Write> Archiver<'a, W> {
         format: ArchiveFormat,
         compression_level: i32,
         writer: W,
+        profile: &NextestProfile<'_, FinalConfig>,
     ) -> Result<Self, ArchiveCreateError> {
         let buf_writer = BufWriter::new(writer);
         let builder = match format {
@@ -152,6 +158,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             builder,
             unix_timestamp,
             added_files: HashSet::new(),
+            archive_include: profile.archive_include().clone(),
         })
     }
 
@@ -179,7 +186,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             let rel_path = Utf8Path::new("target").join(rel_path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
-            self.append_path(&binary.path, &rel_path)?;
+            self.append_file(&binary.path, &rel_path)?;
         }
         for non_test_binary in self
             .binary_list
@@ -198,7 +205,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             let rel_path = Utf8Path::new("target").join(&non_test_binary.path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
-            self.append_path(&src_path, &rel_path)?;
+            self.append_file(&src_path, &rel_path)?;
         }
 
         // Write build script output directories to the archive.
@@ -257,7 +264,21 @@ impl<'a, W: Write> Archiver<'a, W> {
             self.append_dir_one_level(&rel_path, &src_path)?;
         }
 
-        // TODO: add extra files.
+        for include in self.archive_include.clone() {
+            let src_path = self
+                .binary_list
+                .rust_build_meta
+                .target_directory
+                .join(&include.path);
+            let src_path = self.path_mapper.map_binary(src_path);
+
+            let rel_path = Utf8Path::new("target").join(include.path);
+            let rel_path = convert_rel_path_to_forward_slash(&rel_path);
+
+            if src_path.exists() {
+                self.append_path_recursive(&rel_path, &src_path)?;
+            }
+        }
 
         // Finish writing the archive.
         let encoder = self
@@ -295,6 +316,46 @@ impl<'a, W: Write> Archiver<'a, W> {
         Ok(())
     }
 
+    fn append_path_recursive(
+        &mut self,
+        rel_path: &Utf8Path,
+        src_path: &Utf8Path,
+    ) -> Result<(), ArchiveCreateError> {
+        let entries =
+            src_path
+                .read_dir_utf8()
+                .map_err(|error| ArchiveCreateError::InputFileRead {
+                    path: src_path.to_owned(),
+                    is_dir: Some(true),
+                    error,
+                })?;
+        for entry in entries {
+            let entry = entry.map_err(|error| ArchiveCreateError::DirEntryRead {
+                path: src_path.to_owned(),
+                error,
+            })?;
+            // In case of a symlink pointing to a directory, entry.file_type.is_dir() is false, but
+            // src.is_dir() will return true. We want to use entry.file_type.is_dir().
+            let src = entry.path();
+            let file_type =
+                entry
+                    .file_type()
+                    .map_err(|error| ArchiveCreateError::InputFileRead {
+                        path: src.to_owned(),
+                        is_dir: None,
+                        error,
+                    })?;
+            if file_type.is_dir() {
+                self.append_path_recursive(&rel_path.join(entry.file_name()), entry.path())?;
+            } else {
+                let dest = rel_path_join(rel_path, entry.file_name().as_ref());
+                self.append_file(src, &dest)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn append_dir_one_level(
         &mut self,
         rel_path: &Utf8Path,
@@ -326,14 +387,14 @@ impl<'a, W: Write> Archiver<'a, W> {
                     })?;
             if !file_type.is_dir() {
                 let dest = rel_path_join(rel_path, entry.file_name().as_ref());
-                self.append_path(src, &dest)?;
+                self.append_file(src, &dest)?;
             }
         }
 
         Ok(())
     }
 
-    fn append_path(&mut self, src: &Utf8Path, dest: &Utf8Path) -> Result<(), ArchiveCreateError> {
+    fn append_file(&mut self, src: &Utf8Path, dest: &Utf8Path) -> Result<(), ArchiveCreateError> {
         // Check added_files to ensure we aren't adding duplicate files.
         if !self.added_files.contains(dest) {
             self.builder
