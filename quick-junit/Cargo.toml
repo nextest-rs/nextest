@@ -13,7 +13,7 @@ rust-version.workspace = true
 
 [dependencies]
 chrono = { version = "0.4.34", default-features = false, features = ["std"] }
-indexmap = "2.2.3"
+indexmap = "2.2.4"
 quick-xml = "0.31.0"
 thiserror = "1.0.57"
 uuid = "1.7.0"
