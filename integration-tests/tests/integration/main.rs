@@ -22,7 +22,7 @@
 //! cargo-nextest, except it isn't used as the actual test runner. We refer to it with
 //! `NEXTEST_BIN_EXE_cargo-nextest-dup`.
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use nextest_metadata::{BuildPlatform, NextestExitCode};
 use std::{fs::File, io::Write};
 
@@ -338,12 +338,66 @@ fn test_relocated_run() {
 }
 
 #[test]
-fn test_run_from_archive() {
+fn test_run_from_archive_with_no_includes() {
     set_env_vars();
 
+    let (_p1, archive_file) = create_archive("");
+    let (_p2, extracted_target) = run_archive(&archive_file);
+
+    let expected_path = extracted_target
+        .join("application-data")
+        .join("foo")
+        .join("bar")
+        .join("some_file.txt");
+
+    assert!(
+        !Utf8Path::new(&expected_path)
+            .join("application-data")
+            .exists(),
+        "stray files must not be included in the archive"
+    );
+}
+
+#[test]
+fn test_run_from_archive_with_includes() {
+    set_env_vars();
+
+    let config = r#"
+[profile.default]
+archive-include = [
+    { path = "application-data", relative-to = "target" },
+    { path = "file_that_does_not_exist.txt", relative-to = "target" },
+]"#;
+    let (_p1, archive_file) = create_archive(config);
+    let (_p2, extracted_target) = run_archive(&archive_file);
+
+    let expected_path = extracted_target
+        .join("application-data")
+        .join("foo")
+        .join("bar")
+        .join("some_file.txt");
+
+    let contents = std::fs::read_to_string(expected_path).expect("extra file written to archive");
+    assert_eq!(contents, "a test string");
+}
+
+fn create_archive(config_contents: &str) -> (TempProject, Utf8PathBuf) {
     let custom_target_dir = Utf8TempDir::new().unwrap();
     let custom_target_path = custom_target_dir.path();
     let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
+
+    let config_path = p.workspace_root().join(".config/nextest.toml");
+    std::fs::write(config_path, config_contents).unwrap();
+
+    // setup extra file to include
+    let test_dir = p
+        .target_dir()
+        .join("application-data")
+        .join("foo")
+        .join("bar");
+    let test_file = test_dir.join("some_file.txt");
+    std::fs::create_dir_all(test_dir).unwrap();
+    std::fs::write(test_file, "a test string").unwrap();
 
     let archive_file = p.temp_root().join("my-archive.tar.zst");
 
@@ -367,7 +421,14 @@ fn test_run_from_archive() {
     std::fs::remove_dir_all(p.workspace_root()).unwrap();
     std::fs::remove_dir_all(p.target_dir()).unwrap();
 
+    // project is included in return value to keep tempdirs alive
+    (p, archive_file)
+}
+
+fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
     let p2 = TempProject::new().unwrap();
+    let extract_to = p2.workspace_root().join("extract_to");
+    std::fs::create_dir_all(&extract_to).unwrap();
 
     let output = CargoNextestCli::new()
         .args([
@@ -376,6 +437,8 @@ fn test_run_from_archive() {
             archive_file.as_str(),
             "--workspace-remap",
             p2.workspace_root().as_str(),
+            "--extract-to",
+            extract_to.as_str(),
         ])
         .unchecked(true)
         .output();
@@ -386,6 +449,9 @@ fn test_run_from_archive() {
         "correct exit code for command\n{output}"
     );
     check_run_output(&output.stderr, true);
+
+    // project is included in return value to keep tempdirs alive
+    (p2, extract_to.join("target"))
 }
 
 #[test]

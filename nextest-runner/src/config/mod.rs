@@ -3,6 +3,7 @@
 
 //! Configuration support for nextest.
 
+mod archive_include;
 mod config_impl;
 mod identifier;
 mod nextest_version;
@@ -15,6 +16,7 @@ mod test_threads;
 mod threads_required;
 mod tool_config;
 
+pub use archive_include::*;
 pub use config_impl::*;
 pub use identifier::*;
 pub use nextest_version::*;
