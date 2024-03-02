@@ -702,6 +702,13 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
             .unwrap_or(self.default_profile.fail_fast)
     }
 
+    /// Returns the hide-progress-bar config for this profile.
+    pub fn hide_progress_bar(&self) -> bool {
+        self.custom_profile
+            .and_then(|profile| profile.hide_progress_bar)
+            .unwrap_or(self.default_profile.hide_progress_bar)
+    }
+
     /// Returns the list of setup scripts.
     pub fn setup_scripts(&self, test_list: &TestList<'_>) -> SetupScripts<'_> {
         SetupScripts::new(self, test_list)
@@ -880,6 +887,7 @@ pub(super) struct DefaultProfileImpl {
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
     fail_fast: bool,
+    hide_progress_bar: bool,
     slow_timeout: SlowTimeout,
     leak_timeout: Duration,
     overrides: Vec<DeserializedOverride>,
@@ -910,6 +918,9 @@ impl DefaultProfileImpl {
                 .success_output
                 .expect("success-output present in default profile"),
             fail_fast: p.fail_fast.expect("fail-fast present in default profile"),
+            hide_progress_bar: p
+                .hide_progress_bar
+                .expect("hide-progress-bar present in default profile"),
             slow_timeout: p
                 .slow_timeout
                 .expect("slow-timeout present in default profile"),
@@ -972,6 +983,8 @@ pub(super) struct CustomProfileImpl {
     success_output: Option<TestOutputDisplay>,
     #[serde(default)]
     fail_fast: Option<bool>,
+    #[serde(default)]
+    hide_progress_bar: Option<bool>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
     #[serde(default, with = "humantime_serde::option")]
