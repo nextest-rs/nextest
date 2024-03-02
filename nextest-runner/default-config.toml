@@ -109,5 +109,3 @@ store-failure-output = true
 
 # This profile is activated if MIRI_SYSROOT is set.
 [profile.default-miri]
-# Miri tests take up a lot of memory, so only run 1 test at a time by default.
-test-threads = 1
