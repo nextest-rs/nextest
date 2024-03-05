@@ -232,7 +232,18 @@ jobs:
       - build-cargo-nextest-binaries
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Clone nextest repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          path: nextest
+      - name: Clone release-meta repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        with:
+          repository: nextest-rs/release-meta
+          ref: main
+          token: ${{ secrets.RELEASE_META_DEPLOY_TOKEN }}
+          path: release-meta
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
@@ -242,11 +253,13 @@ jobs:
       - name: Download mukti
         run: |
           mkdir -p ~/bin
-          curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/mukti-bin-0.6.1/mukti-bin-0.6.1-x86_64-unknown-linux-musl.tar.gz" \
+          curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/mukti-bin-0.7.4/mukti-bin-0.7.4-x86_64-unknown-linux-musl.tar.gz" \
             | tar xzf - -C ~/bin
       - name: Add release metadata
         run: |
-          ~/bin/mukti-bin add-release --version ${{ needs.cargo-nextest-release.outputs.version }} \
+          cd release-meta
+          ~/bin/mukti-bin --json releases.json add-release \
+            --version ${{ needs.cargo-nextest-release.outputs.version }} \
             --release-url "https://github.com/nextest-rs/nextest/releases/${{ github.ref_name }}" \
             --archive-prefix "https://github.com/nextest-rs/nextest/releases/download/${{ github.ref_name }}" \
             --archive x86_64-unknown-linux-gnu:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-linux-tar }} \
@@ -259,10 +272,10 @@ jobs:
             --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.mac-tar }} \
             --archive x86_64-unknown-freebsd:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-freebsd-tar }} \
             --archive x86_64-unknown-illumos:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-illumos-tar }} \
-      - name: Generate netlify redirects
+      - name: Generate redirects
         run: |
-          mkdir out-dir
-          ~/bin/mukti-bin generate-netlify out-dir \
+          cd release-meta
+          ~/bin/mukti-bin --json releases.json generate-redirects --flavor cloudflare . \
             --alias linux=x86_64-unknown-linux-gnu:tar.gz \
             --alias linux-musl=x86_64-unknown-linux-musl:tar.gz \
             --alias linux-arm=aarch64-unknown-linux-gnu:tar.gz \
@@ -273,29 +286,18 @@ jobs:
             --alias mac=universal-apple-darwin:tar.gz \
             --alias freebsd=x86_64-unknown-freebsd:tar.gz \
             --alias illumos=x86_64-unknown-illumos:tar.gz \
-      - name: Update releases.json on main branch
+      - name: Update release-meta repo
         run: |
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions"
+          cd release-meta
+          git config user.email "bot@nexte.st"
+          git config user.name "Nextest Bot"
           git pull --autostash --rebase origin main
-          git add .releases.json
+          git add releases.json _redirects
           git commit -m "Update release metadata for ${{ github.ref_name }}"
           git push origin HEAD:main
-      - name: Copy releases.json to output dir
+      - name: Run cargo-release-publish.sh
         run: |
-          cp .releases.json out-dir/releases.json
-      - name: Copy static files to output dir
-        # Note trailing slash after release-meta-static is important
-        run: |
-          rsync -avH site/release-meta-static/ out-dir
-      - name: Deploy release metadata
-        uses: JamesIves/github-pages-deploy-action@65b5dfd4f5bcd3a7403bbc2959c144256167464e # v4
-        with:
-          branch: release-meta
-          folder: out-dir
-      # cargo release requires the working dir to not have any untracked files, hence the git clean.
-      - run: |
-          git clean -fdx
+          cd nextest
           ./scripts/cargo-release-publish.sh
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
