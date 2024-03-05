@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## [0.8.0] - 2024-03-04
 
 ### Changed
 
 - MSRV updated to Rust 1.73.
+- Parser combinator library changed from nom to winnow. Thanks [@epage](https://github.com/epage)
+  for creating winnow, and for the contribution!
 
 ## [0.7.1] - 2024-01-09
 
@@ -100,6 +102,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.8.0
 [0.7.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.7.1
 [0.7.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.7.0
 [0.6.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.6.0
