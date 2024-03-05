@@ -35,10 +35,6 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
-[profile.release]
-# This is Cargo's default, but the rust-binary-upload-action calls `strip` if this isn't set anyway.
-strip = "none"
-
 [patch.crates-io]
 nextest-workspace-hack = { path = "workspace-hack" }
 
