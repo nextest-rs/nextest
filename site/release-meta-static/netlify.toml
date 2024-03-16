@@ -1,6 +1,0 @@
-# Redirects not managed by mukti.
-
-[[redirects]]
-from = "/"
-to = "https://nexte.st/book/pre-built-binaries"
-status = 302

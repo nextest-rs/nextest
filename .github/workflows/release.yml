@@ -286,6 +286,9 @@ jobs:
             --alias mac=universal-apple-darwin:tar.gz \
             --alias freebsd=x86_64-unknown-freebsd:tar.gz \
             --alias illumos=x86_64-unknown-illumos:tar.gz \
+      - name: Add extra redirects
+        run: |
+          cat nextest/site/release-meta-static/extra-redirects >> release-meta/_redirects
       - name: Update release-meta repo
         run: |
           cd release-meta
