@@ -35,6 +35,11 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
+[profile.release]
+# Ensure that symbols and debuginfo aren't stripped. They're useful for debugging issues with
+# nextest in the field, and don't bloat up binaries too much
+strip = "none"
+
 [patch.crates-io]
 nextest-workspace-hack = { path = "workspace-hack" }
 

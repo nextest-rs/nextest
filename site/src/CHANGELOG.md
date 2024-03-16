@@ -3,7 +3,7 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.68-rc.1] - 2024-03-16
+## [0.9.68-rc.2] - 2024-03-16
 
 This is a maintenance release with many internal improvements, and preparation for future features.
 
