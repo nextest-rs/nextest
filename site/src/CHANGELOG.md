@@ -3,9 +3,29 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## [0.9.68-b.2] - 2024-03-04
+## [0.9.68-rc.1] - 2024-03-16
 
-This is a test release.
+This is a maintenance release with many internal improvements, and preparation for future features.
+
+### Changed
+
+- Nextest binaries now ship with symbols, producing better stack traces. This is aligned with the behavior. See [issue #1345](https://github.com/nextest-rs/nextest/issues/1345) for more information.
+
+- Thanks to recent improvements, Miri is now significantly less taxing. As a result, [nextest with Miri](https://nexte.st/book/miri) has been changed to use all threads by default. You can restore the old Miri behavior (run one test at a time) with `-j1`, or by setting in `.config/nextest.toml`:
+
+  ```toml
+  [profile.default-miri]
+  test-threads = 1
+  ```
+
+  Rules for [heavy tests](https://nexte.st/book/threads-required) and [test groups](https://nexte.st/book/test-groups) will continue to be followed with Miri.
+
+  Thanks to [Ben Kimock](https://github.com/saethlin) for driving the Miri improvements and updating nextest!
+
+### Misc
+
+- The [filter expression](https://nexte.st/book/filter-expressions) parser now uses [winnow](https://docs.rs/winnow).
+- [get.nexte.st](https://get.nexte.st) now uses Cloudflare rather than Netlify for hosting. See [this discussion](https://github.com/nextest-rs/nextest/discussions/1383) for more.
 
 ## [0.9.67] - 2024-01-09
 
@@ -930,7 +950,7 @@ Supported in this initial release:
 - [Test retries](book/retries.md) and flaky test detection
 - [JUnit support](book/junit.md) for integration with other test tooling
 
-[0.9.68-b.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.68-b.2
+[0.9.68-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.68-rc.1
 [0.9.67]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.67
 [0.9.66]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.66
 [0.9.65]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.65

@@ -41,7 +41,7 @@ For more about unit and integration tests, see [the documentation for `cargo tes
 To only run tests that match certain names:
 
 ```
-cargo nextest run -- <test-name1> <test-name2>...
+cargo nextest run <test-name1> <test-name2>...
 ```
 
 ### `--skip` and `--exact`

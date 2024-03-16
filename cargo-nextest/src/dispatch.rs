@@ -515,12 +515,12 @@ struct TestBuildFilter {
     #[arg(long, short = 'E', value_name = "EXPR", action(ArgAction::Append))]
     filter_expr: Vec<String>,
 
-    /// Test name filters (deprecated, use filters after -- instead)
-    #[arg(name = "FILTERS", hide = true)]
+    /// Test name filters
+    #[arg(help_heading = None, name = "FILTERS")]
     pre_double_dash_filters: Vec<String>,
 
     /// Test name filters and emulated test binary arguments (partially supported)
-    #[arg(help_heading = None, value_name = "FILTERS", last = true)]
+    #[arg(help_heading = None, value_name = "FILTERS_AND_ARGS", last = true)]
     filters: Vec<String>,
 }
 
