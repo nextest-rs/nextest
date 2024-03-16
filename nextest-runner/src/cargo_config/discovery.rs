@@ -189,9 +189,9 @@ fn parse_cli_config(config_str: &str) -> Result<CargoConfig, CargoConfigError> {
     // We only want to allow "dotted key" (see https://toml.io/en/v1.0.0#keys)
     // expressions followed by a value that's not an "inline table"
     // (https://toml.io/en/v1.0.0#inline-table). Easiest way to check for that is to
-    // parse the value as a toml_edit::Document, and check that the (single)
+    // parse the value as a toml_edit::DocumentMut, and check that the (single)
     // inner-most table is set via dotted keys.
-    let doc: toml_edit::Document =
+    let doc: toml_edit::DocumentMut =
         config_str
             .parse()
             .map_err(|error| CargoConfigError::CliConfigParseError {
