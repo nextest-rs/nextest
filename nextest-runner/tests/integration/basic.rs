@@ -36,7 +36,12 @@ fn test_list_binaries() -> Result<()> {
             .iter()
             .find(|bin| bin.id.as_str() == *id)
             .unwrap();
-        assert_eq!(*name, bin.name.as_str());
+        // With Rust 1.79 and later, the actual name has - replaced with _. Just check for either.
+        assert!(
+            bin.name.as_str() == *name || bin.name.as_str() == name.replace('-', "_"),
+            "binary name matches (expected: {name}, actual: {})",
+            bin.name,
+        );
         if *platform_is_target {
             assert_eq!(BuildPlatform::Target, bin.build_platform);
         } else {
