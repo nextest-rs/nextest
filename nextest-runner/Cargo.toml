@@ -73,7 +73,7 @@ tokio = { version = "1.36.0", features = [
     "sync",
     "time",
 ] }
-toml = "0.8.11"
+toml = "0.8.12"
 toml_edit = { version = "0.22.7", features = ["serde"] }
 xxhash-rust = { version = "0.8.10", features = ["xxh64"] }
 zstd = { version = "0.13.0", features = ["zstdmt"] }
