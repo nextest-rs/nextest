@@ -85,6 +85,20 @@ slow-timeout = { period = "60s" }
 # See <https://nexte.st/book/leaky-tests> for more information.
 leak-timeout = "100ms"
 
+# `nextest archive` automatically includes any build output required by a standard build.
+# However sometimes extra non-standard files are required.
+# To address this "archive-include" specifies additional paths that will be included in the archive.
+archive-include = [
+    # Examples:
+    #
+    # { path = "application-data", relative-to = "target" },
+    # { path = "data-from-some-dependency/file.txt", relative-to = "target" },
+    #
+    # In the above example:
+    # * the directory and its contents at "target/application-data" will be included recursively in the archive.
+    # * the file "target/data-from-some-dependency/file.txt" will be included in the archive.
+]
+
 [profile.default.junit]
 # Output a JUnit report into the given file inside 'store.dir/<profile-name>'.
 # If unspecified, JUnit is not written out.
