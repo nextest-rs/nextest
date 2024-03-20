@@ -878,7 +878,10 @@ impl TestReporterOpts {
         if let Some(final_status_level) = self.final_status_level {
             builder.set_final_status_level(final_status_level.into());
         }
-        builder.set_hide_progress_bar(self.hide_progress_bar);
+        match self.hide_progress_bar {
+            true => builder.set_hide_progress_bar(Some(true)),
+            false => builder.set_hide_progress_bar(None),
+        };
         builder
     }
 }

@@ -168,9 +168,8 @@ pub struct TestReporterBuilder {
     success_output: Option<TestOutputDisplay>,
     status_level: Option<StatusLevel>,
     final_status_level: Option<FinalStatusLevel>,
-
     verbose: bool,
-    hide_progress_bar: bool,
+    hide_progress_bar: Option<bool>,
 }
 
 impl TestReporterBuilder {
@@ -215,7 +214,7 @@ impl TestReporterBuilder {
 
     /// Sets visibility of the progress bar.
     /// The progress bar is also hidden if `no_capture` is set.
-    pub fn set_hide_progress_bar(&mut self, hide_progress_bar: bool) -> &mut Self {
+    pub fn set_hide_progress_bar(&mut self, hide_progress_bar: Option<bool>) -> &mut Self {
         self.hide_progress_bar = hide_progress_bar;
         self
     }
@@ -250,6 +249,10 @@ impl TestReporterBuilder {
             .final_status_level
             .unwrap_or_else(|| profile.final_status_level());
 
+        let hide_progress_bar = self
+            .hide_progress_bar
+            .unwrap_or_else(|| profile.hide_progress_bar());
+
         // failure_output and success_output are meaningless if the runner isn't capturing any
         // output.
         let force_success_output = match self.no_capture {
@@ -278,9 +281,7 @@ impl TestReporterBuilder {
                 // in these environments.
                 ReporterStderrImpl::TerminalWithoutBar
             }
-            ReporterStderr::Terminal if self.hide_progress_bar => {
-                ReporterStderrImpl::TerminalWithoutBar
-            }
+            ReporterStderr::Terminal if hide_progress_bar => ReporterStderrImpl::TerminalWithoutBar,
 
             ReporterStderr::Terminal => {
                 let progress_bar = ProgressBar::new(test_list.test_count() as u64);

@@ -67,6 +67,10 @@ success-output = "never"
 # to false.
 fail-fast = true
 
+# Hide the progress bar when running tests. For CI runs, consider setting this
+# to true
+hide-progress-bar = false
+
 # Treat a test that takes longer than the configured 'period' as slow, and print a message.
 # See <https://nexte.st/book/slow-tests> for more information.
 #
