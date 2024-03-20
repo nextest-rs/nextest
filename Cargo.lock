@@ -373,7 +373,7 @@ dependencies = [
  "semver",
  "serde_json",
  "shell-words",
- "supports-color 2.1.0",
+ "supports-color 3.0.0",
  "supports-unicode",
  "swrite",
  "thiserror",
