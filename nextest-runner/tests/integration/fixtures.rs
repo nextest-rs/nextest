@@ -284,7 +284,7 @@ pub(crate) static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
 pub(crate) static FIXTURE_RAW_CARGO_TEST_OUTPUT: Lazy<Vec<u8>> =
     Lazy::new(init_fixture_raw_cargo_test_output);
 
-fn  init_fixture_raw_cargo_test_output() -> Vec<u8> {
+fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
     // This is a simple version of what cargo does.
     let cmd_name = match env::var("CARGO") {
         Ok(v) => v,
