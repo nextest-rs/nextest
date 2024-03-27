@@ -28,7 +28,7 @@ config = { version = "0.14.0", default-features = false, features = [
 ] }
 cargo_metadata = "0.18.1"
 cfg-if = "1.0.0"
-chrono = "0.4.35"
+chrono = "0.4.37"
 debug-ignore.workspace = true
 display-error-chain = "0.2.0"
 either = "1.10.0"
