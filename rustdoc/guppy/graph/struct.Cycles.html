@@ -1,0 +1,223 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Contains information about dependency cycles."><title>Cycles in guppy::graph - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="guppy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../guppy/index.html">guppy</a><span class="version">0.17.5</span></h2></div><h2 class="location"><a href="#">Cycles</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.all_cycles">all_cycles</a></li><li><a href="#method.is_cyclic">is_cyclic</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-RefUnwindSafe-for-Cycles%3C'g%3E">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Cycles%3C'g%3E">Send</a></li><li><a href="#impl-Sync-for-Cycles%3C'g%3E">Sync</a></li><li><a href="#impl-Unpin-for-Cycles%3C'g%3E">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Cycles%3C'g%3E">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In guppy::graph</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../guppy/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../index.html">guppy</a>::<wbr><a href="index.html">graph</a>::<wbr><a class="struct" href="#">Cycles</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/guppy/graph/cycles.rs.html#273-276">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Cycles&lt;'g&gt; { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Contains information about dependency cycles.</p>
+<p>More accurately, information about Strongly Connected Components with 2 or more elements.
+Constructed through <code>PackageGraph::cycles</code>.</p>
+<p>This page includes a bunch of detailed information on cycles, but here’s the TLDR:</p>
+<ul>
+<li>Yes, cycles can happen</li>
+<li>Cycles only happen with dev-dependencies</li>
+<li>These cycles have properties that make them easy to handle</li>
+<li>We handle this in APIs like <a href="struct.PackageSet.html#method.packages" title="method guppy::graph::PackageSet::packages"><code>PackageSet::packages</code></a></li>
+<li>As a result, you probably don’t actually need this module</li>
+</ul>
+<p>The slighly more detailed summary is that any graph of “packages” is conflating
+the “real” package with its tests, which are actually separate binaries. These
+tests <em>always</em> depend on the “real” package, and if we bothered to encode that
+then any package with tests would have a cyclic dependency on itself – so we
+don’t encode that. Unfortunately dev-dependencies allow tests to <em>indirectly</em>
+depend on the “real” package, creating a cycle you <em>do</em> see.</p>
+<p>If you only care about “real” builds, you can simply ignore the dev-dependency
+edges and restore a nice and simple DAG that can be topologically sorted. This is what
+we do for you in APIs like <a href="struct.PackageSet.html#method.packages" title="method guppy::graph::PackageSet::packages"><code>PackageSet::packages</code></a>.</p>
+<p>If you care about tests and dev-dependencies, we recommend treating those as
+different from the “real” ones (essentially desugarring the package into two nodes).
+Because all dev builds are roots of the package graph (nothing depends on a test/benchmark),
+they can always go at the start/end (depending on direction) of the topological sort.
+This means you can just do add a second loop before/after the “real” one.</p>
+<p>For instance, here’s a simple program that recursively computes some property of packages
+(here “whether serde is a transitive dependency”):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>guppy::{CargoMetadata, graph::DependencyDirection};
+<span class="kw">use </span>std::collections::HashMap;
+
+<span class="kw">let </span>metadata = CargoMetadata::parse_json(<span class="macro">include_str!</span>(<span class="string">"../../../fixtures/small/metadata1.json"</span>)).unwrap();
+<span class="kw">let </span>package_graph = metadata.build_graph().unwrap();
+<span class="kw">let </span>workspace_members = package_graph.resolve_workspace();
+<span class="kw">let </span>dependency_graph = package_graph.query_workspace().resolve();
+
+<span class="comment">// Whether the "real" package uses serde
+</span><span class="kw">let </span><span class="kw-2">mut </span>package_uses_serde = HashMap::new();
+<span class="comment">// Whether the "dev" package uses serde
+</span><span class="kw">let </span><span class="kw-2">mut </span>dev_package_uses_serde = HashMap::new();
+
+<span class="comment">// Iterate over packages in reverse topo order (process dependencies first)
+</span><span class="kw">for </span>package <span class="kw">in </span>dependency_graph.packages(DependencyDirection::Reverse) {
+    <span class="comment">// A package uses serde if...
+    </span><span class="kw">let </span>uses_serde = <span class="kw">if </span>package.name() == <span class="string">"serde" </span>{
+        <span class="comment">// It is literally serde (base case)
+        </span><span class="bool-val">true
+    </span>} <span class="kw">else </span>{
+        <span class="comment">// It has a non-dev-dependency on a package which uses serde
+        // (dev-dependencies handled in the second loop)
+        </span>package.direct_links().any(|link| {
+            !link.dev_only() &amp;&amp; package_uses_serde[link.to().id()]
+        })
+    };
+    <span class="comment">// Record this package's result
+    </span>package_uses_serde.insert(package.id(), uses_serde);
+}
+
+<span class="comment">// Now iterate over the workspace members to handle their tests (if any)
+// Note that DependencyDirection doesn't matter here, we're literally
+// just looping over every workspace member in arbitrary order!
+</span><span class="kw">for </span>package <span class="kw">in </span>workspace_members.packages(DependencyDirection::Reverse) {
+    <span class="comment">// Check dev-packages using the "real" package results for all links!
+    </span><span class="kw">let </span>uses_serde = package.direct_links().any(|link| {
+        package_uses_serde[link.to().id()]
+    });
+    <span class="comment">// Record this dev-package's result
+    </span>dev_package_uses_serde.insert(package.id(), uses_serde);
+}
+
+<span class="comment">// Now we have all the values computed!
+</span><span class="kw">for </span>(id, <span class="kw-2">&amp;</span>uses_serde) <span class="kw">in </span><span class="kw-2">&amp;</span>package_uses_serde {
+    <span class="kw">if </span>uses_serde {
+        <span class="kw">let </span>name = package_graph.metadata(id).unwrap().name();
+        <span class="macro">println!</span>(<span class="string">"{name} uses serde!"</span>);
+    }
+}
+<span class="kw">for </span>(id, <span class="kw-2">&amp;</span>uses_serde) <span class="kw">in </span><span class="kw-2">&amp;</span>dev_package_uses_serde {
+    <span class="kw">if </span>uses_serde {
+        <span class="kw">let </span>name = package_graph.metadata(id).unwrap().name();
+        <span class="macro">println!</span>(<span class="string">"{name}'s tests use serde!"</span>);
+    }
+}</code></pre></div>
+<h2 id="why-cargo-dependency-graphs-have-cycles"><a class="doc-anchor" href="#why-cargo-dependency-graphs-have-cycles">§</a>Why Cargo Dependency Graphs Have Cycles</h2>
+<p>Dependency graphs are generally Directed Acyclic Graphs (DAGs), where each package
+is a node and each dependency is an edge. These graphs are acyclic (contain no cycles)
+because anything else would be a paradox – how do you build X if it depends on itself?
+You don’t!</p>
+<p>So why does this API exist? It wouldn’t make sense for Cargo to have cycles!</p>
+<p>The problem is that “the Cargo dependency graph” is actually two different graphs
+at different levels of abstraction: The Package Graph (Guppy, cargo-metadata), and
+The Build Graph (Cargo’s internals). These two graphs are different because each
+package is actually a bunch of different
+<a href="struct.PackageMetadata.html#method.build_targets" title="method guppy::graph::PackageMetadata::build_targets">build targets in a trenchcoat</a> – libs,
+bins, tests, benches, and so on. In The Build Graph these different build targets get
+their own nodes. In The Package Graph all those targets gets merged together into one
+big node. The Build Graph is always a proper DAG, but The Package Graph can have cycles.</p>
+<p>Thankfully these cycles can only be created by one specific (and rare) situation:
+dev-dependencies. <strong>A test/bench target for a package is allowed to indirectly
+depend on the same package’s lib/bin target, and this creates apparent cycles
+in the package graph!</strong> That’s it!</p>
+<p>As we’ll see, <strong>simply ignoring all dev-dependency edges eliminates all cycles
+<em>and</em> preserves the ordering constraints of the dependency graph.</strong></p>
+<h2 id="an-example-cyclic-workspace"><a class="doc-anchor" href="#an-example-cyclic-workspace">§</a>An Example Cyclic Workspace</h2>
+<p>As a concrete example, consider <a href="https://github.com/serde-rs/serde">the serde workspace</a>, which
+actually has this “problem”: there’s a “cycle” between serde and serde_derive.
+In normal builds this cycle doesn’t exist: serde_derive is actually a standalone
+crate, while <a href="https://github.com/serde-rs/serde/blob/072145e0e913df7686f001dbf29e43a0ff7afac4/serde/Cargo.toml#L17-L18">serde (optionally) pulls in serde_derive as a dependency</a>.
+The “cycle” only appears when testing serde_derive: <a href="https://github.com/serde-rs/serde/blob/072145e0e913df7686f001dbf29e43a0ff7afac4/serde_derive/Cargo.toml#L29-L30">serde_derive’s tests quite
+reasonably depend on serde</a> to test the proc-macro’s output,
+creating a cycle!</p>
+<p>The way to resolve this monstrosity is to realize that the tests for serde_derive
+are actually a completely different binary from the serde_derive <em>library</em>. Let’s
+call those tests serde_derive_dev. So although the (Package) graph reported by Guppy
+(and cargo-metadata) looks like a cycle:</p>
+<div class="example-wrap"><pre class="language-text"><code>serde &lt;-----+
+  |         |
+  |         |
+  +--&gt; serde_derive
+</code></pre></div>
+<p>In actuality, serde_derive_dev breaks the cycle and creates a nice clean DAG
+(in The Build Graph):</p>
+<div class="example-wrap"><pre class="language-text"><code>  +-- serde_derive_dev
+  |          |
+  v          |
+serde        |
+  |          |
+  |          v
+  +---&gt; serde_derive
+</code></pre></div>
+<p>Here’s the really important thing to notice: serde_derive_dev is actually a <em>root</em>
+in The Build Graph, and this is always true! Nothing should ever depend on the <em>tests</em>
+or <em>benchmarks</em> for another library.</p>
+<p>This is the key insight to ignoring dev-dependency edges. As we’ll see, the roots
+(and leaves) of a DAG are in some sense “ignorable” by the rest of the graph,
+because they can’t change the ordering constraints between other packages.</p>
+<h2 id="topological-sort-is-great-and-composable"><a class="doc-anchor" href="#topological-sort-is-great-and-composable">§</a>Topological Sort Is Great (And Composable)</h2>
+<p>Now that we understand <em>why</em> cycles can happen in the package graph, let’s look at
+what those cycles mess up, and how to deal with them.</p>
+<p>One of the big reasons everyone loves DAGs is because you can get a Topological
+Sort of them. Topological Sort
+(with <a href="enum.DependencyDirection.html#variant.Forward" title="variant guppy::graph::DependencyDirection::Forward"><code>DependencyDirection::Forward</code></a>)
+is just a fancy way of saying “a list where packages always appear before their dependencies”
+(vice-versa for <a href="enum.DependencyDirection.html#variant.Reverse" title="variant guppy::graph::DependencyDirection::Reverse"><code>DependencyDirection::Reverse</code></a>).</p>
+<p>This is really convenient! If you need to do things in “dependency order” you can just
+topologically sort the packages and then boring old for-loops will magically get
+everything done before it’s needed.</p>
+<p>Unfortunately, you can’t get the Topological Sort of a graph with cycles because that
+doesn’t make sense. And yet, Guppy has
+<a href="struct.PackageSet.html#method.packages" title="method guppy::graph::PackageSet::packages">several APIs which do exactly that</a>.
+What gives? The docs say:</p>
+<blockquote>
+<p>The packages within a dependency cycle will be returned in non-dev order. When the
+direction is forward, if package Foo has a dependency on Bar, and Bar has a cyclic
+dev-dependency on Foo, then Foo is returned before Bar.</p>
+</blockquote>
+<p>We just ignore the dev-dependency edges! Problem Solved.</p>
+<p>But isn’t this throwing out important information that could change the result? Nope!</p>
+<p>As we saw in the previous section, all dev-builds are roots in The Build Graph.
+Ignoring all dev-dependency edges is equivalent to deleting all of those roots.
+This may “orphan” dependencies that are only used for dev-builds, but we still
+keep them in the graph and properly include them in the sort.</p>
+<p>As it turns out, you can recursively compute the topological sort of a graph as follows:</p>
+<ol>
+<li>delete a root (or leaf)</li>
+<li>compute the topological sort of the new graph</li>
+<li>append the root (or leaf) to the start (or end) of the list</li>
+</ol>
+<p><strong>Even although we delete all the dev-nodes from the graph when doing our sort,
+if you want to “add them back” the only thing you need to do is handle them before
+(or after) everything else!</strong> Even better: all the dev-builds are roots at the same
+time, so you can process them in any order!</p>
+<p>Just remember that every node with dev-dependencies is really two nodes: the “normal”
+version without dev-dependencies, and the version with them. Exactly how you want
+to express that notion in your code is up to you. (Two different loops is the simplest.)</p>
+<h2 id="reasoning-about-cycles-strongly-connected-components"><a class="doc-anchor" href="#reasoning-about-cycles-strongly-connected-components">§</a>Reasoning About Cycles: Strongly Connected Components</h2>
+<p>Ok but wait, none of that involved Strongly Connected Components! Yeah, isn’t that great? 😄</p>
+<p>Oh you still want to “know” about the cycles? Then we’ve gotta bust out the heavy
+general-purpose machinery. Thankfully the problem of cycles in directed graphs is
+an old and well-studied problem with a conceptually simple solution: hide the cycle
+in a box and pretend that it’s just one Really Big Node in the DAG.</p>
+<p>Yes, really, that’s all that Strongly Connected Components are. More precisely, SCCs
+are defined to be maximal sets of nodes such that “every node in an SCC can reach
+every other node in that SCC” (a property which definitely holds for cycles).
+The reason for this more complicated definition is that you can have a bunch of
+cycles all knotted together in a nasty ball, and trying to tease out individual
+cycles isn’t really helpful. So we just wrap the whole ball of nodes up into one
+big “I give up” box and forget about it!</p>
+<p>Now, what does this get us?</p>
+<p>The graph <em>between</em> Strongly Connected Components is <em>always</em> a DAG, so you can
+always topologically sort <em>that</em>. In really nasty cases this is just vacuously
+true (all the nodes end up in one SCC, and so the “Graph of SCCs” is just one big
+unsorted node). On the other hand, if the graph already <em>is</em> a DAG then each node
+is its own SCC, and so we lose nothing. In this way SCCs give us a way to preserve
+all the <em>nice</em> parts of our graph while also isolating the problematic parts
+(SCCs with more than 1 node) to something self-contained that we can handle specially.</p>
+<p>In the general case, nothing more can be done to order an SCC. By definition every
+node depends on every other node! But as we’ve seen in the previous section, there
+actually <em>is</em> a good way to order packages even with cycles, and so we maintain
+that ordering for our SCCs: it’s just the topological sort with all the
+dev-dependencies ignored.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Cycles%3C'g%3E" class="impl"><a class="src rightside" href="../../src/guppy/graph/cycles.rs.html#278-312">source</a><a href="#impl-Cycles%3C'g%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'g&gt; <a class="struct" href="struct.Cycles.html" title="struct guppy::graph::Cycles">Cycles</a>&lt;'g&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.is_cyclic" class="method"><a class="src rightside" href="../../src/guppy/graph/cycles.rs.html#289-293">source</a><h4 class="code-header">pub fn <a href="#method.is_cyclic" class="fn">is_cyclic</a>(&amp;self, a: &amp;<a class="struct" href="../struct.PackageId.html" title="struct guppy::PackageId">PackageId</a>, b: &amp;<a class="struct" href="../struct.PackageId.html" title="struct guppy::PackageId">PackageId</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.77.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.bool.html">bool</a>, <a class="enum" href="../errors/enum.Error.html" title="enum guppy::errors::Error">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Returns true if these two IDs are in the same cycle.</p>
+<p>This is equivalent to checking if they’re in the same Strongly Connected Component.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.all_cycles" class="method"><a class="src rightside" href="../../src/guppy/graph/cycles.rs.html#304-311">source</a><h4 class="code-header">pub fn <a href="#method.all_cycles" class="fn">all_cycles</a>(
+    &amp;self
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator">Iterator</a>&lt;Item = <a class="struct" href="https://doc.rust-lang.org/1.77.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;&amp;'g <a class="struct" href="../struct.PackageId.html" title="struct guppy::PackageId">PackageId</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/iter/traits/double_ended/trait.DoubleEndedIterator.html" title="trait core::iter::traits::double_ended::DoubleEndedIterator">DoubleEndedIterator</a> + 'g</h4></section></summary><div class="docblock"><p>Returns all the Strongly Connected Components (SCCs) of 2 or more elements in this graph.</p>
+<p>SCCs are returned in topological order: if packages in SCC B depend on packages in SCC
+A, A is returned before B.</p>
+<p>Within an SCC, nodes are returned in non-dev order: if package Foo has a dependency on Bar,
+and Bar has a cyclic dev-dependency on Foo, then Foo is returned before Bar.</p>
+<p>See the type-level docs for details.</p>
+</div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-RefUnwindSafe-for-Cycles%3C'g%3E" class="impl"><a href="#impl-RefUnwindSafe-for-Cycles%3C'g%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'g&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Cycles.html" title="struct guppy::graph::Cycles">Cycles</a>&lt;'g&gt;</h3></section><section id="impl-Send-for-Cycles%3C'g%3E" class="impl"><a href="#impl-Send-for-Cycles%3C'g%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'g&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Cycles.html" title="struct guppy::graph::Cycles">Cycles</a>&lt;'g&gt;</h3></section><section id="impl-Sync-for-Cycles%3C'g%3E" class="impl"><a href="#impl-Sync-for-Cycles%3C'g%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'g&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Cycles.html" title="struct guppy::graph::Cycles">Cycles</a>&lt;'g&gt;</h3></section><section id="impl-Unpin-for-Cycles%3C'g%3E" class="impl"><a href="#impl-Unpin-for-Cycles%3C'g%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'g&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Cycles.html" title="struct guppy::graph::Cycles">Cycles</a>&lt;'g&gt;</h3></section><section id="impl-UnwindSafe-for-Cycles%3C'g%3E" class="impl"><a href="#impl-UnwindSafe-for-Cycles%3C'g%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'g&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Cycles.html" title="struct guppy::graph::Cycles">Cycles</a>&lt;'g&gt;</h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.77.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.77.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.77.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/borrow.rs.html#208">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/borrow.rs.html#210">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.77.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.77.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/borrow.rs.html#216">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/borrow.rs.html#217">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.77.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.77.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/convert/mod.rs.html#764">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/convert/mod.rs.html#767">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.77.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/convert/mod.rs.html#747-749">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/convert/mod.rs.html#757">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.77.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.77.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/convert/mod.rs.html#804-806">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.77.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/convert/mod.rs.html#811">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.77.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/convert/mod.rs.html#789-791">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.77.0/src/core/convert/mod.rs.html#796">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.77.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

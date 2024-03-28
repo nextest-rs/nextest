@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuildPlatform","CargoResolverVersion","InitialsPlatform"],"struct":["CargoOptions","CargoSet"]};

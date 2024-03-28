@@ -1,0 +1,75 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Error Report Handler trait for customizing `eyre::Report`"><title>EyreHandler in eyre - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="eyre" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../eyre/index.html">eyre</a><span class="version">0.6.11</span></h2></div><h2 class="location"><a href="#">EyreHandler</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.debug">debug</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.display">display</a></li><li><a href="#method.track_caller">track_caller</a></li></ul><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.downcast_mut">downcast_mut</a></li><li><a href="#method.downcast_ref">downcast_ref</a></li><li><a href="#method.is">is</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate eyre</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../eyre/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">eyre</a>::<wbr><a class="trait" href="#">EyreHandler</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/eyre/lib.rs.html#644-723">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait EyreHandler: <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> {
+    // Required method
+    fn <a href="#tymethod.debug" class="fn">debug</a>(
+        &amp;self,
+        error: &amp;(dyn <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html" title="trait core::error::Error">StdError</a> + 'static),
+        f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.77.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.77.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a>;
+
+    // Provided methods
+    fn <a href="#method.display" class="fn">display</a>(
+        &amp;self,
+        error: &amp;(dyn <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html" title="trait core::error::Error">StdError</a> + 'static),
+        f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.77.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.77.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.track_caller" class="fn">track_caller</a>(&amp;mut self, location: &amp;'static <a class="struct" href="https://doc.rust-lang.org/1.77.0/core/panic/location/struct.Location.html" title="struct core::panic::location::Location">Location</a>&lt;'static&gt;) { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Error Report Handler trait for customizing <code>eyre::Report</code></p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.debug" class="method"><a class="src rightside" href="../src/eyre/lib.rs.html#697-701">source</a><h4 class="code-header">fn <a href="#tymethod.debug" class="fn">debug</a>(
+    &amp;self,
+    error: &amp;(dyn <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html" title="trait core::error::Error">StdError</a> + 'static),
+    f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.77.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.77.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class="docblock"><p>Define the report format</p>
+<p>Used to override the report format of <code>eyre::Report</code></p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>backtrace::Backtrace;
+<span class="kw">use </span>eyre::EyreHandler;
+<span class="kw">use </span>eyre::Chain;
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>indenter::indented;
+
+<span class="kw">pub struct </span>Handler {
+    backtrace: Backtrace,
+}
+
+<span class="kw">impl </span>EyreHandler <span class="kw">for </span>Handler {
+    <span class="kw">fn </span>debug(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        error: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Error + <span class="lifetime">'static</span>),
+        f: <span class="kw-2">&amp;mut </span>core::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;,
+    ) -&gt; core::fmt::Result {
+        <span class="kw">use </span>core::fmt::Write <span class="kw">as _</span>;
+
+        <span class="kw">if </span>f.alternate() {
+            <span class="kw">return </span>core::fmt::Debug::fmt(error, f);
+        }
+
+        <span class="macro">write!</span>(f, <span class="string">"{}"</span>, error)<span class="question-mark">?</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(cause) = error.source() {
+            <span class="macro">write!</span>(f, <span class="string">"\n\nCaused by:"</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>multiple = cause.source().is_some();
+
+            <span class="kw">for </span>(n, error) <span class="kw">in </span>Chain::new(cause).enumerate() {
+                <span class="macro">writeln!</span>(f)<span class="question-mark">?</span>;
+                <span class="kw">if </span>multiple {
+                    <span class="macro">write!</span>(indented(f).ind(n), <span class="string">"{}"</span>, error)<span class="question-mark">?</span>;
+                } <span class="kw">else </span>{
+                    <span class="macro">write!</span>(indented(f), <span class="string">"{}"</span>, error)<span class="question-mark">?</span>;
+                }
+            }
+        }
+
+        <span class="kw">let </span>backtrace = <span class="kw-2">&amp;</span><span class="self">self</span>.backtrace;
+        <span class="macro">write!</span>(f, <span class="string">"\n\nStack backtrace:\n{:?}"</span>, backtrace)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
+}</code></pre></div>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.display" class="method"><a class="src rightside" href="../src/eyre/lib.rs.html#704-718">source</a><h4 class="code-header">fn <a href="#method.display" class="fn">display</a>(
+    &amp;self,
+    error: &amp;(dyn <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html" title="trait core::error::Error">StdError</a> + 'static),
+    f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.77.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.77.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class="docblock"><p>Override for the <code>Display</code> format</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.track_caller" class="method"><a class="src rightside" href="../src/eyre/lib.rs.html#722">source</a><h4 class="code-header">fn <a href="#method.track_caller" class="fn">track_caller</a>(&amp;mut self, location: &amp;'static <a class="struct" href="https://doc.rust-lang.org/1.77.0/core/panic/location/struct.Location.html" title="struct core::panic::location::Location">Location</a>&lt;'static&gt;)</h4></section></summary><div class="docblock"><p>Store the location of the caller who constructed this error report</p>
+</div></details></div><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-dyn+EyreHandler" class="impl"><a class="src rightside" href="../src/eyre/lib.rs.html#611-641">source</a><a href="#impl-dyn+EyreHandler" class="anchor">§</a><h3 class="code-header">impl dyn <a class="trait" href="trait.EyreHandler.html" title="trait eyre::EyreHandler">EyreHandler</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.is" class="method"><a class="src rightside" href="../src/eyre/lib.rs.html#613-622">source</a><h4 class="code-header">pub fn <a href="#method.is" class="fn">is</a>&lt;T: <a class="trait" href="trait.EyreHandler.html" title="trait eyre::EyreHandler">EyreHandler</a>&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"></div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_ref" class="method"><a class="src rightside" href="../src/eyre/lib.rs.html#625-631">source</a><h4 class="code-header">pub fn <a href="#method.downcast_ref" class="fn">downcast_ref</a>&lt;T: <a class="trait" href="trait.EyreHandler.html" title="trait eyre::EyreHandler">EyreHandler</a>&gt;(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.77.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.reference.html">&amp;T</a>&gt;</h4></section></summary><div class="docblock"></div></details><details class="toggle method-toggle" open><summary><section id="method.downcast_mut" class="method"><a class="src rightside" href="../src/eyre/lib.rs.html#634-640">source</a><h4 class="code-header">pub fn <a href="#method.downcast_mut" class="fn">downcast_mut</a>&lt;T: <a class="trait" href="trait.EyreHandler.html" title="trait eyre::EyreHandler">EyreHandler</a>&gt;(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.77.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.reference.html">&amp;mut T</a>&gt;</h4></section></summary><div class="docblock"></div></details></div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-EyreHandler-for-DefaultHandler" class="impl"><a class="src rightside" href="../src/eyre/lib.rs.html#790-846">source</a><a href="#impl-EyreHandler-for-DefaultHandler" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.EyreHandler.html" title="trait eyre::EyreHandler">EyreHandler</a> for <a class="struct" href="struct.DefaultHandler.html" title="struct eyre::DefaultHandler">DefaultHandler</a></h3></section></div><script src="../trait.impl/eyre/trait.EyreHandler.js" async></script></section></div></main></body></html>

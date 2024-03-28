@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DependencyKind"],"mod":["errors","graph","platform"],"struct":["CargoMetadata","MetadataCommand","PackageId"]};

@@ -1,0 +1,269 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An error report handler for panics and the `eyre` crate for colorful, consistent, and well formatted error reports for all kinds of errors."><title>color_eyre - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="color_eyre" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../color_eyre/index.html">color_eyre</a><span class="version">0.6.3</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../color_eyre/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">color_eyre</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/color_eyre/lib.rs.html#1-460">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An error report handler for panics and the <a href="https://docs.rs/eyre"><code>eyre</code></a> crate for colorful, consistent, and well
+formatted error reports for all kinds of errors.</p>
+<h3 id="tldr"><a class="doc-anchor" href="#tldr">§</a>TLDR</h3>
+<p><code>color_eyre</code> helps you build error reports that look like this:</p>
+<pre><span style="color: #06989A"><b>color-eyre</b></span> on <span style="color: #75507B"><b> hooked</b></span> <span style="color: #CC0000"><b>[$!] </b></span>is <span style="color: #FF8700"><b>📦 v0.5.0</b></span> via <span style="color: #CC0000"><b>🦀 v1.44.0</b></span>
+<span style="color: #4E9A06"><b>❯</b></span> cargo run --example custom_section
+<span style="color: #4E9A06"><b>    Finished</b></span> dev [unoptimized + debuginfo] target(s) in 0.04s
+<span style="color: #4E9A06"><b>     Running</b></span> `target/debug/examples/custom_section`
+Error:
+   0: <span style="color: #F15D22">Unable to read config</span>
+   1: <span style="color: #F15D22">cmd exited with non-zero status code</span>
+
+Stderr:
+   cat: fake_file: No such file or directory
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ SPANTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   0: <span style="color: #F15D22">custom_section::output2</span> with <span style="color: #34E2E2">self=&quot;cat&quot; &quot;fake_file&quot;</span>
+      at <span style="color: #75507B">examples/custom_section.rs</span>:<span style="color: #75507B">14</span>
+   1: <span style="color: #F15D22">custom_section::read_file</span> with <span style="color: #34E2E2">path=&quot;fake_file&quot;</span>
+      at <span style="color: #75507B">examples/custom_section.rs</span>:<span style="color: #75507B">58</span>
+   2: <span style="color: #F15D22">custom_section::read_config</span>
+      at <span style="color: #75507B">examples/custom_section.rs</span>:<span style="color: #75507B">63</span>
+
+<span style="color: #34E2E2">Suggestion</span>: try using a file that exists next time</pre>
+<h3 id="setup"><a class="doc-anchor" href="#setup">§</a>Setup</h3>
+<p>Add the following to your toml file:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+color-eyre = &quot;0.6&quot;
+</code></pre></div>
+<p>And install the panic and error report handlers:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>color_eyre::eyre::Result;
+
+<span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    color_eyre::install()<span class="question-mark">?</span>;
+
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<h4 id="disabling-tracing-support"><a class="doc-anchor" href="#disabling-tracing-support">§</a>Disabling tracing support</h4>
+<p>If you don’t plan on using <code>tracing_error</code> and <code>SpanTrace</code> you can disable the
+tracing integration to cut down on unused dependencies:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+color-eyre = { version = &quot;0.6&quot;, default-features = false }
+</code></pre></div><h4 id="disabling-spantrace-capture-by-default"><a class="doc-anchor" href="#disabling-spantrace-capture-by-default">§</a>Disabling SpanTrace capture by default</h4>
+<p>color-eyre defaults to capturing span traces. This is because <code>SpanTrace</code>
+capture is significantly cheaper than <code>Backtrace</code> capture. However, like
+backtraces, span traces are most useful for debugging applications, and it’s
+not uncommon to want to disable span trace capture by default to keep noise out
+developer.</p>
+<p>To disable span trace capture you must explicitly set one of the env variables
+that regulate <code>SpanTrace</code> capture to <code>&quot;0&quot;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">if </span>std::env::var(<span class="string">"RUST_SPANTRACE"</span>).is_err() {
+    std::env::set_var(<span class="string">"RUST_SPANTRACE"</span>, <span class="string">"0"</span>);
+}</code></pre></div>
+<h4 id="improving-perf-on-debug-builds"><a class="doc-anchor" href="#improving-perf-on-debug-builds">§</a>Improving perf on debug builds</h4>
+<p>In debug mode <code>color-eyre</code> behaves noticably worse than <code>eyre</code>. This is caused
+by the fact that <code>eyre</code> uses <code>std::backtrace::Backtrace</code> instead of
+<code>backtrace::Backtrace</code>. The std version of backtrace is precompiled with
+optimizations, this means that whether or not you’re in debug mode doesn’t
+matter much for how expensive backtrace capture is, it will always be in the
+10s of milliseconds to capture. A debug version of <code>backtrace::Backtrace</code>
+however isn’t so lucky, and can take an order of magnitude more time to capture
+a backtrace compared to its std counterpart.</p>
+<p>Cargo <a href="https://doc.rust-lang.org/cargo/reference/profiles.html#overrides">profile
+overrides</a>
+can be used to mitigate this problem. By configuring your project to always
+build <code>backtrace</code> with optimizations you should get the same performance from
+<code>color-eyre</code> that you’re used to with <code>eyre</code>. To do so add the following to
+your Cargo.toml:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[profile.dev.package.backtrace]
+opt-level = 3
+</code></pre></div><h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3><h4 id="multiple-report-format-verbosity-levels"><a class="doc-anchor" href="#multiple-report-format-verbosity-levels">§</a>Multiple report format verbosity levels</h4>
+<p><code>color-eyre</code> provides 3 different report formats for how it formats the captured <code>SpanTrace</code>
+and <code>Backtrace</code>, minimal, short, and full. Take the below snippets of the output produced by <a href="https://github.com/yaahc/color-eyre/blob/master/examples/usage.rs"><code>examples/usage.rs</code></a>:</p>
+<hr />
+<p>Running <code>cargo run --example usage</code> without <code>RUST_LIB_BACKTRACE</code> set will produce a minimal
+report like this:</p>
+<pre><span style="color: #06989A"><b>color-eyre</b></span> on <span style="color: #75507B"><b> hooked</b></span> <span style="color: #CC0000"><b>[$!] </b></span>is <span style="color: #FF8700"><b>📦 v0.5.0</b></span> via <span style="color: #CC0000"><b>🦀 v1.44.0</b></span> took <span style="color: #C4A000"><b>2s</b></span>
+<span style="color: #CC0000"><b>❯</b></span> cargo run --example usage
+<span style="color: #4E9A06"><b>    Finished</b></span> dev [unoptimized + debuginfo] target(s) in 0.04s
+<span style="color: #4E9A06"><b>     Running</b></span> `target/debug/examples/usage`
+<span style="color: #A1A1A1">Jul 05 19:15:58.026 </span><span style="color: #4E9A06"> INFO</span> <b>read_config</b>:<b>read_file{</b>path=&quot;fake_file&quot;<b>}</b>: Reading file
+Error:
+   0: <span style="color: #F15D22">Unable to read config</span>
+   1: <span style="color: #F15D22">No such file or directory (os error 2)</span>
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ SPANTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   0: <span style="color: #F15D22">usage::read_file</span> with <span style="color: #34E2E2">path=&quot;fake_file&quot;</span>
+      at <span style="color: #75507B">examples/usage.rs</span>:<span style="color: #75507B">32</span>
+   1: <span style="color: #F15D22">usage::read_config</span>
+      at <span style="color: #75507B">examples/usage.rs</span>:<span style="color: #75507B">38</span>
+
+<span style="color: #34E2E2">Suggestion</span>: try using a file that exists next time</pre>
+<br>
+<p>Running <code>RUST_LIB_BACKTRACE=1 cargo run --example usage</code> tells <code>color-eyre</code> to use the short
+format, which additionally capture a <a href="https://docs.rs/backtrace/*/backtrace/struct.Backtrace.html"><code>backtrace::Backtrace</code></a>:</p>
+<pre><span style="color: #06989A"><b>color-eyre</b></span> on <span style="color: #75507B"><b> hooked</b></span> <span style="color: #CC0000"><b>[$!] </b></span>is <span style="color: #FF8700"><b>📦 v0.5.0</b></span> via <span style="color: #CC0000"><b>🦀 v1.44.0</b></span>
+<span style="color: #CC0000"><b>❯</b></span> RUST_LIB_BACKTRACE=1 cargo run --example usage
+<span style="color: #4E9A06"><b>    Finished</b></span> dev [unoptimized + debuginfo] target(s) in 0.04s
+<span style="color: #4E9A06"><b>     Running</b></span> `target/debug/examples/usage`
+<span style="color: #A1A1A1">Jul 05 19:16:02.853 </span><span style="color: #4E9A06"> INFO</span> <b>read_config</b>:<b>read_file{</b>path=&quot;fake_file&quot;<b>}</b>: Reading file
+Error:
+   0: <span style="color: #F15D22">Unable to read config</span>
+   1: <span style="color: #F15D22">No such file or directory (os error 2)</span>
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ SPANTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   0: <span style="color: #F15D22">usage::read_file</span> with <span style="color: #34E2E2">path=&quot;fake_file&quot;</span>
+      at <span style="color: #75507B">examples/usage.rs</span>:<span style="color: #75507B">32</span>
+   1: <span style="color: #F15D22">usage::read_config</span>
+      at <span style="color: #75507B">examples/usage.rs</span>:<span style="color: #75507B">38</span>
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ BACKTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  <span style="color: #34E2E2">                              ⋮ 5 frames hidden ⋮                               </span>
+   6: <span style="color: #F15D22">usage::read_file</span><span style="color: #88807C">::haee210cb22460af3</span>
+      at <span style="color: #75507B">/home/jlusby/git/yaahc/color-eyre/examples/usage.rs</span>:<span style="color: #75507B">35</span>
+   7: <span style="color: #F15D22">usage::read_config</span><span style="color: #88807C">::ha649ef4ec333524d</span>
+      at <span style="color: #75507B">/home/jlusby/git/yaahc/color-eyre/examples/usage.rs</span>:<span style="color: #75507B">40</span>
+   8: <span style="color: #F15D22">usage::main</span><span style="color: #88807C">::hbe443b50eac38236</span>
+      at <span style="color: #75507B">/home/jlusby/git/yaahc/color-eyre/examples/usage.rs</span>:<span style="color: #75507B">11</span>
+  <span style="color: #34E2E2">                              ⋮ 10 frames hidden ⋮                              </span>
+
+<span style="color: #34E2E2">Suggestion</span>: try using a file that exists next time</pre>
+<br>
+<p>Finally, running <code>RUST_LIB_BACKTRACE=full cargo run --example usage</code> tells <code>color-eyre</code> to use
+the full format, which in addition to the above will attempt to include source lines where the
+error originated from, assuming it can find them on the disk.</p>
+<pre><span style="color: #06989A"><b>color-eyre</b></span> on <span style="color: #75507B"><b> hooked</b></span> <span style="color: #CC0000"><b>[$!] </b></span>is <span style="color: #FF8700"><b>📦 v0.5.0</b></span> via <span style="color: #CC0000"><b>🦀 v1.44.0</b></span>
+<span style="color: #CC0000"><b>❯</b></span> RUST_LIB_BACKTRACE=full cargo run --example usage
+<span style="color: #4E9A06"><b>    Finished</b></span> dev [unoptimized + debuginfo] target(s) in 0.05s
+<span style="color: #4E9A06"><b>     Running</b></span> `target/debug/examples/usage`
+<span style="color: #A1A1A1">Jul 05 19:16:06.335 </span><span style="color: #4E9A06"> INFO</span> <b>read_config</b>:<b>read_file{</b>path=&quot;fake_file&quot;<b>}</b>: Reading file
+Error:
+   0: <span style="color: #F15D22">Unable to read config</span>
+   1: <span style="color: #F15D22">No such file or directory (os error 2)</span>
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ SPANTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   0: <span style="color: #F15D22">usage::read_file</span> with <span style="color: #34E2E2">path=&quot;fake_file&quot;</span>
+      at <span style="color: #75507B">examples/usage.rs</span>:<span style="color: #75507B">32</span>
+        30 │ }
+        31 │
+  <b>      32 &gt; #[instrument]</b>
+        33 │ fn read_file(path: &amp;str) -&gt; Result&lt;(), Report&gt; {
+        34 │     info!(&quot;Reading file&quot;);
+   1: <span style="color: #F15D22">usage::read_config</span>
+      at <span style="color: #75507B">examples/usage.rs</span>:<span style="color: #75507B">38</span>
+        36 │ }
+        37 │
+  <b>      38 &gt; #[instrument]</b>
+        39 │ fn read_config() -&gt; Result&lt;(), Report&gt; {
+        40 │     read_file(&quot;fake_file&quot;)
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ BACKTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  <span style="color: #34E2E2">                              ⋮ 5 frames hidden ⋮                               </span>
+   6: <span style="color: #F15D22">usage::read_file</span><span style="color: #88807C">::haee210cb22460af3</span>
+      at <span style="color: #75507B">/home/jlusby/git/yaahc/color-eyre/examples/usage.rs</span>:<span style="color: #75507B">35</span>
+        33 │ fn read_file(path: &amp;str) -&gt; Result&lt;(), Report&gt; {
+        34 │     info!(&quot;Reading file&quot;);
+  <span style="color: #D3D7CF"><b>      35 &gt;     Ok(std::fs::read_to_string(path).map(drop)?)</b></span>
+        36 │ }
+        37 │
+   7: <span style="color: #F15D22">usage::read_config</span><span style="color: #88807C">::ha649ef4ec333524d</span>
+      at <span style="color: #75507B">/home/jlusby/git/yaahc/color-eyre/examples/usage.rs</span>:<span style="color: #75507B">40</span>
+        38 │ #[instrument]
+        39 │ fn read_config() -&gt; Result&lt;(), Report&gt; {
+  <span style="color: #D3D7CF"><b>      40 &gt;     read_file(&quot;fake_file&quot;)</b></span>
+        41 │         .wrap_err(&quot;Unable to read config&quot;)
+        42 │         .suggestion(&quot;try using a file that exists next time&quot;)
+   8: <span style="color: #F15D22">usage::main</span><span style="color: #88807C">::hbe443b50eac38236</span>
+      at <span style="color: #75507B">/home/jlusby/git/yaahc/color-eyre/examples/usage.rs</span>:<span style="color: #75507B">11</span>
+         9 │     color_eyre::install()?;
+        10 │
+  <span style="color: #D3D7CF"><b>      11 &gt;     Ok(read_config()?)</b></span>
+        12 │ }
+        13 │
+  <span style="color: #34E2E2">                              ⋮ 10 frames hidden ⋮                              </span>
+
+<span style="color: #34E2E2">Suggestion</span>: try using a file that exists next time</pre>
+<h4 id="custom-sections-for-error-reports-via-section-trait"><a class="doc-anchor" href="#custom-sections-for-error-reports-via-section-trait">§</a>Custom <code>Section</code>s for error reports via <a href="https://docs.rs/color-eyre/*/color_eyre/trait.Section.html"><code>Section</code></a> trait</h4>
+<p>The <code>section</code> module provides helpers for adding extra sections to error
+reports. Sections are disinct from error messages and are displayed
+independently from the chain of errors. Take this example of adding sections
+to contain <code>stderr</code> and <code>stdout</code> from a failed command, taken from
+<a href="https://github.com/yaahc/color-eyre/blob/master/examples/custom_section.rs"><code>examples/custom_section.rs</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>color_eyre::{eyre::eyre, SectionExt, Section, eyre::Report};
+<span class="kw">use </span>std::process::Command;
+<span class="kw">use </span>tracing::instrument;
+
+<span class="kw">trait </span>Output {
+    <span class="kw">fn </span>output2(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String, Report&gt;;
+}
+
+<span class="kw">impl </span>Output <span class="kw">for </span>Command {
+    <span class="attr">#[instrument]
+    </span><span class="kw">fn </span>output2(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String, Report&gt; {
+        <span class="kw">let </span>output = <span class="self">self</span>.output()<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>stdout = String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stdout);
+
+        <span class="kw">if </span>!output.status.success() {
+            <span class="kw">let </span>stderr = String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stderr);
+            <span class="prelude-val">Err</span>(<span class="macro">eyre!</span>(<span class="string">"cmd exited with non-zero status code"</span>))
+                .with_section(<span class="kw">move </span>|| stdout.trim().to_string().header(<span class="string">"Stdout:"</span>))
+                .with_section(<span class="kw">move </span>|| stderr.trim().to_string().header(<span class="string">"Stderr:"</span>))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(stdout.into())
+        }
+    }
+}</code></pre></div>
+<hr />
+<p>Here we have an function that, if the command exits unsuccessfully, creates a
+report indicating the failure and attaches two sections, one for <code>stdout</code> and
+one for <code>stderr</code>.</p>
+<p>Running <code>cargo run --example custom_section</code> shows us how these sections are
+included in the output:</p>
+<pre><span style="color: #06989A"><b>color-eyre</b></span> on <span style="color: #75507B"><b> hooked</b></span> <span style="color: #CC0000"><b>[$!] </b></span>is <span style="color: #FF8700"><b>📦 v0.5.0</b></span> via <span style="color: #CC0000"><b>🦀 v1.44.0</b></span> took <span style="color: #C4A000"><b>2s</b></span>
+<span style="color: #CC0000"><b>❯</b></span> cargo run --example custom_section
+<span style="color: #4E9A06"><b>    Finished</b></span> dev [unoptimized + debuginfo] target(s) in 0.04s
+<span style="color: #4E9A06"><b>     Running</b></span> `target/debug/examples/custom_section`
+Error:
+   0: <span style="color: #F15D22">Unable to read config</span>
+   1: <span style="color: #F15D22">cmd exited with non-zero status code</span>
+
+Stderr:
+   cat: fake_file: No such file or directory
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ SPANTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   0: <span style="color: #F15D22">custom_section::output2</span> with <span style="color: #34E2E2">self=&quot;cat&quot; &quot;fake_file&quot;</span>
+      at <span style="color: #75507B">examples/custom_section.rs</span>:<span style="color: #75507B">14</span>
+   1: <span style="color: #F15D22">custom_section::read_file</span> with <span style="color: #34E2E2">path=&quot;fake_file&quot;</span>
+      at <span style="color: #75507B">examples/custom_section.rs</span>:<span style="color: #75507B">58</span>
+   2: <span style="color: #F15D22">custom_section::read_config</span>
+      at <span style="color: #75507B">examples/custom_section.rs</span>:<span style="color: #75507B">63</span>
+
+<span style="color: #34E2E2">Suggestion</span>: try using a file that exists next time</pre>
+<p>Only the <code>Stderr:</code> section actually gets included. The <code>cat</code> command fails,
+so stdout ends up being empty and is skipped in the final report. This gives
+us a short and concise error report indicating exactly what was attempted and
+how it failed.</p>
+<h4 id="aggregating-multiple-errors-into-one-report"><a class="doc-anchor" href="#aggregating-multiple-errors-into-one-report">§</a>Aggregating multiple errors into one report</h4>
+<p>It’s not uncommon for programs like batched task runners or parsers to want
+to return an error with multiple sources. The current version of the error
+trait does not support this use case very well, though there is <a href="https://github.com/rust-lang/rfcs/pull/2895">work being
+done</a> to improve this.</p>
+<p>For now however one way to work around this is to compose errors outside the
+error trait. <code>color-eyre</code> supports such composition in its error reports via
+the <code>Section</code> trait.</p>
+<p>For an example of how to aggregate errors check out <a href="https://github.com/yaahc/color-eyre/blob/master/examples/multiple_errors.rs"><code>examples/multiple_errors.rs</code></a>.</p>
+<h4 id="custom-configuration-for-color-backtrace-for-setting-custom-filters-and-more"><a class="doc-anchor" href="#custom-configuration-for-color-backtrace-for-setting-custom-filters-and-more">§</a>Custom configuration for <code>color-backtrace</code> for setting custom filters and more</h4>
+<p>The pretty printing for backtraces and span traces isn’t actually provided by
+<code>color-eyre</code>, but instead comes from its dependencies <a href="https://docs.rs/color-backtrace"><code>color-backtrace</code></a> and
+<a href="https://github.com/yaahc/color-spantrace"><code>color-spantrace</code></a>. <code>color-backtrace</code> in particular has many more features
+than are exported by <code>color-eyre</code>, such as customized color schemes, panic
+hooks, and custom frame filters. The custom frame filters are particularly
+useful when combined with <code>color-eyre</code>, so to enable their usage we provide
+the <code>install</code> fn for setting up a custom <code>BacktracePrinter</code> with custom
+filters installed.</p>
+<p>For an example of how to setup custom filters, check out <a href="https://github.com/yaahc/color-eyre/blob/master/examples/custom_filter.rs"><code>examples/custom_filter.rs</code></a>.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.IndentedSection"><code>pub use section::<a class="struct" href="section/struct.IndentedSection.html" title="struct color_eyre::section::IndentedSection">IndentedSection</a>;</code></div></li><li><div class="item-name" id="reexport.Section"><code>pub use section::<a class="trait" href="section/trait.Section.html" title="trait color_eyre::section::Section">Section</a>;</code></div></li><li><div class="item-name" id="reexport.SectionExt"><code>pub use section::<a class="trait" href="section/trait.SectionExt.html" title="trait color_eyre::section::SectionExt">SectionExt</a>;</code></div></li><li><div class="item-name" id="reexport.eyre"><code>pub use <a class="mod" href="../eyre/index.html" title="mod eyre">eyre</a>;</code></div></li><li><div class="item-name" id="reexport.owo_colors"><code>pub use <a class="mod" href="../owo_colors/index.html" title="mod owo_colors">owo_colors</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="config/index.html" title="mod color_eyre::config">config</a></div><div class="desc docblock-short">Configuration options for customizing the behavior of the provided panic
+and error reporting hooks</div></li><li><div class="item-name"><a class="mod" href="section/index.html" title="mod color_eyre::section">section</a></div><div class="desc docblock-short">Helpers for adding custom sections to error reports</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Handler.html" title="struct color_eyre::Handler">Handler</a></div><div class="desc docblock-short">A custom handler type for <a href="https://docs.rs/eyre/*/eyre/struct.Report.html"><code>eyre::Report</code></a> which provides colorful error
+reports and <a href="https://docs.rs/tracing-error"><code>tracing-error</code></a> support.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.install.html" title="fn color_eyre::install">install</a></div><div class="desc docblock-short">Install the default panic and error report hooks</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This library contains `DebugIgnore`, a newtype wrapper that causes a field to be skipped while printing out `Debug` output."><title>debug_ignore - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="debug_ignore" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../debug_ignore/index.html">debug_ignore</a><span class="version">1.0.5</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../debug_ignore/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">debug_ignore</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/debug_ignore/lib.rs.html#4-142">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This library contains <code>DebugIgnore</code>, a newtype wrapper that causes a field to be skipped while
+printing out <code>Debug</code> output.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>debug_ignore::DebugIgnore;
+
+<span class="comment">// Some structs have many fields with large `Debug` implementations.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>InnerStructWithLotsOfDebugInfo {
+    field: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+    <span class="comment">// ...
+</span>}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>PublicStruct {
+    inner: DebugIgnore&lt;InnerStructWithLotsOfDebugInfo&gt;,
+}
+
+<span class="kw">impl </span>PublicStruct {
+    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            <span class="comment">// DebugIgnore&lt;T&gt; has a `From&lt;T&gt;` impl for the inner type; you can also construct
+            // one explicitly.
+            </span>inner: InnerStructWithLotsOfDebugInfo { field: <span class="string">"field"</span>, <span class="comment">/* ... */ </span>}.into(),
+        }
+    }
+}
+
+<span class="kw">let </span>x = PublicStruct::new();
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:?}"</span>, x), <span class="string">"PublicStruct { inner: ... }"</span>);
+
+<span class="comment">// Fields within inner can still be accessed through the Deref impl.
+</span><span class="macro">assert_eq!</span>(x.inner.field, <span class="string">"field"</span>);</code></pre></div>
+<h2 id="why"><a class="doc-anchor" href="#why">§</a>Why?</h2>
+<p>Some structs have many fields with large <code>Debug</code> implementations. It can be really annoying to
+go through a ton of usually irrelevant <code>Debug</code> output.</p>
+<p><code>DebugIgnore</code> is a zero-cost, zero-compile-time way to achieve a <code>Debug</code> impl that skips over a
+field.</p>
+<h2 id="optional-features"><a class="doc-anchor" href="#optional-features">§</a>Optional features</h2>
+<p><code>serde</code>: <code>serde</code> support with <code>#[serde(transparent)]</code>.</p>
+<h2 id="rust-version-support"><a class="doc-anchor" href="#rust-version-support">§</a>Rust version support</h2>
+<p>The MSRV is <strong>Rust 1.34</strong> though this crate likely builds with older versions. This crate is
+too trivial to require anything more recent.</p>
+<p>Optional features may require newer versions of Rust.</p>
+<h2 id="alternatives"><a class="doc-anchor" href="#alternatives">§</a>Alternatives</h2>
+<ul>
+<li>Implement <code>Debug</code> by hand.</li>
+<li><a href="https://crates.io/crates/derivative"><code>derivative</code></a> has greater control over the behavior of
+<code>Debug</code> impls, at the cost of a compile-time proc-macro dependency.</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DebugIgnore.html" title="struct debug_ignore::DebugIgnore">DebugIgnore</a></div><div class="desc docblock-short">A newtype wrapper that causes the field within to be ignored while printing out <code>Debug</code> output.</div></li></ul></section></div></main></body></html>

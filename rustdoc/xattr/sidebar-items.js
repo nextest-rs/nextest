@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SUPPORTED_PLATFORM"],"fn":["get","list","remove","set"],"struct":["UnsupportedPlatformError","XAttrs"],"trait":["FileExt"]};

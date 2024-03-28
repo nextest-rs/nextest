@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["self_delete","self_delete_outside_path","self_replace"]};

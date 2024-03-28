@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"console_subscriber":[["impl <a class=\"trait\" href=\"console_api/instrument/instrument_server/trait.Instrument.html\" title=\"trait console_api::instrument::instrument_server::Instrument\">Instrument</a> for <a class=\"struct\" href=\"console_subscriber/struct.Server.html\" title=\"struct console_subscriber::Server\">Server</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

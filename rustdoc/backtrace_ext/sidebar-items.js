@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["short_frames_strict"]};

@@ -1,0 +1,121 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Wrap a line of text at a given width."><title>wrap in textwrap - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="textwrap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../textwrap/index.html">textwrap</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../textwrap/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">textwrap</a>::<wbr><a class="fn" href="#">wrap</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/textwrap/lib.rs.html#989-1002">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn wrap&lt;'a, Opt&gt;(text: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.str.html">str</a>, width_or_options: Opt) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.77.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.77.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow">Cow</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.str.html">str</a>&gt;&gt;<div class="where">where
+    Opt: <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Options.html" title="struct textwrap::Options">Options</a>&lt;'a&gt;&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Wrap a line of text at a given width.</p>
+<p>The result is a vector of lines, each line is of type <a href="https://doc.rust-lang.org/1.77.0/alloc/borrow/enum.Cow.html" title="enum alloc::borrow::Cow"><code>Cow&lt;'_, str&gt;</code></a>, which means that the line will borrow from the input
+<code>&amp;str</code> if possible. The lines do not have trailing whitespace,
+including a final <code>'\n'</code>. Please use the <a href="fn.fill.html" title="fn textwrap::fill"><code>fill</code></a> function if you
+need a <a href="https://doc.rust-lang.org/1.77.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a> instead.</p>
+<p>The easiest way to use this function is to pass an integer for
+<code>width_or_options</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>textwrap::wrap;
+
+<span class="kw">let </span>lines = wrap(<span class="string">"Memory safety without garbage collection."</span>, <span class="number">15</span>);
+<span class="macro">assert_eq!</span>(lines, <span class="kw-2">&amp;</span>[
+    <span class="string">"Memory safety"</span>,
+    <span class="string">"without garbage"</span>,
+    <span class="string">"collection."</span>,
+]);</code></pre></div>
+<p>If you need to customize the wrapping, you can pass an <a href="struct.Options.html" title="struct textwrap::Options"><code>Options</code></a>
+instead of an <code>usize</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>textwrap::{wrap, Options};
+
+<span class="kw">let </span>options = Options::new(<span class="number">15</span>)
+    .initial_indent(<span class="string">"- "</span>)
+    .subsequent_indent(<span class="string">"  "</span>);
+<span class="kw">let </span>lines = wrap(<span class="string">"Memory safety without garbage collection."</span>, <span class="kw-2">&amp;</span>options);
+<span class="macro">assert_eq!</span>(lines, <span class="kw-2">&amp;</span>[
+    <span class="string">"- Memory safety"</span>,
+    <span class="string">"  without"</span>,
+    <span class="string">"  garbage"</span>,
+    <span class="string">"  collection."</span>,
+]);</code></pre></div>
+<h2 id="optimal-fit-wrapping"><a class="doc-anchor" href="#optimal-fit-wrapping">§</a>Optimal-Fit Wrapping</h2>
+<p>By default, <code>wrap</code> will try to ensure an even right margin by
+finding breaks which avoid short lines. We call this an
+“optimal-fit algorithm” since the line breaks are computed by
+considering all possible line breaks. The alternative is a
+“first-fit algorithm” which simply accumulates words until they no
+longer fit on the line.</p>
+<p>As an example, using the first-fit algorithm to wrap the famous
+Hamlet quote “To be, or not to be: that is the question” in a
+narrow column with room for only 10 characters looks like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>To be, or
+not to be:
+that is
+the
+question</code></pre></div>
+<p>Notice how the second to last line is quite narrow because
+“question” was too large to fit? The greedy first-fit algorithm
+doesn’t look ahead, so it has no other option than to put
+“question” onto its own line.</p>
+<p>With the optimal-fit wrapping algorithm, the previous lines are
+shortened slightly in order to make the word “is” go into the
+second last line:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>To be,
+or not to
+be: that
+is the
+question</code></pre></div>
+<p>Please see <a href="wrap_algorithms/enum.WrapAlgorithm.html" title="enum textwrap::wrap_algorithms::WrapAlgorithm"><code>WrapAlgorithm</code></a> for details on the choices.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>The returned iterator yields lines of type <code>Cow&lt;'_, str&gt;</code>. If
+possible, the wrapped lines will borrow from the input string. As
+an example, a hanging indentation, the first line can borrow from
+the input, but the subsequent lines become owned strings:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::borrow::Cow::{Borrowed, Owned};
+<span class="kw">use </span>textwrap::{wrap, Options};
+
+<span class="kw">let </span>options = Options::new(<span class="number">15</span>).subsequent_indent(<span class="string">"...."</span>);
+<span class="kw">let </span>lines = wrap(<span class="string">"Wrapping text all day long."</span>, <span class="kw-2">&amp;</span>options);
+<span class="kw">let </span>annotated = lines
+    .iter()
+    .map(|line| <span class="kw">match </span>line {
+        Borrowed(text) =&gt; <span class="macro">format!</span>(<span class="string">"[Borrowed] {}"</span>, text),
+        Owned(text) =&gt; <span class="macro">format!</span>(<span class="string">"[Owned]    {}"</span>, text),
+    })
+    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<span class="macro">assert_eq!</span>(
+    annotated,
+    <span class="kw-2">&amp;</span>[
+        <span class="string">"[Borrowed] Wrapping text"</span>,
+        <span class="string">"[Owned]    ....all day"</span>,
+        <span class="string">"[Owned]    ....long."</span>,
+    ]
+);</code></pre></div>
+<h3 id="leading-and-trailing-whitespace"><a class="doc-anchor" href="#leading-and-trailing-whitespace">§</a>Leading and Trailing Whitespace</h3>
+<p>As a rule, leading whitespace (indentation) is preserved and
+trailing whitespace is discarded.</p>
+<p>In more details, when wrapping words into lines, words are found
+by splitting the input text on space characters. One or more
+spaces (shown here as “␣”) are attached to the end of each word:</p>
+<div class="example-wrap"><pre class="language-text"><code>&quot;Foo␣␣␣bar␣baz&quot; -&gt; [&quot;Foo␣␣␣&quot;, &quot;bar␣&quot;, &quot;baz&quot;]
+</code></pre></div>
+<p>These words are then put into lines. The interword whitespace is
+preserved, unless the lines are wrapped so that the <code>&quot;Foo␣␣␣&quot;</code>
+word falls at the end of a line:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>textwrap::wrap;
+
+<span class="macro">assert_eq!</span>(wrap(<span class="string">"Foo   bar baz"</span>, <span class="number">10</span>), <span class="macro">vec!</span>[<span class="string">"Foo   bar"</span>, <span class="string">"baz"</span>]);
+<span class="macro">assert_eq!</span>(wrap(<span class="string">"Foo   bar baz"</span>, <span class="number">8</span>), <span class="macro">vec!</span>[<span class="string">"Foo"</span>, <span class="string">"bar baz"</span>]);</code></pre></div>
+<p>Notice how the trailing whitespace is removed in both case: in the
+first example, <code>&quot;bar␣&quot;</code> becomes <code>&quot;bar&quot;</code> and in the second case
+<code>&quot;Foo␣␣␣&quot;</code> becomes <code>&quot;Foo&quot;</code>.</p>
+<p>Leading whitespace is preserved when the following word fits on
+the first line. To understand this, consider how words are found
+in a text with leading spaces:</p>
+<div class="example-wrap"><pre class="language-text"><code>&quot;␣␣foo␣bar&quot; -&gt; [&quot;␣␣&quot;, &quot;foo␣&quot;, &quot;bar&quot;]
+</code></pre></div>
+<p>When put into lines, the indentation is preserved if <code>&quot;foo&quot;</code> fits
+on the first line, otherwise you end up with an empty line:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>textwrap::wrap;
+
+<span class="macro">assert_eq!</span>(wrap(<span class="string">"  foo bar"</span>, <span class="number">8</span>), <span class="macro">vec!</span>[<span class="string">"  foo"</span>, <span class="string">"bar"</span>]);
+<span class="macro">assert_eq!</span>(wrap(<span class="string">"  foo bar"</span>, <span class="number">4</span>), <span class="macro">vec!</span>[<span class="string">""</span>, <span class="string">"foo"</span>, <span class="string">"bar"</span>]);</code></pre></div>
+</div></details></section></div></main></body></html>

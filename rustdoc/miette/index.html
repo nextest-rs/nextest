@@ -1,0 +1,684 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="You run miette? You run her code like the software? Oh. Oh! Error code for coder! Error code for One Thousand Lines!"><title>miette - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="miette" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../miette/index.html">miette</a><span class="version">7.2.0</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../miette/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">miette</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/miette/lib.rs.html#1-803">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>You run miette? You run her code like the software? Oh. Oh! Error code for
+coder! Error code for One Thousand Lines!</p>
+<h3 id="about"><a class="doc-anchor" href="#about">§</a>About</h3>
+<p><code>miette</code> is a diagnostic library for Rust. It includes a series of
+traits/protocols that allow you to hook into its error reporting facilities,
+and even write your own error reports! It lets you define error types that
+can print out like this (or in any format you like!):</p>
+<p><img src="https://raw.githubusercontent.com/zkat/miette/main/images/serde_json.png" alt="Hi! miette also includes a screen-reader-oriented diagnostic printer that's enabled in various situations, such as when you use NO_COLOR or CLICOLOR settings, or on CI. This behavior is also fully configurable and customizable. For example, this is what this particular diagnostic will look like when the narrated printer is enabled:
+\
+Error: Received some bad JSON from the source. Unable to parse.
+    Caused by: missing field `foo` at line 1 column 1700
+\
+Begin snippet for https://api.nuget.org/v3/registration5-gz-semver2/json.net/index.json starting
+at line 1, column 1659
+\
+snippet line 1: gs&quot;:[&quot;json&quot;],&quot;title&quot;:&quot;&quot;,&quot;version&quot;:&quot;1.0.0&quot;},&quot;packageContent&quot;:&quot;https://api.nuget.o
+    highlight starting at line 1, column 1699: last parsing location
+\
+diagnostic help: This is a bug. It might be in ruget, or it might be in the
+source you're using, but it's definitely a bug and should be reported.
+diagnostic error code: ruget::api::bad_json
+" /></p>
+<blockquote>
+<p><strong>NOTE: You must enable the <code>&quot;fancy&quot;</code> crate feature to get fancy report
+output like in the screenshots above.</strong> You should only do this in your
+toplevel crate, as the fancy feature pulls in a number of dependencies that
+libraries and such might not want.</p>
+</blockquote>
+<h3 id="table-of-contents-"><a class="doc-anchor" href="#table-of-contents-">§</a>Table of Contents <!-- omit in toc --></h3>
+<ul>
+<li><a href="#about">About</a></li>
+<li><a href="#features">Features</a></li>
+<li><a href="#installing">Installing</a></li>
+<li><a href="#example">Example</a></li>
+<li><a href="#using">Using</a>
+<ul>
+<li><a href="#-in-libraries">… in libraries</a></li>
+<li><a href="#-in-application-code">… in application code</a></li>
+<li><a href="#-in-main">… in <code>main()</code></a></li>
+<li><a href="#-diagnostic-code-urls">… diagnostic code URLs</a></li>
+<li><a href="#-snippets">… snippets</a></li>
+<li><a href="#-help-text">… help text</a></li>
+<li><a href="#-severity-level">… severity level</a></li>
+<li><a href="#-multiple-related-errors">… multiple related errors</a></li>
+<li><a href="#-delayed-source-code">… delayed source code</a></li>
+<li><a href="#-handler-options">… handler options</a></li>
+<li><a href="#-dynamic-diagnostics">… dynamic diagnostics</a></li>
+<li><a href="#-syntax-highlighting">… syntax highlighting</a></li>
+<li><a href="#-collection-of-labels">… collection of labels</a></li>
+</ul>
+</li>
+<li><a href="#acknowledgements">Acknowledgements</a></li>
+<li><a href="#license">License</a></li>
+</ul>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<ul>
+<li>Generic <a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a> protocol, compatible (and dependent on)
+<a href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html" title="trait core::error::Error"><code>std::error::Error</code></a>.</li>
+<li>Unique error codes on every <a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a>.</li>
+<li>Custom links to get more details on error codes.</li>
+<li>Super handy derive macro for defining diagnostic metadata.</li>
+<li>Replacements for <a href="https://docs.rs/anyhow"><code>anyhow</code></a>/<a href="https://docs.rs/eyre"><code>eyre</code></a>
+types <a href="type.Result.html" title="type miette::Result"><code>Result</code></a>, <a href="struct.Error.html" title="struct miette::Error"><code>Report</code></a> and the <a href="macro.miette.html" title="macro miette::miette"><code>miette!</code></a> macro for the
+<code>anyhow!</code>/<code>eyre!</code> macros.</li>
+<li>Generic support for arbitrary <a href="trait.SourceCode.html" title="trait miette::SourceCode"><code>SourceCode</code></a>s for snippet data, with
+default support for <code>String</code>s included.</li>
+</ul>
+<p>The <code>miette</code> crate also comes bundled with a default <a href="trait.ReportHandler.html" title="trait miette::ReportHandler"><code>ReportHandler</code></a> with
+the following features:</p>
+<ul>
+<li>Fancy graphical <a href="#about">diagnostic output</a>, using ANSI/Unicode text</li>
+<li>single- and multi-line highlighting support</li>
+<li>Screen reader/braille support, gated on <a href="http://no-color.org/"><code>NO_COLOR</code></a>,
+and other heuristics.</li>
+<li>Fully customizable graphical theming (or overriding the printers
+entirely).</li>
+<li>Cause chain printing</li>
+<li>Turns diagnostic codes into links in <a href="https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda">supported terminals</a>.</li>
+</ul>
+<h3 id="installing"><a class="doc-anchor" href="#installing">§</a>Installing</h3><div class="example-wrap"><pre class="language-sh"><code>$ cargo add miette
+</code></pre></div>
+<p>If you want to use the fancy printer in all these screenshots:</p>
+<div class="example-wrap"><pre class="language-sh"><code>$ cargo add miette --features fancy
+</code></pre></div><h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">/*
+You can derive a `Diagnostic` from any `std::error::Error` type.
+
+`thiserror` is a great way to define them, and plays nicely with `miette`!
+*/
+</span><span class="kw">use </span>miette::{Diagnostic, SourceSpan};
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Error, Debug, Diagnostic)]
+#[error(<span class="string">"oops!"</span>)]
+#[diagnostic(
+    code(oops::my::bad),
+    url(docsrs),
+    help(<span class="string">"try doing it better next time?"</span>)
+)]
+</span><span class="kw">struct </span>MyBad {
+    <span class="comment">// The Source that we're gonna be printing snippets out of.
+    // This can be a String if you don't have or care about file names.
+    </span><span class="attr">#[source_code]
+    </span>src: NamedSource&lt;String&gt;,
+    <span class="comment">// Snippets and highlights can be included in the diagnostic!
+    </span><span class="attr">#[label(<span class="string">"This bit here"</span>)]
+    </span>bad_bit: SourceSpan,
+}
+
+<span class="comment">/*
+Now let's define a function!
+
+Use this `Result` type (or its expanded version) as the return type
+throughout your app (but NOT your libraries! Those should always return
+concrete types!).
+*/
+</span><span class="kw">use </span>miette::{NamedSource, <span class="prelude-ty">Result</span>};
+<span class="kw">fn </span>this_fails() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="comment">// You can use plain strings as a `Source`, or anything that implements
+    // the one-method `Source` trait.
+    </span><span class="kw">let </span>src = <span class="string">"source\n  text\n    here"</span>.to_string();
+    <span class="kw">let </span>len = src.len();
+
+    <span class="prelude-val">Err</span>(MyBad {
+        src: NamedSource::new(<span class="string">"bad_file.rs"</span>, src),
+        bad_bit: (<span class="number">9</span>, <span class="number">4</span>).into(),
+    })<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="comment">/*
+Now to get everything printed nicely, just return a `Result&lt;()&gt;`
+and you're all set!
+
+Note: You can swap out the default reporter for a custom one using
+`miette::set_hook()`
+*/
+</span><span class="kw">fn </span>pretend_this_is_main() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="comment">// kaboom~
+    </span>this_fails()<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>And this is the output you’ll get if you run this program:</p>
+<p><img src="https://raw.githubusercontent.com/zkat/miette/main/images/single-line-example.png" alt="
+Narratable printout:
+\
+Error: Types mismatched for operation.
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+\
+snippet line 1: 3 + &quot;5&quot;
+    label starting at line 1, column 1: int
+    label starting at line 1, column 1: doesn't support these values.
+    label starting at line 1, column 1: string
+diagnostic help: Change int or string to be the right types and try again.
+diagnostic code: nu::parser::unsupported_operation
+For more details, see https://docs.rs/nu-parser/0.1.0/nu-parser/enum.ParseError.html#variant.UnsupportedOperation"></p>
+<h3 id="using"><a class="doc-anchor" href="#using">§</a>Using</h3><h4 id="-in-libraries"><a class="doc-anchor" href="#-in-libraries">§</a>… in libraries</h4>
+<p><code>miette</code> is <em>fully compatible</em> with library usage. Consumers who don’t know
+about, or don’t want, <code>miette</code> features can safely use its error types as
+regular <a href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html" title="trait core::error::Error"><code>std::error::Error</code></a>.</p>
+<p>We highly recommend using something like <a href="https://docs.rs/thiserror"><code>thiserror</code></a>
+to define unique error types and error wrappers for your library.</p>
+<p>While <code>miette</code> integrates smoothly with <code>thiserror</code>, it is <em>not required</em>.
+If you don’t want to use the <a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a> derive macro, you can implement
+the trait directly, just like with <code>std::error::Error</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// lib/error.rs
+</span><span class="kw">use </span>miette::{Diagnostic, SourceSpan};
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Error, Diagnostic, Debug)]
+</span><span class="kw">pub enum </span>MyLibError {
+    <span class="attr">#[error(transparent)]
+    #[diagnostic(code(my_lib::io_error))]
+    </span>IoError(<span class="attr">#[from] </span>std::io::Error),
+
+    <span class="attr">#[error(<span class="string">"Oops it blew up"</span>)]
+    #[diagnostic(code(my_lib::bad_code))]
+    </span>BadThingHappened,
+
+    <span class="attr">#[error(transparent)]
+    </span><span class="comment">// Use `#[diagnostic(transparent)]` to wrap another [`Diagnostic`]. You won't see labels otherwise
+    </span><span class="attr">#[diagnostic(transparent)]
+    </span>AnotherError(<span class="attr">#[from] </span>AnotherError),
+}
+
+<span class="attr">#[derive(Error, Diagnostic, Debug)]
+#[error(<span class="string">"another error"</span>)]
+</span><span class="kw">pub struct </span>AnotherError {
+   <span class="attr">#[label(<span class="string">"here"</span>)]
+   </span><span class="kw">pub </span>at: SourceSpan
+}</code></pre></div>
+<p>Then, return this error type from all your fallible public APIs. It’s a best
+practice to wrap any “external” error types in your error <code>enum</code> instead of
+using something like <a href="struct.Error.html" title="struct miette::Error"><code>Report</code></a> in a library.</p>
+<h4 id="-in-application-code"><a class="doc-anchor" href="#-in-application-code">§</a>… in application code</h4>
+<p>Application code tends to work a little differently than libraries. You
+don’t always need or care to define dedicated error wrappers for errors
+coming from external libraries and tools.</p>
+<p>For this situation, <code>miette</code> includes two tools: <a href="struct.Error.html" title="struct miette::Error"><code>Report</code></a> and
+<a href="trait.IntoDiagnostic.html" title="trait miette::IntoDiagnostic"><code>IntoDiagnostic</code></a>. They work in tandem to make it easy to convert regular
+<code>std::error::Error</code>s into <a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a>s. Additionally, there’s a
+<a href="type.Result.html" title="type miette::Result"><code>Result</code></a> type alias that you can use to be more terse.</p>
+<p>When dealing with non-<code>Diagnostic</code> types, you’ll want to
+<code>.into_diagnostic()</code> them:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// my_app/lib/my_internal_file.rs
+</span><span class="kw">use </span>miette::{IntoDiagnostic, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>semver::Version;
+
+<span class="kw">pub fn </span>some_tool() -&gt; <span class="prelude-ty">Result</span>&lt;Version&gt; {
+    <span class="prelude-val">Ok</span>(<span class="string">"1.2.x"</span>.parse().into_diagnostic()<span class="question-mark">?</span>)
+}</code></pre></div>
+<p><code>miette</code> also includes an <code>anyhow</code>/<code>eyre</code>-style <code>Context</code>/<code>WrapErr</code> traits
+that you can import to add ad-hoc context messages to your <code>Diagnostic</code>s, as
+well, though you’ll still need to use <code>.into_diagnostic()</code> to make use of
+it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// my_app/lib/my_internal_file.rs
+</span><span class="kw">use </span>miette::{IntoDiagnostic, <span class="prelude-ty">Result</span>, WrapErr};
+<span class="kw">use </span>semver::Version;
+
+<span class="kw">pub fn </span>some_tool() -&gt; <span class="prelude-ty">Result</span>&lt;Version&gt; {
+    <span class="prelude-val">Ok</span>(<span class="string">"1.2.x"
+        </span>.parse()
+        .into_diagnostic()
+        .wrap_err(<span class="string">"Parsing this tool's semver version failed."</span>)<span class="question-mark">?</span>)
+}</code></pre></div>
+<p>To construct your own simple adhoc error use the <a href="macro.miette.html" title="macro miette::miette">miette!</a> macro:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// my_app/lib/my_internal_file.rs
+</span><span class="kw">use </span>miette::{miette, IntoDiagnostic, <span class="prelude-ty">Result</span>, WrapErr};
+<span class="kw">use </span>semver::Version;
+
+<span class="kw">pub fn </span>some_tool() -&gt; <span class="prelude-ty">Result</span>&lt;Version&gt; {
+    <span class="kw">let </span>version = <span class="string">"1.2.x"</span>;
+    <span class="prelude-val">Ok</span>(version
+        .parse()
+        .map_err(|<span class="kw">_</span>| <span class="macro">miette!</span>(<span class="string">"Invalid version {}"</span>, version))<span class="question-mark">?</span>)
+}</code></pre></div>
+<p>There are also similar <a href="macro.bail.html" title="macro miette::bail">bail!</a> and <a href="macro.ensure.html" title="macro miette::ensure">ensure!</a> macros.</p>
+<h4 id="-in-main"><a class="doc-anchor" href="#-in-main">§</a>… in <code>main()</code></h4>
+<p><code>main()</code> is just like any other part of your application-internal code. Use
+<code>Result</code> as your return value, and it will pretty-print your diagnostics
+automatically.</p>
+<blockquote>
+<p><strong>NOTE:</strong> You must enable the <code>&quot;fancy&quot;</code> crate feature to get fancy report
+output like in the screenshots here.** You should only do this in your
+toplevel crate, as the fancy feature pulls in a number of dependencies that
+libraries and such might not want.</p>
+</blockquote>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::{IntoDiagnostic, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>semver::Version;
+
+<span class="kw">fn </span>pretend_this_is_main() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">let </span>version: Version = <span class="string">"1.2.x"</span>.parse().into_diagnostic()<span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"{}"</span>, version);
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Please note: in order to get fancy diagnostic rendering with all the pretty
+colors and arrows, you should install <code>miette</code> with the <code>fancy</code> feature
+enabled:</p>
+<div class="example-wrap"><pre class="language-toml"><code>miette = { version = &quot;X.Y.Z&quot;, features = [&quot;fancy&quot;] }
+</code></pre></div>
+<p>Another way to display a diagnostic is by printing them using the debug formatter.
+This is, in fact, what returning diagnostics from main ends up doing.
+To do it yourself, you can write the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::{IntoDiagnostic, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>semver::Version;
+
+<span class="kw">fn </span>just_a_random_function() {
+    <span class="kw">let </span>version_result: <span class="prelude-ty">Result</span>&lt;Version&gt; = <span class="string">"1.2.x"</span>.parse().into_diagnostic();
+    <span class="kw">match </span>version_result {
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">println!</span>(<span class="string">"{:?}"</span>, e),
+        <span class="prelude-val">Ok</span>(version) =&gt; <span class="macro">println!</span>(<span class="string">"{}"</span>, version),
+    }
+}</code></pre></div>
+<h4 id="-diagnostic-code-urls"><a class="doc-anchor" href="#-diagnostic-code-urls">§</a>… diagnostic code URLs</h4>
+<p><code>miette</code> supports providing a URL for individual diagnostics. This URL will
+be displayed as an actual link in supported terminals, like so:</p>
+<p><img
+src="https://raw.githubusercontent.com/zkat/miette/main/images/code_linking.png"
+alt=" Example showing the graphical report printer for miette
+pretty-printing an error code. The code is underlined and followed by text
+saying to 'click here'. A hover tooltip shows a full-fledged URL that can be
+Ctrl+Clicked to open in a browser.
+\
+This feature is also available in the narratable printer. It will add a line
+after printing the error code showing a plain URL that you can visit.
+"></p>
+<p>To use this, you can add a <code>url()</code> sub-param to your <code>#[diagnostic]</code>
+attribute:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::Diagnostic;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Error, Diagnostic, Debug)]
+#[error(<span class="string">"kaboom"</span>)]
+#[diagnostic(
+    code(my_app::my_error),
+    <span class="comment">// You can do formatting!
+    </span>url(<span class="string">"https://my_website.com/error_codes#{}"</span>, <span class="self">self</span>.code().unwrap())
+)]
+</span><span class="kw">struct </span>MyErr;</code></pre></div>
+<p>Additionally, if you’re developing a library and your error type is exported
+from your crate’s top level, you can use a special <code>url(docsrs)</code> option
+instead of manually constructing the URL. This will automatically create a
+link to this diagnostic on <code>docs.rs</code>, so folks can just go straight to your
+(very high quality and detailed!) documentation on this diagnostic:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::Diagnostic;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Error, Diagnostic, Debug)]
+#[diagnostic(
+    code(my_app::my_error),
+    <span class="comment">// Will link users to https://docs.rs/my_crate/0.0.0/my_crate/struct.MyErr.html
+    </span>url(docsrs)
+)]
+#[error(<span class="string">"kaboom"</span>)]
+</span><span class="kw">struct </span>MyErr;</code></pre></div>
+<h4 id="-snippets"><a class="doc-anchor" href="#-snippets">§</a>… snippets</h4>
+<p>Along with its general error handling and reporting features, <code>miette</code> also
+includes facilities for adding error spans/annotations/labels to your
+output. This can be very useful when an error is syntax-related, but you can
+even use it to print out sections of your own source code!</p>
+<p>To achieve this, <code>miette</code> defines its own lightweight <a href="struct.SourceSpan.html" title="struct miette::SourceSpan"><code>SourceSpan</code></a> type.
+This is a basic byte-offset and length into an associated <a href="trait.SourceCode.html" title="trait miette::SourceCode"><code>SourceCode</code></a>
+and, along with the latter, gives <code>miette</code> all the information it needs to
+pretty-print some snippets! You can also use your own <code>Into&lt;SourceSpan&gt;</code>
+types as label spans.</p>
+<p>The easiest way to define errors like this is to use the
+<code>derive(Diagnostic)</code> macro:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::{Diagnostic, SourceSpan};
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Diagnostic, Debug, Error)]
+#[error(<span class="string">"oops"</span>)]
+#[diagnostic(code(my_lib::random_error))]
+</span><span class="kw">pub struct </span>MyErrorType {
+    <span class="comment">// The `Source` that miette will use.
+    </span><span class="attr">#[source_code]
+    </span>src: String,
+
+    <span class="comment">// This will underline/mark the specific code inside the larger
+    // snippet context.
+    </span><span class="attr">#[label = <span class="string">"This is the highlight"</span>]
+    </span>err_span: SourceSpan,
+
+    <span class="comment">// You can add as many labels as you want.
+    // They'll be rendered sequentially.
+    </span><span class="attr">#[label(<span class="string">"This is bad"</span>)]
+    </span>snip2: (usize, usize), <span class="comment">// `(usize, usize)` is `Into&lt;SourceSpan&gt;`!
+
+    // Snippets can be optional, by using Option:
+    </span><span class="attr">#[label(<span class="string">"some text"</span>)]
+    </span>snip3: <span class="prelude-ty">Option</span>&lt;SourceSpan&gt;,
+
+    <span class="comment">// with or without label text
+    </span><span class="attr">#[label]
+    </span>snip4: <span class="prelude-ty">Option</span>&lt;SourceSpan&gt;,
+}</code></pre></div>
+<h4 id="-help-text"><a class="doc-anchor" href="#-help-text">§</a>… help text</h4>
+<p><code>miette</code> provides two facilities for supplying help text for your errors:</p>
+<p>The first is the <code>#[help()]</code> format attribute that applies to structs or
+enum variants:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::Diagnostic;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Debug, Diagnostic, Error)]
+#[error(<span class="string">"welp"</span>)]
+#[diagnostic(help(<span class="string">"try doing this instead"</span>))]
+</span><span class="kw">struct </span>Foo;</code></pre></div>
+<p>The other is by programmatically supplying the help text as a field to
+your diagnostic:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::Diagnostic;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Debug, Diagnostic, Error)]
+#[error(<span class="string">"welp"</span>)]
+#[diagnostic()]
+</span><span class="kw">struct </span>Foo {
+    <span class="attr">#[help]
+    </span>advice: <span class="prelude-ty">Option</span>&lt;String&gt;, <span class="comment">// Can also just be `String`
+</span>}
+
+<span class="kw">let </span>err = Foo {
+    advice: <span class="prelude-val">Some</span>(<span class="string">"try doing this instead"</span>.to_string()),
+};</code></pre></div>
+<h4 id="-severity-level"><a class="doc-anchor" href="#-severity-level">§</a>… severity level</h4>
+<p><code>miette</code> provides a way to set the severity level of a diagnostic.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::Diagnostic;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Debug, Diagnostic, Error)]
+#[error(<span class="string">"welp"</span>)]
+#[diagnostic(severity(Warning))]
+</span><span class="kw">struct </span>Foo;</code></pre></div>
+<h4 id="-multiple-related-errors"><a class="doc-anchor" href="#-multiple-related-errors">§</a>… multiple related errors</h4>
+<p><code>miette</code> supports collecting multiple errors into a single diagnostic, and
+printing them all together nicely.</p>
+<p>To do so, use the <code>#[related]</code> tag on any <code>IntoIter</code> field in your
+<code>Diagnostic</code> type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::Diagnostic;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Debug, Error, Diagnostic)]
+#[error(<span class="string">"oops"</span>)]
+</span><span class="kw">struct </span>MyError {
+    <span class="attr">#[related]
+    </span>others: Vec&lt;MyError&gt;,
+}</code></pre></div>
+<h4 id="-delayed-source-code"><a class="doc-anchor" href="#-delayed-source-code">§</a>… delayed source code</h4>
+<p>Sometimes it makes sense to add source code to the error message later.
+One option is to use <a href="struct.Error.html#method.with_source_code" title="method miette::Error::with_source_code"><code>with_source_code()</code></a>
+method for that:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::{Diagnostic, SourceSpan};
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Diagnostic, Debug, Error)]
+#[error(<span class="string">"oops"</span>)]
+#[diagnostic()]
+</span><span class="kw">pub struct </span>MyErrorType {
+    <span class="comment">// Note: label but no source code
+    </span><span class="attr">#[label]
+    </span>err_span: SourceSpan,
+}
+
+<span class="kw">fn </span>do_something() -&gt; miette::Result&lt;()&gt; {
+    <span class="comment">// This function emits actual error with label
+    </span><span class="kw">return </span><span class="prelude-val">Err</span>(MyErrorType {
+        err_span: (<span class="number">7</span>..<span class="number">11</span>).into(),
+    })<span class="question-mark">?</span>;
+}
+
+<span class="kw">fn </span>main() -&gt; miette::Result&lt;()&gt; {
+    do_something().map_err(|error| {
+        <span class="comment">// And this code provides the source code for inner error
+        </span>error.with_source_code(String::from(<span class="string">"source code"</span>))
+    })
+}</code></pre></div>
+<p>Also source code can be provided by a wrapper type. This is especially
+useful in combination with <code>related</code>, when multiple errors should be
+emitted at the same time:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::{Diagnostic, Report, SourceSpan};
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Diagnostic, Debug, Error)]
+#[error(<span class="string">"oops"</span>)]
+#[diagnostic()]
+</span><span class="kw">pub struct </span>InnerError {
+    <span class="comment">// Note: label but no source code
+    </span><span class="attr">#[label]
+    </span>err_span: SourceSpan,
+}
+
+<span class="attr">#[derive(Diagnostic, Debug, Error)]
+#[error(<span class="string">"oops: multiple errors"</span>)]
+#[diagnostic()]
+</span><span class="kw">pub struct </span>MultiError {
+    <span class="comment">// Note source code by no labels
+    </span><span class="attr">#[source_code]
+    </span>source_code: String,
+    <span class="comment">// The source code above is used for these errors
+    </span><span class="attr">#[related]
+    </span>related: Vec&lt;InnerError&gt;,
+}
+
+<span class="kw">fn </span>do_something() -&gt; <span class="prelude-ty">Result</span>&lt;(), Vec&lt;InnerError&gt;&gt; {
+    <span class="prelude-val">Err</span>(<span class="macro">vec!</span>[
+        InnerError {
+            err_span: (<span class="number">0</span>..<span class="number">6</span>).into(),
+        },
+        InnerError {
+            err_span: (<span class="number">7</span>..<span class="number">11</span>).into(),
+        },
+    ])
+}
+
+<span class="kw">fn </span>main() -&gt; miette::Result&lt;()&gt; {
+    do_something().map_err(|err_list| MultiError {
+        source_code: <span class="string">"source code"</span>.into(),
+        related: err_list,
+    })<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h4 id="-diagnostic-based-error-sources"><a class="doc-anchor" href="#-diagnostic-based-error-sources">§</a>… Diagnostic-based error sources.</h4>
+<p>When one uses the <code>#[source]</code> attribute on a field, that usually comes
+from <code>thiserror</code>, and implements a method for
+<a href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html#method.source" title="method core::error::Error::source"><code>std::error::Error::source</code></a>. This works in many cases, but it’s lossy:
+if the source of the diagnostic is a diagnostic itself, the source will
+simply be treated as an <code>std::error::Error</code>.</p>
+<p>While this has no effect on the existing <em>reporters</em>, since they don’t use
+that information right now, APIs who might want this information will have
+no access to it.</p>
+<p>If it’s important for you for this information to be available to users,
+you can use <code>#[diagnostic_source]</code> alongside <code>#[source]</code>. Not that you
+will likely want to use <em>both</em>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>miette::Diagnostic;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Debug, Diagnostic, Error)]
+#[error(<span class="string">"MyError"</span>)]
+</span><span class="kw">struct </span>MyError {
+    <span class="attr">#[source]
+    #[diagnostic_source]
+    </span>the_cause: OtherError,
+}
+
+<span class="attr">#[derive(Debug, Diagnostic, Error)]
+#[error(<span class="string">"OtherError"</span>)]
+</span><span class="kw">struct </span>OtherError;</code></pre></div>
+<h4 id="-handler-options"><a class="doc-anchor" href="#-handler-options">§</a>… handler options</h4>
+<p><a href="struct.MietteHandler.html" title="struct miette::MietteHandler"><code>MietteHandler</code></a> is the default handler, and is very customizable. In
+most cases, you can simply use <a href="struct.MietteHandlerOpts.html" title="struct miette::MietteHandlerOpts"><code>MietteHandlerOpts</code></a> to tweak its behavior
+instead of falling back to your own custom handler.</p>
+<p>Usage is like so:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>miette::set_hook(Box::new(|<span class="kw">_</span>| {
+    Box::new(
+        miette::MietteHandlerOpts::new()
+            .terminal_links(<span class="bool-val">true</span>)
+            .unicode(<span class="bool-val">false</span>)
+            .context_lines(<span class="number">3</span>)
+            .tab_width(<span class="number">4</span>)
+            .break_words(<span class="bool-val">true</span>)
+            .build(),
+    )
+}))
+</code></pre></div>
+<p>See the docs for <a href="struct.MietteHandlerOpts.html" title="struct miette::MietteHandlerOpts"><code>MietteHandlerOpts</code></a> for more details on what you can
+customize!</p>
+<h4 id="-dynamic-diagnostics"><a class="doc-anchor" href="#-dynamic-diagnostics">§</a>… dynamic diagnostics</h4>
+<p>If you…</p>
+<ul>
+<li>…don’t know all the possible errors upfront</li>
+<li>…need to serialize/deserialize errors
+then you may want to use <a href="macro.miette.html" title="macro miette::miette"><code>miette!</code></a>, <a href="macro.diagnostic.html" title="macro miette::diagnostic"><code>diagnostic!</code></a> macros or
+<a href="struct.MietteDiagnostic.html" title="struct miette::MietteDiagnostic"><code>MietteDiagnostic</code></a> directly to create diagnostic on the fly.</li>
+</ul>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>
+<span class="kw">let </span>source = <span class="string">"2 + 2 * 2 = 8"</span>.to_string();
+<span class="kw">let </span>report = <span class="macro">miette!</span>(
+  labels = <span class="macro">vec!</span>[
+      LabeledSpan::at(<span class="number">12</span>..<span class="number">13</span>, <span class="string">"this should be 6"</span>),
+  ],
+  help = <span class="string">"'*' has greater precedence than '+'"</span>,
+  <span class="string">"Wrong answer"
+</span>).with_source_code(source);
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, report)</code></pre></div>
+<h4 id="-syntax-highlighting"><a class="doc-anchor" href="#-syntax-highlighting">§</a>… syntax highlighting</h4>
+<p><code>miette</code> can be configured to highlight syntax in source code snippets.</p>
+<!-- TODO: screenshot goes here once default Theme is decided -->
+<p>To use the built-in highlighting functionality, you must enable the
+<code>syntect-highlighter</code> crate feature. When this feature is enabled, <code>miette</code> will
+automatically use the [<code>syntect</code>] crate to highlight the <code>#[source_code]</code>
+field of your <a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a>.</p>
+<p>Syntax detection with [<code>syntect</code>] is handled by checking 2 methods on the <a href="trait.SpanContents.html" title="trait miette::SpanContents"><code>SpanContents</code></a> trait, in order:</p>
+<ul>
+<li><a href="trait.SpanContents.html#method.language" title="method miette::SpanContents::language">language()</a> - Provides the name of the language
+as a string. For example <code>&quot;Rust&quot;</code> will indicate Rust syntax highlighting.
+You can set the language of the <a href="trait.SpanContents.html" title="trait miette::SpanContents"><code>SpanContents</code></a> produced by a
+<a href="struct.NamedSource.html" title="struct miette::NamedSource"><code>NamedSource</code></a> via the <a href="struct.NamedSource.html#method.with_language" title="method miette::NamedSource::with_language"><code>with_language</code></a>
+method.</li>
+<li><a href="trait.SpanContents.html#method.name" title="method miette::SpanContents::name">name()</a> - In the absence of an explicitly set
+language, the name is assumed to contain a file name or file path.
+The highlighter will check for a file extension at the end of the name and
+try to guess the syntax from that.</li>
+</ul>
+<p>If you want to use a custom highlighter, you can provide a custom
+implementation of the <a href="highlighters/trait.Highlighter.html" title="trait miette::highlighters::Highlighter"><code>Highlighter</code></a>
+trait to <a href="struct.MietteHandlerOpts.html" title="struct miette::MietteHandlerOpts"><code>MietteHandlerOpts</code></a> by calling the
+<a href="struct.MietteHandlerOpts.html#method.with_syntax_highlighting" title="method miette::MietteHandlerOpts::with_syntax_highlighting"><code>with_syntax_highlighting</code></a>
+method. See the <a href="highlighters/index.html" title="mod miette::highlighters"><code>highlighters</code></a> module docs for more details.</p>
+<h4 id="-collection-of-labels"><a class="doc-anchor" href="#-collection-of-labels">§</a>… collection of labels</h4>
+<p>When the number of labels is unknown, you can use a collection of <code>SourceSpan</code>
+(or any type convertible into <code>SourceSpan</code>). For this, add the <code>collection</code>
+parameter to <code>label</code> and use any type than can be iterated over for the field.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Diagnostic, Error)]
+#[error(<span class="string">"oops!"</span>)]
+</span><span class="kw">struct </span>MyError {
+    <span class="attr">#[label(<span class="string">"main issue"</span>)]
+    </span>primary_span: SourceSpan,
+
+    <span class="attr">#[label(collection, <span class="string">"related to this"</span>)]
+    </span>other_spans: Vec&lt;Range&lt;usize&gt;&gt;,
+}
+
+<span class="kw">let </span>report: miette::Report = MyError {
+    primary_span: (<span class="number">6</span>, <span class="number">9</span>).into(),
+    other_spans: <span class="macro">vec!</span>[<span class="number">19</span>..<span class="number">26</span>, <span class="number">30</span>..<span class="number">41</span>],
+}.into();
+
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, report.with_source_code(<span class="string">"About something or another or yet another ..."</span>.to_string()));</code></pre></div>
+<p>A collection can also be of <code>LabeledSpan</code> if you want to have different text
+for different labels. Labels with no text will use the one from the <code>label</code>
+attribute</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, Diagnostic, Error)]
+#[error(<span class="string">"oops!"</span>)]
+</span><span class="kw">struct </span>MyError {
+    <span class="attr">#[label(<span class="string">"main issue"</span>)]
+    </span>primary_span: SourceSpan,
+
+    <span class="attr">#[label(collection, <span class="string">"related to this"</span>)]
+    </span>other_spans: Vec&lt;LabeledSpan&gt;, <span class="comment">// LabeledSpan
+</span>}
+
+<span class="kw">let </span>report: miette::Report = MyError {
+    primary_span: (<span class="number">6</span>, <span class="number">9</span>).into(),
+    other_spans: <span class="macro">vec!</span>[
+        LabeledSpan::new(<span class="prelude-val">None</span>, <span class="number">19</span>, <span class="number">7</span>), <span class="comment">// Use default text `related to this`
+        </span>LabeledSpan::new(<span class="prelude-val">Some</span>(<span class="string">"and also this"</span>.to_string()), <span class="number">30</span>, <span class="number">11</span>), <span class="comment">// Use specific text
+    </span>],
+}.into();
+
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, report.with_source_code(<span class="string">"About something or another or yet another ..."</span>.to_string()));</code></pre></div>
+<h3 id="msrv"><a class="doc-anchor" href="#msrv">§</a>MSRV</h3>
+<p>This crate requires rustc 1.70.0 or later.</p>
+<h3 id="acknowledgements"><a class="doc-anchor" href="#acknowledgements">§</a>Acknowledgements</h3>
+<p><code>miette</code> was not developed in a void. It owes enormous credit to various
+other projects and their authors:</p>
+<ul>
+<li><a href="http://crates.io/crates/anyhow"><code>anyhow</code></a> and <a href="https://crates.io/crates/color-eyre"><code>color-eyre</code></a>:
+these two enormously influential error handling libraries have pushed
+forward the experience of application-level error handling and error
+reporting. <code>miette</code>’s <code>Report</code> type is an attempt at a very very rough
+version of their <code>Report</code> types.</li>
+<li><a href="https://crates.io/crates/thiserror"><code>thiserror</code></a> for setting the standard
+for library-level error definitions, and for being the inspiration behind
+<code>miette</code>’s derive macro.</li>
+<li><code>rustc</code> and <a href="https://github.com/estebank">@estebank</a> for their
+state-of-the-art work in compiler diagnostics.</li>
+<li><a href="https://crates.io/crates/ariadne"><code>ariadne</code></a> for pushing forward how
+<em>pretty</em> these diagnostics can really look!</li>
+</ul>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p><code>miette</code> is released to the Rust community under the <a href="./LICENSE">Apache license
+2.0</a>.</p>
+<p>It also includes code taken from <a href="https://github.com/yaahc/eyre"><code>eyre</code></a>,
+and some from <a href="https://github.com/dtolnay/thiserror"><code>thiserror</code></a>, also
+under the Apache License. Some code is taken from
+<a href="https://github.com/zesterer/ariadne"><code>ariadne</code></a>, which is MIT licensed.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="highlighters/index.html" title="mod miette::highlighters">highlighters</a></div><div class="desc docblock-short">This module provides a trait for creating custom syntax highlighters that
+highlight <a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a> source code with ANSI escape
+sequences when rendering with the <a href="struct.GraphicalReportHandler.html" title="struct miette::GraphicalReportHandler"><code>GraphicalReportHighlighter</code></a>.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.bail.html" title="macro miette::bail">bail</a></div><div class="desc docblock-short">Return early with an error.</div></li><li><div class="item-name"><a class="macro" href="macro.diagnostic.html" title="macro miette::diagnostic">diagnostic</a></div><div class="desc docblock-short">Construct a <a href="struct.MietteDiagnostic.html" title="struct miette::MietteDiagnostic"><code>MietteDiagnostic</code></a> in more user-friendly way.</div></li><li><div class="item-name"><a class="macro" href="macro.ensure.html" title="macro miette::ensure">ensure</a></div><div class="desc docblock-short">Return early with an error if a condition is not satisfied.</div></li><li><div class="item-name"><a class="macro" href="macro.miette.html" title="macro miette::miette">miette</a></div><div class="desc docblock-short">Construct an ad-hoc <a href="struct.Error.html" title="struct miette::Error"><code>Report</code></a>.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DebugReportHandler.html" title="struct miette::DebugReportHandler">DebugReportHandler</a></div><div class="desc docblock-short"><a href="trait.ReportHandler.html" title="trait miette::ReportHandler"><code>ReportHandler</code></a> that renders plain text and avoids extraneous graphics.
+It’s optimized for screen readers and braille users, but is also used in any
+non-graphical environments, such as non-TTY output.</div></li><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct miette::Error">Error</a></div><div class="desc docblock-short">Compatibility re-export of <code>Report</code> for interop with <code>anyhow</code>
+Core Diagnostic wrapper type.</div></li><li><div class="item-name"><a class="struct" href="struct.GraphicalReportHandler.html" title="struct miette::GraphicalReportHandler">GraphicalReportHandler</a></div><div class="desc docblock-short">A <a href="trait.ReportHandler.html" title="trait miette::ReportHandler"><code>ReportHandler</code></a> that displays a given <a href="struct.Error.html" title="struct miette::Error"><code>Report</code></a> in a
+quasi-graphical way, using terminal colors, unicode drawing characters, and
+other such things.</div></li><li><div class="item-name"><a class="struct" href="struct.GraphicalTheme.html" title="struct miette::GraphicalTheme">GraphicalTheme</a></div><div class="desc docblock-short">Theme used by <a href="struct.GraphicalReportHandler.html" title="struct miette::GraphicalReportHandler"><code>GraphicalReportHandler</code></a> to
+render fancy <a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a> reports.</div></li><li><div class="item-name"><a class="struct" href="struct.InstallError.html" title="struct miette::InstallError">InstallError</a></div><div class="desc docblock-short">Error indicating that <a href="fn.set_hook.html" title="fn miette::set_hook"><code>set_hook()</code></a> was unable to install the provided
+<a href="type.ErrorHook.html" title="type miette::ErrorHook"><code>ErrorHook</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.JSONReportHandler.html" title="struct miette::JSONReportHandler">JSONReportHandler</a></div><div class="desc docblock-short"><a href="trait.ReportHandler.html" title="trait miette::ReportHandler"><code>ReportHandler</code></a> that renders JSON output. It’s a machine-readable output.</div></li><li><div class="item-name"><a class="struct" href="struct.LabeledSpan.html" title="struct miette::LabeledSpan">LabeledSpan</a></div><div class="desc docblock-short">A labeled <a href="struct.SourceSpan.html" title="struct miette::SourceSpan"><code>SourceSpan</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.MietteDiagnostic.html" title="struct miette::MietteDiagnostic">MietteDiagnostic</a></div><div class="desc docblock-short">Diagnostic that can be created at runtime.</div></li><li><div class="item-name"><a class="struct" href="struct.MietteHandler.html" title="struct miette::MietteHandler">MietteHandler</a></div><div class="desc docblock-short">A <a href="trait.ReportHandler.html" title="trait miette::ReportHandler"><code>ReportHandler</code></a> that displays a given <a href="struct.Error.html" title="struct miette::Error"><code>Report</code></a> in a
+quasi-graphical way, using terminal colors, unicode drawing characters, and
+other such things.</div></li><li><div class="item-name"><a class="struct" href="struct.MietteHandlerOpts.html" title="struct miette::MietteHandlerOpts">MietteHandlerOpts</a></div><div class="desc docblock-short">Create a custom <a href="struct.MietteHandler.html" title="struct miette::MietteHandler"><code>MietteHandler</code></a> from options.</div></li><li><div class="item-name"><a class="struct" href="struct.MietteSpanContents.html" title="struct miette::MietteSpanContents">MietteSpanContents</a></div><div class="desc docblock-short">Basic implementation of the <a href="trait.SpanContents.html" title="trait miette::SpanContents"><code>SpanContents</code></a> trait, for convenience.</div></li><li><div class="item-name"><a class="struct" href="struct.NamedSource.html" title="struct miette::NamedSource">NamedSource</a></div><div class="desc docblock-short">Utility struct for when you have a regular <a href="trait.SourceCode.html" title="trait miette::SourceCode"><code>SourceCode</code></a> type that doesn’t
+implement <code>name</code>. For example <a href="https://doc.rust-lang.org/1.77.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a>. Or if you want to override the
+<code>name</code> returned by the <code>SourceCode</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.NarratableReportHandler.html" title="struct miette::NarratableReportHandler">NarratableReportHandler</a></div><div class="desc docblock-short"><a href="trait.ReportHandler.html" title="trait miette::ReportHandler"><code>ReportHandler</code></a> that renders plain text and avoids extraneous graphics.
+It’s optimized for screen readers and braille users, but is also used in any
+non-graphical environments, such as non-TTY output.</div></li><li><div class="item-name"><a class="struct" href="struct.Report.html" title="struct miette::Report">Report</a></div><div class="desc docblock-short">Core Diagnostic wrapper type.</div></li><li><div class="item-name"><a class="struct" href="struct.SourceOffset.html" title="struct miette::SourceOffset">SourceOffset</a></div><div class="desc docblock-short">Newtype that represents the <a href="type.ByteOffset.html" title="type miette::ByteOffset"><code>ByteOffset</code></a> from the beginning of a <a href="trait.SourceCode.html" title="trait miette::SourceCode"><code>SourceCode</code></a></div></li><li><div class="item-name"><a class="struct" href="struct.SourceSpan.html" title="struct miette::SourceSpan">SourceSpan</a></div><div class="desc docblock-short">Span within a <a href="trait.SourceCode.html" title="trait miette::SourceCode"><code>SourceCode</code></a></div></li><li><div class="item-name"><a class="struct" href="struct.ThemeCharacters.html" title="struct miette::ThemeCharacters">ThemeCharacters</a></div><div class="desc docblock-short">Characters to be used when drawing when using
+<a href="struct.GraphicalReportHandler.html" title="struct miette::GraphicalReportHandler"><code>GraphicalReportHandler</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ThemeStyles.html" title="struct miette::ThemeStyles">ThemeStyles</a></div><div class="desc docblock-short">Styles for various parts of graphical rendering for the
+<a href="struct.GraphicalReportHandler.html" title="struct miette::GraphicalReportHandler"><code>GraphicalReportHandler</code></a>.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.MietteError.html" title="enum miette::MietteError">MietteError</a></div><div class="desc docblock-short">Error enum for miette. Used by certain operations in the protocol.</div></li><li><div class="item-name"><a class="enum" href="enum.RgbColors.html" title="enum miette::RgbColors">RgbColors</a></div><div class="desc docblock-short">Settings to control the color format used for graphical rendering.</div></li><li><div class="item-name"><a class="enum" href="enum.Severity.html" title="enum miette::Severity">Severity</a></div><div class="desc docblock-short"><a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a> severity. Intended to be used by
+<a href="trait.ReportHandler.html" title="trait miette::ReportHandler"><code>ReportHandler</code></a>s to change the way different
+<a href="trait.Diagnostic.html" title="trait miette::Diagnostic"><code>Diagnostic</code></a>s are displayed. Defaults to <a href="enum.Severity.html#variant.Error" title="variant miette::Severity::Error"><code>Severity::Error</code></a>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Context.html" title="trait miette::Context">Context</a></div><div class="desc docblock-short">Compatibility re-export of <code>WrapErr</code> for interop with <code>anyhow</code>
+Provides the <a href="trait.Context.html#tymethod.wrap_err" title="method miette::Context::wrap_err"><code>wrap_err()</code></a> method for <a href="type.Result.html" title="type miette::Result"><code>Result</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.Diagnostic.html" title="trait miette::Diagnostic">Diagnostic</a></div><div class="desc docblock-short">Adds rich metadata to your Error that can be used by
+<a href="struct.Error.html" title="struct miette::Error"><code>Report</code></a> to print really nice and human-friendly error
+messages.</div></li><li><div class="item-name"><a class="trait" href="trait.IntoDiagnostic.html" title="trait miette::IntoDiagnostic">IntoDiagnostic</a></div><div class="desc docblock-short">Convenience trait that adds a <a href="trait.IntoDiagnostic.html#tymethod.into_diagnostic" title="method miette::IntoDiagnostic::into_diagnostic"><code>.into_diagnostic()</code></a> method that converts a type implementing
+<a href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html" title="trait core::error::Error"><code>std::error::Error</code></a> to a <a href="https://doc.rust-lang.org/1.77.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result&lt;T, Report&gt;</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.ReportHandler.html" title="trait miette::ReportHandler">ReportHandler</a></div><div class="desc docblock-short">Error Report Handler trait for customizing <code>miette::Report</code></div></li><li><div class="item-name"><a class="trait" href="trait.SourceCode.html" title="trait miette::SourceCode">SourceCode</a></div><div class="desc docblock-short">Represents readable source code of some sort.</div></li><li><div class="item-name"><a class="trait" href="trait.SpanContents.html" title="trait miette::SpanContents">SpanContents</a></div><div class="desc docblock-short">Contents of a <a href="trait.SourceCode.html" title="trait miette::SourceCode"><code>SourceCode</code></a> covered by <a href="struct.SourceSpan.html" title="struct miette::SourceSpan"><code>SourceSpan</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.WrapErr.html" title="trait miette::WrapErr">WrapErr</a></div><div class="desc docblock-short">Provides the <a href="trait.Context.html#tymethod.wrap_err" title="method miette::Context::wrap_err"><code>wrap_err()</code></a> method for <a href="type.Result.html" title="type miette::Result"><code>Result</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.set_hook.html" title="fn miette::set_hook">set_hook</a></div><div class="desc docblock-short">Set the error hook.</div></li><li><div class="item-name"><a class="fn" href="fn.set_panic_hook.html" title="fn miette::set_panic_hook">set_panic_hook</a></div><div class="desc docblock-short">Tells miette to render panics using its rendering engine.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ByteOffset.html" title="type miette::ByteOffset">ByteOffset</a></div><div class="desc docblock-short">“Raw” type for the byte offset from the beginning of a <a href="trait.SourceCode.html" title="trait miette::SourceCode"><code>SourceCode</code></a>.</div></li><li><div class="item-name"><a class="type" href="type.ErrorHook.html" title="type miette::ErrorHook">ErrorHook</a></div></li><li><div class="item-name"><a class="type" href="type.Result.html" title="type miette::Result">Result</a></div><div class="desc docblock-short">type alias for <code>Result&lt;T, Report&gt;</code></div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Diagnostic.html" title="derive miette::Diagnostic">Diagnostic</a></div></li></ul></section></div></main></body></html>

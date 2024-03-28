@@ -1,0 +1,1064 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Changelog - cargo-nextest</title>
+
+
+        <!-- Custom HTML head -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:title" content="Changelog - cargo-nextest" />
+        <meta property="og:image" content="https://nexte.st/static/cover.png" />
+        <meta property="og:description" content="A next-generation test runner for Rust." />
+        <link rel="stylesheet" href="/fonts/inter.css" />
+        <style>
+            :root,
+            html {
+                font-family: "Inter", "Helvetica Neue", "Arial", sans-serif;
+                font-feature-settings: "ss01", "ss03";
+                font-variant-ligatures: common-ligatures;
+                letter-spacing: -0.008em;
+            }
+        
+            @supports (font-variation-settings: normal) {
+                :root {
+                    font-family: 'Inter var', "Helvetica Neue", "Arial", sans-serif;
+                }
+            }
+        </style>
+        <link rel="stylesheet" href="/css/extra.css" />
+        <link rel="preload" href="/fonts/Inter-roman.var.woff2?v=26a312df" as="font" type="font/woff2" crossorigin />
+        <link rel="preload" href="/fonts/Inter-italic.var.woff2?v=26a312df" as="font" type="font/woff2" crossorigin />
+
+        <meta name="description" content="A next-generation test runner for Rust.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "rust";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="index.html">Home</a></li><li class="spacer"></li><li class="chapter-item expanded "><a href="book/installation.html"><strong aria-hidden="true">1.</strong> Installation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="book/pre-built-binaries.html"><strong aria-hidden="true">1.1.</strong> Pre-built binaries</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="book/release-urls.html"><strong aria-hidden="true">1.1.1.</strong> Release URLs</a></li></ol></li><li class="chapter-item expanded "><a href="book/installing-from-source.html"><strong aria-hidden="true">1.2.</strong> Installing from source</a></li><li class="chapter-item expanded "><a href="book/updating.html"><strong aria-hidden="true">1.3.</strong> Updating nextest</a></li><li class="chapter-item expanded "><a href="book/antivirus-gatekeeper.html"><strong aria-hidden="true">1.4.</strong> Windows antivirus and macOS Gatekeeper</a></li></ol></li><li class="chapter-item expanded "><a href="book/usage.html"><strong aria-hidden="true">2.</strong> Usage</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="book/running.html"><strong aria-hidden="true">2.1.</strong> Running tests</a></li><li class="chapter-item expanded "><a href="book/listing.html"><strong aria-hidden="true">2.2.</strong> Listing tests</a></li><li class="chapter-item expanded "><a href="book/retries.html"><strong aria-hidden="true">2.3.</strong> Retries and flaky tests</a></li><li class="chapter-item expanded "><a href="book/slow-tests.html"><strong aria-hidden="true">2.4.</strong> Slow tests and timeouts</a></li><li class="chapter-item expanded "><a href="book/leaky-tests.html"><strong aria-hidden="true">2.5.</strong> Leaky tests</a></li><li class="chapter-item expanded "><a href="book/filter-expressions.html"><strong aria-hidden="true">2.6.</strong> Filter expressions</a></li><li class="chapter-item expanded "><a href="book/reusing-builds.html"><strong aria-hidden="true">2.7.</strong> Archiving and reusing builds</a></li><li class="chapter-item expanded "><a href="book/partitioning.html"><strong aria-hidden="true">2.8.</strong> Partitioning test runs in CI</a></li><li class="chapter-item expanded "><a href="book/target-runners.html"><strong aria-hidden="true">2.9.</strong> Target runners</a></li><li class="chapter-item expanded "><a href="book/other-options.html"><strong aria-hidden="true">2.10.</strong> Other options</a></li></ol></li><li class="chapter-item expanded "><a href="book/machine-readable.html"><strong aria-hidden="true">3.</strong> Machine-readable output</a></li><li class="chapter-item expanded "><a href="book/configuration.html"><strong aria-hidden="true">4.</strong> Configuration</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="book/env-vars.html"><strong aria-hidden="true">4.1.</strong> Environment variables</a></li><li class="chapter-item expanded "><a href="book/minimum-versions.html"><strong aria-hidden="true">4.2.</strong> Minimum nextest versions</a></li><li class="chapter-item expanded "><a href="book/per-test-overrides.html"><strong aria-hidden="true">4.3.</strong> Per-test overrides</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="book/specifying-platforms.html"><strong aria-hidden="true">4.3.1.</strong> Specifying platforms</a></li></ol></li><li class="chapter-item expanded "><a href="book/threads-required.html"><strong aria-hidden="true">4.4.</strong> Heavy tests and threads-required</a></li><li class="chapter-item expanded "><a href="book/test-groups.html"><strong aria-hidden="true">4.5.</strong> Test groups and mutual exclusion</a></li></ol></li><li class="chapter-item expanded "><a href="book/junit.html"><strong aria-hidden="true">5.</strong> JUnit support</a></li><li class="chapter-item expanded "><a href="book/integrations.html"><strong aria-hidden="true">6.</strong> Integrations with other tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="book/test-coverage.html"><strong aria-hidden="true">6.1.</strong> Test coverage</a></li><li class="chapter-item expanded "><a href="book/miri.html"><strong aria-hidden="true">6.2.</strong> The Miri interpreter</a></li><li class="chapter-item expanded "><a href="book/benchmark-integration.html"><strong aria-hidden="true">6.3.</strong> Criterion benchmarks</a></li><li class="chapter-item expanded "><a href="book/cargo-mutants.html"><strong aria-hidden="true">6.4.</strong> Mutation testing with cargo-mutants</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="book/stability.html"><strong aria-hidden="true">7.</strong> Stability policy</a></li><li class="chapter-item expanded "><a href="book/experimental-features.html"><strong aria-hidden="true">8.</strong> Experimental features</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="book/setup-scripts.html"><strong aria-hidden="true">8.1.</strong> Setup scripts</a></li><li class="chapter-item expanded "><a href="book/run-machine-readable.html"><strong aria-hidden="true">8.2.</strong> Machine-readable output for test runs</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="book/how-it-works.html"><strong aria-hidden="true">9.</strong> How nextest works</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="book/benchmarks.html"><strong aria-hidden="true">9.1.</strong> Benchmarks</a></li><li class="chapter-item expanded "><a href="book/custom-test-harnesses.html"><strong aria-hidden="true">9.2.</strong> Custom test harnesses</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="CHANGELOG.html" class="active">Changelog</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">cargo-nextest</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/nextest-rs/nextest" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/nextest-rs/nextest/edit/main/site/src/CHANGELOG.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="changelog"><a class="header" href="#changelog">Changelog</a></h1>
+<p>This page documents new features and bugfixes for cargo-nextest. Please see the <a href="book/stability.html">stability
+policy</a> for how versioning works with cargo-nextest.</p>
+<h2 id="0968---2024-03-16"><a class="header" href="#0968---2024-03-16"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.68">0.9.68</a> - 2024-03-16</a></h2>
+<p>This is a maintenance release with many internal improvements, and preparation for future features.</p>
+<h3 id="changed"><a class="header" href="#changed">Changed</a></h3>
+<ul>
+<li>
+<p>Nextest binaries now ship with symbols, producing better stack traces. This is aligned with the behavior. See <a href="https://github.com/nextest-rs/nextest/issues/1345">issue #1345</a> for more information.</p>
+</li>
+<li>
+<p>Thanks to recent improvements, Miri is now significantly less taxing. As a result, <a href="https://nexte.st/book/miri">nextest with Miri</a> has been changed to use all threads by default. You can restore the old Miri behavior (run one test at a time) with <code>-j1</code>, or by setting in <code>.config/nextest.toml</code>:</p>
+<pre><code class="language-toml">[profile.default-miri]
+test-threads = 1
+</code></pre>
+<p>Rules for <a href="https://nexte.st/book/threads-required">heavy tests</a> and <a href="https://nexte.st/book/test-groups">test groups</a> will continue to be followed with Miri.</p>
+<p>Thanks to <a href="https://github.com/saethlin">Ben Kimock</a> for driving the Miri improvements and updating nextest!</p>
+</li>
+</ul>
+<h3 id="misc"><a class="header" href="#misc">Misc</a></h3>
+<ul>
+<li>The <a href="https://nexte.st/book/filter-expressions">filter expression</a> parser now uses <a href="https://docs.rs/winnow">winnow</a>.</li>
+<li><a href="https://get.nexte.st">get.nexte.st</a> now uses Cloudflare rather than Netlify for hosting. See <a href="https://github.com/nextest-rs/nextest/discussions/1383">this discussion</a> for more.</li>
+</ul>
+<h2 id="0967---2024-01-09"><a class="header" href="#0967---2024-01-09"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.67">0.9.67</a> - 2024-01-09</a></h2>
+<h3 id="added"><a class="header" href="#added">Added</a></h3>
+<ul>
+<li>More work on <a href="https://nexte.st/book/run-machine-readable">machine-readable output for test runs</a>: for failing tests, output is now included under the <code>stdout</code> field. This was a large effort which required figuring out how to combine stdout and stderr into the same buffer. Thanks again <a href="https://github.com/Jake-Shadle">Jake</a> for your contribution!</li>
+</ul>
+<h3 id="fixed"><a class="header" href="#fixed">Fixed</a></h3>
+<ul>
+<li>On SIGTERM and SIGHUP, outputs for cancelled and failed tests are now displayed. (Output is still hidden on SIGINT to match typical user expectations.)</li>
+</ul>
+<h2 id="0966---2023-12-10"><a class="header" href="#0966---2023-12-10"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.66">0.9.66</a> - 2023-12-10</a></h2>
+<h3 id="added-1"><a class="header" href="#added-1">Added</a></h3>
+<h4 id="experimental-feature-machine-readable-output-for-test-runs"><a class="header" href="#experimental-feature-machine-readable-output-for-test-runs">Experimental feature: machine-readable output for test runs</a></h4>
+<p>Nextest now has experimental support for machine-readable output during <code>cargo nextest run</code> invocations (<a href="https://github.com/nextest-rs/nextest/pull/1086">#1086</a>), in a format similar to <code>cargo test</code>'s libtest JSON output. For more information, see <a href="https://nexte.st/book/run-machine-readable">the documentation</a>.</p>
+<p>Thanks <a href="https://github.com/Jake-Shadle">Jake Shadle</a> for your contribution!</p>
+<h4 id="out_dir-support"><a class="header" href="#out_dir-support"><code>OUT_DIR</code> support</a></h4>
+<p>Improvements to <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#outputs-of-the-build-script">build script <code>OUT_DIR</code></a>
+support:</p>
+<ul>
+<li>
+<p>Matching the behavior of <code>cargo test</code>, nextest now sets the <code>OUT_DIR</code> environment variable at
+runtime if there's a corresponding build script.</p>
+</li>
+<li>
+<p>While <a href="https://nexte.st/book/reusing-builds">creating archives</a>, nextest now archives <code>OUT_DIR</code>s if:</p>
+<ul>
+<li>The build script is for a crate in the workspace, and</li>
+<li>There's at least one test binary for that crate.</li>
+</ul>
+<p>This is so that the <code>OUT_DIR</code> environment variable continues to be relevant for test runs out of
+archives.</p>
+<p>Currently, <code>OUT_DIR</code>s are only archived one level deep to avoid bloating archives too much. In the
+future, we may add configuration to archive more or less of the output directory. If you have a
+use case that would benefit from this, please <a href="https://github.com/nextest-rs/nextest/issues/new">file an
+issue</a>.</p>
+</li>
+</ul>
+<h3 id="misc-1"><a class="header" href="#misc-1">Misc</a></h3>
+<ul>
+<li>The <code>.crate</code> files uploaded to crates.io now contain the <code>LICENSE-APACHE</code> and <code>LICENSE-MIT</code> license files. Thanks <a href="https://github.com/musicinmybrain">@musicinmybrain</a> for your first contribution!</li>
+</ul>
+<h2 id="0965---2023-12-10"><a class="header" href="#0965---2023-12-10"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.65">0.9.65</a> - 2023-12-10</a></h2>
+<p>This version was not released due to a build issue on illumos.</p>
+<h2 id="0964---2023-12-03"><a class="header" href="#0964---2023-12-03"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.64">0.9.64</a> - 2023-12-03</a></h2>
+<h3 id="added-2"><a class="header" href="#added-2">Added</a></h3>
+<ul>
+<li>Stabilized and documented <a href="https://nexte.st/book/running#binary-ids">the binary ID format</a>.</li>
+<li>Support for glob matchers in <a href="https://nexte.st/book/filter-expressions">filter expressions</a>. For example, <code>package(foo*)</code> will match all tests whose names start with <code>foo</code>.</li>
+<li>A new <code>binary_id()</code> predicate matches against the binary ID.</li>
+</ul>
+<h3 id="changed-1"><a class="header" href="#changed-1">Changed</a></h3>
+<ul>
+<li>
+<p>Unit tests in proc-macro crates now have a binary ID that consists of just the crate name, similar to unit tests in normal crates.</p>
+</li>
+<li>
+<p>The default string matcher for the following predicates has changed from <em>equality</em> to <em>glob</em>:</p>
+<ul>
+<li>Package-related matchers: <code>package()</code>, <code>deps()</code>, and <code>rdeps()</code></li>
+<li>Binary-related matchers: <code>binary()</code></li>
+</ul>
+<p>The new <code>binary_id()</code> predicate also uses the glob matcher by default.</p>
+</li>
+</ul>
+<h3 id="fixed-1"><a class="header" href="#fixed-1">Fixed</a></h3>
+<ul>
+<li>Fixed a regression with some Cargo nightly-only features: see <a href="https://github.com/guppy-rs/guppy/pull/174">guppy-rs/guppy#174</a> for more details.</li>
+</ul>
+<h2 id="0963---2023-11-17"><a class="header" href="#0963---2023-11-17"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.63">0.9.63</a> - 2023-11-17</a></h2>
+<h3 id="fixed-2"><a class="header" href="#fixed-2">Fixed</a></h3>
+<ul>
+<li>Fixed regressions under some Cargo edge cases, e.g. <a href="https://github.com/guppy-rs/guppy/issues/157">guppy-rs/guppy#157</a>.</li>
+</ul>
+<h2 id="0962---2023-11-14"><a class="header" href="#0962---2023-11-14"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.62">0.9.62</a> - 2023-11-14</a></h2>
+<h3 id="added-3"><a class="header" href="#added-3">Added</a></h3>
+<ul>
+<li>If you create a symlink manually named <code>cargo-ntr</code> and pointing to <code>cargo-nextest</code>, you can now
+shorten <code>cargo nextest run</code> to <code>cargo ntr</code>. In the future, this symlink will be automatically
+created at install time.</li>
+</ul>
+<h3 id="changed-2"><a class="header" href="#changed-2">Changed</a></h3>
+<ul>
+<li>Deprecated test name filters passed in before <code>--</code>. For example, <code>cargo nextest run my_test</code> is deprecated; use <code>cargo nextest run -- my_test</code> instead. See <a href="https://github.com/nextest-rs/nextest/issues/1109">#1109</a> for motivation and more information.</li>
+<li><code>x86_64-unknown-linux-gnu</code> builds are now performed using <code>cargo zigbuild</code>. The minimum glibc version remains unchanged at 2.27. Please <a href="https://github.com/nextest-rs/nextest/issues/new">file a bug report</a> if you encounter any issues with this change.</li>
+</ul>
+<h3 id="fixed-3"><a class="header" href="#fixed-3">Fixed</a></h3>
+<ul>
+<li>Fixed crashes under some Cargo edge cases, e.g. <a href="https://github.com/nextest-rs/nextest/issues/1090">#1090</a>.</li>
+</ul>
+<h2 id="0961---2023-10-22"><a class="header" href="#0961---2023-10-22"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.61">0.9.61</a> - 2023-10-22</a></h2>
+<h3 id="changed-3"><a class="header" href="#changed-3">Changed</a></h3>
+<ul>
+<li>The grace period in <code>slow-timeout.grace-period</code> now applies to terminations as well. Thanks <a href="https://github.com/kallisti-dev">@kallisti-dev</a> for your first contribution!</li>
+</ul>
+<h3 id="fixed-4"><a class="header" href="#fixed-4">Fixed</a></h3>
+<ul>
+<li>JUnit output now strips ANSI escapes as well. Thanks <a href="https://github.com/MaienM">@MaienM</a> for your first contribution!</li>
+</ul>
+<h2 id="0960---2023-10-22"><a class="header" href="#0960---2023-10-22"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.60">0.9.60</a> - 2023-10-22</a></h2>
+<p>This version was not released due to a packaging issue.</p>
+<h2 id="0959---2023-09-27"><a class="header" href="#0959---2023-09-27"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.59">0.9.59</a> - 2023-09-27</a></h2>
+<h3 id="added-4"><a class="header" href="#added-4">Added</a></h3>
+<ul>
+<li>Experimental support for <a href="https://nexte.st/book/setup-scripts">setup scripts</a>. Please try them out, and provide feedback in the <a href="https://github.com/nextest-rs/nextest/issues/978">tracking issue</a>!</li>
+<li>Support for newer error messages generated by Rust 1.73.</li>
+</ul>
+<h3 id="fixed-5"><a class="header" href="#fixed-5">Fixed</a></h3>
+<ul>
+<li><code>deps()</code> and <code>rdeps()</code> predicates in <a href="https://nexte.st/book/per-test-overrides">per-test overrides</a> were previously not working correctly. With this version they now work.</li>
+</ul>
+<h2 id="0958---2023-09-20"><a class="header" href="#0958---2023-09-20"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.58">0.9.58</a> - 2023-09-20</a></h2>
+<h3 id="added-5"><a class="header" href="#added-5">Added</a></h3>
+<ul>
+<li>Per-test overrides <a href="https://nexte.st/book/per-test-overrides#specifying-platforms">can now be filtered separately</a> by host and target platforms.</li>
+<li>New <code>--cargo-quiet</code> and <code>--cargo-verbose</code> options to control Cargo's quiet and verbose output options. Thanks <a href="https://github.com/ggwpez">Oliver Tale-Yazdi</a> for your first contribution!</li>
+</ul>
+<h3 id="fixed-6"><a class="header" href="#fixed-6">Fixed</a></h3>
+<ul>
+<li>Improved color support by pulling in <a href="https://github.com/zkat/supports-color/pull/14">zkat/supports-color#14</a>. Now nextest should produce color more often when invoked over SSH.</li>
+</ul>
+<h2 id="0957---2023-08-02"><a class="header" href="#0957---2023-08-02"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.57">0.9.57</a> - 2023-08-02</a></h2>
+<h3 id="fixed-7"><a class="header" href="#fixed-7">Fixed</a></h3>
+<ul>
+<li>Fixed case when <code>.config/nextest.toml</code> isn't present (<a href="https://github.com/nextest-rs/nextest/issues/926">#926</a>).</li>
+</ul>
+<h2 id="0956---2023-08-02"><a class="header" href="#0956---2023-08-02"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.56">0.9.56</a> - 2023-08-02</a></h2>
+<h3 id="fixed-8"><a class="header" href="#fixed-8">Fixed</a></h3>
+<ul>
+<li><code>nextest-version</code> is now parsed in a separate pass. This means that error reporting in case
+there's an incompatible config is now better.</li>
+</ul>
+<h2 id="0955---2023-07-29"><a class="header" href="#0955---2023-07-29"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.55">0.9.55</a> - 2023-07-29</a></h2>
+<h3 id="added-6"><a class="header" href="#added-6">Added</a></h3>
+<ul>
+<li>Support for Cargo's <code>--timings</code> option (<a href="https://github.com/nextest-rs/nextest/issues/903">#903</a>).</li>
+<li>Support for required and recommended versions, via a new <code>nextest-version</code> top-level configuration option. See <a href="https://nexte.st/book/minimum-versions">Minimum nextest versions</a> for more.</li>
+</ul>
+<h3 id="fixed-9"><a class="header" href="#fixed-9">Fixed</a></h3>
+<ul>
+<li>Detect tests if debug level <code>line-tables-only</code> is passed in (<a href="https://github.com/nextest-rs/nextest/issues/910">#910</a>).</li>
+</ul>
+<h2 id="0954---2023-06-25"><a class="header" href="#0954---2023-06-25"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.54">0.9.54</a> - 2023-06-25</a></h2>
+<h3 id="added-7"><a class="header" href="#added-7">Added</a></h3>
+<h4 id="custom-targets"><a class="header" href="#custom-targets">Custom targets</a></h4>
+<ul>
+<li>Nextest now supports custom targets specified via <code>--target</code>, <code>CARGO_BUILD_TARGET</code>, or configuration. See the Rust Embedonomicon for <a href="https://docs.rust-embedded.org/embedonomicon/custom-target.html">how to create a custom target</a>.</li>
+<li>For <a href="https://nexte.st/book/per-test-overrides">per-test overrides</a>, platform filters now support custom target triples.</li>
+</ul>
+<h2 id="0953---2023-05-15"><a class="header" href="#0953---2023-05-15"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.53">0.9.53</a> - 2023-05-15</a></h2>
+<h3 id="added-8"><a class="header" href="#added-8">Added</a></h3>
+<ul>
+<li>Filter expressions in TOML files can now be specified as multiline TOML strings. For example:</li>
+</ul>
+<pre><code class="language-toml">[[profile.default.overrides]]
+filter = '''
+  test(my_test)
+  | package(my-package)
+'''
+# ...
+</code></pre>
+<h3 id="changed-4"><a class="header" href="#changed-4">Changed</a></h3>
+<ul>
+<li><code>show-config test-groups</code> now shows a clean representation of filter expressions, to enable
+printing out multiline expressions neatly.</li>
+</ul>
+<h2 id="0952---2023-05-04"><a class="header" href="#0952---2023-05-04"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.52">0.9.52</a> - 2023-05-04</a></h2>
+<h3 id="fixed-10"><a class="header" href="#fixed-10">Fixed</a></h3>
+<ul>
+<li>Updated dependencies to resolve a build issue on Android (<a href="https://github.com/nextest-rs/nextest/issues/862">#862</a>).</li>
+</ul>
+<h2 id="0951---2023-03-19"><a class="header" href="#0951---2023-03-19"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.51">0.9.51</a> - 2023-03-19</a></h2>
+<h3 id="changed-5"><a class="header" href="#changed-5">Changed</a></h3>
+<ul>
+<li>The definition of <code>threads-required</code> has changed slightly. Previously, it was possible for global and group concurrency limits to be exceeded in some circumstances. Now, concurrency limits are never exceeded. This enables some new use cases, such as being able to declare that a test is mutually exclusive with all other tests globally.</li>
+</ul>
+<h2 id="0950---2023-03-13"><a class="header" href="#0950---2023-03-13"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.50">0.9.50</a> - 2023-03-13</a></h2>
+<h3 id="added-9"><a class="header" href="#added-9">Added</a></h3>
+<ul>
+<li><code>cargo nextest r</code> added as a shortcut for <code>cargo nextest run</code>.</li>
+</ul>
+<h3 id="fixed-11"><a class="header" href="#fixed-11">Fixed</a></h3>
+<ul>
+<li>Switched to using OpenSSL on RISC-V, since ring isn't available on that platform.</li>
+</ul>
+<h2 id="0949---2023-01-13"><a class="header" href="#0949---2023-01-13"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.49">0.9.49</a> - 2023-01-13</a></h2>
+<h3 id="added-10"><a class="header" href="#added-10">Added</a></h3>
+<ul>
+<li>New configuration settings added to <a href="https://nexte.st/book/junit">JUnit reports</a>: <code>junit.store-success-output</code> (defaults to false) and <code>junit.store-failure-output</code> (defaults to true) control whether output for passing and failing tests should be stored in the JUnit report.</li>
+<li>The following configuration options can now be specified as <a href="https://nexte.st/book/per-test-overrides">per-test overrides</a>:
+<ul>
+<li><code>success-output</code> and <code>failure-output</code>.</li>
+<li><code>junit.store-success-output</code> and <code>junit.store-failure-output</code>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="0948---2023-01-02"><a class="header" href="#0948---2023-01-02"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.48">0.9.48</a> - 2023-01-02</a></h2>
+<h3 id="added-11"><a class="header" href="#added-11">Added</a></h3>
+<ul>
+<li>
+<p>You can now mark certain <em>groups</em> of tests to be run with a limited amount of concurrency within the group. This can be used to run tests within a group serially, similar to the <a href="https://crates.io/crates/serial_test"><code>serial_test</code> crate</a>.</p>
+<p>For more about test groups, see <a href="https://nexte.st/book/test-groups">Test groups and mutual exclusion</a>.</p>
+</li>
+<li>
+<p>A new <code>show-config test-groups</code> command shows test groups currently in effect. (<code>show-config</code> will be broadened to show other kinds of configuration in future releases.)</p>
+</li>
+<li>
+<p>Nextest now warns you if you've defined a profile in the <code>default-</code> namespace that isn't already known. Any profile names starting with <code>default-</code> are reserved for future use.</p>
+<p>Thanks <a href="https://github.com/nextest-rs/nextest/pull/747">Marcelo Nicolas Gomez Rivera</a> for your first contribution!</p>
+</li>
+</ul>
+<h3 id="changed-6"><a class="header" href="#changed-6">Changed</a></h3>
+<ul>
+<li>
+<p>On Unix platforms, nextest now uses a new <em>double-spawn</em> test execution mode. This mode resolves some race conditions around signal handling without an apparent performance cost.</p>
+<p>This mode is not expected to cause any issues. However, if it does, you can turn it off by setting <code>NEXTEST_DOUBLE_SPAWN=0</code> in your environment. (Please <a href="https://github.com/nextest-rs/nextest/issues/new">report an issue</a> if it does!)</p>
+</li>
+<li>
+<p>MSRV updated to Rust 1.64.</p>
+</li>
+</ul>
+<h2 id="0947---2022-12-10"><a class="header" href="#0947---2022-12-10"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.47">0.9.47</a> - 2022-12-10</a></h2>
+<h3 id="fixed-12"><a class="header" href="#fixed-12">Fixed</a></h3>
+<ul>
+<li><code>cargo nextest run -E 'deps(foo)</code> queries now work again. Thanks <a href="https://github.com/Freyskeyd">Simon Paitrault</a> for your first contribution!</li>
+</ul>
+<h2 id="0946---2022-12-10"><a class="header" href="#0946---2022-12-10"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.46">0.9.46</a> - 2022-12-10</a></h2>
+<p>This version was not published due to a packaging issue.</p>
+<h2 id="0945---2022-12-04"><a class="header" href="#0945---2022-12-04"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.45">0.9.45</a> - 2022-12-04</a></h2>
+<h3 id="added-12"><a class="header" href="#added-12">Added</a></h3>
+<ul>
+<li>Support for listing and running tests in examples with the <code>--examples</code> and <code>--example &lt;EXAMPLE&gt;</code> command-line arguments. Thanks <a href="https://github.com/jedbrown">Jed Brown</a> for your first contribution!</li>
+<li><a href="https://nexte.st/book/pre-built-binaries">Pre-built binaries</a> are now available for FreeBSD and illumos. Due to GitHub Actions limitations, nextest is not tested on these platforms and might be broken.</li>
+</ul>
+<h2 id="0944---2022-11-23"><a class="header" href="#0944---2022-11-23"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.44">0.9.44</a> - 2022-11-23</a></h2>
+<h3 id="added-13"><a class="header" href="#added-13">Added</a></h3>
+<h4 id="double-spawning-test-processes"><a class="header" href="#double-spawning-test-processes">Double-spawning test processes</a></h4>
+<p>On Unix platforms, a new experimental "double-spawn" approach to running test binaries has been added. With the double-spawn approach, when listing or running tests, nextest will no longer spawn test processes directly. Instead, nextest will first spawn a copy of itself, which will do some initial setup work and then <code>exec</code> the test process.</p>
+<p>The double-spawn approach is currently disabled by default. It can be enabled by setting <code>NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1</code> in your environment.</p>
+<p>The double-spawn approach will soon be enabled the default.</p>
+<h4 id="pausing-and-resuming-test-runs"><a class="header" href="#pausing-and-resuming-test-runs">Pausing and resuming test runs</a></h4>
+<p>Nextest now has initial support for handling SIGTSTP (Ctrl-Z) and SIGCONT (<code>fg</code>). On SIGTSTP (e.g. when Ctrl-Z is pressed), all running tests and timers are paused, and nextest is suspended. On SIGCONT (e.g. when <code>fg</code> is run), tests and timers are resumed.</p>
+<p>Note that, by default, pressing Ctrl-Z in the middle of a test run can lead to <a href="https://inbox.sourceware.org/libc-help/87tu64w33v.fsf@oldenburg.str.redhat.com/T/#m5e40bfa2378e9df29e077addf1aa72b191902b86">nextest runs hanging sometimes</a>. These nondeterministic hangs will not happen if both of the following are true:</p>
+<ul>
+<li>
+<p>Nextest is built with Rust 1.66 (currently in beta) or above. Rust 1.66 contains <a href="https://github.com/rust-lang/rust/pull/101077">a required fix to upstream Rust</a>.</p>
+<p>Note that the <a href="https://nexte.st/book/pre-built-binaries">pre-built binaries</a> for this version are built with beta Rust to pick this fix up.</p>
+</li>
+<li>
+<p>The double-spawn approach is enabled (see above) with <code>NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1</code>.</p>
+</li>
+</ul>
+<p><strong>Call for testing:</strong> Please try out the double-spawn approach by setting <code>NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN=1</code> in your environment. It has been extensively tested and should not cause any breakages, but if it does, please <a href="https://github.com/nextest-rs/nextest/issues/new">report an issue</a>. Thank you!</p>
+<h3 id="fixed-13"><a class="header" href="#fixed-13">Fixed</a></h3>
+<ul>
+<li>Fixed an issue with nextest hanging on Windows with spawned processes that outlive the test (<a href="https://github.com/nextest-rs/nextest/issues/656">#656</a>). Thanks to <a href="https://github.com/chipsenkbeil">Chip Senkbeil</a> for reporting it and providing a minimal example!</li>
+</ul>
+<h2 id="0943---2022-11-04"><a class="header" href="#0943---2022-11-04"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.43">0.9.43</a> - 2022-11-04</a></h2>
+<p>Nextest is now built with Rust 1.65. This version of Rust is the first one to spawn processes using <a href="https://pubs.opengroup.org/onlinepubs/007904975/functions/posix_spawn.html"><code>posix_spawn</code></a> rather than <code>fork</code>/<code>exec</code> on macOS, which should lead to performance benefits in some cases.</p>
+<p>For example, on an M1 Mac Mini, with the <a href="https://github.com/clap-rs/clap">clap repository</a> at <code>520145e</code>, and the command <code>cargo nextest run -E 'not (test(ui_tests) + test(example_tests))'</code>:</p>
+<ul>
+<li><strong>Before:</strong> 0.636 seconds</li>
+<li><strong>After:</strong> 0.284 seconds (2.23x faster)</li>
+</ul>
+<p>This is a best-case scenario; tests that take longer to run will generally benefit less.</p>
+<h3 id="added-14"><a class="header" href="#added-14">Added</a></h3>
+<ul>
+<li>The <a href="https://nexte.st/book/threads-required"><code>threads-required</code> configuration</a> now supports the
+values "num-cpus", for the total number of logical CPUs available, and "num-test-threads", for the
+number of test threads nextest is running with.</li>
+<li>Nextest now prints a warning if a configuration setting is unknown.</li>
+</ul>
+<h3 id="fixed-14"><a class="header" href="#fixed-14">Fixed</a></h3>
+<ul>
+<li>Configuring <code>retries = 0</code> now works correctly. Thanks <a href="https://github.com/xxchan">xxchan</a> for your first contribution!</li>
+</ul>
+<h2 id="0942---2022-11-01"><a class="header" href="#0942---2022-11-01"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.42">0.9.42</a> - 2022-11-01</a></h2>
+<h3 id="added-15"><a class="header" href="#added-15">Added</a></h3>
+<ul>
+<li>Added a new <a href="https://nexte.st/book/threads-required"><code>threads-required</code> configuration</a> that can be specified as a <a href="https://nexte.st/book/per-test-overrides">per-test override</a>. This can be used to limit concurrency for heavier tests, to avoid overwhelming CPU or running out of memory.</li>
+</ul>
+<h2 id="0941---2022-11-01"><a class="header" href="#0941---2022-11-01"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.41">0.9.41</a> - 2022-11-01</a></h2>
+<p>This release ran into an issue during publishing and was skipped.</p>
+<h2 id="0940---2022-10-25"><a class="header" href="#0940---2022-10-25"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.40">0.9.40</a> - 2022-10-25</a></h2>
+<h3 id="added-16"><a class="header" href="#added-16">Added</a></h3>
+<ul>
+<li>
+<p>Overrides can now be restricted to certain platforms, using triples or <code>cfg()</code> expressions. For example, to add retries, but only on macOS:</p>
+<pre><code class="language-toml">[[profile.default.overrides]]
+platform = 'cfg(target_os = "macos")'
+retries = 3
+</code></pre>
+<p>For an override to match, <code>platform</code> and <code>filter</code> (if specified) must both be true for a given test. While <a href="https://nexte.st/book/running#filtering-by-build-platform">cross-compiling code</a>, <code>platform</code> is matched against the host platform for host tests, and against the target platform for target tests.</p>
+</li>
+<li>
+<p>Nextest now reads environment variables specified in <a href="https://doc.rust-lang.org/cargo/reference/config.html#env">the <code>[env]</code> section</a> from <code>.cargo/config.toml</code> files. The full syntax is supported including <code>force</code> and <code>relative</code>.</p>
+<p>Thanks to <a href="https://github.com/arxanas">Waleed Khan</a> for your first contribution!</p>
+</li>
+<li>
+<p>Nextest now sets the <code>CARGO_PKG_RUST_VERSION</code> environment variable when it runs tests. For <code>cargo test</code> this was added in Rust 1.64, but nextest sets it across all versions of Rust.</p>
+</li>
+</ul>
+<h2 id="0939---2022-10-14"><a class="header" href="#0939---2022-10-14"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.39">0.9.39</a> - 2022-10-14</a></h2>
+<h3 id="added-17"><a class="header" href="#added-17">Added</a></h3>
+<ul>
+<li>
+<p>On Unix platforms, if a process times out, nextest attempts to terminate it gracefully by sending it <code>SIGTERM</code>, waiting for a grace period of 10 seconds, and then sending it <code>SIGKILL</code>. A custom grace period can now be specified through the <code>slow-timeout.grace-period</code> parameter. For more information, see <a href="https://nexte.st/book/slow-tests#how-nextest-terminates-tests">How nextest terminates tests</a>.</p>
+<p>Thanks to <a href="https://github.com/saethlin">Ben Kimock</a> for your first contribution!</p>
+</li>
+</ul>
+<h3 id="internal-improvements"><a class="header" href="#internal-improvements">Internal improvements</a></h3>
+<ul>
+<li>Updated clap to version 4.0.</li>
+</ul>
+<h2 id="0938---2022-10-05"><a class="header" href="#0938---2022-10-05"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.38">0.9.38</a> - 2022-10-05</a></h2>
+<h3 id="added-18"><a class="header" href="#added-18">Added</a></h3>
+<ul>
+<li>Test retries now support fixed delays and exponential backoffs, with optional jitter. See <a href="https://nexte.st/book/retries#delays-and-backoff">Delays and backoff</a> for more information. Thanks <a href="https://github.com/tomasol">Tomas Olvecky</a> for your first contribution!</li>
+</ul>
+<h3 id="internal-improvements-1"><a class="header" href="#internal-improvements-1">Internal improvements</a></h3>
+<ul>
+<li>Reading test data from standard output and standard error no longer buffers twice, just once. Thanks <a href="https://github.com/NobodyXu">Jiahao XU</a> for your first contribution!</li>
+</ul>
+<blockquote>
+<p>Note to distributors: now that Rust 1.64 is out, <code>process_group_bootstrap_hack</code> is no longer supported or required. Please remove the following environment variables if you've set them:</p>
+<ul>
+<li><code>RUSTC_BOOTSTRAP=1</code></li>
+<li><code>RUSTFLAGS='--cfg process_group --cfg process_group_bootstrap_hack'</code></li>
+</ul>
+</blockquote>
+<h2 id="0937---2022-09-30"><a class="header" href="#0937---2022-09-30"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.37">0.9.37</a> - 2022-09-30</a></h2>
+<h3 id="added-19"><a class="header" href="#added-19">Added</a></h3>
+<ul>
+<li>Support for a negative value for <code>--test-threads</code>/<code>-j</code>, matching support in recent versions of
+Cargo. A value of -1 means the number of logical CPUs minus 1, and so on. Thanks <a href="https://github.com/OLUWAMUYIWA">Onigbinde
+Oluwamuyiwa Elijah</a> for your first contribution!</li>
+<li>Add a note to the help text for <code>--test-threads</code> indicating that its default value is obtained
+from the profile. Thanks <a href="https://github.com/jiangying000">jiangying</a> for your first contribution!</li>
+</ul>
+<h3 id="changed-7"><a class="header" href="#changed-7">Changed</a></h3>
+<ul>
+<li>Internal dependency target-spec bumped to 1.2.0 -- this means that newer versions of the windows
+crate are now supported.</li>
+<li>MSRV updated to Rust 1.62.</li>
+</ul>
+<h2 id="0936---2022-09-07"><a class="header" href="#0936---2022-09-07"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.36">0.9.36</a> - 2022-09-07</a></h2>
+<h3 id="added-20"><a class="header" href="#added-20">Added</a></h3>
+<ul>
+<li>A new <code>--hide-progress-bar</code> option (environment variable <code>NEXTEST_HIDE_PROGRESS_BAR</code>) forces the
+progress bar to be hidden. Thanks <a href="https://github.com/remlse">Remo Senekowitsch</a> for your first
+contribution!</li>
+</ul>
+<h3 id="changed-8"><a class="header" href="#changed-8">Changed</a></h3>
+<ul>
+<li>Nextest now prints out a list of failing and flaky tests at the end of output by default (the
+<code>final-status-level</code> config is set to <code>flaky</code>).</li>
+<li>The progress bar is now hidden if a CI environment is detected.</li>
+</ul>
+<h2 id="0935---2022-08-17"><a class="header" href="#0935---2022-08-17"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.35">0.9.35</a> - 2022-08-17</a></h2>
+<h3 id="added-21"><a class="header" href="#added-21">Added</a></h3>
+<ul>
+<li>
+<p>Support for the <code>--config</code> argument, stabilized in Rust 1.63. This option is used to configure
+Cargo, not nextest. This argument is passed through to Cargo, and is also used by nextest to
+determine e.g. <a href="https://nexte.st/book/target-runners.html">the target runner</a> for a platform.</p>
+<p><code>--config</code> is also how <a href="https://nexte.st/book/miri.html">Miri</a> communicates with nextest.</p>
+</li>
+<li>
+<p><a href="https://nexte.st/book/target-runners.html">Target runners</a> for cross-compilation now work with
+<a href="https://nexte.st/book/reusing-builds.html">build archives</a>. Thanks <a href="https://github.com/pascalkuthe">Pascal
+Kuthe</a> for your first contribution!</p>
+</li>
+</ul>
+<h2 id="0934---2022-08-12"><a class="header" href="#0934---2022-08-12"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.34">0.9.34</a> - 2022-08-12</a></h2>
+<h3 id="added-22"><a class="header" href="#added-22">Added</a></h3>
+<ul>
+<li>For <code>cargo nextest self update</code>, added <code>-f</code> as a short-form alias for <code>--force</code>.</li>
+</ul>
+<h3 id="fixed-15"><a class="header" href="#fixed-15">Fixed</a></h3>
+<ul>
+<li>Tests are no longer retried after a run is canceled. Thanks <a href="https://github.com/iskyzh">iskyzh</a> for your contribution!</li>
+</ul>
+<h2 id="0933---2022-07-31"><a class="header" href="#0933---2022-07-31"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.33">0.9.33</a> - 2022-07-31</a></h2>
+<h3 id="fixed-16"><a class="header" href="#fixed-16">Fixed</a></h3>
+<ul>
+<li>Fixed regression in cargo-nextest 0.9.32 where it no longer produced any output if stderr wasn't a terminal.</li>
+</ul>
+<h2 id="0932---2022-07-30"><a class="header" href="#0932---2022-07-30"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.32">0.9.32</a> - 2022-07-30</a></h2>
+<h3 id="added-23"><a class="header" href="#added-23">Added</a></h3>
+<ul>
+<li><code>cargo nextest run</code> now has a new <code>--no-run</code> feature to build but not run tests. (This was previously achievable with <code>cargo nextest list -E 'none()'</code>, but is more intuitive this way.)</li>
+<li>Pre-built binaries are now available for i686 Windows. Thanks <a href="https://github.com/Guiguiprim">Guiguiprim</a>!</li>
+</ul>
+<h3 id="internal-improvements-2"><a class="header" href="#internal-improvements-2">Internal improvements</a></h3>
+<ul>
+<li>Filter expression evaluation now uses a stack machine via the <a href="https://crates.io/crates/recursion">recursion</a> crate. Thanks <a href="https://github.com/inanna-malick">Inanna</a> for your first contribution!</li>
+</ul>
+<h2 id="0931---2022-07-27"><a class="header" href="#0931---2022-07-27"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.31">0.9.31</a> - 2022-07-27</a></h2>
+<h3 id="added-24"><a class="header" href="#added-24">Added</a></h3>
+<ul>
+<li>Nextest sets a new <code>NEXTEST_RUN_ID</code> environment variable with a UUID for a test run. All tests run
+within a single invocation of <code>cargo nextest run</code> will set the same run ID. Thanks <a href="https://github.com/mitsuhiko">mitsuhiko</a> for
+your first contribution!</li>
+</ul>
+<h2 id="0930---2022-07-25"><a class="header" href="#0930---2022-07-25"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.30">0.9.30</a> - 2022-07-25</a></h2>
+<h3 id="fixed-17"><a class="header" href="#fixed-17">Fixed</a></h3>
+<ul>
+<li>
+<p>Fixed target runners specified as relative paths.</p>
+</li>
+<li>
+<p>On Unix, cargo-nextest's performance had regressed (by 3x on <a href="https://github.com/clap-rs/clap">clap</a>) due to the change introduced in version 0.9.29 to put each test process into its own process group. In this version, this regression has been fixed, but only if you're using the pre-built binaries or building on Rust 1.64+ (currently in nightly).</p>
+<blockquote>
+<p>Note to distributors: to fix this regression while building with stable Rust 1.62, set the following environment variables:</p>
+<ul>
+<li><code>RUSTC_BOOTSTRAP=1</code></li>
+<li><code>RUSTFLAGS='--cfg process_group --cfg process_group_bootstrap_hack'</code></li>
+</ul>
+<p>This is temporary until <a href="https://github.com/rust-lang/rust/issues/93857">the <code>process_set_process_group</code> feature is stabilized</a> in Rust 1.64.</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="0929---2022-07-24"><a class="header" href="#0929---2022-07-24"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29">0.9.29</a> - 2022-07-24</a></h2>
+<h3 id="added-25"><a class="header" href="#added-25">Added</a></h3>
+<ul>
+<li>
+<p>On Unix, each test process is now put into its own <a href="https://en.wikipedia.org/wiki/Process_group">process group</a>. If a test times out or Ctrl-C is pressed, the entire process group is signaled. This means that most subprocesses spawned by tests are also killed.</p>
+<p>However, because process groups aren't nested, if a test creates a process group itself, those groups won't be signaled. This is a relatively uncommon situation.</p>
+</li>
+<li>
+<p>On Windows, each test process is now associated with a <a href="https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects">job object</a>. On timeouts, the entire job object is terminated. Since job objects <em>are</em> nested in recent versions of Windows, this should result in all subprocesses spawned by tests being killed.</p>
+<p>(On Windows, the Ctrl-C behavior hasn't changed. Nextest also doesn't do graceful shutdowns on Windows yet, though this may change in the future.)</p>
+</li>
+<li>
+<p>Nextest can now parse Cargo configs specified via the unstable <code>--config</code> option.</p>
+</li>
+<li>
+<p>Nextest now publishes binaries for <code>aarch64-unknown-linux-gnu</code> (<a href="https://github.com/nextest-rs/nextest/pull/398">#398</a>) and <code>x86_64-unknown-linux-musl</code> (<a href="https://github.com/nextest-rs/nextest/pull/399">#399</a>). Thanks <a href="https://github.com/messense">messense</a> and <a href="https://github.com/teymour-aldridge">Teymour</a> for your first contributions!</p>
+</li>
+</ul>
+<h3 id="fixed-18"><a class="header" href="#fixed-18">Fixed</a></h3>
+<ul>
+<li>Per-test overrides are now additive across configuration files (including tool-specific configuration files).</li>
+</ul>
+<h2 id="0929-rc1---2022-07-24"><a class="header" href="#0929-rc1---2022-07-24"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.29-rc.1">0.9.29-rc.1</a> - 2022-07-24</a></h2>
+<p>This is a test release to ensure that releasing Linux aarch64 and musl binaries works well.</p>
+<h2 id="0928---2022-07-22"><a class="header" href="#0928---2022-07-22"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.28">0.9.28</a> - 2022-07-22</a></h2>
+<p>This is a quick hotfix release to ensure that the right <code>tokio</code> features are enabled under
+<code>default-no-update</code>.</p>
+<h2 id="0927---2022-07-22"><a class="header" href="#0927---2022-07-22"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.27">0.9.27</a> - 2022-07-22</a></h2>
+<p>This is a major architectural rework of nextest. We've tested it thoroughly to the best of our ability, but if you see regressions please <a href="https://github.com/nextest-rs/nextest/issues/new">report them</a>!</p>
+<p>If you encounter a regression, you can temporarily pin nextest to the previous version in CI. If you're on GitHub Actions and are using <code>taiki-e/install-action</code>, use this instead:</p>
+<pre><code class="language-yaml">- uses: taiki-e/install-action@v1
+- with:
+    tool: nextest
+    version: 0.9.26
+</code></pre>
+<h3 id="added-26"><a class="header" href="#added-26">Added</a></h3>
+<ul>
+<li>Nextest now works with <a href="https://nexte.st/book/miri">the Miri interpreter</a>. Use <code>cargo miri nextest run</code> to run your tests with Miri.</li>
+<li>Nextest now detects some situations where tests <a href="https://nexte.st/book/leaky-tests">leak subprocesses</a>. Previously, these situations would cause nextest to hang.</li>
+<li><a href="https://nexte.st/book/per-test-overrides">Per-test overrides</a> now support <code>slow-timeout</code> and the new <code>leak-timeout</code> config parameter.</li>
+<li>A new option <code>--tool-config-file</code> allows tools that wrap nextest to specify custom config settings, while still prioritizing repository-specific configuration.</li>
+</ul>
+<h3 id="changed-9"><a class="header" href="#changed-9">Changed</a></h3>
+<ul>
+<li>Major internal change: The nextest list and run steps now use <a href="https://tokio.rs/">Tokio</a>. This change enables the leak detection described above.</li>
+<li>The list step now runs list commands in parallel. This should result in speedups in most cases.</li>
+</ul>
+<h3 id="fixed-19"><a class="header" href="#fixed-19">Fixed</a></h3>
+<ul>
+<li>Nextest now redirects standard input during test runs to <code>/dev/null</code> (or <code>NUL</code> on Windows). Most tests do not read from standard input, but if a test does, it will no longer cause nextest to hang.</li>
+<li>On Windows, nextest configures standard input, standard output and standard error to <a href="https://github.com/nextest-rs/nextest/commit/0c109db35a5315d7d8c9121e36a9e706e7393049">not be inherited</a>. This prevents some kinds of test hangs on Windows.</li>
+<li>If a <a href="https://nexte.st/book/env-vars.html#dynamic-library-paths">dynamic library link path</a> doesn't exist, nextest no longer adds it to <code>LD_LIBRARY_PATH</code> or equivalent. This should have no practical effect.</li>
+<li>Archiving tests now works even if the target directory is not called <code>"target"</code>.</li>
+</ul>
+<h2 id="0926---2022-07-14"><a class="header" href="#0926---2022-07-14"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.26">0.9.26</a> - 2022-07-14</a></h2>
+<p>This is a quick hotfix release to update the version of nextest-metadata, to which a breaking change was accidentally committed.</p>
+<h2 id="0925---2022-07-13"><a class="header" href="#0925---2022-07-13"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.25">0.9.25</a> - 2022-07-13</a></h2>
+<p>This is a major release with several new features.</p>
+<h3 id="filter-expressions"><a class="header" href="#filter-expressions">Filter expressions</a></h3>
+<p><a href="https://nexte.st/book/filter-expressions">Filter expressions</a> are now ready for production. For example, to run all tests in <code>nextest-runner</code> and all its transitive dependencies within the workspace:</p>
+<pre><code>cargo nextest run -E 'deps(nextest-runner)'
+</code></pre>
+<p>This release includes a number of additions and changes to filter expressions.</p>
+<h4 id="added-27"><a class="header" href="#added-27">Added</a></h4>
+<ul>
+<li>The expression language supports several new <a href="https://nexte.st/book/filter-expressions#basic-predicates">predicates</a>:
+<ul>
+<li><code>kind(name-matcher)</code>: include all tests in binary kinds (e.g. <code>lib</code>, <code>test</code>, <code>bench</code>) matching <code>name-matcher</code>.</li>
+<li><code>binary(name-matcher)</code>: include all tests in binary names matching <code>name-matcher</code>.</li>
+<li><code>platform(host)</code> or <code>platform(target)</code>: include all tests that are <a href="running.html#filtering-by-build-platform">built for the host or target platform</a>, respectively.</li>
+</ul>
+</li>
+</ul>
+<h4 id="changed-10"><a class="header" href="#changed-10">Changed</a></h4>
+<ul>
+<li>
+<p>If a filter expression is guaranteed not to match a particular binary, it will not be listed by nextest. (This allows <code>platform(host)</code> and <code>platform(target)</code> to work correctly.)</p>
+</li>
+<li>
+<p>If both filter expressions and standard substring filters are passed in, a test must match filter expressions AND substring filters to be executed. For example:</p>
+</li>
+</ul>
+<pre><code>cargo nextest run -E 'package(nextest-runner)' test_foo test_bar
+</code></pre>
+<p>This will execute only the tests in <code>nextest-runner</code> that match <code>test_foo</code> or <code>test_bar</code>.</p>
+<h3 id="per-test-overrides"><a class="header" href="#per-test-overrides">Per-test overrides</a></h3>
+<p>Nextest now supports <a href="https://nexte.st/book/per-test-overrides">per-test overrides</a>. These overrides let you customize settings for subsets of tests. For example, to retry tests that contain the substring <code>test_e2e</code> 3 times:</p>
+<pre><code class="language-toml">[[profile.default.overrides]]
+filter = "test(test_e2e)"
+retries = 3
+</code></pre>
+<p>Currently, only <code>retries</code> are supported. In the future, more kinds of customization will be added.</p>
+<h3 id="other-changes"><a class="header" href="#other-changes">Other changes</a></h3>
+<ul>
+<li>A new environment variable <code>NEXTEST_RETRIES</code> controls the number of retries tests are run with. In terms of precedence, this slots in between the command-line <code>--retries</code> option and per-test overrides for retries.</li>
+<li><code>cargo nextest list</code> now hides skipped tests and binaries by default. To print out skipped tests and binaries, use <code>cargo nextest list --verbose</code>.</li>
+<li>The <a href="https://nexte.st/book/machine-readable">Machine-readable output</a> for <code>cargo nextest list</code> now contains a new <code>"status"</code> key. By default, this is set to <code>"listed"</code>, and for binaries that aren't run because they don't match expression filters this is set to <code>"skipped"</code>.</li>
+<li>The <code>--platform-filter</code> option is deprecated, though it will keep working for all versions within the nextest 0.9 series. Use <code>-E 'platform(host)'</code> or <code>-E 'platform(target)'</code> instead.</li>
+<li><code>cargo nextest run -- --skip</code> and <code>--exact</code> now suggest using a filter expression instead.</li>
+</ul>
+<h2 id="0924---2022-07-01"><a class="header" href="#0924---2022-07-01"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.24">0.9.24</a> - 2022-07-01</a></h2>
+<h3 id="added-28"><a class="header" href="#added-28">Added</a></h3>
+<ul>
+<li>New config option <code>profile.&lt;profile-name&gt;.test-threads</code> controls the number of tests run simultaneously. This option accepts either an integer with the number of threads, or the string "num-cpus" (default) for the number of logical CPUs. As usual, this option is overridden by <code>--test-threads</code> and <code>NEXTEST_TEST_THREADS</code>, in that order.</li>
+<li>The command-line <code>--test-threads</code> option and the <code>NEXTEST_TEST_THREADS</code> environment variable now accept <code>num-cpus</code> as their argument.</li>
+<li>nextest now works with <a href="https://github.com/ryankurte/cargo-binstall">cargo binstall</a> (<a href="https://github.com/nextest-rs/nextest/pull/332">#332</a>). Thanks [Remoun] for your first contribution!</li>
+</ul>
+<h3 id="fixed-20"><a class="header" href="#fixed-20">Fixed</a></h3>
+<ul>
+<li>Within JUnit XML, test failure descriptions (text nodes for <code>&lt;failure&gt;</code> and <code>&lt;error&gt;</code> tags) now have invalid ANSI escape codes stripped from their output.</li>
+</ul>
+<h2 id="0923---2022-06-26"><a class="header" href="#0923---2022-06-26"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.23">0.9.23</a> - 2022-06-26</a></h2>
+<h3 id="added-29"><a class="header" href="#added-29">Added</a></h3>
+<ul>
+<li>On Windows, nextest now detects tests that abort due to e.g. an access violation (segfault) and prints their status as "ABORT" rather than "FAIL", along with an explanatory message on the next line.</li>
+<li>Improved JUnit support: nextest now heuristically detects stack traces and adds them to the text node of the <code>&lt;failure&gt;</code> element (<a href="https://github.com/nextest-rs/nextest/issues/311">#311</a>).</li>
+</ul>
+<h3 id="changed-11"><a class="header" href="#changed-11">Changed</a></h3>
+<ul>
+<li>Errors that happen while writing data to the output now have a new documented exit code: <a href="https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.WRITE_OUTPUT_ERROR"><code>WRITE_OUTPUT_ERROR</code></a>.</li>
+</ul>
+<h2 id="0922---2022-06-21"><a class="header" href="#0922---2022-06-21"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.22">0.9.22</a> - 2022-06-21</a></h2>
+<h3 id="added-30"><a class="header" href="#added-30">Added</a></h3>
+<ul>
+<li>
+<p>Benchmarks are now treated as normal tests. (<a href="https://github.com/nextest-rs/nextest/pull/283">#283</a>, thanks <a href="https://github.com/tabokie">@tabokie</a> for your contribution!).</p>
+<p>Note that criterion.rs benchmarks are currently incompatible with nextest (<a href="https://github.com/nextest-rs/nextest/issues/96">#96</a>) -- this change doesn't have any effect on that.</p>
+</li>
+<li>
+<p>Added <code>-F</code> as a shortcut for <code>--features</code>, mirroring an upcoming addition to Cargo 1.62 (<a href="https://github.com/nextest-rs/nextest/pull/287">#287</a>, thanks <a href="https://github.com/Alexendoo">Alexendoo</a> for your first contribution!)</p>
+</li>
+</ul>
+<h3 id="changed-12"><a class="header" href="#changed-12">Changed</a></h3>
+<ul>
+<li>If nextest's output is colorized, it no longer strips ANSI escape codes from test runs.</li>
+</ul>
+<h2 id="0921---2022-06-17"><a class="header" href="#0921---2022-06-17"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.21">0.9.21</a> - 2022-06-17</a></h2>
+<h3 id="added-31"><a class="header" href="#added-31">Added</a></h3>
+<ul>
+<li>On Unix, tests that fail due to a signal (e.g. SIGSEGV) will print out the name of the signal rather than the generic "FAIL".</li>
+<li><code>cargo-nextest</code> has a new <code>"default-no-update"</code> feature that will contain all default features except for self-update. If you're distributing nextest or installing it in CI, the recommended, forward-compatible way to build cargo-nextest is with <code>--no-default-features --features default-no-update</code>.</li>
+</ul>
+<h3 id="changed-13"><a class="header" href="#changed-13">Changed</a></h3>
+<ul>
+<li>Progress bars now take up the entire width of the screen. This prevents issues with the bar wrapping around on terminals that aren't wide enough.</li>
+</ul>
+<h2 id="0920---2022-06-13"><a class="header" href="#0920---2022-06-13"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.20">0.9.20</a> - 2022-06-13</a></h2>
+<h3 id="fixed-21"><a class="header" href="#fixed-21">Fixed</a></h3>
+<ul>
+<li>Account for skipped tests when determining the length of the progress bar.</li>
+</ul>
+<h2 id="0919---2022-06-13"><a class="header" href="#0919---2022-06-13"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.19">0.9.19</a> - 2022-06-13</a></h2>
+<h3 id="added-32"><a class="header" href="#added-32">Added</a></h3>
+<ul>
+<li>
+<p>Nextest can now update itself! Once this version is installed, simply run <code>cargo nextest self update</code> to update to the latest version.</p>
+<blockquote>
+<p>Note to distributors: you can disable self-update by building cargo-nextest with <code>--no-default-features</code>.</p>
+</blockquote>
+</li>
+<li>
+<p>Partial, emulated support for test binary arguments passed in after <code>cargo nextest run --</code> (<a href="https://github.com/nextest-rs/nextest/pull/265">#265</a>, thanks <a href="https://github.com/tabokie">@tabokie</a> for your contribution!).</p>
+<p>For example, <code>cargo nextest run -- my_test --ignored</code> will run ignored tests containing <code>my_test</code>, similar to <code>cargo test -- my_test --ignored</code>.</p>
+<p>Support is limited to test names, <code>--ignored</code> and <code>--include-ignored</code>.</p>
+<blockquote>
+<p>Note to integrators: to reliably disable all argument parsing, pass in <code>--</code> twice. For example, <code>cargo nextest run -- -- &lt;filters...&gt;</code>.</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="fixed-22"><a class="header" href="#fixed-22">Fixed</a></h3>
+<ul>
+<li>Better detection for cross-compilation -- now look through the <code>CARGO_BUILD_TARGET</code> environment variable, and Cargo configuration as well. The <code>--target</code> option is still preferred.</li>
+<li>Slow and flaky tests are now printed out properly in the final status output (<a href="https://github.com/nextest-rs/nextest/issues/270">#270</a>).</li>
+</ul>
+<p>This is a test release.</p>
+<h2 id="0918---2022-06-08"><a class="header" href="#0918---2022-06-08"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.18">0.9.18</a> - 2022-06-08</a></h2>
+<h3 id="added-33"><a class="header" href="#added-33">Added</a></h3>
+<ul>
+<li>
+<p>Support for terminating tests if they take too long, via the configuration parameter <code>slow-timeout.terminate-after</code>. For example, to time out after 120 seconds:</p>
+<pre><code class="language-toml">slow-timeout = { period = "60s", terminate-after = 2 }
+</code></pre>
+<p>Thanks <a href="https://github.com/steveeJ">steveeJ</a> for your contribution (<a href="https://github.com/nextest-rs/nextest/pull/214">#214</a>)!</p>
+</li>
+</ul>
+<h3 id="fixed-23"><a class="header" href="#fixed-23">Fixed</a></h3>
+<ul>
+<li>Improved support for <a href="https://nexte.st/book/reusing-builds">reusing builds</a>: produce better error messages if the workspace's source is missing.</li>
+</ul>
+<h2 id="0917---2022-06-07"><a class="header" href="#0917---2022-06-07"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.17">0.9.17</a> - 2022-06-07</a></h2>
+<p>This release contains a number of user experience improvements.</p>
+<h3 id="added-34"><a class="header" href="#added-34">Added</a></h3>
+<ul>
+<li>If producing output to an interactive terminal, nextest now prints out its status as a progress bar. This makes it easy to see the status of a test run at a glance.</li>
+<li>Nextest's configuration has a new <code>final-status-level</code> option which can be used to print out some statuses at the end of a run (defaults to <code>none</code>). On the command line, this can be overridden with the <code>--final-status-level</code> argument or <code>NEXTEST_FINAL_STATUS_LEVEL</code> in the environment.</li>
+<li>If a <a href="https://nexte.st/book/target-runners">target runner</a> is in use, nextest now prints out its name and the environment variable or config file the definition was obtained from.</li>
+</ul>
+<h3 id="changed-14"><a class="header" href="#changed-14">Changed</a></h3>
+<ul>
+<li>If the creation of a test list fails, nextest now prints a more descriptive error message, and exits with the exit code 104 (<a href="https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.TEST_LIST_CREATION_FAILED"><code>TEST_LIST_CREATION_FAILED</code></a>).</li>
+</ul>
+<h2 id="0916---2022-06-02"><a class="header" href="#0916---2022-06-02"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.16">0.9.16</a> - 2022-06-02</a></h2>
+<h3 id="added-35"><a class="header" href="#added-35">Added</a></h3>
+<ul>
+<li>Nextest now <a href="https://nexte.st/book/env-vars.html#environment-variables-nextest-sets">sets <code>NEXTEST_LD_*</code> and <code>NEXTEST_DYLD_*</code> environment
+variables</a> to work around
+macOS System Integrity Protection sanitization.</li>
+</ul>
+<h3 id="fixed-24"><a class="header" href="#fixed-24">Fixed</a></h3>
+<ul>
+<li>While <a href="https://nexte.st/book/reusing-builds">archiving build artifacts</a>, work around some libraries producing linked paths that don't exist (<a href="https://github.com/nextest-rs/nextest/issues/247">#247</a>). Print a warning for those paths instead of failing.</li>
+</ul>
+<h3 id="changed-15"><a class="header" href="#changed-15">Changed</a></h3>
+<ul>
+<li>Build artifact archives no longer recurse into linked path subdirectories. This is not a behavioral change because <code>LD_LIBRARY_PATH</code> and other similar variables do not recurse into subdirectories either.</li>
+</ul>
+<h2 id="0915---2022-05-31"><a class="header" href="#0915---2022-05-31"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.15">0.9.15</a> - 2022-05-31</a></h2>
+<h3 id="added-36"><a class="header" href="#added-36">Added</a></h3>
+<ul>
+<li>Improved support for <a href="https://nexte.st/book/reusing-builds">reusing builds</a>:
+<ul>
+<li>New command <code>cargo nextest archive</code> automatically archives test binaries and other relevant
+files after building tests. Currently the <code>.tar.zst</code> format is supported.</li>
+<li>New option <code>cargo nextest run --archive-file</code> automatically extracts archives before running the tests within them.</li>
+<li>New runtime environment variable <code>NEXTEST_BIN_EXE_&lt;name&gt;</code> is set to the absolute path to a binary target's executable, taking path remapping into account. This is equivalent to <a href="https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates"><code>CARGO_BIN_EXE_&lt;name&gt;</code></a>, except this is set at runtime.</li>
+<li><code>cargo nextest list --list-type binaries-only</code> now records information about non-test binaries as well.</li>
+</ul>
+</li>
+</ul>
+<h3 id="fixed-25"><a class="header" href="#fixed-25">Fixed</a></h3>
+<p>Fix for experimental feature <a href="https://nexte.st/book/filter-expressions.html">filter expressions</a>:</p>
+<ul>
+<li>Fix test filtering when expression filters are set but name-based filters aren't.</li>
+</ul>
+<h2 id="0914---2022-04-18"><a class="header" href="#0914---2022-04-18"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.14">0.9.14</a> - 2022-04-18</a></h2>
+<h3 id="fixed-26"><a class="header" href="#fixed-26">Fixed</a></h3>
+<p>Fixes related to path remapping:</p>
+<ul>
+<li>Directories passed into <code>--workspace-remap</code> and <code>--target-dir-remap</code> are now canonicalized.</li>
+<li>If the workspace directory is remapped, <code>CARGO_MANIFEST_DIR</code> in tests' runtime environment is set to the new directory.</li>
+</ul>
+<h2 id="0913---2022-04-16"><a class="header" href="#0913---2022-04-16"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.13">0.9.13</a> - 2022-04-16</a></h2>
+<h3 id="added-37"><a class="header" href="#added-37">Added</a></h3>
+<ul>
+<li>
+<p>Support for <a href="https://nexte.st/book/reusing-builds">reusing builds</a> is now production-ready. Build on one machine and run tests on another, including cross-compiling and test partitioning.</p>
+<p>To see how builds can be reused in GitHub Actions, see <a href="https://github.com/nextest-rs/reuse-build-partition-example/blob/main/.github/workflows/ci.yml">this example</a>.</p>
+</li>
+<li>
+<p>Experimental support for <a href="https://nexte.st/book/filter-expressions.html">filter expressions</a>, allowing fine-grained specifications for which tests to run.</p>
+</li>
+</ul>
+<p>Thanks to <a href="https://github.com/Guiguiprim">Guiguiprim</a> for their fantastic work implementing both of these.</p>
+<h2 id="0912---2022-03-22"><a class="header" href="#0912---2022-03-22"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.12">0.9.12</a> - 2022-03-22</a></h2>
+<h3 id="added-38"><a class="header" href="#added-38">Added</a></h3>
+<ul>
+<li>Support for reading some configuration as <a href="https://nexte.st/book/env-vars#environment-variables-nextest-reads">environment variables</a>. (Thanks <a href="https://github.com/ymgyt">ymgyt</a> and <a href="https://github.com/iskyzh">iskyzh</a> for their pull requests!)</li>
+<li><a href="https://nexte.st/book/machine-readable">Machine-readable output</a> for <code>cargo nextest list</code> now contains a <code>rust-build-meta</code> key. This key currently contains the target directory, the base output directories, and paths to <a href="https://nexte.st/book/env-vars#dynamic-library-paths">search for dynamic libraries in</a> relative to the target directory.</li>
+</ul>
+<h3 id="fixed-27"><a class="header" href="#fixed-27">Fixed</a></h3>
+<ul>
+<li>Test binaries that link to dynamic libraries built by Cargo now work correctly (<a href="https://github.com/nextest-rs/nextest/issues/82">#82</a>).</li>
+<li>Crates with no tests are now skipped while computing padding widths in the reporter (<a href="https://github.com/nextest-rs/nextest/issues/125">#125</a>).</li>
+</ul>
+<h3 id="changed-16"><a class="header" href="#changed-16">Changed</a></h3>
+<ul>
+<li>MSRV updated to Rust 1.56.</li>
+<li>For experimental feature <a href="https://nexte.st/book/reusing-builds">reusing builds</a>:
+<ul>
+<li>Change <code>--binaries-dir-remap</code> to <code>--target-dir-remap</code> and expect that the entire target directory is archived.</li>
+<li>Support linking to dynamic libraries (<a href="https://github.com/nextest-rs/nextest/issues/82">#82</a>).</li>
+</ul>
+</li>
+</ul>
+<h2 id="0911---2022-03-09"><a class="header" href="#0911---2022-03-09"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.11">0.9.11</a> - 2022-03-09</a></h2>
+<h3 id="fixed-28"><a class="header" href="#fixed-28">Fixed</a></h3>
+<ul>
+<li>Update <code>regex</code> to 1.5.5 to address <a href="https://github.com/rust-lang/regex/security/advisories/GHSA-m5pq-gvj9-9vr8">GHSA-m5pq-gvj9-9vr8
+(CVE-2022-24713)</a>.</li>
+</ul>
+<h2 id="0910---2022-03-07"><a class="header" href="#0910---2022-03-07"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.10">0.9.10</a> - 2022-03-07</a></h2>
+<p>Thanks to <a href="https://github.com/Guiguiprim">Guiguiprim</a> for their contributions to this release!</p>
+<h3 id="added-39"><a class="header" href="#added-39">Added</a></h3>
+<ul>
+<li>A new <code>--platform-filter</code> option filters tests by the platform they run on (target or host).</li>
+<li><code>cargo nextest list</code> has a new <code>--list-type</code> option, with values <code>full</code> (the default, same as today) and <code>binaries-only</code> (list out binaries without querying them for the tests they contain).</li>
+<li>Nextest executions done as a separate process per test (currently the only supported method, though this might change in the future) set the environment variable <code>NEXTEST_PROCESS_MODE=process-per-test</code>.</li>
+</ul>
+<h3 id="new-experimental-features"><a class="header" href="#new-experimental-features">New experimental features</a></h3>
+<ul>
+<li>Nextest can now reuse builds across invocations and machines. This is an experimental feature, and feedback is welcome in <a href="https://github.com/nextest-rs/nextest/issues/98">#98</a>!</li>
+</ul>
+<h3 id="changed-17"><a class="header" href="#changed-17">Changed</a></h3>
+<ul>
+<li>The target runner is now build-platform-specific; test binaries built for the host platform will be run by the target runner variable defined for the host, and similarly for the target platform.</li>
+</ul>
+<h2 id="099---2022-03-03"><a class="header" href="#099---2022-03-03"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.9">0.9.9</a> - 2022-03-03</a></h2>
+<h3 id="added-40"><a class="header" href="#added-40">Added</a></h3>
+<ul>
+<li>Updates for Rust 1.59:
+<ul>
+<li>Support abbreviating <code>--release</code> as <code>-r</code> (<a href="https://github.com/rust-lang/cargo/pull/10133">Cargo #10133</a>).</li>
+<li>Stabilize future-incompat-report (<a href="https://github.com/rust-lang/cargo/pull/10165">Cargo #10165</a>).</li>
+<li>Update builtin list of targets (used by the target runner) to Rust 1.59.</li>
+</ul>
+</li>
+</ul>
+<h2 id="098---2022-02-23"><a class="header" href="#098---2022-02-23"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.8">0.9.8</a> - 2022-02-23</a></h2>
+<h3 id="fixed-29"><a class="header" href="#fixed-29">Fixed</a></h3>
+<ul>
+<li>Target runners of the form <code>runner = ["bin-name", "--arg1", ...]</code> are now parsed correctly (<a href="https://github.com/nextest-rs/nextest/pull/75">#75</a>).</li>
+<li>Binary IDs for <code>[[bin]]</code> and <code>[[example]]</code> tests are now unique, in the format <code>&lt;crate-name&gt;::bin/&lt;binary-name&gt;</code> and <code>&lt;crate-name&gt;::test/&lt;binary-name&gt;</code> respectively (<a href="https://github.com/nextest-rs/nextest/pull/76">#76</a>).</li>
+</ul>
+<h2 id="097---2022-02-23"><a class="header" href="#097---2022-02-23"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.7">0.9.7</a> - 2022-02-23</a></h2>
+<h3 id="fixed-30"><a class="header" href="#fixed-30">Fixed</a></h3>
+<ul>
+<li>If parsing target runner configuration fails, warn and proceed without a target runner rather than erroring out.</li>
+</ul>
+<h3 id="known-issues"><a class="header" href="#known-issues">Known issues</a></h3>
+<ul>
+<li>Parsing an array of strings for the target runner currently fails: <a href="https://github.com/nextest-rs/nextest/issues/73">#73</a>. A fix is being worked on in <a href="https://github.com/nextest-rs/nextest/pull/75">#75</a>.</li>
+</ul>
+<h2 id="096---2022-02-22"><a class="header" href="#096---2022-02-22"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.6">0.9.6</a> - 2022-02-22</a></h2>
+<h3 id="added-41"><a class="header" href="#added-41">Added</a></h3>
+<ul>
+<li>Support Cargo configuration for <a href="https://nexte.st/book/target-runners">target runners</a>.</li>
+</ul>
+<h2 id="095---2022-02-20"><a class="header" href="#095---2022-02-20"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.5">0.9.5</a> - 2022-02-20</a></h2>
+<h3 id="fixed-31"><a class="header" href="#fixed-31">Fixed</a></h3>
+<ul>
+<li>Updated nextest-runner to 0.1.2, fixing cyan coloring of module paths (<a href="https://github.com/nextest-rs/nextest/issues/52">#52</a>).</li>
+</ul>
+<h2 id="094---2022-02-16"><a class="header" href="#094---2022-02-16"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.4">0.9.4</a> - 2022-02-16</a></h2>
+<p>The big new change is that release binaries are now available! Head over to <a href="https://nexte.st/book/pre-built-binaries">Pre-built binaries</a> for more.</p>
+<h3 id="added-42"><a class="header" href="#added-42">Added</a></h3>
+<ul>
+<li>In test output, module paths are now colored cyan (<a href="https://github.com/nextest-rs/nextest/pull/42">#42</a>).</li>
+</ul>
+<h3 id="fixed-32"><a class="header" href="#fixed-32">Fixed</a></h3>
+<ul>
+<li>While querying binaries to list tests, lines ending with ": benchmark" will now be ignored (<a href="https://github.com/nextest-rs/nextest/issues/46">#46</a>).</li>
+</ul>
+<h2 id="093---2022-02-14"><a class="header" href="#093---2022-02-14"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.3">0.9.3</a> - 2022-02-14</a></h2>
+<h3 id="fixed-33"><a class="header" href="#fixed-33">Fixed</a></h3>
+<ul>
+<li>Add a <code>BufWriter</code> around stderr for the reporter, reducing the number of syscalls and fixing
+issues around output overlap on Windows (<a href="https://github.com/nextest-rs/nextest/issues/35">#35</a>). Thanks <a href="https://github.com/fdncred">@fdncred</a> for reporting this!</li>
+</ul>
+<h2 id="092---2022-02-14"><a class="header" href="#092---2022-02-14"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.2">0.9.2</a> - 2022-02-14</a></h2>
+<h3 id="fixed-34"><a class="header" href="#fixed-34">Fixed</a></h3>
+<ul>
+<li>Running cargo nextest from within a crate now runs tests for just that crate, similar to cargo
+test. Thanks <a href="https://twitter.com/RealWittenstein/status/1493291441384210437">Yaron Wittenstein</a>
+for reporting this!</li>
+</ul>
+<h2 id="091---2022-02-14"><a class="header" href="#091---2022-02-14"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.1">0.9.1</a> - 2022-02-14</a></h2>
+<h3 id="fixed-35"><a class="header" href="#fixed-35">Fixed</a></h3>
+<ul>
+<li>Updated nextest-runner to 0.1.1, fixing builds on Rust 1.54.</li>
+</ul>
+<h2 id="090---2022-02-14"><a class="header" href="#090---2022-02-14"><a href="https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.0">0.9.0</a> - 2022-02-14</a></h2>
+<p><strong>Initial release.</strong> Happy Valentine's day!</p>
+<h3 id="added-43"><a class="header" href="#added-43">Added</a></h3>
+<p>Supported in this initial release:</p>
+<ul>
+<li><a href="book/listing.html">Listing tests</a></li>
+<li><a href="book/running.html">Running tests in parallel</a> for faster results</li>
+<li><a href="book/partitioning.html">Partitioning tests</a> across multiple CI jobs</li>
+<li><a href="book/retries.html">Test retries</a> and flaky test detection</li>
+<li><a href="book/junit.html">JUnit support</a> for integration with other test tooling</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="book/custom-test-harnesses.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="book/custom-test-harnesses.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

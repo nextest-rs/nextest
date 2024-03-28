@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fix_module_path"]};

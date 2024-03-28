@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["break_words","display_width"],"struct":["Word"],"trait":["Fragment"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ReleaseStatus","VersionRange","VersionRangeKind"],"struct":["MuktiProject","MuktiReleasesJson","ReleaseLocation","ReleaseRangeData","ReleaseVersionData","VersionRangeParseError"]};

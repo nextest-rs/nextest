@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","OverwriteBehavior"],"fn":["move_atomic","replace_atomic"],"struct":["AtomicFile"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ExpressionParseDiagnostic","PlainStringParseDiagnostic","TripleParseDiagnostic"],"trait":["IntoMietteDiagnostic"]};

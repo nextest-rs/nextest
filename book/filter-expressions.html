@@ -1,0 +1,396 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Filter expressions - cargo-nextest</title>
+
+
+        <!-- Custom HTML head -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:title" content="Filter expressions - cargo-nextest" />
+        <meta property="og:image" content="https://nexte.st/static/cover.png" />
+        <meta property="og:description" content="A next-generation test runner for Rust." />
+        <link rel="stylesheet" href="/fonts/inter.css" />
+        <style>
+            :root,
+            html {
+                font-family: "Inter", "Helvetica Neue", "Arial", sans-serif;
+                font-feature-settings: "ss01", "ss03";
+                font-variant-ligatures: common-ligatures;
+                letter-spacing: -0.008em;
+            }
+        
+            @supports (font-variation-settings: normal) {
+                :root {
+                    font-family: 'Inter var', "Helvetica Neue", "Arial", sans-serif;
+                }
+            }
+        </style>
+        <link rel="stylesheet" href="/css/extra.css" />
+        <link rel="preload" href="/fonts/Inter-roman.var.woff2?v=26a312df" as="font" type="font/woff2" crossorigin />
+        <link rel="preload" href="/fonts/Inter-italic.var.woff2?v=26a312df" as="font" type="font/woff2" crossorigin />
+
+        <meta name="description" content="A next-generation test runner for Rust.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "rust";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../index.html">Home</a></li><li class="spacer"></li><li class="chapter-item expanded "><a href="../book/installation.html"><strong aria-hidden="true">1.</strong> Installation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/pre-built-binaries.html"><strong aria-hidden="true">1.1.</strong> Pre-built binaries</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/release-urls.html"><strong aria-hidden="true">1.1.1.</strong> Release URLs</a></li></ol></li><li class="chapter-item expanded "><a href="../book/installing-from-source.html"><strong aria-hidden="true">1.2.</strong> Installing from source</a></li><li class="chapter-item expanded "><a href="../book/updating.html"><strong aria-hidden="true">1.3.</strong> Updating nextest</a></li><li class="chapter-item expanded "><a href="../book/antivirus-gatekeeper.html"><strong aria-hidden="true">1.4.</strong> Windows antivirus and macOS Gatekeeper</a></li></ol></li><li class="chapter-item expanded "><a href="../book/usage.html"><strong aria-hidden="true">2.</strong> Usage</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/running.html"><strong aria-hidden="true">2.1.</strong> Running tests</a></li><li class="chapter-item expanded "><a href="../book/listing.html"><strong aria-hidden="true">2.2.</strong> Listing tests</a></li><li class="chapter-item expanded "><a href="../book/retries.html"><strong aria-hidden="true">2.3.</strong> Retries and flaky tests</a></li><li class="chapter-item expanded "><a href="../book/slow-tests.html"><strong aria-hidden="true">2.4.</strong> Slow tests and timeouts</a></li><li class="chapter-item expanded "><a href="../book/leaky-tests.html"><strong aria-hidden="true">2.5.</strong> Leaky tests</a></li><li class="chapter-item expanded "><a href="../book/filter-expressions.html" class="active"><strong aria-hidden="true">2.6.</strong> Filter expressions</a></li><li class="chapter-item expanded "><a href="../book/reusing-builds.html"><strong aria-hidden="true">2.7.</strong> Archiving and reusing builds</a></li><li class="chapter-item expanded "><a href="../book/partitioning.html"><strong aria-hidden="true">2.8.</strong> Partitioning test runs in CI</a></li><li class="chapter-item expanded "><a href="../book/target-runners.html"><strong aria-hidden="true">2.9.</strong> Target runners</a></li><li class="chapter-item expanded "><a href="../book/other-options.html"><strong aria-hidden="true">2.10.</strong> Other options</a></li></ol></li><li class="chapter-item expanded "><a href="../book/machine-readable.html"><strong aria-hidden="true">3.</strong> Machine-readable output</a></li><li class="chapter-item expanded "><a href="../book/configuration.html"><strong aria-hidden="true">4.</strong> Configuration</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/env-vars.html"><strong aria-hidden="true">4.1.</strong> Environment variables</a></li><li class="chapter-item expanded "><a href="../book/minimum-versions.html"><strong aria-hidden="true">4.2.</strong> Minimum nextest versions</a></li><li class="chapter-item expanded "><a href="../book/per-test-overrides.html"><strong aria-hidden="true">4.3.</strong> Per-test overrides</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/specifying-platforms.html"><strong aria-hidden="true">4.3.1.</strong> Specifying platforms</a></li></ol></li><li class="chapter-item expanded "><a href="../book/threads-required.html"><strong aria-hidden="true">4.4.</strong> Heavy tests and threads-required</a></li><li class="chapter-item expanded "><a href="../book/test-groups.html"><strong aria-hidden="true">4.5.</strong> Test groups and mutual exclusion</a></li></ol></li><li class="chapter-item expanded "><a href="../book/junit.html"><strong aria-hidden="true">5.</strong> JUnit support</a></li><li class="chapter-item expanded "><a href="../book/integrations.html"><strong aria-hidden="true">6.</strong> Integrations with other tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/test-coverage.html"><strong aria-hidden="true">6.1.</strong> Test coverage</a></li><li class="chapter-item expanded "><a href="../book/miri.html"><strong aria-hidden="true">6.2.</strong> The Miri interpreter</a></li><li class="chapter-item expanded "><a href="../book/benchmark-integration.html"><strong aria-hidden="true">6.3.</strong> Criterion benchmarks</a></li><li class="chapter-item expanded "><a href="../book/cargo-mutants.html"><strong aria-hidden="true">6.4.</strong> Mutation testing with cargo-mutants</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../book/stability.html"><strong aria-hidden="true">7.</strong> Stability policy</a></li><li class="chapter-item expanded "><a href="../book/experimental-features.html"><strong aria-hidden="true">8.</strong> Experimental features</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/setup-scripts.html"><strong aria-hidden="true">8.1.</strong> Setup scripts</a></li><li class="chapter-item expanded "><a href="../book/run-machine-readable.html"><strong aria-hidden="true">8.2.</strong> Machine-readable output for test runs</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../book/how-it-works.html"><strong aria-hidden="true">9.</strong> How nextest works</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/benchmarks.html"><strong aria-hidden="true">9.1.</strong> Benchmarks</a></li><li class="chapter-item expanded "><a href="../book/custom-test-harnesses.html"><strong aria-hidden="true">9.2.</strong> Custom test harnesses</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../CHANGELOG.html">Changelog</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">cargo-nextest</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/nextest-rs/nextest" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/nextest-rs/nextest/edit/main/site/src/book/filter-expressions.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="filter-expressions"><a class="header" href="#filter-expressions">Filter expressions</a></h1>
+<p>Nextest supports a domain-specific language (DSL) for filtering tests. The DSL is inspired by, and is similar to, <a href="https://bazel.build/docs/query-how-to">Bazel query</a> and <a href="https://www.mercurial-scm.org/repo/hg/help/revsets">Mercurial revsets</a>.</p>
+<h2 id="example-running-all-tests-in-a-crate-and-its-dependencies"><a class="header" href="#example-running-all-tests-in-a-crate-and-its-dependencies">Example: Running all tests in a crate and its dependencies</a></h2>
+<p>To run all tests in <code>my-crate</code> and its dependencies, run:</p>
+<pre><code>cargo nextest run -E 'deps(my-crate)'
+</code></pre>
+<p>The argument passed into the <code>-E</code> command-line option is called a <em>filter expression</em>. The rest of this page describes the full syntax for the expression DSL.</p>
+<h2 id="the-filter-expression-dsl"><a class="header" href="#the-filter-expression-dsl">The filter expression DSL</a></h2>
+<p>A <em>filter expression</em> defines a set of tests. A test will be run if it matches a filter expression.</p>
+<p>On the command line, multiple filter expressions can be passed in. A test will be run if it matches any of these expressions. For example, to run tests whose names contain the string <code>my_test</code> as well as all tests in package <code>my-crate</code>, run:</p>
+<pre><code>cargo nextest run -E 'test(my_test)' -E 'package(my-crate)'
+</code></pre>
+<p>This is equivalent to:</p>
+<pre><code>cargo nextest run -E 'test(my_test) + package(my-crate)'
+</code></pre>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<ul>
+<li><code>package(serde) and test(deserialize)</code>: every test containing the string <code>deserialize</code> in the package <code>serde</code></li>
+<li><code>deps(nextest*)</code>: all tests in packages whose names start with <code>nextest</code>, and all of their (possibly transitive) dependencies</li>
+<li><code>not (test(/parse[0-9]*/) | test(run))</code>: every test name not matching the regex <code>parse[0-9]*</code> or the substring <code>run</code></li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> If you pass in both a filter expression and a standard, substring-based filter, tests
+must match <strong>both</strong> filter expressions and substring-based filters.</p>
+<p>For example, the command:</p>
+<pre><code>cargo nextest run -E 'package(foo)' -- test_bar test_baz
+</code></pre>
+<p>will run all tests that are both in package <code>foo</code> and match <code>test_bar</code> or <code>test_baz</code>.</p>
+</blockquote>
+<h2 id="dsl-reference"><a class="header" href="#dsl-reference">DSL reference</a></h2>
+<p>This section contains the full set of operators supported by the DSL.</p>
+<h3 id="basic-predicates"><a class="header" href="#basic-predicates">Basic predicates</a></h3>
+<ul>
+<li><code>all()</code>: include all tests.</li>
+<li><code>test(name-matcher)</code>: include all tests matching <code>name-matcher</code>.</li>
+<li><code>package(name-matcher)</code>: include all tests in packages (crates) matching <code>name-matcher</code>.</li>
+<li><code>deps(name-matcher)</code>: include all tests in crates matching <code>name-matcher</code>, and all of their (possibly transitive) dependencies.</li>
+<li><code>rdeps(name-matcher)</code>: include all tests in crates matching <code>name-matcher</code>, and all the crates that (possibly transitively) depend on <code>name-matcher</code>.</li>
+<li><code>kind(name-matcher)</code>: include all tests in binary kinds matching <code>name-matcher</code>. Binary kinds include:
+<ul>
+<li><code>lib</code> for unit tests, typically in the <code>src/</code> directory</li>
+<li><code>test</code> for integration tests, typically in the <code>tests/</code> directory</li>
+<li><code>bench</code> for benchmark tests</li>
+<li><code>bin</code> for tests within <code>[[bin]]</code> targets</li>
+<li><code>proc-macro</code> for tests in the <code>src/</code> directory of a procedural macro</li>
+</ul>
+</li>
+<li><code>binary(name-matcher)</code>: include all tests in binary names matching <code>name-matcher</code>.
+<ul>
+<li>For tests of kind <code>lib</code> and <code>proc-macro</code>, the binary name is the same as the name of the crate.</li>
+<li>Otherwise, it's the name of the integration test, benchmark, or binary target.</li>
+</ul>
+</li>
+<li><code>binary_id(name-matcher)</code>: include all tests in <a href="running.html#binary-ids">binary IDs</a> matching <code>name-matcher</code>.</li>
+<li><code>platform(host)</code> or <code>platform(target)</code>: include all tests that are <a href="running.html#filtering-by-build-platform">built for the host or target platform</a>, respectively.</li>
+<li><code>none()</code>: include no tests.</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> If a filter expression always excludes a particular binary, it will not be run, even to
+get the list of tests within it. This means that a command like:</p>
+<pre><code>cargo nextest list -E 'platform(host)'
+</code></pre>
+<p>will not execute any test binaries built for the target platform. This is generally what you want,
+but if you would like to list tests anyway, include a <code>test()</code> predicate. For example, to
+list test binaries for the target platform (using, for example, a <a href="target-runners.html">target
+runner</a>), but skip running them:</p>
+<pre><code>cargo nextest list -E 'platform(host) + not test(/.*/)' --verbose
+</code></pre>
+</blockquote>
+<h3 id="name-matchers"><a class="header" href="#name-matchers">Name matchers</a></h3>
+<ul>
+<li><code>=string</code>: <em>equality matcher</em>—match a package or test name that's equal to <code>string</code>.</li>
+<li><code>~string</code>: <em>contains matcher</em>—match a package or test name containing <code>string</code>.</li>
+<li><code>/regex/</code>: <em>regex matcher</em>—match a package or test name if any part of it matches the regular expression <code>regex</code>. To match the entire string against a regular expression, use <code>/^regex$/</code>. The implementation uses the <a href="https://github.com/rust-lang/regex">regex</a> crate.</li>
+<li><code>#glob</code>: <em>glob matcher</em>—match a package or test name if the full name matches the glob expression <code>glob</code>. The implementation uses the <a href="https://docs.rs/globset">globset crate</a>.</li>
+<li><code>string</code>: Default matching strategy.
+<ul>
+<li>For <code>test()</code> predicates, this is the <em>contains matcher</em>, equivalent to <code>~string</code>.</li>
+<li>For package-related predicates (<code>package()</code>, <code>deps()</code>, and <code>rdeps()</code>), this is the <em>glob matcher</em>, equivalent to <code>#string</code>.</li>
+<li>For binary-related predicates (<code>binary()</code> and <code>binary_id()</code>), this is also the <em>glob matcher</em>.</li>
+<li>For <code>kind()</code> and <code>platform()</code>, this is the <em>equality matcher</em>, equivalent to <code>=string</code>.</li>
+</ul>
+</li>
+</ul>
+<p>If you're constructing an expression string programmatically, <strong>always use a prefix</strong> to avoid ambiguity.</p>
+<h4 id="escape-sequences"><a class="header" href="#escape-sequences">Escape sequences</a></h4>
+<p>The <em>equality</em>, <em>contains</em>, and <em>glob</em> matchers can contain escape sequences, preceded by a
+backslash (<code>\</code>).</p>
+<ul>
+<li><code>\n</code>: line feed</li>
+<li><code>\r</code>: carriage return</li>
+<li><code>\t</code>: tab</li>
+<li><code>\\</code>: backslash</li>
+<li><code>\/</code>: forward slash</li>
+<li><code>\)</code>: closing parenthesis</li>
+<li><code>\,</code>: comma</li>
+<li><code>\u{7FFF}</code>: 24-bit Unicode character code (up to 6 hex digits)</li>
+</ul>
+<p>For the <em>glob matcher</em>, to match against a literal glob metacharacter such as <code>*</code> or <code>?</code>, enclose it in square brackets: <code>[*]</code> or <code>[?]</code>.</p>
+<p>All other escape sequences are invalid.</p>
+<p>The <em>regular expression</em> matcher supports the same escape sequences that <a href="https://docs.rs/regex/latest/regex/#escape-sequences">the regex crate does</a>. This includes character classes like <code>\d</code>. Additionally, <code>\/</code> is interpreted as an escaped <code>/</code>.</p>
+<h3 id="operators"><a class="header" href="#operators">Operators</a></h3>
+<ul>
+<li><code>set_1 &amp; set_2</code>, <code>set_1 and set_2</code>: the intersection of <code>set_1</code> and <code>set_2</code></li>
+<li><code>set_1 | set_2</code>, <code>set_1 + set_2</code>, <code>set_1 or set_2</code>: the union of <code>set_1</code> or <code>set_2</code></li>
+<li><code>not set</code>, <code>!set</code>: include everything not included in <code>set</code></li>
+<li><code>set_1 - set_2</code>: equivalent to <code>set_1 and not set_2</code></li>
+<li><code>(set)</code>: include everything in <code>set</code></li>
+</ul>
+<h4 id="operator-precedence"><a class="header" href="#operator-precedence">Operator precedence</a></h4>
+<p>In order from highest to lowest, or in other words from tightest to loosest binding:</p>
+<ol>
+<li><code>()</code></li>
+<li><code>not</code>, <code>!</code></li>
+<li><code>and</code>, <code>&amp;</code>, <code>-</code></li>
+<li><code>or</code>, <code>|</code>, <code>+</code></li>
+</ol>
+<p>Within a precedence group, operators bind from left to right.</p>
+<h5 id="examples-1"><a class="header" href="#examples-1">Examples</a></h5>
+<ul>
+<li><code>test(a) &amp; test(b) | test(c)</code> is equivalent to <code>(test(a) &amp; test(b)) | test(c)</code>.</li>
+<li><code>test(a) | test(b) &amp; test(c)</code> is equivalent to <code>test(a) | (test(b) &amp; test(c))</code>.</li>
+<li><code>test(a) &amp; test(b) - test(c)</code> is equivalent to <code>(test(a) &amp; test(b)) - test(c)</code>.</li>
+<li><code>not test(a) | test(b)</code> is equivalent to <code>(not test(a)) | test(b)</code>.</li>
+</ul>
+<h2 id="more-information-about-filter-expressions"><a class="header" href="#more-information-about-filter-expressions">More information about filter expressions</a></h2>
+<p>This section covers additional information that is of interest to nextest's developers and curious readers.</p>
+<details>
+<summary>Click to expand</summary>
+<h3 id="motivation"><a class="header" href="#motivation">Motivation</a></h3>
+<p>Developer tools often work with some notion of sets, and many of them have grown some kind of domain-specific query language to be able to efficiently specify those sets.</p>
+<p>The biggest advantage of a query language is <em>orthogonality</em>: rather than every command having to grow a number of options such as <code>--include</code> and <code>--exclude</code>, developers can learn the query language once and use it everywhere.</p>
+<h3 id="design-decisions"><a class="header" href="#design-decisions">Design decisions</a></h3>
+<p>Nextest's filter expressions are meant to be specified at the command line as well as in configuration. This led to the following design decisions:</p>
+<ul>
+<li><strong>No quotes:</strong> Filter expressions do not have embedded quotes. This lets users use either single (<code>''</code>) or double quotes (<code>""</code>) to specify filter expressions, without having to worry about escaping them.</li>
+<li><strong>Minimize nesting of parens:</strong> If an expression language uses parentheses or other brackets heavily (e.g. Rust's <a href="https://doc.rust-lang.org/reference/conditional-compilation.html"><code>cfg()</code> expressions</a>), getting them wrong can be annoying when trying to write an expression. Text editors typically highlight matching and missing parens, but there's so such immediate feedback on the command line.</li>
+<li><strong>Infix operators:</strong> Nextest's filter expressions use infix operators, which are more natural to read and write for most people. (As an alternative, Rust's <a href="https://doc.rust-lang.org/reference/conditional-compilation.html"><code>cfg()</code> expressions</a> use the prefix operators <code>all()</code> and <code>any()</code>).</li>
+<li><strong>Operator aliases:</strong> Operators are supported as both words (<code>and</code>, <code>or</code>, <code>not</code>) and symbols (<code>&amp;</code>, <code>|</code>, <code>+</code>, <code>-</code>, <code>!</code>), letting users write expressions in the style most natural to them. Filter expressions are a small language, so there's no need to be particularly opinionated.</li>
+</ul>
+</details>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../book/leaky-tests.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../book/reusing-builds.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../book/leaky-tests.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../book/reusing-builds.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

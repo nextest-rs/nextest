@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BINARIES_METADATA_FILE_NAME","CARGO_METADATA_FILE_NAME"],"enum":["ArchiveEvent","ArchiveFormat","ExtractDestination","MetadataOrPath"],"fn":["archive_to_file"],"struct":["ArchiveReporter","BinaryListKind","CargoMetadataKind","MetadataWithRemap","PathMapper","ReuseBuildInfo"],"trait":["MetadataKind"]};

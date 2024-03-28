@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`⚙️ cfg-expr`"><title>cfg_expr - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="cfg_expr" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../cfg_expr/index.html">cfg_expr</a><span class="version">0.15.6</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../cfg_expr/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">cfg_expr</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/cfg_expr/lib.rs.html#1-14">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><div align="center">
+<h2 id="-cfg-expr"><a class="doc-anchor" href="#-cfg-expr">§</a><code>⚙️ cfg-expr</code></h2>
+<p><strong>A parser and evaluator for Rust <code>cfg()</code> expressions. Builtin targets as of <a href="https://forge.rust-lang.org/release/platform-support.html">Rust 1.75.0</a> are supported.</strong></p>
+<p><a href="https://github.com/EmbarkStudios/cfg-expr/actions?workflow=CI"><img src="https://github.com/EmbarkStudios/cfg-expr/workflows/CI/badge.svg" alt="Build Status" /></a>
+<a href="https://crates.io/crates/cfg-expr"><img src="https://img.shields.io/crates/v/cfg-expr.svg" alt="Crates.io" /></a>
+<a href="https://docs.rs/cfg-expr"><img src="https://docs.rs/cfg-expr/badge.svg" alt="Docs" /></a>
+<a href="https://blog.rust-lang.org/2023/06/01/Rust-1.70.0.html"><img src="https://img.shields.io/badge/Rust%20MSRV-1.70.0-blue?color=fc8d62&amp;logo=rust" alt="Minimum Stable Rust Version" /></a>
+<a href="https://forge.rust-lang.org/release/platform-support.html"><img src="https://img.shields.io/badge/Rust%20Targets-1.75.0-blue.svg" alt="Rust Targets" /></a>
+<a href="CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/contributor%20covenant-v2.0%20adopted-ff69b4.svg" alt="Contributor Covenant" /></a>
+<a href="https://embark.dev"><img src="https://img.shields.io/badge/embark-open%20source-blueviolet.svg" alt="Embark" /></a></p>
+</div>
+<h3 id="alternatives"><a class="doc-anchor" href="#alternatives">§</a>Alternatives</h3>
+<ul>
+<li><a href="https://crates.io/crates/cargo-platform">cargo-platform</a></li>
+<li><a href="https://crates.io/crates/parse_cfg">parse_cfg</a></li>
+</ul>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p><code>cfg-expr</code> is a crate that can be used to parse and evaluate Rust <code>cfg()</code> expressions, both as declarable in Rust code itself, as well in cargo manifests’ <code>[target.'cfg()'.dependencies]</code> sections.</p>
+<p>It contains a list of all builtin targets known to rustc as of <code>1.75.0</code> that can be used to determine if a particular cfg expression is satisfiable.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>cfg_expr::{targets::get_builtin_target_by_triple, Expression, Predicate};
+
+<span class="kw">let </span>specific = Expression::parse(
+    <span class="string">r#"all(
+        target_os = "windows",
+        target_arch = "x86",
+        windows,
+        target_env = "msvc",
+        target_feature = "fxsr",
+        target_feature = "sse",
+        target_feature = "sse2",
+        target_pointer_width = "32",
+        target_endian = "little",
+        not(target_vendor = "uwp"),
+        feature = "cool_thing",
+    )"#</span>,
+).unwrap();
+
+<span class="comment">// cfg_expr includes a list of every builtin target in rustc
+</span><span class="kw">let </span>x86_win = get_builtin_target_by_triple(<span class="string">"i686-pc-windows-msvc"</span>).unwrap();
+<span class="kw">let </span>x86_pentium_win = get_builtin_target_by_triple(<span class="string">"i586-pc-windows-msvc"</span>).unwrap();
+<span class="kw">let </span>uwp_win = get_builtin_target_by_triple(<span class="string">"i686-uwp-windows-msvc"</span>).unwrap();
+<span class="kw">let </span>mac = get_builtin_target_by_triple(<span class="string">"x86_64-apple-darwin"</span>).unwrap();
+
+<span class="kw">let </span>avail_target_feats = [<span class="string">"fxsr"</span>, <span class="string">"sse"</span>, <span class="string">"sse2"</span>];
+
+<span class="comment">// This will satisfy all requirements
+</span><span class="macro">assert!</span>(specific.eval(|pred| {
+    <span class="kw">match </span>pred {
+        Predicate::Target(tp) =&gt; tp.matches(x86_win),
+        Predicate::TargetFeature(feat) =&gt; avail_target_feats.contains(feat),
+        Predicate::Feature(feat) =&gt; <span class="kw-2">*</span>feat == <span class="string">"cool_thing"</span>,
+        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+    }
+}));
+
+<span class="comment">// This won't, it doesn't have the cool_thing feature!
+</span><span class="macro">assert!</span>(!specific.eval(|pred| {
+    <span class="kw">match </span>pred {
+        Predicate::Target(tp) =&gt; tp.matches(x86_pentium_win),
+        Predicate::TargetFeature(feat) =&gt; avail_target_feats.contains(feat),
+        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+    }
+}));
+
+<span class="comment">// This will *not* satisfy the vendor predicate
+</span><span class="macro">assert!</span>(!specific.eval(|pred| {
+    <span class="kw">match </span>pred {
+        Predicate::Target(tp) =&gt; tp.matches(uwp_win),
+        Predicate::TargetFeature(feat) =&gt; avail_target_feats.contains(feat),
+        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+    }
+}));
+
+<span class="comment">// This will *not* satisfy the vendor, os, or env predicates
+</span><span class="macro">assert!</span>(!specific.eval(|pred| {
+    <span class="kw">match </span>pred {
+        Predicate::Target(tp) =&gt; tp.matches(mac),
+        Predicate::TargetFeature(feat) =&gt; avail_target_feats.contains(feat),
+        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+    }
+}));</code></pre></div>
+<h3 id="contributing"><a class="doc-anchor" href="#contributing">§</a>Contributing</h3>
+<p>We welcome community contributions to this project.</p>
+<p>Please read our <a href="CONTRIBUTING.md">Contributor Guide</a> for more information on how to get started.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of</p>
+<ul>
+<li>Apache License, Version 2.0, (<a href="LICENSE-APACHE">LICENSE-APACHE</a> or <a href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>)</li>
+<li>MIT license (<a href="LICENSE-MIT">LICENSE-MIT</a> or <a href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>)</li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.ParseError"><code>pub use error::<a class="struct" href="error/struct.ParseError.html" title="struct cfg_expr::error::ParseError">ParseError</a>;</code></div></li><li><div class="item-name" id="reexport.Expression"><code>pub use expr::<a class="struct" href="expr/struct.Expression.html" title="struct cfg_expr::expr::Expression">Expression</a>;</code></div></li><li><div class="item-name" id="reexport.Predicate"><code>pub use expr::<a class="enum" href="expr/enum.Predicate.html" title="enum cfg_expr::expr::Predicate">Predicate</a>;</code></div></li><li><div class="item-name" id="reexport.TargetPredicate"><code>pub use expr::<a class="enum" href="expr/enum.TargetPredicate.html" title="enum cfg_expr::expr::TargetPredicate">TargetPredicate</a>;</code></div></li><li><div class="item-name" id="reexport.target_lexicon"><code>pub use <a class="mod" href="../target_lexicon/index.html" title="mod target_lexicon">target_lexicon</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="error/index.html" title="mod cfg_expr::error">error</a></div><div class="desc docblock-short">Types related to parse errors</div></li><li><div class="item-name"><a class="mod" href="expr/index.html" title="mod cfg_expr::expr">expr</a></div><div class="desc docblock-short">Types related to cfg expressions</div></li><li><div class="item-name"><a class="mod" href="targets/index.html" title="mod cfg_expr::targets">targets</a></div><div class="desc docblock-short">Types related to rustc targets</div></li></ul></section></div></main></body></html>

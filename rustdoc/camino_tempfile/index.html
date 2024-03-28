@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Temporary files and directories with UTF-8 paths."><title>camino_tempfile - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="camino_tempfile" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../camino_tempfile/index.html">camino_tempfile</a><span class="version">1.1.1</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../camino_tempfile/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">camino_tempfile</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/camino_tempfile/lib.rs.html#4-177">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Temporary files and directories with UTF-8 paths.</p>
+<p><code>camino-tempfile</code> is a wrapper around the <a href="../tempfile/index.html" title="mod tempfile"><code>tempfile</code></a> crate that returns
+<a href="../camino/struct.Utf8Path.html" title="struct camino::Utf8Path"><code>Utf8Path</code></a> rather than <a href="https://doc.rust-lang.org/1.77.0/std/path/struct.Path.html" title="struct std::path::Path"><code>Path</code></a>.</p>
+<p>If your code mostly uses <a href="../camino/index.html" title="mod camino"><code>camino</code></a>, it can be annoying to have to convert temporary paths to
+<code>Utf8Path</code> over and over again. This crate takes care of that for you.</p>
+<p>This library and its documentation are adapted from the <a href="../tempfile/index.html" title="mod tempfile"><code>tempfile</code></a> crate, and
+are used under the MIT and Apache 2.0 licenses.</p>
+<h2 id="synopsis"><a class="doc-anchor" href="#synopsis">§</a>Synopsis</h2>
+<ul>
+<li>Use the <a href="fn.tempfile.html" title="fn camino_tempfile::tempfile"><code>tempfile()</code></a> function for temporary files</li>
+<li>Use the <a href="fn.tempdir.html" title="fn camino_tempfile::tempdir"><code>tempdir()</code></a> function for temporary directories.</li>
+</ul>
+<h2 id="design"><a class="doc-anchor" href="#design">§</a>Design</h2>
+<p>This crate provides several approaches to creating temporary files and directories.
+<a href="fn.tempfile.html" title="fn camino_tempfile::tempfile"><code>tempfile()</code></a> relies on the OS to remove the temporary file once the last handle is closed.
+<a href="struct.Utf8TempDir.html" title="struct camino_tempfile::Utf8TempDir"><code>Utf8TempDir</code></a> and <a href="struct.NamedUtf8TempFile.html" title="struct camino_tempfile::NamedUtf8TempFile"><code>NamedUtf8TempFile</code></a> both rely on Rust destructors for cleanup.</p>
+<p>When choosing between the temporary file variants, prefer <code>tempfile</code> unless you either need to
+know the file’s path or to be able to persist it.</p>
+<h3 id="resource-leaking"><a class="doc-anchor" href="#resource-leaking">§</a>Resource Leaking</h3>
+<p><a href="fn.tempfile.html" title="fn camino_tempfile::tempfile"><code>tempfile()</code></a> will (almost) never fail to cleanup temporary resources. However, <a href="struct.Utf8TempDir.html" title="struct camino_tempfile::Utf8TempDir"><code>Utf8TempDir</code></a>
+and <a href="struct.NamedUtf8TempFile.html" title="struct camino_tempfile::NamedUtf8TempFile"><code>NamedUtf8TempFile</code></a> will fail if their destructors don’t run. This is because
+<a href="fn.tempfile.html" title="fn camino_tempfile::tempfile"><code>tempfile()</code></a> relies on the OS to cleanup the underlying file, while <a href="struct.Utf8TempDir.html" title="struct camino_tempfile::Utf8TempDir"><code>Utf8TempDir</code></a> and
+<a href="struct.NamedUtf8TempFile.html" title="struct camino_tempfile::NamedUtf8TempFile"><code>NamedUtf8TempFile</code></a> rely on Rust destructors to do so. Destructors may fail to run if the
+process exits through an unhandled signal interrupt (like <code>SIGINT</code>), or if the instance is
+declared statically, among other possible reasons.</p>
+<h3 id="security"><a class="doc-anchor" href="#security">§</a>Security</h3>
+<p>In the presence of pathological temporary file cleaner, relying on file paths is unsafe because
+a temporary file cleaner could delete the temporary file which an attacker could then replace.</p>
+<p><a href="fn.tempfile.html" title="fn camino_tempfile::tempfile"><code>tempfile()</code></a> doesn’t rely on file paths so this isn’t an issue. However, <a href="struct.NamedUtf8TempFile.html" title="struct camino_tempfile::NamedUtf8TempFile"><code>NamedUtf8TempFile</code></a>
+does rely on file paths for <em>some</em> operations. See the security documentation on the
+<a href="struct.NamedUtf8TempFile.html" title="struct camino_tempfile::NamedUtf8TempFile"><code>NamedUtf8TempFile</code></a> type for more information.</p>
+<h3 id="early-drop-pitfall"><a class="doc-anchor" href="#early-drop-pitfall">§</a>Early drop pitfall</h3>
+<p>Because <a href="struct.Utf8TempDir.html" title="struct camino_tempfile::Utf8TempDir"><code>Utf8TempDir</code></a> and <a href="struct.NamedUtf8TempFile.html" title="struct camino_tempfile::NamedUtf8TempFile"><code>NamedUtf8TempFile</code></a> rely on their destructors for cleanup, this
+can lead to an unexpected early removal of the directory/file, usually when working with APIs
+which are generic over <code>AsRef&lt;Utf8Path&gt;</code> or <code>AsRef&lt;Path&gt;</code>. Consider the following example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Create a directory inside of `std::env::temp_dir()`.
+</span><span class="kw">let </span>temp_dir = tempdir()<span class="question-mark">?</span>;
+
+<span class="comment">// Spawn the `touch` command inside the temporary directory and collect the exit status
+// Note that `temp_dir` is **not** moved into `current_dir`, but passed as a reference
+</span><span class="kw">let </span>exit_status = Command::new(<span class="string">"touch"</span>).arg(<span class="string">"tmp"</span>).current_dir(<span class="kw-2">&amp;</span>temp_dir).status()<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(exit_status.success());
+</code></pre></div>
+<p>This works because a reference to <code>temp_dir</code> is passed to <code>current_dir</code>, resulting in the
+destructor of <code>temp_dir</code> being run after the <code>Command</code> has finished execution. Moving the
+<a href="struct.Utf8TempDir.html" title="struct camino_tempfile::Utf8TempDir"><code>Utf8TempDir</code></a> into the <code>current_dir</code> call would result in the <a href="struct.Utf8TempDir.html" title="struct camino_tempfile::Utf8TempDir"><code>Utf8TempDir</code></a> being converted
+into an internal representation, with the original value being dropped and the directory thus
+being deleted, before the command can be executed.</p>
+<p>The <code>touch</code> command would fail with an <code>No such file or directory</code> error.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p>Create a temporary file and write some data into it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>camino_tempfile::tempfile;
+<span class="kw">use </span>std::io::{<span class="self">self</span>, Write};
+
+<span class="comment">// Create a file inside of `std::env::temp_dir()`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>file = tempfile()<span class="question-mark">?</span>;
+
+<span class="macro">writeln!</span>(file, <span class="string">"Brian was here. Briefly."</span>)<span class="question-mark">?</span>;</code></pre></div>
+<p>Create a named temporary file and open an independent file handle:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>camino_tempfile::NamedUtf8TempFile;
+<span class="kw">use </span>std::io::{<span class="self">self</span>, Write, Read};
+
+<span class="kw">let </span>text = <span class="string">"Brian was here. Briefly."</span>;
+
+<span class="comment">// Create a file inside of `std::env::temp_dir()`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>file1 = NamedUtf8TempFile::new()<span class="question-mark">?</span>;
+
+<span class="comment">// Re-open it.
+</span><span class="kw">let </span><span class="kw-2">mut </span>file2 = file1.reopen()<span class="question-mark">?</span>;
+
+<span class="comment">// Write some test data to the first handle.
+</span>file1.write_all(text.as_bytes())<span class="question-mark">?</span>;
+
+<span class="comment">// Read the test data using the second handle.
+</span><span class="kw">let </span><span class="kw-2">mut </span>buf = String::new();
+file2.read_to_string(<span class="kw-2">&amp;mut </span>buf)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(buf, text);</code></pre></div>
+<p>Create a temporary directory and add a file to it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>camino_tempfile::tempdir;
+<span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::io::{<span class="self">self</span>, Write};
+
+<span class="comment">// Create a directory inside of `std::env::temp_dir()`.
+</span><span class="kw">let </span>dir = tempdir()<span class="question-mark">?</span>;
+
+<span class="kw">let </span>file_path = dir.path().join(<span class="string">"my-temporary-note.txt"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>file = File::create(file_path)<span class="question-mark">?</span>;
+<span class="macro">writeln!</span>(file, <span class="string">"Brian was here. Briefly."</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// By closing the `Utf8TempDir` explicitly, we can check that it has
+// been deleted successfully. If we don't close it explicitly,
+// the directory will still be deleted when `dir` goes out
+// of scope, but we won't know whether deleting the directory
+// succeeded.
+</span>drop(file);
+dir.close()<span class="question-mark">?</span>;</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct camino_tempfile::Builder">Builder</a></div><div class="desc docblock-short">Create a new temporary file or directory with custom parameters.</div></li><li><div class="item-name"><a class="struct" href="struct.NamedUtf8TempFile.html" title="struct camino_tempfile::NamedUtf8TempFile">NamedUtf8TempFile</a></div><div class="desc docblock-short">A named temporary file.</div></li><li><div class="item-name"><a class="struct" href="struct.Utf8PathPersistError.html" title="struct camino_tempfile::Utf8PathPersistError">Utf8PathPersistError</a></div><div class="desc docblock-short">Error returned when persisting a temporary file path fails.</div></li><li><div class="item-name"><a class="struct" href="struct.Utf8PersistError.html" title="struct camino_tempfile::Utf8PersistError">Utf8PersistError</a></div><div class="desc docblock-short">Error returned when persisting a temporary file fails.</div></li><li><div class="item-name"><a class="struct" href="struct.Utf8TempDir.html" title="struct camino_tempfile::Utf8TempDir">Utf8TempDir</a></div><div class="desc docblock-short">A directory in the filesystem that is automatically deleted when it goes out of scope.</div></li><li><div class="item-name"><a class="struct" href="struct.Utf8TempPath.html" title="struct camino_tempfile::Utf8TempPath">Utf8TempPath</a></div><div class="desc docblock-short">A path to a named temporary file without an open file handle.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.tempdir.html" title="fn camino_tempfile::tempdir">tempdir</a></div><div class="desc docblock-short">Create a new temporary directory.</div></li><li><div class="item-name"><a class="fn" href="fn.tempdir_in.html" title="fn camino_tempfile::tempdir_in">tempdir_in</a></div><div class="desc docblock-short">Create a new temporary directory in a specific directory.</div></li><li><div class="item-name"><a class="fn" href="fn.tempfile.html" title="fn camino_tempfile::tempfile">tempfile</a></div><div class="desc docblock-short">Create a new temporary file.</div></li><li><div class="item-name"><a class="fn" href="fn.tempfile_in.html" title="fn camino_tempfile::tempfile_in">tempfile_in</a></div><div class="desc docblock-short">Create a new temporary file in the specified directory.</div></li></ul></section></div></main></body></html>

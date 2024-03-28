@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Initializes the console tracing `Subscriber` and starts the console subscriber `Server` on its own background thread."><title>init in console_subscriber - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="console_subscriber" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../console_subscriber/index.html">console_subscriber</a><span class="version">0.2.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../console_subscriber/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">console_subscriber</a>::<wbr><a class="fn" href="#">init</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/console_subscriber/builder.rs.html#651-653">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn init()</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Initializes the console <a href="https://docs.rs/tracing/latest/tracing/trait.Subscriber.html">tracing <code>Subscriber</code></a> and starts the console
+subscriber <a href="struct.Server.html" title="struct console_subscriber::Server"><code>Server</code></a> on its own background thread.</p>
+<p>This function represents the easiest way to get started using
+tokio-console.</p>
+<p>In addition to the <a href="struct.ConsoleLayer.html" title="struct console_subscriber::ConsoleLayer"><code>ConsoleLayer</code></a>, which collects instrumentation data
+consumed by the console, the default <a href="https://docs.rs/tracing/latest/tracing/trait.Subscriber.html"><code>Subscriber</code></a> initialized by this
+function also includes a <a href="https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html"><code>tracing_subscriber::fmt</code></a> layer, which logs
+tracing spans and events to stdout. Which spans and events are logged will
+be determined by the <code>RUST_LOG</code> environment variable.</p>
+<p><strong>Note</strong>: this function sets the <a href="https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber">default <code>tracing</code> subscriber</a>
+for your application. If you need to add additional layers to a subscriber,
+see <a href="fn.spawn.html" title="fn console_subscriber::spawn"><code>spawn</code></a>.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<ul>
+<li>If the subscriber’s background thread could not be spawned.</li>
+<li>If the <a href="https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber">default <code>tracing</code> subscriber</a> has already been set.</li>
+</ul>
+<h2 id="configuration"><a class="doc-anchor" href="#configuration">§</a>Configuration</h2>
+<p>Tokio console subscriber is configured with sensible defaults for most
+use cases. If you need to tune these parameters, several environmental
+configuration variables are available:</p>
+<div><table><thead><tr><th><strong>Environment Variable</strong></th><th><strong>Purpose</strong></th><th><strong>Default Value</strong></th></tr></thead><tbody>
+<tr><td><code>TOKIO_CONSOLE_RETENTION</code></td><td>The number of seconds to accumulate completed tracing data</td><td>3600s (1h)</td></tr>
+<tr><td><code>TOKIO_CONSOLE_BIND</code></td><td>A HOST:PORT description, such as <code>localhost:1234</code></td><td><code>127.0.0.1:6669</code></td></tr>
+<tr><td><code>TOKIO_CONSOLE_PUBLISH_INTERVAL</code></td><td>The number of milliseconds to wait between sending updates to the console</td><td>1000ms (1s)</td></tr>
+<tr><td><code>TOKIO_CONSOLE_RECORD_PATH</code></td><td>The file path to save a recording</td><td>None</td></tr>
+<tr><td><code>RUST_LOG</code></td><td>Configures what events are logged events. See <a href="https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html"><code>Targets</code></a> for details.</td><td>“error”</td></tr>
+</tbody></table>
+</div>
+<p>If the “env-filter” crate feature flag is enabled, the <code>RUST_LOG</code>
+environment variable will be parsed using the <a href="https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.EnvFilter.html"><code>EnvFilter</code></a> type from
+<code>tracing-subscriber. If the &quot;env-filter&quot; feature is **not** enabled, the [</code>Targets<code>] filter is used instead. The </code>EnvFilter<code>type accepts all the same syntax as</code>Targets`, but with the added ability to filter dynamically
+on span field values. See the documentation for those types for details.</p>
+<h2 id="further-customization"><a class="doc-anchor" href="#further-customization">§</a>Further customization</h2>
+<p>To add additional layers or replace the format layer, replace
+<code>console_subscriber::init</code> with:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>console_layer = console_subscriber::spawn();
+
+tracing_subscriber::registry()
+    .with(console_layer)
+    .with(tracing_subscriber::fmt::layer())
+<span class="comment">//  .with(..potential additional layer..)
+    </span>.init();</code></pre></div>
+<p>Calling <code>console_subscriber::init</code> is equivalent to the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>console_subscriber::ConsoleLayer;
+
+ConsoleLayer::builder().with_default_env().init();</code></pre></div>
+</div></details></section></div></main></body></html>

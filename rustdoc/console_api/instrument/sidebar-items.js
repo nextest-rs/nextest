@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["instrument_client","instrument_server"],"struct":["InstrumentRequest","PauseRequest","PauseResponse","ResumeRequest","ResumeResponse","TaskDetailsRequest","Update"]};

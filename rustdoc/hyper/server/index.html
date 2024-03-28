@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="HTTP Server"><title>hyper::server - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="hyper" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../hyper/index.html">hyper</a><span class="version">0.14.27</span></h2></div><h2 class="location"><a href="#">Module server</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate hyper</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../hyper/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">hyper</a>::<wbr><a class="mod" href="#">server</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/hyper/server/mod.rs.html#1-173">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>HTTP Server</p>
+<p>A <code>Server</code> is created to listen on a port, parse HTTP requests, and hand
+them off to a <code>Service</code>.</p>
+<p>There are two levels of APIs provide for constructing HTTP servers:</p>
+<ul>
+<li>The higher-level <a href="struct.Server.html" title="struct hyper::server::Server"><code>Server</code></a> type.</li>
+<li>The lower-level <a href="conn/index.html" title="mod hyper::server::conn"><code>conn</code></a> module.</li>
+</ul>
+<h2 id="server"><a class="doc-anchor" href="#server">§</a>Server</h2>
+<p>The <a href="struct.Server.html" title="struct hyper::server::Server"><code>Server</code></a> is main way to start listening for HTTP requests.
+It wraps a listener with a <a href="../service/index.html" title="mod hyper::service"><code>MakeService</code></a>, and then should
+be executed to start serving requests.</p>
+<p><a href="struct.Server.html" title="struct hyper::server::Server"><code>Server</code></a> accepts connections in both HTTP1 and HTTP2 by default.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::convert::Infallible;
+<span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>hyper::{Body, Request, Response, Server};
+<span class="kw">use </span>hyper::service::{make_service_fn, service_fn};
+
+<span class="kw">async fn </span>handle(_req: Request&lt;Body&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;Body&gt;, Infallible&gt; {
+    <span class="prelude-val">Ok</span>(Response::new(Body::from(<span class="string">"Hello World"</span>)))
+}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="comment">// Construct our SocketAddr to listen on...
+    </span><span class="kw">let </span>addr = SocketAddr::from(([<span class="number">127</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">3000</span>));
+
+    <span class="comment">// And a MakeService to handle each connection...
+    </span><span class="kw">let </span>make_service = make_service_fn(|_conn| <span class="kw">async </span>{
+        <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, Infallible&gt;(service_fn(handle))
+    });
+
+    <span class="comment">// Then bind and serve...
+    </span><span class="kw">let </span>server = Server::bind(<span class="kw-2">&amp;</span>addr).serve(make_service);
+
+    <span class="comment">// And run forever...
+    </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = server.<span class="kw">await </span>{
+        <span class="macro">eprintln!</span>(<span class="string">"server error: {}"</span>, e);
+    }
+}</code></pre></div>
+<p>If you don’t need the connection and your service implements <code>Clone</code> you can use
+<a href="https://docs.rs/tower/latest/tower/make/struct.Shared.html"><code>tower::make::Shared</code></a> instead of <code>make_service_fn</code> which is a bit simpler:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="comment">// Construct our SocketAddr to listen on...
+    </span><span class="kw">let </span>addr = SocketAddr::from(([<span class="number">127</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">3000</span>));
+
+    <span class="comment">// Shared is a MakeService that produces services by cloning an inner service...
+    </span><span class="kw">let </span>make_service = Shared::new(service_fn(handle));
+
+    <span class="comment">// Then bind and serve...
+    </span><span class="kw">let </span>server = Server::bind(<span class="kw-2">&amp;</span>addr).serve(make_service);
+
+    <span class="comment">// And run forever...
+    </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = server.<span class="kw">await </span>{
+        <span class="macro">eprintln!</span>(<span class="string">"server error: {}"</span>, e);
+    }
+}</code></pre></div>
+<p>Passing data to your request handler can be done like so:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::convert::Infallible;
+<span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>hyper::{Body, Request, Response, Server};
+<span class="kw">use </span>hyper::service::{make_service_fn, service_fn};
+<span class="kw">use </span>hyper::server::conn::AddrStream;
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>AppContext {
+    <span class="comment">// Whatever data your application needs can go here
+</span>}
+
+<span class="kw">async fn </span>handle(
+    context: AppContext,
+    addr: SocketAddr,
+    req: Request&lt;Body&gt;
+) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;Body&gt;, Infallible&gt; {
+    <span class="prelude-val">Ok</span>(Response::new(Body::from(<span class="string">"Hello World"</span>)))
+}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>context = AppContext {
+        <span class="comment">// ...
+    </span>};
+
+    <span class="comment">// A `MakeService` that produces a `Service` to handle each connection.
+    </span><span class="kw">let </span>make_service = make_service_fn(<span class="kw">move </span>|conn: <span class="kw-2">&amp;</span>AddrStream| {
+        <span class="comment">// We have to clone the context to share it with each invocation of
+        // `make_service`. If your data doesn't implement `Clone` consider using
+        // an `std::sync::Arc`.
+        </span><span class="kw">let </span>context = context.clone();
+
+        <span class="comment">// You can grab the address of the incoming connection like so.
+        </span><span class="kw">let </span>addr = conn.remote_addr();
+
+        <span class="comment">// Create a `Service` for responding to the request.
+        </span><span class="kw">let </span>service = service_fn(<span class="kw">move </span>|req| {
+            handle(context.clone(), addr, req)
+        });
+
+        <span class="comment">// Return the service to hyper.
+        </span><span class="kw">async move </span>{ <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, Infallible&gt;(service) }
+    });
+
+    <span class="comment">// Run the server like above...
+    </span><span class="kw">let </span>addr = SocketAddr::from(([<span class="number">127</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">3000</span>));
+
+    <span class="kw">let </span>server = Server::bind(<span class="kw-2">&amp;</span>addr).serve(make_service);
+
+    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = server.<span class="kw">await </span>{
+        <span class="macro">eprintln!</span>(<span class="string">"server error: {}"</span>, e);
+    }
+}</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="accept/index.html" title="mod hyper::server::accept">accept</a></div><div class="desc docblock-short">The <code>Accept</code> trait and supporting types.</div></li><li><div class="item-name"><a class="mod" href="conn/index.html" title="mod hyper::server::conn">conn</a></div><div class="desc docblock-short">Lower-level Server connection API.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct hyper::server::Builder">Builder</a></div><div class="desc docblock-short">A builder for a <a href="struct.Server.html" title="struct hyper::server::Server"><code>Server</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Server.html" title="struct hyper::server::Server">Server</a></div><div class="desc docblock-short">A listening HTTP server that accepts connections in both HTTP1 and HTTP2 by default.</div></li></ul></section></div></main></body></html>

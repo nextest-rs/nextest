@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["deserialize","serialize"],"mod":["option","re"],"struct":["Serde"]};

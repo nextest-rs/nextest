@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MessageError","MessagePayload"],"struct":["BorrowedPlainMessage","Message","OpaqueMessage","PlainMessage"]};

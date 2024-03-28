@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["install"],"mod":["config","section"],"struct":["Handler"]};

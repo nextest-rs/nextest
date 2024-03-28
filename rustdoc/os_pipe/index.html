@@ -1,0 +1,116 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A cross-platform library for opening OS pipes, like those from `pipe` on Linux or `CreatePipe` on Windows. The Rust standard library provides `Stdio::piped` for simple use cases involving child processes, but it doesn’t support creating pipes directly. This crate fills that gap."><title>os_pipe - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="os_pipe" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../os_pipe/index.html">os_pipe</a><span class="version">1.1.4</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../os_pipe/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">os_pipe</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/os_pipe/lib.rs.html#1-504">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A cross-platform library for opening OS pipes, like those from
+<a href="https://man7.org/linux/man-pages/man2/pipe.2.html"><code>pipe</code></a> on Linux
+or
+<a href="https://docs.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-createpipe"><code>CreatePipe</code></a>
+on Windows. The Rust standard library provides
+<a href="https://doc.rust-lang.org/std/process/struct.Stdio.html#method.piped"><code>Stdio::piped</code></a>
+for simple use cases involving child processes, but it doesn’t
+support creating pipes directly. This crate fills that gap.</p>
+<ul>
+<li><a href="https://docs.rs/os_pipe">Docs</a></li>
+<li><a href="https://crates.io/crates/os_pipe">Crate</a></li>
+<li><a href="https://github.com/oconnor663/os_pipe.rs">Repo</a></li>
+</ul>
+<h2 id="common-deadlocks-related-to-pipes"><a class="doc-anchor" href="#common-deadlocks-related-to-pipes">§</a>Common deadlocks related to pipes</h2>
+<p>When you work with pipes, you often end up debugging a deadlock at
+some point. These can be confusing if you don’t know why they
+happen. Here are two things you need to know:</p>
+<ol>
+<li>Pipe reads will block waiting for input as long as there’s at
+least one writer still open. <strong>If you forget to close a writer,
+reads will block forever.</strong> This includes writers that you give
+to child processes.</li>
+<li>Pipes have an internal buffer of some fixed size. On Linux for
+example, pipe buffers are 64 KiB by default. When the buffer is
+full, writes will block waiting for space. <strong>If the buffer is
+full and there aren’t any readers, writes will block forever.</strong></li>
+</ol>
+<p>Deadlocks caused by a forgotten writer usually show up immediately,
+which makes them relatively easy to fix once you know what to look
+for. (See “Avoid a deadlock!” in the example code below.) However,
+deadlocks caused by full pipe buffers are trickier. These might only
+show up for larger inputs, and they might be timing-dependent or
+platform-dependent. If you find that writing to a pipe deadlocks
+sometimes, think about who’s supposed to be reading from that pipe,
+and whether that thread or process might be blocked on something
+else. For more on this, see the <a href="https://github.com/oconnor663/duct.py/blob/master/gotchas.md#using-io-threads-to-avoid-blocking-children">Gotchas
+Doc</a>
+from the <a href="https://github.com/oconnor663/duct.rs"><code>duct</code></a> crate. (And
+consider whether <a href="https://github.com/oconnor663/duct.rs"><code>duct</code></a>
+might be a good fit for your use case.)</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Here we write a single byte into a pipe and read it back out:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>(<span class="kw-2">mut </span>reader, <span class="kw-2">mut </span>writer) = os_pipe::pipe()<span class="question-mark">?</span>;
+<span class="comment">// XXX: If this write blocks, we'll never get to the read.
+</span>writer.write_all(<span class="string">b"x"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>output = [<span class="number">0</span>];
+reader.read_exact(<span class="kw-2">&amp;mut </span>output)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="string">b"x"</span>, <span class="kw-2">&amp;</span>output);</code></pre></div>
+<p>This is a minimal working example, but as discussed in the section
+above, reading and writing on the same thread like this is
+deadlock-prone. If we wrote 100 KB instead of just one byte, this
+example would block on <code>write_all</code>, it would never make it to
+<code>read_exact</code>, and that would be a deadlock. Doing the read and write
+from different threads or different processes would fix the
+deadlock.</p>
+<p>For a more complex example, here we join the stdout and stderr of a
+child process into a single pipe. To do that we open a pipe, clone
+its writer, and set that pair of writers as the child’s stdout and
+stderr. (This is possible because <code>PipeWriter</code> implements
+<code>Into&lt;Stdio&gt;</code>.) Then we can read interleaved output from the pipe
+reader. This example is deadlock-free, but note the comment about
+closing the writers.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// We're going to spawn a child process that prints "foo" to stdout
+// and "bar" to stderr, and we'll combine these into a single pipe.
+</span><span class="kw">let </span><span class="kw-2">mut </span>command = std::process::Command::new(<span class="string">"python"</span>);
+command.args(<span class="kw-2">&amp;</span>[<span class="string">"-c"</span>, <span class="string">r#"
+import sys
+sys.stdout.write("foo")
+sys.stdout.flush()
+sys.stderr.write("bar")
+sys.stderr.flush()
+"#</span>]);
+
+<span class="comment">// Here's the interesting part. Open a pipe, clone its writer, and
+// set that pair of writers as the child's stdout and stderr.
+</span><span class="kw">let </span>(<span class="kw-2">mut </span>reader, writer) = os_pipe::pipe()<span class="question-mark">?</span>;
+<span class="kw">let </span>writer_clone = writer.try_clone()<span class="question-mark">?</span>;
+command.stdout(writer);
+command.stderr(writer_clone);
+
+<span class="comment">// Now start the child process running.
+</span><span class="kw">let </span><span class="kw-2">mut </span>handle = command.spawn()<span class="question-mark">?</span>;
+
+<span class="comment">// Avoid a deadlock! This parent process is still holding open pipe
+// writers inside the Command object, and we have to close those
+// before we read. Here we do this by dropping the Command object.
+</span>drop(command);
+
+<span class="comment">// Finally we can read all the output and clean up the child.
+</span><span class="kw">let </span><span class="kw-2">mut </span>output = String::new();
+reader.read_to_string(<span class="kw-2">&amp;mut </span>output)<span class="question-mark">?</span>;
+handle.wait()<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(output, <span class="string">"foobar"</span>);</code></pre></div>
+<p>Note that the <a href="https://github.com/oconnor663/duct.rs"><code>duct</code></a> crate
+can reproduce the example above in a single line of code, with no
+risk of deadlocks and no risk of leaking <a href="https://en.wikipedia.org/wiki/Zombie_process">zombie
+children</a>.</p>
+<h2 id="cargo-features"><a class="doc-anchor" href="#cargo-features">§</a>Cargo features</h2>
+<p>The <code>io_safety</code> feature is currently off by default but enabled for
+<a href="https://docs.rs/os_pipe/latest/os_pipe/">docs.rs</a>. It enables conversions to and from the
+<a href="https://doc.rust-lang.org/stable/std/os/unix/io/struct.OwnedFd.html"><code>OwnedFd</code></a> and
+<a href="https://doc.rust-lang.org/stable/std/os/unix/io/struct.BorrowedFd.html"><code>BorrowedFd</code></a> IO
+safety types (and their <a href="https://doc.rust-lang.org/stable/std/os/windows/io/index.html">Windows
+counterparts</a>) introduced in
+Rust 1.63. Eventually these conversions will be available unconditionally and this feature will
+become a no-op.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.PipeReader.html" title="struct os_pipe::PipeReader">PipeReader</a></div><div class="desc docblock-short">The reading end of a pipe, returned by <a href="fn.pipe.html"><code>pipe</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.PipeWriter.html" title="struct os_pipe::PipeWriter">PipeWriter</a></div><div class="desc docblock-short">The writing end of a pipe, returned by <a href="fn.pipe.html"><code>pipe</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.dup_stderr.html" title="fn os_pipe::dup_stderr">dup_stderr</a></div><div class="desc docblock-short">Get a duplicated copy of the current process’s standard error, as a
+<a href="struct.PipeWriter.html"><code>PipeWriter</code></a>.</div></li><li><div class="item-name"><a class="fn" href="fn.dup_stdin.html" title="fn os_pipe::dup_stdin">dup_stdin</a></div><div class="desc docblock-short">Get a duplicated copy of the current process’s standard input, as a
+<a href="struct.PipeReader.html"><code>PipeReader</code></a>.</div></li><li><div class="item-name"><a class="fn" href="fn.dup_stdout.html" title="fn os_pipe::dup_stdout">dup_stdout</a></div><div class="desc docblock-short">Get a duplicated copy of the current process’s standard output, as a
+<a href="struct.PipeWriter.html"><code>PipeWriter</code></a>.</div></li><li><div class="item-name"><a class="fn" href="fn.pipe.html" title="fn os_pipe::pipe">pipe</a></div><div class="desc docblock-short">Open a new pipe and return a <a href="struct.PipeReader.html"><code>PipeReader</code></a> and <a href="struct.PipeWriter.html"><code>PipeWriter</code></a> pair.</div></li></ul></section></div></main></body></html>

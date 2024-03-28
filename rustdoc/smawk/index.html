@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate implements various functions that help speed up dynamic programming, most importantly the SMAWK algorithm for finding row or column minima in a totally monotone matrix with m rows and n columns in time O(m + n). This is much better than the brute force solution which would take O(mn). When m and n are of the same order, this turns a quadratic function into a linear function."><title>smawk - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="smawk" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../smawk/index.html">smawk</a><span class="version">0.3.2</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../smawk/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">smawk</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/smawk/lib.rs.html#1-570">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate implements various functions that help speed up dynamic
+programming, most importantly the SMAWK algorithm for finding row
+or column minima in a totally monotone matrix with <em>m</em> rows and
+<em>n</em> columns in time O(<em>m</em> + <em>n</em>). This is much better than the
+brute force solution which would take O(<em>mn</em>). When <em>m</em> and <em>n</em>
+are of the same order, this turns a quadratic function into a
+linear function.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Computing the column minima of an <em>m</em> ✕ <em>n</em> Monge matrix can be
+done efficiently with <code>smawk::column_minima</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>smawk::Matrix;
+
+<span class="kw">let </span>matrix = <span class="macro">vec!</span>[
+    <span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>],
+    <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">1</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">4</span>],
+    <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">1</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">4</span>],
+    <span class="macro">vec!</span>[<span class="number">3</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">3</span>, <span class="number">4</span>],
+    <span class="macro">vec!</span>[<span class="number">4</span>, <span class="number">3</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">1</span>],
+];
+<span class="kw">let </span>minima = <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">1</span>, <span class="number">4</span>, <span class="number">4</span>, <span class="number">4</span>];
+<span class="macro">assert_eq!</span>(smawk::column_minima(<span class="kw-2">&amp;</span>matrix), minima);</code></pre></div>
+<p>The <code>minima</code> vector gives the index of the minimum value per
+column, so <code>minima[0] == 1</code> since the minimum value in the first
+column is 2 (row 1). Note that the smallest row index is returned.</p>
+<h2 id="definitions"><a class="doc-anchor" href="#definitions">§</a>Definitions</h2>
+<p>Some of the functions in this crate only work on matrices that are
+<em>totally monotone</em>, which we will define below.</p>
+<h3 id="monotone-matrices"><a class="doc-anchor" href="#monotone-matrices">§</a>Monotone Matrices</h3>
+<p>We start with a helper definition. Given an <em>m</em> ✕ <em>n</em> matrix <code>M</code>,
+we say that <code>M</code> is <em>monotone</em> when the minimum value of row <code>i</code> is
+found to the left of the minimum value in row <code>i'</code> where <code>i &lt; i'</code>.</p>
+<p>More formally, if we let <code>rm(i)</code> denote the column index of the
+left-most minimum value in row <code>i</code>, then we have</p>
+<div class="example-wrap"><pre class="language-text"><code>rm(0) ≤ rm(1) ≤ ... ≤ rm(m - 1)
+</code></pre></div>
+<p>This means that as you go down the rows from top to bottom, the
+row-minima proceed from left to right.</p>
+<p>The algorithms in this crate deal with finding such row- and
+column-minima.</p>
+<h3 id="totally-monotone-matrices"><a class="doc-anchor" href="#totally-monotone-matrices">§</a>Totally Monotone Matrices</h3>
+<p>We say that a matrix <code>M</code> is <em>totally monotone</em> when every
+sub-matrix is monotone. A sub-matrix is formed by the intersection
+of any two rows <code>i &lt; i'</code> and any two columns <code>j &lt; j'</code>.</p>
+<p>This is often expressed as via this equivalent condition:</p>
+<div class="example-wrap"><pre class="language-text"><code>M[i, j] &gt; M[i, j&#39;]  =&gt;  M[i&#39;, j] &gt; M[i&#39;, j&#39;]
+</code></pre></div>
+<p>for all <code>i &lt; i'</code> and <code>j &lt; j'</code>.</p>
+<h3 id="monge-property-for-matrices"><a class="doc-anchor" href="#monge-property-for-matrices">§</a>Monge Property for Matrices</h3>
+<p>A matrix <code>M</code> is said to fulfill the <em>Monge property</em> if</p>
+<div class="example-wrap"><pre class="language-text"><code>M[i, j] + M[i&#39;, j&#39;] ≤ M[i, j&#39;] + M[i&#39;, j]
+</code></pre></div>
+<p>for all <code>i &lt; i'</code> and <code>j &lt; j'</code>. This says that given any rectangle
+in the matrix, the sum of the top-left and bottom-right corners is
+less than or equal to the sum of the bottom-left and upper-right
+corners.</p>
+<p>All Monge matrices are totally monotone, so it is enough to
+establish that the Monge property holds in order to use a matrix
+with the functions in this crate. If your program is dealing with
+unknown inputs, it can use <a href="monge/fn.is_monge.html" title="fn smawk::monge::is_monge"><code>monge::is_monge</code></a> to verify that a
+matrix is a Monge matrix.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="monge/index.html" title="mod smawk::monge">monge</a></div><div class="desc docblock-short">Functions for generating and checking Monge arrays.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Matrix.html" title="trait smawk::Matrix">Matrix</a></div><div class="desc docblock-short">Minimal matrix trait for two-dimensional arrays.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.column_minima.html" title="fn smawk::column_minima">column_minima</a></div><div class="desc docblock-short">Compute column minima in O(<em>m</em> + <em>n</em>) time.</div></li><li><div class="item-name"><a class="fn" href="fn.online_column_minima.html" title="fn smawk::online_column_minima">online_column_minima</a></div><div class="desc docblock-short">Compute upper-right column minima in O(<em>m</em> + <em>n</em>) time.</div></li><li><div class="item-name"><a class="fn" href="fn.row_minima.html" title="fn smawk::row_minima">row_minima</a></div><div class="desc docblock-short">Compute row minima in O(<em>m</em> + <em>n</em>) time.</div></li><li><div class="item-name"><a class="fn" href="fn.smawk_column_minima.html" title="fn smawk::smawk_column_minima">smawk_column_minima</a><span class="stab deprecated" title="">Deprecated</span></div></li><li><div class="item-name"><a class="fn" href="fn.smawk_row_minima.html" title="fn smawk::smawk_row_minima">smawk_row_minima</a><span class="stab deprecated" title="">Deprecated</span></div></li></ul></section></div></main></body></html>

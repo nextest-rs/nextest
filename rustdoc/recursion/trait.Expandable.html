@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The ability to recursively expand a seed to construct a value of this type, frame by frame."><title>Expandable in recursion - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="recursion" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../recursion/index.html">recursion</a><span class="version">0.5.2</span></h2></div><h2 class="location"><a href="#">Expandable</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.FrameToken">FrameToken</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.from_frame">from_frame</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate recursion</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../recursion/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">recursion</a>::<wbr><a class="trait" href="#">Expandable</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/recursion/recursive/expand.rs.html#158-166">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Expandable<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div>{
+    type <a href="#associatedtype.FrameToken" class="associatedtype">FrameToken</a>: <a class="trait" href="trait.MappableFrame.html" title="trait recursion::MappableFrame">MappableFrame</a>;
+
+    // Required method
+    fn <a href="#tymethod.from_frame" class="fn">from_frame</a>(val: &lt;Self::<a class="associatedtype" href="trait.Expandable.html#associatedtype.FrameToken" title="type recursion::Expandable::FrameToken">FrameToken</a> as <a class="trait" href="trait.MappableFrame.html" title="trait recursion::MappableFrame">MappableFrame</a>&gt;::<a class="associatedtype" href="trait.MappableFrame.html#associatedtype.Frame" title="type recursion::MappableFrame::Frame">Frame</a>&lt;Self&gt;) -&gt; Self;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The ability to recursively expand a seed to construct a value of this type, frame by frame.</p>
+<h2 id="example-a-tree-of-integers"><a class="doc-anchor" href="#example-a-tree-of-integers">§</a>Example: A tree of integers</h2>
+<p>Here’s an example showing how to use <a href="trait.Expandable.html" title="trait recursion::Expandable"><code>Expandable</code></a> to expand a binary tree of integers,
+where nodes hold two subnodes and no data and leaves hold a single <code>usize</code> value</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, PartialEq, Eq)]
+</span><span class="kw">enum </span>IntTree {
+    Leaf { value: usize },
+    Node { left: Box&lt;<span class="self">Self</span>&gt;, right: Box&lt;<span class="self">Self</span>&gt; },
+}
+</code></pre></div>
+<h3 id="defining-a-frame-type"><a class="doc-anchor" href="#defining-a-frame-type">§</a>Defining a frame type</h3>
+<p>For working with values of type <code>IntTree</code>, we’ll define an <code>IntTreeFrame&lt;A&gt;</code> frame type
+that represents a single layer of the <code>IntTree</code> structure, with <code>A</code> subbed in for <code>Box&lt;Self&gt;</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">enum </span>IntTreeFrame&lt;A&gt; {
+    Leaf { value: usize },
+    Node { left: A, right: A },
+}
+<span class="kw">impl </span>MappableFrame <span class="kw">for </span>IntTreeFrame&lt;PartiallyApplied&gt; { <span class="comment">/*...*/
+</span>}</code></pre></div>
+<h3 id="implementing-expandable"><a class="doc-anchor" href="#implementing-expandable">§</a>Implementing Expandable</h3>
+<p>Then we can define an <a href="trait.Expandable.html" title="trait recursion::Expandable"><code>Expandable</code></a> instance for <code>IntTree</code></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Expandable <span class="kw">for </span>IntTree {
+    <span class="kw">type </span>FrameToken = IntTreeFrame&lt;PartiallyApplied&gt;;
+
+    <span class="kw">fn </span>from_frame(val: &lt;<span class="self">Self</span>::FrameToken <span class="kw">as </span>MappableFrame&gt;::Frame&lt;<span class="self">Self</span>&gt;) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>val {
+            IntTreeFrame::Leaf { value } =&gt; IntTree::Leaf { value },
+            IntTreeFrame::Node { left, right } =&gt; IntTree::Node {
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+        }
+    }
+}</code></pre></div>
+<h3 id="expanding-a-value-into-a-tree"><a class="doc-anchor" href="#expanding-a-value-into-a-tree">§</a>Expanding a value into a tree</h3>
+<p>Finally, we can use our <a href="trait.Expandable.html" title="trait recursion::Expandable"><code>Expandable</code></a> instance to generate a tree</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>depth = <span class="number">2</span>;
+
+<span class="kw">let </span>expanded_tree = IntTree::expand_frames(depth, |n| {
+    <span class="kw">if </span>n &lt;= <span class="number">0 </span>{
+        IntTreeFrame::Leaf { value: n }
+    } <span class="kw">else </span>{
+        IntTreeFrame::Node {
+            left: n - <span class="number">1</span>,
+            right: n - <span class="number">1</span>,
+        }
+    }
+});
+
+<span class="kw">let </span>expected = IntTree::node(
+    IntTree::node(IntTree::leaf(<span class="number">0</span>), IntTree::leaf(<span class="number">0</span>)),
+    IntTree::node(IntTree::leaf(<span class="number">0</span>), IntTree::leaf(<span class="number">0</span>)),
+);
+
+<span class="macro">assert_eq!</span>(expected, expanded_tree)</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><section id="associatedtype.FrameToken" class="method"><a class="src rightside" href="../src/recursion/recursive/expand.rs.html#162">source</a><h4 class="code-header">type <a href="#associatedtype.FrameToken" class="associatedtype">FrameToken</a>: <a class="trait" href="trait.MappableFrame.html" title="trait recursion::MappableFrame">MappableFrame</a></h4></section></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.from_frame" class="method"><a class="src rightside" href="../src/recursion/recursive/expand.rs.html#165">source</a><h4 class="code-header">fn <a href="#tymethod.from_frame" class="fn">from_frame</a>(val: &lt;Self::<a class="associatedtype" href="trait.Expandable.html#associatedtype.FrameToken" title="type recursion::Expandable::FrameToken">FrameToken</a> as <a class="trait" href="trait.MappableFrame.html" title="trait recursion::MappableFrame">MappableFrame</a>&gt;::<a class="associatedtype" href="trait.MappableFrame.html#associatedtype.Frame" title="type recursion::MappableFrame::Frame">Frame</a>&lt;Self&gt;) -&gt; Self</h4></section></summary><div class="docblock"><p>Given a frame holding instances of <code>Self</code>, generate an instance of <code>Self</code></p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.77.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/recursion/recursive/expand/trait.Expandable.js" async></script></section></div></main></body></html>

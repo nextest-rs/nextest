@@ -1,0 +1,279 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Other options - cargo-nextest</title>
+
+
+        <!-- Custom HTML head -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:title" content="Other options - cargo-nextest" />
+        <meta property="og:image" content="https://nexte.st/static/cover.png" />
+        <meta property="og:description" content="A next-generation test runner for Rust." />
+        <link rel="stylesheet" href="/fonts/inter.css" />
+        <style>
+            :root,
+            html {
+                font-family: "Inter", "Helvetica Neue", "Arial", sans-serif;
+                font-feature-settings: "ss01", "ss03";
+                font-variant-ligatures: common-ligatures;
+                letter-spacing: -0.008em;
+            }
+        
+            @supports (font-variation-settings: normal) {
+                :root {
+                    font-family: 'Inter var', "Helvetica Neue", "Arial", sans-serif;
+                }
+            }
+        </style>
+        <link rel="stylesheet" href="/css/extra.css" />
+        <link rel="preload" href="/fonts/Inter-roman.var.woff2?v=26a312df" as="font" type="font/woff2" crossorigin />
+        <link rel="preload" href="/fonts/Inter-italic.var.woff2?v=26a312df" as="font" type="font/woff2" crossorigin />
+
+        <meta name="description" content="A next-generation test runner for Rust.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "rust";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../index.html">Home</a></li><li class="spacer"></li><li class="chapter-item expanded "><a href="../book/installation.html"><strong aria-hidden="true">1.</strong> Installation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/pre-built-binaries.html"><strong aria-hidden="true">1.1.</strong> Pre-built binaries</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/release-urls.html"><strong aria-hidden="true">1.1.1.</strong> Release URLs</a></li></ol></li><li class="chapter-item expanded "><a href="../book/installing-from-source.html"><strong aria-hidden="true">1.2.</strong> Installing from source</a></li><li class="chapter-item expanded "><a href="../book/updating.html"><strong aria-hidden="true">1.3.</strong> Updating nextest</a></li><li class="chapter-item expanded "><a href="../book/antivirus-gatekeeper.html"><strong aria-hidden="true">1.4.</strong> Windows antivirus and macOS Gatekeeper</a></li></ol></li><li class="chapter-item expanded "><a href="../book/usage.html"><strong aria-hidden="true">2.</strong> Usage</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/running.html"><strong aria-hidden="true">2.1.</strong> Running tests</a></li><li class="chapter-item expanded "><a href="../book/listing.html"><strong aria-hidden="true">2.2.</strong> Listing tests</a></li><li class="chapter-item expanded "><a href="../book/retries.html"><strong aria-hidden="true">2.3.</strong> Retries and flaky tests</a></li><li class="chapter-item expanded "><a href="../book/slow-tests.html"><strong aria-hidden="true">2.4.</strong> Slow tests and timeouts</a></li><li class="chapter-item expanded "><a href="../book/leaky-tests.html"><strong aria-hidden="true">2.5.</strong> Leaky tests</a></li><li class="chapter-item expanded "><a href="../book/filter-expressions.html"><strong aria-hidden="true">2.6.</strong> Filter expressions</a></li><li class="chapter-item expanded "><a href="../book/reusing-builds.html"><strong aria-hidden="true">2.7.</strong> Archiving and reusing builds</a></li><li class="chapter-item expanded "><a href="../book/partitioning.html"><strong aria-hidden="true">2.8.</strong> Partitioning test runs in CI</a></li><li class="chapter-item expanded "><a href="../book/target-runners.html"><strong aria-hidden="true">2.9.</strong> Target runners</a></li><li class="chapter-item expanded "><a href="../book/other-options.html" class="active"><strong aria-hidden="true">2.10.</strong> Other options</a></li></ol></li><li class="chapter-item expanded "><a href="../book/machine-readable.html"><strong aria-hidden="true">3.</strong> Machine-readable output</a></li><li class="chapter-item expanded "><a href="../book/configuration.html"><strong aria-hidden="true">4.</strong> Configuration</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/env-vars.html"><strong aria-hidden="true">4.1.</strong> Environment variables</a></li><li class="chapter-item expanded "><a href="../book/minimum-versions.html"><strong aria-hidden="true">4.2.</strong> Minimum nextest versions</a></li><li class="chapter-item expanded "><a href="../book/per-test-overrides.html"><strong aria-hidden="true">4.3.</strong> Per-test overrides</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/specifying-platforms.html"><strong aria-hidden="true">4.3.1.</strong> Specifying platforms</a></li></ol></li><li class="chapter-item expanded "><a href="../book/threads-required.html"><strong aria-hidden="true">4.4.</strong> Heavy tests and threads-required</a></li><li class="chapter-item expanded "><a href="../book/test-groups.html"><strong aria-hidden="true">4.5.</strong> Test groups and mutual exclusion</a></li></ol></li><li class="chapter-item expanded "><a href="../book/junit.html"><strong aria-hidden="true">5.</strong> JUnit support</a></li><li class="chapter-item expanded "><a href="../book/integrations.html"><strong aria-hidden="true">6.</strong> Integrations with other tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/test-coverage.html"><strong aria-hidden="true">6.1.</strong> Test coverage</a></li><li class="chapter-item expanded "><a href="../book/miri.html"><strong aria-hidden="true">6.2.</strong> The Miri interpreter</a></li><li class="chapter-item expanded "><a href="../book/benchmark-integration.html"><strong aria-hidden="true">6.3.</strong> Criterion benchmarks</a></li><li class="chapter-item expanded "><a href="../book/cargo-mutants.html"><strong aria-hidden="true">6.4.</strong> Mutation testing with cargo-mutants</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../book/stability.html"><strong aria-hidden="true">7.</strong> Stability policy</a></li><li class="chapter-item expanded "><a href="../book/experimental-features.html"><strong aria-hidden="true">8.</strong> Experimental features</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/setup-scripts.html"><strong aria-hidden="true">8.1.</strong> Setup scripts</a></li><li class="chapter-item expanded "><a href="../book/run-machine-readable.html"><strong aria-hidden="true">8.2.</strong> Machine-readable output for test runs</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../book/how-it-works.html"><strong aria-hidden="true">9.</strong> How nextest works</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../book/benchmarks.html"><strong aria-hidden="true">9.1.</strong> Benchmarks</a></li><li class="chapter-item expanded "><a href="../book/custom-test-harnesses.html"><strong aria-hidden="true">9.2.</strong> Custom test harnesses</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../CHANGELOG.html">Changelog</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">cargo-nextest</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/nextest-rs/nextest" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/nextest-rs/nextest/edit/main/site/src/book/other-options.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="other-options"><a class="header" href="#other-options">Other options</a></h1>
+<p>Some other options accepted by <code>cargo nextest run</code>. Many of these options are also accepted as <a href="configuration.html">configuration settings</a> and <a href="env-vars.html">environment variables</a>.</p>
+<h2 id="runner-options"><a class="header" href="#runner-options">Runner options</a></h2>
+<ul>
+<li><code>--no-fail-fast</code>: do not exit the test run on the first failure. Most useful for CI scenarios.</li>
+<li><code>-j, --test-threads</code>: number of tests to run simultaneously. Note that this is separate from the number of build jobs to run simultaneously, which is specified by <code>--build-jobs</code>.</li>
+<li><code>--run-ignored ignored-only</code> runs ignored tests, while <code>--run-ignored all</code> runs both ignored and non-ignored tests.</li>
+</ul>
+<h2 id="reporter-options"><a class="header" href="#reporter-options">Reporter options</a></h2>
+<h3 id="--success-output-and---failure-output"><a class="header" href="#--success-output-and---failure-output"><code>--success-output</code> and <code>--failure-output</code></a></h3>
+<p>These options control when standard output and standard error are displayed for failing and passing tests, respectively. The possible values are:</p>
+<ul>
+<li><code>immediate</code>: display output as soon as the test fails. Default for <code>--failure-output</code>.</li>
+<li><code>final</code>: display output at the end of the test run.</li>
+<li><code>immediate-final</code>: display output as soon as the test fails, and at the end of the run. This is most useful for CI jobs.</li>
+<li><code>never</code>: never display output. Default for <code>--success-output</code>.</li>
+</ul>
+<p>These options can also be configured via <a href="configuration.html">global configuration</a> and <a href="per-test-overrides.html">per-test overrides</a>. Specifying these options over the command line will override configuration settings.</p>
+<h3 id="--status-level-and---final-status-level"><a class="header" href="#--status-level-and---final-status-level"><code>--status-level</code> and <code>--final-status-level</code></a></h3>
+<ul>
+<li><code>--status-level</code>: which test statuses (<strong>PASS</strong>, <strong>FAIL</strong> etc) to display. There are 7 status levels: <code>none, fail, retry, slow, pass, skip, all</code>. Each status level causes all earlier status levels to be displayed as well (similar to log levels). (For example, setting <code>status-level</code> to <code>skip</code> will show failing, retried, slow and passing tests along with skipped tests.) The default is <code>pass</code>.</li>
+<li><code>--final-status-level</code>: which test statuses to display at the end of a test run. For example, this can be set to <code>fail</code> to print out a list of failing tests at the end of a test run. The default is <code>none</code>.</li>
+</ul>
+<p>For a full list of options, see <a href="running.html#options-and-arguments">Options and arguments</a>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../book/target-runners.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../book/machine-readable.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../book/target-runners.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../book/machine-readable.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

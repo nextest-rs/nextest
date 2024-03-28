@@ -1,0 +1,160 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Portable atomic types including support for 128-bit atomics, atomic float, etc."><title>portable_atomic - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="portable_atomic" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../portable_atomic/index.html">portable_atomic</a><span class="version">1.6.0</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../portable_atomic/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">portable_atomic</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/portable_atomic/lib.rs.html#3-3976">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><!-- tidy:crate-doc:start -->
+<p>Portable atomic types including support for 128-bit atomics, atomic float, etc.</p>
+<ul>
+<li>Provide all atomic integer types (<code>Atomic{I,U}{8,16,32,64}</code>) for all targets that can use atomic CAS. (i.e., all targets that can use <code>std</code>, and most no-std targets)</li>
+<li>Provide <code>AtomicI128</code> and <code>AtomicU128</code>.</li>
+<li>Provide <code>AtomicF32</code> and <code>AtomicF64</code>. (<a href="#optional-features-float">optional, requires the <code>float</code> feature</a>)</li>
+<li>Provide atomic load/store for targets where atomic is not available at all in the standard library. (RISC-V without A-extension, MSP430, AVR)</li>
+<li>Provide atomic CAS for targets where atomic CAS is not available in the standard library. (thumbv6m, pre-v6 ARM, RISC-V without A-extension, MSP430, AVR, Xtensa, etc.) (always enabled for MSP430 and AVR, <a href="#optional-features-critical-section">optional</a> otherwise)</li>
+<li>Provide stable equivalents of the standard library’s atomic types’ unstable APIs, such as <a href="https://github.com/rust-lang/rust/issues/99108"><code>AtomicPtr::fetch_*</code></a>, <a href="https://github.com/rust-lang/rust/issues/98485"><code>AtomicBool::fetch_not</code></a>.</li>
+<li>Make features that require newer compilers, such as <a href="https://doc.rust-lang.org/std/sync/atomic/struct.AtomicUsize.html#method.fetch_max"><code>fetch_{max,min}</code></a>, <a href="https://doc.rust-lang.org/std/sync/atomic/struct.AtomicUsize.html#method.fetch_update"><code>fetch_update</code></a>, <a href="https://doc.rust-lang.org/std/sync/atomic/struct.AtomicUsize.html#method.as_ptr"><code>as_ptr</code></a>, <a href="https://doc.rust-lang.org/std/sync/atomic/struct.AtomicUsize.html#method.from_ptr"><code>from_ptr</code></a> and <a href="https://github.com/rust-lang/rust/pull/98383">stronger CAS failure ordering</a> available on Rust 1.34+.</li>
+<li>Provide workaround for bugs in the standard library’s atomic-related APIs, such as <a href="https://github.com/rust-lang/rust/issues/100650">rust-lang/rust#100650</a>, <code>fence</code>/<code>compiler_fence</code> on MSP430 that cause LLVM error, etc.</li>
+</ul>
+<!-- TODO:
+- mention Atomic{I,U}*::fetch_neg, Atomic{I*,U*,Ptr}::bit_*, etc.
+- mention portable-atomic-util crate
+-->
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>Add this to your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+portable-atomic = &quot;1&quot;
+</code></pre></div>
+<p>The default features are mainly for users who use atomics larger than the pointer width.
+If you don’t need them, disabling the default features may reduce code size and compile time slightly.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+portable-atomic = { version = &quot;1&quot;, default-features = false }
+</code></pre></div>
+<p>If your crate supports no-std environment and requires atomic CAS, enabling the <code>require-cas</code> feature will allow the <code>portable-atomic</code> to display helpful error messages to users on targets requiring additional action on the user side to provide atomic CAS.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+portable-atomic = { version = &quot;1.3&quot;, default-features = false, features = [&quot;require-cas&quot;] }
+</code></pre></div>
+<p><em>Compiler support: requires rustc 1.34+</em></p>
+<h3 id="128-bit-atomics-support"><a class="doc-anchor" href="#128-bit-atomics-support">§</a>128-bit atomics support</h3>
+<p>Native 128-bit atomic operations are available on x86_64 (Rust 1.59+), aarch64 (Rust 1.59+), powerpc64 (nightly only), and s390x (nightly only), otherwise the fallback implementation is used.</p>
+<p>On x86_64, even if <code>cmpxchg16b</code> is not available at compile-time (note: <code>cmpxchg16b</code> target feature is enabled by default only on Apple targets), run-time detection checks whether <code>cmpxchg16b</code> is available. If <code>cmpxchg16b</code> is not available at either compile-time or run-time detection, the fallback implementation is used. See also <a href="#optional-cfg-no-outline-atomics"><code>portable_atomic_no_outline_atomics</code></a> cfg.</p>
+<p>They are usually implemented using inline assembly, and when using Miri or ThreadSanitizer that do not support inline assembly, core intrinsics are used instead of inline assembly if possible.</p>
+<p>See the <a href="https://github.com/taiki-e/portable-atomic/blob/HEAD/src/imp/atomic128/README.md"><code>atomic128</code> module’s readme</a> for details.</p>
+<h3 id="optional-features"><a class="doc-anchor" href="#optional-features">§</a>Optional features</h3>
+<ul>
+<li>
+<p><strong><code>fallback</code></strong> <em>(enabled by default)</em><br>
+Enable fallback implementations.</p>
+<p>Disabling this allows only atomic types for which the platform natively supports atomic operations.</p>
+</li>
+<li>
+<p><a name="optional-features-float"></a><strong><code>float</code></strong><br>
+Provide <code>AtomicF{32,64}</code>.</p>
+<p>Note that most of <code>fetch_*</code> operations of atomic floats are implemented using CAS loops, which can be slower than equivalent operations of atomic integers. (<a href="https://github.com/taiki-e/portable-atomic/issues/34">GPU targets have atomic instructions for float, so we plan to use these instructions for GPU targets in the future.</a>)</p>
+</li>
+<li>
+<p><strong><code>std</code></strong><br>
+Use <code>std</code>.</p>
+</li>
+<li>
+<p><a name="optional-features-require-cas"></a><strong><code>require-cas</code></strong><br>
+Emit compile error if atomic CAS is not available. See <a href="#usage">Usage</a> section and <a href="https://github.com/taiki-e/portable-atomic/pull/100">#100</a> for more.</p>
+</li>
+<li>
+<p><a name="optional-features-serde"></a><strong><code>serde</code></strong><br>
+Implement <code>serde::{Serialize,Deserialize}</code> for atomic types.</p>
+<p>Note:</p>
+<ul>
+<li>The MSRV when this feature is enabled depends on the MSRV of <a href="https://github.com/serde-rs/serde">serde</a>.</li>
+</ul>
+</li>
+<li>
+<p><a name="optional-features-critical-section"></a><strong><code>critical-section</code></strong><br>
+When this feature is enabled, this crate uses <a href="https://github.com/rust-embedded/critical-section">critical-section</a> to provide atomic CAS for targets where
+it is not natively available. When enabling it, you should provide a suitable critical section implementation
+for the current target, see the <a href="https://github.com/rust-embedded/critical-section">critical-section</a> documentation for details on how to do so.</p>
+<p><code>critical-section</code> support is useful to get atomic CAS when the <a href="#optional-features-unsafe-assume-single-core"><code>unsafe-assume-single-core</code> feature</a> can’t be used,
+such as multi-core targets, unprivileged code running under some RTOS, or environments where disabling interrupts
+needs extra care due to e.g. real-time requirements.</p>
+<p>Note that with the <code>critical-section</code> feature, critical sections are taken for all atomic operations, while with
+<a href="#optional-features-unsafe-assume-single-core"><code>unsafe-assume-single-core</code> feature</a> some operations don’t require disabling interrupts (loads and stores, but
+additionally on MSP430 <code>add</code>, <code>sub</code>, <code>and</code>, <code>or</code>, <code>xor</code>, <code>not</code>). Therefore, for better performance, if
+all the <code>critical-section</code> implementation for your target does is disable interrupts, prefer using
+<code>unsafe-assume-single-core</code> feature instead.</p>
+<p>Note:</p>
+<ul>
+<li>
+<p>The MSRV when this feature is enabled depends on the MSRV of <a href="https://github.com/rust-embedded/critical-section">critical-section</a>.</p>
+</li>
+<li>
+<p>It is usually <em>not</em> recommended to always enable this feature in dependencies of the library.</p>
+<p>Enabling this feature will prevent the end user from having the chance to take advantage of other (potentially) efficient implementations (<a href="#optional-features-unsafe-assume-single-core">Implementations provided by <code>unsafe-assume-single-core</code> feature, default implementations on MSP430 and AVR</a>, implementation proposed in <a href="https://github.com/taiki-e/portable-atomic/issues/60">#60</a>, etc. Other systems may also be supported in the future).</p>
+<p>The recommended approach for libraries is to leave it up to the end user whether or not to enable this feature. (However, it may make sense to enable this feature by default for libraries specific to a platform where other implementations are known not to work.)</p>
+<p>As an example, the end-user’s <code>Cargo.toml</code> that uses a crate that provides a critical-section implementation and a crate that depends on portable-atomic as an option would be expected to look like this:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+portable-atomic = { version = &quot;1&quot;, default-features = false, features = [&quot;critical-section&quot;] }
+crate-provides-critical-section-impl = &quot;...&quot;
+crate-uses-portable-atomic-as-feature = { version = &quot;...&quot;, features = [&quot;portable-atomic&quot;] }
+</code></pre></div></li>
+</ul>
+</li>
+<li>
+<p><a name="optional-features-unsafe-assume-single-core"></a><strong><code>unsafe-assume-single-core</code></strong><br>
+Assume that the target is single-core.
+When this feature is enabled, this crate provides atomic CAS for targets where atomic CAS is not available in the standard library by disabling interrupts.</p>
+<p>This feature is <code>unsafe</code>, and note the following safety requirements:</p>
+<ul>
+<li>
+<p>Enabling this feature for multi-core systems is always <strong>unsound</strong>.</p>
+</li>
+<li>
+<p>This uses privileged instructions to disable interrupts, so it usually doesn’t work on unprivileged mode.
+Enabling this feature in an environment where privileged instructions are not available, or if the instructions used are not sufficient to disable interrupts in the system, it is also usually considered <strong>unsound</strong>, although the details are system-dependent.</p>
+<p>The following are known cases:</p>
+<ul>
+<li>On pre-v6 ARM, this disables only IRQs by default. For many systems (e.g., GBA) this is enough. If the system need to disable both IRQs and FIQs, you need to enable the <code>disable-fiq</code> feature together.</li>
+<li>On RISC-V without A-extension, this generates code for machine-mode (M-mode) by default. If you enable the <code>s-mode</code> together, this generates code for supervisor-mode (S-mode). In particular, <code>qemu-system-riscv*</code> uses <a href="https://github.com/riscv-software-src/opensbi">OpenSBI</a> as the default firmware.</li>
+</ul>
+<p>See also <a href="https://github.com/taiki-e/portable-atomic/blob/HEAD/src/imp/interrupt/README.md">the <code>interrupt</code> module’s readme</a>.</p>
+</li>
+</ul>
+<p>Consider using the <a href="#optional-features-critical-section"><code>critical-section</code> feature</a> for systems that cannot use this feature.</p>
+<p>It is <strong>very strongly discouraged</strong> to enable this feature in libraries that depend on <code>portable-atomic</code>. The recommended approach for libraries is to leave it up to the end user whether or not to enable this feature. (However, it may make sense to enable this feature by default for libraries specific to a platform where it is guaranteed to always be sound, for example in a hardware abstraction layer targeting a single-core chip.)</p>
+<p>ARMv6-M (thumbv6m), pre-v6 ARM (e.g., thumbv4t, thumbv5te), RISC-V without A-extension, and Xtensa are currently supported.</p>
+<p>Since all MSP430 and AVR are single-core, we always provide atomic CAS for them without this feature.</p>
+<p>Enabling this feature for targets that have atomic CAS will result in a compile error.</p>
+<p>Feel free to submit an issue if your target is not supported yet.</p>
+</li>
+</ul>
+<h3 id="optional-cfg"><a class="doc-anchor" href="#optional-cfg">§</a>Optional cfg</h3>
+<p>One of the ways to enable cfg is to set <a href="https://doc.rust-lang.org/cargo/reference/config.html#targettriplerustflags">rustflags in the cargo config</a>:</p>
+<div class="example-wrap"><pre class="language-toml"><code># .cargo/config.toml
+[target.&lt;target&gt;]
+rustflags = [&quot;--cfg&quot;, &quot;portable_atomic_no_outline_atomics&quot;]
+</code></pre></div>
+<p>Or set environment variable:</p>
+<div class="example-wrap"><pre class="language-sh"><code>RUSTFLAGS=&quot;--cfg portable_atomic_no_outline_atomics&quot; cargo ...
+</code></pre></div>
+<ul>
+<li>
+<p><a name="optional-cfg-unsafe-assume-single-core"></a><strong><code>--cfg portable_atomic_unsafe_assume_single_core</code></strong><br>
+Since 1.4.0, this cfg is an alias of <a href="#optional-features-unsafe-assume-single-core"><code>unsafe-assume-single-core</code> feature</a>.</p>
+<p>Originally, we were providing these as cfgs instead of features, but based on a strong request from the embedded ecosystem, we have agreed to provide them as features as well. See <a href="https://github.com/taiki-e/portable-atomic/pull/94">#94</a> for more.</p>
+</li>
+<li>
+<p><a name="optional-cfg-no-outline-atomics"></a><strong><code>--cfg portable_atomic_no_outline_atomics</code></strong><br>
+Disable dynamic dispatching by run-time CPU feature detection.</p>
+<p>If dynamic dispatching by run-time CPU feature detection is enabled, it allows maintaining support for older CPUs while using features that are not supported on older CPUs, such as CMPXCHG16B (x86_64) and FEAT_LSE (aarch64).</p>
+<p>Note:</p>
+<ul>
+<li>Dynamic detection is currently only enabled in Rust 1.59+ for aarch64, in Rust 1.59+ (AVX) or 1.69+ (CMPXCHG16B) for x86_64, nightly only for powerpc64 (disabled by default), otherwise it works the same as when this cfg is set.</li>
+<li>If the required target features are enabled at compile-time, the atomic operations are inlined.</li>
+<li>This is compatible with no-std (as with all features except <code>std</code>).</li>
+<li>On some targets, run-time detection is disabled by default mainly for compatibility with older versions of operating systems or incomplete build environments, and can be enabled by <code>--cfg portable_atomic_outline_atomics</code>. (When both cfg are enabled, <code>*_no_*</code> cfg is preferred.)</li>
+<li>Some aarch64 targets enable LLVM’s <code>outline-atomics</code> target feature by default, so if you set this cfg, you may want to disable that as well. (portable-atomic’s outline-atomics does not depend on the compiler-rt symbols, so even if you need to disable LLVM’s outline-atomics, you may not need to disable portable-atomic’s outline-atomics.)</li>
+</ul>
+<p>See also the <a href="https://github.com/taiki-e/portable-atomic/blob/HEAD/src/imp/atomic128/README.md"><code>atomic128</code> module’s readme</a>.</p>
+</li>
+</ul>
+<h3 id="related-projects"><a class="doc-anchor" href="#related-projects">§</a>Related Projects</h3>
+<ul>
+<li><a href="https://github.com/taiki-e/atomic-maybe-uninit">atomic-maybe-uninit</a>: Atomic operations on potentially uninitialized integers.</li>
+<li><a href="https://github.com/taiki-e/atomic-memcpy">atomic-memcpy</a>: Byte-wise atomic memcpy.</li>
+</ul>
+<!-- tidy:crate-doc:end --></div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Ordering"><code>pub use core::sync::atomic::<a class="enum" href="https://doc.rust-lang.org/1.77.0/core/sync/atomic/enum.Ordering.html" title="enum core::sync::atomic::Ordering">Ordering</a>;</code></div></li><li><div class="item-name" id="reexport.compiler_fence"><code>pub use core::sync::atomic::<a class="fn" href="https://doc.rust-lang.org/1.77.0/core/sync/atomic/fn.compiler_fence.html" title="fn core::sync::atomic::compiler_fence">compiler_fence</a>;</code></div></li><li><div class="item-name" id="reexport.fence"><code>pub use core::sync::atomic::<a class="fn" href="https://doc.rust-lang.org/1.77.0/core/sync/atomic/fn.fence.html" title="fn core::sync::atomic::fence">fence</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="hint/index.html" title="mod portable_atomic::hint">hint</a></div><div class="desc docblock-short">Re-export of the <a href="https://doc.rust-lang.org/1.77.0/core/hint/index.html" title="mod core::hint"><code>core::hint</code></a> module.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.cfg_has_atomic_8.html" title="macro portable_atomic::cfg_has_atomic_8">cfg_has_atomic_8</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_has_atomic_16.html" title="macro portable_atomic::cfg_has_atomic_16">cfg_has_atomic_16</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_has_atomic_32.html" title="macro portable_atomic::cfg_has_atomic_32">cfg_has_atomic_32</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_has_atomic_64.html" title="macro portable_atomic::cfg_has_atomic_64">cfg_has_atomic_64</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_has_atomic_128.html" title="macro portable_atomic::cfg_has_atomic_128">cfg_has_atomic_128</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_has_atomic_cas.html" title="macro portable_atomic::cfg_has_atomic_cas">cfg_has_atomic_cas</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_has_atomic_ptr.html" title="macro portable_atomic::cfg_has_atomic_ptr">cfg_has_atomic_ptr</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_no_atomic_8.html" title="macro portable_atomic::cfg_no_atomic_8">cfg_no_atomic_8</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_no_atomic_16.html" title="macro portable_atomic::cfg_no_atomic_16">cfg_no_atomic_16</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_no_atomic_32.html" title="macro portable_atomic::cfg_no_atomic_32">cfg_no_atomic_32</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_no_atomic_64.html" title="macro portable_atomic::cfg_no_atomic_64">cfg_no_atomic_64</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_no_atomic_128.html" title="macro portable_atomic::cfg_no_atomic_128">cfg_no_atomic_128</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_no_atomic_cas.html" title="macro portable_atomic::cfg_no_atomic_cas">cfg_no_atomic_cas</a></div></li><li><div class="item-name"><a class="macro" href="macro.cfg_no_atomic_ptr.html" title="macro portable_atomic::cfg_no_atomic_ptr">cfg_no_atomic_ptr</a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AtomicBool.html" title="struct portable_atomic::AtomicBool">AtomicBool</a></div><div class="desc docblock-short">A boolean type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicI8.html" title="struct portable_atomic::AtomicI8">AtomicI8</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicI16.html" title="struct portable_atomic::AtomicI16">AtomicI16</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicI32.html" title="struct portable_atomic::AtomicI32">AtomicI32</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicI64.html" title="struct portable_atomic::AtomicI64">AtomicI64</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicI128.html" title="struct portable_atomic::AtomicI128">AtomicI128</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicIsize.html" title="struct portable_atomic::AtomicIsize">AtomicIsize</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicPtr.html" title="struct portable_atomic::AtomicPtr">AtomicPtr</a></div><div class="desc docblock-short">A raw pointer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicU8.html" title="struct portable_atomic::AtomicU8">AtomicU8</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicU16.html" title="struct portable_atomic::AtomicU16">AtomicU16</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicU32.html" title="struct portable_atomic::AtomicU32">AtomicU32</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicU64.html" title="struct portable_atomic::AtomicU64">AtomicU64</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicU128.html" title="struct portable_atomic::AtomicU128">AtomicU128</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li><li><div class="item-name"><a class="struct" href="struct.AtomicUsize.html" title="struct portable_atomic::AtomicUsize">AtomicUsize</a></div><div class="desc docblock-short">An integer type which can be safely shared between threads.</div></li></ul></section></div></main></body></html>

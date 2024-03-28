@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["tempdir","tempdir_in","tempfile","tempfile_in"],"struct":["Builder","NamedUtf8TempFile","Utf8PathPersistError","Utf8PersistError","Utf8TempDir","Utf8TempPath"]};

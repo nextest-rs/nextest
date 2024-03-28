@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A single ‘frame’ containing values that can be mapped over via `map_frame`."><title>MappableFrame in recursion - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="recursion" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../recursion/index.html">recursion</a><span class="version">0.5.2</span></h2></div><h2 class="location"><a href="#">MappableFrame</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Frame">Frame</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.map_frame">map_frame</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate recursion</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../recursion/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">recursion</a>::<wbr><a class="trait" href="#">MappableFrame</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/recursion/frame.rs.html#64-70">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait MappableFrame {
+    type <a href="#associatedtype.Frame" class="associatedtype">Frame</a>&lt;X&gt;;
+
+    // Required method
+    fn <a href="#tymethod.map_frame" class="fn">map_frame</a>&lt;A, B&gt;(
+        input: Self::<a class="associatedtype" href="trait.MappableFrame.html#associatedtype.Frame" title="type recursion::MappableFrame::Frame">Frame</a>&lt;A&gt;,
+        f: impl <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(A) -&gt; B
+    ) -&gt; Self::<a class="associatedtype" href="trait.MappableFrame.html#associatedtype.Frame" title="type recursion::MappableFrame::Frame">Frame</a>&lt;B&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A single ‘frame’ containing values that can be mapped over via <code>map_frame</code>.</p>
+<h2 id="motivation"><a class="doc-anchor" href="#motivation">§</a>Motivation</h2>
+<p>Generally speaking, you won’t use this trait yourself. It’s used by the internal plumbing of
+<a href="trait.Collapsible.html" title="trait recursion::Collapsible"><code>crate::Collapsible</code></a> and <a href="trait.Expandable.html" title="trait recursion::Expandable"><code>crate::Expandable</code></a> to implement recursive traversals.</p>
+<h2 id="implementing-this-trait"><a class="doc-anchor" href="#implementing-this-trait">§</a>Implementing this trait</h2>
+<p>This trait is usually implemented for some marker token, because rust does not
+allow for implementing a trait for a partially applied type. That is, we can implement
+a trait for <code>Option&lt;usize&gt;</code> but we can’t implement a trait for just <code>Option</code>, because
+<code>Option</code> is a partially applied type.</p>
+<p>For this reason, a common convention is to implement this trait using the uninhabited
+<a href="enum.PartiallyApplied.html" title="enum recursion::PartiallyApplied"><code>PartiallyApplied</code></a> enum marker, eg</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">enum </span>MyOption&lt;A&gt; {
+    <span class="prelude-val">Some</span>(A),
+    <span class="prelude-val">None</span>,
+}
+
+<span class="kw">impl </span>MappableFrame <span class="kw">for </span>MyOption&lt;PartiallyApplied&gt; {
+    <span class="kw">type </span>Frame&lt;X&gt; = MyOption&lt;X&gt;;
+
+    <span class="kw">fn </span>map_frame&lt;A, B&gt;(input: <span class="self">Self</span>::Frame&lt;A&gt;, <span class="kw-2">mut </span>f: <span class="kw">impl </span>FnMut(A) -&gt; B) -&gt; <span class="self">Self</span>::Frame&lt;B&gt; {
+        <span class="kw">match </span>input {
+            MyOption::Some(x) =&gt; MyOption::Some(f(x)),
+            MyOption::None =&gt; MyOption::None,
+        }
+    }
+}</code></pre></div>
+<h2 id="use"><a class="doc-anchor" href="#use">§</a>Use</h2>
+<p>Here’s what mapping over a <code>MyOption</code> frame looks like in action:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>frame = MyOption::Some(<span class="number">1</span>);
+<span class="kw">let </span>mapped_frame = MyOption::&lt;PartiallyApplied&gt;::map_frame(frame, |n| n + <span class="number">10</span>);
+
+<span class="macro">assert_eq!</span>(mapped_frame, MyOption::Some(<span class="number">11</span>));</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Frame" class="method"><a class="src rightside" href="../src/recursion/frame.rs.html#66">source</a><h4 class="code-header">type <a href="#associatedtype.Frame" class="associatedtype">Frame</a>&lt;X&gt;</h4></section></summary><div class="docblock"><p>the frame type that is mapped over by <code>map_frame</code></p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.map_frame" class="method"><a class="src rightside" href="../src/recursion/frame.rs.html#69">source</a><h4 class="code-header">fn <a href="#tymethod.map_frame" class="fn">map_frame</a>&lt;A, B&gt;(
+    input: Self::<a class="associatedtype" href="trait.MappableFrame.html#associatedtype.Frame" title="type recursion::MappableFrame::Frame">Frame</a>&lt;A&gt;,
+    f: impl <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(A) -&gt; B
+) -&gt; Self::<a class="associatedtype" href="trait.MappableFrame.html#associatedtype.Frame" title="type recursion::MappableFrame::Frame">Frame</a>&lt;B&gt;</h4></section></summary><div class="docblock"><p>Apply some function <code>f</code> to each element inside a frame</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.77.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/recursion/frame/trait.MappableFrame.js" async></script></section></div></main></body></html>

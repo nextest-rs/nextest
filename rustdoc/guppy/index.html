@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Track and query Cargo dependency graphs."><title>guppy - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="guppy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../guppy/index.html">guppy</a><span class="version">0.17.5</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../guppy/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">guppy</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/guppy/lib.rs.html#4-117">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Track and query Cargo dependency graphs.</p>
+<p><code>guppy</code> provides a Rust interface to run queries over Cargo dependency graphs. <code>guppy</code> parses
+the output of  <a href="https://doc.rust-lang.org/cargo/commands/cargo-metadata.html"><code>cargo metadata</code></a>,
+then presents a graph interface over it.</p>
+<h2 id="types-and-lifetimes"><a class="doc-anchor" href="#types-and-lifetimes">§</a>Types and lifetimes</h2>
+<p>The central structure exposed by <code>guppy</code> is <a href="graph/struct.PackageGraph.html" title="struct guppy::graph::PackageGraph"><code>PackageGraph</code></a>. This
+represents a directed (though <a href="graph/struct.Cycles.html" title="struct guppy::graph::Cycles">not necessarily acyclic</a>) graph where every
+node is a package and every edge represents a dependency.</p>
+<p>Other types borrow data from a <code>PackageGraph</code> and have a <code>'g</code> lifetime parameter indicating
+that. A lifetime parameter named <code>'g</code> always indicates that data is borrowed from a
+<code>PackageGraph</code>.</p>
+<p><a href="graph/struct.PackageMetadata.html" title="struct guppy::graph::PackageMetadata"><code>PackageMetadata</code></a> contains information about individual
+packages, such as the data in
+<a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-package-section">the <code>[package]</code> section</a>.</p>
+<p>For traversing the graph, <code>guppy</code> provides a few types:</p>
+<ul>
+<li><a href="graph/struct.PackageLink.html" title="struct guppy::graph::PackageLink"><code>PackageLink</code></a> represents both ends of a dependency edge, along
+with details about the dependency (whether it is dev-only, platform-specific, and so on).</li>
+<li><a href="graph/struct.PackageQuery.html" title="struct guppy::graph::PackageQuery"><code>PackageQuery</code></a> represents the input parameters to a dependency
+traversal: a set of packages and a direction. A traversal is performed with
+<a href="graph/struct.PackageQuery.html#method.resolve" title="method guppy::graph::PackageQuery::resolve"><code>PackageQuery::resolve</code></a>, and fine-grained control over
+the traversal is achieved with
+<a href="graph/struct.PackageQuery.html#method.resolve_with_fn" title="method guppy::graph::PackageQuery::resolve_with_fn"><code>PackageQuery::resolve_with_fn</code></a>.</li>
+<li><a href="graph/struct.PackageSet.html" title="struct guppy::graph::PackageSet"><code>PackageSet</code></a> represents the result of a graph traversal. This
+struct provides several methods to iterate over packages.</li>
+</ul>
+<p>For some operations, <code>guppy</code> builds an auxiliary <a href="graph/feature/struct.FeatureGraph.html" title="struct guppy::graph::feature::FeatureGraph"><code>FeatureGraph</code></a>
+the first time it is required. Every node in a <code>FeatureGraph</code> is a combination of a package and
+a feature declared in it, and every edge is a feature dependency.</p>
+<p>For traversing the feature graph, <code>guppy</code> provides the analogous <a href="graph/feature/struct.FeatureQuery.html" title="struct guppy::graph::feature::FeatureQuery"><code>FeatureQuery</code></a> and
+<a href="graph/feature/struct.FeatureSet.html" title="struct guppy::graph::feature::FeatureSet"><code>FeatureSet</code></a> types.</p>
+<p><code>FeatureSet</code> also has an <a href="graph/feature/struct.FeatureSet.html#method.into_cargo_set" title="method guppy::graph::feature::FeatureSet::into_cargo_set"><code>into_cargo_set</code></a>
+method, to simulate Cargo builds. This method produces a <a href="graph/cargo/struct.CargoSet.html" title="struct guppy::graph::cargo::CargoSet"><code>CargoSet</code></a>,
+which is essentially two <code>FeatureSet</code>s along with some more useful information.</p>
+<p><code>guppy</code>’s data structures are immutable, with some internal caches. All of <code>guppy</code>’s types are
+<code>Send + Sync</code>, and all lifetime parameters are <a href="https://github.com/sunshowers/lifetime-variance-example/">covariant</a>.</p>
+<h2 id="optional-features"><a class="doc-anchor" href="#optional-features">§</a>Optional features</h2>
+<ul>
+<li><code>proptest1</code>: Support for <a href="https://jessitron.com/2013/04/25/property-based-testing-what-is-it/">property-based testing</a>
+using the <a href="https://altsysrq.github.io/proptest-book/intro.html"><code>proptest</code></a> framework.</li>
+<li><code>rayon1</code>: Support for parallel iterators through <a href="docs.rs/rayon/1">Rayon</a> (preliminary work
+so far, more parallel iterators to be added in the future).</li>
+<li><code>summaries</code>: Support for writing out <a href="https://github.com/guppy-rs/guppy/tree/main/guppy-summaries">build summaries</a>.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Print out all direct dependencies of a package:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>guppy::{CargoMetadata, PackageId};
+
+<span class="comment">// `guppy` accepts `cargo metadata` JSON output. Use a pre-existing fixture for these examples.
+</span><span class="kw">let </span>metadata = CargoMetadata::parse_json(<span class="macro">include_str!</span>(<span class="string">"../../fixtures/small/metadata1.json"</span>)).unwrap();
+<span class="kw">let </span>package_graph = metadata.build_graph().unwrap();
+
+<span class="comment">// `guppy` provides several ways to get hold of package IDs. Use a pre-defined one for this
+// example.
+</span><span class="kw">let </span>package_id = PackageId::new(<span class="string">"testcrate 0.1.0 (path+file:///fakepath/testcrate)"</span>);
+
+<span class="comment">// The `metadata` method returns information about the package, or `None` if the package ID
+// wasn't recognized.
+</span><span class="kw">let </span>package = package_graph.metadata(<span class="kw-2">&amp;</span>package_id).unwrap();
+
+<span class="comment">// `direct_links` returns all direct dependencies of a package.
+</span><span class="kw">for </span>link <span class="kw">in </span>package.direct_links() {
+    <span class="comment">// A dependency link contains `from()`, `to()` and information about the specifics of the
+    // dependency.
+    </span><span class="macro">println!</span>(<span class="string">"direct dependency: {}"</span>, link.to().id());
+}</code></pre></div>
+<p>For more examples, see
+<a href="https://github.com/guppy-rs/guppy/tree/main/guppy/examples">the <code>examples</code> directory</a>.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Error"><code>pub use errors::<a class="enum" href="errors/enum.Error.html" title="enum guppy::errors::Error">Error</a>;</code></div></li><li><div class="item-name" id="reexport.Version"><code>pub use semver::<a class="struct" href="../semver/struct.Version.html" title="struct semver::Version">Version</a>;</code></div></li><li><div class="item-name" id="reexport.VersionReq"><code>pub use semver::<a class="struct" href="../semver/struct.VersionReq.html" title="struct semver::VersionReq">VersionReq</a>;</code></div></li><li><div class="item-name" id="reexport.JsonValue"><code>pub use serde_json::<a class="enum" href="../serde_json/value/enum.Value.html" title="enum serde_json::value::Value">Value</a> as JsonValue;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="errors/index.html" title="mod guppy::errors">errors</a></div><div class="desc docblock-short">Contains types that describe errors and warnings that <code>guppy</code> methods can return.</div></li><li><div class="item-name"><a class="mod" href="graph/index.html" title="mod guppy::graph">graph</a></div><div class="desc docblock-short">Entry point for analyzing Cargo dependency graphs.</div></li><li><div class="item-name"><a class="mod" href="platform/index.html" title="mod guppy::platform">platform</a></div><div class="desc docblock-short">Support for dependencies that are only enabled on some platforms.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CargoMetadata.html" title="struct guppy::CargoMetadata">CargoMetadata</a></div><div class="desc docblock-short">Deserialized Cargo metadata.</div></li><li><div class="item-name"><a class="struct" href="struct.MetadataCommand.html" title="struct guppy::MetadataCommand">MetadataCommand</a></div><div class="desc docblock-short">A builder for configuring <code>cargo metadata</code> invocations.</div></li><li><div class="item-name"><a class="struct" href="struct.PackageId.html" title="struct guppy::PackageId">PackageId</a></div><div class="desc docblock-short">An “opaque” identifier for a package.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.DependencyKind.html" title="enum guppy::DependencyKind">DependencyKind</a></div><div class="desc docblock-short">A descriptor for the kind of dependency.</div></li></ul></section></div></main></body></html>

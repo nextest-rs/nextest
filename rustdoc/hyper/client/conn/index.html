@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Lower-level client connection API."><title>hyper::client::conn - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hyper" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../hyper/index.html">hyper</a><span class="version">0.14.27</span></h2></div><h2 class="location"><a href="#">Module conn</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In hyper::client</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../hyper/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">hyper</a>::<wbr><a href="../index.html">client</a>::<wbr><a class="mod" href="#">conn</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../../src/hyper/client/conn.rs.html#1-1156">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Lower-level client connection API.</p>
+<p>The types in this module are to provide a lower-level API based around a
+single connection. Connecting to a host, pooling connections, and the like
+are not handled at this level. This module provides the building blocks to
+customize those things externally.</p>
+<p>If don’t have need to manage connections yourself, consider using the
+higher-level <a href="../index.html" title="mod hyper::client">Client</a> API.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>A simple example that uses the <code>SendRequest</code> struct to talk HTTP over a Tokio TCP stream</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tower::ServiceExt;
+<span class="kw">use </span>http::{Request, StatusCode};
+<span class="kw">use </span>hyper::{client::conn, Body};
+<span class="kw">use </span>tokio::net::TcpStream;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="kw">let </span>target_stream = TcpStream::connect(<span class="string">"example.com:80"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>(<span class="kw-2">mut </span>request_sender, connection) = conn::handshake(target_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// spawn a task to poll the connection and drive the HTTP state
+    </span>tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = connection.<span class="kw">await </span>{
+            <span class="macro">eprintln!</span>(<span class="string">"Error in connection: {}"</span>, e);
+        }
+    });
+
+    <span class="kw">let </span>request = Request::builder()
+        <span class="comment">// We need to manually add the host header because SendRequest does not
+        </span>.header(<span class="string">"Host"</span>, <span class="string">"example.com"</span>)
+        .method(<span class="string">"GET"</span>)
+        .body(Body::from(<span class="string">""</span>))<span class="question-mark">?</span>;
+    <span class="kw">let </span>response = request_sender.send_request(request).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">assert!</span>(response.status() == StatusCode::OK);
+
+    <span class="comment">// To send via the same connection again, it may not work as it may not be ready,
+    // so we have to wait until the request_sender becomes ready.
+    </span>request_sender.ready().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>request = Request::builder()
+        .header(<span class="string">"Host"</span>, <span class="string">"example.com"</span>)
+        .method(<span class="string">"GET"</span>)
+        .body(Body::from(<span class="string">""</span>))<span class="question-mark">?</span>;
+    <span class="kw">let </span>response = request_sender.send_request(request).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">assert!</span>(response.status() == StatusCode::OK);
+    <span class="prelude-val">Ok</span>(())
+}
+</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct hyper::client::conn::Builder">Builder</a></div><div class="desc docblock-short">A builder to configure an HTTP connection.</div></li><li><div class="item-name"><a class="struct" href="struct.Connection.html" title="struct hyper::client::conn::Connection">Connection</a></div><div class="desc docblock-short">A future that processes all HTTP state for the IO object.</div></li><li><div class="item-name"><a class="struct" href="struct.Parts.html" title="struct hyper::client::conn::Parts">Parts</a></div><div class="desc docblock-short">Deconstructed parts of a <code>Connection</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.ResponseFuture.html" title="struct hyper::client::conn::ResponseFuture">ResponseFuture</a></div><div class="desc docblock-short">A future returned by <code>SendRequest::send_request</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.SendRequest.html" title="struct hyper::client::conn::SendRequest">SendRequest</a></div><div class="desc docblock-short">The sender side of an established connection.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.handshake.html" title="fn hyper::client::conn::handshake">handshake</a></div><div class="desc docblock-short">Returns a handshake future over some IO.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CheckStatus","UpdateVersion"],"struct":["MuktiBackend","MuktiUpdateContext","NextestReleaseMetadata","NextestReleases","ReleaseVersionData"]};

@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Build status Build Status crates.io:clin docs"><title>self_update - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="self_update" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../self_update/index.html">self_update</a><span class="version">0.39.0</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../self_update/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">self_update</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/self_update/lib.rs.html#1-1106">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://ci.appveyor.com/project/jaemk/self-update/branch/master"><img src="https://ci.appveyor.com/api/projects/status/xlkq8rd73cla4ixw/branch/master?svg=true" alt="Build status" /></a>
+<a href="https://travis-ci.org/jaemk/self_update"><img src="https://travis-ci.org/jaemk/self_update.svg?branch=master" alt="Build Status" /></a>
+<a href="https://crates.io/crates/self_update"><img src="https://img.shields.io/crates/v/self_update.svg?label=self_update" alt="crates.io:clin" /></a>
+<a href="https://docs.rs/self_update"><img src="https://docs.rs/self_update/badge.svg" alt="docs" /></a></p>
+<p><code>self_update</code> provides updaters for updating rust executables in-place from various release
+distribution backends.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>Update (replace) the current executable with the latest release downloaded
+from <code>https://api.github.com/repos/jaemk/self_update/releases/latest</code>.
+Note, the <a href="https://github.com/japaric/trust"><code>trust</code></a> project provides a nice setup for
+producing release-builds via CI (travis/appveyor).</p>
+<h4 id="features"><a class="doc-anchor" href="#features">§</a>Features</h4>
+<p>The following <a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-section">cargo features</a> are
+available (but <em>disabled</em> by default):</p>
+<ul>
+<li><code>archive-tar</code>: Support for <em>tar</em> archive format;</li>
+<li><code>archive-zip</code>: Support for <em>zip</em> archive format;</li>
+<li><code>compression-flate2</code>: Support for <em>gzip</em> compression;</li>
+<li><code>compression-zip-deflate</code>: Support for <em>zip</em>’s <em>deflate</em> compression format;</li>
+<li><code>compression-zip-bzip2</code>: Support for <em>zip</em>’s <em>bzip2</em> compression format;</li>
+<li><code>rustls</code>: Use <a href="https://github.com/ctz/rustls">pure rust TLS implementation</a> for network requests. This feature does <em>not</em> support 32bit macOS;</li>
+<li><code>signatures</code>: Use <a href="https://github.com/Kijewski/zipsign">zipsign</a> to verify <code>.zip</code> and <code>.tar.gz</code> artifacts. Artifacts are assumed to have been signed using zipsign.</li>
+</ul>
+<p>Please activate the feature(s) needed by your release files.</p>
+<h4 id="example"><a class="doc-anchor" href="#example">§</a>Example</h4>
+<p>Run the following example to see <code>self_update</code> in action:</p>
+<p><code>cargo run --example github --features &quot;archive-tar archive-zip compression-flate2 compression-zip-deflate&quot;</code>.</p>
+<p>There’s also an equivalent example for gitlab:</p>
+<p><code>cargo run --example gitlab --features &quot;archive-tar archive-zip compression-flate2 compression-zip-deflate&quot;</code>.</p>
+<p>which runs something roughly equivalent to:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>self_update::cargo_crate_version;
+
+<span class="kw">fn </span>update() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;::std::error::Error&gt;&gt; {
+    <span class="kw">let </span>status = self_update::backends::github::Update::configure()
+        .repo_owner(<span class="string">"jaemk"</span>)
+        .repo_name(<span class="string">"self_update"</span>)
+        .bin_name(<span class="string">"github"</span>)
+        .show_download_progress(<span class="bool-val">true</span>)
+        .current_version(<span class="macro">cargo_crate_version!</span>())
+        .build()<span class="question-mark">?
+        </span>.update()<span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"Update status: `{}`!"</span>, status.version());
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Amazon S3, Google GCS, and DigitalOcean Spaces are also supported through the <code>S3</code> backend to check for new releases. Provided a <code>bucket_name</code>
+and <code>asset_prefix</code> string, <code>self_update</code> will look up all matching files using the following format
+as a convention for the filenames: <code>[directory/]&lt;asset name&gt;-&lt;semver&gt;-&lt;platform/target&gt;.&lt;extension&gt;</code>.
+Leading directories will be stripped from the file name allowing the use of subdirectories in the S3 bucket,
+and any file not matching the format, or not matching the provided prefix string, will be ignored.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>self_update::cargo_crate_version;
+
+<span class="kw">fn </span>update() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;::std::error::Error&gt;&gt; {
+    <span class="kw">let </span>status = self_update::backends::s3::Update::configure()
+        .bucket_name(<span class="string">"self_update_releases"</span>)
+        .asset_prefix(<span class="string">"something/self_update"</span>)
+        .region(<span class="string">"eu-west-2"</span>)
+        .bin_name(<span class="string">"self_update_example"</span>)
+        .show_download_progress(<span class="bool-val">true</span>)
+        .current_version(<span class="macro">cargo_crate_version!</span>())
+        .build()<span class="question-mark">?
+        </span>.update()<span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"S3 Update status: `{}`!"</span>, status.version());
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Separate utilities are also exposed (<strong>NOTE</strong>: the following example <em>requires</em> the <code>archive-tar</code> feature,
+see the <a href="#features">features</a> section above). The <code>self_replace</code> crate is re-exported for convenience:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>update() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;::std::error::Error&gt;&gt; {
+    <span class="kw">let </span>releases = self_update::backends::github::ReleaseList::configure()
+        .repo_owner(<span class="string">"jaemk"</span>)
+        .repo_name(<span class="string">"self_update"</span>)
+        .build()<span class="question-mark">?
+        </span>.fetch()<span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"found releases:"</span>);
+    <span class="macro">println!</span>(<span class="string">"{:#?}\n"</span>, releases);
+
+    <span class="comment">// get the first available release
+    </span><span class="kw">let </span>asset = releases[<span class="number">0</span>]
+        .asset_for(<span class="kw-2">&amp;</span>self_update::get_target()).unwrap();
+
+    <span class="kw">let </span>tmp_dir = tempfile::Builder::new()
+            .prefix(<span class="string">"self_update"</span>)
+            .tempdir_in(::std::env::current_dir()<span class="question-mark">?</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>tmp_tarball_path = tmp_dir.path().join(<span class="kw-2">&amp;</span>asset.name);
+    <span class="kw">let </span>tmp_tarball = ::std::fs::File::open(<span class="kw-2">&amp;</span>tmp_tarball_path)<span class="question-mark">?</span>;
+
+    self_update::Download::from_url(<span class="kw-2">&amp;</span>asset.download_url)
+        .set_header(reqwest::header::ACCEPT, <span class="string">"application/octet-stream"</span>.parse()<span class="question-mark">?</span>)
+        .download_to(<span class="kw-2">&amp;</span>tmp_tarball)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>bin_name = std::path::PathBuf::from(<span class="string">"self_update_bin"</span>);
+    self_update::Extract::from_source(<span class="kw-2">&amp;</span>tmp_tarball_path)
+        .archive(self_update::ArchiveKind::Tar(<span class="prelude-val">Some</span>(self_update::Compression::Gz)))
+        .extract_file(<span class="kw-2">&amp;</span>tmp_dir.path(), <span class="kw-2">&amp;</span>bin_name)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>new_exe = tmp_dir.path().join(bin_name);
+    self_replace::self_replace(new_exe)<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.self_replace"><code>pub use <a class="mod" href="../self_replace/index.html" title="mod self_replace">self_replace</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="backends/index.html" title="mod self_update::backends">backends</a></div><div class="desc docblock-short">Collection of modules supporting various release distribution backends</div></li><li><div class="item-name"><a class="mod" href="errors/index.html" title="mod self_update::errors">errors</a></div><div class="desc docblock-short">Error type, conversions, and macros</div></li><li><div class="item-name"><a class="mod" href="update/index.html" title="mod self_update::update">update</a></div></li><li><div class="item-name"><a class="mod" href="version/index.html" title="mod self_update::version">version</a></div><div class="desc docblock-short">Semver version checks</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.cargo_crate_version.html" title="macro self_update::cargo_crate_version">cargo_crate_version</a></div><div class="desc docblock-short">Allows you to pull the version from your Cargo.toml at compile time as
+<code>MAJOR.MINOR.PATCH_PKGVERSION_PRE</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Download.html" title="struct self_update::Download">Download</a></div><div class="desc docblock-short">Download things into files</div></li><li><div class="item-name"><a class="struct" href="struct.Extract.html" title="struct self_update::Extract">Extract</a></div><div class="desc docblock-short">Extract contents of an encoded archive (e.g. tar.gz) file to a specified directory</div></li><li><div class="item-name"><a class="struct" href="struct.Move.html" title="struct self_update::Move">Move</a></div><div class="desc docblock-short">Moves a file from the given path to the specified destination.</div></li><li><div class="item-name"><a class="struct" href="struct.TempDir.html" title="struct self_update::TempDir">TempDir</a></div><div class="desc docblock-short">A directory in the filesystem that is automatically deleted when
+it goes out of scope.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ArchiveKind.html" title="enum self_update::ArchiveKind">ArchiveKind</a></div><div class="desc docblock-short">Supported archive formats</div></li><li><div class="item-name"><a class="enum" href="enum.Compression.html" title="enum self_update::Compression">Compression</a></div></li><li><div class="item-name"><a class="enum" href="enum.Status.html" title="enum self_update::Status">Status</a></div><div class="desc docblock-short">Status returned after updating</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.DEFAULT_PROGRESS_CHARS.html" title="constant self_update::DEFAULT_PROGRESS_CHARS">DEFAULT_PROGRESS_CHARS</a></div></li><li><div class="item-name"><a class="constant" href="constant.DEFAULT_PROGRESS_TEMPLATE.html" title="constant self_update::DEFAULT_PROGRESS_TEMPLATE">DEFAULT_PROGRESS_TEMPLATE</a></div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.get_target.html" title="fn self_update::get_target">get_target</a></div><div class="desc docblock-short">Get the current target triple.</div></li><li><div class="item-name"><a class="fn" href="fn.should_update.html" title="fn self_update::should_update">should_update</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Check if a version tag is greater than the current</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.GetArchiveReaderResult.html" title="type self_update::GetArchiveReaderResult">GetArchiveReaderResult</a></div></li></ul></section></div></main></body></html>

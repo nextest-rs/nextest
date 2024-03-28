@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Iter","Nested"],"trait":["Collection"],"type":["Item","ZString","ZVec"]};

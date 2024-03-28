@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EndPoint"],"struct":["ReleaseList","ReleaseListBuilder","Update","UpdateBuilder"]};

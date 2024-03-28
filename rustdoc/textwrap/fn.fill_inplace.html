@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Fill `text` in-place without reallocating the input string."><title>fill_inplace in textwrap - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="textwrap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../textwrap/index.html">textwrap</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../textwrap/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">textwrap</a>::<wbr><a class="fn" href="#">fill_inplace</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/textwrap/lib.rs.html#1260-1293">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn fill_inplace(text: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.77.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, width: <a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.usize.html">usize</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Fill <code>text</code> in-place without reallocating the input string.</p>
+<p>This function works by modifying the input string: some <code>' '</code>
+characters will be replaced by <code>'\n'</code> characters. The rest of the
+text remains untouched.</p>
+<p>Since we can only replace existing whitespace in the input with
+<code>'\n'</code> (there is no space for <code>&quot;\r\n&quot;</code>), we cannot do hyphenation
+nor can we split words longer than the line width. We also need to
+use <code>AsciiSpace</code> as the word separator since we need <code>' '</code>
+characters between words in order to replace some of them with a
+<code>'\n'</code>. Indentation is also ruled out. In other words,
+<code>fill_inplace(width)</code> behaves as if you had called <a href="fn.fill.html" title="fn textwrap::fill"><code>fill</code></a> with
+these options:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>Options::new(width)
+    .break_words(<span class="bool-val">false</span>)
+    .line_ending(LineEnding::LF)
+    .word_separator(WordSeparator::AsciiSpace)
+    .wrap_algorithm(WrapAlgorithm::FirstFit)
+    .word_splitter(WordSplitter::NoHyphenation);</code></pre></div>
+<p>The wrap algorithm is <a href="wrap_algorithms/enum.WrapAlgorithm.html#variant.FirstFit" title="variant textwrap::wrap_algorithms::WrapAlgorithm::FirstFit"><code>WrapAlgorithm::FirstFit</code></a> since this
+is the fastest algorithm — and the main reason to use
+<code>fill_inplace</code> is to get the string broken into newlines as fast
+as possible.</p>
+<p>A last difference is that (unlike <a href="fn.fill.html" title="fn textwrap::fill"><code>fill</code></a>) <code>fill_inplace</code> can
+leave trailing whitespace on lines. This is because we wrap by
+inserting a <code>'\n'</code> at the final whitespace in the input string:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>text = String::from(<span class="string">"Hello   World!"</span>);
+textwrap::fill_inplace(<span class="kw-2">&amp;mut </span>text, <span class="number">10</span>);
+<span class="macro">assert_eq!</span>(text, <span class="string">"Hello  \nWorld!"</span>);</code></pre></div>
+<p>If we didn’t do this, the word <code>World!</code> would end up being
+indented. You can avoid this if you make sure that your input text
+has no double spaces.</p>
+<h2 id="performance"><a class="doc-anchor" href="#performance">§</a>Performance</h2>
+<p>In benchmarks, <code>fill_inplace</code> is about twice as fast as <a href="fn.fill.html" title="fn textwrap::fill"><code>fill</code></a>.
+Please see the <a href="https://github.com/mgeisler/textwrap/blob/master/benchmarks/linear.rs"><code>linear</code>
+benchmark</a>
+for details.</p>
+</div></details></section></div></main></body></html>

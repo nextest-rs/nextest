@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["diff_paths","diff_utf8_paths"]};

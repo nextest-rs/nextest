@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_PROGRESS_CHARS","DEFAULT_PROGRESS_TEMPLATE"],"enum":["ArchiveKind","Compression","Status"],"fn":["get_target","should_update"],"macro":["cargo_crate_version"],"mod":["backends","errors","update","version"],"struct":["Download","Extract","Move","TempDir"],"type":["GetArchiveReaderResult"]};

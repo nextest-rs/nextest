@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_FRAGMENT_LEN","MAX_FRAGMENT_SIZE","PACKET_OVERHEAD"],"struct":["MessageFragmenter"]};

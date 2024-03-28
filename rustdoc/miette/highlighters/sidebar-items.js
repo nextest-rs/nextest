@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BlankHighlighter","BlankHighlighterState"],"trait":["Highlighter","HighlighterState"]};

@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Duct is a library for running child processes. Duct makes it easy to build pipelines and redirect IO like a shell. At the same time, Duct helps you write correct, portable code: whitespace is never significant, errors from child processes get reported by default, and a variety of gotchas, bugs, and platform inconsistencies are handled for you the Right Way™."><title>duct - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="duct" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../duct/index.html">duct</a><span class="version">0.13.7</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../duct/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">duct</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/duct/lib.rs.html#1-2061">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Duct is a library for running child processes. Duct makes it easy to build
+pipelines and redirect IO like a shell. At the same time, Duct helps you
+write correct, portable code: whitespace is never significant, errors from
+child processes get reported by default, and a variety of <a href="https://github.com/oconnor663/duct.py/blob/master/gotchas.md">gotchas, bugs,
+and platform
+inconsistencies</a>
+are handled for you the Right Way™.</p>
+<ul>
+<li><a href="https://docs.rs/duct">Documentation</a></li>
+<li><a href="https://crates.io/crates/duct">Crate</a></li>
+<li><a href="https://github.com/oconnor663/duct.rs">GitHub repo</a></li>
+<li><a href="https://github.com/oconnor663/duct.py">the same library, in Python</a></li>
+</ul>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p>Run a command without capturing any output. Here “hi” is printed directly
+to the terminal:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>duct::cmd;
+<span class="macro">cmd!</span>(<span class="string">"echo"</span>, <span class="string">"hi"</span>).run()<span class="question-mark">?</span>;</code></pre></div>
+<p>Capture the standard output of a command. Here “hi” is returned as a
+<code>String</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>stdout = <span class="macro">cmd!</span>(<span class="string">"echo"</span>, <span class="string">"hi"</span>).read()<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(stdout, <span class="string">"hi"</span>);</code></pre></div>
+<p>Capture the standard output of a pipeline:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>stdout = <span class="macro">cmd!</span>(<span class="string">"echo"</span>, <span class="string">"hi"</span>).pipe(<span class="macro">cmd!</span>(<span class="string">"sed"</span>, <span class="string">"s/i/o/"</span>)).read()<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(stdout, <span class="string">"ho"</span>);</code></pre></div>
+<p>Merge standard error into standard output and read both incrementally:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>duct::cmd;
+<span class="kw">use </span>std::io::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::io::BufReader;
+
+<span class="kw">let </span>big_cmd = <span class="macro">cmd!</span>(<span class="string">"bash"</span>, <span class="string">"-c"</span>, <span class="string">"echo out &amp;&amp; echo err 1&gt;&amp;2"</span>);
+<span class="kw">let </span>reader = big_cmd.stderr_to_stdout().reader()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>lines = BufReader::new(reader).lines();
+<span class="macro">assert_eq!</span>(lines.next().unwrap()<span class="question-mark">?</span>, <span class="string">"out"</span>);
+<span class="macro">assert_eq!</span>(lines.next().unwrap()<span class="question-mark">?</span>, <span class="string">"err"</span>);</code></pre></div>
+<p>Children that exit with a non-zero status return an error by default:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>result = <span class="macro">cmd!</span>(<span class="string">"false"</span>).run();
+<span class="macro">assert!</span>(result.is_err());
+<span class="kw">let </span>result = <span class="macro">cmd!</span>(<span class="string">"false"</span>).unchecked().run();
+<span class="macro">assert!</span>(result.is_ok());</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="unix/index.html" title="mod duct::unix">unix</a></div><div class="desc docblock-short">Unix-specific extensions to duct, for sending signals.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.cmd.html" title="macro duct::cmd">cmd</a></div><div class="desc docblock-short">Create a command with any number of of positional arguments, which may be
+different types (anything that implements
+<a href="https://doc.rust-lang.org/std/convert/trait.From.html"><code>Into&lt;OsString&gt;</code></a>).
+See also the <a href="fn.cmd.html"><code>cmd</code></a> function, which takes a collection of
+arguments.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Expression.html" title="struct duct::Expression">Expression</a></div><div class="desc docblock-short">The central objects in Duct, Expressions are created with
+<a href="fn.cmd.html"><code>cmd</code></a> or <a href="macro.cmd.html"><code>cmd!</code></a>, combined with
+<a href="struct.Expression.html#method.pipe"><code>pipe</code></a>, and finally executed with
+<a href="struct.Expression.html#method.run"><code>run</code></a>,
+<a href="struct.Expression.html#method.read"><code>read</code></a>,
+<a href="struct.Expression.html#method.start"><code>start</code></a>, or
+<a href="struct.Expression.html#method.reader"><code>reader</code></a>. They also support several
+methods to control their execution, like
+<a href="struct.Expression.html#method.stdin_bytes"><code>stdin_bytes</code></a>,
+<a href="struct.Expression.html#method.stdout_capture"><code>stdout_capture</code></a>,
+<a href="struct.Expression.html#method.env"><code>env</code></a>, and
+<a href="struct.Expression.html#method.unchecked"><code>unchecked</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Handle.html" title="struct duct::Handle">Handle</a></div><div class="desc docblock-short">A handle to a running expression, returned by the
+<a href="struct.Expression.html#method.start"><code>start</code></a> method.</div></li><li><div class="item-name"><a class="struct" href="struct.ReaderHandle.html" title="struct duct::ReaderHandle">ReaderHandle</a></div><div class="desc docblock-short">An incremental reader created with the
+<a href="struct.Expression.html#method.reader"><code>Expression::reader</code></a> method.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.IntoExecutablePath.html" title="trait duct::IntoExecutablePath">IntoExecutablePath</a></div><div class="desc docblock-short">An implementation detail of <a href="fn.cmd.html"><code>cmd</code></a>, to distinguish paths from
+other string types.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.cmd.html" title="fn duct::cmd">cmd</a></div><div class="desc docblock-short">Create a command given a program name and a collection of arguments. See
+also the <a href="macro.cmd.html"><code>cmd!</code></a> macro, which doesn’t require a collection.</div></li></ul></section></div></main></body></html>

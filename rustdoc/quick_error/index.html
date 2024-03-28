@@ -1,0 +1,213 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A macro which makes errors easy to write"><title>quick_error - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="quick_error" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../quick_error/index.html">quick_error</a><span class="version">1.2.3</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../quick_error/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">quick_error</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/quick_error/lib.rs.html#1-1262">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A macro which makes errors easy to write</p>
+<p>Minimum type is like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[macro_use] </span><span class="kw">extern crate </span>quick_error;
+
+<span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        Variant1 {}
+    }
+}</code></pre></div>
+<p>Both <code>pub</code> and non-public types may be declared, and all meta attributes
+(such as <code>#[derive(Debug)]</code>) are forwarded as is. The <code>Debug</code> must be
+implemented (but you may do that yourself if you like). The documentation
+comments <code>/// something</code> (as well as other meta attrbiutes) on variants
+are allowed.</p>
+<h2 id="allowed-syntax"><a class="doc-anchor" href="#allowed-syntax">§</a>Allowed Syntax</h2>
+<p>You may add arbitrary parameters to any struct variant:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        <span class="doccomment">/// IO Error
+        </span>Io(err: std::io::Error) {}
+        <span class="doccomment">/// Utf8 Error
+        </span>Utf8(err: std::str::Utf8Error) {}
+    }
+}</code></pre></div>
+<p>Note unlike in normal Enum declarations you declare names of fields (which
+are omitted from type). How they can be used is outlined below.</p>
+<p>Now you might have noticed trailing braces <code>{}</code>. They are used to define
+implementations. By default:</p>
+<ul>
+<li><code>Error::cause()</code> returns None (even if type wraps some value)</li>
+<li><code>Display</code> outputs debug representation</li>
+<li>No <code>From</code> implementations are defined</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        Io(err: std::io::Error) {
+            display(<span class="string">"{}"</span>, err)
+        }
+        Utf8(err: std::str::Utf8Error) {
+            display(<span class="string">"utf8 error"</span>)
+        }
+    }
+}</code></pre></div>
+<p>To change <code>cause</code> method to return some error, add <code>cause(value)</code>, for
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        Io(err: std::io::Error) {
+            cause(err)
+        }
+        Utf8(err: std::str::Utf8Error) {
+            display(<span class="string">"utf8 error"</span>)
+        }
+        Other(err: Box&lt;std::error::Error&gt;) {
+            cause(<span class="kw-2">&amp;**</span>err)
+        }
+    }
+}</code></pre></div>
+<p>Note you don’t need to wrap value in <code>Some</code>, its implicit. In case you want
+<code>None</code> returned just omit the <code>cause</code>. You can’t return <code>None</code>
+conditionally.</p>
+<p>To change how each clause is <code>Display</code>ed add <code>display(pattern,..args)</code>,
+for example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        Io(err: std::io::Error) {
+            display(<span class="string">"I/O error: {}"</span>, err)
+        }
+        Utf8(err: std::str::Utf8Error) {
+            display(<span class="string">"Utf8 error, valid up to {}"</span>, err.valid_up_to())
+        }
+    }
+}</code></pre></div>
+<p>If you need a reference to the error when <code>Display</code>ing, you can instead use
+<code>display(x) -&gt; (pattern, ..args)</code>, where <code>x</code> sets the name of the reference.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::error::Error; <span class="comment">// put methods like `source()` of this trait into scope
+
+</span><span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        Io(err: std::io::Error) {
+            display(x) -&gt; (<span class="string">"I/O: {}"</span>, err)
+        }
+        Utf8(err: std::str::Utf8Error) {
+            display(self_) -&gt; (<span class="string">"UTF-8 error. Valid up to {}"</span>, err.valid_up_to())
+        }
+    }
+}</code></pre></div>
+<p>To convert to the type from any other, use one of the three forms of
+<code>from</code> clause.</p>
+<p>For example, to convert simple wrapper use bare <code>from()</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        Io(err: std::io::Error) {
+            from()
+        }
+    }
+}</code></pre></div>
+<p>This implements <code>From&lt;io::Error&gt;</code>.</p>
+<p>To convert to singleton enumeration type (discarding the value), use
+the <code>from(type)</code> form:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        FormatError {
+            from(std::fmt::Error)
+        }
+    }
+}</code></pre></div>
+<p>And the most powerful form is <code>from(var: type) -&gt; (arguments...)</code>. It
+might be used to convert to type with multiple arguments or for arbitrary
+value conversions:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>SomeError {
+        FailedOperation(s: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, errno: i32) {
+            from(errno: i32) -&gt; (<span class="string">"os error"</span>, errno)
+            from(e: std::io::Error) -&gt; (<span class="string">"io error"</span>, e.raw_os_error().unwrap())
+        }
+        <span class="doccomment">/// Converts from both kinds of utf8 errors
+        </span>Utf8(err: std::str::Utf8Error) {
+            from()
+            from(err: std::string::FromUtf8Error) -&gt; (err.utf8_error())
+        }
+    }
+}</code></pre></div>
+<h2 id="context"><a class="doc-anchor" href="#context">§</a>Context</h2>
+<p>Since quick-error 1.1 we also have a <code>context</code> declaration, which is
+similar to (the longest form of) <code>from</code>, but allows adding some context to
+the error. We need a longer example to demonstrate this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>quick_error::ResultExt;
+
+<span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>Error {
+        File(filename: PathBuf, err: io::Error) {
+            context(path: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Path, err: io::Error)
+                -&gt; (path.to_path_buf(), err)
+        }
+    }
+}
+
+<span class="kw">fn </span>openfile(path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="macro">try!</span>(File::open(path).context(path));
+
+    <span class="comment">// If we didn't have context, the line above would be written as;
+    //
+    // try!(File::open(path)
+    //     .map_err(|err| Error::File(path.to_path_buf(), err)));
+
+    </span><span class="prelude-val">Ok</span>(())
+}
+</code></pre></div>
+<p>Each <code>context(a: A, b: B)</code> clause implements
+<code>From&lt;Context&lt;A, B&gt;&gt; for Error</code>. Which means multiple <code>context</code> clauses
+are a subject to the normal coherence rules. Unfortunately, we can’t
+provide full support of generics for the context, but you may either use a
+lifetime <code>'a</code> for references or <code>AsRef&lt;Type&gt;</code> (the latter means <code>A: AsRef&lt;Type&gt;</code>, and <code>Type</code> must be concrete). It’s also occasionally useful
+to use a tuple as a type of the first argument.</p>
+<p>You also need to <code>use quick_error::ResultExt</code> extension trait to get
+working <code>.context()</code> method.</p>
+<p>More info on context in <a href="http://bit.ly/1PsuxDt">this article</a>.</p>
+<p>All forms of <code>from</code>, <code>display</code>, <code>cause</code>, and <code>context</code>
+clauses can be combined and put in arbitrary order. Only <code>from</code> and
+<code>context</code> can be used multiple times in single variant of enumeration.
+Docstrings are also okay.  Empty braces can be omitted as of quick_error
+0.1.3.</p>
+<h2 id="private-enums"><a class="doc-anchor" href="#private-enums">§</a>Private Enums</h2>
+<p>Since quick-error 1.2.0 we  have a way to make a private enum that is
+wrapped by public structure:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[macro_use] </span><span class="kw">extern crate </span>quick_error;
+
+<span class="macro">quick_error! </span>{
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">pub enum </span>PubError wraps ErrorEnum {
+        Variant1 {}
+    }
+}</code></pre></div>
+<p>This generates data structures like this</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">pub struct </span>PubError(ErrorEnum);
+
+<span class="kw">enum </span>ErrorEnum {
+    Variant1,
+}
+</code></pre></div>
+<p>Which in turn allows you to export just <code>PubError</code> in your crate and keep
+actual enumeration private to the crate. This is useful to keep backwards
+compatibility for error types. Currently there is no shorcuts to define
+error constructors for the inner type, but we consider adding some in
+future versions.</p>
+<p>It’s possible to declare internal enum as public too.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.quick_error.html" title="macro quick_error::quick_error">quick_error</a></div><div class="desc docblock-short">Main macro that does all the work</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Context.html" title="struct quick_error::Context">Context</a></div><div class="desc docblock-short">Generic context type</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ResultExt.html" title="trait quick_error::ResultExt">ResultExt</a></div><div class="desc docblock-short">Result extension trait adding a <code>context</code> method</div></li></ul></section></div></main></body></html>

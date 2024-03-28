@@ -1,0 +1,87 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`self-replace` is a crate that allows binaries to replace themselves with newer versions or to uninstall themselves.  On Unix systems this is a simple feat, but on Windows a few hacks are needed which is why this crate exists."><title>self_replace - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="self_replace" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../self_replace/index.html">self_replace</a><span class="version">1.3.7</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../self_replace/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">self_replace</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/self_replace/lib.rs.html#1-194">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>self-replace</code> is a crate that allows binaries to replace themselves with newer
+versions or to uninstall themselves.  On Unix systems this is a simple feat, but
+on Windows a few hacks are needed which is why this crate exists.</p>
+<p>This is a useful operation when working with single-executable utilties that
+want to implement a form of self updating or self uninstallation.</p>
+<h3 id="self-deletion"><a class="doc-anchor" href="#self-deletion">§</a>Self Deletion</h3>
+<p>The <a href="fn.self_delete.html" title="fn self_replace::self_delete"><code>self_delete</code></a> function schedules a binary for self deletion.  On Unix the
+file system entry is immediately deleted, on Windows the file is deleted after the
+process shuts down.  Note that you should not use this function to be followed up
+by a replacement operation, for that use <a href="fn.self_replace.html" title="fn self_replace::self_replace"><code>self_replace</code></a> as on Windows the file
+will still be locked.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>self_replace::self_delete()<span class="question-mark">?</span>;</code></pre></div>
+<p>On Windows self deletion requires some place in the folder the deletion is taking
+place.  This will prevent the abiltiy of the program to also delete the folder the
+executable is placed in.  To avoid this you can use the <a href="fn.self_delete_outside_path.html" title="fn self_replace::self_delete_outside_path"><code>self_delete_outside_path</code></a>
+function which will ensure that the deletion does not take place in the path
+provided if it’s possible to do so.  That way you can delete entire structures safely.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>itself = std::env::current_exe().unwrap();
+<span class="kw">let </span>parent = itself.parent().unwrap();
+self_replace::self_delete_outside_path(<span class="kw-2">&amp;</span>parent)<span class="question-mark">?</span>;
+fs::remove_dir_all(<span class="kw-2">&amp;</span>parent);</code></pre></div>
+<h3 id="self-replacing"><a class="doc-anchor" href="#self-replacing">§</a>Self Replacing</h3>
+<p>This replaces the binary with another binary.  The provided path is copied over and
+if the function successfully completes, you can delete the source binary.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs;
+
+<span class="kw">let </span>new_binary = <span class="string">"/path/to/new/binary"</span>;
+self_replace::self_replace(<span class="kw-2">&amp;</span>new_binary)<span class="question-mark">?</span>;
+fs::remove_file(<span class="kw-2">&amp;</span>new_binary)<span class="question-mark">?</span>;</code></pre></div>
+<h3 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h3>
+<p>The way this is implemented depends on the operating system.  On UNIX systems you
+can usually not directly write into an executable, but you can swap it out which is
+exactly what this is doing.  For deleting, the file is just unlinked, for replacing
+a new file is placed right next to the current executable and an atomic move with
+<code>rename</code> is performed.</p>
+<p>On Windows the situation is trickier because when an executable launches it can be
+renamed, but it cannot be unlinked.  This means that we cannot clean up after
+ourselves easily.  In either case, we first move our executable aside so the name
+on the file system is made available for the new executable.  Then for both
+deleting and replacing, we create a copy of our own executable first.  After this we
+open that copied executable with <code>FILE_FLAG_DELETE_ON_CLOSE</code>.  Then we spawn it and
+wait for our own shut down.</p>
+<p>This library contains a special glue code that detects this copy of the executable
+and does nothing else but waiting for the parent to quit and to then delete the
+parent executable.  There is an extra hack in there in that it spawns another system
+executable that stays alive until after we shut down to make the self deletion of
+the copy work.  This is necessary because our running executable must not be the
+last user of that file handle as otherwise the deletion won’t work as the
+executable still cannot be deleted.  Presumably this is because <code>CreateProcess</code>
+and friends do not open the executable with <code>FILE_FLAG_DELETE_ON_CLOSE</code>.</p>
+<p><strong>Special note on Windows:</strong> the system will attempt to run the parent deletion logic
+if the executable has the suffix <code>.__selfdelete__.exe</code>.  This means if you
+name your executable <code>foo.exe.__selfdelete__.exe</code>, this logic would kick in.</p>
+<h3 id="alternatives-for-windows"><a class="doc-anchor" href="#alternatives-for-windows">§</a>Alternatives for Windows</h3>
+<p>Various proposals were made and tried for alternative solutions on Windows.  One
+quite popular option is to spawn a batch file for the deletion job as a batch file
+can self delete.  This could be used for both replace and self deletion, but it
+has the disadvantage that this is a very racy and quite dirty approach as the batch
+file cannot easily wait for the shutdown of the parent process.</p>
+<p>For just replaces, co-operation between parent and client could be implemented in
+simpler terms where first the new executable replaces the old, and then on
+startup replaces the new one.  There are two downsides of this approach: the first
+is that it requires that the new replacing executable has matching logic for the
+cleanup.  The second issue with this approach is that it requires either launching
+the new executable or waiting for the executable to launch for natural reasons.
+The former might not always be preferrable, the second leaves files lingering
+around for an extended period of time.</p>
+<p>The third, and somewhat official solution is to use <code>MOVEFILE_DELAY_UNTIL_REBOOT</code>
+with <code>MoveFileEx</code>.  This causes windows to store an entry in the registry and
+will perform the delete / move on restart.  This means that if a restart of the
+machine does not happen, no cleanup is performed.  It also is a privileged
+operation that is not available to all user accounts.</p>
+<h3 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h3>
+<p>Because files need to be placed temporarily on the file system, there is a chance
+that if power is cut in just the wrong moment, some files are left over.  These
+files resemble the original names of the executable prefixed with a dot (<code>.</code>) and
+a random suffix.  The likelihood of this happening should be small.  It’s not
+recommended to run automatic cleanup on startup as the location of those temporary
+files placed is left undefined.  In many cases the temporary files will be placed
+in temporary locations and the operating system will take care of the deletion on
+restart.</p>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.self_delete.html" title="fn self_replace::self_delete">self_delete</a></div><div class="desc docblock-short">Deletes the executable in a platform independent manner.</div></li><li><div class="item-name"><a class="fn" href="fn.self_delete_outside_path.html" title="fn self_replace::self_delete_outside_path">self_delete_outside_path</a></div><div class="desc docblock-short">Like <a href="fn.self_delete.html" title="fn self_replace::self_delete"><code>self_delete</code></a> but accepts a path which must not be used for temporary operations.</div></li><li><div class="item-name"><a class="fn" href="fn.self_replace.html" title="fn self_replace::self_replace">self_replace</a></div><div class="desc docblock-short">Replaces the running executable with a different one.</div></li></ul></section></div></main></body></html>

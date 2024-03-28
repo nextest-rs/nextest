@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Refill a paragraph of wrapped text with a new width."><title>refill in textwrap - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="textwrap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../textwrap/index.html">textwrap</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../textwrap/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">textwrap</a>::<wbr><a class="fn" href="#">refill</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/textwrap/lib.rs.html#798-817">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn refill&lt;'a, Opt&gt;(filled_text: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.str.html">str</a>, new_width_or_options: Opt) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.77.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a><div class="where">where
+    Opt: <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.Options.html" title="struct textwrap::Options">Options</a>&lt;'a&gt;&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Refill a paragraph of wrapped text with a new width.</p>
+<p>This function will first use the <a href="fn.unfill.html" title="fn textwrap::unfill"><code>unfill</code></a> function to remove
+newlines from the text. Afterwards the text is filled again using
+the <a href="fn.fill.html" title="fn textwrap::fill"><code>fill</code></a> function.</p>
+<p>The <code>new_width_or_options</code> argument specify the new width and can
+specify other options as well — except for
+<a href="struct.Options.html#method.initial_indent" title="method textwrap::Options::initial_indent"><code>Options::initial_indent</code></a> and <a href="struct.Options.html#method.subsequent_indent" title="method textwrap::Options::subsequent_indent"><code>Options::subsequent_indent</code></a>,
+which are deduced from <code>filled_text</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>textwrap::refill;
+
+<span class="comment">// Some loosely wrapped text. The "&gt; " prefix is recognized automatically.
+</span><span class="kw">let </span>text = <span class="string">"\
+&gt; Memory
+&gt; safety without garbage
+&gt; collection.
+"</span>;
+
+<span class="macro">assert_eq!</span>(refill(text, <span class="number">20</span>), <span class="string">"\
+&gt; Memory safety
+&gt; without garbage
+&gt; collection.
+"</span>);
+
+<span class="macro">assert_eq!</span>(refill(text, <span class="number">40</span>), <span class="string">"\
+&gt; Memory safety without garbage
+&gt; collection.
+"</span>);
+
+<span class="macro">assert_eq!</span>(refill(text, <span class="number">60</span>), <span class="string">"\
+&gt; Memory safety without garbage collection.
+"</span>);</code></pre></div>
+<p>You can also reshape bullet points:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>textwrap::refill;
+
+<span class="kw">let </span>text = <span class="string">"\
+- This is my
+  list item.
+"</span>;
+
+<span class="macro">assert_eq!</span>(refill(text, <span class="number">20</span>), <span class="string">"\
+- This is my list
+  item.
+"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

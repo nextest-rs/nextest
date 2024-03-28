@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["UNICODE_VERSION"],"enum":["BreakClass","BreakOpportunity"],"fn":["break_property","linebreaks","split_at_safe"]};

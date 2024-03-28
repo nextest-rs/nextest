@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CustomTripleCreateError","Error","ExpressionParseErrorKind"],"struct":["ExpressionParseError","PlainStringParseError","TripleParseError"]};

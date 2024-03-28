@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Collections implemented with bit vectors."><title>bit_vec - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bit_vec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bit_vec/index.html">bit_vec</a><span class="version">0.6.3</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../bit_vec/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">bit_vec</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/bit_vec/lib.rs.html#28-2535">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Collections implemented with bit vectors.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This is a simple example of the <a href="http://en.wikipedia.org/wiki/Sieve_of_Eratosthenes">Sieve of Eratosthenes</a>
+which calculates prime numbers up to a given limit.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bit_vec::BitVec;
+
+<span class="kw">let </span>max_prime = <span class="number">10000</span>;
+
+<span class="comment">// Store the primes as a BitVec
+</span><span class="kw">let </span>primes = {
+    <span class="comment">// Assume all numbers are prime to begin, and then we
+    // cross off non-primes progressively
+    </span><span class="kw">let </span><span class="kw-2">mut </span>bv = BitVec::from_elem(max_prime, <span class="bool-val">true</span>);
+
+    <span class="comment">// Neither 0 nor 1 are prime
+    </span>bv.set(<span class="number">0</span>, <span class="bool-val">false</span>);
+    bv.set(<span class="number">1</span>, <span class="bool-val">false</span>);
+
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">2</span>.. <span class="number">1 </span>+ (max_prime <span class="kw">as </span>f64).sqrt() <span class="kw">as </span>usize {
+        <span class="comment">// if i is a prime
+        </span><span class="kw">if </span>bv[i] {
+            <span class="comment">// Mark all multiples of i as non-prime (any multiples below i * i
+            // will have been marked as non-prime previously)
+            </span><span class="kw">for </span>j <span class="kw">in </span>i.. {
+                <span class="kw">if </span>i * j &gt;= max_prime {
+                    <span class="kw">break</span>;
+                }
+                bv.set(i * j, <span class="bool-val">false</span>)
+            }
+        }
+    }
+    bv
+};
+
+<span class="comment">// Simple primality tests below our max bound
+</span><span class="kw">let </span>print_primes = <span class="number">20</span>;
+<span class="macro">print!</span>(<span class="string">"The primes below {} are: "</span>, print_primes);
+<span class="kw">for </span>x <span class="kw">in </span><span class="number">0</span>..print_primes {
+    <span class="kw">if </span>primes.get(x).unwrap_or(<span class="bool-val">false</span>) {
+        <span class="macro">print!</span>(<span class="string">"{} "</span>, x);
+    }
+}
+<span class="macro">println!</span>();
+
+<span class="kw">let </span>num_primes = primes.iter().filter(|x| <span class="kw-2">*</span>x).count();
+<span class="macro">println!</span>(<span class="string">"There are {} primes below {}"</span>, num_primes, max_prime);
+<span class="macro">assert_eq!</span>(num_primes, <span class="number">1_229</span>);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BitVec.html" title="struct bit_vec::BitVec">BitVec</a></div><div class="desc docblock-short">The bitvector type.</div></li><li><div class="item-name"><a class="struct" href="struct.Blocks.html" title="struct bit_vec::Blocks">Blocks</a></div><div class="desc docblock-short">An iterator over the blocks of a <code>BitVec</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.IntoIter.html" title="struct bit_vec::IntoIter">IntoIter</a></div></li><li><div class="item-name"><a class="struct" href="struct.Iter.html" title="struct bit_vec::Iter">Iter</a></div><div class="desc docblock-short">An iterator for <code>BitVec</code>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.BitBlock.html" title="trait bit_vec::BitBlock">BitBlock</a></div><div class="desc docblock-short">Abstracts over a pile of bits (basically unsigned primitives)</div></li></ul></section></div></main></body></html>

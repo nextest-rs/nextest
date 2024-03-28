@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bump_is_compatible","bump_is_greater","bump_is_major","bump_is_minor","bump_is_patch"]};

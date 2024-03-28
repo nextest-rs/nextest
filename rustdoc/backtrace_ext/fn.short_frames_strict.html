@@ -1,0 +1,92 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Gets an iterator over the frames that are part of Rust’s “short backtrace” range. If no such range is found, the full stack is yielded."><title>short_frames_strict in backtrace_ext - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="backtrace_ext" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../backtrace_ext/index.html">backtrace_ext</a><span class="version">0.2.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../backtrace_ext/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">backtrace_ext</a>::<wbr><a class="fn" href="#">short_frames_strict</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/backtrace_ext/lib.rs.html#108-112">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn short_frames_strict(
+    backtrace: &amp;<a class="struct" href="../backtrace/capture/struct.Backtrace.html" title="struct backtrace::capture::Backtrace">Backtrace</a>
+) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator">Iterator</a>&lt;Item = (&amp;<a class="struct" href="../backtrace/capture/struct.BacktraceFrame.html" title="struct backtrace::capture::BacktraceFrame">BacktraceFrame</a>, <a class="struct" href="https://doc.rust-lang.org/1.77.0/core/ops/range/struct.Range.html" title="struct core::ops::range::Range">Range</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.usize.html">usize</a>&gt;)&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Gets an iterator over the frames that are part of Rust’s “short backtrace” range.
+If no such range is found, the full stack is yielded.</p>
+<p>Rust generally tries to include special frames on the stack called <code>rust_end_short_backtrace</code>
+and <code>rust_begin_short_backtrace</code> which delimit the “real” stackframes from “gunk” stackframes
+like setting up main and invoking the panic runtime. This yields all the “real” frames between
+those two (which theoretically can be nothing with enough optimization, although that’s unlikely
+for any non-trivial program).</p>
+<p>If only one of the special frames is present we will only clamp one side of the stack
+(similar to <code>a..</code> or <code>..a</code>). If the special frames are in the wrong order we will discard
+them and produce the full stack. If multiple versions of a special frame are found
+(I’ve seen it in the wild), we will pick the “innermost” ones, producing the smallest
+possible backtrace (and excluding all special frames from the output).</p>
+<p>Each element of the iterator includes a Range which you should use to slice
+the frame’s <code>symbols()</code> array. This handles the theoretical situation where “real” frames
+got inlined together with the special marker frames. I want to believe this can’t happen
+but you can never trust backtraces to be reasonable! We will never yield a Frame to you
+with an empty Range.</p>
+<p>Note that some “gunk” frames may still be found within the short backtrace, as there is still some
+platform-specific and optimization-specific glue around the edges because compilers are
+complicated and nothing’s perfect. This can include:</p>
+<ul>
+<li><code>core::ops::function::FnOnce::call_once</code></li>
+<li><code>std::panicking::begin_panic_handler</code></li>
+<li><code>core::panicking::panic_fmt</code></li>
+<li><code>rust_begin_unwind</code></li>
+</ul>
+<p>In the future we may introduce a non-strict short_frames which heuristically filters
+those frames out too. Until then, the strict approach is safe.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Here’s an example simple “short backtrace” implementation.
+Note the use of <code>sub_frames</code> for the inner loop to restrict <code>symbols</code>!</p>
+<p>This example is based off of code found in <code>miette</code> (Apache-2.0), which itself
+copied the logic from <code>human-panic</code> (MIT/Apache-2.0).</p>
+<p>FIXME: it would be nice if this example consulted <code>RUST_BACKTRACE=full</code>,
+and maybe other vars used by rust’s builtin panic handler..?</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>backtrace() -&gt; String {
+    <span class="kw">use </span>std::fmt::Write;
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(var) = std::env::var(<span class="string">"RUST_BACKTRACE"</span>) {
+        <span class="kw">if </span>!var.is_empty() &amp;&amp; var != <span class="string">"0" </span>{
+            <span class="kw">const </span>HEX_WIDTH: usize = std::mem::size_of::&lt;usize&gt;() + <span class="number">2</span>;
+            <span class="comment">// Padding for next lines after frame's address
+            </span><span class="kw">const </span>NEXT_SYMBOL_PADDING: usize = HEX_WIDTH + <span class="number">6</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>backtrace = String::new();
+            <span class="kw">let </span>trace = backtrace::Backtrace::new();
+            <span class="kw">let </span>frames = backtrace_ext::short_frames_strict(<span class="kw-2">&amp;</span>trace).enumerate();
+            <span class="kw">for </span>(idx, (frame, subframes)) <span class="kw">in </span>frames {
+                <span class="kw">let </span>ip = frame.ip();
+                <span class="kw">let _ </span>= <span class="macro">write!</span>(backtrace, <span class="string">"\n{:4}: {:2$?}"</span>, idx, ip, HEX_WIDTH);
+     
+                <span class="kw">let </span>symbols = frame.symbols();
+                <span class="kw">if </span>symbols.is_empty() {
+                    <span class="kw">let _ </span>= <span class="macro">write!</span>(backtrace, <span class="string">" - &lt;unresolved&gt;"</span>);
+                    <span class="kw">continue</span>;
+                }
+     
+                <span class="kw">for </span>(idx, symbol) <span class="kw">in </span>symbols[subframes].iter().enumerate() {
+                    <span class="comment">// Print symbols from this address,
+                    // if there are several addresses
+                    // we need to put it on next line
+                    </span><span class="kw">if </span>idx != <span class="number">0 </span>{
+                        <span class="kw">let _ </span>= <span class="macro">write!</span>(backtrace, <span class="string">"\n{:1$}"</span>, <span class="string">""</span>, NEXT_SYMBOL_PADDING);
+                    }
+     
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(name) = symbol.name() {
+                        <span class="kw">let _ </span>= <span class="macro">write!</span>(backtrace, <span class="string">" - {}"</span>, name);
+                    } <span class="kw">else </span>{
+                        <span class="kw">let _ </span>= <span class="macro">write!</span>(backtrace, <span class="string">" - &lt;unknown&gt;"</span>);
+                    }
+     
+                    <span class="comment">// See if there is debug information with file name and line
+                    </span><span class="kw">if let </span>(<span class="prelude-val">Some</span>(file), <span class="prelude-val">Some</span>(line)) = (symbol.filename(), symbol.lineno()) {
+                        <span class="kw">let _ </span>= <span class="macro">write!</span>(
+                            backtrace,
+                            <span class="string">"\n{:3$}at {}:{}"</span>,
+                            <span class="string">""</span>,
+                            file.display(),
+                            line,
+                            NEXT_SYMBOL_PADDING
+                        );
+                    }
+                }
+            }
+            <span class="kw">return </span>backtrace;
+        }
+    }
+    <span class="string">""</span>.into()
+}</code></pre></div>
+</div></details></section></div></main></body></html>

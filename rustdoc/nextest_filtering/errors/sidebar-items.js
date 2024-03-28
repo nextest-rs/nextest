@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GlobConstructError","ParseSingleError"],"struct":["FilterExpressionParseErrors"]};

@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A library for awaiting and killing child processes from multiple threads."><title>shared_child - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="shared_child" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../shared_child/index.html">shared_child</a><span class="version">1.0.0</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../shared_child/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">shared_child</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/shared_child/lib.rs.html#1-464">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A library for awaiting and killing child processes from multiple threads.</p>
+<ul>
+<li><a href="https://docs.rs/shared_child">Docs</a></li>
+<li><a href="https://crates.io/crates/shared_child">Crate</a></li>
+<li><a href="https://github.com/oconnor663/shared_child.rs">Repo</a></li>
+</ul>
+<p>The
+<a href="https://doc.rust-lang.org/std/process/struct.Child.html"><code>std::process::Child</code></a>
+type in the standard library provides
+<a href="https://doc.rust-lang.org/std/process/struct.Child.html#method.wait"><code>wait</code></a>
+and
+<a href="https://doc.rust-lang.org/std/process/struct.Child.html#method.kill"><code>kill</code></a>
+methods that take <code>&amp;mut self</code>, making it impossible to kill a child process
+while another thread is waiting on it. That design works around a race
+condition in Unix’s <code>waitpid</code> function, where a PID might get reused as soon
+as the wait returns, so a signal sent around the same time could
+accidentally get delivered to the wrong process.</p>
+<p>However with the newer POSIX <code>waitid</code> function, we can wait on a child
+without freeing its PID for reuse. That makes it safe to send signals
+concurrently. Windows has actually always supported this, by preventing PID
+reuse while there are still open handles to a child process. This library
+wraps <code>std::process::Child</code> for concurrent use, backed by these APIs.</p>
+<p>Compatibility note: The <code>libc</code> crate doesn’t currently support <code>waitid</code> on
+NetBSD or OpenBSD, or on older versions of OSX. There <a href="https://bugs.python.org/msg167016">might also
+be</a> some version of OSX where the
+<code>waitid</code> function exists but is broken. We can add a “best effort”
+workaround using <code>waitpid</code> for these platforms as we run into them. Please
+<a href="https://github.com/oconnor663/shared_child.rs/issues/new">file an issue</a> if
+you hit this.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>shared_child::SharedChild;
+<span class="kw">use </span>std::process::Command;
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="comment">// Spawn a child that will just sleep for a long time,
+// and put it in an Arc to share between threads.
+</span><span class="kw">let </span><span class="kw-2">mut </span>command = Command::new(<span class="string">"python"</span>);
+command.arg(<span class="string">"-c"</span>).arg(<span class="string">"import time; time.sleep(1000000000)"</span>);
+<span class="kw">let </span>shared_child = SharedChild::spawn(<span class="kw-2">&amp;mut </span>command).unwrap();
+<span class="kw">let </span>child_arc = Arc::new(shared_child);
+
+<span class="comment">// On another thread, wait on the child process.
+</span><span class="kw">let </span>child_arc_clone = child_arc.clone();
+<span class="kw">let </span>thread = std::thread::spawn(<span class="kw">move </span>|| {
+    child_arc_clone.wait().unwrap()
+});
+
+<span class="comment">// While the other thread is waiting, kill the child process.
+// This wouldn't be possible with e.g. Arc&lt;Mutex&lt;Child&gt;&gt; from
+// the standard library, because the waiting thread would be
+// holding the mutex.
+</span>child_arc.kill().unwrap();
+
+<span class="comment">// Join the waiting thread and get the exit status.
+</span><span class="kw">let </span>exit_status = thread.join().unwrap();
+<span class="macro">assert!</span>(!exit_status.success());</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="unix/index.html" title="mod shared_child::unix">unix</a></div><div class="desc docblock-short">Unix-only extensions, for sending signals.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.SharedChild.html" title="struct shared_child::SharedChild">SharedChild</a></div></li></ul></section></div></main></body></html>

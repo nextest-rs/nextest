@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Zeroizing"],"trait":["DefaultIsZeroes","TryZeroize","Zeroize","ZeroizeOnDrop"]};

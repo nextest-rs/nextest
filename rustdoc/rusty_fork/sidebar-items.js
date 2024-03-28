@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["fork"],"macro":["rusty_fork_id","rusty_fork_test","rusty_fork_test_name"],"mod":["fork_test"],"struct":["ChildWrapper","ExitStatusWrapper","RustyForkId"],"type":["Result"]};

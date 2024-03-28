@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PartiallyApplied"],"trait":["Collapsible","CollapsibleExt","Expandable","ExpandableExt","MappableFrame"]};

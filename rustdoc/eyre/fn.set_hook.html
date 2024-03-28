@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Install the provided error hook for constructing EyreHandlers when converting Errors to Reports"><title>set_hook in eyre - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="eyre" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0 (aedd173a2 2024-03-17)" data-channel="1.77.0" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-4c98445ec4002617.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../eyre/index.html">eyre</a><span class="version">0.6.11</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../eyre/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">eyre</a>::<wbr><a class="fn" href="#">set_hook</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/eyre/lib.rs.html#583-585">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn set_hook(
+    hook: <a class="struct" href="https://doc.rust-lang.org/1.77.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(&amp;(dyn <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/error/trait.Error.html" title="trait core::error::Error">StdError</a> + 'static)) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.77.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.EyreHandler.html" title="trait eyre::EyreHandler">EyreHandler</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + <a class="trait" href="https://doc.rust-lang.org/1.77.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'static&gt;
+) -&gt; <a class="type" href="type.Result.html" title="type eyre::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.77.0/std/primitive.unit.html">()</a>, <a class="struct" href="struct.InstallError.html" title="struct eyre::InstallError">InstallError</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Install the provided error hook for constructing EyreHandlers when converting
+Errors to Reports</p>
+<h2 id="details"><a class="doc-anchor" href="#details">§</a>Details</h2>
+<p>To customize the format and content of error reports from <code>eyre</code> you must
+first define a new <code>EyreHandler</code> type to capture and store the extra context
+and to define the format of how to display the chain of errors and this
+stored context. Once this type has been defined you must also define a global
+hook used to construct these handlers whenever <code>Report</code>s are constructed.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap should_panic"><a href="#" class="tooltip" title="This example panics">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>backtrace::Backtrace;
+<span class="kw">use </span>eyre::EyreHandler;
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::{fmt, iter};
+
+<span class="kw">fn </span>main() -&gt; eyre::Result&lt;()&gt; {
+    <span class="comment">// Install our custom eyre report hook for constructing our custom Handlers
+    </span>install().unwrap();
+
+    <span class="comment">// construct a report with, hopefully, our custom handler!
+    </span><span class="kw">let </span><span class="kw-2">mut </span>report = <span class="macro">eyre::eyre!</span>(<span class="string">"hello from custom error town!"</span>);
+
+    <span class="comment">// manually set the custom msg for this report after it has been constructed
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(handler) = report.handler_mut().downcast_mut::&lt;Handler&gt;() {
+        handler.custom_msg = <span class="prelude-val">Some</span>(<span class="string">"you're the best users, you know that right???"</span>);
+    }
+
+    <span class="comment">// print that shit!!
+    </span><span class="prelude-val">Err</span>(report)
+}
+
+<span class="comment">// define a handler that captures backtraces unless told not to
+</span><span class="kw">fn </span>install() -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="kw">impl </span>Error&gt; {
+    <span class="kw">let </span>capture_backtrace = std::env::var(<span class="string">"RUST_BACKWARDS_TRACE"</span>)
+        .map(|val| val != <span class="string">"0"</span>)
+        .unwrap_or(<span class="bool-val">true</span>);
+
+    <span class="kw">let </span>hook = Hook { capture_backtrace };
+
+    eyre::set_hook(Box::new(<span class="kw">move </span>|e| Box::new(hook.make_handler(e))))
+}
+
+<span class="kw">struct </span>Hook {
+    capture_backtrace: bool,
+}
+
+<span class="kw">impl </span>Hook {
+    <span class="kw">fn </span>make_handler(<span class="kw-2">&amp;</span><span class="self">self</span>, _error: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Error + <span class="lifetime">'static</span>)) -&gt; Handler {
+        <span class="kw">let </span>backtrace = <span class="kw">if </span><span class="self">self</span>.capture_backtrace {
+            <span class="prelude-val">Some</span>(Backtrace::new())
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
+
+        Handler {
+            backtrace,
+            custom_msg: <span class="prelude-val">None</span>,
+        }
+    }
+}
+
+<span class="kw">struct </span>Handler {
+    <span class="comment">// custom configured backtrace capture
+    </span>backtrace: <span class="prelude-ty">Option</span>&lt;Backtrace&gt;,
+    <span class="comment">// customizable message payload associated with reports
+    </span>custom_msg: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;,
+}
+
+<span class="kw">impl </span>EyreHandler <span class="kw">for </span>Handler {
+    <span class="kw">fn </span>debug(<span class="kw-2">&amp;</span><span class="self">self</span>, error: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Error + <span class="lifetime">'static</span>), f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        <span class="kw">if </span>f.alternate() {
+            <span class="kw">return </span>fmt::Debug::fmt(error, f);
+        }
+
+        <span class="kw">let </span>errors = iter::successors(<span class="prelude-val">Some</span>(error), |error| (<span class="kw-2">*</span>error).source());
+
+        <span class="kw">for </span>(ind, error) <span class="kw">in </span>errors.enumerate() {
+            <span class="macro">write!</span>(f, <span class="string">"\n{:&gt;4}: {}"</span>, ind, error)<span class="question-mark">?</span>;
+        }
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(backtrace) = <span class="self">self</span>.backtrace.as_ref() {
+            <span class="macro">writeln!</span>(f, <span class="string">"\n\nBacktrace:\n{:?}"</span>, backtrace)<span class="question-mark">?</span>;
+        }
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(msg) = <span class="self">self</span>.custom_msg.as_ref() {
+            <span class="macro">writeln!</span>(f, <span class="string">"\n\n{}"</span>, msg)<span class="question-mark">?</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(())
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

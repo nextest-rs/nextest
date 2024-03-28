@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FeatureKind","FeatureLabel","StandardFeatures"],"fn":["feature_id_filter","named_feature_filter"],"mod":["feature_list"],"struct":["ConditionalLink","Cycles","FeatureFilterFn","FeatureGraph","FeatureId","FeatureMetadata","FeatureQuery","FeatureSet"],"trait":["FeatureFilter","FeatureResolver"]};

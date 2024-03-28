@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CaptureStrategy","TestOutput"],"fn":["collect_test_output"],"struct":["TestSingleOutput"]};
