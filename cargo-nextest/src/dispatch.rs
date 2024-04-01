@@ -8,7 +8,7 @@ use crate::{
     ExpectedError, Result, ReuseBuildKind,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use clap::{builder::BoolishValueParser, ArgAction, Args, Parser, Subcommand, ValueEnum};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
@@ -844,7 +844,7 @@ struct TestReporterOpts {
     final_status_level: Option<FinalStatusLevelOpt>,
 
     /// Do not display the progress bar
-    #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR")]
+    #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR", value_parser = BoolishValueParser::new())]
     hide_progress_bar: bool,
 
     /// Format to use for test results (experimental).
@@ -2029,6 +2029,8 @@ mod tests {
             "cargo nextest run --final-status-level flaky",
             // retry is an alias for flaky -- ensure that it parses
             "cargo nextest run --final-status-level retry",
+            "NEXTEST_HIDE_PROGRESS_BAR=1 cargo nextest run",
+            "NEXTEST_HIDE_PROGRESS_BAR=true cargo nextest run",
             // ---
             // Cargo options
             // ---
@@ -2189,10 +2191,31 @@ mod tests {
         }
 
         for valid_args in valid {
-            if let Err(error) = CargoNextestApp::try_parse_from(
-                shell_words::split(valid_args).expect("valid command line"),
-            ) {
+            let cmd = shell_words::split(valid_args).expect("valid command line");
+            // Any args in the beginning with an equals sign should be parsed as environment variables.
+            let env_vars: Vec<_> = cmd
+                .iter()
+                .take_while(|arg| arg.contains('='))
+                .cloned()
+                .collect();
+
+            let mut env_keys = Vec::with_capacity(env_vars.len());
+            for k_v in &env_vars {
+                let (k, v) = k_v.split_once('=').expect("valid env var");
+                std::env::set_var(k, v);
+                env_keys.push(k);
+            }
+
+            let cmd = cmd.iter().skip(env_vars.len());
+
+            if let Err(error) = CargoNextestApp::try_parse_from(cmd) {
                 panic!("{valid_args} should have successfully parsed, but didn't: {error}");
+            }
+
+            // Unset any environment variables we set. (Don't really need to preserve the old value
+            // for now.)
+            for &k in &env_keys {
+                std::env::remove_var(k);
             }
         }
 
