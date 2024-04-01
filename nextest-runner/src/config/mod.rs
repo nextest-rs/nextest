@@ -15,6 +15,7 @@ mod test_group;
 mod test_threads;
 mod threads_required;
 mod tool_config;
+mod track_default;
 
 pub use archive_include::*;
 pub use config_impl::*;
@@ -28,6 +29,7 @@ pub use test_group::*;
 pub use test_threads::*;
 pub use threads_required::*;
 pub use tool_config::*;
+pub(super) use track_default::*;
 
 #[cfg(test)]
 mod test_helpers;

@@ -13,14 +13,16 @@ use std::{
 /// Reporter for archive operations.
 pub struct ArchiveReporter {
     styles: Styles,
+    verbose: bool,
     // TODO: message-format json?
 }
 
 impl ArchiveReporter {
     /// Creates a new reporter for archive events.
-    pub fn new(_verbose: bool) -> Self {
+    pub fn new(verbose: bool) -> Self {
         Self {
             styles: Styles::default(),
+            verbose,
         }
     }
 
@@ -54,6 +56,30 @@ impl ArchiveReporter {
                 )?;
 
                 writeln!(writer, " to {}", output_file.style(self.styles.bold))?;
+            }
+            ArchiveEvent::RecursionDepthExceeded { path, limit, warn } => {
+                if warn {
+                    write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
+                } else if self.verbose {
+                    write!(writer, "{:>12} ", "Skipped".style(self.styles.skipped))?;
+                } else {
+                    return Ok(()); // Skip
+                }
+
+                writeln!(
+                    writer,
+                    "recursion depth exceeded at {} (limit: {limit})",
+                    path.style(self.styles.bold),
+                )?;
+            }
+            ArchiveEvent::UnknownFileType { path } => {
+                write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
+                writeln!(
+                    writer,
+                    "ignoring `{}` because it is not a file, \
+                     directory, or symbolic link",
+                    path.style(self.styles.bold),
+                )?;
             }
             ArchiveEvent::Archived {
                 file_count,
@@ -170,12 +196,16 @@ impl ArchiveReporter {
 struct Styles {
     bold: Style,
     success: Style,
+    warning: Style,
+    skipped: Style,
 }
 
 impl Styles {
     fn colorize(&mut self) {
         self.bold = Style::new().bold();
         self.success = Style::new().green().bold();
+        self.warning = Style::new().yellow().bold();
+        self.skipped = Style::new().bold();
     }
 }
 
@@ -201,6 +231,24 @@ pub enum ArchiveEvent<'a> {
 
         /// The archive output file.
         output_file: &'a Utf8Path,
+    },
+
+    /// While performing the archive, the recursion depth was exceeded.
+    RecursionDepthExceeded {
+        /// The path that exceeded the recursion depth.
+        path: &'a Utf8Path,
+
+        /// The recursion depth limit that was hit.
+        limit: usize,
+
+        /// Whether the reporter should produce a warning about this.
+        warn: bool,
+    },
+
+    /// The archive process encountered an unknown file type.
+    UnknownFileType {
+        /// The path of the unknown type.
+        path: &'a Utf8Path,
     },
 
     /// The archive operation completed successfully.

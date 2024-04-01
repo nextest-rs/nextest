@@ -344,18 +344,17 @@ fn test_run_from_archive_with_no_includes() {
     let (_p1, archive_file) = create_archive("");
     let (_p2, extracted_target) = run_archive(&archive_file);
 
-    let expected_path = extracted_target
-        .join("application-data")
-        .join("foo")
-        .join("bar")
-        .join("some_file.txt");
-
-    assert!(
-        !Utf8Path::new(&expected_path)
-            .join("application-data")
-            .exists(),
-        "stray files must not be included in the archive"
-    );
+    for path in [
+        APP_DATA_DIR,
+        TOP_LEVEL_FILE,
+        TOP_LEVEL_DIR,
+        TOP_LEVEL_DIR_OTHER_FILE,
+    ] {
+        _ = extracted_target
+            .join(path)
+            .symlink_metadata()
+            .map(|_| panic!("file {} must not be included in the archive", path));
+    }
 }
 
 #[test]
@@ -366,20 +365,40 @@ fn test_run_from_archive_with_includes() {
 [profile.default]
 archive-include = [
     { path = "application-data", relative-to = "target" },
+    { path = "top-level-file.txt", relative-to = "target", depth = 0 },
+    { path = "excluded-dir", relative-to = "target", depth = 0 },
     { path = "file_that_does_not_exist.txt", relative-to = "target" },
 ]"#;
     let (_p1, archive_file) = create_archive(config);
     let (_p2, extracted_target) = run_archive(&archive_file);
 
-    let expected_path = extracted_target
-        .join("application-data")
-        .join("foo")
-        .join("bar")
-        .join("some_file.txt");
+    // TODO: we should test which of these paths above warn here, either by defining a serialization
+    // format or via screen-scraping.
 
-    let contents = std::fs::read_to_string(expected_path).expect("extra file written to archive");
-    assert_eq!(contents, "a test string");
+    // The included file should be present, but the excluded file should not.
+    for path in [INCLUDED_PATH, TOP_LEVEL_FILE] {
+        let contents = std::fs::read_to_string(&extracted_target.join(path))
+            .expect("extra file written to archive");
+        assert_eq!(contents, "a test string");
+    }
+
+    for path in [EXCLUDED_PATH, TOP_LEVEL_DIR, TOP_LEVEL_DIR_OTHER_FILE] {
+        _ = extracted_target
+            .join(path)
+            .symlink_metadata()
+            .map(|_| panic!("file {} must not be included in the archive", path));
+    }
 }
+
+const APP_DATA_DIR: &str = "application-data";
+// The default limit is 8, so anything at depth 9 (under d8) is excluded.
+const DIR_TREE: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8";
+const INCLUDED_PATH: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/included.txt";
+const EXCLUDED_PATH: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8/excluded.txt";
+
+const TOP_LEVEL_FILE: &str = "top-level-file.txt";
+const TOP_LEVEL_DIR: &str = "top-level-dir";
+const TOP_LEVEL_DIR_OTHER_FILE: &str = "top-level-dir/other-file.txt";
 
 fn create_archive(config_contents: &str) -> (TempProject, Utf8PathBuf) {
     let custom_target_dir = Utf8TempDir::new().unwrap();
@@ -389,20 +408,24 @@ fn create_archive(config_contents: &str) -> (TempProject, Utf8PathBuf) {
     let config_path = p.workspace_root().join(".config/nextest.toml");
     std::fs::write(config_path, config_contents).unwrap();
 
-    // setup extra file to include
-    let test_dir = p
-        .target_dir()
-        .join("application-data")
-        .join("foo")
-        .join("bar");
-    let test_file = test_dir.join("some_file.txt");
+    // Setup extra files to include.
+    let test_dir = p.target_dir().join(DIR_TREE);
     std::fs::create_dir_all(test_dir).unwrap();
-    std::fs::write(test_file, "a test string").unwrap();
+    std::fs::write(p.target_dir().join(INCLUDED_PATH), "a test string").unwrap();
+    std::fs::write(p.target_dir().join(EXCLUDED_PATH), "a test string").unwrap();
+
+    let top_level_file = p.target_dir().join(TOP_LEVEL_FILE);
+    std::fs::write(top_level_file, "a test string").unwrap();
+
+    let top_level_dir = p.target_dir().join(TOP_LEVEL_DIR);
+    let top_level_dir_other_file = p.target_dir().join(TOP_LEVEL_DIR_OTHER_FILE);
+    std::fs::create_dir(top_level_dir).unwrap();
+    std::fs::write(top_level_dir_other_file, "a test string").unwrap();
 
     let archive_file = p.temp_root().join("my-archive.tar.zst");
 
     // Write the archive to the archive_file above.
-    _ = CargoNextestCli::new()
+    let output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -415,6 +438,8 @@ fn create_archive(config_contents: &str) -> (TempProject, Utf8PathBuf) {
             "--all-targets",
         ])
         .output();
+
+    eprintln!("archive creation succeeded, output:\n\n{output}\n=========");
 
     // Remove the old source and target directories to ensure that any tests that refer to files within
     // it fail.

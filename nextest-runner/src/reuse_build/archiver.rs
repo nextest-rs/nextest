@@ -3,7 +3,7 @@
 
 use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
-    config::{get_num_cpus, ArchiveInclude, FinalConfig, NextestProfile},
+    config::{get_num_cpus, ArchiveInclude, FinalConfig, NextestProfile, RecursionDepth},
     errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
     list::{BinaryList, OutputFormat, SerializableFormat},
@@ -13,6 +13,7 @@ use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
 use std::{
     collections::HashSet,
+    fs,
     io::{self, BufWriter, Write},
     time::{Instant, SystemTime},
 };
@@ -51,7 +52,7 @@ impl ArchiveFormat {
 /// The output file is a Zstandard-compressed tarball (`.tar.zst`).
 #[allow(clippy::too_many_arguments)]
 pub fn archive_to_file<'a, F>(
-    profile: NextestProfile<'_, FinalConfig>,
+    profile: NextestProfile<'a, FinalConfig>,
     binary_list: &'a BinaryList,
     cargo_metadata: &'a str,
     path_mapper: &'a PathMapper,
@@ -61,7 +62,7 @@ pub fn archive_to_file<'a, F>(
     mut callback: F,
 ) -> Result<(), ArchiveCreateError>
 where
-    F: FnMut(ArchiveEvent<'a>) -> io::Result<()>,
+    F: for<'b> FnMut(ArchiveEvent<'b>) -> io::Result<()>,
 {
     let file = AtomicFile::new(output_file, OverwriteBehavior::AllowOverwrite);
     let test_binary_count = binary_list.rust_binaries.len();
@@ -90,7 +91,7 @@ where
                 zstd_level,
                 file,
             )?;
-            let (_, file_count) = archiver.archive()?;
+            let (_, file_count) = archiver.archive(&mut callback)?;
             Ok(file_count)
         })
         .map_err(|err| match err {
@@ -123,7 +124,7 @@ struct Archiver<'a, W: Write> {
 impl<'a, W: Write> Archiver<'a, W> {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        profile: &'a NextestProfile<'_, FinalConfig>,
+        profile: &'a NextestProfile<'a, FinalConfig>,
         binary_list: &'a BinaryList,
         cargo_metadata: &'a str,
         path_mapper: &'a PathMapper,
@@ -162,7 +163,10 @@ impl<'a, W: Write> Archiver<'a, W> {
         })
     }
 
-    fn archive(mut self) -> Result<(W, usize), ArchiveCreateError> {
+    fn archive<F>(mut self, callback: &mut F) -> Result<(W, usize), ArchiveCreateError>
+    where
+        F: for<'b> FnMut(ArchiveEvent<'b>) -> io::Result<()>,
+    {
         // Add the binaries metadata first so that while unarchiving, reports are instant.
         let binaries_metadata = self
             .binary_list
@@ -249,7 +253,13 @@ impl<'a, W: Write> Archiver<'a, W> {
             // XXX: For now, we only archive one level of build script output directories as a
             // conservative solution. If necessary, we may have to either broaden this by default or
             // add configuration for this. Archiving too much can cause unnecessary slowdowns.
-            self.append_dir_one_level(&rel_path, &src_path)?;
+            self.append_path_recursive(
+                &src_path,
+                &rel_path,
+                RecursionDepth::Finite(1),
+                false,
+                callback,
+            )?;
         }
 
         // Write linked paths to the archive.
@@ -273,7 +283,9 @@ impl<'a, W: Write> Archiver<'a, W> {
                 }
                 log::warn!(
                     target: "nextest-runner",
-                    "these crates link against `{src_path}` which doesn't exist, ignoring:\n{s}  (this is a bug in these crates that should be fixed)",
+                    "these crates link against `{src_path}` \
+                     which doesn't exist, ignoring:\n{s}  \
+                     (this is a bug in these crates that should be fixed)",
                 );
                 continue;
             }
@@ -282,16 +294,30 @@ impl<'a, W: Write> Archiver<'a, W> {
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
             // Since LD_LIBRARY_PATH etc aren't recursive, we only need to add the top-level files
             // from linked paths.
-            self.append_dir_one_level(&rel_path, &src_path)?;
+            self.append_path_recursive(
+                &src_path,
+                &rel_path,
+                RecursionDepth::Finite(1),
+                false,
+                callback,
+            )?;
         }
 
-        // Also include archived paths.
+        // Also include extra paths.
         for (include, src_path) in archive_include_paths {
             let rel_path = Utf8Path::new("target").join(&include.path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
             if src_path.exists() {
-                self.append_path_recursive(&rel_path, &src_path)?;
+                // Warn if the implicit depth limit for these paths is in use.
+                let warn_on_exceed_depth = !include.depth.is_deserialized;
+                self.append_path_recursive(
+                    &src_path,
+                    &rel_path,
+                    include.depth.value,
+                    warn_on_exceed_depth,
+                    callback,
+                )?;
             }
         }
 
@@ -331,78 +357,87 @@ impl<'a, W: Write> Archiver<'a, W> {
         Ok(())
     }
 
-    fn append_path_recursive(
+    fn append_path_recursive<F>(
         &mut self,
-        rel_path: &Utf8Path,
         src_path: &Utf8Path,
-    ) -> Result<(), ArchiveCreateError> {
-        let entries =
-            src_path
-                .read_dir_utf8()
-                .map_err(|error| ArchiveCreateError::InputFileRead {
-                    path: src_path.to_owned(),
-                    is_dir: Some(true),
-                    error,
-                })?;
-        for entry in entries {
-            let entry = entry.map_err(|error| ArchiveCreateError::DirEntryRead {
+        rel_path: &Utf8Path,
+        limit: RecursionDepth,
+        warn_on_exceed_depth: bool,
+        callback: &mut F,
+    ) -> Result<(), ArchiveCreateError>
+    where
+        F: for<'b> FnMut(ArchiveEvent<'b>) -> io::Result<()>,
+    {
+        // Within the loop, the metadata will be part of the directory entry.
+        let metadata =
+            fs::symlink_metadata(src_path).map_err(|error| ArchiveCreateError::InputFileRead {
                 path: src_path.to_owned(),
+                is_dir: None,
                 error,
             })?;
-            // In case of a symlink pointing to a directory, entry.file_type.is_dir() is false, but
-            // src.is_dir() will return true. We want to use entry.file_type.is_dir().
-            let src = entry.path();
-            let file_type =
-                entry
-                    .file_type()
-                    .map_err(|error| ArchiveCreateError::InputFileRead {
-                        path: src.to_owned(),
-                        is_dir: None,
+
+        // Use an explicit stack to avoid the unlikely but possible situation of a stack overflow.
+        let mut stack = vec![(limit, src_path.to_owned(), rel_path.to_owned(), metadata)];
+
+        while let Some((depth, src_path, rel_path, metadata)) = stack.pop() {
+            log::trace!(
+                target: "nextest-runner",
+                "processing `{src_path}` with metadata {metadata:?} \
+                 (depth: {depth})",
+            );
+
+            if metadata.is_dir() {
+                // Check the recursion limit.
+                if depth.is_zero() {
+                    callback(ArchiveEvent::RecursionDepthExceeded {
+                        path: &src_path,
+                        limit: limit.unwrap_finite(),
+                        warn: warn_on_exceed_depth,
+                    })
+                    .map_err(ArchiveCreateError::ReporterIo)?;
+                    continue;
+                }
+
+                // Iterate over this directory.
+                log::debug!(
+                    target: "nextest-runner",
+                    "recursing into `{}`",
+                    src_path
+                );
+                let entries = src_path.read_dir_utf8().map_err(|error| {
+                    ArchiveCreateError::InputFileRead {
+                        path: src_path.to_owned(),
+                        is_dir: Some(true),
+                        error,
+                    }
+                })?;
+                for entry in entries {
+                    let entry = entry.map_err(|error| ArchiveCreateError::DirEntryRead {
+                        path: src_path.to_owned(),
                         error,
                     })?;
-            if file_type.is_dir() {
-                self.append_path_recursive(&rel_path.join(entry.file_name()), entry.path())?;
+                    let metadata =
+                        entry
+                            .metadata()
+                            .map_err(|error| ArchiveCreateError::InputFileRead {
+                                path: entry.path().to_owned(),
+                                is_dir: None,
+                                error,
+                            })?;
+                    let entry_rel_path = rel_path_join(&rel_path, entry.file_name().as_ref());
+                    stack.push((
+                        depth.decrement(),
+                        entry.into_path(),
+                        entry_rel_path,
+                        metadata,
+                    ));
+                }
+            } else if metadata.is_file() || metadata.is_symlink() {
+                self.append_file(&src_path, &rel_path)?;
             } else {
-                let dest = rel_path_join(rel_path, entry.file_name().as_ref());
-                self.append_file(src, &dest)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn append_dir_one_level(
-        &mut self,
-        rel_path: &Utf8Path,
-        src_path: &Utf8Path,
-    ) -> Result<(), ArchiveCreateError> {
-        let entries =
-            src_path
-                .read_dir_utf8()
-                .map_err(|error| ArchiveCreateError::InputFileRead {
-                    path: src_path.to_owned(),
-                    is_dir: Some(true),
-                    error,
-                })?;
-        for entry in entries {
-            let entry = entry.map_err(|error| ArchiveCreateError::DirEntryRead {
-                path: src_path.to_owned(),
-                error,
-            })?;
-            // In case of a symlink pointing to a directory, entry.file_type.is_dir() is false, but
-            // src.is_dir() will return true. We want to use entry.file_type.is_dir().
-            let src = entry.path();
-            let file_type =
-                entry
-                    .file_type()
-                    .map_err(|error| ArchiveCreateError::InputFileRead {
-                        path: src.to_owned(),
-                        is_dir: None,
-                        error,
-                    })?;
-            if !file_type.is_dir() {
-                let dest = rel_path_join(rel_path, entry.file_name().as_ref());
-                self.append_file(src, &dest)?;
+                // Don't archive other kinds of files.
+                callback(ArchiveEvent::UnknownFileType { path: &src_path })
+                    .map_err(ArchiveCreateError::ReporterIo)?;
             }
         }
 
@@ -412,6 +447,10 @@ impl<'a, W: Write> Archiver<'a, W> {
     fn append_file(&mut self, src: &Utf8Path, dest: &Utf8Path) -> Result<(), ArchiveCreateError> {
         // Check added_files to ensure we aren't adding duplicate files.
         if !self.added_files.contains(dest) {
+            log::debug!(
+                target: "nextest-runner",
+                "adding `{src}` to archive as `{dest}`",
+            );
             self.builder
                 .append_path_with_name(src, dest)
                 .map_err(|error| ArchiveCreateError::InputFileRead {
