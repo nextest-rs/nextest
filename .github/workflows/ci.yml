@@ -25,7 +25,7 @@ jobs:
       - name: Lint (rustfmt)
         run: cargo xfmt --check
       - name: Install cargo readme
-        uses: taiki-e/install-action@b43c846230df0999d45aeecdc72be153a7985695 # v2
+        uses: taiki-e/install-action@d475def0028dbe8f19e36f8f5bc73b90cfc78de8 # v2
         with:
           tool: cargo-readme
       - name: Run cargo readme
