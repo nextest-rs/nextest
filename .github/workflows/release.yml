@@ -17,7 +17,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@29beae9445d6ef8516259305b219de7ff43a0118 # v2
+        uses: taiki-e/install-action@834a7b93e0c678fb40309ee0e36546336d5c6ea7 # v2
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
@@ -42,7 +42,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@29beae9445d6ef8516259305b219de7ff43a0118 # v2
+        uses: taiki-e/install-action@834a7b93e0c678fb40309ee0e36546336d5c6ea7 # v2
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
@@ -67,7 +67,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@29beae9445d6ef8516259305b219de7ff43a0118 # v2
+        uses: taiki-e/install-action@834a7b93e0c678fb40309ee0e36546336d5c6ea7 # v2
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
@@ -92,7 +92,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@29beae9445d6ef8516259305b219de7ff43a0118 # v2
+        uses: taiki-e/install-action@834a7b93e0c678fb40309ee0e36546336d5c6ea7 # v2
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
@@ -247,7 +247,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@29beae9445d6ef8516259305b219de7ff43a0118 # v2
+        uses: taiki-e/install-action@834a7b93e0c678fb40309ee0e36546336d5c6ea7 # v2
         with:
           tool: cargo-release@0.25.0
       - name: Download mukti
