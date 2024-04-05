@@ -392,8 +392,10 @@ impl<'a> TestRunnerInner<'a> {
                             let _ = forward_sender_ref.send(SignalForwardEvent::Continue);
                         }
                         #[cfg(not(unix))]
-                        Ok(Some(_)) => {
-                            crate::helpers::statically_unreachable();
+                        Ok(Some(e)) => {
+                            // On platforms other than Unix this enum is expected to be empty;
+                            // we can check this assumption at compile time like so:
+                            match e {}
                         }
                         Ok(None) => {}
                         Err(err) => {
