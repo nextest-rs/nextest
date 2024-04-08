@@ -15,7 +15,6 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.69", features = ["gimli-symbolize"] }
-chrono = { version = "0.4.37" }
 clap = { version = "4.4.18", features = ["derive", "env"] }
 clap_builder = { version = "4.4.18", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
 console = { version = "0.15.7" }
@@ -32,9 +31,7 @@ owo-colors = { version = "4.0.0", default-features = false, features = ["support
 rand = { version = "0.8.5" }
 serde = { version = "1.0.197", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.115", features = ["unbounded_depth"] }
-similar = { version = "2.3.0", features = ["inline", "unicode"] }
 tokio = { version = "1.37.0", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
-uuid = { version = "1.8.0", features = ["v4"] }
 xxhash-rust = { version = "0.8.10", default-features = false, features = ["xxh3", "xxh64"] }
 
 [build-dependencies]

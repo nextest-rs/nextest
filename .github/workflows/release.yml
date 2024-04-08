@@ -7,31 +7,6 @@ on:
       - "*"
 
 jobs:
-  quick-junit-release:
-    if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'quick-junit-')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-        with:
-          persist-credentials: false
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Install cargo release
-        uses: taiki-e/install-action@e4ef34df890c5af6027f55257634401a93b14dc7 # v2
-        with:
-          tool: cargo-release@0.25.0
-      - uses: taiki-e/create-gh-release-action@8df4de6534ceacdaed10a08f73418ca751f31793 # v1
-        with:
-          prefix: quick-junit
-          changelog: quick-junit/CHANGELOG.md
-          title: $prefix $version
-          branch: main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: ./scripts/cargo-release-publish.sh --exclude cargo-nextest
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
   nextest-filtering-release:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-filtering-')
     runs-on: ubuntu-latest

@@ -6,7 +6,6 @@ members = [
   "nextest-metadata",
   "nextest-runner",
   "nextest-filtering",
-  "quick-junit",
   "workspace-hack",
 ]
 
@@ -21,6 +20,7 @@ miette = "7.2.0"
 owo-colors = { version = "4.0.0", features = ["supports-colors"] }
 nextest-metadata = { version = "0.10.0", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
+quick-junit = "0.3.6"
 swrite = "0.1.0"
 target-spec-miette = "0.4.0"
 
@@ -48,3 +48,4 @@ nextest-workspace-hack = { path = "workspace-hack" }
 # cargo_metadata = { path = "../cargo_metadata" }
 # target-spec = { path = "../guppy/target-spec" }
 # target-spec-miette = { path = "../guppy/target-spec-miette" }
+# quick-junit = { path = "../quick-junit" }

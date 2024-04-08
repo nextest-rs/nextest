@@ -73,8 +73,6 @@ jobs:
           key: ${{ matrix.rust-version }}
       - name: Install latest nextest release
         uses: taiki-e/install-action@nextest
-      - name: Build quick-junit
-        run: cargo build --package quick-junit
       - name: Build nextest-metadata
         run: cargo build --package nextest-metadata
       - name: Build cargo-nextest without self-update

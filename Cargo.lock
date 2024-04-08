@@ -291,17 +291,6 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
-dependencies = [
- "lazy_static",
- "memchr",
- "regex-automata 0.1.10",
-]
-
-[[package]]
-name = "bstr"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05efc5cfd9110c8416e471df0e96702d58690178e206e61b7173706673c93706"
@@ -1052,22 +1041,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57da3b9b5b85bd66f31093f8c408b90a74431672542466497dcbdfdc02034be1"
 dependencies = [
  "aho-corasick",
- "bstr 1.9.1",
+ "bstr",
  "log",
  "regex-automata 0.4.4",
  "regex-syntax 0.8.3",
-]
-
-[[package]]
-name = "goldenfile"
-version = "1.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0af5cd7d547c48d88e2513268559d132424fcb6765bb564c9364d17e27c42d08"
-dependencies = [
- "scopeguard",
- "similar-asserts",
- "tempfile",
- "yansi 1.0.1",
 ]
 
 [[package]]
@@ -1669,7 +1646,7 @@ dependencies = [
  "aho-corasick",
  "async-scoped",
  "atomicwrites",
- "bstr 1.9.1",
+ "bstr",
  "bytes",
  "camino",
  "camino-tempfile",
@@ -1748,7 +1725,6 @@ version = "0.1.0"
 dependencies = [
  "backtrace",
  "cc",
- "chrono",
  "clap",
  "clap_builder",
  "console",
@@ -1772,10 +1748,8 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
- "similar",
  "syn",
  "tokio",
- "uuid",
  "winapi",
  "windows-sys 0.48.0",
  "windows-sys 0.52.0",
@@ -2012,7 +1986,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af7cee1a6c8a5b9208b3cb1061f10c0cb689087b3d8ce85fb9d2dd7a29b6ba66"
 dependencies = [
  "diff",
- "yansi 0.5.1",
+ "yansi",
 ]
 
 [[package]]
@@ -2084,13 +2058,12 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quick-junit"
-version = "0.3.5"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1a341ae463320e9f8f34adda49c8a85d81d4e8f34cce4397fb0350481552224"
 dependencies = [
  "chrono",
- "goldenfile",
  "indexmap 2.2.6",
- "nextest-workspace-hack",
- "owo-colors 4.0.0",
  "quick-xml 0.31.0",
  "strip-ansi-escapes",
  "thiserror",
@@ -2385,12 +2358,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scopeguard"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
 name = "sct"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2598,20 +2565,6 @@ name = "similar"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2aeaf503862c419d66959f5d7ca015337d864e9c49485d771b732e2a20453597"
-dependencies = [
- "bstr 0.2.17",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "similar-asserts"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e041bb827d1bfca18f213411d51b665309f1afb37a04a5d1464530e13779fc0f"
-dependencies = [
- "console",
- "similar",
-]
 
 [[package]]
 name = "slab"
@@ -3242,12 +3195,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unicode-segmentation"
-version = "1.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dd624098567895118886609431a7c3b8f516e41d30e0643f03d94592a147e36"
-
-[[package]]
 name = "unicode-width"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3749,12 +3696,6 @@ name = "yansi"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
-
-[[package]]
-name = "yansi"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "zerocopy"

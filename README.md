@@ -4,32 +4,28 @@ Nextest is a next-generation test runner for Rust. For more information, **check
 
 This repository contains the source code for:
 
-* [**cargo-nextest**](cargo-nextest): a new, faster Cargo test runner
+- [**cargo-nextest**](cargo-nextest): a new, faster Cargo test runner
   [![cargo-nextest on crates.io](https://img.shields.io/crates/v/cargo-nextest)](https://crates.io/crates/cargo-nextest)
   [![Documentation (website)](https://img.shields.io/badge/docs-nexte.st-blue)](https://nexte.st)
-* libraries used by cargo-nextest:
-  * [**nextest-runner**](nextest-runner): core logic for cargo-nextest
+- libraries used by cargo-nextest:
+  - [**nextest-runner**](nextest-runner): core logic for cargo-nextest
     [![nextest-runner on crates.io](https://img.shields.io/crates/v/nextest-runner)](https://crates.io/crates/nextest-runner)
     [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-runner)
     [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/nextest_runner/)
-  * [**nextest-metadata**](nextest-metadata): library for calling cargo-nextest over the command line
+  - [**nextest-metadata**](nextest-metadata): library for calling cargo-nextest over the command line
     [![nextest-metadata on crates.io](https://img.shields.io/crates/v/nextest-metadata)](https://crates.io/crates/nextest-metadata)
     [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-metadata)
     [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/nextest_metadata)
-  * [**nextest-filtering**](nextest-filtering): parser and evaluator for [filter expressions](https://nexte.st/book/filter-expressions)
+  - [**nextest-filtering**](nextest-filtering): parser and evaluator for [filter expressions](https://nexte.st/book/filter-expressions)
     [![nextest-filtering on crates.io](https://img.shields.io/crates/v/nextest-filtering)](https://crates.io/crates/nextest-filtering)
     [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-filtering)
     [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/nextest_filtering)
-* [**quick-junit**](quick-junit): a data model, serializer (and in the future deserializer) for JUnit/XUnit XML
-  [![quick-junit on crates.io](https://img.shields.io/crates/v/quick-junit)](https://crates.io/crates/quick-junit)
-  [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/quick-junit/)
-  [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/quick_junit/)
 
 ## Minimum supported Rust version
 
-The minimum supported Rust version to *run* nextest with is **Rust 1.38.** Nextest is not tested against versions that are that old, but it should work with any version of Rust released in the past year. (Please report a bug if not!)
+The minimum supported Rust version to _run_ nextest with is **Rust 1.38.** Nextest is not tested against versions that are that old, but it should work with any version of Rust released in the past year. (Please report a bug if not!)
 
-The minimum supported Rust version to *build* nextest with is **Rust 1.73.** For building, at least the last 3 versions of stable Rust are supported at any given time.
+The minimum supported Rust version to _build_ nextest with is **Rust 1.73.** For building, at least the last 3 versions of stable Rust are supported at any given time.
 
 See the [stability policy](https://nexte.st/book/stability) for more details.
 
@@ -40,7 +36,7 @@ crate has reached 1.x, any MSRV bump will be accompanied with a new minor versio
 
 See the [CONTRIBUTING](CONTRIBUTING.md) file for how to help out.
 
-*Looking to contribute to nextest and don't know where to get started?* Check out the list of [good first issues](https://github.com/nextest-rs/nextest/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22good+first+issue%22).
+_Looking to contribute to nextest and don't know where to get started?_ Check out the list of [good first issues](https://github.com/nextest-rs/nextest/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22good+first+issue%22).
 
 ## License
 

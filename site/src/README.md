@@ -43,7 +43,9 @@ For more detailed installation instructions, see [Installation](book/installatio
 | **nextest-runner,** core nextest logic                               |  [![nextest-runner on crates.io][nrci]][nrcl]   | [![Documentation (latest release)][doci]][nrdl] | [![Documentation (main)][docmi]][nrml] |
 | **nextest-metadata,** parsers for machine-readable output            | [![nextest-metadata on crates.io][nmci]][nmcl]  | [![Documentation (latest release)][doci]][nmdl] | [![Documentation (main)][docmi]][nmml] |
 | **nextest-filtering,** parser and evaluator for [filter expressions] | [![nextest-filtering on crates.io][nfci]][nfcl] | [![Documentation (latest release)][doci]][nfdl] | [![Documentation (main)][docmi]][nfml] |
-| **quick-junit,** JUnit XML serializer                                |    [![quick-junit on crates.io][qjci]][qjcl]    | [![Documentation (latest release)][doci]][qjcl] | [![Documentation (main)][docmi]][qjml] |
+| **quick-junit,** JUnit XML serializer                                |    [![quick-junit on crates.io][qjci]][qjcl]    | [![Documentation (latest release)][doci]][qjdl] | [![Documentation (main)][docmi]][qjml] |
+| **datatest-stable,** [custom test harness] for data-driven tests     |  [![datatest-stable on crates.io][dsci]][dscl]  | [![Documentation (latest release)][doci]][dsdl] | [![Documentation (main)][docmi]][dsml] |
+| **future-queue,** run queued futures with global and group limits    |   [![future-queue on crates.io][fqci]][fqcl]    | [![Documentation (latest release)][doci]][fqdl] | [![Documentation (main)][docmi]][fqml] |
 
 [cnci]: https://img.shields.io/crates/v/cargo-nextest
 [cncl]: https://crates.io/crates/cargo-nextest
@@ -61,11 +63,20 @@ For more detailed installation instructions, see [Installation](book/installatio
 [nfcl]: https://crates.io/crates/nextest-filtering
 [nfdl]: https://docs.rs/nextest-filtering
 [nfml]: https://nexte.st/rustdoc/nextest_filtering
-[filter expressions]: book/filter-expressions.md
 [qjci]: https://img.shields.io/crates/v/quick-junit
 [qjcl]: https://crates.io/crates/quick-junit
 [qjdl]: https://docs.rs/quick-junit
-[qjml]: https://nexte.st/rustdoc/quick_junit
+[qjml]: https://quick-junit.nexte.st
+[dsci]: https://img.shields.io/crates/v/datatest-stable
+[dscl]: https://crates.io/crates/datatest-stable
+[dsdl]: https://docs.rs/datatest-stable
+[dsml]: https://datatest-stable.nexte.st
+[fqci]: https://img.shields.io/crates/v/future-queue
+[fqcl]: https://crates.io/crates/future-queue
+[fqdl]: https://docs.rs/future-queue
+[fqml]: https://nextest-rs.github.io/future-queue/rustdoc/future_queue/
+[filter expressions]: book/filter-expressions.md
+[custom-test-harness]: book/custom-test-harnesses.md
 [doci]: https://img.shields.io/badge/docs-latest-brightgreen
 [docmi]: https://img.shields.io/badge/docs-main-purple
 
