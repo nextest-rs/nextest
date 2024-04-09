@@ -6,7 +6,7 @@ Nextest's [execution model](how-it-works.md) generally leads to faster test runs
 - _Bottlenecks with "long pole" tests._ Nextest excels in situations where there are bottlenecks in multiple test binaries: cargo test can only run them serially, while nextest can run those tests in parallel.
 - _Build caching._ Test runs are one component of end-to-end execution times. Speeding up the build by using [sccache](https://github.com/mozilla/sccache), the [Rust Cache GitHub Action](https://github.com/marketplace/actions/rust-cache), or similar, will make test run times be a proportionally greater part of overall times.
 
-Even if nextest doesn't result in faster test runs, you may find it useful for identifying test bottlenecks, for its user interface, or for its [other features](../README.md#features).
+Even if nextest doesn't result in faster test runs, you may find it useful for identifying test bottlenecks, for its user interface, or for its [other features](../#features).
 
 ## Results
 
