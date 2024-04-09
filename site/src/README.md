@@ -76,7 +76,7 @@ For more detailed installation instructions, see [Installation](book/installatio
 [fqdl]: https://docs.rs/future-queue
 [fqml]: https://nextest-rs.github.io/future-queue/rustdoc/future_queue/
 [filter expressions]: book/filter-expressions.md
-[custom-test-harness]: book/custom-test-harnesses.md
+[custom test harness]: book/custom-test-harnesses.md
 [doci]: https://img.shields.io/badge/docs-latest-brightgreen
 [docmi]: https://img.shields.io/badge/docs-main-purple
 
