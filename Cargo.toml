@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-rust-version = "1.73"
+rust-version = "1.74"
 
 [workspace.dependencies]
 bstr = { version = "1.9.1", default-features = false, features = ["std"] }
