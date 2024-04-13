@@ -31,7 +31,7 @@ cfg-if = "1.0.0"
 chrono = "0.4.37"
 debug-ignore.workspace = true
 display-error-chain = "0.2.0"
-either = "1.10.0"
+either = "1.11.0"
 futures = "0.3.30"
 guppy = "0.17.5"
 # Used to find the cargo root directory, which is needed in case the user has
