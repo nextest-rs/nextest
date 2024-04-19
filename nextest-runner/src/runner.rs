@@ -31,6 +31,7 @@ use display_error_chain::DisplayErrorChain;
 use future_queue::StreamExt;
 use futures::{future::try_join, prelude::*};
 use nextest_metadata::{FilterMatch, MismatchReason};
+use quick_junit::ReportUuid;
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
     convert::Infallible,
@@ -51,7 +52,6 @@ use tokio::{
     runtime::Runtime,
     sync::{broadcast, mpsc::UnboundedSender},
 };
-use uuid::Uuid;
 
 #[derive(Debug)]
 struct BackoffIter {
@@ -202,7 +202,7 @@ impl TestRunnerBuilder {
                 double_spawn,
                 target_runner,
                 runtime,
-                run_id: Uuid::new_v4(),
+                run_id: ReportUuid::new_v4(),
             },
             handler,
         })
@@ -264,7 +264,7 @@ struct TestRunnerInner<'a> {
     double_spawn: DoubleSpawnInfo,
     target_runner: TargetRunner,
     runtime: Runtime,
-    run_id: Uuid,
+    run_id: ReportUuid,
 }
 
 impl<'a> TestRunnerInner<'a> {
@@ -1685,7 +1685,7 @@ enum ShutdownForwardEvent {
 
 struct CallbackContext<F, E> {
     callback: F,
-    run_id: Uuid,
+    run_id: ReportUuid,
     profile_name: String,
     cli_args: Vec<String>,
     stopwatch: StopwatchStart,
@@ -1704,7 +1704,7 @@ where
 {
     fn new(
         callback: F,
-        run_id: Uuid,
+        run_id: ReportUuid,
         profile_name: &str,
         cli_args: Vec<String>,
         initial_run_count: usize,

@@ -26,6 +26,7 @@ use debug_ignore::DebugIgnore;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
+use quick_junit::ReportUuid;
 use serde::Deserialize;
 use std::{
     borrow::Cow,
@@ -35,7 +36,6 @@ use std::{
     io::{BufWriter, Write},
     time::Duration,
 };
-use uuid::Uuid;
 
 /// When to display test output in the reporter.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -1672,7 +1672,7 @@ pub enum TestEventKind<'a> {
         test_list: &'a TestList<'a>,
 
         /// The UUID for this run.
-        run_id: Uuid,
+        run_id: ReportUuid,
 
         /// The nextest profile chosen for this run.
         profile_name: String,
@@ -1875,7 +1875,7 @@ pub enum TestEventKind<'a> {
     /// The test run finished.
     RunFinished {
         /// The unique ID for this run.
-        run_id: Uuid,
+        run_id: ReportUuid,
 
         /// The time at which the run was started.
         start_time: DateTime<FixedOffset>,
