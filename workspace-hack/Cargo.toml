@@ -21,12 +21,12 @@ console = { version = "0.15.7" }
 either = { version = "1.11.0" }
 futures-channel = { version = "0.3.30", features = ["sink"] }
 futures-sink = { version = "0.3.30", default-features = false, features = ["std"] }
-getrandom = { version = "0.2.11", default-features = false, features = ["std"] }
+getrandom = { version = "0.2.14", default-features = false, features = ["std"] }
 indexmap = { version = "2.2.6", features = ["serde"] }
 log = { version = "0.4.21", default-features = false, features = ["std"] }
-memchr = { version = "2.7.1" }
+memchr = { version = "2.7.2" }
 miette = { version = "7.2.0", features = ["fancy"] }
-num-traits = { version = "0.2.17", default-features = false, features = ["libm", "std"] }
+num-traits = { version = "0.2.18", default-features = false, features = ["libm", "std"] }
 owo-colors = { version = "4.0.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
 serde = { version = "1.0.198", features = ["alloc", "derive"] }
@@ -35,10 +35,10 @@ tokio = { version = "1.37.0", features = ["fs", "io-util", "macros", "process", 
 xxhash-rust = { version = "0.8.10", default-features = false, features = ["xxh3", "xxh64"] }
 
 [build-dependencies]
-cc = { version = "1.0.83", default-features = false, features = ["parallel"] }
-proc-macro2 = { version = "1.0.78" }
-quote = { version = "1.0.35" }
-syn = { version = "2.0.52", features = ["extra-traits", "full", "visit", "visit-mut"] }
+cc = { version = "1.0.94", default-features = false, features = ["parallel"] }
+proc-macro2 = { version = "1.0.81" }
+quote = { version = "1.0.36" }
+syn = { version = "2.0.60", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.30" }
