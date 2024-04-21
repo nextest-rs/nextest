@@ -20,6 +20,7 @@ pub mod indenter;
 pub mod list;
 pub mod partition;
 pub mod platform;
+pub mod redact;
 pub mod reporter;
 pub mod reuse_build;
 pub mod runner;

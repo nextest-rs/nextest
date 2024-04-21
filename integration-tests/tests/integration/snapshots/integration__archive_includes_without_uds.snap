@@ -1,0 +1,13 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: output.stderr_as_str()
+---
+   Archiving 16 binaries (including 2 non-test binaries), 2 build script output directories, and 2 linked paths to <archive-file>
+     Warning ignoring extra path `<target-dir>/excluded-dir` because it does not exist
+     Warning ignoring extra path `<target-dir>/depth-0-dir` specified with depth 0 since it is a directory
+     Warning ignoring extra path `<target-dir>/file_that_does_not_exist.txt` because it does not exist
+     Warning ignoring extra path `<target-dir>/uds.sock` because it does not exist
+     Warning linked path `<target-dir>/debug/build/<cdylib-link-hash>/does-not-exist` not found, requested by: cdylib-link v0.1.0
+             (this is a bug in this crate that should be fixed)
+     Warning recursion depth exceeded at <target-dir>/application-data/d1/d2/d3/d4/d5/d6/d7/d8 (limit: 8)
+    Archived <file-count> files to <archive-file> in <duration>

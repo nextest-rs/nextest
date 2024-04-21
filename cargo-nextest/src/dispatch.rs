@@ -3,7 +3,7 @@
 
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
-    output::{OutputContext, OutputOpts, OutputWriter},
+    output::{should_redact, OutputContext, OutputOpts, OutputWriter},
     reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
     ExpectedError, Result, ReuseBuildKind,
 };
@@ -28,6 +28,7 @@ use nextest_runner::{
     },
     partition::PartitionerBuilder,
     platform::BuildPlatforms,
+    redact::Redactor,
     reporter::{structured, FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, RunStatsFailureKind, TestRunnerBuilder},
@@ -1269,7 +1270,15 @@ impl BaseApp {
             .load_profile(profile_name, &config)?
             .apply_build_platforms(&build_platforms);
 
-        let mut reporter = ArchiveReporter::new(self.output.verbose);
+        let redactor = if should_redact() {
+            Redactor::build_active(&binary_list.rust_build_meta)
+                .with_path(output_file.to_path_buf(), "<archive-file>".to_owned())
+                .build()
+        } else {
+            Redactor::noop()
+        };
+
+        let mut reporter = ArchiveReporter::new(self.output.verbose, redactor);
         if self
             .output
             .color

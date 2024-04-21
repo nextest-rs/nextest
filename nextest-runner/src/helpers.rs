@@ -200,12 +200,17 @@ pub(crate) fn rel_path_join(rel_path: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf
     format!("{}/{}", rel_path, path).into()
 }
 
-pub(crate) fn format_duration(duration: Duration) -> String {
-    let duration = duration.as_secs_f64();
-    if duration > 60.0 {
-        format!("{}m {:.2}s", duration as u32 / 60, duration % 60.0)
-    } else {
-        format!("{duration:.2}s")
+#[derive(Debug)]
+pub(crate) struct FormattedDuration(pub(crate) Duration);
+
+impl fmt::Display for FormattedDuration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let duration = self.0.as_secs_f64();
+        if duration > 60.0 {
+            write!(f, "{}m {:.2}s", duration as u32 / 60, duration % 60.0)
+        } else {
+            write!(f, "{duration:.2}s")
+        }
     }
 }
 

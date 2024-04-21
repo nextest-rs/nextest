@@ -29,6 +29,7 @@ use std::{fs::File, io::Write};
 mod fixtures;
 mod temp_project;
 
+use crate::temp_project::{create_uds, UdsStatus};
 use camino_tempfile::Utf8TempDir;
 use fixtures::*;
 use temp_project::TempProject;
@@ -341,7 +342,7 @@ fn test_relocated_run() {
 fn test_run_from_archive_with_no_includes() {
     set_env_vars();
 
-    let (_p1, archive_file) = create_archive("");
+    let (_p1, archive_file) = create_archive("", false, "archive_no_includes");
     let (_p2, extracted_target) = run_archive(&archive_file);
 
     for path in [
@@ -367,9 +368,11 @@ archive-include = [
     { path = "application-data", relative-to = "target" },
     { path = "top-level-file.txt", relative-to = "target", depth = 0 },
     { path = "excluded-dir", relative-to = "target", depth = 0 },
+    { path = "depth-0-dir", relative-to = "target", depth = 0 },
     { path = "file_that_does_not_exist.txt", relative-to = "target" },
+    { path = "uds.sock", relative-to = "target" },
 ]"#;
-    let (_p1, archive_file) = create_archive(config);
+    let (_p1, archive_file) = create_archive(config, true, "archive_includes");
     let (_p2, extracted_target) = run_archive(&archive_file);
 
     // TODO: we should test which of these paths above warn here, either by defining a serialization
@@ -395,12 +398,18 @@ const APP_DATA_DIR: &str = "application-data";
 const DIR_TREE: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8";
 const INCLUDED_PATH: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/included.txt";
 const EXCLUDED_PATH: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8/excluded.txt";
+const DIR_AT_DEPTH_0: &str = "depth-0-dir";
+const UDS_PATH: &str = "uds.sock";
 
 const TOP_LEVEL_FILE: &str = "top-level-file.txt";
 const TOP_LEVEL_DIR: &str = "top-level-dir";
 const TOP_LEVEL_DIR_OTHER_FILE: &str = "top-level-dir/other-file.txt";
 
-fn create_archive(config_contents: &str) -> (TempProject, Utf8PathBuf) {
+fn create_archive(
+    config_contents: &str,
+    make_uds: bool,
+    snapshot_name: &str,
+) -> (TempProject, Utf8PathBuf) {
     let custom_target_dir = Utf8TempDir::new().unwrap();
     let custom_target_path = custom_target_dir.path();
     let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
@@ -422,6 +431,16 @@ fn create_archive(config_contents: &str) -> (TempProject, Utf8PathBuf) {
     std::fs::create_dir(top_level_dir).unwrap();
     std::fs::write(top_level_dir_other_file, "a test string").unwrap();
 
+    // This produces a warning.
+    std::fs::create_dir_all(p.target_dir().join(DIR_AT_DEPTH_0)).unwrap();
+
+    // This produces a warning as well, since Unix domain sockets are unrecognized.
+    let uds_created = if make_uds {
+        create_uds(&p.target_dir().join(UDS_PATH)).unwrap()
+    } else {
+        UdsStatus::NotRequested
+    };
+
     let archive_file = p.temp_root().join("my-archive.tar.zst");
 
     // Write the archive to the archive_file above.
@@ -436,10 +455,20 @@ fn create_archive(config_contents: &str) -> (TempProject, Utf8PathBuf) {
             "--target-dir",
             p.target_dir().as_str(),
             "--all-targets",
+            // Make cargo fully quiet since we're testing just nextest output below.
+            "--cargo-quiet",
+            "--cargo-quiet",
         ])
+        .env("__NEXTEST_REDACT", "1")
         .output();
 
-    eprintln!("archive creation succeeded, output:\n\n{output}\n=========");
+    // If a UDS was created, we're going to have a slightly different snapshot.
+    let snapshot_name = match uds_created {
+        UdsStatus::Created | UdsStatus::NotRequested => snapshot_name.to_string(),
+        UdsStatus::NotCreated => format!("{snapshot_name}_without_uds"),
+    };
+
+    insta::assert_snapshot!(snapshot_name, output.stderr_as_str());
 
     // Remove the old source and target directories to ensure that any tests that refer to files within
     // it fail.

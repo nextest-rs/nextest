@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::helpers::{format_duration, plural};
+use crate::{helpers::plural, redact::Redactor};
 use camino::Utf8Path;
 use owo_colors::{OwoColorize, Style};
 use std::{
@@ -14,16 +14,20 @@ use std::{
 pub struct ArchiveReporter {
     styles: Styles,
     verbose: bool,
+    redactor: Redactor,
+
     linked_path_hint_emitted: bool,
     // TODO: message-format json?
 }
 
 impl ArchiveReporter {
     /// Creates a new reporter for archive events.
-    pub fn new(verbose: bool) -> Self {
+    pub fn new(verbose: bool, redactor: Redactor) -> Self {
         Self {
             styles: Styles::default(),
             verbose,
+            redactor,
+
             linked_path_hint_emitted: false,
         }
     }
@@ -57,7 +61,29 @@ impl ArchiveReporter {
                     &mut writer,
                 )?;
 
-                writeln!(writer, " to {}", output_file.style(self.styles.bold))?;
+                writeln!(
+                    writer,
+                    " to {}",
+                    self.redactor
+                        .redact_path(output_file)
+                        .style(self.styles.bold)
+                )?;
+            }
+            ArchiveEvent::ExtraPathMissing { path } => {
+                write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
+                writeln!(
+                    writer,
+                    "ignoring extra path `{}` because it does not exist",
+                    self.redactor.redact_path(path).style(self.styles.bold),
+                )?;
+            }
+            ArchiveEvent::DirectoryAtDepthZero { path } => {
+                write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
+                writeln!(
+                    writer,
+                    "ignoring extra path `{}` specified with depth 0 since it is a directory",
+                    self.redactor.redact_path(path).style(self.styles.bold),
+                )?;
             }
             ArchiveEvent::RecursionDepthExceeded { path, limit, warn } => {
                 if warn {
@@ -71,7 +97,7 @@ impl ArchiveReporter {
                 writeln!(
                     writer,
                     "recursion depth exceeded at {} (limit: {limit})",
-                    path.style(self.styles.bold),
+                    self.redactor.redact_path(path).style(self.styles.bold),
                 )?;
             }
             ArchiveEvent::UnknownFileType { path } => {
@@ -80,7 +106,7 @@ impl ArchiveReporter {
                     writer,
                     "ignoring `{}` because it is not a file, \
                      directory, or symbolic link",
-                    path.style(self.styles.bold),
+                    self.redactor.redact_path(path).style(self.styles.bold),
                 )?;
             }
             ArchiveEvent::LinkedPathNotFound { path, requested_by } => {
@@ -88,7 +114,7 @@ impl ArchiveReporter {
                 writeln!(
                     writer,
                     "linked path `{}` not found, requested by: {}",
-                    path.style(self.styles.bold),
+                    self.redactor.redact_path(path).style(self.styles.bold),
                     requested_by.join(", ").style(self.styles.bold),
                 )?;
                 if !self.linked_path_hint_emitted {
@@ -110,9 +136,13 @@ impl ArchiveReporter {
                 writeln!(
                     writer,
                     "{} files to {} in {}",
-                    file_count.style(self.styles.bold),
-                    output_file.style(self.styles.bold),
-                    format_duration(elapsed),
+                    self.redactor
+                        .redact_file_count(file_count)
+                        .style(self.styles.bold),
+                    self.redactor
+                        .redact_path(output_file)
+                        .style(self.styles.bold),
+                    self.redactor.redact_duration(elapsed),
                 )?;
             }
             ArchiveEvent::ExtractStarted {
@@ -143,10 +173,14 @@ impl ArchiveReporter {
                 writeln!(
                     writer,
                     "{} {} to {} in {}",
-                    file_count.style(self.styles.bold),
+                    self.redactor
+                        .redact_file_count(file_count)
+                        .style(self.styles.bold),
                     plural::files_str(file_count),
-                    destination_dir.style(self.styles.bold),
-                    format_duration(elapsed),
+                    self.redactor
+                        .redact_path(destination_dir)
+                        .style(self.styles.bold),
+                    self.redactor.redact_duration(elapsed),
                 )?;
             }
         }
@@ -251,6 +285,18 @@ pub enum ArchiveEvent<'a> {
 
         /// The archive output file.
         output_file: &'a Utf8Path,
+    },
+
+    /// A provided extra path did not exist.
+    ExtraPathMissing {
+        /// The path that was missing.
+        path: &'a Utf8Path,
+    },
+
+    /// For an extra include, a directory was specified at depth 0.
+    DirectoryAtDepthZero {
+        /// The directory that was at depth 0.
+        path: &'a Utf8Path,
     },
 
     /// While performing the archive, the recursion depth was exceeded.

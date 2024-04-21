@@ -7,6 +7,7 @@ use clap::{Args, ValueEnum};
 use guppy::graph::PackageGraph;
 use nextest_runner::{
     errors::PathMapperConstructKind,
+    redact::Redactor,
     reuse_build::{
         ArchiveFormat, ArchiveReporter, ExtractDestination, MetadataWithRemap, PathMapper,
         ReuseBuildInfo,
@@ -122,7 +123,10 @@ impl ReuseBuildOpts {
                 },
             };
 
-            let mut reporter = ArchiveReporter::new(output.verbose);
+            // TODO: make this redactor work.
+            let redactor = Redactor::noop();
+
+            let mut reporter = ArchiveReporter::new(output.verbose, redactor);
             if output.color.should_colorize(supports_color::Stream::Stderr) {
                 reporter.colorize();
             }

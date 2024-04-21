@@ -168,9 +168,9 @@ pub(crate) struct CargoOptions {
 
     //  TODO: doc?
     // no-run is handled by test runner
-    /// Do not print cargo log messages
-    #[arg(long, group = "cargo-opts", help_heading = "Other Cargo options")]
-    cargo_quiet: bool,
+    /// Do not print cargo log messages (specify twice for no Cargo output at all)
+    #[arg(long, action = ArgAction::Count, group = "cargo-opts", help_heading = "Other Cargo options")]
+    cargo_quiet: u8,
 
     /// Use cargo verbose output (specify twice for very verbose/build.rs output)
     #[arg(long, action = ArgAction::Count, group = "cargo-opts", help_heading = "Other Cargo options")]
@@ -207,6 +207,7 @@ pub(crate) struct CargoCli<'a> {
     output: OutputContext,
     command: &'a str,
     args: Vec<Cow<'a, str>>,
+    stderr_null: bool,
 }
 
 impl<'a> CargoCli<'a> {
@@ -222,6 +223,7 @@ impl<'a> CargoCli<'a> {
             output,
             command,
             args: vec![],
+            stderr_null: false,
         }
     }
 
@@ -341,6 +343,7 @@ impl<'a> CargoCli<'a> {
         // ---
         // Other Cargo options
         // ---
+
         if options.cargo_verbose > 0 {
             self.add_args(std::iter::repeat("--verbose").take(options.cargo_verbose.into()));
         }
@@ -378,8 +381,11 @@ impl<'a> CargoCli<'a> {
 
         // Other cargo options. We don't apply --verbose here, since we generally intend --verbose
         // to only be for the main build.
-        if options.cargo_quiet {
+        if options.cargo_quiet > 0 {
             self.add_arg("--quiet");
+        }
+        if options.cargo_quiet > 1 {
+            self.stderr_null = true;
         }
 
         self
@@ -400,14 +406,20 @@ impl<'a> CargoCli<'a> {
         if let Some(path) = self.manifest_path {
             initial_args.extend(["--manifest-path", path.as_str()]);
         }
-        duct::cmd(
+        let ret = duct::cmd(
             // Ensure that cargo gets picked up from PATH if necessary, by calling as_str
             // rather than as_std_path.
             self.cargo_path.as_str(),
             initial_args
                 .into_iter()
                 .chain(self.args.iter().map(|s| s.as_ref())),
-        )
+        );
+
+        if self.stderr_null {
+            ret.stderr_null()
+        } else {
+            ret
+        }
     }
 }
 
