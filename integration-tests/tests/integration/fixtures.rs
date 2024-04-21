@@ -218,6 +218,10 @@ impl CargoNextestOutput {
         String::from_utf8_lossy(&self.stdout)
     }
 
+    pub fn stderr_as_str(&self) -> Cow<'_, str> {
+        String::from_utf8_lossy(&self.stderr)
+    }
+
     pub fn decode_test_list_json(&self) -> Result<TestListSummary> {
         Ok(serde_json::from_slice(&self.stdout)?)
     }

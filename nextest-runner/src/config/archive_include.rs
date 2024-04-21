@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::TrackDefault;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use serde::{de::Unexpected, Deserialize};
 use std::fmt;
 
@@ -15,16 +15,28 @@ use std::fmt;
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ArchiveInclude {
-    pub(crate) path: Utf8PathBuf,
-    pub(crate) relative_to: ArchiveRelativeTo,
+    path: Utf8PathBuf,
+    relative_to: ArchiveRelativeTo,
     #[serde(default = "default_depth")]
-    pub(crate) depth: TrackDefault<RecursionDepth>,
+    depth: TrackDefault<RecursionDepth>,
 }
 
 impl ArchiveInclude {
     /// The maximum depth of recursion.
     pub fn depth(&self) -> RecursionDepth {
         self.depth.value
+    }
+
+    /// Whether the depth was deserialized. If false, the default value was used.
+    pub fn is_depth_deserialized(&self) -> bool {
+        self.depth.is_deserialized
+    }
+
+    /// Join the path with the given target dir.
+    pub fn join_path(&self, target_dir: &Utf8Path) -> Utf8PathBuf {
+        match self.relative_to {
+            ArchiveRelativeTo::Target => target_dir.join(&self.path),
+        }
     }
 }
 

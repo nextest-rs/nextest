@@ -320,3 +320,7 @@ impl<'a> Write for StderrWriter<'a> {
         }
     }
 }
+
+pub(crate) fn should_redact() -> bool {
+    std::env::var("__NEXTEST_REDACT") == Ok("1".to_string())
+}

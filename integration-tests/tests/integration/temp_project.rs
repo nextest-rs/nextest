@@ -132,3 +132,45 @@ fn fixup_macos_path(path: &Utf8Path) -> Utf8PathBuf {
 fn fixup_macos_path(path: &Utf8Path) -> Utf8PathBuf {
     path.to_path_buf()
 }
+
+#[cfg(unix)]
+mod unix {
+    use super::UdsStatus;
+    use camino::Utf8Path;
+    use color_eyre::eyre::{Context, Result};
+
+    pub(crate) fn create_uds(path: &Utf8Path) -> Result<UdsStatus> {
+        // This creates a Unix domain socket by binding it to a path.
+        use std::os::unix::net::UnixListener;
+
+        UnixListener::bind(path).wrap_err_with(|| format!("failed to bind UDS at {}", path))?;
+        Ok(UdsStatus::Created)
+    }
+}
+#[cfg(unix)]
+pub(crate) use unix::*;
+
+#[cfg(windows)]
+mod windows {
+    use super::UdsStatus;
+    use camino::Utf8Path;
+    use color_eyre::eyre::Result;
+
+    pub(crate) fn create_uds(_path: &Utf8Path) -> Result<UdsStatus> {
+        // While Unix domain sockets are supported on Windows, Rust 1.77's `is_file()` returns true for
+        // them. This means that the `UnknownFileType` warning can't be produced for them. So we can't
+        // actually test that case on Windows.
+        Ok(UdsStatus::NotCreated)
+    }
+}
+#[cfg(windows)]
+pub(crate) use windows::*;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[must_use]
+#[allow(dead_code)]
+pub(crate) enum UdsStatus {
+    Created,
+    NotCreated,
+    NotRequested,
+}

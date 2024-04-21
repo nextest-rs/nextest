@@ -185,26 +185,56 @@ impl<'a, W: Write> Archiver<'a, W> {
 
         let target_dir = &self.binary_list.rust_build_meta.target_directory;
 
+        fn filter_map_err<T>(result: io::Result<()>) -> Option<Result<T, ArchiveCreateError>> {
+            match result {
+                Ok(()) => None,
+                Err(err) => Some(Err(ArchiveCreateError::ReporterIo(err))),
+            }
+        }
+
         // Check that all archive-include paths exist.
-        let archive_include_paths: Vec<_> = self
+        let archive_include_paths = self
             .archive_include
             .iter()
             .filter_map(|include| {
-                let src_path = target_dir.join(&include.path);
+                let src_path = include.join_path(target_dir);
                 let src_path = self.path_mapper.map_binary(src_path);
 
-                if src_path.exists() {
-                    Some((include, src_path))
-                } else {
-                    log::debug!(
-                        target: "nextest-runner",
-                        "archive-include path `{}` does not exist, ignoring",
-                        include.path
-                    );
-                    None
+                match src_path.symlink_metadata() {
+                    Ok(metadata) => {
+                        if metadata.is_dir() {
+                            if include.depth().is_zero() {
+                                // A directory with depth 0 will not be archived, so warn on that.
+                                filter_map_err(callback(ArchiveEvent::DirectoryAtDepthZero {
+                                    path: &src_path,
+                                }))
+                            } else {
+                                Some(Ok((include, src_path)))
+                            }
+                        } else if metadata.is_file() || metadata.is_symlink() {
+                            Some(Ok((include, src_path)))
+                        } else {
+                            filter_map_err(callback(ArchiveEvent::UnknownFileType {
+                                path: &src_path,
+                            }))
+                        }
+                    }
+                    Err(error) => {
+                        if error.kind() == io::ErrorKind::NotFound {
+                            filter_map_err(callback(ArchiveEvent::ExtraPathMissing {
+                                path: &src_path,
+                            }))
+                        } else {
+                            Some(Err(ArchiveCreateError::InputFileRead {
+                                path: src_path.to_owned(),
+                                is_dir: None,
+                                error,
+                            }))
+                        }
+                    }
                 }
             })
-            .collect();
+            .collect::<Result<Vec<_>, ArchiveCreateError>>()?;
 
         // Write all discovered binaries into the archive.
         for binary in &self.binary_list.rust_binaries {
@@ -322,16 +352,16 @@ impl<'a, W: Write> Archiver<'a, W> {
 
         // Also include extra paths.
         for (include, src_path) in archive_include_paths {
-            let rel_path = Utf8Path::new("target").join(&include.path);
+            let rel_path = include.join_path(Utf8Path::new("target"));
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
             if src_path.exists() {
                 // Warn if the implicit depth limit for these paths is in use.
-                let warn_on_exceed_depth = !include.depth.is_deserialized;
+                let warn_on_exceed_depth = !include.is_depth_deserialized();
                 self.append_path_recursive(
                     &src_path,
                     &rel_path,
-                    include.depth.value,
+                    include.depth(),
                     warn_on_exceed_depth,
                     callback,
                 )?;
