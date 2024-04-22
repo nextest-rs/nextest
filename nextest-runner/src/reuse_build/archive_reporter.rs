@@ -14,6 +14,7 @@ use std::{
 pub struct ArchiveReporter {
     styles: Styles,
     verbose: bool,
+    linked_path_hint_emitted: bool,
     // TODO: message-format json?
 }
 
@@ -23,6 +24,7 @@ impl ArchiveReporter {
         Self {
             styles: Styles::default(),
             verbose,
+            linked_path_hint_emitted: false,
         }
     }
 
@@ -80,6 +82,24 @@ impl ArchiveReporter {
                      directory, or symbolic link",
                     path.style(self.styles.bold),
                 )?;
+            }
+            ArchiveEvent::LinkedPathNotFound { path, requested_by } => {
+                write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
+                writeln!(
+                    writer,
+                    "linked path `{}` not found, requested by: {}",
+                    path.style(self.styles.bold),
+                    requested_by.join(", ").style(self.styles.bold),
+                )?;
+                if !self.linked_path_hint_emitted {
+                    write!(writer, "{:>12} ", "")?;
+                    writeln!(
+                        writer,
+                        "(this is a bug in {} that should be fixed)",
+                        plural::this_crate_str(requested_by.len())
+                    )?;
+                    self.linked_path_hint_emitted = true;
+                }
             }
             ArchiveEvent::Archived {
                 file_count,
@@ -249,6 +269,15 @@ pub enum ArchiveEvent<'a> {
     UnknownFileType {
         /// The path of the unknown type.
         path: &'a Utf8Path,
+    },
+
+    /// A crate linked against a non-existent path.
+    LinkedPathNotFound {
+        /// The path of the linked file.
+        path: &'a Utf8Path,
+
+        /// The crates that linked against the path.
+        requested_by: &'a [String],
     },
 
     /// The archive operation completed successfully.

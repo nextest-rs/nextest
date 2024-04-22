@@ -1283,6 +1283,7 @@ impl BaseApp {
             profile,
             &binary_list,
             &self.cargo_metadata_json,
+            &self.package_graph,
             // Note that path_mapper is currently a no-op -- we don't support reusing builds for
             // archive creation because it's too confusing.
             &path_mapper,

@@ -11,6 +11,7 @@ use crate::{
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
+use guppy::{graph::PackageGraph, PackageId};
 use std::{
     collections::HashSet,
     fs,
@@ -55,6 +56,7 @@ pub fn archive_to_file<'a, F>(
     profile: NextestProfile<'a, FinalConfig>,
     binary_list: &'a BinaryList,
     cargo_metadata: &'a str,
+    graph: &'a PackageGraph,
     path_mapper: &'a PathMapper,
     format: ArchiveFormat,
     zstd_level: i32,
@@ -86,6 +88,7 @@ where
                 &profile,
                 binary_list,
                 cargo_metadata,
+                graph,
                 path_mapper,
                 format,
                 zstd_level,
@@ -114,6 +117,7 @@ where
 struct Archiver<'a, W: Write> {
     binary_list: &'a BinaryList,
     cargo_metadata: &'a str,
+    graph: &'a PackageGraph,
     path_mapper: &'a PathMapper,
     builder: tar::Builder<Encoder<'static, BufWriter<W>>>,
     unix_timestamp: u64,
@@ -127,6 +131,7 @@ impl<'a, W: Write> Archiver<'a, W> {
         profile: &'a NextestProfile<'a, FinalConfig>,
         binary_list: &'a BinaryList,
         cargo_metadata: &'a str,
+        graph: &'a PackageGraph,
         path_mapper: &'a PathMapper,
         format: ArchiveFormat,
         compression_level: i32,
@@ -155,6 +160,7 @@ impl<'a, W: Write> Archiver<'a, W> {
         Ok(Self {
             binary_list,
             cargo_metadata,
+            graph,
             path_mapper,
             builder,
             unix_timestamp,
@@ -275,18 +281,29 @@ impl<'a, W: Write> Archiver<'a, W> {
 
             // Some crates produce linked paths that don't exist. This is a bug in those libraries.
             if !src_path.exists() {
-                let mut s = String::new();
-                for package_id in requested_by {
-                    s.push_str("  - ");
-                    s.push_str(package_id);
-                    s.push('\n');
-                }
-                log::warn!(
-                    target: "nextest-runner",
-                    "these crates link against `{src_path}` \
-                     which doesn't exist, ignoring:\n{s}  \
-                     (this is a bug in these crates that should be fixed)",
-                );
+                // Map each requested_by to its package name and version.
+                let mut requested_by: Vec<_> = requested_by
+                    .iter()
+                    .map(|package_id| {
+                        self.graph
+                            .metadata(&PackageId::new(package_id.clone()))
+                            .map_or_else(
+                                |_| {
+                                    // If a package ID is not found in the graph, it's strange but not
+                                    // fatal -- just use the ID.
+                                    package_id.to_owned()
+                                },
+                                |metadata| format!("{} v{}", metadata.name(), metadata.version()),
+                            )
+                    })
+                    .collect();
+                requested_by.sort_unstable();
+
+                callback(ArchiveEvent::LinkedPathNotFound {
+                    path: &src_path,
+                    requested_by: &requested_by,
+                })
+                .map_err(ArchiveCreateError::ReporterIo)?;
                 continue;
             }
 
