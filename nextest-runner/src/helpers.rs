@@ -54,6 +54,14 @@ pub(crate) mod plural {
             "directories"
         }
     }
+
+    pub(crate) fn this_crate_str(count: usize) -> &'static str {
+        if count == 1 {
+            "this crate"
+        } else {
+            "these crates"
+        }
+    }
 }
 
 /// Write out a test name.
