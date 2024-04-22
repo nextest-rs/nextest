@@ -5,6 +5,7 @@
 
 mod archive_include;
 mod config_impl;
+mod helpers;
 mod identifier;
 mod nextest_version;
 mod overrides;
