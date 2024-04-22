@@ -364,7 +364,7 @@ fn test_run_from_archive_with_includes() {
 
     let config = r#"
 [profile.default]
-archive-include = [
+archive.include = [
     { path = "application-data", relative-to = "target" },
     { path = "top-level-file.txt", relative-to = "target", depth = 0 },
     { path = "excluded-dir", relative-to = "target", depth = 0 },

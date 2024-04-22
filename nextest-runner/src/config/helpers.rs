@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Component, Utf8PathBuf};
-use serde::de::{Error, Unexpected};
-use serde::Deserialize;
+use serde::{
+    de::{Error, Unexpected},
+    Deserialize,
+};
 
 /// Deserializes a well-formed relative path.
 ///
@@ -30,10 +32,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use color_eyre::eyre::{bail, Context, Result};
     use serde::de::IntoDeserializer;
-
-    use super::*;
 
     #[test]
     fn test_deserialize_relative_path() -> Result<()> {
