@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::TrackDefault;
+use crate::config::helpers::deserialize_relative_path;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{de::Unexpected, Deserialize};
 use std::fmt;
@@ -15,6 +16,7 @@ use std::fmt;
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ArchiveInclude {
+    #[serde(deserialize_with = "deserialize_relative_path")]
     path: Utf8PathBuf,
     relative_to: ArchiveRelativeTo,
     #[serde(default = "default_depth")]
@@ -284,6 +286,24 @@ mod tests {
         "#},
         r#"invalid value: integer `-1`, expected a non-negative integer or "infinite""#
         ; "negative depth")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            archive-include = [
+                { path = "foo/../bar", relative-to = "target" }
+            ]
+        "#},
+        r#"invalid value: string "foo/../bar", expected a relative path with no parent components"#
+        ; "parent component")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            archive-include = [
+                { path = "/foo/bar", relative-to = "target" }
+            ]
+        "#},
+        r#"invalid value: string "/foo/bar", expected a relative path with no parent components"#
+        ; "absolute path")]
     fn parse_invalid(config_contents: &str, expected_message: &str) {
         let workspace_dir = tempdir().unwrap();
         let workspace_path: &Utf8Path = workspace_dir.path();
