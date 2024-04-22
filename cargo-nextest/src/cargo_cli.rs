@@ -336,25 +336,11 @@ impl<'a> CargoCli<'a> {
             }
         }
 
-        // ---
-        // Manifest options
-        // ---
-        if options.frozen {
-            self.add_arg("--frozen");
-        }
-        if options.locked {
-            self.add_arg("--locked");
-        }
-        if options.offline {
-            self.add_arg("--offline");
-        }
+        self.add_generic_cargo_options(options);
 
         // ---
         // Other Cargo options
         // ---
-        if options.cargo_quiet {
-            self.add_arg("--quiet");
-        }
         if options.cargo_verbose > 0 {
             self.add_args(std::iter::repeat("--verbose").take(options.cargo_verbose.into()));
         }
@@ -371,6 +357,30 @@ impl<'a> CargoCli<'a> {
                 .iter()
                 .flat_map(|s| ["-Z", s.as_str()]),
         );
+
+        self
+    }
+
+    /// Add Cargo options that are common to all commands.
+    pub(crate) fn add_generic_cargo_options(&mut self, options: &CargoOptions) -> &mut Self {
+        // ---
+        // Manifest options
+        // ---
+        if options.frozen {
+            self.add_arg("--frozen");
+        }
+        if options.locked {
+            self.add_arg("--locked");
+        }
+        if options.offline {
+            self.add_arg("--offline");
+        }
+
+        // Other cargo options. We don't apply --verbose here, since we generally intend --verbose
+        // to only be for the main build.
+        if options.cargo_quiet {
+            self.add_arg("--quiet");
+        }
 
         self
     }
