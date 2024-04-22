@@ -3,7 +3,7 @@
 
 use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
-    config::{get_num_cpus, ArchiveInclude, FinalConfig, NextestProfile, RecursionDepth},
+    config::{get_num_cpus, ArchiveConfig, FinalConfig, NextestProfile, RecursionDepth},
     errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
     list::{BinaryList, OutputFormat, SerializableFormat},
@@ -122,7 +122,7 @@ struct Archiver<'a, W: Write> {
     builder: tar::Builder<Encoder<'static, BufWriter<W>>>,
     unix_timestamp: u64,
     added_files: HashSet<Utf8PathBuf>,
-    archive_include: &'a [ArchiveInclude],
+    config: &'a ArchiveConfig,
 }
 
 impl<'a, W: Write> Archiver<'a, W> {
@@ -165,7 +165,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             builder,
             unix_timestamp,
             added_files: HashSet::new(),
-            archive_include: profile.archive_include(),
+            config: profile.archive_config(),
         })
     }
 
@@ -194,7 +194,8 @@ impl<'a, W: Write> Archiver<'a, W> {
 
         // Check that all archive-include paths exist.
         let archive_include_paths = self
-            .archive_include
+            .config
+            .include
             .iter()
             .filter_map(|include| {
                 let src_path = include.join_path(target_dir);

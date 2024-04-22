@@ -7,6 +7,14 @@ use camino::{Utf8Path, Utf8PathBuf};
 use serde::{de::Unexpected, Deserialize};
 use std::fmt;
 
+/// Configuration for archives.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ArchiveConfig {
+    /// Files to include in the archive.
+    pub include: Vec<ArchiveInclude>,
+}
+
 /// Type for the archive-include key.
 ///
 /// # Notes
@@ -16,6 +24,8 @@ use std::fmt;
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ArchiveInclude {
+    // We only allow well-formed relative paths within the target directory here. It's possible we
+    // can relax this in the future, but better safe than sorry for now.
     #[serde(deserialize_with = "deserialize_relative_path")]
     path: Utf8PathBuf,
     relative_to: ArchiveRelativeTo,
@@ -164,19 +174,19 @@ mod tests {
     #[test]
     fn parse_valid() {
         let config_contents = indoc! {r#"
-            [profile.default]
-            archive-include = [
+            [profile.default.archive]
+            include = [
                 { path = "foo", relative-to = "target" },
                 { path = "bar", relative-to = "target", depth = 1 },
             ]
 
             [profile.profile1]
-            archive-include = [
+            archive.include = [
                 { path = "baz", relative-to = "target", depth = 0 },
             ]
 
             [profile.profile2]
-            archive-include = []
+            archive.include = []
 
             [profile.profile3]
         "#};
@@ -194,26 +204,28 @@ mod tests {
         )
         .expect("config is valid");
 
-        let default_config = &[
-            ArchiveInclude {
-                path: "foo".into(),
-                relative_to: ArchiveRelativeTo::Target,
-                depth: default_depth(),
-            },
-            ArchiveInclude {
-                path: "bar".into(),
-                relative_to: ArchiveRelativeTo::Target,
-                depth: TrackDefault::with_deserialized_value(RecursionDepth::Finite(1)),
-            },
-        ];
+        let default_config = ArchiveConfig {
+            include: vec![
+                ArchiveInclude {
+                    path: "foo".into(),
+                    relative_to: ArchiveRelativeTo::Target,
+                    depth: default_depth(),
+                },
+                ArchiveInclude {
+                    path: "bar".into(),
+                    relative_to: ArchiveRelativeTo::Target,
+                    depth: TrackDefault::with_deserialized_value(RecursionDepth::Finite(1)),
+                },
+            ],
+        };
 
         assert_eq!(
             config
                 .profile("default")
                 .expect("default profile exists")
                 .apply_build_platforms(&build_platforms())
-                .archive_include(),
-            default_config,
+                .archive_config(),
+            &default_config,
             "default matches"
         );
 
@@ -222,12 +234,14 @@ mod tests {
                 .profile("profile1")
                 .expect("profile exists")
                 .apply_build_platforms(&build_platforms())
-                .archive_include(),
-            &[ArchiveInclude {
-                path: "baz".into(),
-                relative_to: ArchiveRelativeTo::Target,
-                depth: TrackDefault::with_deserialized_value(RecursionDepth::ZERO),
-            }],
+                .archive_config(),
+            &ArchiveConfig {
+                include: vec![ArchiveInclude {
+                    path: "baz".into(),
+                    relative_to: ArchiveRelativeTo::Target,
+                    depth: TrackDefault::with_deserialized_value(RecursionDepth::ZERO),
+                }],
+            },
             "profile1 matches"
         );
 
@@ -236,8 +250,8 @@ mod tests {
                 .profile("profile2")
                 .expect("default profile exists")
                 .apply_build_platforms(&build_platforms())
-                .archive_include(),
-            &[],
+                .archive_config(),
+            &ArchiveConfig { include: vec![] },
             "profile2 matches"
         );
 
@@ -246,8 +260,8 @@ mod tests {
                 .profile("profile3")
                 .expect("default profile exists")
                 .apply_build_platforms(&build_platforms())
-                .archive_include(),
-            default_config,
+                .archive_config(),
+            &default_config,
             "profile3 matches"
         );
     }
@@ -255,14 +269,14 @@ mod tests {
     #[test_case(
         indoc!{r#"
             [profile.default]
-            archive-include = { path = "foo", relative-to = "target" }
+            archive.include = { path = "foo", relative-to = "target" }
         "#},
         r#"invalid type: map, expected a sequence"#
         ; "missing list")]
     #[test_case(
         indoc!{r#"
             [profile.default]
-            archive-include = [
+            archive.include = [
                 { path = "foo" }
             ]
         "#},
@@ -271,7 +285,7 @@ mod tests {
     #[test_case(
         indoc!{r#"
             [profile.default]
-            archive-include = [
+            archive.include = [
                 { path = "bar", relative-to = "unknown" }
             ]
         "#},
@@ -280,7 +294,7 @@ mod tests {
     #[test_case(
         indoc!{r#"
             [profile.default]
-            archive-include = [
+            archive.include = [
                 { path = "bar", relative-to = "target", depth = -1 }
             ]
         "#},
@@ -289,7 +303,7 @@ mod tests {
     #[test_case(
         indoc!{r#"
             [profile.default]
-            archive-include = [
+            archive.include = [
                 { path = "foo/../bar", relative-to = "target" }
             ]
         "#},
@@ -298,7 +312,7 @@ mod tests {
     #[test_case(
         indoc!{r#"
             [profile.default]
-            archive-include = [
+            archive.include = [
                 { path = "/foo/bar", relative-to = "target" }
             ]
         "#},

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ArchiveInclude, CompiledByProfile, CompiledData, ConfigExperimental, CustomTestGroup,
+    ArchiveConfig, CompiledByProfile, CompiledData, ConfigExperimental, CustomTestGroup,
     DeserializedOverride, DeserializedProfileScriptConfig, NextestVersionDeserialize, RetryPolicy,
     ScriptConfig, ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig,
     TestSettings, TestThreads, ThreadsRequired, ToolConfigFile,
@@ -702,11 +702,11 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
             .unwrap_or(self.default_profile.fail_fast)
     }
 
-    /// Returns the archive-include config for this profile.
-    pub fn archive_include(&self) -> &[ArchiveInclude] {
+    /// Returns the archive configuration for this profile.
+    pub fn archive_config(&self) -> &'cfg ArchiveConfig {
         self.custom_profile
-            .and_then(|profile| profile.archive_include.as_ref())
-            .unwrap_or(&self.default_profile.archive_include)
+            .and_then(|profile| profile.archive.as_ref())
+            .unwrap_or(&self.default_profile.archive)
     }
 
     /// Returns the list of setup scripts.
@@ -892,7 +892,7 @@ pub(super) struct DefaultProfileImpl {
     overrides: Vec<DeserializedOverride>,
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
-    archive_include: Vec<ArchiveInclude>,
+    archive: ArchiveConfig,
 }
 
 impl DefaultProfileImpl {
@@ -941,9 +941,7 @@ impl DefaultProfileImpl {
                     .store_failure_output
                     .expect("junit.store-failure-output present in default profile"),
             },
-            archive_include: p
-                .archive_include
-                .expect("archive_include present in default profile"),
+            archive: p.archive.expect("archive present in default profile"),
         }
     }
 
@@ -994,7 +992,7 @@ pub(super) struct CustomProfileImpl {
     #[serde(default)]
     junit: JunitImpl,
     #[serde(default)]
-    archive_include: Option<Vec<ArchiveInclude>>,
+    archive: Option<ArchiveConfig>,
 }
 
 #[allow(dead_code)]

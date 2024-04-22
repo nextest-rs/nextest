@@ -87,8 +87,8 @@ leak-timeout = "100ms"
 
 # `nextest archive` automatically includes any build output required by a standard build.
 # However sometimes extra non-standard files are required.
-# To address this "archive-include" specifies additional paths that will be included in the archive.
-archive-include = [
+# To address this, "archive.include" specifies additional paths that will be included in the archive.
+archive.include = [
     # Examples:
     #
     # { path = "application-data", relative-to = "target" },
