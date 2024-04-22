@@ -14,10 +14,10 @@ publish = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
-backtrace = { version = "0.3.69", features = ["gimli-symbolize"] }
+backtrace = { version = "0.3.71", features = ["gimli-symbolize"] }
 clap = { version = "4.5.4", features = ["derive", "env"] }
 clap_builder = { version = "4.5.2", default-features = false, features = ["color", "env", "help", "std", "suggestions", "usage"] }
-console = { version = "0.15.7" }
+console = { version = "0.15.8" }
 either = { version = "1.11.0" }
 futures-channel = { version = "0.3.30", features = ["sink"] }
 futures-sink = { version = "0.3.30", default-features = false, features = ["std"] }
@@ -35,7 +35,7 @@ tokio = { version = "1.37.0", features = ["fs", "io-util", "macros", "process", 
 xxhash-rust = { version = "0.8.10", default-features = false, features = ["xxh3", "xxh64"] }
 
 [build-dependencies]
-cc = { version = "1.0.94", default-features = false, features = ["parallel"] }
+cc = { version = "1.0.95", default-features = false, features = ["parallel"] }
 proc-macro2 = { version = "1.0.81" }
 quote = { version = "1.0.36" }
 syn = { version = "2.0.60", features = ["extra-traits", "full", "visit", "visit-mut"] }
@@ -44,9 +44,9 @@ syn = { version = "2.0.60", features = ["extra-traits", "full", "visit", "visit-
 futures-core = { version = "0.3.30" }
 futures-sink = { version = "0.3.30" }
 libc = { version = "0.2.153", features = ["extra_traits"] }
-linux-raw-sys = { version = "0.4.12", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
-miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
-rustix = { version = "0.38.28", features = ["fs", "termios"] }
+linux-raw-sys = { version = "0.4.13", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
+miniz_oxide = { version = "0.7.2", default-features = false, features = ["with-alloc"] }
+rustix = { version = "0.38.33", features = ["fs", "termios"] }
 tokio = { version = "1.37.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -56,8 +56,8 @@ libc = { version = "0.2.153", features = ["extra_traits"] }
 futures-core = { version = "0.3.30" }
 futures-sink = { version = "0.3.30" }
 libc = { version = "0.2.153", features = ["extra_traits"] }
-miniz_oxide = { version = "0.7.1", default-features = false, features = ["with-alloc"] }
-rustix = { version = "0.38.28", features = ["fs", "termios"] }
+miniz_oxide = { version = "0.7.2", default-features = false, features = ["with-alloc"] }
+rustix = { version = "0.38.33", features = ["fs", "termios"] }
 tokio = { version = "1.37.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
@@ -67,8 +67,7 @@ libc = { version = "0.2.153", features = ["extra_traits"] }
 futures-core = { version = "0.3.30" }
 futures-sink = { version = "0.3.30" }
 tokio = { version = "1.37.0", default-features = false, features = ["net"] }
-winapi = { version = "0.3.9", default-features = false, features = ["handleapi", "synchapi", "winbase", "winerror", "winnt", "ws2ipdef", "ws2tcpip"] }
-windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_UI_Shell"] }
+windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
 windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Environment", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 
 ### END HAKARI SECTION
