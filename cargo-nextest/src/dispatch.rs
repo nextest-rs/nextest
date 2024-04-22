@@ -1013,6 +1013,7 @@ impl BaseApp {
                 let json = acquire_graph_data(
                     manifest_path.as_deref(),
                     cargo_opts.target_dir.as_deref(),
+                    &cargo_opts,
                     output,
                 )?;
                 let graph = PackageGraph::from_json(&json)
@@ -1890,13 +1891,16 @@ impl SelfCommand {
 fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
     target_dir: Option<&Utf8Path>,
+    cargo_opts: &CargoOptions,
     output: OutputContext,
 ) -> Result<String> {
     let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
-    cargo_cli.add_args(["--format-version=1", "--all-features"]);
+    cargo_cli
+        .add_args(["--format-version=1", "--all-features"])
+        .add_generic_cargo_options(cargo_opts);
 
-    // We used to be able to only pull deps in some cases, but that was (a) error-prone and (b) a
-    // bit harder to do given that some nextest config options depend on the graph. Maybe we could
+    // We used to be able to pass in --no-deps in common cases, but that was (a) error-prone and (b)
+    // a bit harder to do given that some nextest config options depend on the graph. Maybe we could
     // reintroduce it some day.
 
     let mut expression = cargo_cli.to_expression().stdout_capture().unchecked();
