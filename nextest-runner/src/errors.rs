@@ -862,6 +862,54 @@ fn kind_str(is_dir: Option<bool>) -> &'static str {
     }
 }
 
+/// An error occurred while materializing a metadata path.
+#[derive(Debug, Error)]
+pub enum MetadataMaterializeError {
+    /// An I/O error occurred while reading the metadata file.
+    #[error("I/O error reading metadata file `{path}`")]
+    Read {
+        /// The path that was being read.
+        path: Utf8PathBuf,
+
+        /// The error that occurred.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// A JSON deserialization error occurred while reading the metadata file.
+    #[error("error deserializing metadata file `{path}`")]
+    Deserialize {
+        /// The path that was being read.
+        path: Utf8PathBuf,
+
+        /// The error that occurred.
+        #[source]
+        error: serde_json::Error,
+    },
+
+    /// An error occurred while parsing Rust build metadata.
+    #[error("error parsing Rust build metadata from `{path}`")]
+    RustBuildMeta {
+        /// The path that was deserialized.
+        path: Utf8PathBuf,
+
+        /// The error that occurred.
+        #[source]
+        error: RustBuildMetaParseError,
+    },
+
+    /// An error occurred converting data into a `PackageGraph`.
+    #[error("error building package graph from `{path}`")]
+    PackageGraphConstruct {
+        /// The path that was deserialized.
+        path: Utf8PathBuf,
+
+        /// The error that occurred.
+        #[source]
+        error: guppy::Error,
+    },
+}
+
 /// An error occurred while reading a file.
 ///
 /// Returned as part of both [`ArchiveCreateError`] and [`ArchiveExtractError`].

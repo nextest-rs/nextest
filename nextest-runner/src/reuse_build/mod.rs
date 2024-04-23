@@ -9,13 +9,15 @@
 
 use crate::{
     errors::{
-        ArchiveExtractError, ArchiveReadError, PathMapperConstructError, PathMapperConstructKind,
+        ArchiveExtractError, ArchiveReadError, MetadataMaterializeError, PathMapperConstructError,
+        PathMapperConstructKind,
     },
     list::BinaryList,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
 use guppy::graph::PackageGraph;
+use nextest_metadata::BinaryListSummary;
 use std::{fmt, fs, io, sync::Arc};
 
 mod archive_reporter;
@@ -36,10 +38,10 @@ pub const BINARIES_METADATA_FILE_NAME: &str = "target/nextest/binaries-metadata.
 #[derive(Debug, Default)]
 pub struct ReuseBuildInfo {
     /// Cargo metadata and remapping for the target directory.
-    pub cargo_metadata: Option<MetadataWithRemap<CargoMetadataKind>>,
+    pub cargo_metadata: Option<MetadataWithRemap<ReusedCargoMetadata>>,
 
     /// Binaries metadata JSON and remapping for the target directory.
-    pub binaries_metadata: Option<MetadataWithRemap<BinaryListKind>>,
+    pub binaries_metadata: Option<MetadataWithRemap<ReusedBinaryList>>,
 
     /// Optional temporary directory used for cleanup.
     _temp_dir: Option<Utf8TempDir>,
@@ -48,8 +50,8 @@ pub struct ReuseBuildInfo {
 impl ReuseBuildInfo {
     /// Creates a new [`ReuseBuildInfo`] from the given cargo and binaries metadata information.
     pub fn new(
-        cargo_metadata: Option<MetadataWithRemap<CargoMetadataKind>>,
-        binaries_metadata: Option<MetadataWithRemap<BinaryListKind>>,
+        cargo_metadata: Option<MetadataWithRemap<ReusedCargoMetadata>>,
+        binaries_metadata: Option<MetadataWithRemap<ReusedBinaryList>>,
     ) -> Self {
         Self {
             cargo_metadata,
@@ -82,11 +84,11 @@ impl ReuseBuildInfo {
         } = unarchiver.extract(dest, callback)?;
 
         let cargo_metadata = MetadataWithRemap {
-            metadata: MetadataOrPath::metadata((cargo_metadata_json, graph)),
+            metadata: ReusedCargoMetadata::new((cargo_metadata_json, graph)),
             remap: workspace_remap.map(|p| p.to_owned()),
         };
         let binaries_metadata = MetadataWithRemap {
-            metadata: MetadataOrPath::metadata(binary_list),
+            metadata: ReusedBinaryList::new(binary_list),
             remap: Some(dest_dir.join("target")),
         };
 
@@ -98,12 +100,12 @@ impl ReuseBuildInfo {
     }
 
     /// Returns the Cargo metadata.
-    pub fn cargo_metadata(&self) -> Option<&MetadataOrPath<CargoMetadataKind>> {
+    pub fn cargo_metadata(&self) -> Option<&ReusedCargoMetadata> {
         self.cargo_metadata.as_ref().map(|m| &m.metadata)
     }
 
-    /// Returns the binaries metadata.
-    pub fn binaries_metadata(&self) -> Option<&MetadataOrPath<BinaryListKind>> {
+    /// Returns the binaries metadata, reading it from disk if necessary.
+    pub fn binaries_metadata(&self) -> Option<&ReusedBinaryList> {
         self.binaries_metadata.as_ref().map(|m| &m.metadata)
     }
 
@@ -131,57 +133,33 @@ impl ReuseBuildInfo {
 /// Metadata as either deserialized contents or a path, along with a possible directory remap.
 #[derive(Clone, Debug)]
 pub struct MetadataWithRemap<T> {
-    /// Metadata as either a path to data or as data that's already been read.
-    pub metadata: MetadataOrPath<T>,
+    /// The metadata.
+    pub metadata: T,
 
     /// The remapped directory.
     pub remap: Option<Utf8PathBuf>,
 }
 
-/// Represents either a path to metadata or actual deserialized metadata.
-///
-/// Part of [`MetadataWithRemap`].
-#[derive(Clone, Debug)]
-pub enum MetadataOrPath<T> {
-    /// Deserialized metadata.
-    Metadata(T),
-
-    /// Path to metadata.
-    Path(Utf8PathBuf),
-}
-
-impl<T: MetadataKind> MetadataOrPath<T> {
-    /// Creates a new [`MetadataOrPath`] with actual metadata.
-    #[inline]
-    pub fn metadata(metadata: T::MetadataType) -> Self {
-        Self::Metadata(T::new(metadata))
-    }
-}
-
-impl<T> From<Utf8PathBuf> for MetadataOrPath<T> {
-    #[inline]
-    fn from(path: Utf8PathBuf) -> Self {
-        Self::Path(path)
-    }
-}
-
-/// Type parameter for [`MetadataOrPath`] and [`MetadataWithRemap`].
+/// Type parameter for [`MetadataWithRemap`].
 pub trait MetadataKind: Clone + fmt::Debug {
     /// The type of metadata stored.
-    type MetadataType;
+    type MetadataType: Sized;
 
     /// Constructs a new [`MetadataKind`] from the given metadata.
     fn new(metadata: Self::MetadataType) -> Self;
+
+    /// Reads a path, resolving it into this data type.
+    fn materialize(path: &Utf8Path) -> Result<Self, MetadataMaterializeError>;
 }
 
 /// [`MetadataKind`] for a [`BinaryList`].
 #[derive(Clone, Debug)]
-pub struct BinaryListKind {
+pub struct ReusedBinaryList {
     /// The binary list.
     pub binary_list: Arc<BinaryList>,
 }
 
-impl MetadataKind for BinaryListKind {
+impl MetadataKind for ReusedBinaryList {
     type MetadataType = BinaryList;
 
     fn new(binary_list: Self::MetadataType) -> Self {
@@ -189,11 +167,40 @@ impl MetadataKind for BinaryListKind {
             binary_list: Arc::new(binary_list),
         }
     }
+
+    fn materialize(path: &Utf8Path) -> Result<Self, MetadataMaterializeError> {
+        // Three steps: read the contents, turn it into a summary, and then turn it into a
+        // BinaryList.
+        //
+        // Buffering the contents in memory is generally much faster than trying to read it
+        // using a BufReader.
+        let contents =
+            fs::read_to_string(path).map_err(|error| MetadataMaterializeError::Read {
+                path: path.to_owned(),
+                error,
+            })?;
+
+        let summary: BinaryListSummary = serde_json::from_str(&contents).map_err(|error| {
+            MetadataMaterializeError::Deserialize {
+                path: path.to_owned(),
+                error,
+            }
+        })?;
+
+        let binary_list = BinaryList::from_summary(summary).map_err(|error| {
+            MetadataMaterializeError::RustBuildMeta {
+                path: path.to_owned(),
+                error,
+            }
+        })?;
+
+        Ok(Self::new(binary_list))
+    }
 }
 
 /// [`MetadataKind`] for Cargo metadata.
 #[derive(Clone, Debug)]
-pub struct CargoMetadataKind {
+pub struct ReusedCargoMetadata {
     /// Cargo metadata JSON.
     pub json: Arc<String>,
 
@@ -201,7 +208,7 @@ pub struct CargoMetadataKind {
     pub graph: Arc<PackageGraph>,
 }
 
-impl MetadataKind for CargoMetadataKind {
+impl MetadataKind for ReusedCargoMetadata {
     type MetadataType = (String, PackageGraph);
 
     fn new((json, graph): Self::MetadataType) -> Self {
@@ -209,6 +216,23 @@ impl MetadataKind for CargoMetadataKind {
             json: Arc::new(json),
             graph: Arc::new(graph),
         }
+    }
+
+    fn materialize(path: &Utf8Path) -> Result<Self, MetadataMaterializeError> {
+        // Read the contents into memory, then parse them as a `PackageGraph`.
+        let json =
+            std::fs::read_to_string(path).map_err(|error| MetadataMaterializeError::Read {
+                path: path.to_owned(),
+                error,
+            })?;
+        let graph = PackageGraph::from_json(&json).map_err(|error| {
+            MetadataMaterializeError::PackageGraphConstruct {
+                path: path.to_owned(),
+                error,
+            }
+        })?;
+
+        Ok(Self::new((json, graph)))
     }
 }
 

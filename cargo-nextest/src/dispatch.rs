@@ -12,7 +12,7 @@ use clap::{builder::BoolishValueParser, ArgAction, Args, Parser, Subcommand, Val
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::FilteringExpr;
-use nextest_metadata::{BinaryListSummary, BuildPlatform};
+use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
@@ -21,7 +21,7 @@ use nextest_runner::{
         VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
-    errors::WriteTestListError,
+    errors::{UnknownHostPlatform, WriteTestListError},
     list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
         TestList,
@@ -30,7 +30,7 @@ use nextest_runner::{
     platform::BuildPlatforms,
     redact::Redactor,
     reporter::{structured, FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
-    reuse_build::{archive_to_file, ArchiveReporter, MetadataOrPath, PathMapper, ReuseBuildInfo},
+    reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, RunStatsFailureKind, TestRunnerBuilder},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
@@ -971,6 +971,7 @@ impl From<FinalStatusLevelOpt> for FinalStatusLevel {
 #[derive(Debug)]
 struct BaseApp {
     output: OutputContext,
+    build_platforms: BuildPlatforms,
     cargo_metadata_json: Arc<String>,
     package_graph: Arc<PackageGraph>,
     // Potentially remapped workspace root (might not be the same as the graph).
@@ -999,17 +1000,18 @@ impl BaseApp {
 
         let reuse_build = reuse_build.process(output, writer)?;
 
+        // First obtain the Cargo configs.
+        let cargo_configs = CargoConfigs::new(&cargo_opts.config).map_err(Box::new)?;
+
+        // Next, read the build platforms.
+        let build_platforms = match reuse_build.binaries_metadata() {
+            Some(kind) => kind.binary_list.rust_build_meta.build_platforms()?,
+            None => discover_build_platforms(&cargo_configs, cargo_opts.target.as_deref())?,
+        };
+
+        // Read the Cargo metadata.
         let (cargo_metadata_json, package_graph) = match reuse_build.cargo_metadata() {
-            Some(MetadataOrPath::Metadata(kind)) => (kind.json.clone(), kind.graph.clone()),
-            Some(MetadataOrPath::Path(path)) => {
-                let json = std::fs::read_to_string(path).map_err(|err| {
-                    ExpectedError::argument_file_read_error("cargo-metadata", path, err)
-                })?;
-                let graph = PackageGraph::from_json(&json).map_err(|err| {
-                    ExpectedError::cargo_metadata_parse_error(Some(path.clone()), err)
-                })?;
-                (Arc::new(json), Arc::new(graph))
-            }
+            Some(m) => (m.json.clone(), m.graph.clone()),
             None => {
                 let json = acquire_graph_data(
                     manifest_path.as_deref(),
@@ -1052,12 +1054,11 @@ impl BaseApp {
             });
         }
 
-        let cargo_configs = CargoConfigs::new(&cargo_opts.config).map_err(Box::new)?;
-
         let current_version = current_version();
 
         Ok(Self {
             output,
+            build_platforms,
             cargo_metadata_json,
             package_graph,
             workspace_root,
@@ -1316,27 +1317,13 @@ impl BaseApp {
 
     fn build_binary_list(&self) -> Result<Arc<BinaryList>> {
         let binary_list = match self.reuse_build.binaries_metadata() {
-            Some(MetadataOrPath::Metadata(binary_list)) => binary_list.binary_list.clone(),
-            Some(MetadataOrPath::Path(path)) => {
-                let raw_binary_list = std::fs::read_to_string(path).map_err(|err| {
-                    ExpectedError::argument_file_read_error("binaries-metadata", path, err)
-                })?;
-                let binary_list: BinaryListSummary = serde_json::from_str(&raw_binary_list)
-                    .map_err(|err| {
-                        ExpectedError::argument_json_parse_error("binaries-metadata", path, err)
-                    })?;
-                Arc::new(BinaryList::from_summary(binary_list)?)
-            }
-            None => {
-                let target_triple =
-                    discover_target_triple(&self.cargo_configs, self.cargo_opts.target.as_deref());
-                Arc::new(self.cargo_opts.compute_binary_list(
-                    self.graph(),
-                    self.manifest_path.as_deref(),
-                    self.output,
-                    target_triple,
-                )?)
-            }
+            Some(m) => m.binary_list.clone(),
+            None => Arc::new(self.cargo_opts.compute_binary_list(
+                self.graph(),
+                self.manifest_path.as_deref(),
+                self.output,
+                self.build_platforms.target.clone(),
+            )?),
         };
         Ok(binary_list)
     }
@@ -1936,11 +1923,11 @@ fn acquire_graph_data(
     Ok(json)
 }
 
-fn discover_target_triple(
+fn discover_build_platforms(
     cargo_configs: &CargoConfigs,
     target_cli_option: Option<&str>,
-) -> Option<TargetTriple> {
-    match TargetTriple::find(cargo_configs, target_cli_option) {
+) -> Result<BuildPlatforms, UnknownHostPlatform> {
+    let target_triple = match TargetTriple::find(cargo_configs, target_cli_option) {
         Ok(Some(triple)) => {
             log::debug!(
                 "using target triple `{}` defined by `{}`; {}",
@@ -1952,13 +1939,16 @@ fn discover_target_triple(
         }
         Ok(None) => {
             log::debug!("no target triple found, assuming no cross-compilation");
+
             None
         }
         Err(err) => {
             warn_on_err("target triple", &err);
             None
         }
-    }
+    };
+
+    BuildPlatforms::new(target_triple)
 }
 
 fn runner_for_target(

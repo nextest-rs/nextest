@@ -87,12 +87,11 @@ pub enum ExpectedError {
         #[from]
         err: UnknownHostPlatform,
     },
-    #[error("argument file read error")]
-    ArgumentFileReadError {
+    #[error("metadata materialize error")]
+    MetadataMaterializeError {
         arg_name: &'static str,
-        file_name: Utf8PathBuf,
         #[source]
-        err: std::io::Error,
+        err: Box<MetadataMaterializeError>,
     },
     #[error("unknown archive format")]
     UnknownArchiveFormat {
@@ -118,13 +117,6 @@ pub enum ExpectedError {
         arg_name: &'static str,
         #[source]
         err: PathMapperConstructError,
-    },
-    #[error("argument json parse error")]
-    ArgumentJsonParseError {
-        arg_name: &'static str,
-        file_name: Utf8PathBuf,
-        #[source]
-        err: serde_json::Error,
     },
     #[error("cargo metadata parse error")]
     CargoMetadataParseError {
@@ -293,27 +285,13 @@ impl ExpectedError {
         Self::ConfigParseError { err }
     }
 
-    pub(crate) fn argument_file_read_error(
+    pub(crate) fn metadata_materialize_error(
         arg_name: &'static str,
-        file_name: impl Into<Utf8PathBuf>,
-        err: std::io::Error,
+        err: MetadataMaterializeError,
     ) -> Self {
-        Self::ArgumentFileReadError {
+        Self::MetadataMaterializeError {
             arg_name,
-            file_name: file_name.into(),
-            err,
-        }
-    }
-
-    pub(crate) fn argument_json_parse_error(
-        arg_name: &'static str,
-        file_name: impl Into<Utf8PathBuf>,
-        err: serde_json::Error,
-    ) -> Self {
-        Self::ArgumentJsonParseError {
-            arg_name,
-            file_name: file_name.into(),
-            err,
+            err: Box::new(err),
         }
     }
 
@@ -386,12 +364,11 @@ impl ExpectedError {
             | Self::CargoConfigError { .. }
             | Self::TestFilterBuilderError { .. }
             | Self::UnknownHostPlatform { .. }
-            | Self::ArgumentFileReadError { .. }
+            | Self::MetadataMaterializeError { .. }
             | Self::UnknownArchiveFormat { .. }
             | Self::ArchiveExtractError { .. }
             | Self::RustBuildMetaParseError { .. }
             | Self::PathMapperConstructError { .. }
-            | Self::ArgumentJsonParseError { .. }
             | Self::TestRunnerBuildError { .. }
             | Self::ConfigureHandleInheritanceError { .. }
             | Self::CargoMetadataParseError { .. }
@@ -629,15 +606,10 @@ impl ExpectedError {
                 log::error!("the host platform was unknown to nextest");
                 Some(err as &dyn Error)
             }
-            Self::ArgumentFileReadError {
-                arg_name,
-                file_name,
-                err,
-            } => {
+            Self::MetadataMaterializeError { arg_name, err } => {
                 log::error!(
-                    "argument {} specified file `{}` that couldn't be read",
-                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
-                    file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    "error reading metadata from argument {}",
+                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }
@@ -670,18 +642,6 @@ impl ExpectedError {
             }
             Self::RustBuildMetaParseError { err } => {
                 log::error!("error parsing Rust build metadata");
-                Some(err as &dyn Error)
-            }
-            Self::ArgumentJsonParseError {
-                arg_name,
-                file_name,
-                err,
-            } => {
-                log::error!(
-                    "argument {} specified JSON file `{}` that couldn't be deserialized",
-                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
-                    file_name.if_supports_color(Stream::Stderr, |x| x.bold()),
-                );
                 Some(err as &dyn Error)
             }
             Self::PathMapperConstructError { arg_name, err } => {
