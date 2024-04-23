@@ -7,7 +7,7 @@ use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{ConfigExperimental, CustomTestGroup, ScriptId, TestGroup},
     helpers::{dylib_path_envvar, extract_abort_status},
-    reuse_build::ArchiveFormat,
+    reuse_build::{ArchiveFormat, ArchiveStep},
     runner::AbortStatus,
     target_runner::PlatformRunnerSource,
 };
@@ -804,8 +804,11 @@ pub enum ArchiveCreateError {
     CreateBinaryList(#[source] WriteTestListError),
 
     /// An error occurred while reading data from a file on disk.
-    #[error("error writing {} `{path}` to archive", kind_str(*.is_dir))]
+    #[error("while archiving {step}, error writing {} `{path}` to archive", kind_str(*.is_dir))]
     InputFileRead {
+        /// The step that the archive errored at.
+        step: ArchiveStep,
+
         /// The name of the file that could not be read.
         path: Utf8PathBuf,
 
