@@ -3,7 +3,10 @@
 
 //! Platform-related data structures.
 
-use crate::{cargo_config::TargetTriple, errors::UnknownHostPlatform};
+use crate::{
+    cargo_config::{CargoTargetArg, TargetTriple},
+    errors::{TargetTripleError, UnknownHostPlatform},
+};
 pub use target_spec::Platform;
 
 /// A representation of host and target platforms.
@@ -33,5 +36,16 @@ impl BuildPlatforms {
     /// This is intended for testing situations. Most users should call [`Self::new`] instead.
     pub fn new_with_host(host: Platform, target: Option<TargetTriple>) -> Self {
         Self { host, target }
+    }
+
+    /// Returns the argument to pass into `cargo metadata --filter-platform <triple>`.
+    pub fn to_cargo_target_arg(&self) -> Result<CargoTargetArg, TargetTripleError> {
+        match &self.target {
+            Some(target) => target.to_cargo_target_arg(),
+            None => {
+                // If there's no target, use the host platform.
+                Ok(CargoTargetArg::Builtin(self.host.triple_str().to_owned()))
+            }
+        }
     }
 }

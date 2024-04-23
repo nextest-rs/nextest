@@ -4,6 +4,7 @@
 use camino::Utf8PathBuf;
 use camino_tempfile::Utf8TempDir;
 use color_eyre::eyre::{Context, Result};
+use target_spec::{Platform, TargetFeatures};
 
 pub(super) fn setup_temp_dir() -> Result<Utf8TempDir> {
     let dir = camino_tempfile::Builder::new()
@@ -69,6 +70,13 @@ pub(super) fn custom_target_path() -> Utf8PathBuf {
         .parent()
         .unwrap()
         .join("fixtures/custom-target/my-target.json")
+}
+
+pub(super) fn custom_platform() -> Platform {
+    let custom_target_json = std::fs::read_to_string(custom_target_path())
+        .expect("custom target json read successfully");
+    Platform::new_custom("my-target", &custom_target_json, TargetFeatures::Unknown)
+        .expect("custom target is valid")
 }
 
 static FOO_CARGO_CONFIG_CONTENTS: &str = r#"

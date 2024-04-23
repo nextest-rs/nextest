@@ -1232,6 +1232,54 @@ pub enum TargetTripleError {
         #[source]
         error: std::io::Error,
     },
+
+    /// Failed to create a temporary directory for a custom platform.
+    #[error(
+        "for custom platform obtained from {source}, \
+         failed to create temporary directory for custom platform"
+    )]
+    CustomPlatformTempDirError {
+        /// The source of the target triple.
+        source: TargetTripleSource,
+
+        /// The error that occurred during the create.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to write a custom platform to disk.
+    #[error(
+        "for custom platform obtained from {source}, \
+         failed to write JSON to temporary path `{path}`"
+    )]
+    CustomPlatformWriteError {
+        /// The source of the target triple.
+        source: TargetTripleSource,
+
+        /// The path that we tried to write to.
+        path: Utf8PathBuf,
+
+        /// The error that occurred during the write.
+        #[source]
+        error: std::io::Error,
+    },
+
+    /// Failed to close a temporary directory for an extracted custom platform.
+    #[error(
+        "for custom platform obtained from {source}, \
+         failed to close temporary directory `{dir_path}`"
+    )]
+    CustomPlatformCloseError {
+        /// The source of the target triple.
+        source: TargetTripleSource,
+
+        /// The directory that we tried to delete.
+        dir_path: Utf8PathBuf,
+
+        /// The error that occurred during the close.
+        #[source]
+        error: std::io::Error,
+    },
 }
 
 /// An error occurred determining the target runner

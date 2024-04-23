@@ -1017,6 +1017,7 @@ impl BaseApp {
                     manifest_path.as_deref(),
                     cargo_opts.target_dir.as_deref(),
                     &cargo_opts,
+                    &build_platforms,
                     output,
                 )?;
                 let graph = PackageGraph::from_json(&json)
@@ -1889,11 +1890,16 @@ fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
     target_dir: Option<&Utf8Path>,
     cargo_opts: &CargoOptions,
+    build_platforms: &BuildPlatforms,
     output: OutputContext,
 ) -> Result<String> {
+    let cargo_target_arg = build_platforms.to_cargo_target_arg()?;
+    let cargo_target_arg_str = cargo_target_arg.to_string();
+
     let mut cargo_cli = CargoCli::new("metadata", manifest_path, output);
     cargo_cli
         .add_args(["--format-version=1", "--all-features"])
+        .add_args(["--filter-platform", &cargo_target_arg_str])
         .add_generic_cargo_options(cargo_opts);
 
     // We used to be able to pass in --no-deps in common cases, but that was (a) error-prone and (b)
