@@ -3,10 +3,14 @@
 
 use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
-    config::{get_num_cpus, ArchiveConfig, FinalConfig, NextestProfile, RecursionDepth},
+    config::{
+        get_num_cpus, ArchiveConfig, ArchiveIncludeOnMissing, FinalConfig, NextestProfile,
+        RecursionDepth,
+    },
     errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
     list::{BinaryList, OutputFormat, SerializableFormat},
+    redact::Redactor,
     reuse_build::PathMapper,
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
@@ -63,6 +67,7 @@ pub fn archive_to_file<'a, F>(
     zstd_level: i32,
     output_file: &'a Utf8Path,
     mut callback: F,
+    redactor: Redactor,
 ) -> Result<(), ArchiveCreateError>
 where
     F: for<'b> FnMut(ArchiveEvent<'b>) -> io::Result<()>,
@@ -94,6 +99,7 @@ where
                 format,
                 zstd_level,
                 file,
+                redactor,
             )?;
             let (_, file_count) = archiver.archive(&mut callback)?;
             Ok(file_count)
@@ -124,6 +130,7 @@ struct Archiver<'a, W: Write> {
     unix_timestamp: u64,
     added_files: HashSet<Utf8PathBuf>,
     config: &'a ArchiveConfig,
+    redactor: Redactor,
 }
 
 impl<'a, W: Write> Archiver<'a, W> {
@@ -137,6 +144,7 @@ impl<'a, W: Write> Archiver<'a, W> {
         format: ArchiveFormat,
         compression_level: i32,
         writer: W,
+        redactor: Redactor,
     ) -> Result<Self, ArchiveCreateError> {
         let buf_writer = BufWriter::new(writer);
         let builder = match format {
@@ -167,6 +175,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             unix_timestamp,
             added_files: HashSet::new(),
             config: profile.archive_config(),
+            redactor,
         })
     }
 
@@ -224,9 +233,27 @@ impl<'a, W: Write> Archiver<'a, W> {
                     }
                     Err(error) => {
                         if error.kind() == io::ErrorKind::NotFound {
-                            filter_map_err(callback(ArchiveEvent::ExtraPathMissing {
-                                path: &src_path,
-                            }))
+                            match include.on_missing() {
+                                ArchiveIncludeOnMissing::Error => {
+                                    // TODO: accumulate errors rather than failing on the first one
+                                    Some(Err(ArchiveCreateError::MissingExtraPath {
+                                        path: src_path.to_owned(),
+                                        redactor: self.redactor.clone(),
+                                    }))
+                                }
+                                ArchiveIncludeOnMissing::Warn => {
+                                    filter_map_err(callback(ArchiveEvent::ExtraPathMissing {
+                                        path: &src_path,
+                                        warn: true,
+                                    }))
+                                }
+                                ArchiveIncludeOnMissing::Ignore => {
+                                    filter_map_err(callback(ArchiveEvent::ExtraPathMissing {
+                                        path: &src_path,
+                                        warn: false,
+                                    }))
+                                }
+                            }
                         } else {
                             Some(Err(ArchiveCreateError::InputFileRead {
                                 step: ArchiveStep::ExtraPaths,
@@ -362,14 +389,13 @@ impl<'a, W: Write> Archiver<'a, W> {
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
             if src_path.exists() {
-                // Warn if the implicit depth limit for these paths is in use.
-                let warn_on_exceed_depth = !include.is_depth_deserialized();
                 self.append_path_recursive(
                     ArchiveStep::ExtraPaths,
                     &src_path,
                     &rel_path,
                     include.depth(),
-                    warn_on_exceed_depth,
+                    // Warn if the implicit depth limit for these paths is in use.
+                    true,
                     callback,
                 )?;
             }

@@ -70,8 +70,15 @@ impl ArchiveReporter {
                         .style(self.styles.bold)
                 )?;
             }
-            ArchiveEvent::ExtraPathMissing { path } => {
-                write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
+            ArchiveEvent::ExtraPathMissing { path, warn } => {
+                if warn {
+                    write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
+                } else if self.verbose {
+                    write!(writer, "{:>12} ", "Skipped".style(self.styles.skipped))?;
+                } else {
+                    return Ok(()); // Skip
+                }
+
                 writeln!(
                     writer,
                     "ignoring extra path `{}` because it does not exist",
@@ -297,6 +304,9 @@ pub enum ArchiveEvent<'a> {
     ExtraPathMissing {
         /// The path that was missing.
         path: &'a Utf8Path,
+
+        /// Whether the reporter should produce a warning about this.
+        warn: bool,
     },
 
     /// For an extra include, a directory was specified at depth 0.

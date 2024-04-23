@@ -9,7 +9,13 @@ use nextest_metadata::{
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::{borrow::Cow, collections::HashMap, ffi::OsString, fmt, process::Command};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    ffi::OsString,
+    fmt,
+    process::{Command, ExitStatus},
+};
 
 pub struct TestInfo {
     id: RustBinaryId,
@@ -192,7 +198,7 @@ impl CargoNextestCli {
 
         let ret = CargoNextestOutput {
             command,
-            exit_code: output.status.code(),
+            exit_status: output.status,
             stdout: output.stdout,
             stderr: output.stderr,
         };
@@ -205,10 +211,9 @@ impl CargoNextestCli {
     }
 }
 
-#[derive(Debug)]
 pub struct CargoNextestOutput {
     pub command: Command,
-    pub exit_code: Option<i32>,
+    pub exit_status: ExitStatus,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
 }
@@ -234,10 +239,17 @@ impl fmt::Display for CargoNextestOutput {
             "command: {:?}\nexit code: {:?}\n\
                    --- stdout ---\n{}\n\n--- stderr ---\n{}\n\n",
             self.command,
-            self.exit_code,
+            self.exit_status.code(),
             String::from_utf8_lossy(&self.stdout),
             String::from_utf8_lossy(&self.stderr)
         )
+    }
+}
+
+// Make Debug output the same as Display output, so `.unwrap()` and `.expect()` are nicer.
+impl fmt::Debug for CargoNextestOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
 

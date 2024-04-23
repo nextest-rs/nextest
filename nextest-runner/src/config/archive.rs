@@ -31,6 +31,8 @@ pub struct ArchiveInclude {
     relative_to: ArchiveRelativeTo,
     #[serde(default = "default_depth")]
     depth: TrackDefault<RecursionDepth>,
+    #[serde(default = "default_on_missing")]
+    on_missing: ArchiveIncludeOnMissing,
 }
 
 impl ArchiveInclude {
@@ -50,11 +52,67 @@ impl ArchiveInclude {
             ArchiveRelativeTo::Target => target_dir.join(&self.path),
         }
     }
+
+    /// What to do when the path is missing.
+    pub fn on_missing(&self) -> ArchiveIncludeOnMissing {
+        self.on_missing
+    }
 }
 
 fn default_depth() -> TrackDefault<RecursionDepth> {
     // We use a high-but-not-infinite depth.
-    TrackDefault::with_default_value(RecursionDepth::Finite(8))
+    TrackDefault::with_default_value(RecursionDepth::Finite(16))
+}
+
+fn default_on_missing() -> ArchiveIncludeOnMissing {
+    ArchiveIncludeOnMissing::Warn
+}
+
+/// What to do when an archive-include path is missing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArchiveIncludeOnMissing {
+    /// Ignore and continue.
+    Ignore,
+
+    /// Warn and continue.
+    Warn,
+
+    /// Produce an error.
+    Error,
+}
+
+impl<'de> Deserialize<'de> for ArchiveIncludeOnMissing {
+    fn deserialize<D>(deserializer: D) -> Result<ArchiveIncludeOnMissing, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ArchiveIncludeOnMissingVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ArchiveIncludeOnMissingVisitor {
+            type Value = ArchiveIncludeOnMissing;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string: \"ignore\", \"warn\", or \"error\"")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<ArchiveIncludeOnMissing, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "ignore" => Ok(ArchiveIncludeOnMissing::Ignore),
+                    "warn" => Ok(ArchiveIncludeOnMissing::Warn),
+                    "error" => Ok(ArchiveIncludeOnMissing::Error),
+                    _ => Err(serde::de::Error::invalid_value(
+                        Unexpected::Str(value),
+                        &self,
+                    )),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(ArchiveIncludeOnMissingVisitor)
+    }
 }
 
 /// Defines the base of the path
@@ -177,12 +235,12 @@ mod tests {
             [profile.default.archive]
             include = [
                 { path = "foo", relative-to = "target" },
-                { path = "bar", relative-to = "target", depth = 1 },
+                { path = "bar", relative-to = "target", depth = 1, on-missing = "error" },
             ]
 
             [profile.profile1]
             archive.include = [
-                { path = "baz", relative-to = "target", depth = 0 },
+                { path = "baz", relative-to = "target", depth = 0, on-missing = "ignore" },
             ]
 
             [profile.profile2]
@@ -210,11 +268,13 @@ mod tests {
                     path: "foo".into(),
                     relative_to: ArchiveRelativeTo::Target,
                     depth: default_depth(),
+                    on_missing: ArchiveIncludeOnMissing::Warn,
                 },
                 ArchiveInclude {
                     path: "bar".into(),
                     relative_to: ArchiveRelativeTo::Target,
                     depth: TrackDefault::with_deserialized_value(RecursionDepth::Finite(1)),
+                    on_missing: ArchiveIncludeOnMissing::Error,
                 },
             ],
         };
@@ -240,6 +300,7 @@ mod tests {
                     path: "baz".into(),
                     relative_to: ArchiveRelativeTo::Target,
                     depth: TrackDefault::with_deserialized_value(RecursionDepth::ZERO),
+                    on_missing: ArchiveIncludeOnMissing::Ignore,
                 }],
             },
             "profile1 matches"
@@ -318,6 +379,24 @@ mod tests {
         "#},
         r#"invalid value: string "/foo/bar", expected a relative path with no parent components"#
         ; "absolute path")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            archive.include = [
+                { path = "foo", relative-to = "target", on-missing = "unknown" }
+            ]
+        "#},
+        r#"invalid value: string "unknown", expected a string: "ignore", "warn", or "error""#
+        ; "invalid on-missing")]
+    #[test_case(
+        indoc!{r#"
+            [profile.default]
+            archive.include = [
+                { path = "foo", relative-to = "target", on-missing = 42 }
+            ]
+        "#},
+        r#"invalid type: integer `42`, expected a string: "ignore", "warn", or "error""#
+        ; "invalid on-missing type")]
     fn parse_invalid(config_contents: &str, expected_message: &str) {
         let workspace_dir = tempdir().unwrap();
         let workspace_path: &Utf8Path = workspace_dir.path();

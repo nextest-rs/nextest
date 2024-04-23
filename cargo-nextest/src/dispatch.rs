@@ -1278,7 +1278,7 @@ impl BaseApp {
             Redactor::noop()
         };
 
-        let mut reporter = ArchiveReporter::new(self.output.verbose, redactor);
+        let mut reporter = ArchiveReporter::new(self.output.verbose, redactor.clone());
         if self
             .output
             .color
@@ -1303,10 +1303,12 @@ impl BaseApp {
                 reporter.report_event(event, &mut writer)?;
                 writer.flush()
             },
+            redactor.clone(),
         )
         .map_err(|err| ExpectedError::ArchiveCreateError {
             archive_file: output_file.to_owned(),
             err,
+            redactor,
         })?;
 
         Ok(())

@@ -245,7 +245,7 @@ fn test_run() {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
@@ -271,7 +271,7 @@ fn test_run_after_build() {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
@@ -331,7 +331,7 @@ fn test_relocated_run() {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
@@ -342,7 +342,8 @@ fn test_relocated_run() {
 fn test_run_from_archive_with_no_includes() {
     set_env_vars();
 
-    let (_p1, archive_file) = create_archive("", false, "archive_no_includes");
+    let (_p1, archive_file) =
+        create_archive("", false, "archive_no_includes").expect("archive succeeded");
     let (_p2, extracted_target) = run_archive(&archive_file);
 
     for path in [
@@ -365,14 +366,16 @@ fn test_run_from_archive_with_includes() {
     let config = r#"
 [profile.default]
 archive.include = [
-    { path = "application-data", relative-to = "target" },
+    { path = "application-data", relative-to = "target", on-missing = "error" },
     { path = "top-level-file.txt", relative-to = "target", depth = 0 },
     { path = "excluded-dir", relative-to = "target", depth = 0 },
     { path = "depth-0-dir", relative-to = "target", depth = 0 },
     { path = "file_that_does_not_exist.txt", relative-to = "target" },
     { path = "uds.sock", relative-to = "target" },
+    { path = "missing-file", relative-to = "target", on-missing = "ignore" },  # should not be printed out
 ]"#;
-    let (_p1, archive_file) = create_archive(config, true, "archive_includes");
+    let (_p1, archive_file) =
+        create_archive(config, true, "archive_includes").expect("archive succeeded");
     let (_p2, extracted_target) = run_archive(&archive_file);
 
     // TODO: we should test which of these paths above warn here, either by defining a serialization
@@ -393,11 +396,26 @@ archive.include = [
     }
 }
 
+#[test]
+fn test_run_from_archive_with_missing_includes() {
+    set_env_vars();
+
+    let config = r#"
+[profile.default]
+archive.include = [
+    { path = "missing-file", relative-to = "target", on-missing = "error" },
+]"#;
+    create_archive(config, false, "archive_missing_includes")
+        .expect_err("archive should have failed");
+}
+
 const APP_DATA_DIR: &str = "application-data";
-// The default limit is 8, so anything at depth 9 (under d8) is excluded.
-const DIR_TREE: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8";
-const INCLUDED_PATH: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/included.txt";
-const EXCLUDED_PATH: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8/excluded.txt";
+// The default limit is 16, so anything at depth 17 (under d16) is excluded.
+const DIR_TREE: &str = "application-data/d1/d2/d3/d4/d5/d6/d7/d8/d9/d10/d11/d12/d13/d14/d15/d16";
+const INCLUDED_PATH: &str =
+    "application-data/d1/d2/d3/d4/d5/d6/d7/d8/d9/d10/d11/d12/d13/d14/d15/included.txt";
+const EXCLUDED_PATH: &str =
+    "application-data/d1/d2/d3/d4/d5/d6/d7/d8/d9/d10/d11/d12/d13/d14/d15/d16/excluded.txt";
 const DIR_AT_DEPTH_0: &str = "depth-0-dir";
 const UDS_PATH: &str = "uds.sock";
 
@@ -409,7 +427,7 @@ fn create_archive(
     config_contents: &str,
     make_uds: bool,
     snapshot_name: &str,
-) -> (TempProject, Utf8PathBuf) {
+) -> Result<(TempProject, Utf8PathBuf), CargoNextestOutput> {
     let custom_target_dir = Utf8TempDir::new().unwrap();
     let custom_target_path = custom_target_dir.path();
     let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
@@ -460,6 +478,7 @@ fn create_archive(
             "--cargo-quiet",
         ])
         .env("__NEXTEST_REDACT", "1")
+        .unchecked(true)
         .output();
 
     // If a UDS was created, we're going to have a slightly different snapshot.
@@ -476,7 +495,11 @@ fn create_archive(
     std::fs::remove_dir_all(p.target_dir()).unwrap();
 
     // project is included in return value to keep tempdirs alive
-    (p, archive_file)
+    if output.exit_status.success() {
+        Ok((p, archive_file))
+    } else {
+        Err(output)
+    }
 }
 
 fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
@@ -498,7 +521,7 @@ fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
@@ -633,7 +656,7 @@ fn test_show_config_version() {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::RECOMMENDED_VERSION_NOT_MET)
     );
     insta::assert_snapshot!(output.stdout_as_str());
@@ -650,7 +673,7 @@ fn test_show_config_version() {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::RECOMMENDED_VERSION_NOT_MET)
     );
     insta::assert_snapshot!(output.stdout_as_str());
@@ -667,7 +690,7 @@ fn test_show_config_version() {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::REQUIRED_VERSION_NOT_MET)
     );
     insta::assert_snapshot!(output.stdout_as_str());
@@ -684,7 +707,7 @@ fn test_show_config_version() {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::REQUIRED_VERSION_NOT_MET)
     );
     insta::assert_snapshot!(output.stdout_as_str());
@@ -774,7 +797,7 @@ fn test_setup_scripts_not_enabled() {
         .output();
 
     assert_eq!(
-        output.exit_code,
+        output.exit_status.code(),
         Some(NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED)
     );
 }
@@ -790,5 +813,8 @@ fn test_setup_script_error() {
         .unchecked(true)
         .output();
 
-    assert_eq!(output.exit_code, Some(NextestExitCode::SETUP_SCRIPT_FAILED));
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::SETUP_SCRIPT_FAILED)
+    );
 }

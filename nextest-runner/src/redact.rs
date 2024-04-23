@@ -12,7 +12,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::{collections::BTreeMap, fmt, time::Duration};
+use std::{collections::BTreeMap, fmt, sync::Arc, time::Duration};
 
 static CRATE_NAME_HASH_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^([a-zA-Z0-9_-]+)-[a-f0-9]{16}$").unwrap());
@@ -24,16 +24,20 @@ static DURATION_REDACTION: &str = "<duration>";
 ///
 /// This isn't meant to be perfect, and not everything can be redacted yet -- the set of supported
 /// redactions will grow over time.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Redactor {
-    kind: RedactorKind,
+    kind: Arc<RedactorKind>,
 }
 
 impl Redactor {
     /// Creates a new no-op redactor.
     pub fn noop() -> Self {
+        Self::new_with_kind(RedactorKind::Noop)
+    }
+
+    fn new_with_kind(kind: RedactorKind) -> Self {
         Self {
-            kind: RedactorKind::Noop,
+            kind: Arc::new(kind),
         }
     }
 
@@ -69,7 +73,7 @@ impl Redactor {
     }
 
     /// Redacts a path.
-    pub(crate) fn redact_path<'a>(&self, orig: &'a Utf8Path) -> RedactorOutput<&'a Utf8Path> {
+    pub fn redact_path<'a>(&self, orig: &'a Utf8Path) -> RedactorOutput<&'a Utf8Path> {
         for redaction in self.kind.iter_redactions() {
             match redaction {
                 Redaction::Path { path, replacement } => {
@@ -93,7 +97,7 @@ impl Redactor {
     }
 
     /// Redacts a file count.
-    pub(crate) fn redact_file_count(&self, orig: usize) -> RedactorOutput<usize> {
+    pub fn redact_file_count(&self, orig: usize) -> RedactorOutput<usize> {
         if self.kind.is_active() {
             RedactorOutput::Redacted(FILE_COUNT_REDACTION.to_string())
         } else {
@@ -128,17 +132,19 @@ impl RedactorBuilder {
 
     /// Builds the redactor.
     pub fn build(self) -> Redactor {
-        Redactor {
-            kind: RedactorKind::Active {
-                redactions: self.redactions,
-            },
-        }
+        Redactor::new_with_kind(RedactorKind::Active {
+            redactions: self.redactions,
+        })
     }
 }
 
+/// The output of a [`Redactor`] operation.
 #[derive(Debug)]
-pub(crate) enum RedactorOutput<T> {
+pub enum RedactorOutput<T> {
+    /// The value was not redacted.
     Unredacted(T),
+
+    /// The value was redacted.
     Redacted(String),
 }
 
@@ -257,24 +263,22 @@ mod tests {
     #[test]
     fn test_redact_path() {
         let abs_path = make_abs_path();
-        let redactor = Redactor {
-            kind: RedactorKind::Active {
-                redactions: vec![
-                    Redaction::Path {
-                        path: "target/debug".into(),
-                        replacement: "<target-debug>".to_string(),
-                    },
-                    Redaction::Path {
-                        path: "target".into(),
-                        replacement: "<target-dir>".to_string(),
-                    },
-                    Redaction::Path {
-                        path: abs_path.clone(),
-                        replacement: "<abs-target>".to_string(),
-                    },
-                ],
-            },
-        };
+        let redactor = Redactor::new_with_kind(RedactorKind::Active {
+            redactions: vec![
+                Redaction::Path {
+                    path: "target/debug".into(),
+                    replacement: "<target-debug>".to_string(),
+                },
+                Redaction::Path {
+                    path: "target".into(),
+                    replacement: "<target-dir>".to_string(),
+                },
+                Redaction::Path {
+                    path: abs_path.clone(),
+                    replacement: "<abs-target>".to_string(),
+                },
+            ],
+        });
 
         let examples: &[(Utf8PathBuf, &str)] = &[
             ("target/foo".into(), "<target-dir>/foo"),
