@@ -2,7 +2,7 @@
 source: integration-tests/tests/integration/main.rs
 expression: output.stderr_as_str()
 ---
-   Archiving 16 binaries (including 2 non-test binaries), 2 build script output directories, and 2 linked paths to <archive-file>
+   Archiving 16 binaries (including 2 non-test binaries), 2 build script output directories, 2 linked paths, and 1 extra path to <archive-file>
 error: error creating archive `<archive-file>`
 
 Caused by:

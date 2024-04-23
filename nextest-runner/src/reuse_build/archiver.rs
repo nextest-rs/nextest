@@ -72,11 +72,14 @@ pub fn archive_to_file<'a, F>(
 where
     F: for<'b> FnMut(ArchiveEvent<'b>) -> io::Result<()>,
 {
+    let config = profile.archive_config();
+
     let file = AtomicFile::new(output_file, OverwriteBehavior::AllowOverwrite);
     let test_binary_count = binary_list.rust_binaries.len();
     let non_test_binary_count = binary_list.rust_build_meta.non_test_binaries.len();
     let build_script_out_dir_count = binary_list.rust_build_meta.build_script_out_dirs.len();
     let linked_path_count = binary_list.rust_build_meta.linked_paths.len();
+    let extra_path_count = config.include.len();
     let start_time = Instant::now();
 
     let file_count = file
@@ -86,12 +89,13 @@ where
                 non_test_binary_count,
                 build_script_out_dir_count,
                 linked_path_count,
+                extra_path_count,
                 output_file,
             })
             .map_err(ArchiveCreateError::ReporterIo)?;
             // Write out the archive.
             let archiver = Archiver::new(
-                &profile,
+                config,
                 binary_list,
                 cargo_metadata,
                 graph,
@@ -136,7 +140,7 @@ struct Archiver<'a, W: Write> {
 impl<'a, W: Write> Archiver<'a, W> {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        profile: &'a NextestProfile<'a, FinalConfig>,
+        config: &'a ArchiveConfig,
         binary_list: &'a BinaryList,
         cargo_metadata: &'a str,
         graph: &'a PackageGraph,
@@ -174,7 +178,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             builder,
             unix_timestamp,
             added_files: HashSet::new(),
-            config: profile.archive_config(),
+            config,
             redactor,
         })
     }
