@@ -9,8 +9,8 @@ use nextest_runner::{
     errors::PathMapperConstructKind,
     redact::Redactor,
     reuse_build::{
-        ArchiveFormat, ArchiveReporter, ExtractDestination, MetadataWithRemap, PathMapper,
-        ReuseBuildInfo,
+        ArchiveFormat, ArchiveReporter, ExtractDestination, MetadataKind, MetadataWithRemap,
+        PathMapper, ReuseBuildInfo, ReusedBinaryList, ReusedCargoMetadata,
     },
 };
 use std::io::Write;
@@ -148,18 +148,29 @@ impl ReuseBuildOpts {
             });
         }
 
-        let cargo_metadata = self.cargo_metadata.as_ref().map(|path| MetadataWithRemap {
-            metadata: path.clone().into(),
-            remap: self.workspace_remap.clone(),
-        });
+        let cargo_metadata = self
+            .cargo_metadata
+            .as_ref()
+            .map(|path| {
+                Ok(MetadataWithRemap {
+                    metadata: ReusedCargoMetadata::materialize(path)?,
+                    remap: self.workspace_remap.clone(),
+                })
+            })
+            .transpose()
+            .map_err(|err| ExpectedError::metadata_materialize_error("cargo-metadata", err))?;
 
         let binaries_metadata = self
             .binaries_metadata
             .as_ref()
-            .map(|path| MetadataWithRemap {
-                metadata: path.clone().into(),
-                remap: self.target_dir_remap.clone(),
-            });
+            .map(|path| {
+                Ok(MetadataWithRemap {
+                    metadata: ReusedBinaryList::materialize(path)?,
+                    remap: self.target_dir_remap.clone(),
+                })
+            })
+            .transpose()
+            .map_err(|err| ExpectedError::metadata_materialize_error("binaries-metadata", err))?;
 
         Ok(ReuseBuildInfo::new(cargo_metadata, binaries_metadata))
     }
