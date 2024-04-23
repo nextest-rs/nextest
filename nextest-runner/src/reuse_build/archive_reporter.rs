@@ -1,6 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use super::ArchiveStep;
 use crate::{helpers::plural, redact::Redactor};
 use camino::Utf8Path;
 use owo_colors::{OwoColorize, Style};
@@ -85,7 +86,12 @@ impl ArchiveReporter {
                     self.redactor.redact_path(path).style(self.styles.bold),
                 )?;
             }
-            ArchiveEvent::RecursionDepthExceeded { path, limit, warn } => {
+            ArchiveEvent::RecursionDepthExceeded {
+                step,
+                path,
+                limit,
+                warn,
+            } => {
                 if warn {
                     write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
                 } else if self.verbose {
@@ -96,15 +102,15 @@ impl ArchiveReporter {
 
                 writeln!(
                     writer,
-                    "recursion depth exceeded at {} (limit: {limit})",
+                    "while archiving {step}, recursion depth exceeded at {} (limit: {limit})",
                     self.redactor.redact_path(path).style(self.styles.bold),
                 )?;
             }
-            ArchiveEvent::UnknownFileType { path } => {
+            ArchiveEvent::UnknownFileType { step, path } => {
                 write!(writer, "{:>12} ", "Warning".style(self.styles.warning))?;
                 writeln!(
                     writer,
-                    "ignoring `{}` because it is not a file, \
+                    "while archiving {step}, ignoring `{}` because it is not a file, \
                      directory, or symbolic link",
                     self.redactor.redact_path(path).style(self.styles.bold),
                 )?;
@@ -301,6 +307,9 @@ pub enum ArchiveEvent<'a> {
 
     /// While performing the archive, the recursion depth was exceeded.
     RecursionDepthExceeded {
+        /// The current step in the archive process.
+        step: ArchiveStep,
+
         /// The path that exceeded the recursion depth.
         path: &'a Utf8Path,
 
@@ -313,6 +322,9 @@ pub enum ArchiveEvent<'a> {
 
     /// The archive process encountered an unknown file type.
     UnknownFileType {
+        /// The current step in the archive process.
+        step: ArchiveStep,
+
         /// The path of the unknown type.
         path: &'a Utf8Path,
     },

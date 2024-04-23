@@ -9,5 +9,5 @@ expression: output.stderr_as_str()
      Warning ignoring extra path `<target-dir>/uds.sock` because it does not exist
      Warning linked path `<target-dir>/debug/build/<cdylib-link-hash>/does-not-exist` not found, requested by: cdylib-link v0.1.0
              (this is a bug in this crate that should be fixed)
-     Warning recursion depth exceeded at <target-dir>/application-data/d1/d2/d3/d4/d5/d6/d7/d8 (limit: 8)
+     Warning while archiving extra paths, recursion depth exceeded at <target-dir>/application-data/d1/d2/d3/d4/d5/d6/d7/d8 (limit: 8)
     Archived <file-count> files to <archive-file> in <duration>

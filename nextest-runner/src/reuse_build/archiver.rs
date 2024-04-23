@@ -11,6 +11,7 @@ use crate::{
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
+use core::fmt;
 use guppy::{graph::PackageGraph, PackageId};
 use std::{
     collections::HashSet,
@@ -192,7 +193,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             }
         }
 
-        // Check that all archive-include paths exist.
+        // Check that all archive.include paths exist.
         let archive_include_paths = self
             .config
             .include
@@ -216,6 +217,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                             Some(Ok((include, src_path)))
                         } else {
                             filter_map_err(callback(ArchiveEvent::UnknownFileType {
+                                step: ArchiveStep::ExtraPaths,
                                 path: &src_path,
                             }))
                         }
@@ -227,6 +229,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                             }))
                         } else {
                             Some(Err(ArchiveCreateError::InputFileRead {
+                                step: ArchiveStep::ExtraPaths,
                                 path: src_path.to_owned(),
                                 is_dir: None,
                                 error,
@@ -248,7 +251,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             let rel_path = Utf8Path::new("target").join(rel_path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
-            self.append_file(&binary.path, &rel_path)?;
+            self.append_file(ArchiveStep::TestBinaries, &binary.path, &rel_path)?;
         }
         for non_test_binary in self
             .binary_list
@@ -267,7 +270,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             let rel_path = Utf8Path::new("target").join(&non_test_binary.path);
             let rel_path = convert_rel_path_to_forward_slash(&rel_path);
 
-            self.append_file(&src_path, &rel_path)?;
+            self.append_file(ArchiveStep::NonTestBinaries, &src_path, &rel_path)?;
         }
 
         // Write build script output directories to the archive.
@@ -291,6 +294,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             // conservative solution. If necessary, we may have to either broaden this by default or
             // add configuration for this. Archiving too much can cause unnecessary slowdowns.
             self.append_path_recursive(
+                ArchiveStep::BuildScriptOutDirs,
                 &src_path,
                 &rel_path,
                 RecursionDepth::Finite(1),
@@ -343,6 +347,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             // Since LD_LIBRARY_PATH etc aren't recursive, we only need to add the top-level files
             // from linked paths.
             self.append_path_recursive(
+                ArchiveStep::LinkedPaths,
                 &src_path,
                 &rel_path,
                 RecursionDepth::Finite(1),
@@ -360,6 +365,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                 // Warn if the implicit depth limit for these paths is in use.
                 let warn_on_exceed_depth = !include.is_depth_deserialized();
                 self.append_path_recursive(
+                    ArchiveStep::ExtraPaths,
                     &src_path,
                     &rel_path,
                     include.depth(),
@@ -407,6 +413,7 @@ impl<'a, W: Write> Archiver<'a, W> {
 
     fn append_path_recursive<F>(
         &mut self,
+        step: ArchiveStep,
         src_path: &Utf8Path,
         rel_path: &Utf8Path,
         limit: RecursionDepth,
@@ -419,6 +426,7 @@ impl<'a, W: Write> Archiver<'a, W> {
         // Within the loop, the metadata will be part of the directory entry.
         let metadata =
             fs::symlink_metadata(src_path).map_err(|error| ArchiveCreateError::InputFileRead {
+                step,
                 path: src_path.to_owned(),
                 is_dir: None,
                 error,
@@ -438,6 +446,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                 // Check the recursion limit.
                 if depth.is_zero() {
                     callback(ArchiveEvent::RecursionDepthExceeded {
+                        step,
                         path: &src_path,
                         limit: limit.unwrap_finite(),
                         warn: warn_on_exceed_depth,
@@ -454,6 +463,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                 );
                 let entries = src_path.read_dir_utf8().map_err(|error| {
                     ArchiveCreateError::InputFileRead {
+                        step,
                         path: src_path.to_owned(),
                         is_dir: Some(true),
                         error,
@@ -468,6 +478,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                         entry
                             .metadata()
                             .map_err(|error| ArchiveCreateError::InputFileRead {
+                                step,
                                 path: entry.path().to_owned(),
                                 is_dir: None,
                                 error,
@@ -481,18 +492,26 @@ impl<'a, W: Write> Archiver<'a, W> {
                     ));
                 }
             } else if metadata.is_file() || metadata.is_symlink() {
-                self.append_file(&src_path, &rel_path)?;
+                self.append_file(step, &src_path, &rel_path)?;
             } else {
                 // Don't archive other kinds of files.
-                callback(ArchiveEvent::UnknownFileType { path: &src_path })
-                    .map_err(ArchiveCreateError::ReporterIo)?;
+                callback(ArchiveEvent::UnknownFileType {
+                    step,
+                    path: &src_path,
+                })
+                .map_err(ArchiveCreateError::ReporterIo)?;
             }
         }
 
         Ok(())
     }
 
-    fn append_file(&mut self, src: &Utf8Path, dest: &Utf8Path) -> Result<(), ArchiveCreateError> {
+    fn append_file(
+        &mut self,
+        step: ArchiveStep,
+        src: &Utf8Path,
+        dest: &Utf8Path,
+    ) -> Result<(), ArchiveCreateError> {
         // Check added_files to ensure we aren't adding duplicate files.
         if !self.added_files.contains(dest) {
             log::debug!(
@@ -502,6 +521,7 @@ impl<'a, W: Write> Archiver<'a, W> {
             self.builder
                 .append_path_with_name(src, dest)
                 .map_err(|error| ArchiveCreateError::InputFileRead {
+                    step,
                     path: src.to_owned(),
                     is_dir: Some(false),
                     error,
@@ -509,6 +529,39 @@ impl<'a, W: Write> Archiver<'a, W> {
             self.added_files.insert(dest.into());
         }
         Ok(())
+    }
+}
+
+/// The part of the archive process that is currently in progress.
+///
+/// This is used for better warnings and errors.
+#[derive(Clone, Copy, Debug)]
+pub enum ArchiveStep {
+    /// Test binaries are being archived.
+    TestBinaries,
+
+    /// Non-test binaries are being archived.
+    NonTestBinaries,
+
+    /// Build script output directories are being archived.
+    BuildScriptOutDirs,
+
+    /// Linked paths are being archived.
+    LinkedPaths,
+
+    /// Extra paths are being archived.
+    ExtraPaths,
+}
+
+impl fmt::Display for ArchiveStep {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TestBinaries => write!(f, "test binaries"),
+            Self::NonTestBinaries => write!(f, "non-test binaries"),
+            Self::BuildScriptOutDirs => write!(f, "build script output directories"),
+            Self::LinkedPaths => write!(f, "linked paths"),
+            Self::ExtraPaths => write!(f, "extra paths"),
+        }
     }
 }
 
