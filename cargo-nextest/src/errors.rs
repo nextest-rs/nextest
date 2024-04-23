@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use itertools::Itertools;
 use nextest_filtering::errors::FilterExpressionParseErrors;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::errors::*;
+use nextest_runner::{errors::*, redact::Redactor};
 use owo_colors::{OwoColorize, Stream};
 use semver::Version;
 use std::{error::Error, string::FromUtf8Error};
@@ -105,6 +105,7 @@ pub enum ExpectedError {
         archive_file: Utf8PathBuf,
         #[source]
         err: ArchiveCreateError,
+        redactor: Redactor,
     },
     #[error("archive extract error")]
     ArchiveExtractError {
@@ -647,10 +648,16 @@ impl ExpectedError {
                 );
                 Some(err as &dyn Error)
             }
-            Self::ArchiveCreateError { archive_file, err } => {
+            Self::ArchiveCreateError {
+                archive_file,
+                err,
+                redactor,
+            } => {
                 log::error!(
                     "error creating archive `{}`",
-                    archive_file.if_supports_color(Stream::Stderr, |x| x.bold())
+                    redactor
+                        .redact_path(archive_file)
+                        .if_supports_color(Stream::Stderr, |x| x.bold())
                 );
                 Some(err as &dyn Error)
             }

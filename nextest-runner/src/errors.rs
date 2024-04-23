@@ -7,6 +7,7 @@ use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{ConfigExperimental, CustomTestGroup, ScriptId, TestGroup},
     helpers::{dylib_path_envvar, extract_abort_status},
+    redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
     runner::AbortStatus,
     target_runner::PlatformRunnerSource,
@@ -802,6 +803,19 @@ pub enum ArchiveCreateError {
     /// An error occurred while creating the binary list to be written.
     #[error("error creating binary list")]
     CreateBinaryList(#[source] WriteTestListError),
+
+    /// An extra path was missing.
+    #[error("extra path `{}` not found", .redactor.redact_path(path))]
+    MissingExtraPath {
+        /// The path that was missing.
+        path: Utf8PathBuf,
+
+        /// A redactor for the path.
+        ///
+        /// (This should eventually move to being a field for a wrapper struct, but it's okay for
+        /// now.)
+        redactor: Redactor,
+    },
 
     /// An error occurred while reading data from a file on disk.
     #[error("while archiving {step}, error writing {} `{path}` to archive", kind_str(*.is_dir))]
