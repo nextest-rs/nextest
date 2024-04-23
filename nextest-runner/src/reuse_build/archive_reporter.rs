@@ -50,15 +50,17 @@ impl ArchiveReporter {
                 non_test_binary_count,
                 build_script_out_dir_count,
                 linked_path_count,
+                extra_path_count,
                 output_file,
             } => {
                 write!(writer, "{:>12} ", "Archiving".style(self.styles.success))?;
 
-                self.report_binary_counts(
+                self.report_counts(
                     test_binary_count,
                     non_test_binary_count,
                     build_script_out_dir_count,
                     linked_path_count,
+                    extra_path_count,
                     &mut writer,
                 )?;
 
@@ -167,11 +169,14 @@ impl ArchiveReporter {
             } => {
                 write!(writer, "{:>12} ", "Extracting".style(self.styles.success))?;
 
-                self.report_binary_counts(
+                self.report_counts(
                     test_binary_count,
                     non_test_binary_count,
                     build_script_out_dir_count,
                     linked_path_count,
+                    // TODO: we currently don't store a list of extra paths at manifest creation
+                    // time, so we can't report this count here.
+                    0,
                     &mut writer,
                 )?;
 
@@ -201,12 +206,13 @@ impl ArchiveReporter {
         Ok(())
     }
 
-    fn report_binary_counts(
+    fn report_counts(
         &mut self,
         test_binary_count: usize,
         non_test_binary_count: usize,
         build_script_out_dir_count: usize,
         linked_path_count: usize,
+        extra_path_count: usize,
         mut writer: impl Write,
     ) -> io::Result<()> {
         let total_binary_count = test_binary_count + non_test_binary_count;
@@ -232,6 +238,13 @@ impl ArchiveReporter {
                 "{} linked {}",
                 linked_path_count.style(self.styles.bold),
                 plural::paths_str(linked_path_count),
+            ));
+        }
+        if extra_path_count > 0 {
+            more.push(format!(
+                "{} extra {}",
+                extra_path_count.style(self.styles.bold),
+                plural::paths_str(extra_path_count),
             ));
         }
 
@@ -295,6 +308,9 @@ pub enum ArchiveEvent<'a> {
 
         /// The number of linked paths to archive.
         linked_path_count: usize,
+
+        /// The number of extra paths to archive.
+        extra_path_count: usize,
 
         /// The archive output file.
         output_file: &'a Utf8Path,

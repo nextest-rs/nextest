@@ -130,6 +130,8 @@ impl<'a> Unarchiver<'a> {
                     this_binary_list.rust_build_meta.build_script_out_dirs.len();
                 let linked_path_count = this_binary_list.rust_build_meta.linked_paths.len();
 
+                // TODO: also store a manifest of extra paths, and report them here.
+
                 // Report begin extraction.
                 callback(ArchiveEvent::ExtractStarted {
                     test_binary_count,
