@@ -42,6 +42,43 @@ In some cases, it can be useful to separate out building tests from running them
 
 Currently, the only format supported is a Zstandard-compressed tarball (`.tar.zst`).
 
+### Adding extra files to an archive
+
+Starting nextest 0.9.69, you can include extra files within archives. This can be useful if your
+build process creates artifacts outside of Cargo that are required for Rust tests.
+
+Use the `profile.<profile-name>.archive.include` configuration option for this. For example:
+
+```toml
+[profile.default]
+archive.include = [
+    { path = "my-extra-path", relative-to = "target" },
+    { path = "other-path", relative-to = "target", depth = 2, on-missing = "error" },
+]
+```
+
+`archive.include` takes a list of tables, with the following parameters:
+
+- `path` — The relative path to the archive.
+- `relative-to` — The root directory that `path` is defined against. Currently, only `"target"` is
+  supported, to indicate the target directory.
+- `depth` — The recursion depth for directories; either a non-negative integer or `"infinite"`. The
+  default is a depth of 16, which should cover most non-degenerate use cases.
+- `on-missing` — What to do if the specified path was not found. One of `"warn"` (default),
+  `"ignore"`, or `"error"`.
+
+> NOTE: The following features are not currently supported:
+>
+> - Excluding subdirectories ([#1456]).
+> - Paths relative to something other than the target directory ([#1457]).
+> - Per-test-binary and per-platform overrides ([#1460]).
+>
+> Help on any of these would be greatly appreciated!
+
+[#1456]: https://github.com/nextest-rs/nextest/issues/1456
+[#1457]: https://github.com/nextest-rs/nextest/issues/1457
+[#1460]: https://github.com/nextest-rs/nextest/issues/1460
+
 ## Running tests from archives
 
 `cargo nextest list` and `run` support a new `--archive-file` option. This option accepts archives created by `cargo nextest archive` as above.

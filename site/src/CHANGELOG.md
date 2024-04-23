@@ -5,9 +5,29 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 
 ## Unreleased
 
+### Added
+
+- Archives can now include extra paths in them. For example:
+
+  ```toml
+  [profile.default]
+  archive.include = [
+      { path = "my-extra-path", relative-to = "target" }
+  ]
+  ```
+
+  For more information, see [_Adding extra files to an archive_](https://nexte.st/book/reusing-builds#adding-extra-files-to-an-archive).
+
+  Thanks to [@rukai](https://github.com/rukai) for your first contribution!
+
+- You can now pass in `--cargo-quiet` twice to completely discard standard error for the Cargo
+  commands run by nextest. This is equivalent to `2> /dev/null`.
+
 ### Fixed
 
 - The initial `cargo metadata` execution now passes in `--frozen`, `--locked`, `--offline` and `--quiet` if the corresponding flags are passed into nextest.
+- Previously, `NEXTEST_HIDE_PROGRESS_BAR=1` did not work (only `NEXTEST_HIDE_PROGRESS_BAR=true`
+  did). Now both `1` and `true` work.
 
 ## [0.9.68] - 2024-03-16
 
