@@ -87,6 +87,11 @@ pub enum ExpectedError {
         #[from]
         err: UnknownHostPlatform,
     },
+    #[error("target triple error")]
+    TargetTripleError {
+        #[from]
+        err: TargetTripleError,
+    },
     #[error("metadata materialize error")]
     MetadataMaterializeError {
         arg_name: &'static str,
@@ -364,6 +369,7 @@ impl ExpectedError {
             | Self::CargoConfigError { .. }
             | Self::TestFilterBuilderError { .. }
             | Self::UnknownHostPlatform { .. }
+            | Self::TargetTripleError { .. }
             | Self::MetadataMaterializeError { .. }
             | Self::UnknownArchiveFormat { .. }
             | Self::ArchiveExtractError { .. }
@@ -605,6 +611,10 @@ impl ExpectedError {
             Self::UnknownHostPlatform { err } => {
                 log::error!("the host platform was unknown to nextest");
                 Some(err as &dyn Error)
+            }
+            Self::TargetTripleError { err } => {
+                log::error!("{err}");
+                err.source()
             }
             Self::MetadataMaterializeError { arg_name, err } => {
                 log::error!(

@@ -1,6 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use super::ExtractedCustomPlatform;
 use crate::{
     cargo_config::{CargoConfigSource, CargoConfigs, DiscoveredConfig},
     errors::TargetTripleError,
@@ -49,10 +50,14 @@ impl TargetTriple {
         platform: Option<PlatformSummary>,
     ) -> Result<Option<TargetTriple>, target_spec::Error> {
         platform
-            .map(|platform| {
-                let platform = platform.to_platform()?;
+            .map(|summary| {
+                let platform = summary.to_platform()?;
                 let location = if platform.is_custom() {
-                    TargetDefinitionLocation::MetadataCustom
+                    TargetDefinitionLocation::MetadataCustom(
+                        summary
+                            .custom_json
+                            .expect("custom platform <=> custom JSON"),
+                    )
                 } else {
                     TargetDefinitionLocation::Builtin
                 };
@@ -78,6 +83,29 @@ impl TargetTriple {
                 })
             })
             .transpose()
+    }
+
+    /// Returns the target triple being built as a string to pass into downstream Cargo arguments,
+    /// such as `cargo metadata --filter-platform`.
+    ///
+    /// For custom target triples, this will be a path to a file ending with `.json`. Nextest may
+    /// temporarily extract the target triple, in which case a `Utf8TempFile` is returned.
+    pub fn to_cargo_target_arg(&self) -> Result<CargoTargetArg, TargetTripleError> {
+        match &self.location {
+            // The determination for heuristic targets may not be quite right.
+            TargetDefinitionLocation::Builtin | TargetDefinitionLocation::Heuristic => Ok(
+                CargoTargetArg::Builtin(self.platform.triple_str().to_string()),
+            ),
+            TargetDefinitionLocation::DirectPath(path)
+            | TargetDefinitionLocation::RustTargetPath(path) => {
+                Ok(CargoTargetArg::Path(path.clone()))
+            }
+            TargetDefinitionLocation::MetadataCustom(json) => CargoTargetArg::from_custom_json(
+                self.platform.triple_str(),
+                json,
+                self.source.clone(),
+            ),
+        }
     }
 
     /// Find the target triple being built.
@@ -171,25 +199,7 @@ impl TargetTriple {
         target_paths: &[Utf8PathBuf],
     ) -> Result<Self, TargetTripleError> {
         if triple_str_or_path.ends_with(".json") {
-            let path = resolve_dir.join(triple_str_or_path);
-            let canonicalized_path = path.canonicalize_utf8().map_err(|error| {
-                TargetTripleError::TargetPathReadError {
-                    source: source.clone(),
-                    path,
-                    error,
-                }
-            })?;
-            // Strip the ".json" at the end.
-            let triple_str = canonicalized_path
-                .file_stem()
-                .expect("target path must not be empty")
-                .to_owned();
-            return Self::load_file(
-                &triple_str,
-                &canonicalized_path,
-                source,
-                TargetDefinitionLocation::DirectPath(canonicalized_path.clone()),
-            );
+            return Self::custom_from_path(triple_str_or_path.as_ref(), source, resolve_dir);
         }
 
         // Is this a builtin (non-heuristic)?
@@ -246,6 +256,38 @@ impl TargetTriple {
         })
     }
 
+    /// Converts a path ending with `.json` to a custom target triple.
+    pub(super) fn custom_from_path(
+        path: &Utf8Path,
+        source: TargetTripleSource,
+        resolve_dir: &Utf8Path,
+    ) -> Result<Self, TargetTripleError> {
+        assert_eq!(
+            path.extension(),
+            Some("json"),
+            "path {path} must end with .json",
+        );
+        let path = resolve_dir.join(path);
+        let canonicalized_path =
+            path.canonicalize_utf8()
+                .map_err(|error| TargetTripleError::TargetPathReadError {
+                    source: source.clone(),
+                    path,
+                    error,
+                })?;
+        // Strip the ".json" at the end.
+        let triple_str = canonicalized_path
+            .file_stem()
+            .expect("target path must not be empty")
+            .to_owned();
+        Self::load_file(
+            &triple_str,
+            &canonicalized_path,
+            source,
+            TargetDefinitionLocation::DirectPath(canonicalized_path.clone()),
+        )
+    }
+
     fn load_file(
         triple_str: &str,
         path: &Utf8Path,
@@ -270,6 +312,52 @@ impl TargetTriple {
             source,
             location,
         })
+    }
+}
+
+/// Cargo argument for downstream commands.
+///
+/// If it is necessary to run a Cargo command with a target triple, this enum provides the right
+/// invocation. Create it with [`TargetTriple::to_cargo_target_arg`].
+///
+/// The `Display` impl of this type produces the argument to provide after `--target`, or `cargo
+/// metadata --filter-platform`.
+#[derive(Debug)]
+pub enum CargoTargetArg {
+    /// The target triple is a builtin.
+    Builtin(String),
+
+    /// The target triple is a JSON file at this path.
+    Path(Utf8PathBuf),
+
+    /// The target triple was extracted from metadata and stored in a temporary directory.
+    Extracted(ExtractedCustomPlatform),
+}
+
+impl CargoTargetArg {
+    fn from_custom_json(
+        triple_str: &str,
+        json: &str,
+        source: TargetTripleSource,
+    ) -> Result<Self, TargetTripleError> {
+        let extracted = ExtractedCustomPlatform::new(triple_str, json, source)?;
+        Ok(Self::Extracted(extracted))
+    }
+}
+
+impl fmt::Display for CargoTargetArg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Builtin(triple) => {
+                write!(f, "{triple}")
+            }
+            Self::Path(path) => {
+                write!(f, "{path}")
+            }
+            Self::Extracted(extracted) => {
+                write!(f, "{}", extracted.path())
+            }
+        }
     }
 }
 
@@ -338,8 +426,8 @@ pub enum TargetDefinitionLocation {
     /// The definition was obtained heuristically.
     Heuristic,
 
-    /// A custom definition was stored in metadata.
-    MetadataCustom,
+    /// A custom definition was stored in metadata. The string is the JSON of the custom target.
+    MetadataCustom(String),
 }
 
 impl fmt::Display for TargetDefinitionLocation {
@@ -357,7 +445,7 @@ impl fmt::Display for TargetDefinitionLocation {
             Self::Heuristic => {
                 write!(f, "definition obtained heuristically")
             }
-            Self::MetadataCustom => {
+            Self::MetadataCustom(_) => {
                 write!(f, "custom definition stored in metadata")
             }
         }
@@ -367,7 +455,7 @@ impl fmt::Display for TargetDefinitionLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cargo_config::test_helpers::{custom_target_path, setup_temp_dir};
+    use crate::cargo_config::test_helpers::{custom_platform, setup_temp_dir};
 
     #[test]
     fn test_find_target_triple() {
@@ -650,12 +738,5 @@ mod tests {
 
     fn platform(triple_str: &str) -> Platform {
         Platform::new(triple_str.to_owned(), TargetFeatures::Unknown).expect("triple str is valid")
-    }
-
-    fn custom_platform() -> Platform {
-        let custom_target_json = std::fs::read_to_string(custom_target_path())
-            .expect("custom target json read successfully");
-        Platform::new_custom("my-target", &custom_target_json, TargetFeatures::Unknown)
-            .expect("custom target is valid")
     }
 }
