@@ -959,6 +959,7 @@ mod tests {
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::SerializableFormat,
+        platform::BuildPlatforms,
         test_filter::RunIgnored,
     };
     use guppy::CargoMetadata;
@@ -1032,9 +1033,10 @@ mod tests {
             source: TargetTripleSource::CliOption,
             location: TargetDefinitionLocation::Builtin,
         };
+        let build_platforms = BuildPlatforms::new(Some(fake_triple)).unwrap();
         let fake_env = EnvironmentMap::empty();
         let rust_build_meta =
-            RustBuildMeta::new("/fake", Some(fake_triple)).map_paths(&PathMapper::noop());
+            RustBuildMeta::new("/fake", build_platforms).map_paths(&PathMapper::noop());
         let test_list = TestList::new_with_outputs(
             [
                 (test_binary, &non_ignored_output, &ignored_output),
