@@ -687,7 +687,7 @@ impl CargoOptions {
         graph: &PackageGraph,
         manifest_path: Option<&Utf8Path>,
         output: OutputContext,
-        target_triple: Option<TargetTriple>,
+        build_platforms: BuildPlatforms,
     ) -> Result<BinaryList> {
         // Don't use the manifest path from the graph to ensure that if the user cd's into a
         // particular crate and runs cargo nextest, then it behaves identically to cargo test.
@@ -711,7 +711,7 @@ impl CargoOptions {
         }
 
         let test_binaries =
-            BinaryList::from_messages(Cursor::new(output.stdout), graph, target_triple)?;
+            BinaryList::from_messages(Cursor::new(output.stdout), graph, build_platforms)?;
         Ok(test_binaries)
     }
 }
@@ -1005,7 +1005,7 @@ impl BaseApp {
 
         // Next, read the build platforms.
         let build_platforms = match reuse_build.binaries_metadata() {
-            Some(kind) => kind.binary_list.rust_build_meta.build_platforms()?,
+            Some(kind) => kind.binary_list.rust_build_meta.build_platforms.clone(),
             None => discover_build_platforms(&cargo_configs, cargo_opts.target.as_deref())?,
         };
 
@@ -1265,7 +1265,7 @@ impl BaseApp {
         let binary_list = self.build_binary_list()?;
         let path_mapper = PathMapper::noop();
 
-        let build_platforms = binary_list.rust_build_meta.build_platforms()?;
+        let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
         let (_, config) = self.load_config()?;
         let profile = self
             .load_profile(profile_name, &config)?
@@ -1322,7 +1322,7 @@ impl BaseApp {
                 self.graph(),
                 self.manifest_path.as_deref(),
                 self.output,
-                self.build_platforms.target.clone(),
+                self.build_platforms.clone(),
             )?),
         };
         Ok(binary_list)
@@ -1458,7 +1458,7 @@ impl App {
                 let double_spawn = self.base.load_double_spawn();
                 let target_runner = self
                     .base
-                    .load_runner(&binary_list.rust_build_meta.build_platforms()?);
+                    .load_runner(&binary_list.rust_build_meta.build_platforms);
                 let ctx = TestExecuteContext {
                     double_spawn,
                     target_runner,
@@ -1507,12 +1507,10 @@ impl App {
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
-        let build_platforms = binary_list.rust_build_meta.build_platforms()?;
+        let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
 
         let double_spawn = self.base.load_double_spawn();
-        let target_runner = self
-            .base
-            .load_runner(&binary_list.rust_build_meta.build_platforms()?);
+        let target_runner = self.base.load_runner(&build_platforms);
         let ctx = TestExecuteContext {
             double_spawn,
             target_runner,
@@ -1591,9 +1589,9 @@ impl App {
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
-        let build_platforms = binary_list.rust_build_meta.build_platforms()?;
+        let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
         let double_spawn = self.base.load_double_spawn();
-        let target_runner = self.base.load_runner(&build_platforms);
+        let target_runner = self.base.load_runner(build_platforms);
         let ctx = TestExecuteContext {
             double_spawn,
             target_runner,
@@ -1602,7 +1600,7 @@ impl App {
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder)?;
 
         let output = output_writer.reporter_output();
-        let profile = profile.apply_build_platforms(&build_platforms);
+        let profile = profile.apply_build_platforms(build_platforms);
 
         let mut reporter = reporter_opts
             .to_builder(no_capture)

@@ -559,6 +559,10 @@ pub enum RustBuildMetaParseError {
     /// An error occurred while deserializing the platform.
     #[error("error deserializing platform from build metadata")]
     PlatformDeserializeError(#[from] target_spec::Error),
+
+    /// The host platform could not be determined.
+    #[error("the host platform could not be determined")]
+    UnknownHostPlatform(#[source] target_spec::Error),
 }
 
 /// An error that occurs in [`BinaryList::from_messages`](crate::list::BinaryList::from_messages) or

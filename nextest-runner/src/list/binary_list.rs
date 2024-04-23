@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    cargo_config::TargetTriple,
     errors::{FromMessagesError, RustBuildMetaParseError, WriteTestListError},
     helpers::convert_rel_path_to_forward_slash,
     list::{BinaryListState, OutputFormat, RustBuildMeta, Styles},
+    platform::BuildPlatforms,
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -51,9 +51,9 @@ impl BinaryList {
     pub fn from_messages(
         reader: impl io::BufRead,
         graph: &PackageGraph,
-        target_triple: Option<TargetTriple>,
+        build_platforms: BuildPlatforms,
     ) -> Result<Self, FromMessagesError> {
-        let mut state = BinaryListBuildState::new(graph, target_triple);
+        let mut state = BinaryListBuildState::new(graph, build_platforms);
 
         for message in Message::parse_stream(reader) {
             let message = message.map_err(FromMessagesError::ReadMessages)?;
@@ -164,13 +164,13 @@ struct BinaryListBuildState<'g> {
 }
 
 impl<'g> BinaryListBuildState<'g> {
-    fn new(graph: &'g PackageGraph, target_triple: Option<TargetTriple>) -> Self {
+    fn new(graph: &'g PackageGraph, build_platforms: BuildPlatforms) -> Self {
         let rust_target_dir = graph.workspace().target_directory().to_path_buf();
 
         Self {
             graph,
             rust_binaries: vec![],
-            rust_build_meta: RustBuildMeta::new(rust_target_dir, target_triple),
+            rust_build_meta: RustBuildMeta::new(rust_target_dir, build_platforms),
         }
     }
 
@@ -392,7 +392,7 @@ impl<'g> BinaryListBuildState<'g> {
 mod tests {
     use super::*;
     use crate::{
-        cargo_config::{TargetDefinitionLocation, TargetTripleSource},
+        cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::SerializableFormat,
     };
     use indoc::indoc;
@@ -426,7 +426,9 @@ mod tests {
             source: TargetTripleSource::CliOption,
             location: TargetDefinitionLocation::Builtin,
         };
-        let mut rust_build_meta = RustBuildMeta::new("/fake/target", Some(fake_triple));
+        let build_platforms = BuildPlatforms::new(Some(fake_triple)).unwrap();
+
+        let mut rust_build_meta = RustBuildMeta::new("/fake/target", build_platforms);
         rust_build_meta
             .base_output_directories
             .insert("my-profile".into());

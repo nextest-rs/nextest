@@ -14,6 +14,7 @@ use nextest_runner::{
     list::{
         BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
     },
+    platform::BuildPlatforms,
     reporter::TestEventKind,
     reuse_build::PathMapper,
     runner::{
@@ -331,9 +332,14 @@ impl FixtureTargets {
         )
         .unwrap();
         let env = EnvironmentMap::new(&cargo_configs);
+        let build_platforms = BuildPlatforms::new(None).unwrap();
         let binary_list = Arc::new(
-            BinaryList::from_messages(Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT), graph, None)
-                .unwrap(),
+            BinaryList::from_messages(
+                Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT),
+                graph,
+                build_platforms,
+            )
+            .unwrap(),
         );
         let rust_build_meta = binary_list.rust_build_meta.clone();
 
