@@ -3,7 +3,7 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
-## Unreleased
+## [0.9.69] - 2024-04-24
 
 ### Added
 
@@ -28,6 +28,10 @@ policy](book/stability.md) for how versioning works with cargo-nextest.
 - The initial `cargo metadata` execution now passes in `--frozen`, `--locked`, `--offline` and `--quiet` if the corresponding flags are passed into nextest.
 - Previously, `NEXTEST_HIDE_PROGRESS_BAR=1` did not work (only `NEXTEST_HIDE_PROGRESS_BAR=true`
   did). Now both `1` and `true` work.
+
+### Changed
+
+- Updated MSRV for compiling nextest to Rust 1.74.
 
 ## [0.9.68] - 2024-03-16
 
@@ -976,6 +980,7 @@ Supported in this initial release:
 - [Test retries](book/retries.md) and flaky test detection
 - [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.69]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.69
 [0.9.68]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.68
 [0.9.67]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.67
 [0.9.66]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.66
