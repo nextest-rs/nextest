@@ -24,26 +24,6 @@ pub struct TargetTriple {
 }
 
 impl TargetTriple {
-    /// Converts a target triple to a `String` that can be stored in the build-metadata.
-    /// cargo-nextest represents the host triple with `None` during runtime.
-    /// However the build-metadata might be used on a system with a different host triple.
-    /// Therefore the host triple is detected if `target_triple` is `None`
-    pub fn serialize(target_triple: Option<&TargetTriple>) -> Option<PlatformSummary> {
-        if let Some(target) = &target_triple {
-            Some(target.platform.to_summary())
-        } else {
-            match Platform::current() {
-                Ok(host) => Some(host.to_summary()),
-                Err(err) => {
-                    log::warn!(
-                        "failed to detect host target: {err}!\n cargo nextest may use the wrong test runner for this archive."
-                    );
-                    None
-                }
-            }
-        }
-    }
-
     /// Converts a `PlatformSummary` that was output by `TargetTriple::serialize` back to a target triple.
     /// This target triple is assumed to originate from a build-metadata config.
     pub fn deserialize(
