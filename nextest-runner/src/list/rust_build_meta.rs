@@ -174,9 +174,7 @@ impl<State> RustBuildMeta<State> {
                 .as_ref()
                 .map(|triple| triple.platform.triple_str().to_owned()),
             // TODO: support multiple --target options
-            target_platforms: TargetTriple::serialize(self.build_platforms.target.as_ref())
-                .into_iter()
-                .collect(),
+            target_platforms: vec![self.build_platforms.to_summary()],
         }
     }
 }

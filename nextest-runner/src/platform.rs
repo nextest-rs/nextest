@@ -7,6 +7,7 @@ use crate::{
     cargo_config::{CargoTargetArg, TargetTriple},
     errors::{TargetTripleError, UnknownHostPlatform},
 };
+use target_spec::summaries::PlatformSummary;
 pub use target_spec::Platform;
 
 /// A representation of host and target platforms.
@@ -46,6 +47,22 @@ impl BuildPlatforms {
                 // If there's no target, use the host platform.
                 Ok(CargoTargetArg::Builtin(self.host.triple_str().to_owned()))
             }
+        }
+    }
+
+    /// Converts a target triple to a `String` that can be stored in the build-metadata.
+    ///
+    /// cargo-nextest represents the host triple with `None` during runtime. However the
+    /// build-metadata might be used on a system with a different host triple. Therefore, the host
+    /// triple is detected if `target_triple` is `None`.
+    ///
+    /// XXX: This isn't quite correct -- instead, we should serialize this into our own
+    /// `BuildPlatformsSummary`.
+    pub fn to_summary(&self) -> PlatformSummary {
+        if let Some(target) = &self.target {
+            target.platform.to_summary()
+        } else {
+            self.host.to_summary()
         }
     }
 }
