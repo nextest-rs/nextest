@@ -3,9 +3,10 @@ Build and archive tests
 Usage: cargo nextest archive [OPTIONS] --archive-file <PATH>
 
 Options:
-  -v, --verbose       Verbose output [env: NEXTEST_VERBOSE=]
-      --color <WHEN>  Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
-  -h, --help          Print help (see more with '--help')
+  -v, --verbose            Verbose output [env: NEXTEST_VERBOSE=]
+      --color <WHEN>       Produce color output: auto, always, never [env: CARGO_TERM_COLOR=] [default: auto]
+  -P, --profile <PROFILE>  Nextest profile to use [env: NEXTEST_PROFILE=]
+  -h, --help               Print help (see more with '--help')
 
 Package selection:
   -p, --package <PACKAGES>  Package to test
@@ -46,7 +47,7 @@ Manifest options:
       --offline               Run without accessing the network
 
 Other Cargo options:
-      --cargo-quiet             Do not print cargo log messages
+      --cargo-quiet...          Do not print cargo log messages (specify twice for no Cargo output at all)
       --cargo-verbose...        Use cargo verbose output (specify twice for very verbose/build.rs output)
       --ignore-rust-version     Ignore `rust-version` specification in packages
       --future-incompat-report  Outputs a future incompatibility report at the end of the build

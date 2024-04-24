@@ -44,7 +44,7 @@ Currently, the only format supported is a Zstandard-compressed tarball (`.tar.zs
 
 ### Adding extra files to an archive
 
-Starting nextest 0.9.69, you can include extra files within archives. This can be useful if your
+Starting nextest 0.9.70, you can include extra files within archives. This can be useful if your
 build process creates artifacts outside of Cargo that are required for Rust tests.
 
 Use the `profile.<profile-name>.archive.include` configuration option for this. For example:

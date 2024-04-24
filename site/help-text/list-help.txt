@@ -1,10 +1,10 @@
 List tests in workspace
 
-Usage: cargo nextest list [OPTIONS] [FILTERS]... [-- <TEST-BINARY-ARGS>...]
+Usage: cargo nextest list [OPTIONS] [FILTERS]... [-- <FILTERS_AND_ARGS>...]
 
 Arguments:
-  [FILTERS]...           Test name filter
-  [TEST-BINARY-ARGS]...  Emulated cargo test binary arguments (partially supported)
+  [FILTERS]...           Test name filters
+  [FILTERS_AND_ARGS]...  Test name filters and emulated test binary arguments (partially supported)
 
 Options:
   -v, --verbose       Verbose output [env: NEXTEST_VERBOSE=]
@@ -50,7 +50,7 @@ Manifest options:
       --offline               Run without accessing the network
 
 Other Cargo options:
-      --cargo-quiet             Do not print cargo log messages
+      --cargo-quiet...          Do not print cargo log messages (specify twice for no Cargo output at all)
       --cargo-verbose...        Use cargo verbose output (specify twice for very verbose/build.rs output)
       --ignore-rust-version     Ignore `rust-version` specification in packages
       --future-incompat-report  Outputs a future incompatibility report at the end of the build

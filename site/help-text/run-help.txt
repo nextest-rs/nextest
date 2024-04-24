@@ -1,10 +1,10 @@
 Build and run tests
 
-Usage: cargo nextest run [OPTIONS] [FILTERS]... [-- <TEST-BINARY-ARGS>...]
+Usage: cargo nextest run [OPTIONS] [FILTERS]... [-- <FILTERS_AND_ARGS>...]
 
 Arguments:
-  [FILTERS]...           Test name filter
-  [TEST-BINARY-ARGS]...  Emulated cargo test binary arguments (partially supported)
+  [FILTERS]...           Test name filters
+  [FILTERS_AND_ARGS]...  Test name filters and emulated test binary arguments (partially supported)
 
 Options:
   -P, --profile <PROFILE>  Nextest profile to use [env: NEXTEST_PROFILE=]
@@ -51,7 +51,7 @@ Manifest options:
       --offline               Run without accessing the network
 
 Other Cargo options:
-      --cargo-quiet             Do not print cargo log messages
+      --cargo-quiet...          Do not print cargo log messages (specify twice for no Cargo output at all)
       --cargo-verbose...        Use cargo verbose output (specify twice for very verbose/build.rs output)
       --ignore-rust-version     Ignore `rust-version` specification in packages
       --future-incompat-report  Outputs a future incompatibility report at the end of the build
@@ -73,11 +73,20 @@ Runner options:
       --no-capture        Run tests serially and do not capture output
 
 Reporter options:
-      --failure-output <WHEN>       Output stdout and stderr on failure [env: NEXTEST_FAILURE_OUTPUT=] [possible values: immediate, immediate-final, final, never]
-      --success-output <WHEN>       Output stdout and stderr on success [env: NEXTEST_SUCCESS_OUTPUT=] [possible values: immediate, immediate-final, final, never]
-      --status-level <LEVEL>        Test statuses to output [env: NEXTEST_STATUS_LEVEL=] [possible values: none, fail, retry, slow, leak, pass, skip, all]
-      --final-status-level <LEVEL>  Test statuses to output at the end of the run [env: NEXTEST_FINAL_STATUS_LEVEL=] [possible values: none, fail, flaky, slow, skip, pass, all]
-      --hide-progress-bar           Do not display the progress bar [env: NEXTEST_HIDE_PROGRESS_BAR=]
+      --failure-output <WHEN>
+          Output stdout and stderr on failure [env: NEXTEST_FAILURE_OUTPUT=] [possible values: immediate, immediate-final, final, never]
+      --success-output <WHEN>
+          Output stdout and stderr on success [env: NEXTEST_SUCCESS_OUTPUT=] [possible values: immediate, immediate-final, final, never]
+      --status-level <LEVEL>
+          Test statuses to output [env: NEXTEST_STATUS_LEVEL=] [possible values: none, fail, retry, slow, leak, pass, skip, all]
+      --final-status-level <LEVEL>
+          Test statuses to output at the end of the run [env: NEXTEST_FINAL_STATUS_LEVEL=] [possible values: none, fail, flaky, slow, skip, pass, all]
+      --hide-progress-bar
+          Do not display the progress bar [env: NEXTEST_HIDE_PROGRESS_BAR=]
+      --message-format <FORMAT>
+          Format to use for test results (experimental) [env: NEXTEST_MESSAGE_FORMAT=] [default: human] [possible values: human, libtest-json, libtest-json-plus]
+      --message-format-version <VERSION>
+          Version of structured message-format to use (experimental) [env: NEXTEST_MESSAGE_FORMAT_VERSION=]
 
 Reuse build options:
       --archive-file <PATH>       Path to nextest archive
