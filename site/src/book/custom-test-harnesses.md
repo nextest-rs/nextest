@@ -45,3 +45,6 @@ For your test harness to work with nextest, follow these rules (keywords are as 
   - A completely disjoint set of tests from those printed out without `--ignored`.
 - **Test names that are not at the top level (however the harness defines this) SHOULD be returned as `path::to::test::test_name`.** This is recommended because the cargo-nextest UI uses `::` as a separator to format test names nicely.
 - **The test harness MUST support being run with `<test-name> --nocapture --exact`**. This command will be called with every test name provided by the harness in `--list` above.
+- **The test harness SHOULD be able to efficiently identify single tests specified with --exact.** This is particularly relevant in cases where discovering the list of tests is expensive. This can lead to a quadratic performance issue: if there are N tests in your custom test harness, nextest will run your test harness N times, leading to O(N²) behavior.
+
+  For example, the datatest-stable library switches to a more efficient mode for exact tests, as implemented in [datatest-stable PR #49](https://github.com/nextest-rs/datatest-stable/pull/49).
