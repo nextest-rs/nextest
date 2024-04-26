@@ -17,7 +17,7 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@1d96c772d19495a3b5c517cd2bc0cb401ea0529f # v4
+      - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-hakari
         uses: taiki-e/install-action@1eda5d19daf935cb04d43ac3bb1b761ec2c8d8f8 # v2

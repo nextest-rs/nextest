@@ -17,7 +17,7 @@ jobs:
       RUSTFLAGS: -D warnings
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@1d96c772d19495a3b5c517cd2bc0cb401ea0529f # v4
+      - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4
         # Nightly Rust is used for cargo llvm-cov --doc below.
       - uses: dtolnay/rust-toolchain@nightly
         with:
