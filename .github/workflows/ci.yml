@@ -107,10 +107,20 @@ jobs:
           toolchain: stable
           targets: x86_64-pc-windows-gnu
       - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
+
+      # The version of wine that comes with Ubuntu 22.04 is too old: it doesn't contain
+      # bcryptprimitives.dll, which is required to run binaries built with Rust 1.78+. We use the
+      # WineHQ PPA to get a newer version.
+      - name: Add Wine PPA
+        run: |
+          sudo dpkg --add-architecture i386
+          wget -nc https://dl.winehq.org/wine-builds/winehq.key
+          sudo apt-key add winehq.key
+          sudo add-apt-repository 'deb https://dl.winehq.org/wine-builds/ubuntu/ jammy main'
       - name: Install wine and gcc-mingw-w64-x86-64-win32
         run: |
           sudo apt-get update
-          sudo apt-get install wine gcc-mingw-w64-x86-64-win32
+          sudo apt-get install winehq-stable gcc-mingw-w64-x86-64-win32
       - name: Build cargo-nextest
         run: cargo build --package cargo-nextest
       - name: Archive test fixtures
