@@ -2235,7 +2235,6 @@ mod imp {
     /// Pre-execution configuration on Unix.
     ///
     /// This sets up just the process group ID.
-    #[cfg(process_group)]
     pub(super) fn set_process_group(cmd: &mut std::process::Command) {
         cmd.process_group(0);
     }
