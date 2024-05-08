@@ -20,7 +20,7 @@ jobs:
       - name: Build rustdoc
         run: ./scripts/build-docs.sh
       - name: Install mdbook
-        uses: taiki-e/install-action@6608b29f1fd1773aafb923cffd26c3a528f72083 # v2
+        uses: taiki-e/install-action@040f0ebba5461501fd9919d75244fd045c3774b3 # v2
         with:
           tool: mdbook@0.4
       - name: Run mdbook
