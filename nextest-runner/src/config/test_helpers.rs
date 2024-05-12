@@ -4,7 +4,7 @@
 use crate::{
     cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
     config::{CustomTestGroup, TestGroup},
-    platform::BuildPlatforms,
+    platform::{BuildPlatforms, BuildPlatformsTarget},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::{
@@ -84,14 +84,16 @@ pub(super) fn binary_query<'a>(
 }
 
 pub(super) fn build_platforms() -> BuildPlatforms {
-    BuildPlatforms::new_with_host(
-        Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
-        Some(TargetTriple {
-            platform: Platform::new("aarch64-apple-darwin", TargetFeatures::Unknown).unwrap(),
-            source: TargetTripleSource::Env,
-            location: TargetDefinitionLocation::Builtin,
+    BuildPlatforms {
+        host: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
+        target: Some(BuildPlatformsTarget {
+            triple: TargetTriple {
+                platform: Platform::new("aarch64-apple-darwin", TargetFeatures::Unknown).unwrap(),
+                source: TargetTripleSource::Env,
+                location: TargetDefinitionLocation::Builtin,
+            },
         }),
-    )
+    }
 }
 
 pub(super) fn test_group(name: &str) -> TestGroup {

@@ -959,7 +959,7 @@ mod tests {
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::SerializableFormat,
-        platform::BuildPlatforms,
+        platform::{BuildPlatforms, BuildPlatformsTarget},
         test_filter::RunIgnored,
     };
     use guppy::CargoMetadata;
@@ -1033,7 +1033,13 @@ mod tests {
             source: TargetTripleSource::CliOption,
             location: TargetDefinitionLocation::Builtin,
         };
-        let build_platforms = BuildPlatforms::new(Some(fake_triple)).unwrap();
+        let build_platforms = BuildPlatforms {
+            host: TargetTriple::x86_64_unknown_linux_gnu().platform,
+            target: Some(BuildPlatformsTarget {
+                triple: fake_triple,
+            }),
+        };
+
         let fake_env = EnvironmentMap::empty();
         let rust_build_meta =
             RustBuildMeta::new("/fake", build_platforms).map_paths(&PathMapper::noop());
@@ -1139,6 +1145,22 @@ mod tests {
                 "non-test-binaries": {},
                 "build-script-out-dirs": {},
                 "linked-paths": [],
+                "platforms": {
+                  "host": {
+                    "platform": {
+                      "triple": "x86_64-unknown-linux-gnu",
+                      "target-features": "unknown"
+                    }
+                  },
+                  "targets": [
+                    {
+                      "platform": {
+                        "triple": "aarch64-unknown-linux-gnu",
+                        "target-features": "unknown"
+                      }
+                    }
+                  ]
+                },
                 "target-platforms": [
                   {
                     "triple": "aarch64-unknown-linux-gnu",

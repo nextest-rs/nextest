@@ -461,7 +461,7 @@ pub enum RustBinaryIdNameAndKind<'a> {
 }
 
 /// Rust metadata used for builds and test runs.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct RustBuildMetaSummary {
     /// The target directory for Rust artifacts.
@@ -483,7 +483,13 @@ pub struct RustBuildMetaSummary {
     /// Linked paths, relative to the target directory.
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
+    /// The build platforms used while compiling the Rust artifacts.
+    #[serde(default)]
+    pub platforms: Option<BuildPlatformsSummary>,
+
     /// The target platforms used while compiling the Rust artifacts.
+    ///
+    /// Deprecated in favor of [`Self::platforms`]; use that if non-empty.
     #[serde(default)]
     pub target_platforms: Vec<PlatformSummary>,
 
@@ -508,6 +514,33 @@ pub struct RustNonTestBinarySummary {
 
     /// The path to the binary, relative to the target directory.
     pub path: Utf8PathBuf,
+}
+
+/// Serialized representation of the host platform.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct HostPlatformSummary {
+    /// The host platform, if specified.
+    pub platform: PlatformSummary,
+}
+
+/// Serialized representation of the target platform.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TargetPlatformSummary {
+    /// The target platform, if specified.
+    pub platform: PlatformSummary,
+}
+
+/// Serialized representation of the host and the target platform.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct BuildPlatformsSummary {
+    /// The target platform used while compiling the Rust artifacts.
+    pub host: HostPlatformSummary,
+
+    /// The host platform used while compiling the Rust artifacts.
+    pub targets: Vec<TargetPlatformSummary>,
 }
 
 /// Information about the kind of a Rust non-test binary.
@@ -705,6 +738,7 @@ mod tests {
         linked_paths: BTreeSet::new(),
         target_platform: None,
         target_platforms: vec![],
+        platforms: None,
     }; "no target platform")]
     #[test_case(r#"{
         "target-directory": "/foo",
@@ -720,6 +754,7 @@ mod tests {
         linked_paths: BTreeSet::new(),
         target_platform: Some("x86_64-unknown-linux-gnu".to_owned()),
         target_platforms: vec![],
+        platforms: None,
     }; "single target platform specified")]
     fn test_deserialize_old_rust_build_meta(input: &str, expected: RustBuildMetaSummary) {
         let build_meta: RustBuildMetaSummary =

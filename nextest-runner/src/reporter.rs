@@ -2216,7 +2216,7 @@ mod tests {
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
-        let build_platforms = BuildPlatforms::new(None).unwrap();
+        let build_platforms = BuildPlatforms::new().unwrap();
 
         let mut buf: Vec<u8> = Vec::new();
         let output = ReporterStderr::Buffer(&mut buf);

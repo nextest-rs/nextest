@@ -27,7 +27,7 @@ fn test_list_binaries() -> Result<()> {
     set_env_vars();
 
     let graph = &*PACKAGE_GRAPH;
-    let build_platforms = BuildPlatforms::new(None)?;
+    let build_platforms = BuildPlatforms::new()?;
     let binary_list = BinaryList::from_messages(
         Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT),
         graph,
@@ -104,7 +104,7 @@ fn test_run() -> Result<()> {
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
-    let build_platforms = BuildPlatforms::new(None).unwrap();
+    let build_platforms = BuildPlatforms::new().unwrap();
     let profile = profile.apply_build_platforms(&build_platforms);
 
     let runner = TestRunnerBuilder::default()
@@ -213,7 +213,7 @@ fn test_run_ignored() -> Result<()> {
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
         .expect("default config is valid");
-    let build_platforms = BuildPlatforms::new(None).unwrap();
+    let build_platforms = BuildPlatforms::new().unwrap();
     let profile = profile.apply_build_platforms(&build_platforms);
 
     let runner = TestRunnerBuilder::default()
@@ -411,7 +411,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     let profile = config
         .profile("with-retries")
         .expect("with-retries config is valid");
-    let build_platforms = BuildPlatforms::new(None).unwrap();
+    let build_platforms = BuildPlatforms::new().unwrap();
     let profile = profile.apply_build_platforms(&build_platforms);
 
     let profile_retries = profile.retries();
@@ -561,7 +561,7 @@ fn test_termination() -> Result<()> {
     let profile = config
         .profile("with-termination")
         .expect("with-termination config is valid");
-    let build_platforms = BuildPlatforms::new(None).unwrap();
+    let build_platforms = BuildPlatforms::new().unwrap();
     let profile = profile.apply_build_platforms(&build_platforms);
 
     let runner = TestRunnerBuilder::default()

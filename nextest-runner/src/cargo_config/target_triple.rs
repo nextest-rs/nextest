@@ -24,6 +24,18 @@ pub struct TargetTriple {
 }
 
 impl TargetTriple {
+    /// Create an x86_64-unknown-linux-gnu [`TargetTriple`]. Useful for testing.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying implementation fail to parse the `"x86_64-unknown-linux-gnu"`
+    /// triple string.
+    pub fn x86_64_unknown_linux_gnu() -> Self {
+        TargetTriple::deserialize_str(Some("x86_64-unknown-linux-gnu".to_owned()))
+            .expect("creating TargetTriple from linux gnu triple string should succeed")
+            .expect("the output of deserialize_str shouldn't be None")
+    }
+
     /// Converts a `PlatformSummary` that was output by `TargetTriple::serialize` back to a target triple.
     /// This target triple is assumed to originate from a build-metadata config.
     pub fn deserialize(

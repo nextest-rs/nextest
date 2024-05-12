@@ -388,8 +388,8 @@ impl CompiledProfileScripts<PreBuildPlatform> {
         let target_eval = build_platforms
             .target
             .as_ref()
-            .map_or(host_test_eval, |triple| {
-                self.data.target_spec.eval(&triple.platform)
+            .map_or(host_test_eval, |target| {
+                self.data.target_spec.eval(&target.triple.platform)
             });
 
         CompiledProfileScripts {

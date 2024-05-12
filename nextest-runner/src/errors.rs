@@ -563,6 +563,13 @@ pub enum RustBuildMetaParseError {
     /// The host platform could not be determined.
     #[error("the host platform could not be determined")]
     UnknownHostPlatform(#[source] target_spec::Error),
+
+    /// The build metadata includes features unsupported.
+    #[error("unsupported features in the build metadata: {message}")]
+    Unsupported {
+        /// The detailed error message.
+        message: String,
+    },
 }
 
 /// An error that occurs in [`BinaryList::from_messages`](crate::list::BinaryList::from_messages) or

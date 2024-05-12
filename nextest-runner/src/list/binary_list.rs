@@ -394,6 +394,7 @@ mod tests {
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::SerializableFormat,
+        platform::BuildPlatformsTarget,
     };
     use indoc::indoc;
     use maplit::btreeset;
@@ -422,11 +423,16 @@ mod tests {
         };
 
         let fake_triple = TargetTriple {
-            platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
+            platform: Platform::new("aarch64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
             source: TargetTripleSource::CliOption,
             location: TargetDefinitionLocation::Builtin,
         };
-        let build_platforms = BuildPlatforms::new(Some(fake_triple)).unwrap();
+        let build_platforms = BuildPlatforms {
+            host: TargetTriple::x86_64_unknown_linux_gnu().platform,
+            target: Some(BuildPlatformsTarget {
+                triple: fake_triple,
+            }),
+        };
 
         let mut rust_build_meta = RustBuildMeta::new("/fake/target", build_platforms);
         rust_build_meta
@@ -499,13 +505,29 @@ mod tests {
             },
             "build-script-out-dirs": {},
             "linked-paths": [],
+            "platforms": {
+              "host": {
+                "platform": {
+                  "triple": "x86_64-unknown-linux-gnu",
+                  "target-features": "unknown"
+                }
+              },
+              "targets": [
+                {
+                  "platform": {
+                    "triple": "aarch64-unknown-linux-gnu",
+                    "target-features": "unknown"
+                  }
+                }
+              ]
+            },
             "target-platforms": [
               {
-                "triple": "x86_64-unknown-linux-gnu",
+                "triple": "aarch64-unknown-linux-gnu",
                 "target-features": "unknown"
               }
             ],
-            "target-platform": "x86_64-unknown-linux-gnu"
+            "target-platform": "aarch64-unknown-linux-gnu"
           },
           "rust-binaries": {
             "fake-macro::proc-macro/fake-macro": {
