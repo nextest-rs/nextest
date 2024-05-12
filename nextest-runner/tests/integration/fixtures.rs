@@ -332,7 +332,7 @@ impl FixtureTargets {
         )
         .unwrap();
         let env = EnvironmentMap::new(&cargo_configs);
-        let build_platforms = BuildPlatforms::new(None).unwrap();
+        let build_platforms = BuildPlatforms::new().unwrap();
         let binary_list = Arc::new(
             BinaryList::from_messages(
                 Cursor::new(&*FIXTURE_RAW_CARGO_TEST_OUTPUT),

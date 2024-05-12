@@ -8,7 +8,7 @@ use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
     double_spawn::DoubleSpawnInfo,
-    platform::BuildPlatforms,
+    platform::{BuildPlatforms, BuildPlatformsTarget},
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -25,8 +25,10 @@ fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunn
         Vec::new(),
     )
     .unwrap();
-    let triple = TargetTriple::find(&configs, triple)?;
-    let build_platforms = BuildPlatforms::new(triple)?;
+    let mut build_platforms = BuildPlatforms::new()?;
+    if let Some(triple) = TargetTriple::find(&configs, triple)? {
+        build_platforms.target = Some(BuildPlatformsTarget { triple });
+    }
     let target_runner = TargetRunner::new(&configs, &build_platforms)?;
     Ok((build_platforms, target_runner))
 }

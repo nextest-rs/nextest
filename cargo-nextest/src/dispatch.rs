@@ -21,13 +21,13 @@ use nextest_runner::{
         VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
-    errors::{UnknownHostPlatform, WriteTestListError},
+    errors::WriteTestListError,
     list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
         TestList,
     },
     partition::PartitionerBuilder,
-    platform::BuildPlatforms,
+    platform::{BuildPlatforms, BuildPlatformsTarget},
     redact::Redactor,
     reporter::{structured, FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
@@ -971,6 +971,7 @@ impl From<FinalStatusLevelOpt> for FinalStatusLevel {
 #[derive(Debug)]
 struct BaseApp {
     output: OutputContext,
+    // TODO: support multiple --target options
     build_platforms: BuildPlatforms,
     cargo_metadata_json: Arc<String>,
     package_graph: Arc<PackageGraph>,
@@ -1006,7 +1007,15 @@ impl BaseApp {
         // Next, read the build platforms.
         let build_platforms = match reuse_build.binaries_metadata() {
             Some(kind) => kind.binary_list.rust_build_meta.build_platforms.clone(),
-            None => discover_build_platforms(&cargo_configs, cargo_opts.target.as_deref())?,
+            None => {
+                let mut build_platforms = BuildPlatforms::new()?;
+                if let Some(triple) =
+                    discover_target_triple(&cargo_configs, cargo_opts.target.as_deref())
+                {
+                    build_platforms.target = Some(BuildPlatformsTarget { triple });
+                }
+                build_platforms
+            }
         };
 
         // Read the Cargo metadata.
@@ -1927,11 +1936,11 @@ fn acquire_graph_data(
     Ok(json)
 }
 
-fn discover_build_platforms(
+fn discover_target_triple(
     cargo_configs: &CargoConfigs,
     target_cli_option: Option<&str>,
-) -> Result<BuildPlatforms, UnknownHostPlatform> {
-    let target_triple = match TargetTriple::find(cargo_configs, target_cli_option) {
+) -> Option<TargetTriple> {
+    match TargetTriple::find(cargo_configs, target_cli_option) {
         Ok(Some(triple)) => {
             log::debug!(
                 "using target triple `{}` defined by `{}`; {}",
@@ -1950,9 +1959,7 @@ fn discover_build_platforms(
             warn_on_err("target triple", &err);
             None
         }
-    };
-
-    BuildPlatforms::new(target_triple)
+    }
 }
 
 fn runner_for_target(
