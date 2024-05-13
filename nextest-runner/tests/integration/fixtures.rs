@@ -175,6 +175,7 @@ pub(crate) static EXPECTED_TESTS: Lazy<BTreeMap<RustBinaryId, Vec<TestFixture>>>
             "with-build-script".into() => vec![
                 TestFixture { name: "tests::test_out_dir_present", status: FixtureStatus::Pass },
             ],
+            "proc-macro-test".into() => vec![],
         }
     },
 );

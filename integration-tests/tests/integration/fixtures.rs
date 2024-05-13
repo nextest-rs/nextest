@@ -128,6 +128,7 @@ pub static EXPECTED_LIST: Lazy<Vec<TestInfo>> = Lazy::new(|| {
             BuildPlatform::Target,
             vec![("tests::test_out_dir_present", false)],
         ),
+        TestInfo::new("proc-macro-test", BuildPlatform::Host, vec![]),
     ]
 });
 
@@ -379,7 +380,20 @@ pub fn check_list_binaries_output(stdout: &[u8]) {
     let result: BinaryListSummary = serde_json::from_slice(stdout).unwrap();
 
     let test_suite = &*EXPECTED_LIST;
-    assert_eq!(test_suite.len(), result.rust_binaries.len());
+    let mut expected_binary_ids = test_suite
+        .iter()
+        .map(|test_info| test_info.id.clone())
+        .collect::<Vec<_>>();
+    expected_binary_ids.sort();
+    let mut actual_binary_ids = result.rust_binaries.keys().collect::<Vec<_>>();
+    actual_binary_ids.sort();
+    assert_eq!(
+        test_suite.len(),
+        result.rust_binaries.len(),
+        "expected rust binaries:\n{:?}\nactual rust binaries\n{:?}",
+        expected_binary_ids,
+        actual_binary_ids
+    );
 
     for test in test_suite {
         let entry = result

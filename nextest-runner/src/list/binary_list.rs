@@ -427,10 +427,14 @@ mod tests {
             source: TargetTripleSource::CliOption,
             location: TargetDefinitionLocation::Builtin,
         };
+        let fake_host_libdir = "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib";
+        let fake_target_libdir = "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-unknown-linux-gnu/lib";
         let build_platforms = BuildPlatforms {
             host: TargetTriple::x86_64_unknown_linux_gnu().platform,
+            host_libdir: Some(Utf8PathBuf::from(fake_host_libdir)),
             target: Some(BuildPlatformsTarget {
                 triple: fake_triple,
+                libdir: Some(Utf8PathBuf::from(fake_target_libdir)),
             }),
         };
 
@@ -510,14 +514,16 @@ mod tests {
                 "platform": {
                   "triple": "x86_64-unknown-linux-gnu",
                   "target-features": "unknown"
-                }
+                },
+                "libdir": "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib"
               },
               "targets": [
                 {
                   "platform": {
                     "triple": "aarch64-unknown-linux-gnu",
                     "target-features": "unknown"
-                  }
+                  },
+                  "libdir": "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-unknown-linux-gnu/lib"
                 }
               ]
             },

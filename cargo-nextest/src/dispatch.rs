@@ -37,6 +37,7 @@ use nextest_runner::{
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
     write_str::WriteStr,
+    RustcCli,
 };
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Stream, Style};
@@ -1009,10 +1010,17 @@ impl BaseApp {
             Some(kind) => kind.binary_list.rust_build_meta.build_platforms.clone(),
             None => {
                 let mut build_platforms = BuildPlatforms::new()?;
+                if let Some(output) = RustcCli::print_host_libdir().read() {
+                    build_platforms.set_host_libdir_from_rustc_output(Cursor::new(output));
+                }
                 if let Some(triple) =
                     discover_target_triple(&cargo_configs, cargo_opts.target.as_deref())
                 {
-                    build_platforms.target = Some(BuildPlatformsTarget { triple });
+                    let mut target = BuildPlatformsTarget::new(triple.clone());
+                    if let Some(output) = RustcCli::print_target_libdir(&triple).read() {
+                        target.set_libdir_from_rustc_output(Cursor::new(output));
+                    }
+                    build_platforms.target = Some(target);
                 }
                 build_platforms
             }

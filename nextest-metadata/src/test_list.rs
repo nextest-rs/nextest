@@ -522,6 +522,12 @@ pub struct RustNonTestBinarySummary {
 pub struct HostPlatformSummary {
     /// The host platform, if specified.
     pub platform: PlatformSummary,
+
+    /// The libdir for the host platform.
+    ///
+    /// Empty if failed to discover.
+    #[serde(default)]
+    pub libdir: Option<Utf8PathBuf>,
 }
 
 /// Serialized representation of the target platform.
@@ -530,6 +536,12 @@ pub struct HostPlatformSummary {
 pub struct TargetPlatformSummary {
     /// The target platform, if specified.
     pub platform: PlatformSummary,
+
+    /// The libdir for the target platform.
+    ///
+    /// Empty if failed to discover.
+    #[serde(default)]
+    pub libdir: Option<Utf8PathBuf>,
 }
 
 /// Serialized representation of the host and the target platform.

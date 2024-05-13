@@ -34,6 +34,7 @@ members = [
     "derive",
     "dylib-test",
     "with-build-script",
+    "proc-macro-test"
 ]
 
 [dependencies]
