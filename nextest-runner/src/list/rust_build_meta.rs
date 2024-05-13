@@ -9,6 +9,7 @@ use crate::{
     reuse_build::PathMapper,
 };
 use camino::Utf8PathBuf;
+use itertools::Itertools;
 use nextest_metadata::{BuildPlatformsSummary, RustBuildMetaSummary, RustNonTestBinarySummary};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -83,8 +84,6 @@ impl RustBuildMeta<TestListState> {
     /// Empty metadata for tests.
     #[cfg(test)]
     pub(crate) fn empty() -> Self {
-        use target_spec::Platform;
-
         Self {
             target_directory: Utf8PathBuf::new(),
             base_output_directories: BTreeSet::new(),
@@ -92,10 +91,7 @@ impl RustBuildMeta<TestListState> {
             build_script_out_dirs: BTreeMap::new(),
             linked_paths: BTreeMap::new(),
             state: PhantomData,
-            build_platforms: BuildPlatforms {
-                host: Platform::current().unwrap(),
-                target: None,
-            },
+            build_platforms: BuildPlatforms::new().unwrap(),
         }
     }
 
@@ -109,6 +105,21 @@ impl RustBuildMeta<TestListState> {
         // FIXME/HELP WANTED: get the rustc sysroot library path here.
         // See https://github.com/nextest-rs/nextest/issues/267.
 
+        let libdirs = self
+            .build_platforms
+            .host_libdir
+            .iter()
+            .chain(
+                self.build_platforms
+                    .target
+                    .as_ref()
+                    .and_then(|target| target.libdir.as_ref()),
+            )
+            .cloned()
+            .collect::<Vec<_>>();
+        if libdirs.is_empty() {
+            log::warn!("failed to detect the rustc libdir, may fail to list or run tests");
+        }
         // Cargo puts linked paths before base output directories.
         self.linked_paths
             .keys()
@@ -127,6 +138,10 @@ impl RustBuildMeta<TestListState> {
                 // This is the order paths are added in by Cargo.
                 [with_deps, abs_base]
             }))
+            // Add the rustc libdir paths to the search paths to run procudure macro binaries. See
+            // details in https://github.com/nextest-rs/nextest/issues/1493.
+            .chain(libdirs)
+            .unique()
             .collect()
     }
 }
@@ -233,6 +248,7 @@ mod tests {
         build_platforms: BuildPlatforms {
             host: host_platform(),
             target: None,
+            host_libdir: None,
         },
         ..Default::default()
     }; "no target platforms")]
@@ -242,8 +258,10 @@ mod tests {
     }, RustBuildMeta::<BinaryListState> {
         build_platforms: BuildPlatforms {
             host: host_platform(),
+            host_libdir: None,
             target: Some(BuildPlatformsTarget{
                 triple: TargetTriple::x86_64_unknown_linux_gnu(),
+                libdir: None,
             }),
         },
         ..Default::default()
@@ -255,8 +273,10 @@ mod tests {
     }, RustBuildMeta::<BinaryListState> {
         build_platforms: BuildPlatforms {
             host: host_platform(),
+            host_libdir: None,
             target: Some(BuildPlatformsTarget{
-                triple: x86_64_pc_windows_msvc_triple()
+                triple: x86_64_pc_windows_msvc_triple(),
+                libdir: None,
             }),
         },
         ..Default::default()
@@ -267,17 +287,21 @@ mod tests {
         platforms: Some(BuildPlatformsSummary {
             host: HostPlatformSummary {
                 platform: not_host_platform_triple().platform.to_summary(),
+                libdir: Some("/fake/test/libdir/281".into()),
             },
             targets: vec![TargetPlatformSummary {
                 platform: PlatformSummary::new("aarch64-unknown-linux-gnu"),
+                libdir: Some("/fake/test/libdir/837".into()),
             }],
         }),
         ..Default::default()
     }, RustBuildMeta::<BinaryListState> {
         build_platforms: BuildPlatforms {
             host: not_host_platform_triple().platform,
+            host_libdir: Some("/fake/test/libdir/281".into()),
             target: Some(BuildPlatformsTarget{
                 triple: aarch64_unknown_linux_gnu_triple(),
+                libdir: Some("/fake/test/libdir/837".into()),
             }),
         },
         ..Default::default()
@@ -286,6 +310,7 @@ mod tests {
         platforms: Some(BuildPlatformsSummary {
             host: HostPlatformSummary {
                 platform: PlatformSummary::new("x86_64-apple-darwin"),
+                libdir: None,
             },
             targets: vec![],
         }),
@@ -293,6 +318,7 @@ mod tests {
     }, RustBuildMeta::<BinaryListState> {
         build_platforms: BuildPlatforms {
             host: x86_64_apple_darwin_triple().platform,
+            host_libdir: None,
             target: None,
         },
         ..Default::default()
@@ -309,13 +335,16 @@ mod tests {
             platforms: Some(BuildPlatformsSummary {
                 host: HostPlatformSummary {
                     platform: PlatformSummary::new("x86_64-apple-darwin"),
+                    libdir: None,
                 },
                 targets: vec![
                     TargetPlatformSummary {
                         platform: PlatformSummary::new("aarch64-unknown-linux-gnu"),
+                        libdir: None,
                     },
                     TargetPlatformSummary {
                         platform: PlatformSummary::new("x86_64-pc-windows-msvc"),
+                        libdir: None,
                     },
                 ],
             }),
@@ -331,6 +360,7 @@ mod tests {
             platforms: Some(BuildPlatformsSummary {
                 host: HostPlatformSummary {
                     platform: PlatformSummary::new("invalid-platform-triple"),
+                    libdir: None,
                 },
                 targets: vec![],
             }),
@@ -358,6 +388,7 @@ mod tests {
         build_platforms: BuildPlatforms {
             host: host_platform(),
             target: None,
+            host_libdir: None,
         },
         ..Default::default()
     }, RustBuildMetaSummary {
@@ -365,7 +396,8 @@ mod tests {
         target_platforms: vec![host_platform().to_summary()],
         platforms: Some(BuildPlatformsSummary {
             host: HostPlatformSummary {
-                platform: host_platform().to_summary()
+                platform: host_platform().to_summary(),
+                libdir: None,
             },
             targets: vec![],
         }),
@@ -374,8 +406,10 @@ mod tests {
     #[test_case(RustBuildMeta::<BinaryListState> {
         build_platforms: BuildPlatforms {
             host: host_platform(),
+            host_libdir: Some("/fake/test/libdir/736".into()),
             target: Some(BuildPlatformsTarget {
-                triple: not_host_platform_triple()
+                triple: not_host_platform_triple(),
+                libdir: Some(Utf8PathBuf::from("/fake/test/libdir/873")),
             }),
         },
         ..Default::default()
@@ -385,9 +419,11 @@ mod tests {
         platforms: Some(BuildPlatformsSummary {
             host: HostPlatformSummary {
                 platform: host_platform().to_summary(),
+                libdir: Some("/fake/test/libdir/736".into()),
             },
             targets: vec![TargetPlatformSummary {
                 platform: not_host_platform_triple().platform.to_summary(),
+                libdir: Some("/fake/test/libdir/873".into()),
             }],
         }),
         ..Default::default()
@@ -395,5 +431,77 @@ mod tests {
     fn test_to_summary(meta: RustBuildMeta<BinaryListState>, expected: RustBuildMetaSummary) {
         let actual = meta.to_summary();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_dylib_paths_should_include_rustc_dir() {
+        let host_libdir = Utf8PathBuf::from("/fake/rustc/host/libdir");
+        let target_libdir = Utf8PathBuf::from("/fake/rustc/target/libdir");
+
+        let rust_build_meta = RustBuildMeta {
+            build_platforms: {
+                let mut build_platforms = BuildPlatforms::new()
+                    .expect("Should create BuildPlatforms with default ctor successfully");
+                build_platforms.host_libdir = Some(host_libdir.clone());
+                let mut target =
+                    BuildPlatformsTarget::new(TargetTriple::x86_64_unknown_linux_gnu());
+                target.libdir = Some(target_libdir.clone());
+                build_platforms.target = Some(target);
+                build_platforms
+            },
+            ..RustBuildMeta::empty()
+        };
+        let dylib_paths = rust_build_meta.dylib_paths();
+
+        assert!(
+            dylib_paths.contains(&host_libdir),
+            "{:?} should contain {}",
+            dylib_paths,
+            host_libdir
+        );
+        assert!(
+            dylib_paths.contains(&target_libdir),
+            "{:?} should contain {}",
+            dylib_paths,
+            target_libdir
+        );
+    }
+
+    #[test]
+    fn test_dylib_paths_should_not_contain_duplicate_paths() {
+        let tmpdir = camino_tempfile::tempdir().expect("should create temp dir successfully");
+        let host_libdir = tmpdir.path().to_path_buf();
+        let target_libdir = host_libdir.clone();
+        let fake_target_dir = tmpdir
+            .path()
+            .parent()
+            .expect("tmp directory should have a parent");
+        let tmpdir_dirname = tmpdir
+            .path()
+            .file_name()
+            .expect("tmp directory should have a file name");
+
+        let rust_build_meta = RustBuildMeta {
+            target_directory: fake_target_dir.to_path_buf(),
+            linked_paths: [(Utf8PathBuf::from(tmpdir_dirname), Default::default())].into(),
+            base_output_directories: [Utf8PathBuf::from(tmpdir_dirname)].into(),
+            build_platforms: {
+                let mut build_platforms = BuildPlatforms::new()
+                    .expect("should create BuildPlatforms with default ctor successfully");
+                let mut target =
+                    BuildPlatformsTarget::new(TargetTriple::x86_64_unknown_linux_gnu());
+                target.libdir = Some(target_libdir.clone());
+                build_platforms.target = Some(target);
+                build_platforms
+            },
+            ..RustBuildMeta::empty()
+        };
+        let dylib_paths = rust_build_meta.dylib_paths();
+
+        assert!(
+            dylib_paths.clone().into_iter().all_unique(),
+            "{:?} should not contain duplicate paths",
+            dylib_paths
+        );
     }
 }

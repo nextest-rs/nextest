@@ -2,7 +2,7 @@
 source: integration-tests/tests/integration/main.rs
 expression: output.stderr_as_str()
 ---
-   Archiving 16 binaries (including 2 non-test binaries), 2 build script output directories, 2 linked paths, and 7 extra paths to <archive-file>
+   Archiving 17 binaries (including 2 non-test binaries), 2 build script output directories, 2 linked paths, and 7 extra paths to <archive-file>
      Warning ignoring extra path `<target-dir>/excluded-dir` because it does not exist
      Warning ignoring extra path `<target-dir>/depth-0-dir` specified with depth 0 since it is a directory
      Warning ignoring extra path `<target-dir>/file_that_does_not_exist.txt` because it does not exist

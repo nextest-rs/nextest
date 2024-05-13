@@ -23,8 +23,9 @@
 //! `NEXTEST_BIN_EXE_cargo-nextest-dup`.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use nextest_metadata::{BuildPlatform, NextestExitCode};
+use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
 use std::{fs::File, io::Write};
+use target_spec::Platform;
 
 mod fixtures;
 mod temp_project;
@@ -816,5 +817,25 @@ fn test_setup_script_error() {
     assert_eq!(
         output.exit_status.code(),
         Some(NextestExitCode::SETUP_SCRIPT_FAILED)
+    );
+}
+
+#[test]
+fn test_target_arg() {
+    let host_platform = Platform::current().expect("should detect the host target successfully");
+    let host_triple = host_platform.triple_str();
+    let output = CargoNextestCli::new()
+        .args(["list", "--target", host_triple, "--message-format", "json"])
+        .output();
+    let result: TestListSummary = serde_json::from_slice(&output.stdout).unwrap();
+    let build_platforms = &result
+        .rust_build_meta
+        .platforms
+        .expect("should have the platforms field");
+    assert_eq!(build_platforms.host.platform, host_platform.to_summary());
+    assert_eq!(build_platforms.targets[0].platform.triple, host_triple);
+    assert_eq!(
+        build_platforms.targets[0].libdir,
+        build_platforms.host.libdir
     );
 }

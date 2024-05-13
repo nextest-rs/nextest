@@ -13,8 +13,9 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
+    RustcCli,
 };
-use std::env;
+use std::{env, io::Cursor};
 use target_spec::Platform;
 
 fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunner)> {
@@ -26,8 +27,15 @@ fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunn
     )
     .unwrap();
     let mut build_platforms = BuildPlatforms::new()?;
+    if let Some(host_libdir) = RustcCli::print_host_libdir().read() {
+        build_platforms.set_host_libdir_from_rustc_output(Cursor::new(host_libdir));
+    }
     if let Some(triple) = TargetTriple::find(&configs, triple)? {
-        build_platforms.target = Some(BuildPlatformsTarget { triple });
+        let mut target = BuildPlatformsTarget::new(triple.clone());
+        if let Some(libdir) = RustcCli::print_target_libdir(&triple).read() {
+            target.set_libdir_from_rustc_output(Cursor::new(libdir));
+        }
+        build_platforms.target = Some(target);
     }
     let target_runner = TargetRunner::new(&configs, &build_platforms)?;
     Ok((build_platforms, target_runner))
