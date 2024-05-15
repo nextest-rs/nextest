@@ -12,7 +12,7 @@ edition = "2021"
 rust-version.workspace = true
 
 [dependencies]
-camino = "1.1.6"
+camino = "1.1.7"
 cfg-if = "1.0.0"
 clap = { version = "4.5.4", features = ["derive", "env"] }
 # we don't use the tracing support
