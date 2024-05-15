@@ -41,6 +41,9 @@ swrite.workspace = true
 thiserror = "1.0.60"
 nextest-workspace-hack.workspace = true
 
+[dev-dependencies]
+camino-tempfile = "1.1.1"
+
 [features]
 default = ["default-no-update", "self-update"]
 experimental-tokio-console = ["nextest-runner/experimental-tokio-console"]
