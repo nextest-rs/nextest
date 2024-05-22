@@ -27,7 +27,7 @@ use nextest_runner::{
         TestList,
     },
     partition::PartitionerBuilder,
-    platform::{BuildPlatforms, BuildPlatformsTarget},
+    platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     redact::Redactor,
     reporter::{structured, FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
@@ -1009,20 +1009,20 @@ impl BaseApp {
         let build_platforms = match reuse_build.binaries_metadata() {
             Some(kind) => kind.binary_list.rust_build_meta.build_platforms.clone(),
             None => {
-                let mut build_platforms = BuildPlatforms::new()?;
-                if let Some(output) = RustcCli::print_host_libdir().read() {
-                    build_platforms.set_host_libdir_from_rustc_output(Cursor::new(output));
-                }
-                if let Some(triple) =
+                let host = HostPlatform::current(PlatformLibdir::from_rustc_stdout(
+                    RustcCli::print_host_libdir().read(),
+                ))?;
+                let target = if let Some(triple) =
                     discover_target_triple(&cargo_configs, cargo_opts.target.as_deref())
                 {
-                    let mut target = BuildPlatformsTarget::new(triple.clone());
-                    if let Some(output) = RustcCli::print_target_libdir(&triple).read() {
-                        target.set_libdir_from_rustc_output(Cursor::new(output));
-                    }
-                    build_platforms.target = Some(target);
-                }
-                build_platforms
+                    let libdir = PlatformLibdir::from_rustc_stdout(
+                        RustcCli::print_target_libdir(&triple).read(),
+                    );
+                    Some(TargetPlatform::new(triple, libdir))
+                } else {
+                    None
+                };
+                BuildPlatforms { host, target }
             }
         };
 

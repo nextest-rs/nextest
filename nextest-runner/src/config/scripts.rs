@@ -383,8 +383,8 @@ impl CompiledProfileScripts<PreBuildPlatform> {
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledProfileScripts<FinalConfig> {
-        let host_eval = self.data.host_spec.eval(&build_platforms.host);
-        let host_test_eval = self.data.target_spec.eval(&build_platforms.host);
+        let host_eval = self.data.host_spec.eval(&build_platforms.host.platform);
+        let host_test_eval = self.data.target_spec.eval(&build_platforms.host.platform);
         let target_eval = build_platforms
             .target
             .as_ref()

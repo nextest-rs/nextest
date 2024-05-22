@@ -8,14 +8,14 @@ use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
     double_spawn::DoubleSpawnInfo,
-    platform::{BuildPlatforms, BuildPlatformsTarget},
+    platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
     RustcCli,
 };
-use std::{env, io::Cursor};
+use std::env;
 use target_spec::Platform;
 
 fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunner)> {
@@ -26,17 +26,21 @@ fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunn
         Vec::new(),
     )
     .unwrap();
-    let mut build_platforms = BuildPlatforms::new()?;
-    if let Some(host_libdir) = RustcCli::print_host_libdir().read() {
-        build_platforms.set_host_libdir_from_rustc_output(Cursor::new(host_libdir));
-    }
-    if let Some(triple) = TargetTriple::find(&configs, triple)? {
-        let mut target = BuildPlatformsTarget::new(triple.clone());
-        if let Some(libdir) = RustcCli::print_target_libdir(&triple).read() {
-            target.set_libdir_from_rustc_output(Cursor::new(libdir));
-        }
-        build_platforms.target = Some(target);
-    }
+
+    let build_platforms = {
+        let host = HostPlatform::current(PlatformLibdir::from_rustc_stdout(
+            RustcCli::print_host_libdir().read(),
+        ))?;
+        let target = if let Some(triple) = TargetTriple::find(&configs, triple)? {
+            let libdir =
+                PlatformLibdir::from_rustc_stdout(RustcCli::print_target_libdir(&triple).read());
+            Some(TargetPlatform::new(triple, libdir))
+        } else {
+            None
+        };
+        BuildPlatforms { host, target }
+    };
+
     let target_runner = TargetRunner::new(&configs, &build_platforms)?;
     Ok((build_platforms, target_runner))
 }

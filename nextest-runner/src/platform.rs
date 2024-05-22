@@ -8,95 +8,36 @@ use crate::{
     errors::{RustBuildMetaParseError, TargetTripleError, UnknownHostPlatform},
 };
 use camino::Utf8PathBuf;
-use nextest_metadata::{BuildPlatformsSummary, HostPlatformSummary, TargetPlatformSummary};
-use std::io;
+use nextest_metadata::{
+    BuildPlatformsSummary, HostPlatformSummary, PlatformLibdirSummary, PlatformLibdirUnavailable,
+    TargetPlatformSummary,
+};
 use target_spec::summaries::PlatformSummary;
 pub use target_spec::Platform;
-
-fn read_first_line_as_path(reader: impl io::BufRead) -> Option<Utf8PathBuf> {
-    // We will print warn logs later when we are adding the path to the dynamic linker search paths,
-    // so we don't print the warn log here to avoid spammy log.
-    match reader.lines().next() {
-        Some(Ok(line)) => {
-            let original_line = line.as_str();
-            let line = line.trim();
-            if line.is_empty() {
-                log::debug!("empty input found: {:#?}", original_line);
-                return None;
-            }
-            Some(Utf8PathBuf::from(line))
-        }
-        Some(Err(e)) => {
-            log::debug!("failed to read the input: {:#?}", e);
-            None
-        }
-        None => {
-            log::debug!("empty input");
-            None
-        }
-    }
-}
-
-/// The target platform.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BuildPlatformsTarget {
-    /// The target triplet, which consists of machine, vendor and OS.
-    pub triple: TargetTriple,
-
-    /// The target libdir.
-    pub libdir: Option<Utf8PathBuf>,
-}
-
-impl BuildPlatformsTarget {
-    /// Creates a new [`BuildPlatformsTarget`] and set the [`Self::triple`] to the imput `triple`.
-    pub fn new(triple: TargetTriple) -> Self {
-        Self {
-            triple,
-            libdir: None,
-        }
-    }
-
-    /// Try to parse the rustc output and set [`Self::libdir`]. If the we fail to parse the input
-    /// [`Self::libdir`] will be set to [`None`].
-    ///
-    /// Used to set the dynamic linker search path when running the test executables.
-    pub fn set_libdir_from_rustc_output(&mut self, reader: impl io::BufRead) {
-        self.libdir = read_first_line_as_path(reader);
-    }
-}
 
 /// A representation of host and target platform.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BuildPlatforms {
     /// The host platform.
-    pub host: Platform,
-
-    /// The host libdir.
-    pub host_libdir: Option<Utf8PathBuf>,
+    pub host: HostPlatform,
 
     /// The target platform, if specified.
-    pub target: Option<BuildPlatformsTarget>,
+    ///
+    /// In the future, this will support multiple targets.
+    pub target: Option<TargetPlatform>,
 }
 
 impl BuildPlatforms {
-    /// Creates a new [`BuildPlatforms`].
+    /// Creates a new `BuildPlatforms` with no libdirs or targets.
     ///
-    /// Returns an error if the host platform could not be determined.
-    pub fn new() -> Result<Self, UnknownHostPlatform> {
-        let host = Platform::current().map_err(|error| UnknownHostPlatform { error })?;
+    /// Used for testing.
+    pub fn new_with_no_target() -> Result<Self, UnknownHostPlatform> {
         Ok(Self {
-            host,
-            host_libdir: None,
+            host: HostPlatform::current(PlatformLibdir::Unavailable(
+                PlatformLibdirUnavailable::new_const("test"),
+            ))?,
             target: None,
         })
-    }
-
-    /// Try to parse the rustc output and set [`Self::host_libdir`]. If the we fail to parse the
-    /// input [`Self::host_libdir`] will be set to [`None`].
-    ///
-    /// Used to set the dynamic linker search path when running the test executables.
-    pub fn set_host_libdir_from_rustc_output(&mut self, reader: impl io::BufRead) {
-        self.host_libdir = read_first_line_as_path(reader);
     }
 
     /// Returns the argument to pass into `cargo metadata --filter-platform <triple>`.
@@ -105,8 +46,33 @@ impl BuildPlatforms {
             Some(target) => target.triple.to_cargo_target_arg(),
             None => {
                 // If there's no target, use the host platform.
-                Ok(CargoTargetArg::Builtin(self.host.triple_str().to_owned()))
+                Ok(CargoTargetArg::Builtin(
+                    self.host.platform.triple_str().to_owned(),
+                ))
             }
+        }
+    }
+
+    /// Converts self to a summary.
+    pub fn to_summary(&self) -> BuildPlatformsSummary {
+        BuildPlatformsSummary {
+            host: self.host.to_summary(),
+            targets: self
+                .target
+                .as_ref()
+                .map(|target| vec![target.to_summary()])
+                .unwrap_or_default(),
+        }
+    }
+
+    /// Converts self to a single summary.
+    ///
+    /// Pairs with [`Self::from_target_summary`]. Deprecated in favor of [`BuildPlatformsSummary`].
+    pub fn to_target_or_host_summary(&self) -> PlatformSummary {
+        if let Some(target) = &self.target {
+            target.triple.platform.to_summary()
+        } else {
+            self.host.platform.to_summary()
         }
     }
 
@@ -119,88 +85,10 @@ impl BuildPlatforms {
             .map(|triple| triple.triple.platform.triple_str().to_owned())
     }
 
-    /// Creates a [`BuildPlatforms`] from a serializable summary.
-    ///
-    /// Only for backward compatibility. Deprecated in favor of [`BuildPlatformsSummary`].
-    pub fn from_summary_str(summary: Option<String>) -> Result<Self, RustBuildMetaParseError> {
-        let mut build_platforms = BuildPlatforms::new()
-            .map_err(|error| RustBuildMetaParseError::UnknownHostPlatform(error.error))?;
-        if let Some(triple) = TargetTriple::deserialize_str(summary)? {
-            build_platforms.target = Some(BuildPlatformsTarget::new(triple));
-        }
-        Ok(build_platforms)
-    }
-}
-
-/// A value-to-value conversion that consumes the input value and generate a serialized summary
-/// type. The opposite of [`FromSummary`].
-pub trait ToSummary<T> {
-    /// Converts this type into the (usually inferred) input type.
-    fn to_summary(&self) -> T;
-}
-
-/// Simple and safe conversions from a serialized summary type that may fail in a controlled way
-/// under some circumstances. The serialized summary will be stored in the build-metadata, It is the
-/// reciprocal of [`ToSummary`].
-pub trait FromSummary<T>: Sized {
-    /// The type returned in the event of a conversion error.
-    type Error: Sized;
-
-    /// Performs the conversion.
-    fn from_summary(summary: T) -> Result<Self, Self::Error>;
-}
-
-/// Deprecated in favor of [`BuildPlatformsSummary`].
-impl ToSummary<PlatformSummary> for BuildPlatforms {
-    fn to_summary(&self) -> PlatformSummary {
-        if let Some(target) = &self.target {
-            target.triple.platform.to_summary()
-        } else {
-            self.host.to_summary()
-        }
-    }
-}
-
-impl ToSummary<HostPlatformSummary> for BuildPlatforms {
-    fn to_summary(&self) -> HostPlatformSummary {
-        HostPlatformSummary {
-            platform: self.host.to_summary(),
-            libdir: self.host_libdir.clone(),
-        }
-    }
-}
-
-impl ToSummary<TargetPlatformSummary> for BuildPlatformsTarget {
-    fn to_summary(&self) -> TargetPlatformSummary {
-        TargetPlatformSummary {
-            platform: self.triple.platform.to_summary(),
-            libdir: self.libdir.clone(),
-        }
-    }
-}
-
-/// Creates a [`BuildPlatforms`] from a serializable summary for backwards compatibility.
-impl FromSummary<PlatformSummary> for BuildPlatforms {
-    type Error = RustBuildMetaParseError;
-
-    fn from_summary(summary: PlatformSummary) -> Result<Self, Self::Error> {
-        let mut build_platforms = BuildPlatforms::new()
-            .map_err(|error| RustBuildMetaParseError::UnknownHostPlatform(error.error))?;
-        if let Some(triple) = TargetTriple::deserialize(Some(summary))? {
-            build_platforms.target = Some(BuildPlatformsTarget::new(triple));
-        }
-        Ok(build_platforms)
-    }
-}
-
-/// Creates a [`BuildPlatforms`] from a serializable summary.
-impl FromSummary<BuildPlatformsSummary> for BuildPlatforms {
-    type Error = RustBuildMetaParseError;
-
-    fn from_summary(summary: BuildPlatformsSummary) -> Result<Self, Self::Error> {
+    /// Converts a summary to a [`BuildPlatforms`].
+    pub fn from_summary(summary: BuildPlatformsSummary) -> Result<Self, RustBuildMetaParseError> {
         Ok(BuildPlatforms {
-            host: summary.host.platform.to_platform()?,
-            host_libdir: summary.host.libdir,
+            host: HostPlatform::from_summary(summary.host)?,
             target: {
                 if summary.targets.len() > 1 {
                     return Err(RustBuildMetaParseError::Unsupported {
@@ -210,108 +98,274 @@ impl FromSummary<BuildPlatformsSummary> for BuildPlatforms {
                 summary
                     .targets
                     .first()
-                    .map(|target| {
-                        Ok::<_, Self::Error>(BuildPlatformsTarget {
-                            triple: TargetTriple::deserialize(Some(target.platform.clone()))?
-                                .expect("the input is not None, so the output must not be None"),
-                            libdir: target.libdir.clone(),
-                        })
-                    })
+                    .map(|target| TargetPlatform::from_summary(target.clone()))
                     .transpose()?
             },
         })
+    }
+
+    /// Creates a [`BuildPlatforms`] from a single `PlatformSummary`.
+    ///
+    /// Only for backwards compatibility. Deprecated in favor of [`BuildPlatformsSummary`].
+    pub fn from_target_summary(summary: PlatformSummary) -> Result<Self, RustBuildMetaParseError> {
+        // In this case:
+        //
+        // * no libdirs are available
+        // * the host might be serialized as the target platform as well (we can't detect this case
+        //   reliably, so we treat it as the target platform as well, which isn't a problem in
+        //   practice).
+        let host = HostPlatform::current(PlatformLibdir::Unavailable(
+            PlatformLibdirUnavailable::OLD_SUMMARY,
+        ))
+        .map_err(|error| RustBuildMetaParseError::UnknownHostPlatform(error.error))?;
+
+        let target = TargetTriple::deserialize(Some(summary))?.map(|triple| {
+            TargetPlatform::new(
+                triple,
+                PlatformLibdir::Unavailable(PlatformLibdirUnavailable::OLD_SUMMARY),
+            )
+        });
+
+        Ok(Self { host, target })
+    }
+
+    /// Creates a [`BuildPlatforms`] from a target triple.
+    ///
+    /// Only for backward compatibility. Deprecated in favor of [`BuildPlatformsSummary`].
+    pub fn from_summary_str(summary: Option<String>) -> Result<Self, RustBuildMetaParseError> {
+        // In this case:
+        //
+        // * no libdirs are available
+        // * can't represent custom platforms
+        // * the host might be serialized as the target platform as well (we can't detect this case
+        //   reliably, so we treat it as the target platform as well, which isn't a problem in
+        //   practice).
+        let host = HostPlatform::current(PlatformLibdir::Unavailable(
+            PlatformLibdirUnavailable::OLD_SUMMARY,
+        ))
+        .map_err(|error| RustBuildMetaParseError::UnknownHostPlatform(error.error))?;
+
+        let target = TargetTriple::deserialize_str(summary)?.map(|triple| {
+            TargetPlatform::new(
+                triple,
+                PlatformLibdir::Unavailable(PlatformLibdirUnavailable::OLD_SUMMARY),
+            )
+        });
+
+        Ok(Self { host, target })
+    }
+}
+
+/// A representation of a host platform during a build.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HostPlatform {
+    /// The platform.
+    pub platform: Platform,
+
+    /// The host libdir.
+    pub libdir: PlatformLibdir,
+}
+
+impl HostPlatform {
+    /// Creates a new `HostPlatform` representing the current platform.
+    pub fn current(libdir: PlatformLibdir) -> Result<Self, UnknownHostPlatform> {
+        let platform = Platform::current().map_err(|error| UnknownHostPlatform { error })?;
+        Ok(Self { platform, libdir })
+    }
+
+    /// Converts self to a summary.
+    pub fn to_summary(&self) -> HostPlatformSummary {
+        HostPlatformSummary {
+            platform: self.platform.to_summary(),
+            libdir: self.libdir.to_summary(),
+        }
+    }
+
+    /// Converts a summary to a [`HostPlatform`].
+    pub fn from_summary(summary: HostPlatformSummary) -> Result<Self, RustBuildMetaParseError> {
+        let platform = summary
+            .platform
+            .to_platform()
+            .map_err(RustBuildMetaParseError::PlatformDeserializeError)?;
+        Ok(Self {
+            platform,
+            libdir: PlatformLibdir::from_summary(summary.libdir),
+        })
+    }
+}
+
+/// The target platform.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TargetPlatform {
+    /// The target triple: the platform, along with its source and where it was obtained from.
+    pub triple: TargetTriple,
+
+    /// The target libdir.
+    pub libdir: PlatformLibdir,
+}
+
+impl TargetPlatform {
+    /// Creates a new [`TargetPlatform`].
+    pub fn new(triple: TargetTriple, libdir: PlatformLibdir) -> Self {
+        Self { triple, libdir }
+    }
+
+    /// Converts self to a summary.
+    pub fn to_summary(&self) -> TargetPlatformSummary {
+        TargetPlatformSummary {
+            platform: self.triple.platform.to_summary(),
+            libdir: self.libdir.to_summary(),
+        }
+    }
+
+    /// Converts a summary to a [`TargetPlatform`].
+    pub fn from_summary(summary: TargetPlatformSummary) -> Result<Self, RustBuildMetaParseError> {
+        Ok(Self {
+            triple: TargetTriple::deserialize(Some(summary.platform))
+                .map_err(RustBuildMetaParseError::PlatformDeserializeError)?
+                .expect("the input is not None, so the output must not be None"),
+            libdir: PlatformLibdir::from_summary(summary.libdir),
+        })
+    }
+}
+
+/// A platform libdir.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PlatformLibdir {
+    /// The libdir is known and available.
+    Available(Utf8PathBuf),
+
+    /// The libdir is unavailable.
+    Unavailable(PlatformLibdirUnavailable),
+}
+
+impl PlatformLibdir {
+    /// Constructs a new `PlatformLibdir` from a `Utf8PathBuf`.
+    pub fn from_path(path: Utf8PathBuf) -> Self {
+        Self::Available(path)
+    }
+
+    /// Constructs a new `PlatformLibdir` from rustc's standard output.
+    ///
+    /// None implies that rustc failed, and will be stored as such.
+    pub fn from_rustc_stdout(rustc_output: Option<Vec<u8>>) -> Self {
+        fn inner(v: Option<Vec<u8>>) -> Result<Utf8PathBuf, PlatformLibdirUnavailable> {
+            let v = v.ok_or(PlatformLibdirUnavailable::RUSTC_FAILED)?;
+
+            let s = String::from_utf8(v).map_err(|e| {
+                log::debug!("failed to convert the output to a string: {e}");
+                PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR
+            })?;
+
+            let mut lines = s.lines();
+            let Some(out) = lines.next() else {
+                log::debug!("empty output");
+                return Err(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR);
+            };
+
+            let trimmed = out.trim();
+            if trimmed.is_empty() {
+                log::debug!("empty output");
+                return Err(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR);
+            }
+
+            // If there's another line, it must be empty.
+            for line in lines {
+                if !line.trim().is_empty() {
+                    log::debug!("unexpected additional output: {line}");
+                    return Err(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR);
+                }
+            }
+
+            Ok(Utf8PathBuf::from(trimmed))
+        }
+
+        match inner(rustc_output) {
+            Ok(path) => Self::Available(path),
+            Err(error) => Self::Unavailable(error),
+        }
+    }
+
+    /// Constructs a new `PlatformLibdir` from a `PlatformLibdirUnavailable`.
+    pub fn from_unavailable(error: PlatformLibdirUnavailable) -> Self {
+        Self::Unavailable(error)
+    }
+
+    /// Returns self as a path if available.
+    pub fn as_path(&self) -> Option<&Utf8PathBuf> {
+        match self {
+            Self::Available(path) => Some(path),
+            Self::Unavailable(_) => None,
+        }
+    }
+
+    /// Converts self to a summary.
+    pub fn to_summary(&self) -> PlatformLibdirSummary {
+        match self {
+            Self::Available(path) => PlatformLibdirSummary::Available { path: path.clone() },
+            Self::Unavailable(reason) => PlatformLibdirSummary::Unavailable {
+                reason: reason.clone(),
+            },
+        }
+    }
+
+    /// Converts a summary to a [`PlatformLibdir`].
+    pub fn from_summary(summary: PlatformLibdirSummary) -> Self {
+        // TODO: accept a path remapper
+        match summary {
+            PlatformLibdirSummary::Available { path: libdir } => Self::Available(libdir),
+            PlatformLibdirSummary::Unavailable { reason } => Self::Unavailable(reason),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use indoc::indoc;
-    use std::io::Cursor;
     use test_case::test_case;
 
     #[test]
-    fn test_read_from_rustc_output_failed() {
-        struct ReadMock;
-        impl io::Read for ReadMock {
-            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
-                Err(io::Error::other("test error"))
-            }
-        }
-
-        let reader = io::BufReader::new(ReadMock);
-        let mut build_platforms = BuildPlatforms::new().expect("default ctor should succeed");
-        build_platforms.set_host_libdir_from_rustc_output(reader);
-        assert_eq!(build_platforms.host_libdir, None);
-
-        let reader = io::BufReader::new(ReadMock);
-        let mut build_platforms_target =
-            BuildPlatformsTarget::new(TargetTriple::x86_64_unknown_linux_gnu());
-        build_platforms_target.set_libdir_from_rustc_output(reader);
-        assert_eq!(build_platforms_target.libdir, None);
-    }
-
-    #[test]
-    fn test_read_from_rustc_output_empty_input() {
-        let mut build_platforms = BuildPlatforms::new().expect("default ctor should succeed");
-        build_platforms.set_host_libdir_from_rustc_output(io::empty());
-        assert_eq!(build_platforms.host_libdir, None);
-
-        let mut build_platforms_target =
-            BuildPlatformsTarget::new(TargetTriple::x86_64_unknown_linux_gnu());
-        build_platforms_target.set_libdir_from_rustc_output(io::empty());
-        assert_eq!(build_platforms_target.libdir, None);
-    }
-
-    #[test_case("/fake/libdir/22548", Some("/fake/libdir/22548"); "single line")]
-    #[test_case(
-        indoc! {r#"
-            /fake/libdir/1
-            /fake/libdir/2
-        "#},
-        Some("/fake/libdir/1");
-        "multiple lines"
-    )]
-    #[test_case(
-        "\t /fake/libdir\t \n\r",
-        Some("/fake/libdir");
-        "with leading or trailing whitespace"
-    )]
-    #[test_case("\t \r\n", None; "empty content with whitespaces")]
-    fn test_read_from_rustc_output_not_empty_input(input: &str, actual: Option<&str>) {
-        let mut build_platforms = BuildPlatforms::new().expect("default ctor should succeed");
-        build_platforms.set_host_libdir_from_rustc_output(Cursor::new(input));
-        assert_eq!(build_platforms.host_libdir, actual.map(Utf8PathBuf::from));
-
-        let mut build_platforms_target =
-            BuildPlatformsTarget::new(TargetTriple::x86_64_unknown_linux_gnu());
-        build_platforms_target.set_libdir_from_rustc_output(Cursor::new(input));
-        assert_eq!(build_platforms_target.libdir, actual.map(Utf8PathBuf::from));
-    }
-
-    #[test]
-    fn test_build_platform_new() {
-        let build_platforms = BuildPlatforms::new().expect("default ctor should succeed");
+    fn test_from_rustc_output_invalid() {
+        // None.
         assert_eq!(
-            build_platforms,
-            BuildPlatforms {
-                host: Platform::current().expect("should detect the current platform successfully"),
-                host_libdir: None,
-                target: None,
-            }
+            PlatformLibdir::from_rustc_stdout(None),
+            PlatformLibdir::Unavailable(PlatformLibdirUnavailable::RUSTC_FAILED),
+        );
+
+        // Empty input.
+        assert_eq!(
+            PlatformLibdir::from_rustc_stdout(Some(Vec::new())),
+            PlatformLibdir::Unavailable(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR),
+        );
+
+        // A single empty line.
+        assert_eq!(
+            PlatformLibdir::from_rustc_stdout(Some(b"\n".to_vec())),
+            PlatformLibdir::Unavailable(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR),
+        );
+
+        // Multiple lines.
+        assert_eq!(
+            PlatformLibdir::from_rustc_stdout(Some(b"/fake/libdir/1\n/fake/libdir/2\n".to_vec())),
+            PlatformLibdir::Unavailable(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR),
         );
     }
 
-    #[test]
-    fn test_build_platforms_target_new() {
-        let triple = TargetTriple::x86_64_unknown_linux_gnu();
-        let build_platforms_target = BuildPlatformsTarget::new(triple.clone());
+    #[test_case(b"/fake/libdir/22548", "/fake/libdir/22548"; "single line")]
+    #[test_case(
+        b"\t /fake/libdir\t \n\r",
+        "/fake/libdir";
+        "with leading or trailing whitespace"
+    )]
+    #[test_case(
+        b"/fake/libdir/1\n\n",
+        "/fake/libdir/1";
+        "trailing newlines"
+    )]
+    fn test_read_from_rustc_output_valid(input: &[u8], actual: &str) {
         assert_eq!(
-            build_platforms_target,
-            BuildPlatformsTarget {
-                triple,
-                libdir: None,
-            }
+            PlatformLibdir::from_rustc_stdout(Some(input.to_vec())),
+            PlatformLibdir::Available(actual.into()),
         );
     }
 }

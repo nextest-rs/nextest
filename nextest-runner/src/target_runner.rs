@@ -29,7 +29,7 @@ impl TargetRunner {
         configs: &CargoConfigs,
         build_platforms: &BuildPlatforms,
     ) -> Result<Self, TargetRunnerError> {
-        let host = PlatformRunner::by_precedence(configs, &build_platforms.host)?;
+        let host = PlatformRunner::by_precedence(configs, &build_platforms.host.platform)?;
         let target = match &build_platforms.target {
             Some(target) => PlatformRunner::by_precedence(configs, &target.triple.platform)?,
             None => host.clone(),

@@ -1,12 +1,11 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use super::TargetTriple;
 use camino::Utf8PathBuf;
 use camino_tempfile::Utf8TempDir;
 use color_eyre::eyre::{Context, Result};
 use target_spec::{Platform, TargetFeatures};
-
-use super::TargetTriple;
 
 pub(super) fn setup_temp_dir() -> Result<Utf8TempDir> {
     let dir = camino_tempfile::Builder::new()
