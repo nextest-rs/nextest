@@ -548,10 +548,12 @@ pub struct TargetPlatformSummary {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BuildPlatformsSummary {
-    /// The target platform used while compiling the Rust artifacts.
+    /// The host platform used while compiling the Rust artifacts.
     pub host: HostPlatformSummary,
 
-    /// The host platform used while compiling the Rust artifacts.
+    /// The target platforms used while compiling the Rust artifacts.
+    ///
+    /// With current versions of nextest, this will contain at most one element.
     pub targets: Vec<TargetPlatformSummary>,
 }
 
