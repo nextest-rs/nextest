@@ -6,6 +6,8 @@ use camino_tempfile::Utf8TempDir;
 use color_eyre::eyre::{Context, Result};
 use target_spec::{Platform, TargetFeatures};
 
+use super::TargetTriple;
+
 pub(super) fn setup_temp_dir() -> Result<Utf8TempDir> {
     let dir = camino_tempfile::Builder::new()
         .tempdir()
@@ -65,6 +67,14 @@ pub(super) fn setup_temp_dir() -> Result<Utf8TempDir> {
     Ok(dir)
 }
 
+impl TargetTriple {
+    /// Creates an x86_64-unknown-linux-gnu [`TargetTriple`]. Useful for testing.
+    pub(crate) fn x86_64_unknown_linux_gnu() -> Self {
+        TargetTriple::deserialize_str(Some("x86_64-unknown-linux-gnu".to_owned()))
+            .expect("creating TargetTriple from linux gnu triple string should succeed")
+            .expect("the output of deserialize_str shouldn't be None")
+    }
+}
 pub(super) fn custom_target_path() -> Utf8PathBuf {
     Utf8PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
         .parent()
