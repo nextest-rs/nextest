@@ -822,10 +822,21 @@ fn test_setup_script_error() {
 
 #[test]
 fn test_target_arg() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
     let host_platform = Platform::current().expect("should detect the host target successfully");
     let host_triple = host_platform.triple_str();
     let output = CargoNextestCli::new()
-        .args(["list", "--target", host_triple, "--message-format", "json"])
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--target",
+            host_triple,
+            "--message-format",
+            "json",
+        ])
         .output();
     let result: TestListSummary = serde_json::from_slice(&output.stdout).unwrap();
     let build_platforms = &result
