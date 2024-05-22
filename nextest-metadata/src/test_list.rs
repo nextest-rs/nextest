@@ -516,34 +516,6 @@ pub struct RustNonTestBinarySummary {
     pub path: Utf8PathBuf,
 }
 
-/// Serialized representation of the host platform.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct HostPlatformSummary {
-    /// The host platform, if specified.
-    pub platform: PlatformSummary,
-
-    /// The libdir for the host platform.
-    ///
-    /// Empty if failed to discover.
-    #[serde(default)]
-    pub libdir: Option<Utf8PathBuf>,
-}
-
-/// Serialized representation of the target platform.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct TargetPlatformSummary {
-    /// The target platform, if specified.
-    pub platform: PlatformSummary,
-
-    /// The libdir for the target platform.
-    ///
-    /// Empty if failed to discover.
-    #[serde(default)]
-    pub libdir: Option<Utf8PathBuf>,
-}
-
 /// Serialized representation of the host and the target platform.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -555,6 +527,83 @@ pub struct BuildPlatformsSummary {
     ///
     /// With current versions of nextest, this will contain at most one element.
     pub targets: Vec<TargetPlatformSummary>,
+}
+
+/// Serialized representation of the host platform.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct HostPlatformSummary {
+    /// The host platform, if specified.
+    pub platform: PlatformSummary,
+
+    /// The libdir for the host platform.
+    pub libdir: PlatformLibdirSummary,
+}
+
+/// Serialized representation of the target platform.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TargetPlatformSummary {
+    /// The target platform, if specified.
+    pub platform: PlatformSummary,
+
+    /// The libdir for the target platform.
+    ///
+    /// Err if we failed to discover it.
+    pub libdir: PlatformLibdirSummary,
+}
+
+/// Serialized representation of a platform's library directory.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(tag = "status", rename_all = "kebab-case")]
+pub enum PlatformLibdirSummary {
+    /// The libdir is available.
+    Available {
+        /// The libdir.
+        path: Utf8PathBuf,
+    },
+
+    /// The libdir is unavailable, for the reason provided in the inner value.
+    Unavailable {
+        /// The reason why the libdir is unavailable.
+        reason: PlatformLibdirUnavailable,
+    },
+}
+
+/// The reason why a platform libdir is unavailable.
+///
+/// Part of [`PlatformLibdirSummary`].
+///
+/// This is an open-ended enum that may have additional deserializable variants in the future.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct PlatformLibdirUnavailable(pub Cow<'static, str>);
+
+impl PlatformLibdirUnavailable {
+    /// The libdir is not available because the rustc invocation to obtain it failed.
+    pub const RUSTC_FAILED: Self = Self::new_const("rustc-failed");
+
+    /// The libdir is not available because it was attempted to be read from rustc, but there was an
+    /// issue with its output.
+    pub const RUSTC_OUTPUT_ERROR: Self = Self::new_const("rustc-output-error");
+
+    /// The libdir is unavailable because it was deserialized from a summary serialized by an older
+    /// version of nextest.
+    pub const OLD_SUMMARY: Self = Self::new_const("old-summary");
+
+    /// Converts a static string into Self.
+    pub const fn new_const(reason: &'static str) -> Self {
+        Self(Cow::Borrowed(reason))
+    }
+
+    /// Converts a string into Self.
+    pub fn new(reason: impl Into<Cow<'static, str>>) -> Self {
+        Self(reason.into())
+    }
+
+    /// Returns self as a string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 /// Information about the kind of a Rust non-test binary.

@@ -394,10 +394,11 @@ mod tests {
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::SerializableFormat,
-        platform::BuildPlatformsTarget,
+        platform::{HostPlatform, PlatformLibdir, TargetPlatform},
     };
     use indoc::indoc;
     use maplit::btreeset;
+    use nextest_metadata::PlatformLibdirUnavailable;
     use pretty_assertions::assert_eq;
     use target_spec::{Platform, TargetFeatures};
 
@@ -428,13 +429,15 @@ mod tests {
             location: TargetDefinitionLocation::Builtin,
         };
         let fake_host_libdir = "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib";
-        let fake_target_libdir = "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-unknown-linux-gnu/lib";
         let build_platforms = BuildPlatforms {
-            host: TargetTriple::x86_64_unknown_linux_gnu().platform,
-            host_libdir: Some(Utf8PathBuf::from(fake_host_libdir)),
-            target: Some(BuildPlatformsTarget {
+            host: HostPlatform {
+                platform: TargetTriple::x86_64_unknown_linux_gnu().platform,
+                libdir: PlatformLibdir::Available(Utf8PathBuf::from(fake_host_libdir)),
+            },
+            target: Some(TargetPlatform {
                 triple: fake_triple,
-                libdir: Some(Utf8PathBuf::from(fake_target_libdir)),
+                // Test out the error case for unavailable libdirs.
+                libdir: PlatformLibdir::Unavailable(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR),
             }),
         };
 
@@ -515,7 +518,10 @@ mod tests {
                   "triple": "x86_64-unknown-linux-gnu",
                   "target-features": "unknown"
                 },
-                "libdir": "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib"
+                "libdir": {
+                  "status": "available",
+                  "path": "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib"
+                }
               },
               "targets": [
                 {
@@ -523,7 +529,10 @@ mod tests {
                     "triple": "aarch64-unknown-linux-gnu",
                     "target-features": "unknown"
                   },
-                  "libdir": "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-unknown-linux-gnu/lib"
+                  "libdir": {
+                    "status": "unavailable",
+                    "reason": "rustc-output-error"
+                  }
                 }
               ]
             },

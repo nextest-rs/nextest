@@ -60,7 +60,7 @@ impl<'a> RustcCli<'a> {
             }
         };
         if !output.status.success() {
-            log::debug!("The execution of the command failed with {}", output.status);
+            log::debug!("execution failed with {}", output.status);
             log::debug!("stdout:");
             log::debug!("{}", String::from_utf8_lossy(&output.stdout));
             log::debug!("stderr:");

@@ -2382,7 +2382,7 @@ mod tests {
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
-        let build_platforms = BuildPlatforms::new().unwrap();
+        let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
         let handler_kind = SignalHandlerKind::Noop;
         let profile = profile.apply_build_platforms(&build_platforms);
         let runner = builder

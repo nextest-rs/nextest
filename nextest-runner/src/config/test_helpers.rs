@@ -4,7 +4,7 @@
 use crate::{
     cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
     config::{CustomTestGroup, TestGroup},
-    platform::{BuildPlatforms, BuildPlatformsTarget},
+    platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::{
@@ -85,17 +85,19 @@ pub(super) fn binary_query<'a>(
 
 pub(super) fn build_platforms() -> BuildPlatforms {
     BuildPlatforms {
-        host: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
-        host_libdir: Some(
-            Utf8PathBuf::from("/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib")
-        ),
-        target: Some(BuildPlatformsTarget {
+        host: HostPlatform {
+            platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
+            libdir: PlatformLibdir::Available(
+                Utf8PathBuf::from("/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib")
+            ),
+        },
+        target: Some(TargetPlatform {
             triple: TargetTriple {
                 platform: Platform::new("aarch64-apple-darwin", TargetFeatures::Unknown).unwrap(),
                 source: TargetTripleSource::Env,
                 location: TargetDefinitionLocation::Builtin,
             },
-            libdir: Some(
+            libdir: PlatformLibdir::Available(
                 Utf8PathBuf::from("/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-apple-darwin/lib")
             ),
         }),
