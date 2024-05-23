@@ -485,7 +485,7 @@ pub struct RustBuildMetaSummary {
 
     /// The build platforms used while compiling the Rust artifacts.
     ///
-    /// Added in cargo-nextest 0.9.71.
+    /// Added in cargo-nextest 0.9.72.
     #[serde(default)]
     pub platforms: Option<BuildPlatformsSummary>,
 
