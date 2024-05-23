@@ -22,6 +22,9 @@
   - [Target runners](book/target-runners.md)
   - [Other options](book/other-options.md)
 - [Machine-readable output](book/machine-readable.md)
+  - [Machine-readable listings](book/machine-readable-list.md)
+  - [JUnit support](book/junit.md)
+  - [See also: Libtest JSON output]()
 - [Configuration](book/configuration.md)
   - [Environment variables](book/env-vars.md)
   - [Minimum nextest versions](book/minimum-versions.md)
@@ -29,18 +32,21 @@
     - [Specifying platforms](book/specifying-platforms.md)
   - [Heavy tests and threads-required](book/threads-required.md)
   - [Test groups and mutual exclusion](book/test-groups.md)
-- [JUnit support](book/junit.md)
 - [Integrations with other tools](book/integrations.md)
   - [Test coverage](book/test-coverage.md)
   - [The Miri interpreter](book/miri.md)
   - [Criterion benchmarks](book/benchmark-integration.md)
   - [Mutation testing with cargo-mutants](book/cargo-mutants.md)
+
 ---
+
 - [Stability policy](book/stability.md)
 - [Experimental features](book/experimental-features.md)
   - [Setup scripts](book/setup-scripts.md)
-  - [Machine-readable output for test runs](book/run-machine-readable.md)
+  - [Libtest JSON output](book/libtest-json.md)
+
 ---
+
 - [How nextest works](book/how-it-works.md)
   - [Benchmarks](book/benchmarks.md)
   - [Custom test harnesses](book/custom-test-harnesses.md)

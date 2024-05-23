@@ -6,4 +6,4 @@ may be changed or removed at any time, and must be accessed through a configurat
 ## Current features
 
 - [Setup scripts](setup-scripts.md)
-- [Machine-readable output for test runs](run-machine-readable.md)
+- [Libtest JSON output](libtest-json.md)

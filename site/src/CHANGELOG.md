@@ -645,7 +645,7 @@ This release includes a number of additions and changes to filter expressions.
 - The expression language supports several new [predicates](https://nexte.st/book/filter-expressions#basic-predicates):
   - `kind(name-matcher)`: include all tests in binary kinds (e.g. `lib`, `test`, `bench`) matching `name-matcher`.
   - `binary(name-matcher)`: include all tests in binary names matching `name-matcher`.
-  - `platform(host)` or `platform(target)`: include all tests that are [built for the host or target platform](running.md#filtering-by-build-platform), respectively.
+  - `platform(host)` or `platform(target)`: include all tests that are [built for the host or target platform](https://nexte.st/book/running#filtering-by-build-platform), respectively.
 
 #### Changed
 
@@ -685,7 +685,7 @@ Currently, only `retries` are supported. In the future, more kinds of customizat
 
 - New config option `profile.<profile-name>.test-threads` controls the number of tests run simultaneously. This option accepts either an integer with the number of threads, or the string "num-cpus" (default) for the number of logical CPUs. As usual, this option is overridden by `--test-threads` and `NEXTEST_TEST_THREADS`, in that order.
 - The command-line `--test-threads` option and the `NEXTEST_TEST_THREADS` environment variable now accept `num-cpus` as their argument.
-- nextest now works with [cargo binstall](https://github.com/ryankurte/cargo-binstall) ([#332]). Thanks [Remoun] for your first contribution!
+- nextest now works with [cargo binstall](https://github.com/ryankurte/cargo-binstall) ([#332]). Thanks [@remoun] for your first contribution!
 
 ### Fixed
 

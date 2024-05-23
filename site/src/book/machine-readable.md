@@ -1,87 +1,24 @@
 # Machine-readable output
 
-cargo-nextest can be configured to produce machine-readable JSON output, readable by other programs. The [nextest-metadata crate](https://crates.io/crates/nextest-metadata) provides a Rust interface to deserialize the output to. (The same crate is used by nextest to generate the output.)
+Nextest provides a number of ways to obtain output suitable for consumption by other tools or infrastructure.
 
-## Listing tests
+## Test and binary lists
 
-To produce a list of tests using the JSON output, use `cargo nextest list --message-format json` (or `json-pretty` for nicely formatted output). Here's some example output for [camino](https://github.com/camino-rs/camino):
+For test lists, nextest provides JSON output. See [_Machine-readable test lists_](list-machine-readable.md#machine-readable-test-lists).
 
-```json
-% cargo nextest list --all-features --lib --message-format json-pretty
-{
-  "rust-build-meta": {
-    "target-directory": "/home/rain/dev/camino/target",
-    "base-output-directories": [
-      "debug"
-    ],
-    "non-test-binaries": {},
-    "build-script-out-dirs": {
-      "camino 1.1.6 (path+file:///home/rain/dev/camino)": "debug/build/camino-02991de38c555ca1/out"
-    },
-    "linked-paths": [],
-    "target-platforms": [
-      {
-        "triple": "x86_64-unknown-linux-gnu",
-        "target-features": [
-          "fxsr",
-          "sse",
-          "sse2"
-        ]
-      }
-    ],
-    "target-platform": null
-  },
-  "test-count": 5,
-  "rust-suites": {
-    "camino": {
-      "package-name": "camino",
-      "binary-id": "camino",
-      "binary-name": "camino",
-      "package-id": "camino 1.1.6 (path+file:///home/rain/dev/camino)",
-      "kind": "lib",
-      "binary-path": "/home/rain/dev/camino/target/debug/deps/camino-1bdca073ddd4474a",
-      "build-platform": "target",
-      "cwd": "/home/rain/dev/camino",
-      "status": "listed",
-      "testcases": {
-        "serde_impls::tests::invalid_utf8": {
-          "ignored": false,
-          "filter-match": {
-            "status": "matches"
-          }
-        },
-        "serde_impls::tests::valid_utf8": {
-          "ignored": false,
-          "filter-match": {
-            "status": "matches"
-          }
-        },
-        "tests::test_borrowed_into": {
-          "ignored": false,
-          "filter-match": {
-            "status": "matches"
-          }
-        },
-        "tests::test_deref_mut": {
-          "ignored": false,
-          "filter-match": {
-            "status": "matches"
-          }
-        },
-        "tests::test_owned_into": {
-          "ignored": false,
-          "filter-match": {
-            "status": "matches"
-          }
-        }
-      }
-    }
-  }
-}
-```
+In addition, nextest can also provide a list of binaries without running them to obtain the list of tests. See [_Machine-readable binary lists_](list-machine-readable.md#machine-readable-binary-lists) for more information.
 
-The value of `"package-id"` can be matched up to the package IDs produced by running `cargo metadata`.
+## Test runs
 
-## Running tests
+For test runs, the main mechanism available is JUnit XML. For more information, see [_JUnit support_](junit.md).
 
-This is currently an experimental feature. For more information, see [Machine-readable output for test runs](run-machine-readable.md).
+Additionally, as an experimental feature, JSON libtest-like output is supported. This is primarily meant for compatibility with existing test infrastructure that consumes this output, and is not currently full-fidelity. For more information, see [_Libtest JSON output_](libtest-json.md).
+
+## Future work
+
+The overall aspiration is for all human-readable UI to also become machine-readable. Some features that are still missing:
+
+1. A first-class newline-delimited JSON format for test runs, not necessarily attempting to retain compatibility with libtest JSON. See [#20](https://github.com/nextest-rs/nextest/issues/20).
+2. Detected configuration: both [nextest-specific configuration](configuration.md), and configuration detected by emulating Cargo. See [#1527](https://github.com/nextest-rs/nextest/issues/1527).
+
+NOTE: If you'd like to see any of these happen, contributions would be greatly appreciated!

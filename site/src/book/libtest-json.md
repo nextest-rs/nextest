@@ -1,4 +1,4 @@
-# Machine-readable output for test runs
+# Libtest JSON output
 
 - **Nextest version:** 0.9.66 and above
 - **Enable with:** Set `NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1` in the environment
