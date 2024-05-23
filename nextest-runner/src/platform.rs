@@ -337,7 +337,6 @@ impl PlatformLibdir {
 
     /// Converts a summary to a [`PlatformLibdir`].
     pub fn from_summary(summary: PlatformLibdirSummary) -> Self {
-        // TODO: accept a path remapper
         match summary {
             PlatformLibdirSummary::Available { path: libdir } => Self::Available(libdir),
             PlatformLibdirSummary::Unavailable { reason } => Self::Unavailable(reason),

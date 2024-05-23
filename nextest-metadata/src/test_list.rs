@@ -484,19 +484,21 @@ pub struct RustBuildMetaSummary {
     pub linked_paths: BTreeSet<Utf8PathBuf>,
 
     /// The build platforms used while compiling the Rust artifacts.
+    ///
+    /// Added in cargo-nextest 0.9.71.
     #[serde(default)]
     pub platforms: Option<BuildPlatformsSummary>,
 
     /// The target platforms used while compiling the Rust artifacts.
     ///
-    /// Deprecated in favor of [`Self::platforms`]; use that if non-empty.
+    /// Deprecated in favor of [`Self::platforms`]; use that if available.
     #[serde(default)]
     pub target_platforms: Vec<PlatformSummary>,
 
     /// A deprecated form of the target platform used for cross-compilation, if any.
     ///
-    /// This is no longer used by nextest, but is maintained for compatibility with older versions
-    /// which used to generate this.
+    /// Deprecated in favor of (in order) [`Self::platforms`] and [`Self::target_platforms`]; use
+    /// those if available.
     #[serde(default)]
     pub target_platform: Option<String>,
 }

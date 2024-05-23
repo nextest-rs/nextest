@@ -32,7 +32,6 @@ impl ConfigIdentifier {
         // Tool identifiers are of the form "@tool:identifier:identifier".
 
         if let Some(suffix) = identifier.strip_prefix("@tool:") {
-            // TODO: finish this
             let mut parts = suffix.splitn(2, ':');
             let tool_name = parts
                 .next()

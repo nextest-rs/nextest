@@ -1,10 +1,17 @@
 # Changelog
 
-## Unreleased
+## [0.11.0] - 2024-05-023
+
+### Added
+
+- `RustBuildMetaSummary` now has a new `platforms` field, which contains information about host and
+  target platforms. This field is provided by cargo-nextest 0.9.71 and above.
 
 ### Changed
 
 - MSRV updated to Rust 1.73.
+- `RustBuildMetaSummary::target_platforms` is now deprecated -- use
+  `RustBuildMetaSummary::platforms` if available.
 
 ## [0.10.0] - 2023-12-09
 
@@ -203,6 +210,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.0
 [0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.10.0
 [0.9.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.3
 [0.9.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.2

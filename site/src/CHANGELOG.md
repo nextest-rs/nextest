@@ -3,6 +3,28 @@
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](book/stability.md) for how versioning works with cargo-nextest.
 
+## [0.9.71] - 2024-05-23
+
+### Fixed
+
+Previously, nextest would be unable to run proc-macro tests in some circumstances:
+
+- On Windows, with rustup 1.27.2 and above
+- On all platforms, if cargo is used without rustup, or if the `cargo-nextest` binary is invoked directly
+
+With this release, proc-macros tests now work in all circumstances. This is done by nextest detecting Rust libdirs for the host and target platforms, and adding them to the library path automatically.
+
+(There's also the less-common case of test binaries compiled with `-C prefer-dynamic`. These
+situations now also work.)
+
+See [#267](https://github.com/nextest-rs/nextest/issues/267) and [#1493](https://github.com/nextest-rs/nextest/issues/1493) for more details.
+
+Thanks to [06393993](https://github.com/06393993) for your first contribution!
+
+### Changed
+
+As part of the above fix, libstd is now included in all archives. This makes archives around 4MB bigger, or around 8MB in cross-compilation scenarios. (It is possible to address this via config knobs -- if this is particularly bothersome to you, please post in [#1515](https://github.com/nextest-rs/nextest/issues/1515).)
+
 ## [0.9.70] - 2024-04-24
 
 ### Added
@@ -984,6 +1006,7 @@ Supported in this initial release:
 - [Test retries](book/retries.md) and flaky test detection
 - [JUnit support](book/junit.md) for integration with other test tooling
 
+[0.9.71]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.71
 [0.9.70]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.70
 [0.9.69]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.69
 [0.9.68]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.68

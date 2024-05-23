@@ -43,7 +43,6 @@ impl SerializableFormat {
     ) -> Result<(), WriteTestListError> {
         let out = match self {
             SerializableFormat::Json => {
-                // TODO: convert WriteStr to io::Write rather than buffering the output in memory.
                 serde_json::to_string(value).map_err(WriteTestListError::Json)?
             }
             SerializableFormat::JsonPretty => {
