@@ -89,10 +89,6 @@ jobs:
         run: cargo local-nt run --profile ci
       - name: Test with latest nextest release
         run: cargo nextest run --profile ci
-        env:
-          # TODO: should remove once https://github.com/nextest-rs/nextest/pull/1499 is in the
-          # latest release
-          RUSTUP_WINDOWS_PATH_ADD_BIN: 1
       - name: Test without double-spawning
         if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-14' }}
         env:
