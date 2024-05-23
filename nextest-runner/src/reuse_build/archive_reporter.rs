@@ -46,23 +46,12 @@ impl ArchiveReporter {
     ) -> io::Result<()> {
         match event {
             ArchiveEvent::ArchiveStarted {
-                test_binary_count,
-                non_test_binary_count,
-                build_script_out_dir_count,
-                linked_path_count,
-                extra_path_count,
+                counts,
                 output_file,
             } => {
                 write!(writer, "{:>12} ", "Archiving".style(self.styles.success))?;
 
-                self.report_counts(
-                    test_binary_count,
-                    non_test_binary_count,
-                    build_script_out_dir_count,
-                    linked_path_count,
-                    extra_path_count,
-                    &mut writer,
-                )?;
+                self.report_counts(counts, &mut writer)?;
 
                 writeln!(
                     writer,
@@ -70,6 +59,14 @@ impl ArchiveReporter {
                     self.redactor
                         .redact_path(output_file)
                         .style(self.styles.bold)
+                )?;
+            }
+            ArchiveEvent::StdlibPathError { error } => {
+                write!(writer, "{:>12} ", "Warning".style(self.styles.bold))?;
+                writeln!(
+                    writer,
+                    "could not find standard library for host (proc macro tests may not work): {}",
+                    error
                 )?;
             }
             ArchiveEvent::ExtraPathMissing { path, warn } => {
@@ -170,13 +167,16 @@ impl ArchiveReporter {
                 write!(writer, "{:>12} ", "Extracting".style(self.styles.success))?;
 
                 self.report_counts(
-                    test_binary_count,
-                    non_test_binary_count,
-                    build_script_out_dir_count,
-                    linked_path_count,
-                    // TODO: we currently don't store a list of extra paths at manifest creation
-                    // time, so we can't report this count here.
-                    0,
+                    ArchiveCounts {
+                        test_binary_count,
+                        non_test_binary_count,
+                        build_script_out_dir_count,
+                        linked_path_count,
+                        // TODO: we currently don't store a list of extra paths or standard libs at
+                        // manifest creation time, so we can't report this count here.
+                        extra_path_count: 0,
+                        stdlib_count: 0,
+                    },
                     &mut writer,
                 )?;
 
@@ -206,15 +206,16 @@ impl ArchiveReporter {
         Ok(())
     }
 
-    fn report_counts(
-        &mut self,
-        test_binary_count: usize,
-        non_test_binary_count: usize,
-        build_script_out_dir_count: usize,
-        linked_path_count: usize,
-        extra_path_count: usize,
-        mut writer: impl Write,
-    ) -> io::Result<()> {
+    fn report_counts(&mut self, counts: ArchiveCounts, mut writer: impl Write) -> io::Result<()> {
+        let ArchiveCounts {
+            test_binary_count,
+            non_test_binary_count,
+            build_script_out_dir_count,
+            linked_path_count,
+            extra_path_count,
+            stdlib_count,
+        } = counts;
+
         let total_binary_count = test_binary_count + non_test_binary_count;
         let non_test_text = if non_test_binary_count > 0 {
             format!(
@@ -245,6 +246,13 @@ impl ArchiveReporter {
                 "{} extra {}",
                 extra_path_count.style(self.styles.bold),
                 plural::paths_str(extra_path_count),
+            ));
+        }
+        if stdlib_count > 0 {
+            more.push(format!(
+                "{} standard {}",
+                stdlib_count.style(self.styles.bold),
+                plural::libraries_str(stdlib_count),
             ));
         }
 
@@ -297,23 +305,17 @@ impl Styles {
 pub enum ArchiveEvent<'a> {
     /// The archive process started.
     ArchiveStarted {
-        /// The number of test binaries to archive.
-        test_binary_count: usize,
-
-        /// The number of non-test binaries to archive.
-        non_test_binary_count: usize,
-
-        /// The number of build script output directories to archive.
-        build_script_out_dir_count: usize,
-
-        /// The number of linked paths to archive.
-        linked_path_count: usize,
-
-        /// The number of extra paths to archive.
-        extra_path_count: usize,
+        /// File counts.
+        counts: ArchiveCounts,
 
         /// The archive output file.
         output_file: &'a Utf8Path,
+    },
+
+    /// An error occurred while obtaining the path to a standard library.
+    StdlibPathError {
+        /// The error that occurred.
+        error: &'a str,
     },
 
     /// A provided extra path did not exist.
@@ -405,4 +407,26 @@ pub enum ArchiveEvent<'a> {
         /// How long it took to extract the archive.
         elapsed: Duration,
     },
+}
+
+/// Counts of various types of files in an archive.
+#[derive(Clone, Copy, Debug)]
+pub struct ArchiveCounts {
+    /// The number of test binaries.
+    pub test_binary_count: usize,
+
+    /// The number of non-test binaries.
+    pub non_test_binary_count: usize,
+
+    /// The number of build script output directories.
+    pub build_script_out_dir_count: usize,
+
+    /// The number of linked paths.
+    pub linked_path_count: usize,
+
+    /// The number of extra paths.
+    pub extra_path_count: usize,
+
+    /// The number of standard libraries.
+    pub stdlib_count: usize,
 }

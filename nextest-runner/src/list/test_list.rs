@@ -234,6 +234,10 @@ impl<'g> TestList<'g> {
         let stream = futures::stream::iter(test_artifacts).map(|test_binary| {
             async {
                 if filter.should_obtain_test_list_from_binary(&test_binary) {
+                    log::debug!(
+                        "executing test binary to obtain test list: {}",
+                        test_binary.binary_id,
+                    );
                     // Run the binary to obtain the test list.
                     let (non_ignored, ignored) = test_binary.exec(&lctx, ctx.target_runner).await?;
                     let (bin, info) = Self::process_output(
@@ -245,6 +249,10 @@ impl<'g> TestList<'g> {
                     Ok::<_, CreateTestListError>((bin, info))
                 } else {
                     // Skipped means no tests, so test_count doesn't need to be modified.
+                    log::debug!(
+                        "skipping test binary because of filters: {}",
+                        test_binary.binary_id,
+                    );
                     Ok(Self::process_skipped(test_binary))
                 }
             }

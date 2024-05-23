@@ -590,6 +590,10 @@ impl PlatformLibdirUnavailable {
     /// version of nextest.
     pub const OLD_SUMMARY: Self = Self::new_const("old-summary");
 
+    /// The libdir is unavailable because a build was reused from an archive, and the libdir was not
+    /// present in the archive
+    pub const NOT_IN_ARCHIVE: Self = Self::new_const("not-in-archive");
+
     /// Converts a static string into Self.
     pub const fn new_const(reason: &'static str) -> Self {
         Self(Cow::Borrowed(reason))

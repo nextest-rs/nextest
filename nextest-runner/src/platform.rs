@@ -6,8 +6,9 @@
 use crate::{
     cargo_config::{CargoTargetArg, TargetTriple},
     errors::{RustBuildMetaParseError, TargetTripleError, UnknownHostPlatform},
+    reuse_build::{LibdirMapper, PlatformLibdirMapper},
 };
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use nextest_metadata::{
     BuildPlatformsSummary, HostPlatformSummary, PlatformLibdirSummary, PlatformLibdirUnavailable,
     TargetPlatformSummary,
@@ -38,6 +39,17 @@ impl BuildPlatforms {
             ))?,
             target: None,
         })
+    }
+
+    /// Maps libdir paths.
+    pub fn map_libdir(&self, mapper: &LibdirMapper) -> Self {
+        Self {
+            host: self.host.map_libdir(&mapper.host),
+            target: self
+                .target
+                .as_ref()
+                .map(|target| target.map_libdir(&mapper.target)),
+        }
     }
 
     /// Returns the argument to pass into `cargo metadata --filter-platform <triple>`.
@@ -192,6 +204,13 @@ impl HostPlatform {
             libdir: PlatformLibdir::from_summary(summary.libdir),
         })
     }
+
+    fn map_libdir(&self, mapper: &PlatformLibdirMapper) -> Self {
+        Self {
+            platform: self.platform.clone(),
+            libdir: mapper.map(&self.libdir),
+        }
+    }
 }
 
 /// The target platform.
@@ -226,6 +245,13 @@ impl TargetPlatform {
                 .expect("the input is not None, so the output must not be None"),
             libdir: PlatformLibdir::from_summary(summary.libdir),
         })
+    }
+
+    fn map_libdir(&self, mapper: &PlatformLibdirMapper) -> Self {
+        Self {
+            triple: self.triple.clone(),
+            libdir: mapper.map(&self.libdir),
+        }
     }
 }
 
@@ -292,7 +318,7 @@ impl PlatformLibdir {
     }
 
     /// Returns self as a path if available.
-    pub fn as_path(&self) -> Option<&Utf8PathBuf> {
+    pub fn as_path(&self) -> Option<&Utf8Path> {
         match self {
             Self::Available(path) => Some(path),
             Self::Unavailable(_) => None,

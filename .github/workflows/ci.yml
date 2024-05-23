@@ -99,6 +99,22 @@ jobs:
           NEXTEST_DOUBLE_SPAWN: 0
         run: cargo local-nt run --profile ci
 
+      - name: Test without rustup wrappers
+        env:
+          CARGO_NEXTEST: target/debug/cargo-nextest
+          RUSTUP_AVAILABLE: 1
+        shell: bash
+        run: ./scripts/nextest-without-rustup.sh run --profile ci
+
+      - name: Upload nextest binary
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: cargo-nextest-${{ matrix.os }}-${{ matrix.rust-version }}
+          path: |
+            target/debug/cargo-nextest
+            target/debug/cargo-nextest.exe
+          if-no-files-found: error
+
   test-archive-target-runner:
     name: Test archives with a target runner
     # gcc-mingw-w64-x86-64-win32 requires Ubuntu 22.04
@@ -128,11 +144,83 @@ jobs:
       - name: Build cargo-nextest
         run: cargo build --package cargo-nextest
       - name: Archive test fixtures
+        env:
+          CARGO_NEXTEST: target/debug/cargo-nextest
+          RUSTUP_AVAILABLE: 1
         run: |
-          cargo local-nt archive --manifest-path fixtures/nextest-tests/Cargo.toml \
+          ./scripts/nextest-without-rustup.sh archive --manifest-path fixtures/nextest-tests/Cargo.toml \
             --target x86_64-pc-windows-gnu --archive-file target/fixture-archive.tar.zst \
             --package cdylib-example --package nextest-derive
+
+      # This ensures that for target binaries, we always use the libdir in the archive, never the
+      # one installed by rustup.
+      - name: Remove x86_64-pc-windows-gnu target from rustup
+        run: rustup target remove x86_64-pc-windows-gnu
+
       - name: Run test fixtures
         env:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER: wine
         run: cargo local-nt run --archive-file target/fixture-archive.tar.zst
+
+      # Completely uninstall rustup -- this is similar to running an archive on a machine without
+      # cargo.
+      - name: Uninstall rustup
+        run: rustup self uninstall -y
+
+      - name: Run test fixtures without rustup wrappers
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER: wine
+          CARGO_NEXTEST: target/debug/cargo-nextest
+        run: ./scripts/nextest-without-rustup.sh run --archive-file target/fixture-archive.tar.zst
+
+      # Upload the archive for use in the next job.
+      - name: Upload archive
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: fixture-archive
+          path: target/fixture-archive.tar.zst
+          if-no-files-found: error
+
+  test-archive-runner-dest:
+    name: Test archives with a runner (destination)
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    needs:
+      - test-archive-target-runner
+      - build
+    steps:
+      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
+      - name: Download nextest binary
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4.1.7
+        with:
+          name: cargo-nextest-${{ matrix.os }}-stable
+          path: nextest-bin
+      - name: Download archive
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4.1.7
+        with:
+          name: fixture-archive
+          path: fixture-archive
+      - name: Run test fixtures (host)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          CARGO_NEXTEST: nextest-bin/cargo-nextest
+        run: |
+          chmod +x $CARGO_NEXTEST
+          ./scripts/nextest-without-rustup.sh run \
+            --archive-file fixture-archive/fixture-archive.tar.zst \
+            --workspace-remap $GITHUB_WORKSPACE/fixtures/nextest-tests \
+            -E 'platform(host)'
+      - name: Run test fixtures (target)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: bash
+        env:
+          CARGO_NEXTEST: nextest-bin/cargo-nextest.exe
+        run: |
+          ./scripts/nextest-without-rustup.sh run \
+            --archive-file fixture-archive/fixture-archive.tar.zst \
+            --workspace-remap $GITHUB_WORKSPACE/fixtures/nextest-tests \
+            -E 'platform(target)'

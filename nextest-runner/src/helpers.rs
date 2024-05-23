@@ -62,6 +62,14 @@ pub(crate) mod plural {
             "these crates"
         }
     }
+
+    pub(crate) fn libraries_str(count: usize) -> &'static str {
+        if count == 1 {
+            "library"
+        } else {
+            "libraries"
+        }
+    }
 }
 
 /// Write out a test name.

@@ -1,9 +1,13 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{ArchiveEvent, ArchiveFormat, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
+use super::{
+    ArchiveEvent, ArchiveFormat, LibdirMapper, PlatformLibdirMapper, BINARIES_METADATA_FILE_NAME,
+    CARGO_METADATA_FILE_NAME, LIBDIRS_BASE_DIR,
+};
 use crate::{
     errors::{ArchiveExtractError, ArchiveReadError},
+    helpers::convert_rel_path_to_main_sep,
     list::BinaryList,
 };
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
@@ -85,9 +89,11 @@ impl<'a> Unarchiver<'a> {
         let mut archive_reader =
             ArchiveReader::new(self.file, self.format).map_err(ArchiveExtractError::Read)?;
 
-        // Will be filled out by the for loop below\
+        // Will be filled out by the for loop below.
         let mut binary_list = None;
         let mut graph_data = None;
+        let mut host_libdir = PlatformLibdirMapper::Unavailable;
+        let mut target_libdir = PlatformLibdirMapper::Unavailable;
         let binaries_metadata_path = Utf8Path::new(BINARIES_METADATA_FILE_NAME);
         let cargo_metadata_path = Utf8Path::new(CARGO_METADATA_FILE_NAME);
 
@@ -165,6 +171,18 @@ impl<'a> Unarchiver<'a> {
                 })?;
                 graph_data = Some((json, package_graph));
                 continue;
+            } else if let Ok(suffix) = path.strip_prefix(LIBDIRS_BASE_DIR) {
+                if suffix.starts_with("host") {
+                    host_libdir = PlatformLibdirMapper::Path(dest_dir.join(
+                        convert_rel_path_to_main_sep(&Utf8Path::new(LIBDIRS_BASE_DIR).join("host")),
+                    ));
+                } else if suffix.starts_with("target/0") {
+                    // Currently we only support one target, so just check explicitly for target/0.
+                    target_libdir =
+                        PlatformLibdirMapper::Path(dest_dir.join(convert_rel_path_to_main_sep(
+                            &Utf8Path::new(LIBDIRS_BASE_DIR).join("target/0"),
+                        )));
+                }
             }
         }
 
@@ -201,6 +219,10 @@ impl<'a> Unarchiver<'a> {
             binary_list,
             cargo_metadata_json,
             graph,
+            libdir_mapper: LibdirMapper {
+                host: host_libdir,
+                target: target_libdir,
+            },
         })
     }
 }
@@ -221,6 +243,9 @@ pub(crate) struct ExtractInfo {
 
     /// The [`PackageGraph`] read from the archive.
     pub graph: PackageGraph,
+
+    /// A remapper for the Rust libdir.
+    pub libdir_mapper: LibdirMapper,
 }
 
 struct ArchiveReader<'a> {
