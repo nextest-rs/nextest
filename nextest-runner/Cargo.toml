@@ -32,7 +32,7 @@ chrono = "0.4.38"
 debug-ignore.workspace = true
 display-error-chain = "0.2.0"
 duct = "0.13.7"
-either = "1.11.0"
+either = "1.12.0"
 futures = "0.3.30"
 guppy = "0.17.5"
 # Used to find the cargo root directory, which is needed in case the user has
