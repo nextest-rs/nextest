@@ -8,6 +8,8 @@ repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://docs.rs/nextest-runner"
 edition = "2021"
 rust-version.workspace = true
+keywords = ["nextest", "test-runner"]
+categories = ["development-tools::testing"]
 # For an example build script that gates by compiler version, see the history for build.rs in this
 # directory.
 
