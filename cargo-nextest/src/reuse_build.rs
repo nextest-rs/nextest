@@ -213,6 +213,7 @@ pub(crate) fn make_path_mapper(
         info.workspace_remap(),
         orig_target_dir,
         info.target_dir_remap(),
+        info.libdir_mapper.clone(),
     )
     .map_err(|err| {
         let arg_name = match err.kind() {

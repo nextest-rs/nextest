@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
+use super::{ArchiveCounts, ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
     config::{
         get_num_cpus, ArchiveConfig, ArchiveIncludeOnMissing, FinalConfig, NextestProfile,
@@ -11,7 +11,7 @@ use crate::{
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
     list::{BinaryList, OutputFormat, SerializableFormat},
     redact::Redactor,
-    reuse_build::PathMapper,
+    reuse_build::{PathMapper, LIBDIRS_BASE_DIR},
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -74,37 +74,92 @@ where
 {
     let config = profile.archive_config();
 
-    let file = AtomicFile::new(output_file, OverwriteBehavior::AllowOverwrite);
-    let test_binary_count = binary_list.rust_binaries.len();
-    let non_test_binary_count = binary_list.rust_build_meta.non_test_binaries.len();
-    let build_script_out_dir_count = binary_list.rust_build_meta.build_script_out_dirs.len();
-    let linked_path_count = binary_list.rust_build_meta.linked_paths.len();
-    let extra_path_count = config.include.len();
     let start_time = Instant::now();
 
+    let file = AtomicFile::new(output_file, OverwriteBehavior::AllowOverwrite);
     let file_count = file
         .write(|file| {
-            callback(ArchiveEvent::ArchiveStarted {
-                test_binary_count,
-                non_test_binary_count,
-                build_script_out_dir_count,
-                linked_path_count,
-                extra_path_count,
-                output_file,
-            })
-            .map_err(ArchiveCreateError::ReporterIo)?;
-            // Write out the archive.
+            // Tests require the standard library in two cases:
+            // * proc-macro tests (host)
+            // * tests compiled with -C prefer-dynamic (target)
+            //
+            // We only care about libstd -- empirically, other libraries in the path aren't
+            // required.
+            let (host_stdlib, host_stdlib_err) = if let Some(libdir) = binary_list
+                .rust_build_meta
+                .build_platforms
+                .host
+                .libdir
+                .as_path()
+            {
+                split_result(find_std(libdir))
+            } else {
+                (None, None)
+            };
+
+            let (target_stdlib, target_stdlib_err) =
+                if let Some(target) = &binary_list.rust_build_meta.build_platforms.target {
+                    if let Some(libdir) = target.libdir.as_path() {
+                        split_result(find_std(libdir))
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    (None, None)
+                };
+
+            let stdlib_count = host_stdlib.is_some() as usize + target_stdlib.is_some() as usize;
+
             let archiver = Archiver::new(
                 config,
                 binary_list,
                 cargo_metadata,
                 graph,
                 path_mapper,
+                host_stdlib,
+                target_stdlib,
                 format,
                 zstd_level,
                 file,
                 redactor,
             )?;
+
+            let test_binary_count = binary_list.rust_binaries.len();
+            let non_test_binary_count = binary_list.rust_build_meta.non_test_binaries.len();
+            let build_script_out_dir_count =
+                binary_list.rust_build_meta.build_script_out_dirs.len();
+            let linked_path_count = binary_list.rust_build_meta.linked_paths.len();
+            let extra_path_count = config.include.len();
+
+            let counts = ArchiveCounts {
+                test_binary_count,
+                non_test_binary_count,
+                build_script_out_dir_count,
+                linked_path_count,
+                extra_path_count,
+                stdlib_count,
+            };
+
+            callback(ArchiveEvent::ArchiveStarted {
+                counts,
+                output_file,
+            })
+            .map_err(ArchiveCreateError::ReporterIo)?;
+
+            // Was there an error finding the standard library?
+            if let Some(err) = host_stdlib_err {
+                callback(ArchiveEvent::StdlibPathError {
+                    error: &err.to_string(),
+                })
+                .map_err(ArchiveCreateError::ReporterIo)?;
+            }
+            if let Some(err) = target_stdlib_err {
+                callback(ArchiveEvent::StdlibPathError {
+                    error: &err.to_string(),
+                })
+                .map_err(ArchiveCreateError::ReporterIo)?;
+            }
+
             let (_, file_count) = archiver.archive(&mut callback)?;
             Ok(file_count)
         })
@@ -130,6 +185,8 @@ struct Archiver<'a, W: Write> {
     cargo_metadata: &'a str,
     graph: &'a PackageGraph,
     path_mapper: &'a PathMapper,
+    host_stdlib: Option<Utf8PathBuf>,
+    target_stdlib: Option<Utf8PathBuf>,
     builder: tar::Builder<Encoder<'static, BufWriter<W>>>,
     unix_timestamp: u64,
     added_files: HashSet<Utf8PathBuf>,
@@ -145,6 +202,8 @@ impl<'a, W: Write> Archiver<'a, W> {
         cargo_metadata: &'a str,
         graph: &'a PackageGraph,
         path_mapper: &'a PathMapper,
+        host_stdlib: Option<Utf8PathBuf>,
+        target_stdlib: Option<Utf8PathBuf>,
         format: ArchiveFormat,
         compression_level: i32,
         writer: W,
@@ -175,6 +234,8 @@ impl<'a, W: Write> Archiver<'a, W> {
             cargo_metadata,
             graph,
             path_mapper,
+            host_stdlib,
+            target_stdlib,
             builder,
             unix_timestamp,
             added_files: HashSet::new(),
@@ -405,6 +466,26 @@ impl<'a, W: Write> Archiver<'a, W> {
             }
         }
 
+        // Add the standard libraries to the archive if available.
+        if let Some(host_stdlib) = self.host_stdlib.clone() {
+            let rel_path = Utf8Path::new(LIBDIRS_BASE_DIR)
+                .join("host")
+                .join(host_stdlib.file_name().unwrap());
+            let rel_path = convert_rel_path_to_forward_slash(&rel_path);
+
+            self.append_file(ArchiveStep::ExtraPaths, &host_stdlib, &rel_path)?;
+        }
+        if let Some(target_stdlib) = self.target_stdlib.clone() {
+            // Use libdir/target/0 as the path to the target standard library, to support multiple
+            // targets in the future.
+            let rel_path = Utf8Path::new(LIBDIRS_BASE_DIR)
+                .join("target/0")
+                .join(target_stdlib.file_name().unwrap());
+            let rel_path = convert_rel_path_to_forward_slash(&rel_path);
+
+            self.append_file(ArchiveStep::ExtraPaths, &target_stdlib, &rel_path)?;
+        }
+
         // Finish writing the archive.
         let encoder = self
             .builder
@@ -562,6 +643,37 @@ impl<'a, W: Write> Archiver<'a, W> {
     }
 }
 
+fn find_std(libdir: &Utf8Path) -> io::Result<Utf8PathBuf> {
+    for path in libdir.read_dir_utf8()? {
+        let path = path?;
+        // As of Rust 1.78, std is of the form:
+        //
+        //   libstd-<hash>.so (non-macOS Unix)
+        //   libstd-<hash>.dylib (macOS)
+        //   std-<hash>.dll (Windows)
+        let file_name = path.file_name();
+        let is_unix = file_name.starts_with("libstd-")
+            && (file_name.ends_with(".so") || file_name.ends_with(".dylib"));
+        let is_windows = file_name.starts_with("std-") && file_name.ends_with(".dll");
+
+        if is_unix || is_windows {
+            return Ok(path.into_path());
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "could not find the Rust standard library in the libdir",
+    ))
+}
+
+fn split_result<T, E>(result: Result<T, E>) -> (Option<T>, Option<E>) {
+    match result {
+        Ok(v) => (Some(v), None),
+        Err(e) => (None, Some(e)),
+    }
+}
+
 /// The part of the archive process that is currently in progress.
 ///
 /// This is used for better warnings and errors.
@@ -581,6 +693,9 @@ pub enum ArchiveStep {
 
     /// Extra paths are being archived.
     ExtraPaths,
+
+    /// The standard library is being archived.
+    Stdlib,
 }
 
 impl fmt::Display for ArchiveStep {
@@ -591,6 +706,7 @@ impl fmt::Display for ArchiveStep {
             Self::BuildScriptOutDirs => write!(f, "build script output directories"),
             Self::LinkedPaths => write!(f, "linked paths"),
             Self::ExtraPaths => write!(f, "extra paths"),
+            Self::Stdlib => write!(f, "standard library"),
         }
     }
 }

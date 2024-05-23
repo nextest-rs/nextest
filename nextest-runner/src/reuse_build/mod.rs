@@ -13,11 +13,12 @@ use crate::{
         PathMapperConstructKind,
     },
     list::BinaryList,
+    platform::PlatformLibdir,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
 use guppy::graph::PackageGraph;
-use nextest_metadata::BinaryListSummary;
+use nextest_metadata::{BinaryListSummary, PlatformLibdirUnavailable};
 use std::{fmt, fs, io, sync::Arc};
 
 mod archive_reporter;
@@ -34,6 +35,9 @@ pub const CARGO_METADATA_FILE_NAME: &str = "target/nextest/cargo-metadata.json";
 /// The name of the file in which binaries metadata is stored.
 pub const BINARIES_METADATA_FILE_NAME: &str = "target/nextest/binaries-metadata.json";
 
+/// The name of the directory in which libdirs are stored.
+pub const LIBDIRS_BASE_DIR: &str = "target/nextest/libdirs";
+
 /// Reuse build information.
 #[derive(Debug, Default)]
 pub struct ReuseBuildInfo {
@@ -42,6 +46,9 @@ pub struct ReuseBuildInfo {
 
     /// Binaries metadata JSON and remapping for the target directory.
     pub binaries_metadata: Option<MetadataWithRemap<ReusedBinaryList>>,
+
+    /// A remapper for libdirs.
+    pub libdir_mapper: LibdirMapper,
 
     /// Optional temporary directory used for cleanup.
     _temp_dir: Option<Utf8TempDir>,
@@ -52,10 +59,12 @@ impl ReuseBuildInfo {
     pub fn new(
         cargo_metadata: Option<MetadataWithRemap<ReusedCargoMetadata>>,
         binaries_metadata: Option<MetadataWithRemap<ReusedBinaryList>>,
+        // TODO: accept libdir_mapper as an argument, as well
     ) -> Self {
         Self {
             cargo_metadata,
             binaries_metadata,
+            libdir_mapper: LibdirMapper::default(),
             _temp_dir: None,
         }
     }
@@ -81,6 +90,7 @@ impl ReuseBuildInfo {
             binary_list,
             cargo_metadata_json,
             graph,
+            libdir_mapper,
         } = unarchiver.extract(dest, callback)?;
 
         let cargo_metadata = MetadataWithRemap {
@@ -95,6 +105,7 @@ impl ReuseBuildInfo {
         Ok(Self {
             cargo_metadata: Some(cargo_metadata),
             binaries_metadata: Some(binaries_metadata),
+            libdir_mapper,
             _temp_dir: temp_dir,
         })
     }
@@ -238,11 +249,13 @@ impl MetadataKind for ReusedCargoMetadata {
 
 /// A helper for path remapping.
 ///
-/// This is useful when running tests in a different directory, or a different computer, from building them.
+/// This is useful when running tests in a different directory, or a different computer, from
+/// building them.
 #[derive(Clone, Debug, Default)]
 pub struct PathMapper {
     workspace: Option<(Utf8PathBuf, Utf8PathBuf)>,
     target_dir: Option<(Utf8PathBuf, Utf8PathBuf)>,
+    libdir_mapper: LibdirMapper,
 }
 
 impl PathMapper {
@@ -252,17 +265,19 @@ impl PathMapper {
         workspace_remap: Option<&Utf8Path>,
         orig_target_dir: impl Into<Utf8PathBuf>,
         target_dir_remap: Option<&Utf8Path>,
+        libdir_mapper: LibdirMapper,
     ) -> Result<Self, PathMapperConstructError> {
         let workspace_root = workspace_remap
             .map(|root| Self::canonicalize_dir(root, PathMapperConstructKind::WorkspaceRoot))
             .transpose()?;
         let target_dir = target_dir_remap
-            .map(|dir| Self::canonicalize_dir(dir, PathMapperConstructKind::WorkspaceRoot))
+            .map(|dir| Self::canonicalize_dir(dir, PathMapperConstructKind::TargetDir))
             .transpose()?;
 
         Ok(Self {
             workspace: workspace_root.map(|w| (orig_workspace_root.into(), w)),
             target_dir: target_dir.map(|d| (orig_target_dir.into(), d)),
+            libdir_mapper,
         })
     }
 
@@ -271,7 +286,13 @@ impl PathMapper {
         Self {
             workspace: None,
             target_dir: None,
+            libdir_mapper: LibdirMapper::default(),
         }
+    }
+
+    /// Returns the libdir mapper.
+    pub fn libdir_mapper(&self) -> &LibdirMapper {
+        &self.libdir_mapper
     }
 
     fn canonicalize_dir(
@@ -330,6 +351,48 @@ impl PathMapper {
     }
 }
 
+/// A mapper for lib dirs.
+///
+/// Archives store parts of lib dirs, which must be remapped to the new target directory.
+#[derive(Clone, Debug, Default)]
+pub struct LibdirMapper {
+    /// The host libdir mapper.
+    pub(crate) host: PlatformLibdirMapper,
+
+    /// The target libdir mapper.
+    pub(crate) target: PlatformLibdirMapper,
+}
+
+/// A mapper for an individual platform libdir.
+///
+/// Part of [`LibdirMapper`].
+#[derive(Clone, Debug, Default)]
+pub(crate) enum PlatformLibdirMapper {
+    Path(Utf8PathBuf),
+    Unavailable,
+    #[default]
+    NotRequested,
+}
+
+impl PlatformLibdirMapper {
+    pub(crate) fn map(&self, original: &PlatformLibdir) -> PlatformLibdir {
+        match self {
+            PlatformLibdirMapper::Path(new) => {
+                // Just use the new path. (We may have to check original in the future, but it
+                // doesn't seem necessary for now -- if a libdir has been provided to the remapper,
+                // that's that.)
+                PlatformLibdir::Available(new.clone())
+            }
+            PlatformLibdirMapper::Unavailable => {
+                // In this case, the original value is ignored -- we expected a libdir to be
+                // present, but it wasn't.
+                PlatformLibdir::Unavailable(PlatformLibdirUnavailable::NOT_IN_ARCHIVE)
+            }
+            PlatformLibdirMapper::NotRequested => original.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,6 +435,7 @@ mod tests {
             Some(&rel_workspace_root),
             &orig_target_dir,
             Some(&rel_target_dir),
+            LibdirMapper::default(),
         )
         .expect("remapped paths exist");
 

@@ -144,8 +144,11 @@ fn test_cargo_env_vars() {
         Ok("process-per-test"),
         "NEXTEST_EXECUTION_MODE set to process-per-test"
     );
+
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
-    assert_env!("CARGO");
+
+    // Note: we do not test CARGO here because nextest does not set it -- it's set by Cargo when
+    // invoked as `cargo nextest`.
     assert_env!(
         "CARGO_MANIFEST_DIR",
         "__NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR"

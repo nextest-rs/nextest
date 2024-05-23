@@ -75,7 +75,7 @@ impl RustBuildMeta<BinaryListState> {
             build_script_out_dirs: self.build_script_out_dirs.clone(),
             linked_paths: self.linked_paths.clone(),
             state: PhantomData,
-            build_platforms: self.build_platforms.clone(),
+            build_platforms: self.build_platforms.map_libdir(path_mapper.libdir_mapper()),
         }
     }
 }
@@ -103,6 +103,11 @@ impl RustBuildMeta<TestListState> {
     /// These paths are prepended to the dynamic library environment variable for the current
     /// platform (e.g. `LD_LIBRARY_PATH` on non-Apple Unix platforms).
     pub fn dylib_paths(&self) -> Vec<Utf8PathBuf> {
+        // Add rust libdirs to the path if available, so we can run test binaries that depend on
+        // libstd.
+        //
+        // We could be smarter here and only add the host libdir for host binaries and the target
+        // libdir for target binaries, but it's simpler to just add both for now.
         let libdirs = self
             .build_platforms
             .host
@@ -115,11 +120,12 @@ impl RustBuildMeta<TestListState> {
                     .as_ref()
                     .and_then(|target| target.libdir.as_path()),
             )
-            .cloned()
+            .map(|libdir| libdir.to_path_buf())
             .collect::<Vec<_>>();
         if libdirs.is_empty() {
             log::warn!("failed to detect the rustc libdir, may fail to list or run tests");
         }
+
         // Cargo puts linked paths before base output directories.
         self.linked_paths
             .keys()
@@ -138,8 +144,6 @@ impl RustBuildMeta<TestListState> {
                 // This is the order paths are added in by Cargo.
                 [with_deps, abs_base]
             }))
-            // Add the rustc libdir paths to the search paths to run procudure macro binaries. See
-            // details in https://github.com/nextest-rs/nextest/issues/1493.
             .chain(libdirs)
             .unique()
             .collect()
