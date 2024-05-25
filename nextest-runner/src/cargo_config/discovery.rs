@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::errors::{CargoConfigError, InvalidCargoCliConfigReason};
+use crate::errors::{CargoConfigError, CargoConfigParseError, InvalidCargoCliConfigReason};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -375,11 +375,12 @@ fn load_file(
             path: path.clone(),
             error,
         })?;
-    let config: CargoConfig =
-        toml::from_str(&config_contents).map_err(|error| CargoConfigError::ConfigParseError {
+    let config: CargoConfig = toml::from_str(&config_contents).map_err(|error| {
+        CargoConfigError::from(Box::new(CargoConfigParseError {
             path: path.clone(),
             error,
-        })?;
+        }))
+    })?;
     Ok((CargoConfigSource::File(path), config))
 }
 

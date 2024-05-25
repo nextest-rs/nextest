@@ -231,7 +231,7 @@ pub(crate) fn extract_abort_status(exit_status: ExitStatus) -> Option<AbortStatu
             exit_status.signal().map(AbortStatus::UnixSignal)
         } else if #[cfg(windows)] {
             exit_status.code().and_then(|code| {
-                (code < 0).then(|| AbortStatus::WindowsNtStatus(code))
+                (code < 0).then_some(AbortStatus::WindowsNtStatus(code))
             })
         } else {
             None
@@ -271,11 +271,11 @@ pub(crate) fn display_nt_status(nt_status: windows_sys::Win32::Foundation::NTSTA
         return format!("{nt_status:#x} ({nt_status})");
     }
 
-    return format!(
+    format!(
         "{:#x}: {}",
         nt_status,
         io::Error::from_raw_os_error(win32_code as i32)
-    );
+    )
 }
 
 #[derive(Copy, Clone, Debug)]
