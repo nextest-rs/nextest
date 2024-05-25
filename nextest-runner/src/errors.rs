@@ -1159,15 +1159,22 @@ pub enum CargoConfigError {
     },
 
     /// Failed to deserialize config file
-    #[error("failed to parse config at `{path}`")]
-    ConfigParseError {
-        /// The path of the config file
-        path: Utf8PathBuf,
+    #[error(transparent)]
+    ConfigParseError(#[from] Box<CargoConfigParseError>),
+}
 
-        /// The error that occurred trying to deserialize the config file
-        #[source]
-        error: toml::de::Error,
-    },
+/// Failed to deserialize config file
+///
+/// We introduce this extra indirection, because of the `clippy::result_large_err` rule on Windows.
+#[derive(Debug, Error)]
+#[error("failed to parse config at `{path}`")]
+pub struct CargoConfigParseError {
+    /// The path of the config file
+    pub path: Utf8PathBuf,
+
+    /// The error that occurred trying to deserialize the config file
+    #[source]
+    pub error: toml::de::Error,
 }
 
 /// The reason an invalid CLI config failed.

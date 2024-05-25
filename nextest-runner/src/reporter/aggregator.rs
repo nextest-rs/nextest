@@ -407,18 +407,15 @@ pub fn heuristic_extract_description<'a>(
         leaked,
     } = exec_result
     {
-        return Some(
-            format!(
-                "Test aborted with code {}{}",
-                crate::helpers::display_nt_status(exception),
-                if leaked {
-                    ", and also leaked handles"
-                } else {
-                    ""
-                }
-            )
-            .into(),
-        );
+        return Some(format!(
+            "Test aborted with code {}{}",
+            crate::helpers::display_nt_status(exception),
+            if leaked {
+                ", and also leaked handles"
+            } else {
+                ""
+            }
+        ));
     }
 
     // Try the heuristic stack trace extraction first as they're the more common kinds of test.

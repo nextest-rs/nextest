@@ -1176,7 +1176,7 @@ fn create_execution_result(exit_status: ExitStatus, leaked: bool) -> ExecutionRe
                 let abort_status = exit_status.signal().map(AbortStatus::UnixSignal);
             } else if #[cfg(windows)] {
                 let abort_status = exit_status.code().and_then(|code| {
-                    (code < 0).then(|| AbortStatus::WindowsNtStatus(code))
+                    (code < 0).then_some(AbortStatus::WindowsNtStatus(code))
                 });
             } else {
                 let abort_status = None;
