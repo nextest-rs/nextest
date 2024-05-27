@@ -1,1 +1,4 @@
 /output
+/.cache
+__pycache__/
+/src/site.egg-info/

@@ -1,7 +1,9 @@
 on:
   push:
     branches:
-      - master
+      - main
+  pull_request:
+    branches:
       - main
 
 name: Docs
@@ -15,22 +17,17 @@ jobs:
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
-      - name: Install static-sitemap-cli
-        run: npm install static-sitemap-cli
-      - name: Build rustdoc
-        run: ./scripts/build-docs.sh
-      - name: Install mdbook
-        uses: taiki-e/install-action@9b00020f6f75a34aa11872329c46b410780fda7e # v2
+      - name: Install nextest for help text in docs
+        uses: taiki-e/install-action@nextest
+      - name: Install rye
+        uses: eifinger/setup-rye@e62d8930f186833fcc7b04b9f74549c01450a06b # v3.0.2
         with:
-          tool: mdbook@0.4
-      - name: Run mdbook
-        run: |
-          cd site
-          mdbook build
-      - name: Generate sitemap
-        run: |
-          cd site/output
-          npx sscli --base https://nexte.st
+          enable-cache: true
+          working-directory: site
+      - name: Build rustdoc
+        run: ./scripts/build-rustdoc.sh
+      - name: Build site
+        run: ./scripts/build-site.sh
       - name: Organize
         run: |
           rm -rf target/gh-pages

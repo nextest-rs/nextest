@@ -1,0 +1,28 @@
+[35;1mnextest-runner[0m:
+    [36mconfig::nextest_version::tests::test_valid_nextest_version[0m[36m::[0m[34;1mbasic[0m
+    [36mconfig::nextest_version::tests::test_valid_nextest_version[0m[36m::[0m[34;1mbasic_with_patch[0m
+    [36mconfig::overrides::tests[0m[36m::[0m[34;1mtest_overrides_basic[0m
+    [36mconfig::scripts::tests[0m[36m::[0m[34;1mtest_scripts_basic[0m
+    [36mconfig::tool_config::tests[0m[36m::[0m[34;1mtool_config_basic[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mno_capture_settings[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_dont_show_immediate[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_dont_store_final[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_dont_write_status_line[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_show_immediate[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_1[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_2[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_3[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_4[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_with_interrupt[0m
+    [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_write_status_line[0m
+[35;1mnextest-runner::integration[0m:
+    [36mbasic[0m[36m::[0m[34;1mtest_filter_expr_with_string_filters[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_filter_expr_without_string_filters[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_list_binaries[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_list_tests[0m
+    [36mbasic::test_retries[0m[36m::[0m[34;1mretry_overrides_ignored[0m
+    [36mbasic::test_retries[0m[36m::[0m[34;1mretry_overrides_obeyed[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_run[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_run_ignored[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_string_filters_without_filter_expr[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_termination[0m

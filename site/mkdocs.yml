@@ -1,0 +1,165 @@
+site_name: cargo-nextest
+site_url: https://nexte.st
+
+repo_url: https://github.com/nextest-rs/nextest
+repo_name: nextest-rs/nextest
+edit_uri: edit/main/site/src/
+
+docs_dir: src
+site_dir: output
+
+theme:
+  name: material
+  custom_dir: overrides
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.progress
+      # Makes "summarized/full" and "colorized/plaintext" tabs linked
+    - content.tabs.link
+    - content.action.edit
+    - content.action.view
+    - search.highlight
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+plugins:
+  - git-revision-date-localized:
+      enable_creation_date: true
+  - markdown-exec
+  - search
+  - social
+
+extra:
+  status:
+    experimental: "Experimental: not stable yet"
+    new: Recently added
+
+extra_css:
+  - fonts/inter.css
+  - theme/css/extra.css
+
+hooks:
+  - overrides/hooks/shortcodes.py
+
+nav:
+  - Home:
+      - index.md
+      - "Installation":
+          - "Pre-built binaries": docs/installation/pre-built-binaries.md
+          - docs/installation/from-source.md
+          - docs/installation/updating.md
+      - "Platform-specific notes":
+          - docs/installation/windows.md
+          - docs/installation/macos.md
+      - docs/installation/release-urls.md
+      - changelog.md
+  - Usage:
+      - docs/running.md
+      - docs/listing.md
+      - docs/reporting.md
+      - "Features":
+          - docs/features/retries.md
+          - docs/features/slow-tests.md
+          - docs/features/leaky-tests.md
+          - docs/features/target-runners.md
+      - "Features for CI":
+          - docs/ci-features/archiving.md
+          - "Partitioning/sharding runs": docs/ci-features/partitioning.md
+      - "Filterset DSL":
+          - docs/filtersets/index.md
+          - "DSL reference": docs/filtersets/reference.md
+      - Configuration:
+          - docs/configuration/index.md
+          - docs/configuration/per-test-overrides.md
+          - "Specifying platforms": docs/configuration/specifying-platforms.md
+          - "Environment variables": docs/configuration/env-vars.md
+          - "Minimum versions": docs/configuration/minimum-versions.md
+          - "Heavy tests": docs/configuration/threads-required.md
+          - "Mutual exclusion and rate-limiting": docs/configuration/test-groups.md
+          - docs/configuration/setup-scripts.md
+      - Machine-readable output:
+          - docs/machine-readable/index.md
+          - "Test and binary lists": docs/machine-readable/list.md
+          - "JUnit support": docs/machine-readable/junit.md
+          - docs/machine-readable/libtest-json.md
+      - "Integrations":
+          - docs/integrations/index.md
+          - docs/integrations/test-coverage.md
+          - "Miri interpreter": docs/integrations/miri.md
+          - docs/integrations/criterion.md
+          - "cargo-mutants": docs/integrations/cargo-mutants.md
+      - "Stability policy":
+          - docs/stability/index.md
+      - "Design":
+          - docs/design/how-it-works.md
+          - docs/design/custom-test-harnesses.md
+  - Benchmarks:
+      - docs/benchmarks/index.md
+  - "Crates.io": "https://crates.io/crates/cargo-nextest"
+
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:ext.slugs.slugify
+        kwds:
+          case: lower
+
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.snippets:
+      base_path:
+        - "."
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - mdx_truly_sane_lists
