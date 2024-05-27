@@ -1,0 +1,45 @@
+# These redirects are processed by Cloudflare:
+# https://developers.cloudflare.com/pages/configuration/redirects/
+
+/CHANGELOG* /changelog/ 302
+/book/antivirus-gatekeeper* /docs/installation/macos/ 302
+/book/benchmark-integration* /docs/integrations/criterion/ 302
+/book/benchmarks* /docs/benchmarks/ 302
+/book/cargo-mutants* /docs/integrations/cargo-mutants/ 302
+/book/configuration* /docs/configuration/ 302
+/book/custom-test-harnesses* /docs/design/custom-test-harnesses/ 302
+/book/env-vars* /docs/configuration/env-vars/ 302
+/book/experimental-features* /docs/stability-policy/ 302
+/book/filter-expressions* /docs/filtersets/ 302
+/book/how-it-works* /docs/design/how-it-works/ 302
+/book/installation* /docs/installation/pre-built-binaries/ 302
+/book/installing-from-source* /docs/installation/from-source/ 302
+/book/integrations* /docs/integrations/ 302
+/book/junit* /docs/machine-readable/junit/ 302
+/book/leaky-tests* /docs/features/leaky-tests/ 302
+/book/libtest-json* /docs/machine-readable/libtest-json/ 302
+/book/listing* /docs/listing/ 302
+/book/machine-readable* /docs/machine-readable/ 302
+/book/machine-readable-list* /docs/machine-readable/list/ 302
+/book/minimum-versions* /docs/configuration/minimum-versions/ 302
+/book/miri* /docs/integrations/miri/ 302
+/book/other-options* /docs/reporting/ 302
+/book/partitioning* /docs/ci-features/partitioning/ 302
+/book/per-test-overrides* /docs/configuration/per-test-overrides/ 302
+/book/pre-built-binaries* /docs/installation/pre-built-binaries/ 302
+/book/release-urls* /docs/installation/release-urls/ 302
+/book/retries* /docs/features/retries/ 302
+/book/reusing-builds* /docs/ci-features/archiving/ 302
+/book/running* /docs/running/ 302
+/book/setup-scripts* /docs/configuration/setup-scripts/ 302
+/book/slow-tests* /docs/features/slow-tests/ 302
+/book/specifying-platforms* /docs/configuration/specifying-platforms/ 302
+/book/stability* /docs/stability/ 302
+/book/target-runners* /docs/features/target-runners/ 302
+/book/test-coverage* /docs/integrations/test-coverage/ 302
+/book/test-groups* /docs/configuration/test-groups/ 302
+/book/threads-required* /docs/configuration/threads-required/ 302
+/book/updating* /docs/installation/updating/ 302
+/book/usage* /docs/running/ 302
+
+# TODO: installing from source afterwards

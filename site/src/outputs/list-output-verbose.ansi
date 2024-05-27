@@ -1,0 +1,33 @@
+[35;1mnextest-runner::integration[0m:
+  [33;1mbin:[0m /home/rain/dev/nextest-rs/nextest/target/debug/deps/integration-87720ee436469004
+  [33;1mcwd:[0m /home/rain/dev/nextest-rs/nextest/nextest-runner
+  [33;1mbuild platform:[0m target
+    [36mbasic[0m[36m::[0m[34;1mtest_filter_expr_with_string_filters[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_filter_expr_without_string_filters[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_list_binaries[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_list_tests[0m
+    [36mbasic::test_retries[0m[36m::[0m[34;1mretry_overrides_ignored[0m
+    [36mbasic::test_retries[0m[36m::[0m[34;1mretry_overrides_obeyed[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_run[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_run_ignored[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_string_filters_without_filter_expr[0m
+    [36mbasic[0m[36m::[0m[34;1mtest_termination[0m
+    [36mtarget_runner[0m[36m::[0m[34;1mdisregards_non_matching[0m (skipped)
+    [36mtarget_runner[0m[36m::[0m[34;1mfalls_back_to_cargo_config[0m (skipped)
+    [36mtarget_runner[0m[36m::[0m[34;1mparses_cargo_config_cfg[0m (skipped)
+    [36mtarget_runner[0m[36m::[0m[34;1mparses_cargo_config_exact[0m (skipped)
+    [36mtarget_runner[0m[36m::[0m[34;1mparses_cargo_env[0m (skipped)
+    [36mtarget_runner[0m[36m::[0m[34;1mtest_listing_with_target_runner[0m (skipped)
+    [36mtarget_runner[0m[36m::[0m[34;1mtest_run_with_target_runner[0m (skipped)
+    [36mtarget_triple[0m[36m::[0m[34;1mparses_cargo_env[0m (skipped)
+    [36mtarget_triple[0m[36m::[0m[34;1mparses_custom_target_cli[0m (skipped)
+    [36mtarget_triple[0m[36m::[0m[34;1mparses_custom_target_cli_from_rust_target_path[0m (skipped)
+    [36mtarget_triple[0m[36m::[0m[34;1mparses_custom_target_cli_heuristic[0m (skipped)
+    [36mtarget_triple[0m[36m::[0m[34;1mparses_custom_target_env[0m (skipped)
+    [36mtarget_triple[0m[36m::[0m[34;1mparses_custom_target_env_from_rust_target_path[0m (skipped)
+    [36mtarget_triple[0m[36m::[0m[34;1mparses_target_cli_option[0m (skipped)
+[35;1mnextest-runner::bin/passthrough[0m:
+  [33;1mbin:[0m /home/rain/dev/nextest-rs/nextest/target/debug/deps/passthrough-d0acaba9cef8de3b
+  [33;1mcwd:[0m /home/rain/dev/nextest-rs/nextest/nextest-runner
+  [33;1mbuild platform:[0m target
+    (no tests)
