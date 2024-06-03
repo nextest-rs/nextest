@@ -21,12 +21,12 @@ console = { version = "0.15.8" }
 either = { version = "1.12.0" }
 futures-channel = { version = "0.3.30", features = ["sink"] }
 futures-sink = { version = "0.3.30", default-features = false, features = ["std"] }
-getrandom = { version = "0.2.14", default-features = false, features = ["std"] }
+getrandom = { version = "0.2.15", default-features = false, features = ["std"] }
 indexmap = { version = "2.2.6", features = ["serde"] }
 log = { version = "0.4.21", default-features = false, features = ["std"] }
 memchr = { version = "2.7.2" }
 miette = { version = "7.2.0", features = ["fancy"] }
-num-traits = { version = "0.2.18", default-features = false, features = ["libm", "std"] }
+num-traits = { version = "0.2.19", default-features = false, features = ["libm", "std"] }
 owo-colors = { version = "4.0.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
 serde = { version = "1.0.203", features = ["alloc", "derive"] }
@@ -35,17 +35,17 @@ tokio = { version = "1.38.0", features = ["fs", "io-util", "macros", "process", 
 xxhash-rust = { version = "0.8.10", default-features = false, features = ["xxh3", "xxh64"] }
 
 [build-dependencies]
-cc = { version = "1.0.95", default-features = false, features = ["parallel"] }
-proc-macro2 = { version = "1.0.81" }
+cc = { version = "1.0.98", default-features = false, features = ["parallel"] }
+proc-macro2 = { version = "1.0.85" }
 quote = { version = "1.0.36" }
-syn = { version = "2.0.60", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.66", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-core = { version = "0.3.30" }
 futures-sink = { version = "0.3.30" }
 libc = { version = "0.2.155", features = ["extra_traits"] }
-linux-raw-sys = { version = "0.4.13", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
-miniz_oxide = { version = "0.7.2", default-features = false, features = ["with-alloc"] }
+linux-raw-sys = { version = "0.4.14", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
+miniz_oxide = { version = "0.7.3", default-features = false, features = ["with-alloc"] }
 rustix = { version = "0.38.34", features = ["fs", "termios"] }
 tokio = { version = "1.38.0", default-features = false, features = ["net"] }
 
@@ -56,7 +56,7 @@ libc = { version = "0.2.155", features = ["extra_traits"] }
 futures-core = { version = "0.3.30" }
 futures-sink = { version = "0.3.30" }
 libc = { version = "0.2.155", features = ["extra_traits"] }
-miniz_oxide = { version = "0.7.2", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { version = "0.7.3", default-features = false, features = ["with-alloc"] }
 rustix = { version = "0.38.34", features = ["fs", "termios"] }
 tokio = { version = "1.38.0", default-features = false, features = ["net"] }
 
