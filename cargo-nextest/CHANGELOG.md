@@ -1,1 +1,1 @@
-../site/src/CHANGELOG.md
+../site/src/changelog.md

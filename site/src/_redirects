@@ -1,0 +1,14 @@
+# These redirects are processed by Cloudflare:
+# https://developers.cloudflare.com/pages/configuration/redirects/
+
+/CHANGELOG* /changelog/ 302
+/book/antivirus-gatekeeper* /book/installation/macos/ 302
+/book/benchmark-integration* /book/integrations/criterion/ 302
+/book/cargo-mutants* /book/integrations/cargo-mutants/ 302
+/book/custom-test-harnesses* /book/design/custom-test-harnesses/ 302
+/book/env-vars* /book/configuration/env-vars/ 302
+/book/experimental-features* /book/stability-policy/ 302
+/book/filter-expressions* /book/filtersets/ 302
+/book/how-it-works* /book/design/how-it-works/ 302
+/book/installation* /book/installation/pre-built-binaries/ 302
+# TODO: installing from source afterwards

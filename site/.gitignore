@@ -1,1 +1,6 @@
 /output
+/requirements.lock
+/requirements-dev.lock
+/.cache
+__pycache__/
+/src/site.egg-info/

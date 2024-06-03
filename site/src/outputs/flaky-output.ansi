@@ -1,0 +1,27 @@
+$ cargo nextest run test_flaky_mod_2 --retries 2
+
+[32;1m    Starting[0m [1m1[0m test across [1m2[0m binaries ([1m11[0m skipped; run ID: [1m7859d0ee-55ab-4892-9127-24f4bf805f36[0m, nextest profile: [1mdefault[0m)
+[35;1m  TRY 1 FAIL[0m [   0.003s] [35;1mnextest-tests::basic[0m [34;1mtest_flaky_mod_2[0m
+
+[35;1m--- [0m[35;1mTRY[0m [35;1m1[0m [35;1mSTDOUT:        [0m[35;1mnextest-tests::basic[0m [34;1mtest_flaky_mod_2[0m[35;1m ---[0m
+
+running 1 test
+test test_flaky_mod_2 ... FAILED
+
+failures:
+
+failures:
+    test_flaky_mod_2
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+[0m
+[35;1m--- [0m[35;1mTRY[0m [35;1m1[0m [35;1mSTDERR:        [0m[35;1mnextest-tests::basic[0m [34;1mtest_flaky_mod_2[0m[35;1m ---[0m
+thread 'test_flaky_mod_2' panicked at tests/basic.rs:53:9:
+Failed because attempt 1 % 2 != 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[0m
+[33;1m  TRY 2 PASS[0m [   0.002s] [35;1mnextest-tests::basic[0m [34;1mtest_flaky_mod_2[0m
+------------
+[32;1m     Summary[0m [   0.021s] [1m1[0m test run: [1m1[0m [32;1mpassed[0m ([1m1[0m [33;1mflaky[0m), [1m25[0m [33;1mskipped[0m
+[33;1m   FLAKY 2/3[0m [   0.002s] [35;1mnextest-tests::basic[0m [34;1mtest_flaky_mod_2[0m

@@ -1,3 +1,7 @@
+---
+icon: material/run-fast
+---
+
 # Running tests
 
 To build and run all tests in a workspace[^doctest], cd into the workspace and run:
@@ -8,13 +12,23 @@ cargo nextest run
 
 This will produce output that looks like:
 
-![Output of cargo nextest run](../static/nextest-run.png)
+=== "Colorized"
 
-In the output above:
+    ```bash exec="true" result="ansi"
+    cat src/outputs/run-output.ansi
+    ```
 
-- Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets. In the example above, **`test_list_tests`** passed and took 0.052 seconds to execute.
-- Tests that take more than a specified amount of time are marked **SLOW**. The timeout is 60 seconds by default, and can be [changed through configuration](configuration.md).
-- The part of the test in purple is the _binary ID_ for a unit test binary (see [Binary IDs](#binary-ids) below).
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/run-output.ansi | ../scripts/strip-ansi.sh
+    ```
+
+In nextest's run output:
+
+- Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets.
+- Tests that take more than a specified amount of time (60 seconds by default) are marked **SLOW**. See [Slow tests and timeouts](features/slow-tests.md).
+- The part of the test in magenta is the _binary ID_ for a unit test binary (see [Binary IDs](#binary-ids) below).
 
 - The part after the binary ID is the _test name_, including the module the test is in. The final part of the test name is highlighted in bold blue text.
 
@@ -24,7 +38,7 @@ In the output above:
 cargo nextest run -p my-package
 ```
 
-For a full list of options accepted by `cargo nextest run`, see `cargo nextest run --help`.
+For a full list of options accepted by `cargo nextest run`, see [Options and arguments](#options-and-arguments) below, or `cargo nextest run --help`.
 
 ## Binary IDs
 
@@ -46,7 +60,7 @@ cargo nextest run <test-name1> <test-name2>...
 
 ### `--skip` and `--exact`
 
-Nextest does not support `--skip` and `--exact` directly; instead, it supports more powerful [filter expressions] which supersede these options.
+Nextest does not support `--skip` and `--exact` directly; instead, it supports more powerful [filtersets] which supersede these options.
 
 Here are some examples:
 
@@ -57,7 +71,7 @@ Here are some examples:
 
 ### Filtering by build platform
 
-While cross-compiling code, some tests (e.g. proc-macro tests) may need to be run on the host platform. To filter tests based on the build platform they're for, nextest's filter expressions accept the `platform()` set with values `target` and `host`.
+While cross-compiling code, some tests (e.g. proc-macro tests) may need to be run on the host platform. To filter tests based on the build platform they're for, nextest's filtersets accept the `platform()` set with values `target` and `host`.
 
 For example, to only run tests for the host platform:
 
@@ -65,22 +79,58 @@ For example, to only run tests for the host platform:
 cargo nextest run -E 'platform(host)'
 ```
 
-[filter expressions]: filter-expressions.md
-
-## Displaying live test output
-
-By default, `cargo nextest run` will capture test output and only display it on failure. If you do _not_ want to capture test output:
-
-```
-cargo nextest run --no-capture
-```
-
-In this mode, cargo-nextest will run tests _serially_ so that output from different tests isn't interspersed. This is different from `cargo test -- --nocapture`, which will run tests in parallel.
+[filtersets]: filtersets/index.md
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
 
+## Other runner options
+
+`--no-fail-fast`
+: Do not exit the test run on the first failure. Most useful for CI scenarios.
+
+`-j`, `--test-threads`
+: Number of tests to run simultaneously. Note that this is separate from the number of build jobs to run simultaneously, which is specified by `--build-jobs`.
+
+`--run-ignored ignored-only`
+: Run only ignored tests.
+
+`--run-ignored all`
+: Run both ignored and non-ignored tests.
+
+## Controlling nextest's output
+
+For information about configuring the way nextest displays its human-readable output, see [_Reporting test results_](reporting.md).
+
 ## Options and arguments
 
-```
-{{#include ../../help-text/run-help.txt}}
-```
+=== "Summarized output"
+
+    The output of `cargo nextest run -h`:
+
+    === "Colorized"
+
+        ```bash exec="true" result="ansi"
+        CLICOLOR_FORCE=1 cargo nextest run -h
+        ```
+
+    === "Plaintext"
+
+        ```bash exec="true" result="text"
+        cargo nextest run -h
+        ```
+
+=== "Full output"
+
+    The output of `cargo nextest run --help`:
+
+    === "Colorized"
+
+        ```bash exec="true" result="ansi"
+        CLICOLOR_FORCE=1 cargo nextest run --help
+        ```
+
+    === "Plaintext"
+
+        ```bash exec="true" result="text"
+        cargo nextest run --help
+        ```
