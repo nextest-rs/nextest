@@ -1,3 +1,8 @@
+---
+title: Nextest
+description: A next-generation test runner for Rust.
+---
+
 # cargo-nextest
 
 Welcome to the home page for **cargo-nextest**, a next-generation test runner for Rust projects.
