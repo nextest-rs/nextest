@@ -15,6 +15,7 @@ theme:
     - navigation.tabs
     - navigation.sections
     - navigation.indexes
+    - navigation.footer
     - navigation.instant
     - navigation.instant.progress
       # Makes "summarized/full" and "colorized/plaintext" tabs linked

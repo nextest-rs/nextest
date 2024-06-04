@@ -1,0 +1,18 @@
+<div class="md-copyright">
+    <span class="md-copyright__highlight">
+        Copyright 2021-{{ build_date_utc.strftime('%Y') }} The Nextest Contributors.
+    </span>
+    Licensed under
+        <a
+            href="https://creativecommons.org/licenses/by/4.0/"
+            target="_blank" rel="noopener"
+        >CC BY 4.0</a>.
+    {% if not config.extra.generator == false %}
+      Made with
+      <a
+        href="https://squidfunk.github.io/mkdocs-material/"
+        target="_blank" rel="noopener"
+      >
+        Material for MkDocs</a>.
+    {% endif %}
+</div>
