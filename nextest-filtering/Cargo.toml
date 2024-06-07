@@ -41,7 +41,7 @@ nextest-workspace-hack.workspace = true
 winnow = "0.6.11"
 
 [dev-dependencies]
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "4.5.6", features = ["derive"] }
 camino = "1.1.7"
 test-case = "3.3.1"
 proptest = { version = "1.4.0" }
