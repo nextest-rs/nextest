@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-hakari
-        uses: taiki-e/install-action@d0c2bb4cffa2484ea6862a142a14b7ac5057c74a # v2
+        uses: taiki-e/install-action@5ee12b256842c489ae5e3e84eb6f5c6e71ee618f # v2
         with:
           tool: cargo-hakari
       - name: Check workspace-hack Cargo.toml is up-to-date
