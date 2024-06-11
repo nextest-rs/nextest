@@ -533,9 +533,9 @@ dependencies = [
 
 [[package]]
 name = "console-api"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd326812b3fd01da5bb1af7d340d0d555fd3d4b641e7f1dfcf5962a902952787"
+checksum = "a257c22cd7e487dd4a13d413beabc512c5052f0bc048db0da6a84c3d8a6142fd"
 dependencies = [
  "futures-core",
  "prost",
@@ -546,9 +546,9 @@ dependencies = [
 
 [[package]]
 name = "console-subscriber"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7481d4c57092cd1c19dd541b92bdce883de840df30aa5d03fd48a3935c01842e"
+checksum = "31c4cc54bae66f7d9188996404abdf7fdfa23034ef8e43478c8810828abad758"
 dependencies = [
  "console-api",
  "crossbeam-channel",
@@ -556,6 +556,7 @@ dependencies = [
  "futures-task",
  "hdrhistogram",
  "humantime",
+ "prost",
  "prost-types",
  "serde",
  "serde_json",
@@ -3044,9 +3045,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.10.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d560933a0de61cf715926b9cac824d4c883c2c43142f787595e48280c40a1d0e"
+checksum = "76c4eb7a4e9ef9d4763600161f12f5070b92a578e1b634db88a6887844c91a13"
 dependencies = [
  "async-stream",
  "async-trait",
