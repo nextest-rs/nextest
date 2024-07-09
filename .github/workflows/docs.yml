@@ -23,7 +23,7 @@ jobs:
       - name: Install nextest for help text in docs
         uses: taiki-e/install-action@nextest
       - name: Install rye
-        uses: eifinger/setup-rye@e62d8930f186833fcc7b04b9f74549c01450a06b # v3.0.2
+        uses: eifinger/setup-rye@7a63de08e2d7838e4025dab04ef2a99f67ad2eaf # v3.0.3
         with:
           enable-cache: true
           working-directory: site
