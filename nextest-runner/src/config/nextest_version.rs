@@ -482,16 +482,6 @@ where
     Version::parse(&s).map_err(E::custom)
 }
 
-/// The mode to use when checking the nextest version: whether to produce an error or a warning.
-#[derive(Debug, Copy, Clone, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum NextestVersionMode {
-    /// Produce an error if the nextest version is not at least the specified version.
-    Error,
-    /// Only produce a warning if the nextest version is not at least the specified version.
-    Warning,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

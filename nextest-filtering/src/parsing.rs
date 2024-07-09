@@ -300,7 +300,7 @@ where
 fn ws<'a, T, P: Parser<Span<'a>, T, Error>>(mut inner: P) -> impl Parser<Span<'a>, T, Error> {
     move |input: &mut Span<'a>| {
         let start = input.checkpoint();
-        repeat(
+        () = repeat(
             0..,
             alt((
                 // Match individual space characters.
