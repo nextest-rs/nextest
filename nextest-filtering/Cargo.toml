@@ -34,7 +34,7 @@ regex = "1.10.5"
 regex-syntax = "0.8.4"
 thiserror = "1.0.63"
 nextest-metadata.workspace = true
-proptest = { version = "1.4.0", optional = true }
+proptest = { version = "1.5.0", optional = true }
 test-strategy = { version = "0.4.0", optional = true }
 xxhash-rust = { version = "0.8.12", features = ["xxh3"], optional = true }
 nextest-workspace-hack.workspace = true
@@ -44,5 +44,5 @@ winnow = "0.6.16"
 clap = { version = "4.5.11", features = ["derive"] }
 camino = "1.1.7"
 test-case = "3.3.1"
-proptest = { version = "1.4.0" }
+proptest = { version = "1.5.0" }
 test-strategy = { version = "0.4.0" }
