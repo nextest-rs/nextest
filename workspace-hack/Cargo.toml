@@ -32,7 +32,7 @@ rand = { version = "0.8.5" }
 serde = { version = "1.0.204", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.121", features = ["unbounded_depth"] }
 tokio = { version = "1.38.0", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
-xxhash-rust = { version = "0.8.11", default-features = false, features = ["xxh3", "xxh64"] }
+xxhash-rust = { version = "0.8.12", default-features = false, features = ["xxh3", "xxh64"] }
 
 [build-dependencies]
 cc = { version = "1.0.99", default-features = false, features = ["parallel"] }
