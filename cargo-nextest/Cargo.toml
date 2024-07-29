@@ -38,7 +38,7 @@ supports-color = "2.1.0"
 supports-unicode = "3.0.0"
 serde_json = "1.0.121"
 swrite.workspace = true
-thiserror = "1.0.61"
+thiserror = "1.0.63"
 nextest-workspace-hack.workspace = true
 
 [dev-dependencies]
