@@ -130,7 +130,7 @@ where
     let cmd = if let Some(current_exe) = double_spawn.current_exe() {
         let mut cmd = std::process::Command::new(current_exe);
         cmd.args([DoubleSpawnInfo::SUBCOMMAND_NAME, "--", program.as_str()]);
-        cmd.arg(&shell_words::join(args));
+        cmd.arg(shell_words::join(args));
         cmd
     } else {
         let mut cmd = std::process::Command::new(program);

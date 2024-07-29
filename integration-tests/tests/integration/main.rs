@@ -384,7 +384,7 @@ archive.include = [
 
     // The included file should be present, but the excluded file should not.
     for path in [INCLUDED_PATH, TOP_LEVEL_FILE] {
-        let contents = std::fs::read_to_string(&extracted_target.join(path))
+        let contents = std::fs::read_to_string(extracted_target.join(path))
             .expect("extra file written to archive");
         assert_eq!(contents, "a test string");
     }
