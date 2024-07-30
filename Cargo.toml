@@ -16,6 +16,7 @@ rust-version = "1.74"
 bstr = { version = "1.10.0", default-features = false, features = ["std"] }
 debug-ignore = "1.0.5"
 globset = "0.4.14"
+guppy = "0.17.6"
 miette = "7.2.0"
 owo-colors = { version = "4.0.0", features = ["supports-colors"] }
 newtype-uuid = { version = "1.1.0", features = ["v4"] }
@@ -23,6 +24,7 @@ nextest-metadata = { version = "0.11.0", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
 quick-junit = "0.4.0"
 swrite = "0.1.0"
+target-spec = { version = "3.2.0", features = ["custom", "summaries"] }
 target-spec-miette = "0.4.0"
 
 # make backtrace + color-eyre faster on debug builds
