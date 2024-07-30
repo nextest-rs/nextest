@@ -13,7 +13,7 @@ members = [
 rust-version = "1.74"
 
 [workspace.dependencies]
-bstr = { version = "1.9.1", default-features = false, features = ["std"] }
+bstr = { version = "1.10.0", default-features = false, features = ["std"] }
 debug-ignore = "1.0.5"
 globset = "0.4.14"
 miette = "7.2.0"
