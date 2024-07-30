@@ -65,7 +65,7 @@ target-spec = { version = "3.1.0", features = ["custom", "summaries"] }
 target-spec-miette.workspace = true
 thiserror = "1.0.63"
 # For parsing of .cargo/config.toml files
-tokio = { version = "1.38.0", features = [
+tokio = { version = "1.39.2", features = [
     "fs",
     "io-util",
     "macros",
