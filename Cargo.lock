@@ -365,7 +365,7 @@ dependencies = [
  "enable-ansi-support",
  "env_logger",
  "guppy",
- "itertools 0.12.1",
+ "itertools",
  "log",
  "miette",
  "nextest-filtering",
@@ -1079,7 +1079,7 @@ dependencies = [
  "fixedbitset",
  "guppy-workspace-hack",
  "indexmap 2.3.0",
- "itertools 0.13.0",
+ "itertools",
  "nested",
  "once_cell",
  "pathdiff",
@@ -1522,15 +1522,6 @@ checksum = "f8478577c03552c21db0e2724ffb8986a5ce7af88107e6be5d2ee6e158c12800"
 
 [[package]]
 name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
@@ -1800,7 +1791,7 @@ dependencies = [
  "indoc",
  "insta",
  "is_ci",
- "itertools 0.12.1",
+ "itertools",
  "libc",
  "log",
  "maplit",
@@ -2162,7 +2153,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18bec9b0adc4eba778b33684b7ba3e7137789434769ee3ce3930463ef904cfca"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn",
