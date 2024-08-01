@@ -365,7 +365,7 @@ dependencies = [
  "enable-ansi-support",
  "env_logger",
  "guppy",
- "itertools",
+ "itertools 0.12.1",
  "log",
  "miette",
  "nextest-filtering",
@@ -1067,9 +1067,9 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.17.6"
+version = "0.17.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8bbe9ea2e1633b2c3afeaae4c7240f1962eba76007544f2b90cfa36fc75ad30"
+checksum = "3bff2f6a9d515cf6453282af93363f93bdf570792a6f4f619756e46696d773fa"
 dependencies = [
  "ahash",
  "camino",
@@ -1079,7 +1079,7 @@ dependencies = [
  "fixedbitset",
  "guppy-workspace-hack",
  "indexmap 2.2.6",
- "itertools",
+ "itertools 0.13.0",
  "nested",
  "once_cell",
  "pathdiff",
@@ -1530,6 +1530,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1791,7 +1800,7 @@ dependencies = [
  "indoc",
  "insta",
  "is_ci",
- "itertools",
+ "itertools 0.12.1",
  "libc",
  "log",
  "maplit",
@@ -2153,7 +2162,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18bec9b0adc4eba778b33684b7ba3e7137789434769ee3ce3930463ef904cfca"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn",
