@@ -16,7 +16,7 @@ rust-version = "1.75"
 bstr = { version = "1.10.0", default-features = false, features = ["std"] }
 debug-ignore = "1.0.5"
 globset = "0.4.14"
-guppy = "0.17.6"
+guppy = "0.17.7"
 miette = "7.2.0"
 owo-colors = { version = "4.0.0", features = ["supports-colors"] }
 newtype-uuid = { version = "1.1.0", features = ["v4"] }
