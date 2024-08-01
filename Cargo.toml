@@ -24,7 +24,7 @@ nextest-metadata = { version = "0.11.0", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
 quick-junit = "0.4.0"
 swrite = "0.1.0"
-target-spec = { version = "3.2.0", features = ["custom", "summaries"] }
+target-spec = { version = "3.2.1", features = ["custom", "summaries"] }
 target-spec-miette = "0.4.0"
 
 # make backtrace + color-eyre faster on debug builds
