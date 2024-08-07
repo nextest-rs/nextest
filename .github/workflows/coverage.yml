@@ -25,11 +25,11 @@ jobs:
       - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
 
       - name: Install latest nextest release
-        uses: taiki-e/install-action@d79dff47733726f636463323dd2d82724f6c36ba # v2
+        uses: taiki-e/install-action@ada21a86dcbd8480ccdd77e11e167f51a002fb3e # v2
         with:
           tool: nextest
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@d79dff47733726f636463323dd2d82724f6c36ba # v2
+        uses: taiki-e/install-action@ada21a86dcbd8480ccdd77e11e167f51a002fb3e # v2
         with:
           tool: cargo-llvm-cov
 
