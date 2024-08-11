@@ -29,7 +29,7 @@ miette = { version = "7.2.0", features = ["fancy"] }
 num-traits = { version = "0.2.19", default-features = false, features = ["libm", "std"] }
 owo-colors = { version = "4.0.0", default-features = false, features = ["supports-colors"] }
 rand = { version = "0.8.5" }
-serde = { version = "1.0.205", features = ["alloc", "derive"] }
+serde = { version = "1.0.206", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.122", features = ["unbounded_depth"] }
 tokio = { version = "1.38.0", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 xxhash-rust = { version = "0.8.12", default-features = false, features = ["xxh3", "xxh64"] }
