@@ -27,7 +27,7 @@ enable-ansi-support = "0.2.1"
 nextest-workspace-hack.workspace = true
 
 [dev-dependencies]
-camino = "1.1.7"
+camino = "1.1.8"
 camino-tempfile = "1.1.1"
 cfg-if = "1.0.0"
 pathdiff = { version = "0.2.1", features = ["camino"] }
