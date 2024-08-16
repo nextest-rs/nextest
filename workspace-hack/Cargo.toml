@@ -15,7 +15,7 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 backtrace = { version = "0.3.71", features = ["gimli-symbolize"] }
-clap = { version = "4.5.15", features = ["derive", "env", "unicode", "wrap_help"] }
+clap = { version = "4.5.16", features = ["derive", "env", "unicode", "wrap_help"] }
 clap_builder = { version = "4.5.15", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 console = { version = "0.15.8" }
 either = { version = "1.13.0" }
