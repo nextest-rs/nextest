@@ -22,7 +22,7 @@ cargo-nextest = { path = "../cargo-nextest", default-features = false, features 
 ] }
 # we don't use the tracing support
 color-eyre = { version = "0.6.3", default-features = false }
-clap = { version = "4.5.15", features = ["derive", "env"] }
+clap = { version = "4.5.16", features = ["derive", "env"] }
 enable-ansi-support = "0.2.1"
 nextest-workspace-hack.workspace = true
 
