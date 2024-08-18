@@ -96,7 +96,7 @@ jobs:
         with:
           prefix: cargo-nextest
           # The changelog for cargo-nextest is hosted on the website
-          changelog: site/src/CHANGELOG.md
+          changelog: site/src/changelog.md
           title: $prefix $version
           branch: main
         env:
