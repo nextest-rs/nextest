@@ -7,6 +7,9 @@ on:
       - main
 
 name: Docs
+env:
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
 
 jobs:
   docs:
@@ -37,6 +40,7 @@ jobs:
           mv site/output target/gh-pages
           mv target/doc target/gh-pages/rustdoc
       - name: Publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/pages-action@1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
