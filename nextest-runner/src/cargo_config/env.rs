@@ -114,12 +114,13 @@ impl EnvironmentMap {
     }
 }
 
-/// An environment variable set in `config.toml`. See https://doc.rust-lang.org/cargo/reference/config.html#env
+/// An environment variable set in `config.toml`. See
+/// <https://doc.rust-lang.org/cargo/reference/config.html#env>.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CargoEnvironmentVariable {
     /// The source `config.toml` file. See
-    /// https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure for the lookup
-    /// order.
+    /// <https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure> for the
+    /// lookup order.
     pub source: Option<Utf8PathBuf>,
 
     /// The name of the environment variable to set.

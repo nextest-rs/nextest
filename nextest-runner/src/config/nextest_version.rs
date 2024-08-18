@@ -259,7 +259,7 @@ impl fmt::Display for ConfigExperimental {
     }
 }
 
-/// Specification for a nextest version. Part of [`NextestVersion`].
+/// Specification for a nextest version. Part of [`NextestVersionConfig`].
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub enum NextestVersionReq {
     /// A version was specified.
@@ -313,9 +313,9 @@ impl NextestVersionReq {
     }
 }
 
-/// The result of checking whether a [`NextestVersion`] satisfies a requirement.
+/// The result of checking whether a [`NextestVersionConfig`] satisfies a requirement.
 ///
-/// Returned by [`NextestVersion::eval`].
+/// Returned by [`NextestVersionConfig::eval`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NextestVersionEval {
     /// The version satisfies the requirement.

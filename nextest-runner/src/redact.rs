@@ -180,10 +180,8 @@ impl RedactorKind {
 }
 
 /// An individual redaction to apply.
-///
-/// Accepted by [`Redactor::new`].
 #[derive(Debug)]
-pub enum Redaction {
+enum Redaction {
     /// Redact a path.
     Path {
         /// The path to redact.
