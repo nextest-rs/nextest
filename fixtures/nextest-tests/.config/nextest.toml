@@ -22,8 +22,12 @@ filter = "test(=test_cargo_env_vars)"
 setup = "my-script-windows"
 
 [[profile.default.overrides]]
-# See https://github.com/nextest-rs/nextest/issues/984.
-platform = { host = 'cfg(windows)' }
+# For Windows: See https://github.com/nextest-rs/nextest/issues/984.
+#
+# For illumos: Under stress, some tests can incorrectly say they're leaky. For example:
+# https://buildomat.eng.oxide.computer/wg/0/details/01J5HQ7T1J3WRZ4KSSE92YS1RZ/40lQc6hVXJWGG966LAWGP2Ckgw0pIJnd9lfzC4K8OQOpwRO5/01J5HQ814KXZADXRAMX89GC8J1#S1469.
+
+platform = { host = 'cfg(any(windows, target_os = "illumos"))' }
 leak-timeout = '1s'
 
 [profile.with-retries]
