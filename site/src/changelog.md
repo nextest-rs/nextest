@@ -8,6 +8,19 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.73] - 2024-08-18
+
+### Added
+
+Warnings are now printed in the following cases:
+
+- If some tests are not run, e.g. due to `--fail-fast`.
+- If no tests are run.
+
+### Upcoming behavior changes
+
+If no tests are run, nextest will start exiting with the advisory code **4** in versions released after 2024-11-18. See [discussion #1646](https://github.com/nextest-rs/nextest/discussions/1646) for more.
+
 ## [0.9.72] - 2024-05-23
 
 ### Fixed
