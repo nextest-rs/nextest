@@ -7,6 +7,14 @@ use owo_colors::OwoColorize;
 use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
 
 pub(crate) mod plural {
+    pub(crate) fn were_plural_if(plural: bool) -> &'static str {
+        if plural {
+            "were"
+        } else {
+            "was"
+        }
+    }
+
     pub(crate) fn setup_scripts_str(count: usize) -> &'static str {
         if count == 1 {
             "setup script"
@@ -16,10 +24,14 @@ pub(crate) mod plural {
     }
 
     pub(crate) fn tests_str(count: usize) -> &'static str {
-        if count == 1 {
-            "test"
-        } else {
+        tests_plural_if(count != 1)
+    }
+
+    pub(crate) fn tests_plural_if(plural: bool) -> &'static str {
+        if plural {
             "tests"
+        } else {
+            "test"
         }
     }
 
