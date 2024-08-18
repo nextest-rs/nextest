@@ -12,7 +12,7 @@ categories = ["development-tools::testing"]
 rust-version.workspace = true
 
 [dependencies]
-camino = { version = "1.1.8", features = ["serde1"] }
+camino = { version = "1.1.9", features = ["serde1"] }
 serde = { version = "1.0.208", features = ["derive"] }
 serde_json = "1.0.125"
 target-spec.workspace = true
