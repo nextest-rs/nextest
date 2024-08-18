@@ -1,0 +1,8 @@
+# Configuration for buildomat. See
+# https://github.com/oxidecomputer/buildomat?tab=readme-ov-file#per-repository-configuration.
+
+enable = true
+org_only = true
+allow_users = [
+    "nextest-bot",
+]
