@@ -17,6 +17,10 @@ Warnings are now printed in the following cases:
 - If some tests are not run, e.g. due to `--fail-fast`.
 - If no tests are run.
 
+### Changed
+
+- Updated MSRV for compiling nextest to Rust 1.75.
+
 ### Upcoming behavior changes
 
 If no tests are run, nextest will start exiting with the advisory code **4** in versions released after 2024-11-18. See [discussion #1646](https://github.com/nextest-rs/nextest/discussions/1646) for more.
@@ -1024,6 +1028,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.73]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.73
 [0.9.72]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.72
 [0.9.71]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.71
 [0.9.70]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.70
