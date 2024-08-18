@@ -16,7 +16,7 @@ use crate::{
     reporter::aggregator::EventAggregator,
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
-        RetryData, RunStats, SetupScriptExecuteStatus,
+        FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
     },
     test_output::{TestOutput, TestSingleOutput},
 };
@@ -432,51 +432,40 @@ fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &Pr
             cancel_state,
             ..
         } => {
-            let running_state = RunningState::new(*cancel_state, current_stats);
-            progress_bar.set_prefix(running_state.progress_bar_prefix(styles));
+            progress_bar.set_prefix(progress_bar_prefix(current_stats, *cancel_state, styles));
             progress_bar.set_message(progress_bar_msg(current_stats, *running, styles));
             // If there are skipped tests, the initial run count will be lower than when constructed
             // in ProgressBar::new.
             progress_bar.set_length(current_stats.initial_run_count as u64);
             progress_bar.set_position(current_stats.finished_count as u64);
         }
-        TestEventKind::RunBeginCancel { reason, .. } => {
-            let running_state = RunningState::Canceling(*reason);
-            progress_bar.set_prefix(running_state.progress_bar_prefix(styles));
+        TestEventKind::RunBeginCancel { .. } => {
+            progress_bar.set_prefix(progress_bar_cancel_prefix(styles));
         }
         _ => {}
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-enum RunningState<'a> {
-    Running(&'a RunStats),
-    Canceling(#[allow(dead_code)] CancelReason),
+fn progress_bar_cancel_prefix(styles: &Styles) -> String {
+    format!("{:>12}", "Canceling".style(styles.fail))
 }
 
-impl<'a> RunningState<'a> {
-    fn new(cancel_state: Option<CancelReason>, current_stats: &'a RunStats) -> Self {
-        match cancel_state {
-            Some(cancel_state) => Self::Canceling(cancel_state),
-            None => Self::Running(current_stats),
-        }
+fn progress_bar_prefix(
+    run_stats: &RunStats,
+    cancel_reason: Option<CancelReason>,
+    styles: &Styles,
+) -> String {
+    if cancel_reason.is_some() {
+        return progress_bar_cancel_prefix(styles);
     }
 
-    fn progress_bar_prefix(self, styles: &Styles) -> String {
-        let (prefix_str, prefix_style) = match self {
-            Self::Running(current_stats) => {
-                let prefix_style = if current_stats.failure_kind().is_some() {
-                    styles.fail
-                } else {
-                    styles.pass
-                };
-                ("Running", prefix_style)
-            }
-            Self::Canceling(_) => ("Canceling", styles.fail),
-        };
+    let style = if run_stats.has_failures() {
+        styles.fail
+    } else {
+        styles.pass
+    };
 
-        format!("{:>12}", prefix_str.style(prefix_style))
-    }
+    format!("{:>12}", "Running".style(style))
 }
 
 fn progress_bar_msg(current_stats: &RunStats, running: usize, styles: &Styles) -> String {
@@ -865,19 +854,11 @@ impl<'a> TestReporterImpl<'a> {
             } => {
                 self.cancel_status = self.cancel_status.max(Some(*reason));
 
-                let reason_str: &str = match reason {
-                    CancelReason::SetupScriptFailure => "setup script failure",
-                    CancelReason::TestFailure => "test failure",
-                    CancelReason::ReportError => "error",
-                    CancelReason::Signal => "signal",
-                    CancelReason::Interrupt => "interrupt",
-                };
-
                 write!(
                     writer,
                     "{:>12} due to {}",
                     "Canceling".style(self.styles.fail),
-                    reason_str.style(self.styles.fail)
+                    reason.to_static_str().style(self.styles.fail)
                 )?;
 
                 // At the moment, we can have either setup scripts or tests running, but not both.
@@ -962,10 +943,11 @@ impl<'a> TestReporterImpl<'a> {
                 run_stats,
                 ..
             } => {
-                let summary_style = if run_stats.failure_kind().is_some() {
-                    self.styles.fail
-                } else {
-                    self.styles.pass
+                let stats_summary = run_stats.summarize_final();
+                let summary_style = match stats_summary {
+                    FinalRunStats::Success => self.styles.pass,
+                    FinalRunStats::NoTestsRun => self.styles.skip,
+                    FinalRunStats::Failed(_) | FinalRunStats::Canceled(_) => self.styles.fail,
                 };
                 write!(
                     writer,
@@ -992,12 +974,10 @@ impl<'a> TestReporterImpl<'a> {
                     )?;
                 }
 
-                let tests_str = if run_stats.finished_count == 1 && run_stats.initial_run_count == 1
-                {
-                    "test"
-                } else {
-                    "tests"
-                };
+                // Both initial and finished counts must be 1 for the singular form.
+                let tests_str = plural::tests_plural_if(
+                    run_stats.initial_run_count != 1 || run_stats.finished_count != 1,
+                );
 
                 let mut summary_str = String::new();
                 // Writing to a string is infallible.
@@ -1040,6 +1020,10 @@ impl<'a> TestReporterImpl<'a> {
                         }
                     }
                 }
+
+                // Print out warnings at the end, if any. We currently print out warnings in two
+                // cases:
+                write_final_warnings(stats_summary, self.cancel_status, &self.styles, writer)?;
             }
         }
 
@@ -1643,6 +1627,69 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
     }
 }
 
+fn write_final_warnings(
+    final_stats: FinalRunStats,
+    cancel_status: Option<CancelReason>,
+    styles: &Styles,
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    match final_stats {
+        // 1. When some tests are not run due to a test failure.
+        FinalRunStats::Failed(RunStatsFailureKind::Test {
+            initial_run_count,
+            not_run,
+        })
+        | FinalRunStats::Canceled(RunStatsFailureKind::Test {
+            initial_run_count,
+            not_run,
+        }) if not_run > 0 => {
+            if cancel_status == Some(CancelReason::TestFailure) {
+                writeln!(
+                    writer,
+                    "{}: {}/{} {} {} not run due to {} (run with {} to run all tests)",
+                    "warning".style(styles.skip),
+                    not_run.style(styles.count),
+                    initial_run_count.style(styles.count),
+                    plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
+                    plural::were_plural_if(initial_run_count != 1 || not_run != 1),
+                    CancelReason::TestFailure.to_static_str().style(styles.skip),
+                    "--no-fail-fast".style(styles.count),
+                )?;
+            } else {
+                let due_to_reason = match cancel_status {
+                    Some(reason) => {
+                        format!(" due to {}", reason.to_static_str().style(styles.skip))
+                    }
+                    None => "".to_string(),
+                };
+                writeln!(
+                    writer,
+                    "{}: {}/{} {} {} not run{}",
+                    "warning".style(styles.skip),
+                    not_run.style(styles.count),
+                    initial_run_count.style(styles.count),
+                    plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
+                    plural::were_plural_if(initial_run_count != 1 || not_run != 1),
+                    due_to_reason,
+                )?;
+            }
+        }
+
+        // 2. When no tests are run at all.
+        FinalRunStats::NoTestsRun => {
+            writeln!(
+                writer,
+                "{}: no tests were run (this will exit with a \
+                         non-zero code in the future)",
+                "warning".style(styles.skip)
+            )?;
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
 /// A test event.
 ///
 /// Events are produced by a [`TestRunner`](crate::runner::TestRunner) and consumed by a
@@ -1907,6 +1954,18 @@ pub enum CancelReason {
 
     /// An interrupt (on Unix, Ctrl-C) was received.
     Interrupt,
+}
+
+impl CancelReason {
+    pub(crate) fn to_static_str(self) -> &'static str {
+        match self {
+            CancelReason::SetupScriptFailure => "setup script failure",
+            CancelReason::TestFailure => "test failure",
+            CancelReason::ReportError => "reporting error",
+            CancelReason::Signal => "signal",
+            CancelReason::Interrupt => "interrupt",
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -2242,5 +2301,146 @@ mod tests {
             StatusLevel::Pass,
             "status level is pass, overriding other settings"
         );
+    }
+
+    #[test]
+    fn test_progress_bar_prefix() {
+        let mut styles = Styles::default();
+        styles.colorize();
+
+        for stats in run_stats_test_failure_examples() {
+            let prefix = progress_bar_prefix(&stats, Some(CancelReason::TestFailure), &styles);
+            assert_eq!(prefix, "   Canceling".style(styles.fail).to_string());
+        }
+        for stats in run_stats_setup_script_failure_examples() {
+            let prefix =
+                progress_bar_prefix(&stats, Some(CancelReason::SetupScriptFailure), &styles);
+            assert_eq!(prefix, "   Canceling".style(styles.fail).to_string());
+        }
+
+        let prefix = progress_bar_prefix(&RunStats::default(), Some(CancelReason::Signal), &styles);
+        assert_eq!(prefix, "   Canceling".style(styles.fail).to_string());
+
+        let prefix = progress_bar_prefix(&RunStats::default(), None, &styles);
+        assert_eq!(prefix, "     Running".style(styles.pass).to_string());
+
+        for stats in run_stats_test_failure_examples() {
+            let prefix = progress_bar_prefix(&stats, None, &styles);
+            assert_eq!(prefix, "     Running".style(styles.fail).to_string());
+        }
+        for stats in run_stats_setup_script_failure_examples() {
+            let prefix = progress_bar_prefix(&stats, None, &styles);
+            assert_eq!(prefix, "     Running".style(styles.fail).to_string());
+        }
+    }
+
+    fn run_stats_test_failure_examples() -> Vec<RunStats> {
+        vec![
+            RunStats {
+                failed: 1,
+                ..RunStats::default()
+            },
+            RunStats {
+                failed: 1,
+                passed: 1,
+                ..RunStats::default()
+            },
+            RunStats {
+                exec_failed: 1,
+                ..RunStats::default()
+            },
+            RunStats {
+                timed_out: 1,
+                ..RunStats::default()
+            },
+        ]
+    }
+
+    fn run_stats_setup_script_failure_examples() -> Vec<RunStats> {
+        vec![
+            RunStats {
+                setup_scripts_failed: 1,
+                ..RunStats::default()
+            },
+            RunStats {
+                setup_scripts_exec_failed: 1,
+                ..RunStats::default()
+            },
+            RunStats {
+                setup_scripts_timed_out: 1,
+                ..RunStats::default()
+            },
+        ]
+    }
+
+    #[test]
+    fn test_final_warnings() {
+        let warnings = final_warnings_for(
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 3,
+                not_run: 1,
+            }),
+            Some(CancelReason::TestFailure),
+        );
+        assert_eq!(
+            warnings,
+            "warning: 1/3 tests were not run due to test failure \
+             (run with --no-fail-fast to run all tests)\n"
+        );
+
+        let warnings = final_warnings_for(
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 8,
+                not_run: 5,
+            }),
+            Some(CancelReason::Signal),
+        );
+        assert_eq!(warnings, "warning: 5/8 tests were not run due to signal\n");
+
+        let warnings = final_warnings_for(
+            FinalRunStats::Canceled(RunStatsFailureKind::Test {
+                initial_run_count: 1,
+                not_run: 1,
+            }),
+            Some(CancelReason::Interrupt),
+        );
+        assert_eq!(warnings, "warning: 1/1 test was not run due to interrupt\n");
+
+        let warnings = final_warnings_for(FinalRunStats::NoTestsRun, None);
+        assert_eq!(
+            warnings,
+            "warning: no tests were run (this will exit with a non-zero code in the future)\n"
+        );
+
+        let warnings = final_warnings_for(FinalRunStats::NoTestsRun, Some(CancelReason::Signal));
+        assert_eq!(
+            warnings,
+            "warning: no tests were run (this will exit with a non-zero code in the future)\n"
+        );
+
+        // No warnings for success.
+        let warnings = final_warnings_for(FinalRunStats::Success, None);
+        assert_eq!(warnings, "");
+
+        // No warnings for setup script failure.
+        let warnings = final_warnings_for(
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
+            Some(CancelReason::SetupScriptFailure),
+        );
+        assert_eq!(warnings, "");
+
+        // No warnings for setup script cancellation.
+        let warnings = final_warnings_for(
+            FinalRunStats::Canceled(RunStatsFailureKind::SetupScript),
+            Some(CancelReason::Interrupt),
+        );
+        assert_eq!(warnings, "");
+    }
+
+    fn final_warnings_for(stats: FinalRunStats, cancel_status: Option<CancelReason>) -> String {
+        let mut buf: Vec<u8> = Vec::new();
+        let styles = Styles::default();
+        write_final_warnings(stats, cancel_status, &styles, &mut buf).unwrap();
+        String::from_utf8(buf).unwrap()
     }
 }

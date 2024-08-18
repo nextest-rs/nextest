@@ -1543,41 +1543,42 @@ pub struct RunStats {
 }
 
 impl RunStats {
-    /// Returns true if this run is considered a success.
-    ///
-    /// A run can be marked as failed if any of the following are true:
-    /// * the run was canceled: the initial run count is greater than the final run count
-    /// * any tests failed
-    /// * any tests encountered an execution failure
-    pub fn is_success(&self) -> bool {
-        if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
-            return false;
-        }
-        if self.initial_run_count > self.finished_count {
-            return false;
-        }
-        if self.failure_kind().is_some() {
-            return false;
-        }
-        true
+    /// Returns true if there are any failures recorded in the stats.
+    pub fn has_failures(&self) -> bool {
+        self.setup_scripts_failed > 0
+            || self.setup_scripts_exec_failed > 0
+            || self.setup_scripts_timed_out > 0
+            || self.failed > 0
+            || self.exec_failed > 0
+            || self.timed_out > 0
     }
 
-    /// Returns the kind of failure recorded by the run stats, if any tests failed or were timed
-    /// out.
-    #[inline]
-    pub fn failure_kind(&self) -> Option<RunStatsFailureKind> {
+    /// Summarizes the stats as an enum at the end of a test run.
+    pub fn summarize_final(&self) -> FinalRunStats {
+        // Check for failures first. The order of setup scripts vs tests should not be important,
+        // though we don't assert that here.
         if self.setup_scripts_failed > 0
             || self.setup_scripts_exec_failed > 0
             || self.setup_scripts_timed_out > 0
         {
-            return Some(RunStatsFailureKind::SetupScript);
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript)
+        } else if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
+            FinalRunStats::Canceled(RunStatsFailureKind::SetupScript)
+        } else if self.failed > 0 || self.exec_failed > 0 || self.timed_out > 0 {
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: self.initial_run_count,
+                not_run: self.initial_run_count.saturating_sub(self.finished_count),
+            })
+        } else if self.initial_run_count > self.finished_count {
+            FinalRunStats::Canceled(RunStatsFailureKind::Test {
+                initial_run_count: self.initial_run_count,
+                not_run: self.initial_run_count.saturating_sub(self.finished_count),
+            })
+        } else if self.finished_count == 0 {
+            FinalRunStats::NoTestsRun
+        } else {
+            FinalRunStats::Success
         }
-
-        if self.failed > 0 || self.exec_failed > 0 || self.timed_out > 0 {
-            return Some(RunStatsFailureKind::Test);
-        }
-
-        None
     }
 
     fn on_setup_script_finished(&mut self, status: &SetupScriptExecuteStatus) {
@@ -1642,14 +1643,37 @@ impl RunStats {
     }
 }
 
-/// A type summarizing the possible failures within a test run.
+/// A type summarizing the possible outcomes of a test run.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FinalRunStats {
+    /// The test run was successful, or is successful so far.
+    Success,
+
+    /// The test run was successful, or is successful so far, but no tests were run.
+    NoTestsRun,
+
+    /// The test run was canceled.
+    Canceled(RunStatsFailureKind),
+
+    /// At least one test failed.
+    Failed(RunStatsFailureKind),
+}
+
+/// A type summarizing the step at which a test run failed.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum RunStatsFailureKind {
-    /// A setup script failed.
+    /// The run was interrupted during setup script execution.
     SetupScript,
 
-    /// A test failed.
-    Test,
+    /// The run was interrupted during test execution.
+    Test {
+        /// The total number of tests scheduled.
+        initial_run_count: usize,
+
+        /// The number of tests not run, or for a currently-executing test the number queued up to
+        /// run.
+        not_run: usize,
+    },
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -2401,177 +2425,97 @@ mod tests {
 
     #[test]
     fn test_is_success() {
-        assert!(RunStats::default().is_success(), "empty run => success");
-        assert!(
+        assert_eq!(
+            RunStats::default().summarize_final(),
+            FinalRunStats::NoTestsRun,
+            "empty run => no tests run"
+        );
+        assert_eq!(
             RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 ..RunStats::default()
             }
-            .is_success(),
+            .summarize_final(),
+            FinalRunStats::Success,
             "initial run count = final run count => success"
         );
-        assert!(
-            !RunStats {
+        assert_eq!(
+            RunStats {
                 initial_run_count: 42,
                 finished_count: 41,
                 ..RunStats::default()
             }
-            .is_success(),
-            "initial run count > final run count => failure"
+            .summarize_final(),
+            FinalRunStats::Canceled(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 1
+            }),
+            "initial run count > final run count => canceled"
         );
-        assert!(
-            !RunStats {
+        assert_eq!(
+            RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 failed: 1,
                 ..RunStats::default()
             }
-            .is_success(),
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 0
+            }),
             "failed => failure"
         );
-        assert!(
-            !RunStats {
+        assert_eq!(
+            RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 exec_failed: 1,
                 ..RunStats::default()
             }
-            .is_success(),
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 0
+            }),
             "exec failed => failure"
         );
-        assert!(
-            !RunStats {
+        assert_eq!(
+            RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 timed_out: 1,
                 ..RunStats::default()
             }
-            .is_success(),
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 0
+            }),
             "timed out => failure"
         );
-        assert!(
+        assert_eq!(
             RunStats {
                 initial_run_count: 42,
                 finished_count: 42,
                 skipped: 1,
                 ..RunStats::default()
             }
-            .is_success(),
+            .summarize_final(),
+            FinalRunStats::Success,
             "skipped => not considered a failure"
         );
 
-        assert!(
-            !RunStats {
+        assert_eq!(
+            RunStats {
                 setup_scripts_initial_count: 2,
                 setup_scripts_finished_count: 1,
                 ..RunStats::default()
             }
-            .is_success(),
-            "setup script not finished => failure"
-        );
-        assert!(
-            !RunStats {
-                setup_scripts_initial_count: 2,
-                setup_scripts_finished_count: 2,
-                setup_scripts_failed: 1,
-                ..RunStats::default()
-            }
-            .is_success(),
+            .summarize_final(),
+            FinalRunStats::Canceled(RunStatsFailureKind::SetupScript),
             "setup script failed => failure"
-        );
-        assert!(
-            !RunStats {
-                setup_scripts_initial_count: 2,
-                setup_scripts_finished_count: 2,
-                setup_scripts_exec_failed: 1,
-                ..RunStats::default()
-            }
-            .is_success(),
-            "setup script exec failed => failure"
-        );
-        assert!(
-            !RunStats {
-                setup_scripts_initial_count: 2,
-                setup_scripts_finished_count: 2,
-                setup_scripts_timed_out: 1,
-                ..RunStats::default()
-            }
-            .is_success(),
-            "setup script timed out => failure"
-        );
-        assert!(
-            RunStats {
-                setup_scripts_initial_count: 2,
-                setup_scripts_finished_count: 2,
-                setup_scripts_passed: 2,
-                ..RunStats::default()
-            }
-            .is_success(),
-            "setup scripts passed => not considered a failure"
-        );
-    }
-
-    #[test]
-    fn test_any_failed() {
-        assert_eq!(
-            RunStats::default().failure_kind(),
-            None,
-            "empty run => none failed"
-        );
-        assert_eq!(
-            RunStats {
-                initial_run_count: 42,
-                finished_count: 41,
-                ..RunStats::default()
-            }
-            .failure_kind(),
-            None,
-            "initial run count > final run count doesn't necessarily mean any failed"
-        );
-        assert_eq!(
-            RunStats {
-                initial_run_count: 42,
-                finished_count: 42,
-                failed: 1,
-                ..RunStats::default()
-            }
-            .failure_kind(),
-            Some(RunStatsFailureKind::Test),
-            "failed => failure"
-        );
-        assert_eq!(
-            RunStats {
-                initial_run_count: 42,
-                finished_count: 42,
-                exec_failed: 1,
-                ..RunStats::default()
-            }
-            .failure_kind(),
-            Some(RunStatsFailureKind::Test),
-            "exec failed => failure"
-        );
-        assert_eq!(
-            RunStats {
-                initial_run_count: 42,
-                finished_count: 42,
-                timed_out: 1,
-                ..RunStats::default()
-            }
-            .failure_kind(),
-            Some(RunStatsFailureKind::Test),
-            "timed out => failure"
-        );
-        assert_eq!(
-            RunStats {
-                initial_run_count: 42,
-                finished_count: 42,
-                skipped: 1,
-                ..RunStats::default()
-            }
-            .failure_kind(),
-            None,
-            "skipped => not considered a failure"
         );
 
         assert_eq!(
@@ -2581,8 +2525,8 @@ mod tests {
                 setup_scripts_failed: 1,
                 ..RunStats::default()
             }
-            .failure_kind(),
-            Some(RunStatsFailureKind::SetupScript),
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
             "setup script failed => failure"
         );
         assert_eq!(
@@ -2592,8 +2536,8 @@ mod tests {
                 setup_scripts_exec_failed: 1,
                 ..RunStats::default()
             }
-            .failure_kind(),
-            Some(RunStatsFailureKind::SetupScript),
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
             "setup script exec failed => failure"
         );
         assert_eq!(
@@ -2603,8 +2547,8 @@ mod tests {
                 setup_scripts_timed_out: 1,
                 ..RunStats::default()
             }
-            .failure_kind(),
-            Some(RunStatsFailureKind::SetupScript),
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
             "setup script timed out => failure"
         );
         assert_eq!(
@@ -2614,9 +2558,9 @@ mod tests {
                 setup_scripts_passed: 2,
                 ..RunStats::default()
             }
-            .failure_kind(),
-            None,
-            "setup scripts passed => not considered a failure"
+            .summarize_final(),
+            FinalRunStats::NoTestsRun,
+            "setup scripts passed => success, but no tests run"
         );
     }
 }

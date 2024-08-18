@@ -9,7 +9,7 @@ use nextest_runner::{
     config::NextestConfig,
     double_spawn::DoubleSpawnInfo,
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
-    runner::TestRunnerBuilder,
+    runner::{FinalRunStats, RunStatsFailureKind, TestRunnerBuilder},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -295,7 +295,16 @@ fn test_run_with_target_runner() -> Result<()> {
         }
     }
 
-    assert!(!run_stats.is_success(), "run should be marked failed");
+    // Note: can't compare not_run because its exact value would depend on the number of threads on
+    // the machine.
+    assert!(
+        matches!(
+            run_stats.summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test { .. })
+        ),
+        "run should be marked failed, but got {:?}",
+        run_stats.summarize_final(),
+    );
 
     Ok(())
 }

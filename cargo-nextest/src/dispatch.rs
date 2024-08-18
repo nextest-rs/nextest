@@ -31,7 +31,7 @@ use nextest_runner::{
     redact::Redactor,
     reporter::{structured, FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
     reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
-    runner::{configure_handle_inheritance, RunStatsFailureKind, TestRunnerBuilder},
+    runner::{configure_handle_inheritance, FinalRunStats, RunStatsFailureKind, TestRunnerBuilder},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -1658,23 +1658,23 @@ impl App {
         })?;
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
-        if !run_stats.is_success() {
-            match run_stats.failure_kind() {
-                Some(RunStatsFailureKind::SetupScript) => {
-                    return Err(ExpectedError::setup_script_failed());
-                }
-                Some(RunStatsFailureKind::Test) => {
-                    return Err(ExpectedError::test_run_failed());
-                }
-                None => {
-                    // XXX This means that the final number run of tests was less than the initial
-                    // number. Why can this be except if tests were failed or canceled for some
-                    // reason?
-                    return Err(ExpectedError::test_run_failed());
-                }
+
+        match run_stats.summarize_final() {
+            FinalRunStats::Success => Ok(()),
+            FinalRunStats::NoTestsRun => {
+                // This currently does not exit with a non-zero code, but will in the future:
+                // https://github.com/nextest-rs/nextest/issues/1639
+                Ok(())
+            }
+            FinalRunStats::Canceled(RunStatsFailureKind::SetupScript)
+            | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
+                Err(ExpectedError::setup_script_failed())
+            }
+            FinalRunStats::Canceled(RunStatsFailureKind::Test { .. })
+            | FinalRunStats::Failed(RunStatsFailureKind::Test { .. }) => {
+                Err(ExpectedError::test_run_failed())
             }
         }
-        Ok(())
     }
 }
 

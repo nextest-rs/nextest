@@ -12,7 +12,10 @@ use nextest_runner::{
     list::BinaryList,
     platform::BuildPlatforms,
     reporter::heuristic_extract_description,
-    runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
+    runner::{
+        ExecutionDescription, ExecutionResult, FinalRunStats, RunStatsFailureKind,
+        TestRunnerBuilder,
+    },
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
@@ -190,7 +193,16 @@ fn test_run() -> Result<()> {
         }
     }
 
-    assert!(!run_stats.is_success(), "run should be marked failed");
+    // Note: can't compare not_run because its exact value would depend on the number of threads on
+    // the machine.
+    assert!(
+        matches!(
+            run_stats.summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test { .. })
+        ),
+        "run should be marked failed, but got {:?}",
+        run_stats.summarize_final(),
+    );
     Ok(())
 }
 
@@ -264,7 +276,16 @@ fn test_run_ignored() -> Result<()> {
         }
     }
 
-    assert!(!run_stats.is_success(), "run should be marked failed");
+    // Note: can't compare not_run because its exact value would depend on the number of threads on
+    // the machine.
+    assert!(
+        matches!(
+            run_stats.summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test { .. })
+        ),
+        "run should be marked failed, but got {:?}",
+        run_stats.summarize_final(),
+    );
     Ok(())
 }
 
@@ -538,7 +559,16 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
         }
     }
 
-    assert!(!run_stats.is_success(), "run should be marked failed");
+    // Note: can't compare not_run because its exact value would depend on the number of threads on
+    // the machine.
+    assert!(
+        matches!(
+            run_stats.summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test { .. })
+        ),
+        "run should be marked failed, but got {:?}",
+        run_stats.summarize_final(),
+    );
     Ok(())
 }
 
