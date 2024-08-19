@@ -11,6 +11,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{builder::BoolishValueParser, ArgAction, Args, Parser, Subcommand, ValueEnum};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
+use log::warn;
 use nextest_filtering::FilteringExpr;
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
@@ -406,8 +407,7 @@ impl NtrOpts {
             &self.run_opts.reporter_opts,
             cli_args,
             output_writer,
-        )?;
-        Ok(0)
+        )
     }
 }
 
@@ -754,6 +754,33 @@ pub struct TestRunnerOpts {
     /// Run all tests regardless of failure
     #[arg(long, conflicts_with = "no-run", overrides_with = "fail-fast")]
     no_fail_fast: bool,
+
+    /// Behavior if there are no tests to run.
+    ///
+    /// The default is currently `warn`, but it will change to `fail` in the future.
+    #[arg(
+        long,
+        value_enum,
+        conflicts_with = "no-run",
+        value_name = "ACTION",
+        require_equals = true,
+        env = "NEXTEST_NO_TESTS"
+    )]
+    no_tests: Option<NoTestsBehavior>,
+}
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum NoTestsBehavior {
+    /// Silently exit with code 0.
+    Pass,
+
+    /// Produce a warning and exit with code 0.
+    #[default]
+    Warn,
+
+    /// Produce an error message and exit with code 4.
+    #[clap(alias = "error")]
+    Fail,
 }
 
 impl TestRunnerOpts {
@@ -1563,7 +1590,7 @@ impl App {
         reporter_opts: &TestReporterOpts,
         cli_args: Vec<String>,
         output_writer: &mut OutputWriter,
-    ) -> Result<()> {
+    ) -> Result<i32> {
         let (version_only_config, config) = self.base.load_config()?;
         let profile = self.base.load_profile(profile_name, &config)?;
 
@@ -1638,7 +1665,7 @@ impl App {
             Some(runner_builder) => runner_builder,
             None => {
                 // This means --no-run was passed in. Exit.
-                return Ok(());
+                return Ok(0);
             }
         };
 
@@ -1656,15 +1683,32 @@ impl App {
             // Write and flush the event.
             reporter.report_event(event)
         })?;
+        reporter.finish();
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
         match run_stats.summarize_final() {
-            FinalRunStats::Success => Ok(()),
+            FinalRunStats::Success => Ok(0),
             FinalRunStats::NoTestsRun => {
-                // This currently does not exit with a non-zero code, but will in the future:
-                // https://github.com/nextest-rs/nextest/issues/1639
-                Ok(())
+                match runner_opts.no_tests {
+                    Some(NoTestsBehavior::Pass) => Ok(0),
+                    Some(NoTestsBehavior::Warn) => {
+                        warn!("no tests to run");
+                        Ok(0)
+                    }
+                    Some(NoTestsBehavior::Fail) => {
+                        Err(ExpectedError::NoTestsRun { is_default: false })
+                    }
+                    None => {
+                        // This currently does not exit with a non-zero code, but will in the
+                        // future: https://github.com/nextest-rs/nextest/issues/1639
+                        warn!(
+                            "no tests to run -- this will become an error in the future\n\
+                             (hint: use `--no-tests` to customize)"
+                        );
+                        Ok(0)
+                    }
+                }
             }
             FinalRunStats::Canceled(RunStatsFailureKind::SetupScript)
             | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {

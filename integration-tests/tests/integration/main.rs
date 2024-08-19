@@ -229,6 +229,87 @@ fn test_list_target_after_build() {
 }
 
 #[test]
+fn test_run_no_tests() {
+    set_env_vars();
+
+    let p = TempProject::new().unwrap();
+    build_tests(&p);
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "-E",
+            "none()",
+        ])
+        .output();
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("warning: no tests to run -- this will become an error in the future"),
+        "stderr contains no tests message"
+    );
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "-E",
+            "none()",
+            "--no-tests=warn",
+        ])
+        .output();
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("warning: no tests to run"),
+        "stderr contains no tests message"
+    );
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "-E",
+            "none()",
+            "--no-tests=fail",
+        ])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::NO_TESTS_RUN),
+        "correct exit code for command\n{output}"
+    );
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("error: no tests to run"),
+        "stderr contains no tests message: {output}"
+    );
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "-E",
+            "none()",
+            "--no-tests=pass",
+        ])
+        .output();
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        !stderr.contains("no tests to run"),
+        "no tests message does not error out"
+    );
+}
+
+#[test]
 fn test_run() {
     set_env_vars();
 

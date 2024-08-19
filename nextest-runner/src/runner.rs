@@ -1649,7 +1649,7 @@ pub enum FinalRunStats {
     /// The test run was successful, or is successful so far.
     Success,
 
-    /// The test run was successful, or is successful so far, but no tests were run.
+    /// The test run was successful, or is successful so far, but no tests were selected to run.
     NoTestsRun,
 
     /// The test run was canceled.

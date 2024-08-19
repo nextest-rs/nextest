@@ -19,6 +19,14 @@ impl NextestExitCode {
     /// An error was encountered while attempting to double-spawn a nextest process.
     pub const DOUBLE_SPAWN_ERROR: i32 = 70;
 
+    /// No tests were selected to run, but no other errors occurred.
+    ///
+    /// This is an advisory exit code generated if nextest is run with `--no-tests=fail` (soon to
+    /// become the default). See [discussion #1646] for more.
+    ///
+    /// [discussion #1646]: https://github.com/nextest-rs/nextest/discussions/1646
+    pub const NO_TESTS_RUN: i32 = 4;
+
     /// One or more tests failed.
     pub const TEST_RUN_FAILED: i32 = 100;
 
