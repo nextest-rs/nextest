@@ -342,6 +342,17 @@ enum ReporterStderrImpl<'a> {
     Buffer(&'a mut Vec<u8>),
 }
 
+impl ReporterStderrImpl<'_> {
+    fn finish_and_clear_bar(&self) {
+        match self {
+            ReporterStderrImpl::TerminalWithBar(bar) => {
+                bar.finish_and_clear();
+            }
+            ReporterStderrImpl::TerminalWithoutBar | ReporterStderrImpl::Buffer(_) => {}
+        }
+    }
+}
+
 /// Functionality to report test results to stderr, JUnit, and/or structured,
 /// machine-readable results to stdout
 pub struct TestReporter<'a> {
@@ -362,6 +373,11 @@ impl<'a> TestReporter<'a> {
     /// Report a test event.
     pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
         self.write_event(event)
+    }
+
+    /// Mark the reporter done.
+    pub fn finish(&mut self) {
+        self.stderr.finish_and_clear_bar();
     }
 
     // ---
@@ -1021,8 +1037,7 @@ impl<'a> TestReporterImpl<'a> {
                     }
                 }
 
-                // Print out warnings at the end, if any. We currently print out warnings in two
-                // cases:
+                // Print out warnings at the end, if any.
                 write_final_warnings(stats_summary, self.cancel_status, &self.styles, writer)?;
             }
         }
@@ -1634,7 +1649,6 @@ fn write_final_warnings(
     writer: &mut dyn Write,
 ) -> io::Result<()> {
     match final_stats {
-        // 1. When some tests are not run due to a test failure.
         FinalRunStats::Failed(RunStatsFailureKind::Test {
             initial_run_count,
             not_run,
@@ -1673,16 +1687,6 @@ fn write_final_warnings(
                     due_to_reason,
                 )?;
             }
-        }
-
-        // 2. When no tests are run at all.
-        FinalRunStats::NoTestsRun => {
-            writeln!(
-                writer,
-                "{}: no tests were run (this will exit with a \
-                         non-zero code in the future)",
-                "warning".style(styles.skip)
-            )?;
         }
         _ => {}
     }
@@ -2406,17 +2410,11 @@ mod tests {
         );
         assert_eq!(warnings, "warning: 1/1 test was not run due to interrupt\n");
 
+        // These warnings are taken care of by cargo-nextest.
         let warnings = final_warnings_for(FinalRunStats::NoTestsRun, None);
-        assert_eq!(
-            warnings,
-            "warning: no tests were run (this will exit with a non-zero code in the future)\n"
-        );
-
+        assert_eq!(warnings, "");
         let warnings = final_warnings_for(FinalRunStats::NoTestsRun, Some(CancelReason::Signal));
-        assert_eq!(
-            warnings,
-            "warning: no tests were run (this will exit with a non-zero code in the future)\n"
-        );
+        assert_eq!(warnings, "");
 
         // No warnings for success.
         let warnings = final_warnings_for(FinalRunStats::Success, None);

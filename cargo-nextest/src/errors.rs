@@ -184,6 +184,12 @@ pub enum ExpectedError {
     SetupScriptFailed,
     #[error("test run failed")]
     TestRunFailed,
+    #[error("no tests to run")]
+    NoTestsRun {
+        /// The no-tests-run error was chosen because it was the default (we show a hint in this
+        /// case)
+        is_default: bool,
+    },
     #[cfg(feature = "self-update")]
     #[error("failed to parse --version")]
     UpdateVersionParseError {
@@ -406,6 +412,7 @@ impl ExpectedError {
             }
             Self::SetupScriptFailed => NextestExitCode::SETUP_SCRIPT_FAILED,
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
+            Self::NoTestsRun { .. } => NextestExitCode::NO_TESTS_RUN,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::WriteTestListError { .. } | Self::WriteEventError { .. } => {
                 NextestExitCode::WRITE_OUTPUT_ERROR
@@ -729,6 +736,15 @@ impl ExpectedError {
             }
             Self::TestRunFailed => {
                 log::error!("test run failed");
+                None
+            }
+            Self::NoTestsRun { is_default } => {
+                let hint_str = if *is_default {
+                    "\n(hint: use `--no-tests` to customize)"
+                } else {
+                    ""
+                };
+                log::error!("no tests to run{hint_str}");
                 None
             }
             Self::ShowTestGroupsError { err } => {
