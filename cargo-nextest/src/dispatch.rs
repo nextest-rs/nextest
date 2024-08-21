@@ -42,7 +42,7 @@ use nextest_runner::{
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
-    test_filter::{FilterBound, RunIgnored, TestFilterBuilder},
+    test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     write_str::WriteStr,
     RustcCli,
 };
@@ -590,11 +590,17 @@ struct TestBuildFilter {
     #[arg(long)]
     ignore_default_filter: bool,
 
-    /// Test name filters
+    /// Test name filters.
     #[arg(help_heading = None, name = "FILTERS")]
     pre_double_dash_filters: Vec<String>,
 
-    /// Test name filters and emulated test binary arguments (partially supported)
+    /// Test name filters and emulated test binary arguments.
+    ///
+    /// Arguments supported:{n}
+    /// - --ignored:         Only run ignored tests{n}
+    /// - --include-ignored: Run both ignored and non-ignored tests{n}
+    /// - --skip PATTERN:    Skip tests that match the pattern{n}
+    /// - --exact PATTERN:   Only run tests that exactly match the pattern
     #[arg(help_heading = None, value_name = "FILTERS_AND_ARGS", last = true)]
     filters: Vec<String>,
 }
@@ -648,13 +654,13 @@ impl TestBuildFilter {
     fn make_test_filter_builder(&self, filter_exprs: Vec<Filterset>) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
-        let mut patterns = self.pre_double_dash_filters.clone();
+        let mut patterns = TestFilterPatterns::new(self.pre_double_dash_filters.clone());
         self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
 
         Ok(TestFilterBuilder::new(
             run_ignored.unwrap_or_default(),
             self.partition.clone(),
-            &patterns,
+            patterns,
             filter_exprs,
         )?)
     }
@@ -662,39 +668,45 @@ impl TestBuildFilter {
     fn merge_test_binary_args(
         &self,
         run_ignored: &mut Option<RunIgnored>,
-        patterns: &mut Vec<String>,
+        patterns: &mut TestFilterPatterns,
     ) -> Result<()> {
         let mut ignore_filters = Vec::new();
         let mut read_trailing_filters = false;
 
-        let mut skip_exact = Vec::new();
         let mut unsupported_args = Vec::new();
 
-        patterns.extend(
-            self.filters
-                .iter()
-                .filter(|&s| {
-                    if read_trailing_filters || !s.starts_with('-') {
-                        true
-                    } else if s == "--include-ignored" {
-                        ignore_filters.push((s.clone(), RunIgnored::All));
-                        false
-                    } else if s == "--ignored" {
-                        ignore_filters.push((s.clone(), RunIgnored::Only));
-                        false
-                    } else if s == "--" {
-                        read_trailing_filters = true;
-                        false
-                    } else if s == "--skip" || s == "--exact" {
-                        skip_exact.push(s.clone());
-                        false
-                    } else {
-                        unsupported_args.push(s.clone());
-                        true
-                    }
-                })
-                .cloned(),
-        );
+        let mut it = self.filters.iter();
+        while let Some(arg) = it.next() {
+            if read_trailing_filters || !arg.starts_with('-') {
+                patterns.add_substring_pattern(arg.clone());
+            } else if arg == "--include-ignored" {
+                ignore_filters.push((arg.clone(), RunIgnored::All));
+            } else if arg == "--ignored" {
+                ignore_filters.push((arg.clone(), RunIgnored::Only));
+            } else if arg == "--" {
+                read_trailing_filters = true;
+            } else if arg == "--skip" {
+                let skip_arg = it.next().ok_or_else(|| {
+                    ExpectedError::test_binary_args_parse_error(
+                        "missing required argument",
+                        vec![arg.clone()],
+                    )
+                })?;
+
+                patterns.add_skip_pattern(skip_arg.clone());
+            } else if arg == "--exact" {
+                let exact_arg = it.next().ok_or_else(|| {
+                    ExpectedError::test_binary_args_parse_error(
+                        "missing required argument",
+                        vec![arg.clone()],
+                    )
+                })?;
+
+                patterns.add_exact_pattern(exact_arg.clone());
+            } else {
+                unsupported_args.push(arg.clone());
+            }
+        }
 
         for (s, f) in ignore_filters {
             if let Some(run_ignored) = run_ignored {
@@ -714,19 +726,13 @@ impl TestBuildFilter {
             }
         }
 
-        if !skip_exact.is_empty() {
-            return Err(ExpectedError::test_binary_args_parse_error(
-                "unsupported\n(hint: use a filterset instead: <https://nexte.st/docs/filtersets>)",
-                skip_exact,
-            ));
-        }
-
         if !unsupported_args.is_empty() {
             return Err(ExpectedError::test_binary_args_parse_error(
                 "unsupported",
                 unsupported_args,
             ));
         }
+
         Ok(())
     }
 }
@@ -2594,6 +2600,22 @@ mod tests {
             ),
             ("foo -- -- str1 str2 --", "foo str1 str2 -- -- --"),
         ];
+        let skip_exact = &[
+            // ---
+            // skip and exact
+            // ---
+            (
+                "foo -- --skip my-pattern --skip your-pattern --exact exact1 pattern2",
+                {
+                    let mut patterns = TestFilterPatterns::default();
+                    patterns.add_skip_pattern("my-pattern".to_owned());
+                    patterns.add_skip_pattern("your-pattern".to_owned());
+                    patterns.add_exact_pattern("exact1".to_owned());
+                    patterns.add_substring_pattern("pattern2".to_owned());
+                    patterns
+                },
+            ),
+        ];
         let invalid = &[
             // ---
             // duplicated
@@ -2606,17 +2628,14 @@ mod tests {
             ("foo -- --ignored --include-ignored", "mutually exclusive"),
             ("foo --run-ignored all -- --ignored", "mutually exclusive"),
             // ---
+            // missing required argument
+            // ---
+            ("foo -- --skip", "missing required argument"),
+            ("foo -- --exact", "missing required argument"),
+            // ---
             // unsupported
             // ---
             ("foo -- --bar", "unsupported"),
-            (
-                "foo -- --exact",
-                "unsupported\n(hint: use a filterset instead: <https://nexte.st/docs/filtersets>)",
-            ),
-            (
-                "foo -- --skip",
-                "unsupported\n(hint: use a filterset instead: <https://nexte.st/docs/filtersets>)",
-            ),
         ];
 
         for (a, b) in valid {
@@ -2629,6 +2648,17 @@ mod tests {
                 get_test_filter_builder(b).unwrap_or_else(|_| panic!("failed to parse {b}"))
             );
             assert_eq!(a_str, b_str);
+        }
+
+        for (args, patterns) in skip_exact {
+            let builder =
+                get_test_filter_builder(args).unwrap_or_else(|_| panic!("failed to parse {args}"));
+
+            let builder2 =
+                TestFilterBuilder::new(RunIgnored::Default, None, patterns.clone(), Vec::new())
+                    .unwrap_or_else(|_| panic!("failed to build TestFilterBuilder"));
+
+            assert_eq!(builder, builder2, "{args} matches expected");
         }
 
         for (s, r) in invalid {

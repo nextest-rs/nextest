@@ -314,6 +314,10 @@ impl CheckResult {
 pub enum RunProperty {
     Relocated = 1,
     WithDefaultFilter = 2,
+    // --skip cdylib
+    WithSkipCdylibFilter = 4,
+    // --exact test_multiply_two tests::test_multiply_two_cdylib
+    WithMultiplyTwoExactFilter = 8,
 }
 
 fn debug_run_properties(properties: u64) -> String {
@@ -323,6 +327,12 @@ fn debug_run_properties(properties: u64) -> String {
     }
     if properties & RunProperty::WithDefaultFilter as u64 != 0 {
         ret.push_str("with-default-filter ");
+    }
+    if properties & RunProperty::WithSkipCdylibFilter as u64 != 0 {
+        ret.push_str("with-skip-cdylib-filter ");
+    }
+    if properties & RunProperty::WithMultiplyTwoExactFilter as u64 != 0 {
+        ret.push_str("with-exact-filter ");
     }
     ret
 }
@@ -368,6 +378,28 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
                 assert!(
                     !output.contains(&name),
                     "test '{name}' should not be run with default set"
+                );
+                skip_count += 1;
+                continue;
+            }
+            if test.has_property(TestCaseFixtureProperty::MatchesCdylib)
+                && properties & RunProperty::WithSkipCdylibFilter as u64 != 0
+            {
+                eprintln!("*** skipping {name}");
+                assert!(
+                    !output.contains(&name),
+                    "test '{name}' should not be run with --skip cdylib"
+                );
+                skip_count += 1;
+                continue;
+            }
+            if !test.has_property(TestCaseFixtureProperty::MatchesTestMultiplyTwo)
+                && properties & RunProperty::WithMultiplyTwoExactFilter as u64 != 0
+            {
+                eprintln!("*** skipping {name}");
+                assert!(
+                    !output.contains(&name),
+                    "test '{name}' should not be run with --exact test_multiply_two test_multiply_two_cdylib"
                 );
                 skip_count += 1;
                 continue;
@@ -423,9 +455,30 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
         }
     }
 
-    let summary_regex_str = format!(
-        r"Summary \[.*\] *{run_count} tests run: {pass_count} passed \({leak_count} leaky\), {fail_count} failed, {skip_count} skipped"
-    );
+    let tests_str = if run_count == 1 { "test" } else { "tests" };
+
+    let summary_regex_str = match (leak_count, fail_count) {
+        (0, 0) => {
+            format!(
+                r"Summary \[.*\] *{run_count} {tests_str} run: {pass_count} passed, {skip_count} skipped"
+            )
+        }
+        (0, _) => {
+            format!(
+                r"Summary \[.*\] *{run_count} {tests_str} run: {pass_count} passed, {fail_count} failed, {skip_count} skipped"
+            )
+        }
+        (_, 0) => {
+            format!(
+                r"Summary \[.*\] *{run_count} {tests_str} run: {pass_count} passed \({leak_count} leaky\), {skip_count} skipped"
+            )
+        }
+        (_, _) => {
+            format!(
+                r"Summary \[.*\] *{run_count} {tests_str} run: {pass_count} passed \({leak_count} leaky\), {fail_count} failed, {skip_count} skipped"
+            )
+        }
+    };
     let summary_reg = Regex::new(&summary_regex_str).unwrap();
     assert!(
         summary_reg.is_match(&output),

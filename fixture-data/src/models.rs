@@ -105,4 +105,6 @@ impl TestCaseFixtureStatus {
 pub enum TestCaseFixtureProperty {
     NeedsSameCwd = 1,
     NotInDefaultSet = 2,
+    MatchesCdylib = 4,
+    MatchesTestMultiplyTwo = 8,
 }
