@@ -18,7 +18,7 @@ use camino::Utf8Path;
 use camino_tempfile::Utf8TempPath;
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use indexmap::IndexMap;
-use nextest_filtering::{FilteringExpr, TestQuery};
+use nextest_filtering::{EvalContext, FilteringExpr, FilteringExprKind, ParseContext, TestQuery};
 use serde::{de::Error, Deserialize};
 use smol_str::SmolStr;
 use std::{
@@ -72,6 +72,8 @@ impl<'profile> SetupScripts<'profile> {
             }
         }
 
+        let env = profile.filterset_ecx();
+
         // This is a map from enabled setup scripts to a list of configurations that enabled them.
         let mut enabled_ids = HashSet::new();
         for test in matching_tests {
@@ -81,7 +83,7 @@ impl<'profile> SetupScripts<'profile> {
                     // This script is already enabled.
                     continue;
                 }
-                if compiled.iter().any(|data| data.is_enabled(&test)) {
+                if compiled.iter().any(|data| data.is_enabled(&test, &env)) {
                     enabled_ids.insert(script_id);
                 }
             }
@@ -164,10 +166,10 @@ impl<'profile> SetupScript<'profile> {
         )
     }
 
-    pub(crate) fn is_enabled(&self, test: &TestQuery<'_>) -> bool {
+    pub(crate) fn is_enabled(&self, test: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         self.compiled
             .iter()
-            .any(|compiled| compiled.is_enabled(test))
+            .any(|compiled| compiled.is_enabled(test, cx))
     }
 }
 
@@ -251,9 +253,9 @@ impl<'profile> SetupScriptExecuteData<'profile> {
     }
 
     /// Applies the data from setup scripts to the given test instance.
-    pub(crate) fn apply(&self, test: &TestQuery<'_>, command: &mut Command) {
+    pub(crate) fn apply(&self, test: &TestQuery<'_>, cx: &EvalContext<'_>, command: &mut Command) {
         for (script, env_map) in &self.env_maps {
-            if script.is_enabled(test) {
+            if script.is_enabled(test, cx) {
                 for (key, value) in env_map.env_map.iter() {
                     command.env(key, value);
                 }
@@ -348,8 +350,14 @@ impl CompiledProfileScripts<PreBuildPlatform> {
 
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
+        let cx = ParseContext {
+            graph,
+            // TODO: probably want to restrict the set of expressions here.
+            kind: FilteringExprKind::Test,
+        };
+
         let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(FilteringExpr::parse(filter.clone(), graph)).transpose()
+            Some(FilteringExpr::parse(filter.clone(), &cx)).transpose()
         });
 
         match (host_spec, target_spec, filter_expr) {
@@ -405,7 +413,7 @@ impl CompiledProfileScripts<PreBuildPlatform> {
 }
 
 impl CompiledProfileScripts<FinalConfig> {
-    pub(super) fn is_enabled(&self, query: &TestQuery<'_>) -> bool {
+    pub(super) fn is_enabled(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         if !self.state.host_eval {
             return false;
         }
@@ -417,7 +425,7 @@ impl CompiledProfileScripts<FinalConfig> {
         }
 
         if let Some(expr) = &self.data.expr {
-            expr.matches_test(query)
+            expr.matches_test(query, cx)
         } else {
             true
         }

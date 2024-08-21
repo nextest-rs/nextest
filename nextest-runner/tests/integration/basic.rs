@@ -8,7 +8,7 @@ use fixture_data::{
     models::{TestCaseFixtureStatus, TestSuiteFixture},
     nextest_tests::{get_expected_test, EXPECTED_TEST_SUITES},
 };
-use nextest_filtering::FilteringExpr;
+use nextest_filtering::{FilteringExpr, FilteringExprKind, ParseContext};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     config::{NextestConfig, RetryPolicy},
@@ -45,7 +45,7 @@ fn test_list_binaries() -> Result<()> {
         binary_id,
         binary_name,
         build_platform,
-        test_cases: _,
+        ..
     } in EXPECTED_TEST_SUITES.values()
     {
         let bin = binary_list
@@ -68,7 +68,7 @@ fn test_list_binaries() -> Result<()> {
 fn test_list_tests() -> Result<()> {
     set_env_vars();
 
-    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     let mut summary = test_list.to_summary();
 
@@ -107,7 +107,7 @@ fn test_list_tests() -> Result<()> {
 fn test_run() -> Result<()> {
     set_env_vars();
 
-    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     let config = load_config();
     let profile = config
@@ -217,8 +217,11 @@ fn test_run() -> Result<()> {
 fn test_run_ignored() -> Result<()> {
     set_env_vars();
 
-    let expr =
-        FilteringExpr::parse("not test(test_slow_timeout)".to_owned(), &PACKAGE_GRAPH).unwrap();
+    let pcx = ParseContext {
+        graph: &PACKAGE_GRAPH,
+        kind: FilteringExprKind::Test,
+    };
+    let expr = FilteringExpr::parse("not test(test_slow_timeout)".to_owned(), &pcx).unwrap();
 
     let test_filter = TestFilterBuilder::new(
         RunIgnored::IgnoredOnly,
@@ -301,9 +304,13 @@ fn test_run_ignored() -> Result<()> {
 fn test_filter_expr_with_string_filters() -> Result<()> {
     set_env_vars();
 
+    let pcx = ParseContext {
+        graph: &PACKAGE_GRAPH,
+        kind: FilteringExprKind::Test,
+    };
     let expr = FilteringExpr::parse(
         "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
-        &PACKAGE_GRAPH,
+        &pcx,
     )
     .expect("filter expression is valid");
 
@@ -364,9 +371,13 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
 fn test_filter_expr_without_string_filters() -> Result<()> {
     set_env_vars();
 
+    let pcx = ParseContext {
+        graph: &PACKAGE_GRAPH,
+        kind: FilteringExprKind::Test,
+    };
     let expr = FilteringExpr::parse(
         "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
-        &PACKAGE_GRAPH,
+        &pcx,
     )
     .expect("filter expression is valid");
 
@@ -433,7 +444,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
 fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     set_env_vars();
 
-    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     let config = load_config();
     let profile = config
@@ -583,8 +594,11 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
 fn test_termination() -> Result<()> {
     set_env_vars();
 
-    let expr =
-        FilteringExpr::parse("test(/^test_slow_timeout/)".to_owned(), &PACKAGE_GRAPH).unwrap();
+    let pcx = ParseContext {
+        graph: &PACKAGE_GRAPH,
+        kind: FilteringExprKind::Test,
+    };
+    let expr = FilteringExpr::parse("test(/^test_slow_timeout/)".to_owned(), &pcx).unwrap();
     let test_filter = TestFilterBuilder::new(
         RunIgnored::IgnoredOnly,
         None,

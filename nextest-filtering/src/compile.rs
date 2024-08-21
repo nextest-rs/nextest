@@ -2,33 +2,59 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    errors::ParseSingleError,
+    errors::{BannedPredicateReason, ParseSingleError},
     expression::*,
     parsing::{ParsedExpr, SetDef},
 };
 use guppy::{
-    graph::{DependsCache, PackageGraph, PackageMetadata},
+    graph::{DependsCache, PackageMetadata},
     PackageId,
 };
 use miette::SourceSpan;
+use recursion::CollapsibleExt;
 use std::collections::HashSet;
 
 pub(crate) fn compile(
     expr: &ParsedExpr,
-    graph: &PackageGraph,
+    cx: &ParseContext<'_>,
 ) -> Result<CompiledExpr, Vec<ParseSingleError>> {
-    let in_workspace_packages: Vec<_> = graph
+    let mut errors = vec![];
+    check_banned_predicates(expr, cx.kind, &mut errors);
+
+    let in_workspace_packages: Vec<_> = cx
+        .graph
         .resolve_workspace()
         .packages(guppy::graph::DependencyDirection::Forward)
         .collect();
-    let mut cache = graph.new_depends_cache();
-    let mut errors = vec![];
+    let mut cache = cx.graph.new_depends_cache();
     let expr = compile_expr(expr, &in_workspace_packages, &mut cache, &mut errors);
 
     if errors.is_empty() {
         Ok(expr)
     } else {
         Err(errors)
+    }
+}
+
+fn check_banned_predicates(
+    expr: &ParsedExpr,
+    kind: FilteringExprKind,
+    errors: &mut Vec<ParseSingleError>,
+) {
+    match kind {
+        FilteringExprKind::Test => {}
+        FilteringExprKind::DefaultSet => {
+            // The `default` predicate is banned.
+            Wrapped(expr).collapse_frames(|layer: ExprFrame<&SetDef, ()>| {
+                if let ExprFrame::Set(SetDef::Default(span)) = layer {
+                    errors.push(ParseSingleError::BannedPredicate {
+                        kind,
+                        span: *span,
+                        reason: BannedPredicateReason::InfiniteRecursion,
+                    });
+                }
+            })
+        }
     }
 }
 
@@ -112,6 +138,7 @@ fn compile_set_def(
         SetDef::BinaryId(matcher, span) => FilteringSet::BinaryId(matcher.clone(), *span),
         SetDef::Platform(platform, span) => FilteringSet::Platform(*platform, *span),
         SetDef::Test(matcher, span) => FilteringSet::Test(matcher.clone(), *span),
+        SetDef::Default(_) => FilteringSet::Default,
         SetDef::All => FilteringSet::All,
         SetDef::None => FilteringSet::None,
     }
@@ -135,7 +162,6 @@ fn compile_expr(
     errors: &mut Vec<ParseSingleError>,
 ) -> CompiledExpr {
     use crate::expression::ExprFrame::*;
-    use recursion::CollapsibleExt;
 
     Wrapped(expr).collapse_frames(|layer: ExprFrame<&SetDef, CompiledExpr>| match layer {
         Set(set) => CompiledExpr::Set(compile_set_def(set, packages, cache, errors)),

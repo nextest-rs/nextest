@@ -176,7 +176,7 @@ fn current_runner_env_var() -> String {
 fn test_listing_with_target_runner() -> Result<()> {
     set_env_vars();
 
-    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
 
     let bin_count = test_list.binary_count();
@@ -209,7 +209,7 @@ fn test_listing_with_target_runner() -> Result<()> {
 fn test_run_with_target_runner() -> Result<()> {
     set_env_vars();
 
-    let test_filter = TestFilterBuilder::any(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
 
     std::env::set_var(
         current_runner_env_var(),

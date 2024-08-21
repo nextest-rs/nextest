@@ -960,7 +960,11 @@ impl<'a> TestRunnerInner<'a> {
         command_mut.env("__NEXTEST_ATTEMPT", format!("{}", retry_data.attempt));
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
         command_mut.stdin(Stdio::null());
-        setup_script_data.apply(&test.to_test_query(), command_mut);
+        setup_script_data.apply(
+            &test.to_test_query(),
+            &self.profile.filterset_ecx(),
+            command_mut,
+        );
         imp::set_process_group(command_mut);
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a

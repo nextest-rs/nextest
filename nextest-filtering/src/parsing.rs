@@ -55,6 +55,7 @@ pub enum SetDef<S = SourceSpan> {
     BinaryId(NameMatcher, S),
     Platform(BuildPlatform, S),
     Test(NameMatcher, S),
+    Default(S),
     All,
     None,
 }
@@ -70,6 +71,7 @@ impl SetDef {
             Self::BinaryId(matcher, _) => SetDef::BinaryId(matcher, ()),
             Self::Platform(platform, _) => SetDef::Platform(platform, ()),
             Self::Test(matcher, _) => SetDef::Test(matcher, ()),
+            Self::Default(_) => SetDef::Default(()),
             Self::All => SetDef::All,
             Self::None => SetDef::None,
         }
@@ -87,6 +89,7 @@ impl<S> fmt::Display for SetDef<S> {
             Self::BinaryId(matcher, _) => write!(f, "binary_id({matcher})"),
             Self::Platform(platform, _) => write!(f, "platform({platform})"),
             Self::Test(matcher, _) => write!(f, "test({matcher})"),
+            Self::Default(_) => write!(f, "default()"),
             Self::All => write!(f, "all()"),
             Self::None => write!(f, "none()"),
         }
@@ -533,18 +536,18 @@ fn nullary_set_def<'a>(
         let _ = literal(name).parse_next(i)?;
         let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
         let err_loc = i.location();
-        let end = match take_till::<_, _, Error>(0.., ')').parse_next(i) {
+        match take_till::<_, _, Error>(0.., ')').parse_next(i) {
             Ok(res) => {
                 if !res.trim().is_empty() {
                     let span = (err_loc, res.len()).into();
                     let err = ParseSingleError::UnexpectedArgument(span);
                     i.state.report_error(err);
                 }
-                i.location()
             }
             Err(_) => unreachable!(),
         };
         let _ = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
+        let end = i.location();
         Ok(Some(make_set((start, end - start).into())))
     }
 }
@@ -630,6 +633,7 @@ fn parse_set_def(input: &mut Span<'_>) -> PResult<Option<SetDef>> {
             unary_set_def("binary", DefaultMatcher::Glob, SetDef::Binary),
             unary_set_def("test", DefaultMatcher::Contains, SetDef::Test),
             platform_def,
+            nullary_set_def("default", SetDef::Default),
             nullary_set_def("all", |_| SetDef::All),
             nullary_set_def("none", |_| SetDef::None),
         ))),

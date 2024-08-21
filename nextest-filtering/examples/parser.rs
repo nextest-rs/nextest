@@ -53,7 +53,11 @@ fn main() {
     let args = Args::parse();
 
     let graph = load_graph(args.cargo_metadata);
-    match nextest_filtering::FilteringExpr::parse(args.expr, &graph) {
+    let cx = nextest_filtering::ParseContext {
+        graph: &graph,
+        kind: nextest_filtering::FilteringExprKind::Test,
+    };
+    match nextest_filtering::FilteringExpr::parse(args.expr, &cx) {
         Ok(expr) => println!("{expr:?}"),
         Err(FilterExpressionParseErrors { input, errors, .. }) => {
             for error in errors {

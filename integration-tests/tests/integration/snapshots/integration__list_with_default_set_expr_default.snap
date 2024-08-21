@@ -1,0 +1,40 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: default_tests_output.stdout_as_str()
+---
+cdylib-link:
+    test_multiply_two
+nextest-derive:
+    it_works
+nextest-tests:
+    tests::call_dylib_add_two
+    tests::unit_test_success
+nextest-tests::basic:
+    test_cargo_env_vars
+    test_cwd
+    test_execute_bin
+    test_failure_assert
+    test_failure_error
+    test_failure_should_panic
+    test_result_failure
+    test_stdin_closed
+    test_subprocess_doesnt_exit
+    test_success
+    test_success_should_panic
+nextest-tests::other:
+    other_test_success
+nextest-tests::segfault:
+    test_segfault
+nextest-tests::bench/my-bench:
+    bench_add_two
+    tests::test_execute_bin
+nextest-tests::bin/nextest-tests:
+    tests::bin_success
+nextest-tests::bin/other:
+    tests::other_bin_success
+nextest-tests::example/nextest-tests:
+    tests::example_success
+nextest-tests::example/other:
+    tests::other_example_success
+with-build-script:
+    tests::test_out_dir_present

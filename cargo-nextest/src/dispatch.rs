@@ -12,7 +12,7 @@ use clap::{builder::BoolishValueParser, ArgAction, Args, Parser, Subcommand, Val
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use log::warn;
-use nextest_filtering::FilteringExpr;
+use nextest_filtering::{EvalContext, FilteringExpr, FilteringExprKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
@@ -544,6 +544,7 @@ impl TestBuildFilter {
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
         env: EnvironmentMap,
+        ecx: &EvalContext<'_>,
         reuse_build: &ReuseBuildInfo,
     ) -> Result<TestList<'g>> {
         let path_mapper = make_path_mapper(
@@ -567,6 +568,7 @@ impl TestBuildFilter {
             &test_filter_builder,
             workspace_root,
             env,
+            ecx,
             // TODO: do we need to allow customizing this?
             get_num_cpus(),
         )
@@ -1437,11 +1439,15 @@ impl App {
     }
 
     fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
+        let pcx = ParseContext {
+            graph: self.base.graph(),
+            kind: FilteringExprKind::Test,
+        };
         let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
             .filter_expr
             .iter()
-            .map(|input| FilteringExpr::parse(input.clone(), self.base.graph()))
+            .map(|input| FilteringExpr::parse(input.clone(), &pcx))
             .partition_result();
 
         if !all_errors.is_empty() {
@@ -1456,6 +1462,7 @@ impl App {
         ctx: &TestExecuteContext<'_>,
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
+        ecx: &EvalContext<'_>,
     ) -> Result<TestList> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
@@ -1465,6 +1472,7 @@ impl App {
             binary_list,
             test_filter_builder,
             env,
+            ecx,
             &self.base.reuse_build,
         )
     }
@@ -1475,7 +1483,8 @@ impl App {
         list_type: ListType,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let (version_only_config, _) = self.base.load_config()?;
+        let (version_only_config, config) = self.base.load_config()?;
+        let profile = self.base.load_profile(&config)?;
         let filter_exprs = self.build_filtering_expressions()?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
@@ -1503,8 +1512,10 @@ impl App {
                     double_spawn,
                     target_runner,
                 };
+                let ecx = profile.filterset_ecx();
 
-                let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder)?;
+                let test_list =
+                    self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
@@ -1554,8 +1565,9 @@ impl App {
             double_spawn,
             target_runner,
         };
+        let ecx = profile.filterset_ecx();
 
-        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder)?;
+        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
 
         let profile = profile.apply_build_platforms(&build_platforms);
 
@@ -1634,8 +1646,9 @@ impl App {
             double_spawn,
             target_runner,
         };
+        let ecx = profile.filterset_ecx();
 
-        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder)?;
+        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
 
         let output = output_writer.reporter_output();
         let profile = profile.apply_build_platforms(build_platforms);
