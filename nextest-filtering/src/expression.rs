@@ -123,6 +123,8 @@ pub enum FilteringSet {
     BinaryId(NameMatcher, SourceSpan),
     /// All tests matching a name
     Test(NameMatcher, SourceSpan),
+    /// The default set of tests to run.
+    Default,
     /// All tests
     All,
     /// No tests
@@ -185,6 +187,45 @@ pub enum CompiledExpr {
     Set(FilteringSet),
 }
 
+impl CompiledExpr {
+    /// Returns a value indicating all tests are accepted by this filter expression.
+    pub const ALL: Self = CompiledExpr::Set(FilteringSet::All);
+
+    /// Returns a value indicating if the given binary is accepted by this filter expression.
+    ///
+    /// The value is:
+    /// * `Some(true)` if this binary is definitely accepted by this filter expression.
+    /// * `Some(false)` if this binary is definitely not accepted.
+    /// * `None` if this binary might or might not be accepted.
+    pub fn matches_binary(&self, query: &BinaryQuery<'_>, cx: &EvalContext<'_>) -> Option<bool> {
+        use ExprFrame::*;
+        Wrapped(self).collapse_frames(|layer: ExprFrame<&FilteringSet, Option<bool>>| {
+            match layer {
+                Set(set) => set.matches_binary(query, cx),
+                Not(a) => a.logic_not(),
+                // TODO: or_else/and_then?
+                Union(a, b) => a.logic_or(b),
+                Intersection(a, b) => a.logic_and(b),
+                Difference(a, b) => a.logic_and(b.logic_not()),
+                Parens(a) => a,
+            }
+        })
+    }
+
+    /// Returns true if the given test is accepted by this filter expression.
+    pub fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
+        use ExprFrame::*;
+        Wrapped(self).collapse_frames(|layer: ExprFrame<&FilteringSet, bool>| match layer {
+            Set(set) => set.matches_test(query, cx),
+            Not(a) => !a,
+            Union(a, b) => a || b,
+            Intersection(a, b) => a && b,
+            Difference(a, b) => a && !b,
+            Parens(a) => a,
+        })
+    }
+}
+
 impl NameMatcher {
     pub(crate) fn is_match(&self, input: &str) -> bool {
         match self {
@@ -197,10 +238,11 @@ impl NameMatcher {
 }
 
 impl FilteringSet {
-    fn matches_test(&self, query: &TestQuery<'_>) -> bool {
+    fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext) -> bool {
         match self {
             Self::All => true,
             Self::None => false,
+            Self::Default => cx.default_set.matches_test(query, cx),
             Self::Test(matcher, _) => matcher.is_match(query.test_name),
             Self::Binary(matcher, _) => matcher.is_match(query.binary_query.binary_name),
             Self::BinaryId(matcher, _) => matcher.is_match(query.binary_query.binary_id.as_str()),
@@ -210,10 +252,11 @@ impl FilteringSet {
         }
     }
 
-    fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
+    fn matches_binary(&self, query: &BinaryQuery<'_>, cx: &EvalContext) -> Option<bool> {
         match self {
             Self::All => Logic::top(),
             Self::None => Logic::bottom(),
+            Self::Default => cx.default_set.matches_binary(query, cx),
             Self::Test(_, _) => None,
             Self::Binary(matcher, _) => Some(matcher.is_match(query.binary_name)),
             Self::BinaryId(matcher, _) => Some(matcher.is_match(query.binary_id.as_str())),
@@ -224,9 +267,54 @@ impl FilteringSet {
     }
 }
 
+/// Inputs to filterset parsing.
+#[derive(Copy, Clone, Debug)]
+pub struct ParseContext<'a> {
+    /// The package graph.
+    pub graph: &'a PackageGraph,
+
+    /// What kind of expression this is.
+    ///
+    /// In some cases, expressions must restrict themselves to a subset of the full filtering
+    /// language. This is used to determine what subset of the language is allowed.
+    pub kind: FilteringExprKind,
+}
+
+/// The kind of filtering expression being parsed.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum FilteringExprKind {
+    /// A test filter expression.
+    Test,
+
+    /// A default-set filter expression.
+    ///
+    /// To prevent recursion, default-set expressions cannot contain `default()` themselves. (This
+    /// is a limited kind of the infinite recursion checking we'll need to do in the future.)
+    DefaultSet,
+}
+
+impl fmt::Display for FilteringExprKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Test => write!(f, "test"),
+            Self::DefaultSet => write!(f, "default-set"),
+        }
+    }
+}
+
+/// Inputs to filterset evaluation functions.
+#[derive(Copy, Clone, Debug)]
+pub struct EvalContext<'a> {
+    /// The default set of tests to run.
+    pub default_set: &'a CompiledExpr,
+}
+
 impl FilteringExpr {
     /// Parse a filtering expression
-    pub fn parse(input: String, graph: &PackageGraph) -> Result<Self, FilterExpressionParseErrors> {
+    pub fn parse(
+        input: String,
+        cx: &ParseContext<'_>,
+    ) -> Result<Self, FilterExpressionParseErrors> {
         let mut errors = Vec::new();
         match parse(new_span(&input, &mut errors)) {
             Ok(parsed_expr) => {
@@ -236,10 +324,9 @@ impl FilteringExpr {
 
                 match parsed_expr {
                     ExprResult::Valid(parsed) => {
-                        let compiled =
-                            crate::compile::compile(&parsed, graph).map_err(|errors| {
-                                FilterExpressionParseErrors::new(input.clone(), errors)
-                            })?;
+                        let compiled = crate::compile::compile(&parsed, cx).map_err(|errors| {
+                            FilterExpressionParseErrors::new(input.clone(), errors)
+                        })?;
                         Ok(Self {
                             input,
                             parsed,
@@ -276,33 +363,13 @@ impl FilteringExpr {
     /// * `Some(true)` if this binary is definitely accepted by this filter expression.
     /// * `Some(false)` if this binary is definitely not accepted.
     /// * `None` if this binary might or might not be accepted.
-    pub fn matches_binary(&self, query: &BinaryQuery<'_>) -> Option<bool> {
-        use ExprFrame::*;
-        Wrapped(&self.compiled).collapse_frames(|layer: ExprFrame<&FilteringSet, Option<bool>>| {
-            match layer {
-                Set(set) => set.matches_binary(query),
-                Not(a) => a.logic_not(),
-                // TODO: or_else/and_then?
-                Union(a, b) => a.logic_or(b),
-                Intersection(a, b) => a.logic_and(b),
-                Difference(a, b) => a.logic_and(b.logic_not()),
-                Parens(a) => a,
-            }
-        })
+    pub fn matches_binary(&self, query: &BinaryQuery<'_>, cx: &EvalContext<'_>) -> Option<bool> {
+        self.compiled.matches_binary(query, cx)
     }
 
     /// Returns true if the given test is accepted by this filter expression.
-    pub fn matches_test(&self, query: &TestQuery<'_>) -> bool {
-        use ExprFrame::*;
-        Wrapped(&self.compiled).collapse_frames(|layer: ExprFrame<&FilteringSet, bool>| match layer
-        {
-            Set(set) => set.matches_test(query),
-            Not(a) => !a,
-            Union(a, b) => a || b,
-            Intersection(a, b) => a && b,
-            Difference(a, b) => a && !b,
-            Parens(a) => a,
-        })
+    pub fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
+        self.compiled.matches_test(query, cx)
     }
 
     /// Returns true if the given expression needs dependencies information to work

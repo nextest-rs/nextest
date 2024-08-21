@@ -247,7 +247,7 @@ fn test_run_no_tests() {
 
     let stderr = output.stderr_as_str();
     assert!(
-        stderr.contains("Starting 0 tests across 0 binaries (8 binaries skipped;"),
+        stderr.contains("Starting 0 tests across 0 binaries (8 binaries skipped)"),
         "stderr contains 'Starting' message: {output}"
     );
     assert!(
@@ -335,7 +335,7 @@ fn test_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, false);
+    check_run_output(&output.stderr, 0);
 }
 
 #[test]
@@ -361,7 +361,7 @@ fn test_run_after_build() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, false);
+    check_run_output(&output.stderr, 0);
 }
 
 #[test]
@@ -421,7 +421,7 @@ fn test_relocated_run() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, true);
+    check_run_output(&output.stderr, RunProperty::Relocated as u64);
 }
 
 #[test]
@@ -611,7 +611,7 @@ fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, true);
+    check_run_output(&output.stderr, RunProperty::Relocated as u64);
 
     // project is included in return value to keep tempdirs alive
     (p2, extract_to.join("target"))
@@ -706,6 +706,108 @@ fn test_show_config_test_groups() {
         .output();
 
     insta::assert_snapshot!(with_termination_all_output.stdout_as_str());
+}
+
+#[test]
+fn test_list_with_default_set() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // Show the output of the default set (does not include tests not in default-set).
+    let default_set_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--profile=with-default-set",
+            "--workspace",
+            "--all-targets",
+        ])
+        .output();
+    insta::assert_snapshot!(
+        "list_with_default_set_basic",
+        default_set_output.stdout_as_str()
+    );
+
+    // Show the output with -E 'all()' (includes all tests).
+    let all_tests_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--profile=with-default-set",
+            "-E",
+            "all()",
+            "--workspace",
+            "--all-targets",
+        ])
+        .output();
+    insta::assert_snapshot!(
+        "list_with_default_set_expr_all",
+        all_tests_output.stdout_as_str()
+    );
+
+    // -E 'default()' (same as not passing -E)
+    let default_tests_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--profile=with-default-set",
+            "-E",
+            "default()",
+            "--workspace",
+            "--all-targets",
+        ])
+        .output();
+    insta::assert_snapshot!(
+        "list_with_default_set_expr_default",
+        default_tests_output.stdout_as_str()
+    );
+
+    // Show the output of the default set with additional regular arguments passed in (*should* be
+    // affected by the default set).
+    let default_set_with_args_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--profile=with-default-set",
+            "test_stdin_closed",
+            "cdylib",
+            "--workspace",
+            "--all-targets",
+        ])
+        .output();
+    insta::assert_snapshot!(
+        "list_with_default_set_args",
+        default_set_with_args_output.stdout_as_str()
+    );
+}
+
+#[test]
+fn test_run_with_default_set() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--profile=with-default-set",
+            "--workspace",
+            "--all-targets",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+    check_run_output(&output.stderr, RunProperty::WithDefaultSet as u64);
 }
 
 #[test]

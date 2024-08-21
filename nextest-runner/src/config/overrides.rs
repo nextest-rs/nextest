@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    CompiledProfileScripts, DeserializedProfileScriptConfig, NextestConfigImpl, NextestProfile,
+    CompiledProfileScripts, DeserializedProfileScriptConfig, NextestConfig, NextestConfigImpl,
+    NextestProfile,
 };
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
@@ -11,7 +12,7 @@ use crate::{
     reporter::TestOutputDisplay,
 };
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
-use nextest_filtering::{FilteringExpr, TestQuery};
+use nextest_filtering::{CompiledExpr, FilteringExpr, FilteringExprKind, ParseContext, TestQuery};
 use serde::{Deserialize, Deserializer};
 use smol_str::SmolStr;
 use std::{collections::HashMap, time::Duration};
@@ -123,6 +124,8 @@ impl<Source: Copy> TestSettings<Source> {
     where
         Source: TrackSource<'p>,
     {
+        let ecx = profile.filterset_ecx();
+
         let mut threads_required = None;
         let mut retries = None;
         let mut slow_timeout = None;
@@ -147,7 +150,7 @@ impl<Source: Copy> TestSettings<Source> {
             }
 
             if let Some(expr) = &override_.data.expr {
-                if !expr.matches_test(query) {
+                if !expr.matches_test(query, &ecx) {
                     continue;
                 }
                 // If no expression is present, it's equivalent to "all()".
@@ -275,6 +278,7 @@ impl CompiledByProfile {
         let default = CompiledData::new(
             graph,
             "default",
+            Some(config.default_profile().default_set()),
             config.default_profile().overrides(),
             config.default_profile().setup_scripts(),
             &mut errors,
@@ -287,6 +291,7 @@ impl CompiledByProfile {
                     CompiledData::new(
                         graph,
                         profile_name,
+                        profile.default_set(),
                         profile.overrides(),
                         profile.scripts(),
                         &mut errors,
@@ -310,6 +315,7 @@ impl CompiledByProfile {
     pub(super) fn for_default_config() -> Self {
         Self {
             default: CompiledData {
+                default_set: Some(CompiledDefaultSet::for_default_config()),
                 overrides: vec![],
                 scripts: vec![],
             },
@@ -318,8 +324,45 @@ impl CompiledByProfile {
     }
 }
 
+/// A compiled form of the default set of tests for a profile.
+///
+/// Returned by [`NextestProfile::default_set`].
+// TODO: generalize this? `Source` isn't right because it includes overrides, and we don't support
+// overrides for the default set.
+#[derive(Clone, Debug)]
+pub struct CompiledDefaultSet {
+    /// The compiled expression.
+    ///
+    /// This is a bit tricky -- in some cases, the default config is constructed without a
+    /// `PackageGraph` being available. But parsing filtersets requires a `PackageGraph`. So we hack
+    /// around it by only storing the compiled expression here, and by setting it to `all()` (which
+    /// matches the config).
+    ///
+    /// This does make the default config's default-set a bit of a lie, but it's a lie we'll live
+    /// with.
+    pub expr: CompiledExpr,
+
+    /// The profile name the default set originates from.
+    pub profile: String,
+}
+
+impl CompiledDefaultSet {
+    fn for_default_config() -> Self {
+        Self {
+            expr: CompiledExpr::ALL,
+            profile: NextestConfig::DEFAULT_PROFILE.to_owned(),
+        }
+    }
+
+    /// Returns the name of the config key for this default set.
+    pub fn config_name(&self) -> String {
+        format!("profile.{}.default-set", self.profile)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct CompiledData<State> {
+    pub(super) default_set: Option<CompiledDefaultSet>,
     pub(super) overrides: Vec<CompiledOverride<State>>,
     pub(super) scripts: Vec<CompiledProfileScripts<State>>,
 }
@@ -328,10 +371,34 @@ impl CompiledData<PreBuildPlatform> {
     fn new(
         graph: &PackageGraph,
         profile_name: &str,
+        default_set: Option<&str>,
         overrides: &[DeserializedOverride],
         scripts: &[DeserializedProfileScriptConfig],
         errors: &mut Vec<ConfigFiltersetOrCfgParseError>,
     ) -> Self {
+        let default_set = default_set.and_then(|filter| {
+            let cx = ParseContext {
+                graph,
+                kind: FilteringExprKind::DefaultSet,
+            };
+            match FilteringExpr::parse(filter.to_owned(), &cx) {
+                Ok(expr) => Some(CompiledDefaultSet {
+                    expr: expr.compiled,
+                    profile: profile_name.to_owned(),
+                }),
+                Err(err) => {
+                    errors.push(ConfigFiltersetOrCfgParseError {
+                        profile_name: profile_name.to_owned(),
+                        not_specified: false,
+                        host_parse_error: None,
+                        target_parse_error: None,
+                        parse_errors: Some(err),
+                    });
+                    None
+                }
+            }
+        });
+
         let overrides = overrides
             .iter()
             .enumerate()
@@ -343,10 +410,18 @@ impl CompiledData<PreBuildPlatform> {
             .iter()
             .filter_map(|source| CompiledProfileScripts::new(graph, profile_name, source, errors))
             .collect();
-        Self { overrides, scripts }
+        Self {
+            default_set,
+            overrides,
+            scripts,
+        }
     }
 
     pub(super) fn extend_reverse(&mut self, other: Self) {
+        // For the default-set, other wins (it is last, and after reversing, it will be first).
+        if other.default_set.is_some() {
+            self.default_set = other.default_set;
+        }
         self.overrides.extend(other.overrides.into_iter().rev());
         self.scripts.extend(other.scripts.into_iter().rev());
     }
@@ -356,12 +431,15 @@ impl CompiledData<PreBuildPlatform> {
         self.scripts.reverse();
     }
 
+    /// Chains this data with another set of data, treating `other` as lower-priority than `self`.
     pub(super) fn chain(self, other: Self) -> Self {
+        let default_set = self.default_set.or(other.default_set);
         let mut overrides = self.overrides;
         let mut setup_scripts = self.scripts;
         overrides.extend(other.overrides);
         setup_scripts.extend(other.scripts);
         Self {
+            default_set,
             overrides,
             scripts: setup_scripts,
         }
@@ -371,6 +449,7 @@ impl CompiledData<PreBuildPlatform> {
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledData<FinalConfig> {
+        let default_set = self.default_set;
         let overrides = self
             .overrides
             .into_iter()
@@ -382,6 +461,7 @@ impl CompiledData<PreBuildPlatform> {
             .map(|setup_script| setup_script.apply_build_platforms(build_platforms))
             .collect();
         CompiledData {
+            default_set,
             overrides,
             scripts: setup_scripts,
         }
@@ -443,11 +523,17 @@ impl CompiledOverride<PreBuildPlatform> {
             });
             return None;
         }
+        let cx = ParseContext {
+            graph,
+            // In the future, based on the settings we may want to have restrictions on the kind
+            // here.
+            kind: FilteringExprKind::Test,
+        };
 
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
         let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(FilteringExpr::parse(filter.clone(), graph)).transpose()
+            Some(FilteringExpr::parse(filter.clone(), &cx)).transpose()
         });
 
         match (host_spec, target_spec, filter_expr) {
@@ -882,6 +968,22 @@ mod tests {
         }]
 
         ; "invalid filter expression"
+    )]
+    #[test_case(
+        // Not strictly an override error, but convenient to put here.
+        indoc! {r#"
+            [profile.ci]
+            default-set = "test(foo) or default()"
+        "#},
+        "ci",
+        &[MietteJsonReport {
+            message: "predicate not allowed in `default-set` expressions".to_owned(),
+            labels: vec![
+                MietteJsonLabel { label: "this predicate causes infinite recursion".to_owned(), span: MietteJsonSpan { offset: 13, length: 9 } }
+            ]
+        }]
+
+        ; "default-set with default"
     )]
     fn parse_overrides_invalid(
         config_contents: &str,

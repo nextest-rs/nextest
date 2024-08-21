@@ -7,6 +7,7 @@ use duct::cmd;
 use fixture_data::models::TestCaseFixtureStatus;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreeset;
+use nextest_filtering::{CompiledExpr, EvalContext};
 use nextest_metadata::{MismatchReason, RustBinaryId};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
@@ -251,6 +252,9 @@ impl FixtureTargets {
             double_spawn: &double_spawn,
             target_runner,
         };
+        let ecx = EvalContext {
+            default_set: &CompiledExpr::ALL,
+        };
 
         TestList::new(
             &ctx,
@@ -259,6 +263,7 @@ impl FixtureTargets {
             test_filter,
             workspace_root(),
             self.env.to_owned(),
+            &ecx,
             get_num_cpus(),
         )
         .context("Failed to make test list")

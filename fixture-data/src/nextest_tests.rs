@@ -7,6 +7,7 @@
 
 use crate::models::{
     TestCaseFixture, TestCaseFixtureProperty, TestCaseFixtureStatus, TestSuiteFixture,
+    TestSuiteFixtureProperty,
 };
 use maplit::btreemap;
 use nextest_metadata::{BuildPlatform, RustBinaryId};
@@ -22,19 +23,31 @@ pub static EXPECTED_TEST_SUITES: Lazy<BTreeMap<RustBinaryId, TestSuiteFixture>> 
             BuildPlatform::Target,
             vec![
                 TestCaseFixture::new("test_cargo_env_vars", TestCaseFixtureStatus::Pass),
-                TestCaseFixture::new("test_cwd", TestCaseFixtureStatus::Pass).with_property(TestCaseFixtureProperty::NeedsSameCwd),
+                TestCaseFixture::new("test_cwd", TestCaseFixtureStatus::Pass)
+                    .with_property(TestCaseFixtureProperty::NeedsSameCwd),
                 TestCaseFixture::new("test_execute_bin", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_failure_assert", TestCaseFixtureStatus::Fail),
                 TestCaseFixture::new("test_failure_error", TestCaseFixtureStatus::Fail),
                 TestCaseFixture::new("test_failure_should_panic", TestCaseFixtureStatus::Fail),
-                TestCaseFixture::new("test_flaky_mod_4", TestCaseFixtureStatus::Flaky { pass_attempt: 4 }),
-                TestCaseFixture::new("test_flaky_mod_6", TestCaseFixtureStatus::Flaky { pass_attempt: 6 }),
+                TestCaseFixture::new(
+                    "test_flaky_mod_4",
+                    TestCaseFixtureStatus::Flaky { pass_attempt: 4 },
+                )
+                .with_property(TestCaseFixtureProperty::NotInDefaultSet),
+                TestCaseFixture::new(
+                    "test_flaky_mod_6",
+                    TestCaseFixtureStatus::Flaky { pass_attempt: 6 },
+                )
+                .with_property(TestCaseFixtureProperty::NotInDefaultSet),
                 TestCaseFixture::new("test_ignored", TestCaseFixtureStatus::IgnoredPass),
                 TestCaseFixture::new("test_ignored_fail", TestCaseFixtureStatus::IgnoredFail),
                 TestCaseFixture::new("test_result_failure", TestCaseFixtureStatus::Fail),
                 TestCaseFixture::new("test_slow_timeout", TestCaseFixtureStatus::IgnoredPass),
                 TestCaseFixture::new("test_slow_timeout_2", TestCaseFixtureStatus::IgnoredPass),
-                TestCaseFixture::new("test_slow_timeout_subprocess", TestCaseFixtureStatus::IgnoredPass),
+                TestCaseFixture::new(
+                    "test_slow_timeout_subprocess",
+                    TestCaseFixtureStatus::IgnoredPass,
+                ),
                 TestCaseFixture::new("test_stdin_closed", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_subprocess_doesnt_exit", TestCaseFixtureStatus::Leak),
                 TestCaseFixture::new("test_success", TestCaseFixtureStatus::Pass),
@@ -142,7 +155,8 @@ pub static EXPECTED_TEST_SUITES: Lazy<BTreeMap<RustBinaryId, TestSuiteFixture>> 
             vec![
                 TestCaseFixture::new("tests::test_multiply_two_cdylib", TestCaseFixtureStatus::Pass),
             ],
-        ),
+        )
+        .with_property(TestSuiteFixtureProperty::NotInDefaultSet),
         // Build script tests
         "with-build-script".into() => TestSuiteFixture::new(
             "with-build-script",

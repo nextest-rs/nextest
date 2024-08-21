@@ -11,6 +11,7 @@ pub struct TestSuiteFixture {
     pub binary_name: &'static str,
     pub build_platform: BuildPlatform,
     pub test_cases: Vec<TestCaseFixture>,
+    properties: u64,
 }
 
 impl TestSuiteFixture {
@@ -25,8 +26,24 @@ impl TestSuiteFixture {
             binary_name,
             build_platform,
             test_cases,
+            properties: 0,
         }
     }
+
+    pub fn with_property(mut self, property: TestSuiteFixtureProperty) -> Self {
+        self.properties |= property as u64;
+        self
+    }
+
+    pub fn has_property(&self, property: TestSuiteFixtureProperty) -> bool {
+        self.properties & property as u64 != 0
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[repr(u64)]
+pub enum TestSuiteFixtureProperty {
+    NotInDefaultSet = 1,
 }
 
 #[derive(Clone, Debug)]
@@ -87,4 +104,5 @@ impl TestCaseFixtureStatus {
 #[repr(u64)]
 pub enum TestCaseFixtureProperty {
     NeedsSameCwd = 1,
+    NotInDefaultSet = 2,
 }

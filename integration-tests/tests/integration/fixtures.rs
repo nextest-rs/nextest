@@ -5,7 +5,7 @@ use super::temp_project::TempProject;
 use camino::Utf8PathBuf;
 use color_eyre::Result;
 use fixture_data::{
-    models::{TestCaseFixtureProperty, TestCaseFixtureStatus},
+    models::{TestCaseFixtureProperty, TestCaseFixtureStatus, TestSuiteFixtureProperty},
     nextest_tests::EXPECTED_TEST_SUITES,
 };
 use nextest_metadata::{
@@ -310,8 +310,26 @@ impl CheckResult {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+#[repr(u64)]
+pub enum RunProperty {
+    Relocated = 1,
+    WithDefaultSet = 2,
+}
+
+fn debug_run_properties(properties: u64) -> String {
+    let mut ret = String::new();
+    if properties & RunProperty::Relocated as u64 != 0 {
+        ret.push_str("relocated ");
+    }
+    if properties & RunProperty::WithDefaultSet as u64 != 0 {
+        ret.push_str("with-default-set ");
+    }
+    ret
+}
+
 #[track_caller]
-pub fn check_run_output(stderr: &[u8], relocated: bool) {
+pub fn check_run_output(stderr: &[u8], properties: u64) {
     // This could be made more robust with a machine-readable output,
     // or maybe using quick-junit output
 
@@ -326,14 +344,45 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     let mut skip_count = 0;
 
     for (binary_id, fixture) in &*EXPECTED_TEST_SUITES {
+        if fixture.has_property(TestSuiteFixtureProperty::NotInDefaultSet)
+            && properties & RunProperty::WithDefaultSet as u64 != 0
+        {
+            eprintln!("*** skipping {binary_id}");
+            for test in &fixture.test_cases {
+                let name = format!("{} {}", binary_id, test.name);
+                // This binary should be skipped -- ensure that it isn't in the output. If it sh
+                assert!(
+                    !output.contains(&name),
+                    "binary {binary_id} should not be run with default set"
+                );
+            }
+            continue;
+        }
+
         for test in &fixture.test_cases {
+            let name = format!("{} {}", binary_id, test.name);
+
+            if test.has_property(TestCaseFixtureProperty::NotInDefaultSet)
+                && properties & RunProperty::WithDefaultSet as u64 != 0
+            {
+                eprintln!("*** skipping {name}");
+                assert!(
+                    !output.contains(&name),
+                    "test '{name}' should not be run with default set"
+                );
+                skip_count += 1;
+                continue;
+            }
+
             let result = match test.status {
                 // This is not a complete accounting -- for example, the needs-same-cwd check should
                 // also be repeated for leaky tests in principle. But it's good enough for the test
                 // suite that actually exists.
                 TestCaseFixtureStatus::Pass => {
                     run_count += 1;
-                    if test.has_property(TestCaseFixtureProperty::NeedsSameCwd) && relocated {
+                    if test.has_property(TestCaseFixtureProperty::NeedsSameCwd)
+                        && properties & RunProperty::Relocated as u64 != 0
+                    {
                         fail_count += 1;
                         CheckResult::Fail
                     } else {
@@ -381,6 +430,7 @@ pub fn check_run_output(stderr: &[u8], relocated: bool) {
     let summary_reg = Regex::new(&summary_regex_str).unwrap();
     assert!(
         summary_reg.is_match(&output),
-        "summary didn't match regex {summary_regex_str} (actual output: {output}, relocated: {relocated})"
+        "summary didn't match regex {summary_regex_str} (actual output: {output}, properties: {})",
+        debug_run_properties(properties),
     );
 }

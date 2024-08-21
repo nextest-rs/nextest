@@ -12,7 +12,7 @@ use crate::{
     config::{NextestProfile, ScriptId},
     errors::WriteEventError,
     helpers::{io_write_test_name, plural},
-    list::{TestInstance, TestList},
+    list::{SkipCounts, TestInstance, TestList},
     reporter::aggregator::EventAggregator,
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
@@ -317,6 +317,7 @@ impl TestReporterBuilder {
 
         TestReporter {
             inner: TestReporterImpl {
+                default_set_config: profile.default_set().config_name(),
                 status_levels: StatusLevels {
                     status_level,
                     final_status_level,
@@ -582,6 +583,7 @@ impl FinalOutput {
 }
 
 struct TestReporterImpl<'a> {
+    default_set_config: String,
     status_levels: StatusLevels,
     force_success_output: Option<TestOutputDisplay>,
     force_failure_output: Option<TestOutputDisplay>,
@@ -605,6 +607,15 @@ impl<'a> TestReporterImpl<'a> {
                 profile_name,
                 cli_args: _,
             } => {
+                writeln!(writer, "------------")?;
+                write!(writer, "{:>12} ", "Nextest run".style(self.styles.pass))?;
+                writeln!(
+                    writer,
+                    "ID {} with nextest profile: {}",
+                    run_id.style(self.styles.count),
+                    profile_name.style(self.styles.count),
+                )?;
+
                 write!(writer, "{:>12} ", "Starting".style(self.styles.pass))?;
 
                 let count_style = self.styles.count;
@@ -614,26 +625,16 @@ impl<'a> TestReporterImpl<'a> {
 
                 write!(
                     writer,
-                    "{} {tests_str} across {} {binaries_str} (",
+                    "{} {tests_str} across {} {binaries_str}",
                     test_list.run_count().style(count_style),
                     test_list.listed_binary_count().style(count_style),
                 )?;
 
-                let skip_counts = test_list.skip_counts();
-                if skip_counts.skipped_tests > 0 || skip_counts.skipped_binaries > 0 {
-                    self.write_skip_counts(
-                        skip_counts.skipped_tests,
-                        skip_counts.skipped_binaries,
-                        writer,
-                    )?;
-                    write!(writer, " skipped; ")?;
-                }
-
-                write!(
+                write_skip_counts(
+                    test_list.skip_counts(),
+                    &self.default_set_config,
+                    &self.styles,
                     writer,
-                    "run ID: {}, nextest profile: {})",
-                    run_id.style(self.styles.count),
-                    profile_name.style(self.styles.count),
                 )?;
 
                 writeln!(writer)?;
@@ -1043,41 +1044,6 @@ impl<'a> TestReporterImpl<'a> {
                 // Print out warnings at the end, if any.
                 write_final_warnings(stats_summary, self.cancel_status, &self.styles, writer)?;
             }
-        }
-
-        Ok(())
-    }
-
-    fn write_skip_counts(
-        &self,
-        skipped_tests: usize,
-        skipped_binaries: usize,
-        writer: &mut dyn Write,
-    ) -> io::Result<()> {
-        // X tests and Y binaries skipped, or X tests skipped, or Y binaries skipped.
-        if skipped_tests > 0 && skipped_binaries > 0 {
-            write!(
-                writer,
-                "{} {} and {} {}",
-                skipped_tests.style(self.styles.count),
-                plural::tests_str(skipped_tests),
-                skipped_binaries.style(self.styles.count),
-                plural::binaries_str(skipped_binaries),
-            )?;
-        } else if skipped_tests > 0 {
-            write!(
-                writer,
-                "{} {}",
-                skipped_tests.style(self.styles.count),
-                plural::tests_str(skipped_tests),
-            )?;
-        } else if skipped_binaries > 0 {
-            write!(
-                writer,
-                "{} {}",
-                skipped_binaries.style(self.styles.count),
-                plural::binaries_str(skipped_tests),
-            )?;
         }
 
         Ok(())
@@ -1526,6 +1492,89 @@ impl<'a> fmt::Debug for TestReporter<'a> {
             .field("stderr", &"BufferWriter { .. }")
             .finish()
     }
+}
+
+fn write_skip_counts(
+    skip_counts: &SkipCounts,
+    default_set_config: &str,
+    styles: &Styles,
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    if skip_counts.skipped_tests > 0 || skip_counts.skipped_binaries > 0 {
+        write!(writer, " (")?;
+        write_skip_counts_impl(
+            skip_counts.skipped_tests,
+            skip_counts.skipped_binaries,
+            styles,
+            writer,
+        )?;
+
+        // Were all tests and binaries that were skipped, skipped due to being in the
+        // default set?
+        if skip_counts.skipped_tests == skip_counts.skipped_tests_default_set
+            && skip_counts.skipped_binaries == skip_counts.skipped_binaries_default_set
+        {
+            write!(
+                writer,
+                " {} via {}",
+                "skipped".style(styles.skip),
+                default_set_config.style(styles.count)
+            )?;
+        } else {
+            write!(writer, " {}", "skipped".style(styles.skip))?;
+            // Were *any* tests in the default set?
+            if skip_counts.skipped_binaries_default_set > 0
+                || skip_counts.skipped_tests_default_set > 0
+            {
+                write!(writer, ", including ")?;
+                write_skip_counts_impl(
+                    skip_counts.skipped_tests_default_set,
+                    skip_counts.skipped_binaries_default_set,
+                    styles,
+                    writer,
+                )?;
+                write!(writer, " via {}", default_set_config.style(styles.count))?;
+            }
+        }
+        write!(writer, ")")?;
+    }
+
+    Ok(())
+}
+
+fn write_skip_counts_impl(
+    skipped_tests: usize,
+    skipped_binaries: usize,
+    styles: &Styles,
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    // X tests and Y binaries skipped, or X tests skipped, or Y binaries skipped.
+    if skipped_tests > 0 && skipped_binaries > 0 {
+        write!(
+            writer,
+            "{} {} and {} {}",
+            skipped_tests.style(styles.count),
+            plural::tests_str(skipped_tests),
+            skipped_binaries.style(styles.count),
+            plural::binaries_str(skipped_binaries),
+        )?;
+    } else if skipped_tests > 0 {
+        write!(
+            writer,
+            "{} {}",
+            skipped_tests.style(styles.count),
+            plural::tests_str(skipped_tests),
+        )?;
+    } else if skipped_binaries > 0 {
+        write!(
+            writer,
+            "{} {}",
+            skipped_binaries.style(styles.count),
+            plural::binaries_str(skipped_binaries),
+        )?;
+    }
+
+    Ok(())
 }
 
 struct StatusLevels {
@@ -2304,6 +2353,126 @@ mod tests {
     }
 
     // ---
+
+    #[test]
+    fn test_write_skip_counts() {
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 1,
+            skipped_tests_default_set: 1,
+            skipped_binaries: 0,
+            skipped_binaries_default_set: 0,
+        }), @" (1 test skipped via profile.my-profile.default-set)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 2,
+            skipped_tests_default_set: 2,
+            skipped_binaries: 0,
+            skipped_binaries_default_set: 0,
+        }), @" (2 tests skipped via profile.my-profile.default-set)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 1,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 0,
+            skipped_binaries_default_set: 0,
+        }), @" (1 test skipped)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 2,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 0,
+            skipped_binaries_default_set: 0,
+        }), @" (2 tests skipped)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 0,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 1,
+            skipped_binaries_default_set: 1,
+        }), @" (1 binary skipped via profile.my-profile.default-set)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 0,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 2,
+            skipped_binaries_default_set: 2,
+        }), @" (2 binaries skipped via profile.my-profile.default-set)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 0,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 1,
+            skipped_binaries_default_set: 0,
+        }), @" (1 binary skipped)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 0,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 2,
+            skipped_binaries_default_set: 0,
+        }), @" (2 binaries skipped)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 1,
+            skipped_tests_default_set: 1,
+            skipped_binaries: 1,
+            skipped_binaries_default_set: 1,
+        }), @" (1 test and 1 binary skipped via profile.my-profile.default-set)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 2,
+            skipped_tests_default_set: 2,
+            skipped_binaries: 3,
+            skipped_binaries_default_set: 3,
+        }), @" (2 tests and 3 binaries skipped via profile.my-profile.default-set)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 1,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 1,
+            skipped_binaries_default_set: 0,
+        }), @" (1 test and 1 binary skipped)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 2,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 3,
+            skipped_binaries_default_set: 0,
+        }), @" (2 tests and 3 binaries skipped)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 1,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 1,
+            skipped_binaries_default_set: 1,
+        }), @" (1 test and 1 binary skipped, including 1 binary via profile.my-profile.default-set)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 3,
+            skipped_tests_default_set: 2,
+            skipped_binaries: 1,
+            skipped_binaries_default_set: 0,
+        }), @" (3 tests and 1 binary skipped, including 2 tests via profile.my-profile.default-set)");
+
+        insta::assert_snapshot!(skip_counts_str(&SkipCounts {
+            skipped_tests: 0,
+            skipped_tests_default_set: 0,
+            skipped_binaries: 0,
+            skipped_binaries_default_set: 0,
+        }), @"");
+    }
+
+    fn skip_counts_str(skip_counts: &SkipCounts) -> String {
+        let mut buf = Vec::new();
+        write_skip_counts(
+            skip_counts,
+            "profile.my-profile.default-set",
+            &Styles::default(),
+            &mut buf,
+        )
+        .unwrap();
+        String::from_utf8(buf).unwrap()
+    }
 
     #[test]
     fn no_capture_settings() {

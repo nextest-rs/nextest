@@ -1,7 +1,9 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::expression::FilteringExprKind;
 use miette::{Diagnostic, SourceSpan};
+use std::fmt;
 use thiserror::Error;
 
 /// A set of errors that occurred while parsing a filter expression.
@@ -48,6 +50,20 @@ pub enum ParseSingleError {
 
         /// The underlying error.
         error: GlobConstructError,
+    },
+
+    /// A banned predicate was encountered.
+    #[error("predicate not allowed in `{kind}` expressions")]
+    BannedPredicate {
+        /// The kind of expression.
+        kind: FilteringExprKind,
+
+        /// The span of the banned predicate.
+        #[label("this predicate causes {reason}")]
+        span: SourceSpan,
+
+        /// The reason why the predicate is banned.
+        reason: BannedPredicateReason,
     },
 
     /// An invalid regex was encountered but we couldn't determine a better error message.
@@ -162,5 +178,21 @@ impl<'a> State<'a> {
 
     pub fn report_error(&mut self, error: ParseSingleError) {
         self.errors.push(error);
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum BannedPredicateReason {
+    /// This predicate causes infinite recursion.
+    InfiniteRecursion,
+}
+
+impl fmt::Display for BannedPredicateReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BannedPredicateReason::InfiniteRecursion => {
+                write!(f, "infinite recursion")
+            }
+        }
     }
 }

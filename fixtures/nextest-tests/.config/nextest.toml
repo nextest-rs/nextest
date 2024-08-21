@@ -74,6 +74,9 @@ path = "junit.xml"
 [profile.retries-with-backoff]
 retries = { backoff = "exponential", count = 2, jitter = true, delay = "1s" }
 
+[profile.with-default-set]
+default-set = "not (test(test_flaky) | package(cdylib-example))"
+
 [test-groups.flaky]
 max-threads = 4
 

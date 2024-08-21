@@ -12,6 +12,7 @@ mod parsing;
 mod proptest_helpers;
 
 pub use expression::{
-    BinaryQuery, CompiledExpr, FilteringExpr, FilteringSet, NameMatcher, TestQuery,
+    BinaryQuery, CompiledExpr, EvalContext, FilteringExpr, FilteringExprKind, FilteringSet,
+    NameMatcher, ParseContext, TestQuery,
 };
 pub use parsing::ParsedExpr;

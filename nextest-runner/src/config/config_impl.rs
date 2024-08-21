@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ArchiveConfig, CompiledByProfile, CompiledData, ConfigExperimental, CustomTestGroup,
-    DeserializedOverride, DeserializedProfileScriptConfig, NextestVersionDeserialize, RetryPolicy,
-    ScriptConfig, ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig,
-    TestSettings, TestThreads, ThreadsRequired, ToolConfigFile,
+    ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultSet, ConfigExperimental,
+    CustomTestGroup, DeserializedOverride, DeserializedProfileScriptConfig,
+    NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId, SettingSource, SetupScripts,
+    SlowTimeout, TestGroup, TestGroupConfig, TestSettings, TestThreads, ThreadsRequired,
+    ToolConfigFile,
 };
 use crate::{
     errors::{
@@ -20,7 +21,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
 use guppy::graph::PackageGraph;
 use indexmap::IndexMap;
-use nextest_filtering::TestQuery;
+use nextest_filtering::{EvalContext, TestQuery};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::{
@@ -484,8 +485,8 @@ impl NextestConfig {
             ));
         }
 
-        // Grab the overrides and setup scripts for this config. Add them in reversed order (we'll
-        // flip it around at the end).
+        // Grab the compiled data (default-set, overrides and setup scripts) for this config, adding
+        // them in reversed order (we'll flip it around at the end).
         compiled_out.default.extend_reverse(this_compiled.default);
         for (name, mut data) in this_compiled.other {
             match compiled_out.other.entry(name) {
@@ -584,6 +585,7 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
+    // Invariant: `compiled_data.default_set` is always present.
     pub(super) compiled_data: CompiledData<State>,
 }
 
@@ -596,6 +598,21 @@ impl<'cfg, State> NextestProfile<'cfg, State> {
     /// Returns the absolute profile-specific store directory.
     pub fn store_dir(&self) -> &Utf8Path {
         &self.store_dir
+    }
+
+    /// Returns the context in which to evaluate filtersets.
+    pub fn filterset_ecx(&self) -> EvalContext<'_> {
+        EvalContext {
+            default_set: &self.default_set().expr,
+        }
+    }
+
+    /// Returns the default set of tests to run.
+    pub fn default_set(&self) -> &CompiledDefaultSet {
+        self.compiled_data
+            .default_set
+            .as_ref()
+            .expect("compiled data always has default set")
     }
 
     /// Returns the global test group configuration.
@@ -882,6 +899,7 @@ struct StoreConfigImpl {
 
 #[derive(Clone, Debug)]
 pub(super) struct DefaultProfileImpl {
+    default_set: String,
     test_threads: TestThreads,
     threads_required: ThreadsRequired,
     retries: RetryPolicy,
@@ -901,6 +919,9 @@ pub(super) struct DefaultProfileImpl {
 impl DefaultProfileImpl {
     fn new(p: CustomProfileImpl) -> Self {
         Self {
+            default_set: p
+                .default_set
+                .expect("default-set present in default profile"),
             test_threads: p
                 .test_threads
                 .expect("test-threads present in default profile"),
@@ -948,6 +969,10 @@ impl DefaultProfileImpl {
         }
     }
 
+    pub(super) fn default_set(&self) -> &str {
+        &self.default_set
+    }
+
     pub(super) fn overrides(&self) -> &[DeserializedOverride] {
         &self.overrides
     }
@@ -968,6 +993,9 @@ struct DefaultJunitImpl {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(super) struct CustomProfileImpl {
+    /// The default set of tests run by `cargo nextest run`.
+    #[serde(default)]
+    default_set: Option<String>,
     #[serde(default, deserialize_with = "super::deserialize_retry_policy")]
     retries: Option<RetryPolicy>,
     #[serde(default)]
@@ -1002,6 +1030,10 @@ pub(super) struct CustomProfileImpl {
 impl CustomProfileImpl {
     pub(super) fn test_threads(&self) -> Option<TestThreads> {
         self.test_threads
+    }
+
+    pub(super) fn default_set(&self) -> Option<&str> {
+        self.default_set.as_deref()
     }
 
     pub(super) fn overrides(&self) -> &[DeserializedOverride] {
