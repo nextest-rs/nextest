@@ -526,24 +526,26 @@ fn recover_unexpected_comma<'i>(input: &mut Span<'i>) -> PResult<()> {
 
 fn nullary_set_def<'a>(
     name: &'static str,
-    make_set: fn() -> SetDef,
+    make_set: fn(SourceSpan) -> SetDef,
 ) -> impl Parser<Span<'a>, Option<SetDef>, Error> {
-    move |i: &mut _| {
+    move |i: &mut Span<'_>| {
+        let start = i.location();
         let _ = literal(name).parse_next(i)?;
         let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
         let err_loc = i.location();
-        match take_till::<_, _, Error>(0.., ')').parse_next(i) {
+        let end = match take_till::<_, _, Error>(0.., ')').parse_next(i) {
             Ok(res) => {
                 if !res.trim().is_empty() {
                     let span = (err_loc, res.len()).into();
                     let err = ParseSingleError::UnexpectedArgument(span);
                     i.state.report_error(err);
                 }
+                i.location()
             }
             Err(_) => unreachable!(),
-        }
+        };
         let _ = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
-        Ok(Some(make_set()))
+        Ok(Some(make_set((start, end - start).into())))
     }
 }
 
@@ -628,8 +630,8 @@ fn parse_set_def(input: &mut Span<'_>) -> PResult<Option<SetDef>> {
             unary_set_def("binary", DefaultMatcher::Glob, SetDef::Binary),
             unary_set_def("test", DefaultMatcher::Contains, SetDef::Test),
             platform_def,
-            nullary_set_def("all", || SetDef::All),
-            nullary_set_def("none", || SetDef::None),
+            nullary_set_def("all", |_| SetDef::All),
+            nullary_set_def("none", |_| SetDef::None),
         ))),
     )
     .parse_next(input)
