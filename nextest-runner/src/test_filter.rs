@@ -17,7 +17,7 @@ use crate::{
 use aho_corasick::AhoCorasick;
 use nextest_filtering::{EvalContext, Filterset, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
-use std::fmt;
+use std::{collections::HashSet, fmt, mem};
 
 /// Whether to run ignored tests.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
@@ -50,7 +50,7 @@ pub enum FilterBound {
 pub struct TestFilterBuilder {
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
-    name_match: NameMatch,
+    patterns: ResolvedFilterPatterns,
     exprs: TestFilterExprs,
 }
 
@@ -63,30 +63,253 @@ enum TestFilterExprs {
     Sets(Vec<Filterset>),
 }
 
-#[derive(Clone, Debug)]
-enum NameMatch {
-    EmptyPatterns,
-    MatchSet {
+/// A set of patterns for test filters.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TestFilterPatterns {
+    /// The only patterns specified (if any) are skip patterns: match the default set of tests minus
+    /// the skip patterns.
+    SkipOnly {
+        /// Skip patterns.
+        skip_patterns: Vec<String>,
+    },
+
+    /// At least one substring or exact pattern is specified.
+    ///
+    /// In other words, at least one of `patterns` or `exact_patterns` should be non-empty.
+    ///
+    /// A fully empty `Patterns` is logically sound (will match no tests), but never created by
+    /// nextest itself.
+    Patterns {
+        /// Substring patterns.
         patterns: Vec<String>,
-        matcher: Box<AhoCorasick>,
+
+        /// Patterns passed in via `--exact`.
+        exact_patterns: HashSet<String>,
+
+        /// Patterns passed in via `--skip`.
+        skip_patterns: Vec<String>,
     },
 }
 
-impl PartialEq for NameMatch {
+impl Default for TestFilterPatterns {
+    fn default() -> Self {
+        Self::SkipOnly {
+            skip_patterns: Vec::new(),
+        }
+    }
+}
+
+impl TestFilterPatterns {
+    /// Initializes a new `TestFilterPatterns` with a set of substring patterns specified before
+    /// `--`.
+    ///
+    /// An empty slice matches all tests.
+    pub fn new(substring_patterns: Vec<String>) -> Self {
+        if substring_patterns.is_empty() {
+            Self::default()
+        } else {
+            Self::Patterns {
+                patterns: substring_patterns,
+                exact_patterns: HashSet::new(),
+                skip_patterns: Vec::new(),
+            }
+        }
+    }
+
+    /// Adds a regular pattern to the set of patterns.
+    pub fn add_substring_pattern(&mut self, pattern: String) {
+        match self {
+            Self::SkipOnly { skip_patterns } => {
+                *self = Self::Patterns {
+                    patterns: vec![pattern],
+                    exact_patterns: HashSet::new(),
+                    skip_patterns: mem::take(skip_patterns),
+                };
+            }
+            Self::Patterns { patterns, .. } => {
+                patterns.push(pattern);
+            }
+        }
+    }
+
+    /// Adds an exact pattern to the set of patterns.
+    pub fn add_exact_pattern(&mut self, pattern: String) {
+        match self {
+            Self::SkipOnly { skip_patterns } => {
+                *self = Self::Patterns {
+                    patterns: Vec::new(),
+                    exact_patterns: [pattern].into_iter().collect(),
+                    skip_patterns: mem::take(skip_patterns),
+                };
+            }
+            Self::Patterns { exact_patterns, .. } => {
+                exact_patterns.insert(pattern);
+            }
+        }
+    }
+
+    /// Adds a skip pattern to the set of patterns.
+    pub fn add_skip_pattern(&mut self, pattern: String) {
+        match self {
+            Self::SkipOnly { skip_patterns } => {
+                skip_patterns.push(pattern);
+            }
+            Self::Patterns { skip_patterns, .. } => {
+                skip_patterns.push(pattern);
+            }
+        }
+    }
+
+    fn resolve(self) -> Result<ResolvedFilterPatterns, TestFilterBuilderError> {
+        match self {
+            Self::SkipOnly { mut skip_patterns } => {
+                if skip_patterns.is_empty() {
+                    Ok(ResolvedFilterPatterns::All)
+                } else {
+                    // sort_unstable allows the PartialEq implementation to work correctly.
+                    skip_patterns.sort_unstable();
+                    let skip_pattern_matcher = Box::new(AhoCorasick::new(&skip_patterns)?);
+                    Ok(ResolvedFilterPatterns::SkipOnly {
+                        skip_patterns,
+                        skip_pattern_matcher,
+                    })
+                }
+            }
+            Self::Patterns {
+                mut patterns,
+                exact_patterns,
+                mut skip_patterns,
+            } => {
+                // sort_unstable allows the PartialEq implementation to work correctly.
+                patterns.sort_unstable();
+                skip_patterns.sort_unstable();
+
+                let pattern_matcher = Box::new(AhoCorasick::new(&patterns)?);
+                let skip_pattern_matcher = Box::new(AhoCorasick::new(&skip_patterns)?);
+
+                Ok(ResolvedFilterPatterns::Patterns {
+                    patterns,
+                    exact_patterns,
+                    skip_patterns,
+                    pattern_matcher,
+                    skip_pattern_matcher,
+                })
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum ResolvedFilterPatterns {
+    /// Match all tests.
+    ///
+    /// This is mostly for convenience -- it's equivalent to `SkipOnly` with an empty set of skip
+    /// patterns.
+    All,
+
+    /// Match all tests except those that match the skip patterns.
+    SkipOnly {
+        skip_patterns: Vec<String>,
+        skip_pattern_matcher: Box<AhoCorasick>,
+    },
+
+    /// Match tests that match the patterns and don't match the skip patterns.
+    Patterns {
+        patterns: Vec<String>,
+        exact_patterns: HashSet<String>,
+        skip_patterns: Vec<String>,
+        pattern_matcher: Box<AhoCorasick>,
+        skip_pattern_matcher: Box<AhoCorasick>,
+    },
+}
+
+impl Default for ResolvedFilterPatterns {
+    fn default() -> Self {
+        Self::All
+    }
+}
+
+impl ResolvedFilterPatterns {
+    fn name_match(&self, test_name: &str) -> FilterNameMatch {
+        match self {
+            Self::All => FilterNameMatch::MatchEmptyPatterns,
+            Self::SkipOnly {
+                // skip_patterns is covered by the matcher.
+                skip_patterns: _,
+                skip_pattern_matcher,
+            } => {
+                if skip_pattern_matcher.is_match(test_name) {
+                    FilterNameMatch::Mismatch(MismatchReason::String)
+                } else {
+                    FilterNameMatch::MatchWithPatterns
+                }
+            }
+            Self::Patterns {
+                // patterns is covered by the matcher.
+                patterns: _,
+                exact_patterns,
+                // skip_patterns is covered by the matcher.
+                skip_patterns: _,
+                pattern_matcher,
+                skip_pattern_matcher,
+            } => {
+                // skip overrides all other patterns.
+                if skip_pattern_matcher.is_match(test_name) {
+                    FilterNameMatch::Mismatch(MismatchReason::String)
+                } else if exact_patterns.contains(test_name) || pattern_matcher.is_match(test_name)
+                {
+                    FilterNameMatch::MatchWithPatterns
+                } else {
+                    FilterNameMatch::Mismatch(MismatchReason::String)
+                }
+            }
+        }
+    }
+}
+
+impl PartialEq for ResolvedFilterPatterns {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::EmptyPatterns, Self::EmptyPatterns) => true,
-            (Self::MatchSet { patterns: sp, .. }, Self::MatchSet { patterns: op, .. })
-                if sp == op =>
-            {
-                true
+            (Self::All, Self::All) => true,
+            (
+                Self::SkipOnly {
+                    skip_patterns,
+                    // The matcher is derived from `skip_patterns`, so it can be ignored.
+                    skip_pattern_matcher: _,
+                },
+                Self::SkipOnly {
+                    skip_patterns: other_skip_patterns,
+                    skip_pattern_matcher: _,
+                },
+            ) => skip_patterns == other_skip_patterns,
+            (
+                Self::Patterns {
+                    patterns,
+                    exact_patterns,
+                    skip_patterns,
+                    // The matchers are derived from `patterns` and `skip_patterns`, so they can be
+                    // ignored.
+                    pattern_matcher: _,
+                    skip_pattern_matcher: _,
+                },
+                Self::Patterns {
+                    patterns: other_patterns,
+                    exact_patterns: other_exact_patterns,
+                    skip_patterns: other_skip_patterns,
+                    pattern_matcher: _,
+                    skip_pattern_matcher: _,
+                },
+            ) => {
+                patterns == other_patterns
+                    && exact_patterns == other_exact_patterns
+                    && skip_patterns == other_skip_patterns
             }
             _ => false,
         }
     }
 }
 
-impl Eq for NameMatch {}
+impl Eq for ResolvedFilterPatterns {}
 
 impl TestFilterBuilder {
     /// Creates a new `TestFilterBuilder` from the given patterns.
@@ -95,19 +318,10 @@ impl TestFilterBuilder {
     pub fn new(
         run_ignored: RunIgnored,
         partitioner_builder: Option<PartitionerBuilder>,
-        patterns: impl IntoIterator<Item = impl Into<String>>,
+        patterns: TestFilterPatterns,
         exprs: Vec<Filterset>,
     ) -> Result<Self, TestFilterBuilderError> {
-        let mut patterns: Vec<_> = patterns.into_iter().map(|s| s.into()).collect();
-        patterns.sort_unstable();
-
-        let name_match = if patterns.is_empty() {
-            NameMatch::EmptyPatterns
-        } else {
-            let matcher = Box::new(AhoCorasick::new(&patterns)?);
-
-            NameMatch::MatchSet { patterns, matcher }
-        };
+        let patterns = patterns.resolve()?;
 
         let exprs = if exprs.is_empty() {
             TestFilterExprs::All
@@ -118,7 +332,7 @@ impl TestFilterBuilder {
         Ok(Self {
             run_ignored,
             partitioner_builder,
-            name_match,
+            patterns,
             exprs,
         })
     }
@@ -128,7 +342,7 @@ impl TestFilterBuilder {
         Self {
             run_ignored,
             partitioner_builder: None,
-            name_match: NameMatch::EmptyPatterns,
+            patterns: ResolvedFilterPatterns::default(),
             exprs: TestFilterExprs::All,
         }
     }
@@ -372,16 +586,7 @@ impl<'filter> TestFilter<'filter> {
     }
 
     fn filter_name_match(&self, test_name: &str) -> FilterNameMatch {
-        match &self.builder.name_match {
-            NameMatch::EmptyPatterns => FilterNameMatch::MatchEmptyPatterns,
-            NameMatch::MatchSet { matcher, .. } => {
-                if matcher.is_match(test_name) {
-                    FilterNameMatch::MatchWithPatterns
-                } else {
-                    FilterNameMatch::Mismatch(MismatchReason::String)
-                }
-            }
-        }
+        self.builder.patterns.name_match(test_name)
     }
 
     fn filter_expression_match(
@@ -434,7 +639,7 @@ impl<'filter> TestFilter<'filter> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum FilterNameMatch {
     /// Match because there are no patterns.
     MatchEmptyPatterns,
@@ -462,7 +667,7 @@ mod tests {
 
     #[proptest(cases = 50)]
     fn proptest_empty(#[strategy(vec(any::<String>(), 0..16))] test_names: Vec<String>) {
-        let patterns: &[String] = &[];
+        let patterns = TestFilterPatterns::default();
         let test_filter =
             TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new()).unwrap();
         let single_filter = test_filter.build();
@@ -474,11 +679,25 @@ mod tests {
     // Test that exact names match.
     #[proptest(cases = 50)]
     fn proptest_exact(#[strategy(vec(any::<String>(), 0..16))] test_names: Vec<String>) {
+        // Test with the default matcher.
+        let patterns = TestFilterPatterns::new(test_names.clone());
         let test_filter =
-            TestFilterBuilder::new(RunIgnored::Default, None, &test_names, Vec::new()).unwrap();
+            TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new()).unwrap();
         let single_filter = test_filter.build();
-        for test_name in test_names {
-            prop_assert!(single_filter.filter_name_match(&test_name).is_match());
+        for test_name in &test_names {
+            prop_assert!(single_filter.filter_name_match(test_name).is_match());
+        }
+
+        // Test with the exact matcher.
+        let mut patterns = TestFilterPatterns::default();
+        for test_name in &test_names {
+            patterns.add_exact_pattern(test_name.clone());
+        }
+        let test_filter =
+            TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new()).unwrap();
+        let single_filter = test_filter.build();
+        for test_name in &test_names {
+            prop_assert!(single_filter.filter_name_match(test_name).is_match());
         }
     }
 
@@ -487,15 +706,15 @@ mod tests {
     fn proptest_substring(
         #[strategy(vec([any::<String>(); 3], 0..16))] substring_prefix_suffixes: Vec<[String; 3]>,
     ) {
-        let mut patterns = Vec::with_capacity(substring_prefix_suffixes.len());
+        let mut patterns = TestFilterPatterns::default();
         let mut test_names = Vec::with_capacity(substring_prefix_suffixes.len());
         for [substring, prefix, suffix] in substring_prefix_suffixes {
             test_names.push(prefix + &substring + &suffix);
-            patterns.push(substring);
+            patterns.add_substring_pattern(substring);
         }
 
         let test_filter =
-            TestFilterBuilder::new(RunIgnored::Default, None, &patterns, Vec::new()).unwrap();
+            TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new()).unwrap();
         let single_filter = test_filter.build();
         for test_name in test_names {
             prop_assert!(single_filter.filter_name_match(&test_name).is_match());
@@ -507,18 +726,148 @@ mod tests {
     fn proptest_no_match(substring: String, prefix: String, suffix: String) {
         prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
         let pattern = prefix + &substring + &suffix;
+        let patterns = TestFilterPatterns::new(vec![pattern]);
         let test_filter =
-            TestFilterBuilder::new(RunIgnored::Default, None, [pattern], Vec::new()).unwrap();
+            TestFilterBuilder::new(RunIgnored::Default, None, patterns, Vec::new()).unwrap();
         let single_filter = test_filter.build();
         prop_assert!(!single_filter.filter_name_match(&substring).is_match());
     }
 
-    // /// Creates a fake test binary instance.
-    // fn make_test_binary() -> TestBinary {
-    //     TestBinary {
-    //         binary: "/fake/path".into(),
-    //         binary_id: "fake-id".to_owned(),
-    //         cwd: "/fake".into(),
-    //     }
-    // }
+    #[test]
+    fn pattern_examples() {
+        let mut patterns = TestFilterPatterns::new(vec!["foo".to_string()]);
+        patterns.add_substring_pattern("bar".to_string());
+        patterns.add_exact_pattern("baz".to_string());
+        patterns.add_skip_pattern("quux".to_string());
+
+        let resolved = patterns.clone().resolve().unwrap();
+
+        // Test substring matches.
+        assert_eq!(
+            resolved.name_match("foo"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("1foo2"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("bar"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("x_bar_y"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+
+        // Test exact matches.
+        assert_eq!(
+            resolved.name_match("baz"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("abazb"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+
+        // Both substring and exact matches.
+        assert_eq!(
+            resolved.name_match("bazfoo"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+
+        // Skip patterns.
+        assert_eq!(
+            resolved.name_match("quux"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+        assert_eq!(
+            resolved.name_match("1quux2"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+
+        // Skip and substring patterns.
+        assert_eq!(
+            resolved.name_match("quuxbar"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+
+        // Skip and exact patterns -- in this case, add `baz` to the skip list.
+        patterns.add_skip_pattern("baz".to_string());
+        let resolved = patterns.resolve().unwrap();
+        assert_eq!(
+            resolved.name_match("quuxbaz"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+    }
+
+    #[test]
+    fn skip_only_pattern_examples() {
+        let mut patterns = TestFilterPatterns::default();
+        patterns.add_skip_pattern("foo".to_string());
+        patterns.add_skip_pattern("bar".to_string());
+
+        let resolved = patterns.clone().resolve().unwrap();
+
+        // Test substring matches.
+        assert_eq!(
+            resolved.name_match("foo"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+        assert_eq!(
+            resolved.name_match("1foo2"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+        assert_eq!(
+            resolved.name_match("bar"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+        assert_eq!(
+            resolved.name_match("x_bar_y"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+
+        // Anything that doesn't match the skip filter should match.
+        assert_eq!(
+            resolved.name_match("baz"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("abazb"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+    }
+
+    #[test]
+    fn empty_pattern_examples() {
+        let patterns = TestFilterPatterns::default();
+        let resolved = patterns.resolve().unwrap();
+        assert_eq!(resolved, ResolvedFilterPatterns::All);
+
+        // Anything matches.
+        assert_eq!(
+            resolved.name_match("foo"),
+            FilterNameMatch::MatchEmptyPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("1foo2"),
+            FilterNameMatch::MatchEmptyPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("bar"),
+            FilterNameMatch::MatchEmptyPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("x_bar_y"),
+            FilterNameMatch::MatchEmptyPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("baz"),
+            FilterNameMatch::MatchEmptyPatterns,
+        );
+        assert_eq!(
+            resolved.name_match("abazb"),
+            FilterNameMatch::MatchEmptyPatterns,
+        );
+    }
 }

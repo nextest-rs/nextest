@@ -1068,7 +1068,7 @@ mod tests {
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
         list::SerializableFormat,
         platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
-        test_filter::RunIgnored,
+        test_filter::{RunIgnored, TestFilterPatterns},
     };
     use guppy::CargoMetadata;
     use indoc::indoc;
@@ -1077,7 +1077,6 @@ mod tests {
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable};
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
-    use std::iter;
     use target_spec::Platform;
 
     #[test]
@@ -1102,7 +1101,7 @@ mod tests {
         let test_filter = TestFilterBuilder::new(
             RunIgnored::Default,
             None,
-            iter::empty::<String>(),
+            TestFilterPatterns::default(),
             // Test against the platform() predicate because this is the most important one here.
             vec![Filterset::parse("platform(target)".to_owned(), &cx).unwrap()],
         )

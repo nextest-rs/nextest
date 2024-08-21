@@ -22,7 +22,7 @@ use nextest_runner::{
     },
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
-    test_filter::{RunIgnored, TestFilterBuilder},
+    test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns},
     test_output::{TestExecutionOutput, TestOutput},
 };
 use pretty_assertions::assert_eq;
@@ -230,8 +230,13 @@ fn test_run_ignored() -> Result<()> {
     };
     let expr = Filterset::parse("not test(test_slow_timeout)".to_owned(), &pcx).unwrap();
 
-    let test_filter =
-        TestFilterBuilder::new(RunIgnored::Only, None, Vec::<String>::new(), vec![expr]).unwrap();
+    let test_filter = TestFilterBuilder::new(
+        RunIgnored::Only,
+        None,
+        TestFilterPatterns::default(),
+        vec![expr],
+    )
+    .unwrap();
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     let config = load_config();
     let profile = config
@@ -319,7 +324,10 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
     let test_filter = TestFilterBuilder::new(
         RunIgnored::Default,
         None,
-        ["call_dylib_add_two", "test_flaky_mod_4"],
+        TestFilterPatterns::new(vec![
+            "call_dylib_add_two".to_owned(),
+            "test_flaky_mod_4".to_owned(),
+        ]),
         vec![expr],
     )
     .unwrap();
@@ -383,9 +391,13 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
     )
     .expect("filterset is valid");
 
-    let test_filter =
-        TestFilterBuilder::new(RunIgnored::Default, None, Vec::<String>::new(), vec![expr])
-            .unwrap();
+    let test_filter = TestFilterBuilder::new(
+        RunIgnored::Default,
+        None,
+        TestFilterPatterns::default(),
+        vec![expr],
+    )
+    .unwrap();
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     for test in test_list.iter_tests() {
         if test.name.contains("test_multiply_two") || test.name == "tests::call_dylib_add_two" {
@@ -411,7 +423,10 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
     let test_filter = TestFilterBuilder::new(
         RunIgnored::Default,
         None,
-        vec!["test_multiply_two", "tests::call_dylib_add_two"],
+        TestFilterPatterns::new(vec![
+            "test_multiply_two".to_owned(),
+            "tests::call_dylib_add_two".to_owned(),
+        ]),
         vec![],
     )
     .unwrap();
@@ -601,8 +616,13 @@ fn test_termination() -> Result<()> {
         kind: FiltersetKind::Test,
     };
     let expr = Filterset::parse("test(/^test_slow_timeout/)".to_owned(), &pcx).unwrap();
-    let test_filter =
-        TestFilterBuilder::new(RunIgnored::Only, None, Vec::<String>::new(), vec![expr]).unwrap();
+    let test_filter = TestFilterBuilder::new(
+        RunIgnored::Only,
+        None,
+        TestFilterPatterns::default(),
+        vec![expr],
+    )
+    .unwrap();
 
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     let config = load_config();

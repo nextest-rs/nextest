@@ -395,6 +395,175 @@ fn test_run() {
         "correct exit code for command\n{output}"
     );
     check_run_output(&output.stderr, 0);
+
+    // Check the output with --skip.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "--skip",
+            "cdylib",
+        ])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+    check_run_output(&output.stderr, RunProperty::WithSkipCdylibFilter as u64);
+
+    // Equivalent filterset to the above.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "not test(cdylib)",
+        ])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+    check_run_output(&output.stderr, RunProperty::WithSkipCdylibFilter as u64);
+
+    // Check the output with --exact.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "--exact",
+            "test_multiply_two",
+            "--exact",
+            "tests::test_multiply_two_cdylib",
+        ])
+        // The above tests pass so don't pass in unchecked(true) here.
+        .output();
+    check_run_output(
+        &output.stderr,
+        RunProperty::WithMultiplyTwoExactFilter as u64,
+    );
+
+    // Equivalent filterset to the above.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "test(=test_multiply_two) | test(=tests::test_multiply_two_cdylib)",
+        ])
+        // The above tests pass so don't pass in unchecked(true) here.
+        .output();
+    check_run_output(
+        &output.stderr,
+        RunProperty::WithMultiplyTwoExactFilter as u64,
+    );
+
+    // Check the output with --exact and --skip.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "--exact",
+            "test_multiply_two",
+            "--exact",
+            "tests::test_multiply_two_cdylib",
+            "--skip",
+            "cdylib",
+        ])
+        // This should only select the test_multiply_two test, which passes. So don't pass in
+        // unchecked(true) here.
+        .output();
+    check_run_output(
+        &output.stderr,
+        RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
+    );
+
+    // Equivalent filterset to the above.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "(test(=test_multiply_two) | test(=tests::test_multiply_two_cdylib)) & not test(cdylib)",
+        ])
+        // This should only select the test_multiply_two test, which passes. So don't pass in
+        // unchecked(true) here.
+        .output();
+    check_run_output(
+        &output.stderr,
+        RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
+    );
+
+    // Another equivalent.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "test(=test_multiply_two) | test(=tests::test_multiply_two_cdylib)",
+            "--",
+            "--skip",
+            "cdylib",
+        ])
+        // This should only select the test_multiply_two test, which passes. So don't pass in
+        // unchecked(true) here.
+        .output();
+    check_run_output(
+        &output.stderr,
+        RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
+    );
+
+    // Yet another equivalent.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "not test(cdylib)",
+            "--",
+            "--exact",
+            "test_multiply_two",
+            "--exact",
+            "tests::test_multiply_two_cdylib",
+        ])
+        // This should only select the test_multiply_two test, which passes. So don't pass in
+        // unchecked(true) here.
+        .output();
+    check_run_output(
+        &output.stderr,
+        RunProperty::WithSkipCdylibFilter as u64 | RunProperty::WithMultiplyTwoExactFilter as u64,
+    );
 }
 
 #[test]

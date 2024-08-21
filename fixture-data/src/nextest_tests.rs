@@ -139,7 +139,8 @@ pub static EXPECTED_TEST_SUITES: Lazy<BTreeMap<RustBinaryId, TestSuiteFixture>> 
             "cdylib-link",
             BuildPlatform::Target,
             vec![
-                TestCaseFixture::new("test_multiply_two", TestCaseFixtureStatus::Pass),
+                TestCaseFixture::new("test_multiply_two", TestCaseFixtureStatus::Pass)
+                    .with_property(TestCaseFixtureProperty::MatchesTestMultiplyTwo),
             ],
         ),
         "dylib-test".into() => TestSuiteFixture::new(
@@ -153,7 +154,9 @@ pub static EXPECTED_TEST_SUITES: Lazy<BTreeMap<RustBinaryId, TestSuiteFixture>> 
             "cdylib-example",
             BuildPlatform::Target,
             vec![
-                TestCaseFixture::new("tests::test_multiply_two_cdylib", TestCaseFixtureStatus::Pass),
+                TestCaseFixture::new("tests::test_multiply_two_cdylib", TestCaseFixtureStatus::Pass)
+                    .with_property(TestCaseFixtureProperty::MatchesCdylib)
+                    .with_property(TestCaseFixtureProperty::MatchesTestMultiplyTwo),
             ],
         )
         .with_property(TestSuiteFixtureProperty::NotInDefaultSet),
