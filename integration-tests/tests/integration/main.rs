@@ -247,8 +247,12 @@ fn test_run_no_tests() {
 
     let stderr = output.stderr_as_str();
     assert!(
+        stderr.contains("Starting 0 tests across 0 binaries (8 binaries skipped;"),
+        "stderr contains 'Starting' message: {output}"
+    );
+    assert!(
         stderr.contains("warning: no tests to run -- this will become an error in the future"),
-        "stderr contains no tests message"
+        "stderr contains no tests message: {output}"
     );
 
     let output = CargoNextestCli::new()
@@ -265,7 +269,7 @@ fn test_run_no_tests() {
     let stderr = output.stderr_as_str();
     assert!(
         stderr.contains("warning: no tests to run"),
-        "stderr contains no tests message"
+        "stderr contains no tests message: {output}"
     );
 
     let output = CargoNextestCli::new()
@@ -305,7 +309,7 @@ fn test_run_no_tests() {
     let stderr = output.stderr_as_str();
     assert!(
         !stderr.contains("no tests to run"),
-        "no tests message does not error out"
+        "no tests message does not error out, stderr: {output}"
     );
 }
 

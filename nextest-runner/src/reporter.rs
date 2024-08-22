@@ -610,20 +610,23 @@ impl<'a> TestReporterImpl<'a> {
                 let count_style = self.styles.count;
 
                 let tests_str = plural::tests_str(test_list.run_count());
-                let binaries_str = plural::binaries_str(test_list.binary_count());
+                let binaries_str = plural::binaries_str(test_list.listed_binary_count());
 
                 write!(
                     writer,
-                    "{} {tests_str} across {} {binaries_str}",
+                    "{} {tests_str} across {} {binaries_str} (",
                     test_list.run_count().style(count_style),
-                    test_list.binary_count().style(count_style),
+                    test_list.listed_binary_count().style(count_style),
                 )?;
 
-                let skip_count = test_list.skip_count();
-                if skip_count > 0 {
-                    write!(writer, " ({} skipped; ", skip_count.style(count_style))?;
-                } else {
-                    write!(writer, " (")?;
+                let skip_counts = test_list.skip_counts();
+                if skip_counts.skipped_tests > 0 || skip_counts.skipped_binaries > 0 {
+                    self.write_skip_counts(
+                        skip_counts.skipped_tests,
+                        skip_counts.skipped_binaries,
+                        writer,
+                    )?;
+                    write!(writer, " skipped; ")?;
                 }
 
                 write!(
@@ -1040,6 +1043,41 @@ impl<'a> TestReporterImpl<'a> {
                 // Print out warnings at the end, if any.
                 write_final_warnings(stats_summary, self.cancel_status, &self.styles, writer)?;
             }
+        }
+
+        Ok(())
+    }
+
+    fn write_skip_counts(
+        &self,
+        skipped_tests: usize,
+        skipped_binaries: usize,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        // X tests and Y binaries skipped, or X tests skipped, or Y binaries skipped.
+        if skipped_tests > 0 && skipped_binaries > 0 {
+            write!(
+                writer,
+                "{} {} and {} {}",
+                skipped_tests.style(self.styles.count),
+                plural::tests_str(skipped_tests),
+                skipped_binaries.style(self.styles.count),
+                plural::binaries_str(skipped_binaries),
+            )?;
+        } else if skipped_tests > 0 {
+            write!(
+                writer,
+                "{} {}",
+                skipped_tests.style(self.styles.count),
+                plural::tests_str(skipped_tests),
+            )?;
+        } else if skipped_binaries > 0 {
+            write!(
+                writer,
+                "{} {}",
+                skipped_binaries.style(self.styles.count),
+                plural::binaries_str(skipped_tests),
+            )?;
         }
 
         Ok(())
