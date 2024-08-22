@@ -17,6 +17,7 @@ use crate::{
 use aho_corasick::AhoCorasick;
 use nextest_filtering::{FilteringExpr, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
+use std::fmt;
 
 /// Whether to run ignored tests.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
@@ -127,14 +128,26 @@ impl TestFilterBuilder {
     ///
     /// This method is implemented directly on `TestFilterBuilder`. The statefulness of `TestFilter`
     /// is only used for counted test partitioning, and is not currently relevant for binaries.
-    pub fn should_obtain_test_list_from_binary(&self, test_binary: &RustTestArtifact<'_>) -> bool {
+    pub fn filter_binary_match(&self, test_binary: &RustTestArtifact<'_>) -> FilterBinaryMatch {
+        let query = test_binary.to_binary_query();
         match &self.exprs {
-            TestFilterExprs::Any => true,
-            TestFilterExprs::Sets(exprs) => exprs.iter().any(|expr| {
-                // If this is a definite or probable match, then we should run this binary.
-                expr.matches_binary(&test_binary.to_binary_query())
-                    .unwrap_or(true)
-            }),
+            TestFilterExprs::Any => FilterBinaryMatch::Definite,
+            TestFilterExprs::Sets(exprs) => exprs.iter().fold(
+                FilterBinaryMatch::Mismatch {
+                    // Just use this as a placeholder as the lowest possible value.
+                    reason: BinaryMismatchReason::Expression,
+                },
+                |acc, expr| {
+                    let this = match expr.matches_binary(&query) {
+                        Some(true) => FilterBinaryMatch::Definite,
+                        None => FilterBinaryMatch::Possible,
+                        Some(false) => FilterBinaryMatch::Mismatch {
+                            reason: BinaryMismatchReason::Expression,
+                        },
+                    };
+                    acc.logic_or(this)
+                },
+            ),
         }
     }
 
@@ -149,6 +162,61 @@ impl TestFilterBuilder {
         TestFilter {
             builder: self,
             partitioner,
+        }
+    }
+}
+
+/// Whether a binary matched filters and should be run to obtain the list of tests within.
+///
+/// The result of [`TestFilterBuilder::filter_binary_match`].
+#[derive(Copy, Clone, Debug)]
+pub enum FilterBinaryMatch {
+    /// This is a definite match -- binaries should be run.
+    Definite,
+
+    /// We don't know for sure -- binaries should be run.
+    Possible,
+
+    /// This is a definite mismatch -- binaries should not be run.
+    Mismatch {
+        /// The reason for the mismatch.
+        reason: BinaryMismatchReason,
+    },
+}
+
+impl FilterBinaryMatch {
+    fn logic_or(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Definite, _) | (_, Self::Definite) => Self::Definite,
+            (Self::Possible, _) | (_, Self::Possible) => Self::Possible,
+            (Self::Mismatch { reason: r1 }, Self::Mismatch { reason: r2 }) => {
+                Self::Mismatch { reason: r1.max(r2) }
+            }
+        }
+    }
+}
+
+/// The reason for a binary mismatch.
+///
+/// Part of [`FilterBinaryMatch`], as returned by [`TestFilterBuilder::filter_binary_match`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum BinaryMismatchReason {
+    /// The binary doesn't match any of the provided filtersets.
+    Expression,
+}
+
+impl BinaryMismatchReason {
+    fn max(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Expression, Self::Expression) => Self::Expression,
+        }
+    }
+}
+
+impl fmt::Display for BinaryMismatchReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Expression => write!(f, "didn't match filtersets"),
         }
     }
 }

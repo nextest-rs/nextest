@@ -714,9 +714,9 @@ impl RustTestSuiteStatusSummary {
     pub const LISTED: Self = Self::new_const("listed");
 
     /// The "skipped" kind, which indicates that the test binary was not executed because it didn't
-    /// match any expression filters.
+    /// match any filtersets.
     ///
-    /// If this is "skipped", the contents of `RustTestSuiteSummary::test_cases` is empty.
+    /// In this case, the contents of [`RustTestSuiteSummary::test_cases`] is empty.
     pub const SKIPPED: Self = Self::new_const("skipped");
 }
 
