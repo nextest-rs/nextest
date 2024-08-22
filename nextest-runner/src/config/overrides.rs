@@ -260,7 +260,7 @@ impl<Source: Copy> TestSettings<Source> {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(super) struct CompiledByProfile {
     pub(super) default: CompiledData<PreBuildPlatform>,
     pub(super) other: HashMap<String, CompiledData<PreBuildPlatform>>,
@@ -301,9 +301,24 @@ impl CompiledByProfile {
             Err(ConfigParseErrorKind::CompiledDataParseError(errors))
         }
     }
+
+    /// Returns the compiled data for the default config.
+    ///
+    /// The default config does not depend on the package graph, so we create it separately here.
+    /// But we don't implement `Default` to make sure that the value is for the default _config_,
+    /// not the default _profile_ (which repo config can customize).
+    pub(super) fn for_default_config() -> Self {
+        Self {
+            default: CompiledData {
+                overrides: vec![],
+                scripts: vec![],
+            },
+            other: HashMap::new(),
+        }
+    }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(super) struct CompiledData<State> {
     pub(super) overrides: Vec<CompiledOverride<State>>,
     pub(super) scripts: Vec<CompiledProfileScripts<State>>,
