@@ -40,7 +40,16 @@ pub struct TestFilterBuilder {
     run_ignored: RunIgnored,
     partitioner_builder: Option<PartitionerBuilder>,
     name_match: NameMatch,
-    exprs: Vec<FilteringExpr>,
+    exprs: TestFilterExprs,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum TestFilterExprs {
+    /// No filtersets specified to filter against -- match any test.
+    Any,
+
+    /// Filtersets to match against. A match can be against any of the sets.
+    Sets(Vec<FilteringExpr>),
 }
 
 #[derive(Clone, Debug)]
@@ -89,6 +98,12 @@ impl TestFilterBuilder {
             NameMatch::MatchSet { patterns, matcher }
         };
 
+        let exprs = if exprs.is_empty() {
+            TestFilterExprs::Any
+        } else {
+            TestFilterExprs::Sets(exprs)
+        };
+
         Ok(Self {
             run_ignored,
             partitioner_builder,
@@ -103,7 +118,7 @@ impl TestFilterBuilder {
             run_ignored,
             partitioner_builder: None,
             name_match: NameMatch::EmptyPatterns,
-            exprs: Vec::new(),
+            exprs: TestFilterExprs::Any,
         }
     }
 
@@ -113,20 +128,14 @@ impl TestFilterBuilder {
     /// This method is implemented directly on `TestFilterBuilder`. The statefulness of `TestFilter`
     /// is only used for counted test partitioning, and is not currently relevant for binaries.
     pub fn should_obtain_test_list_from_binary(&self, test_binary: &RustTestArtifact<'_>) -> bool {
-        if self.exprs.is_empty() {
-            // No expressions means match all tests.
-            return true;
+        match &self.exprs {
+            TestFilterExprs::Any => true,
+            TestFilterExprs::Sets(exprs) => exprs.iter().any(|expr| {
+                // If this is a definite or probable match, then we should run this binary.
+                expr.matches_binary(&test_binary.to_binary_query())
+                    .unwrap_or(true)
+            }),
         }
-        for expr in &self.exprs {
-            // If this is a definite or probable match, then we should run this binary
-            if expr
-                .matches_binary(&test_binary.to_binary_query())
-                .unwrap_or(true)
-            {
-                return true;
-            }
-        }
-        false
     }
 
     /// Creates a new test filter scoped to a single binary.
@@ -247,17 +256,16 @@ impl<'filter> TestFilter<'filter> {
             binary_query: test_binary.to_binary_query(),
             test_name,
         };
-        if self.builder.exprs.is_empty() {
-            FilterNameMatch::MatchEmptyPatterns
-        } else if self
-            .builder
-            .exprs
-            .iter()
-            .any(|expr| expr.matches_test(&query))
-        {
-            FilterNameMatch::MatchWithPatterns
-        } else {
-            FilterNameMatch::Mismatch(MismatchReason::Expression)
+
+        match &self.builder.exprs {
+            TestFilterExprs::Any => FilterNameMatch::MatchEmptyPatterns,
+            TestFilterExprs::Sets(exprs) => {
+                if exprs.iter().any(|expr| expr.matches_test(&query)) {
+                    FilterNameMatch::MatchWithPatterns
+                } else {
+                    FilterNameMatch::Mismatch(MismatchReason::Expression)
+                }
+            }
         }
     }
 
