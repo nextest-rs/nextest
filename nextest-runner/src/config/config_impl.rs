@@ -24,7 +24,7 @@ use nextest_filtering::TestQuery;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
     time::Duration,
 };
 
@@ -184,8 +184,8 @@ impl NextestConfig {
         Self {
             workspace_root: workspace_root.into(),
             inner: deserialized.into_config_impl(),
-            // The default config does not (cannot) have overrides.
-            compiled: CompiledByProfile::default(),
+            // The default config has no overrides or special settings.
+            compiled: CompiledByProfile::for_default_config(),
         }
     }
 
@@ -215,7 +215,7 @@ impl NextestConfig {
 
         // Overrides are handled additively.
         // Note that they're stored in reverse order here, and are flipped over at the end.
-        let mut compiled = CompiledByProfile::default();
+        let mut compiled = CompiledByProfile::for_default_config();
 
         let mut known_groups = BTreeSet::new();
         let mut known_scripts = BTreeSet::new();
@@ -487,12 +487,18 @@ impl NextestConfig {
         // Grab the overrides and setup scripts for this config. Add them in reversed order (we'll
         // flip it around at the end).
         compiled_out.default.extend_reverse(this_compiled.default);
-        for (name, data) in this_compiled.other {
-            compiled_out
-                .other
-                .entry(name)
-                .or_default()
-                .extend_reverse(data);
+        for (name, mut data) in this_compiled.other {
+            match compiled_out.other.entry(name) {
+                hash_map::Entry::Vacant(entry) => {
+                    // When inserting a new element, reverse the data.
+                    data.reverse();
+                    entry.insert(data);
+                }
+                hash_map::Entry::Occupied(mut entry) => {
+                    // When appending to an existing element, extend the data in reverse.
+                    entry.get_mut().extend_reverse(data);
+                }
+            }
         }
 
         Ok(())
@@ -513,13 +519,10 @@ impl NextestConfig {
         store_dir.push(name);
 
         // Grab the compiled data as well.
-        let compiled_data = self
-            .compiled
-            .other
-            .get(name)
-            .cloned()
-            .unwrap_or_default()
-            .chain(self.compiled.default.clone());
+        let compiled_data = match self.compiled.other.get(name) {
+            Some(data) => data.clone().chain(self.compiled.default.clone()),
+            None => self.compiled.default.clone(),
+        };
 
         Ok(NextestProfile {
             name: name.to_owned(),
