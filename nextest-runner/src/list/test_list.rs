@@ -26,14 +26,13 @@ use nextest_metadata::{
     BuildPlatform, RustBinaryId, RustNonTestBinaryKind, RustTestBinaryKind, RustTestBinarySummary,
     RustTestCaseSummary, RustTestSuiteStatusSummary, RustTestSuiteSummary, TestListSummary,
 };
-use once_cell::sync::{Lazy, OnceCell};
 use owo_colors::OwoColorize;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
     io,
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 use tokio::runtime::Runtime;
 
@@ -198,7 +197,7 @@ pub struct TestList<'g> {
     env: EnvironmentMap,
     updated_dylib_path: OsString,
     // Computed on first access.
-    skip_count: OnceCell<usize>,
+    skip_count: OnceLock<usize>,
 }
 
 impl<'g> TestList<'g> {
@@ -279,7 +278,7 @@ impl<'g> TestList<'g> {
             rust_build_meta,
             updated_dylib_path,
             test_count,
-            skip_count: OnceCell::new(),
+            skip_count: OnceLock::new(),
         })
     }
 
@@ -333,7 +332,7 @@ impl<'g> TestList<'g> {
             rust_build_meta,
             updated_dylib_path,
             test_count,
-            skip_count: OnceCell::new(),
+            skip_count: OnceLock::new(),
         })
     }
 
@@ -464,7 +463,7 @@ impl<'g> TestList<'g> {
             env: EnvironmentMap::empty(),
             updated_dylib_path: OsString::new(),
             rust_suites: BTreeMap::new(),
-            skip_count: OnceCell::new(),
+            skip_count: OnceLock::new(),
         }
     }
 
@@ -836,7 +835,7 @@ pub enum RustTestSuiteStatus {
     },
 }
 
-static EMPTY_TEST_CASE_MAP: Lazy<BTreeMap<String, RustTestCaseSummary>> = Lazy::new(BTreeMap::new);
+static EMPTY_TEST_CASE_MAP: BTreeMap<String, RustTestCaseSummary> = BTreeMap::new();
 
 impl RustTestSuiteStatus {
     /// Returns the number of test cases within this suite.
@@ -991,6 +990,7 @@ mod tests {
     use maplit::btreemap;
     use nextest_filtering::FilteringExpr;
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable};
+    use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use std::iter;
     use target_spec::Platform;
