@@ -12,7 +12,7 @@ use crate::{
     reuse_build::PathMapper,
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand},
-    test_filter::TestFilterBuilder,
+    test_filter::{BinaryMismatchReason, FilterBinaryMatch, TestFilterBuilder},
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -233,27 +233,29 @@ impl<'g> TestList<'g> {
 
         let stream = futures::stream::iter(test_artifacts).map(|test_binary| {
             async {
-                if filter.should_obtain_test_list_from_binary(&test_binary) {
-                    log::debug!(
-                        "executing test binary to obtain test list: {}",
-                        test_binary.binary_id,
-                    );
-                    // Run the binary to obtain the test list.
-                    let (non_ignored, ignored) = test_binary.exec(&lctx, ctx.target_runner).await?;
-                    let (bin, info) = Self::process_output(
-                        test_binary,
-                        filter,
-                        non_ignored.as_str(),
-                        ignored.as_str(),
-                    )?;
-                    Ok::<_, CreateTestListError>((bin, info))
-                } else {
-                    // Skipped means no tests, so test_count doesn't need to be modified.
-                    log::debug!(
-                        "skipping test binary because of filters: {}",
-                        test_binary.binary_id,
-                    );
-                    Ok(Self::process_skipped(test_binary))
+                let binary_match = filter.filter_binary_match(&test_binary);
+                match binary_match {
+                    FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
+                        log::debug!(
+                            "executing test binary to obtain test list \
+                            (match result is {binary_match:?}): {}",
+                            test_binary.binary_id,
+                        );
+                        // Run the binary to obtain the test list.
+                        let (non_ignored, ignored) =
+                            test_binary.exec(&lctx, ctx.target_runner).await?;
+                        let (bin, info) = Self::process_output(
+                            test_binary,
+                            filter,
+                            non_ignored.as_str(),
+                            ignored.as_str(),
+                        )?;
+                        Ok::<_, CreateTestListError>((bin, info))
+                    }
+                    FilterBinaryMatch::Mismatch { reason } => {
+                        log::debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
+                        Ok(Self::process_skipped(test_binary, reason))
+                    }
                 }
             }
         });
@@ -299,18 +301,27 @@ impl<'g> TestList<'g> {
         let rust_suites = test_bin_outputs
             .into_iter()
             .map(|(test_binary, non_ignored, ignored)| {
-                if filter.should_obtain_test_list_from_binary(&test_binary) {
-                    let (bin, info) = Self::process_output(
-                        test_binary,
-                        filter,
-                        non_ignored.as_ref(),
-                        ignored.as_ref(),
-                    )?;
-                    test_count += info.status.test_count();
-                    Ok((bin, info))
-                } else {
-                    // Skipped means no tests, so test_count doesn't need to be modified.
-                    Ok(Self::process_skipped(test_binary))
+                let binary_match = filter.filter_binary_match(&test_binary);
+                match binary_match {
+                    FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
+                        log::debug!(
+                            "processing output for binary \
+                            (match result is {binary_match:?}): {}",
+                            test_binary.binary_id,
+                        );
+                        let (bin, info) = Self::process_output(
+                            test_binary,
+                            filter,
+                            non_ignored.as_ref(),
+                            ignored.as_ref(),
+                        )?;
+                        test_count += info.status.test_count();
+                        Ok((bin, info))
+                    }
+                    FilterBinaryMatch::Mismatch { reason } => {
+                        log::debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
+                        Ok(Self::process_skipped(test_binary, reason))
+                    }
                 }
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
@@ -530,8 +541,11 @@ impl<'g> TestList<'g> {
         Ok(test_binary.into_test_suite(RustTestSuiteStatus::Listed { test_cases }))
     }
 
-    fn process_skipped(test_binary: RustTestArtifact<'g>) -> (RustBinaryId, RustTestSuite<'g>) {
-        test_binary.into_test_suite(RustTestSuiteStatus::Skipped)
+    fn process_skipped(
+        test_binary: RustTestArtifact<'g>,
+        reason: BinaryMismatchReason,
+    ) -> (RustBinaryId, RustTestSuite<'g>) {
+        test_binary.into_test_suite(RustTestSuiteStatus::Skipped { reason })
     }
 
     /// Parses the output of --list --message-format terse and returns a sorted list.
@@ -666,11 +680,8 @@ impl<'g> TestList<'g> {
                         }
                     }
                 }
-                RustTestSuiteStatus::Skipped => {
-                    writeln!(
-                        indented,
-                        "(test binary did not match filter expressions, skipped)"
-                    )?;
+                RustTestSuiteStatus::Skipped { reason } => {
+                    writeln!(indented, "(test binary {reason}, skipped)")?;
                 }
             }
 
@@ -819,7 +830,10 @@ pub enum RustTestSuiteStatus {
     },
 
     /// The test suite was not executed.
-    Skipped,
+    Skipped {
+        /// The reason why the test suite was skipped.
+        reason: BinaryMismatchReason,
+    },
 }
 
 static EMPTY_TEST_CASE_MAP: Lazy<BTreeMap<String, RustTestCaseSummary>> = Lazy::new(BTreeMap::new);
@@ -829,7 +843,7 @@ impl RustTestSuiteStatus {
     pub fn test_count(&self) -> usize {
         match self {
             RustTestSuiteStatus::Listed { test_cases } => test_cases.len(),
-            RustTestSuiteStatus::Skipped => 0,
+            RustTestSuiteStatus::Skipped { .. } => 0,
         }
     }
 
@@ -837,7 +851,7 @@ impl RustTestSuiteStatus {
     pub fn test_cases(&self) -> impl Iterator<Item = (&str, &RustTestCaseSummary)> + '_ {
         match self {
             RustTestSuiteStatus::Listed { test_cases } => test_cases.iter(),
-            RustTestSuiteStatus::Skipped => {
+            RustTestSuiteStatus::Skipped { .. } => {
                 // Return an empty test case.
                 EMPTY_TEST_CASE_MAP.iter()
             }
@@ -854,7 +868,9 @@ impl RustTestSuiteStatus {
     ) {
         match self {
             Self::Listed { test_cases } => (RustTestSuiteStatusSummary::LISTED, test_cases.clone()),
-            Self::Skipped => (RustTestSuiteStatusSummary::SKIPPED, BTreeMap::new()),
+            Self::Skipped {
+                reason: BinaryMismatchReason::Expression,
+            } => (RustTestSuiteStatusSummary::SKIPPED, BTreeMap::new()),
         }
     }
 }
@@ -1114,7 +1130,9 @@ mod tests {
                     non_test_binaries: BTreeSet::new(),
                 },
                 skipped_binary_id.clone() => RustTestSuite {
-                    status: RustTestSuiteStatus::Skipped,
+                    status: RustTestSuiteStatus::Skipped {
+                        reason: BinaryMismatchReason::Expression,
+                    },
                     cwd: fake_cwd,
                     build_platform: BuildPlatform::Host,
                     package: package_metadata(),
@@ -1149,7 +1167,7 @@ mod tests {
               bin: /fake/skipped-binary
               cwd: /fake/cwd
               build platform: host
-                (test binary did not match filter expressions, skipped)
+                (test binary didn't match filtersets, skipped)
         "};
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
             {
