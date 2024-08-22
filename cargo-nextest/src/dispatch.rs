@@ -138,7 +138,6 @@ impl AppOpts {
                 )?;
                 let app = App::new(base, run_opts.build_filter)?;
                 app.exec_run(
-                    run_opts.profile.as_deref(),
                     run_opts.no_capture,
                     &run_opts.runner_opts,
                     &run_opts.reporter_opts,
@@ -149,7 +148,6 @@ impl AppOpts {
             }
             Command::Archive {
                 cargo_options,
-                profile,
                 archive_file,
                 archive_format,
                 zstd_level,
@@ -162,13 +160,7 @@ impl AppOpts {
                     self.common.manifest_path,
                     output_writer,
                 )?;
-                app.exec_archive(
-                    profile.as_deref(),
-                    &archive_file,
-                    archive_format,
-                    zstd_level,
-                    output_writer,
-                )?;
+                app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
                 Ok(0)
             }
             Command::ShowConfig { command } => command.exec(
@@ -230,6 +222,20 @@ struct ConfigOpts {
     /// recommended versions of nextest. This option overrides those checks.
     #[arg(long, global = true)]
     pub override_version_check: bool,
+
+    /// The nextest profile to use.
+    ///
+    /// Nextest's configuration supports multiple profiles, which can be used to set up different
+    /// configurations for different purposes. (For example, a configuration for local runs and one
+    /// for CI.) This option selects the profile to use.
+    #[arg(
+        long,
+        short = 'P',
+        env = "NEXTEST_PROFILE",
+        global = true,
+        help_heading = "Config options"
+    )]
+    profile: Option<String>,
 }
 
 impl ConfigOpts {
@@ -323,10 +329,6 @@ enum Command {
         #[clap(flatten)]
         cargo_options: CargoOptions,
 
-        /// Nextest profile to use
-        #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
-        profile: Option<String>,
-
         /// File to write archive to
         #[arg(
             long,
@@ -401,7 +403,6 @@ impl NtrOpts {
         )?;
         let app = App::new(base, self.run_opts.build_filter)?;
         app.exec_run(
-            self.run_opts.profile.as_deref(),
             self.run_opts.no_capture,
             &self.run_opts.runner_opts,
             &self.run_opts.reporter_opts,
@@ -413,10 +414,6 @@ impl NtrOpts {
 
 #[derive(Debug, Args)]
 struct RunOpts {
-    /// Nextest profile to use
-    #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
-    profile: Option<String>,
-
     #[clap(flatten)]
     cargo_options: CargoOptions,
 
@@ -1299,7 +1296,6 @@ impl BaseApp {
 
     fn exec_archive(
         &self,
-        profile_name: Option<&str>,
         output_file: &Utf8Path,
         format: ArchiveFormatOpt,
         zstd_level: i32,
@@ -1313,7 +1309,7 @@ impl BaseApp {
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
         let (_, config) = self.load_config()?;
         let profile = self
-            .load_profile(profile_name, &config)?
+            .load_profile(&config)?
             .apply_build_platforms(&build_platforms);
 
         let redactor = if should_redact() {
@@ -1380,10 +1376,9 @@ impl BaseApp {
 
     fn load_profile<'cfg>(
         &self,
-        profile_name: Option<&str>,
         config: &'cfg NextestConfig,
     ) -> Result<NextestProfile<'cfg, PreBuildPlatform>> {
-        let profile_name = profile_name.unwrap_or_else(|| {
+        let profile_name = self.config_opts.profile.as_deref().unwrap_or_else(|| {
             // The "official" way to detect a miri environment is with MIRI_SYSROOT.
             // https://github.com/rust-lang/miri/pull/2398#issuecomment-1190747685
             if std::env::var_os("MIRI_SYSROOT").is_some() {
@@ -1531,13 +1526,12 @@ impl App {
 
     fn exec_show_test_groups(
         &self,
-        profile_name: Option<&str>,
         show_default: bool,
         groups: Vec<TestGroup>,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let (_, config) = self.base.load_config()?;
-        let profile = self.base.load_profile(profile_name, &config)?;
+        let profile = self.base.load_profile(&config)?;
 
         // Validate test groups before doing any other work.
         let mode = if groups.is_empty() {
@@ -1584,7 +1578,6 @@ impl App {
 
     fn exec_run(
         &self,
-        profile_name: Option<&str>,
         no_capture: bool,
         runner_opts: &TestRunnerOpts,
         reporter_opts: &TestReporterOpts,
@@ -1592,7 +1585,7 @@ impl App {
         output_writer: &mut OutputWriter,
     ) -> Result<i32> {
         let (version_only_config, config) = self.base.load_config()?;
-        let profile = self.base.load_profile(profile_name, &config)?;
+        let profile = self.base.load_profile(&config)?;
 
         // Construct this here so that errors are reported before the build step.
         let mut structured_reporter = structured::StructuredReporter::new();
@@ -1728,10 +1721,6 @@ enum ShowConfigCommand {
     Version {},
     /// Show defined test groups and their associated tests.
     TestGroups {
-        /// Nextest profile to show test groups for
-        #[arg(long, short = 'P', env = "NEXTEST_PROFILE")]
-        profile: Option<String>,
-
         /// Show default test groups
         #[arg(long)]
         show_default: bool,
@@ -1828,7 +1817,6 @@ impl ShowConfigCommand {
                 }
             }
             Self::TestGroups {
-                profile,
                 show_default,
                 groups,
                 cargo_options,
@@ -1845,7 +1833,7 @@ impl ShowConfigCommand {
                 )?;
                 let app = App::new(base, build_filter)?;
 
-                app.exec_show_test_groups(profile.as_deref(), show_default, groups, output_writer)?;
+                app.exec_show_test_groups(show_default, groups, output_writer)?;
 
                 Ok(0)
             }
