@@ -4,7 +4,7 @@
 use crate::fixtures::*;
 use camino::Utf8Path;
 use color_eyre::Result;
-use fixture_data::nextest_tests::EXPECTED_TESTS;
+use fixture_data::nextest_tests::EXPECTED_TEST_SUITES;
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
@@ -244,12 +244,12 @@ fn test_run_with_target_runner() -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
-    for (name, expected) in &*EXPECTED_TESTS {
+    for (name, expected) in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(name)
             .unwrap_or_else(|| panic!("unexpected test name {name}"));
-        for fixture in expected {
+        for fixture in &expected.test_cases {
             let instance_value = instance_statuses
                 .get(&(test_binary.binary_path.as_path(), fixture.name))
                 .unwrap_or_else(|| {
@@ -276,7 +276,7 @@ fn test_run_with_target_runner() -> Result<()> {
                     // On Unix, segfaults aren't passed through by the passthrough runner.
                     cfg_if::cfg_if! {
                         if #[cfg(unix)] {
-                            if fixture.status == fixture_data::models::FixtureStatus::Segfault {
+                            if fixture.status == fixture_data::models::TestCaseFixtureStatus::Segfault {
                                 expected_status = nextest_runner::runner::ExecutionResult::Fail {
                                     abort_status: None,
                                     leaked: false,
