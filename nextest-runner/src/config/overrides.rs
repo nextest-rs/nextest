@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
-    errors::{ConfigParseCompiledDataError, ConfigParseErrorKind},
+    errors::{ConfigFiltersetOrCfgParseError, ConfigParseErrorKind},
     platform::BuildPlatforms,
     reporter::TestOutputDisplay,
 };
@@ -298,7 +298,7 @@ impl CompiledByProfile {
         if errors.is_empty() {
             Ok(Self { default, other })
         } else {
-            Err(ConfigParseErrorKind::CompiledDataParseError(errors))
+            Err(ConfigParseErrorKind::FiltersetOrCfgParseError(errors))
         }
     }
 
@@ -330,7 +330,7 @@ impl CompiledData<PreBuildPlatform> {
         profile_name: &str,
         overrides: &[DeserializedOverride],
         scripts: &[DeserializedProfileScriptConfig],
-        errors: &mut Vec<ConfigParseCompiledDataError>,
+        errors: &mut Vec<ConfigFiltersetOrCfgParseError>,
     ) -> Self {
         let overrides = overrides
             .iter()
@@ -428,13 +428,13 @@ impl CompiledOverride<PreBuildPlatform> {
         profile_name: &str,
         index: usize,
         source: &DeserializedOverride,
-        errors: &mut Vec<ConfigParseCompiledDataError>,
+        errors: &mut Vec<ConfigFiltersetOrCfgParseError>,
     ) -> Option<Self> {
         if source.platform.host.is_none()
             && source.platform.target.is_none()
             && source.filter.is_none()
         {
-            errors.push(ConfigParseCompiledDataError {
+            errors.push(ConfigFiltersetOrCfgParseError {
                 profile_name: profile_name.to_owned(),
                 not_specified: true,
                 host_parse_error: None,
@@ -476,7 +476,7 @@ impl CompiledOverride<PreBuildPlatform> {
                 let platform_parse_error = maybe_platform_err.err();
                 let parse_errors = maybe_parse_err.err();
 
-                errors.push(ConfigParseCompiledDataError {
+                errors.push(ConfigFiltersetOrCfgParseError {
                     profile_name: profile_name.to_owned(),
                     not_specified: false,
                     host_parse_error: host_platform_parse_error,
@@ -902,7 +902,7 @@ mod tests {
         )
         .expect_err("config is invalid");
         match err.kind() {
-            ConfigParseErrorKind::CompiledDataParseError(compile_errors) => {
+            ConfigParseErrorKind::FiltersetOrCfgParseError(compile_errors) => {
                 assert_eq!(
                     compile_errors.len(),
                     1,
@@ -932,7 +932,7 @@ mod tests {
                 assert_eq!(&reports, expected_reports, "reports match");
             }
             other => {
-                panic!("for config error {other:?}, expected ConfigParseErrorKind::CompiledDataParseError");
+                panic!("for config error {other:?}, expected ConfigParseErrorKind::FiltersetOrCfgParseError");
             }
         };
     }

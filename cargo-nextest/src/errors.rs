@@ -507,7 +507,7 @@ impl ExpectedError {
             }
             Self::ConfigParseError { err } => {
                 match err.kind() {
-                    ConfigParseErrorKind::CompiledDataParseError(errors) => {
+                    ConfigParseErrorKind::FiltersetOrCfgParseError(errors) => {
                         // Override errors are printed out using miette.
                         for override_error in errors {
                             log::error!(
