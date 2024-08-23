@@ -1,9 +1,12 @@
 [package]
 name = "fixture-data"
 version = "0.1.0"
+description = "Fixture data for nextest integration tests"
+repository = "https://github.com/nextest-rs/nextest"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 maplit.workspace = true
