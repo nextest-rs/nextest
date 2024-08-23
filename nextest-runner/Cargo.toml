@@ -93,7 +93,7 @@ self_update = { version = "0.39.0", optional = true, default-features = false, f
 ] }
 
 nextest-filtering = { version = "0.10.0", path = "../nextest-filtering" }
-nextest-metadata = { version = "0.11.1", path = "../nextest-metadata" }
+nextest-metadata = { version = "0.11.2", path = "../nextest-metadata" }
 quick-junit.workspace = true
 newtype-uuid.workspace = true
 console-subscriber = { version = "0.4.0", optional = true }
