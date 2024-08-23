@@ -4,7 +4,7 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{Context, Result};
 use duct::cmd;
-use fixture_data::models::FixtureStatus;
+use fixture_data::models::TestCaseFixtureStatus;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreeset;
 use nextest_metadata::{MismatchReason, RustBinaryId};
@@ -35,12 +35,12 @@ use std::{
 };
 
 pub(crate) fn make_execution_result(
-    status: FixtureStatus,
+    status: TestCaseFixtureStatus,
     total_attempts: usize,
 ) -> ExecutionResult {
     match status {
-        FixtureStatus::Pass | FixtureStatus::IgnoredPass => ExecutionResult::Pass,
-        FixtureStatus::Flaky { pass_attempt } => {
+        TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::IgnoredPass => ExecutionResult::Pass,
+        TestCaseFixtureStatus::Flaky { pass_attempt } => {
             if pass_attempt <= total_attempts {
                 ExecutionResult::Pass
             } else {
@@ -50,7 +50,7 @@ pub(crate) fn make_execution_result(
                 }
             }
         }
-        FixtureStatus::Segfault => {
+        TestCaseFixtureStatus::Segfault => {
             cfg_if::cfg_if! {
                 if #[cfg(unix)] {
                     // SIGSEGV is 11.
@@ -69,11 +69,11 @@ pub(crate) fn make_execution_result(
                 leaked: false,
             }
         }
-        FixtureStatus::Fail | FixtureStatus::IgnoredFail => ExecutionResult::Fail {
+        TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::IgnoredFail => ExecutionResult::Fail {
             abort_status: None,
             leaked: false,
         },
-        FixtureStatus::Leak => ExecutionResult::Leak,
+        TestCaseFixtureStatus::Leak => ExecutionResult::Leak,
     }
 }
 

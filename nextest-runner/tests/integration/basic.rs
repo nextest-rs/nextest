@@ -5,8 +5,8 @@ use crate::fixtures::*;
 use cfg_if::cfg_if;
 use color_eyre::eyre::Result;
 use fixture_data::{
-    models::{BinaryFixture, FixtureStatus},
-    nextest_tests::{get_expected_test, EXPECTED_BINARY_LIST, EXPECTED_TESTS},
+    models::{TestCaseFixtureStatus, TestSuiteFixture},
+    nextest_tests::{get_expected_test, EXPECTED_TEST_SUITES},
 };
 use nextest_filtering::FilteringExpr;
 use nextest_metadata::{FilterMatch, MismatchReason};
@@ -41,16 +41,17 @@ fn test_list_binaries() -> Result<()> {
         build_platforms,
     )?;
 
-    for BinaryFixture {
+    for TestSuiteFixture {
         binary_id,
         binary_name,
         build_platform,
-    } in EXPECTED_BINARY_LIST
+        test_cases: _,
+    } in EXPECTED_TEST_SUITES.values()
     {
         let bin = binary_list
             .rust_binaries
             .iter()
-            .find(|bin| bin.id.as_str() == *binary_id)
+            .find(|bin| bin.id == *binary_id)
             .unwrap();
         // With Rust 1.79 and later, the actual name has - replaced with _. Just check for either.
         assert!(
@@ -71,7 +72,7 @@ fn test_list_tests() -> Result<()> {
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     let mut summary = test_list.to_summary();
 
-    for (name, expected) in &*EXPECTED_TESTS {
+    for (name, expected) in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(name)
@@ -85,7 +86,7 @@ fn test_list_tests() -> Result<()> {
             .iter()
             .map(|(name, info)| (name.as_str(), info.filter_match))
             .collect();
-        assert_eq!(expected, &tests, "test list matches");
+        assert_eq!(&expected.test_cases, &tests, "test list matches");
     }
 
     // Are there any remaining tests?
@@ -128,12 +129,12 @@ fn test_run() -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
-    for (binary_id, expected) in &*EXPECTED_TESTS {
+    for (binary_id, expected) in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(binary_id)
             .unwrap_or_else(|| panic!("unexpected binary ID {binary_id}"));
-        for fixture in expected {
+        for fixture in &expected.test_cases {
             let instance_value = instance_statuses
                 .get(&(test_binary.binary_path.as_path(), fixture.name))
                 .unwrap_or_else(|| {
@@ -160,11 +161,12 @@ fn test_run() -> Result<()> {
                     } else {
                         // Extracting descriptions works for segfaults on Unix but not on Windows.
                         #[allow(unused_mut)]
-                        let mut can_extract_description = fixture.status == FixtureStatus::Fail
-                            || fixture.status == FixtureStatus::IgnoredFail;
+                        let mut can_extract_description = fixture.status
+                            == TestCaseFixtureStatus::Fail
+                            || fixture.status == TestCaseFixtureStatus::IgnoredFail;
                         cfg_if! {
                             if #[cfg(unix)] {
-                                can_extract_description |= fixture.status == FixtureStatus::Segfault;
+                                can_extract_description |= fixture.status == TestCaseFixtureStatus::Segfault;
                             }
                         }
 
@@ -246,12 +248,12 @@ fn test_run_ignored() -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
-    for (name, expected) in &*EXPECTED_TESTS {
+    for (name, expected) in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(name)
             .unwrap_or_else(|| panic!("unexpected test name {name}"));
-        for fixture in expected {
+        for fixture in &expected.test_cases {
             if fixture.name.contains("test_slow_timeout") {
                 // These tests are filtered out by the expression above.
                 continue;
@@ -464,32 +466,32 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
-    for (name, expected) in &*EXPECTED_TESTS {
+    for (name, expected) in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
             .get(name)
             .unwrap_or_else(|| panic!("unexpected test name {name}"));
-        for fixture in expected {
+        for fixture in &expected.test_cases {
             let instance_value =
                 &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
             let valid = match &instance_value.status {
                 InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
                 InstanceStatus::Finished(run_statuses) => {
                     let expected_len = match fixture.status {
-                        FixtureStatus::Flaky { pass_attempt } => {
+                        TestCaseFixtureStatus::Flaky { pass_attempt } => {
                             if retries.is_some() {
                                 pass_attempt.min(profile_retries.count() + 1)
                             } else {
                                 pass_attempt
                             }
                         }
-                        FixtureStatus::Pass | FixtureStatus::Leak => 1,
+                        TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::Leak => 1,
                         // Note that currently only the flaky test fixtures are controlled by overrides.
                         // If more tests are controlled by retry overrides, this may need to be updated.
-                        FixtureStatus::Fail | FixtureStatus::Segfault => {
+                        TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::Segfault => {
                             profile_retries.count() + 1
                         }
-                        FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail => {
+                        TestCaseFixtureStatus::IgnoredPass | TestCaseFixtureStatus::IgnoredFail => {
                             unreachable!("ignored tests should be skipped")
                         }
                     };
@@ -503,7 +505,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
 
                     match run_statuses.describe() {
                         ExecutionDescription::Success { single_status } => {
-                            if fixture.status == FixtureStatus::Leak {
+                            if fixture.status == TestCaseFixtureStatus::Leak {
                                 single_status.result == ExecutionResult::Leak
                             } else {
                                 single_status.result == ExecutionResult::Pass

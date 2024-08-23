@@ -3,31 +3,68 @@
 
 //! Data models for fixture information.
 
-use nextest_metadata::{BuildPlatform, FilterMatch};
+use nextest_metadata::{BuildPlatform, FilterMatch, RustBinaryId};
 
-#[derive(Copy, Clone, Debug)]
-pub struct BinaryFixture {
-    pub binary_id: &'static str,
+#[derive(Clone, Debug)]
+pub struct TestSuiteFixture {
+    pub binary_id: RustBinaryId,
     pub binary_name: &'static str,
     pub build_platform: BuildPlatform,
+    pub test_cases: Vec<TestCaseFixture>,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct TestFixture {
+impl TestSuiteFixture {
+    pub fn new(
+        binary_id: &'static str,
+        binary_name: &'static str,
+        build_platform: BuildPlatform,
+        test_cases: Vec<TestCaseFixture>,
+    ) -> Self {
+        Self {
+            binary_id: binary_id.into(),
+            binary_name,
+            build_platform,
+            test_cases,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TestCaseFixture {
     pub name: &'static str,
-    pub status: FixtureStatus,
+    pub status: TestCaseFixtureStatus,
+    properties: u64,
+}
+
+impl TestCaseFixture {
+    pub fn new(name: &'static str, status: TestCaseFixtureStatus) -> Self {
+        Self {
+            name,
+            status,
+            properties: 0,
+        }
+    }
+
+    pub fn with_property(mut self, property: TestCaseFixtureProperty) -> Self {
+        self.properties |= property as u64;
+        self
+    }
+
+    pub fn has_property(&self, property: TestCaseFixtureProperty) -> bool {
+        self.properties & property as u64 != 0
+    }
 }
 
 // This isn't great, but it is the easiest way to compare a Vec of TestFixture with a Vec of (&str,
 // FilterMatch).
-impl PartialEq<(&str, FilterMatch)> for TestFixture {
+impl PartialEq<(&str, FilterMatch)> for TestCaseFixture {
     fn eq(&self, (name, filter_match): &(&str, FilterMatch)) -> bool {
         &self.name == name && self.status.is_ignored() != filter_match.is_match()
     }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum FixtureStatus {
+pub enum TestCaseFixtureStatus {
     Pass,
     Fail,
     Flaky { pass_attempt: usize },
@@ -37,11 +74,17 @@ pub enum FixtureStatus {
     IgnoredFail,
 }
 
-impl FixtureStatus {
+impl TestCaseFixtureStatus {
     pub fn is_ignored(self) -> bool {
         matches!(
             self,
-            FixtureStatus::IgnoredPass | FixtureStatus::IgnoredFail
+            TestCaseFixtureStatus::IgnoredPass | TestCaseFixtureStatus::IgnoredFail
         )
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[repr(u64)]
+pub enum TestCaseFixtureProperty {
+    NeedsSameCwd = 1,
 }
