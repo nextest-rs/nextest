@@ -4,8 +4,12 @@
 use crate::fixtures::*;
 use cfg_if::cfg_if;
 use color_eyre::eyre::Result;
+use fixture_data::{
+    models::{BinaryFixture, FixtureStatus},
+    nextest_tests::{get_expected_test, EXPECTED_BINARY_LIST, EXPECTED_TESTS},
+};
 use nextest_filtering::FilteringExpr;
-use nextest_metadata::{BuildPlatform, FilterMatch, MismatchReason};
+use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     config::{NextestConfig, RetryPolicy},
     double_spawn::DoubleSpawnInfo,
@@ -37,23 +41,24 @@ fn test_list_binaries() -> Result<()> {
         build_platforms,
     )?;
 
-    for (id, name, platform_is_target) in &EXPECTED_BINARY_LIST {
+    for BinaryFixture {
+        binary_id,
+        binary_name,
+        build_platform,
+    } in EXPECTED_BINARY_LIST
+    {
         let bin = binary_list
             .rust_binaries
             .iter()
-            .find(|bin| bin.id.as_str() == *id)
+            .find(|bin| bin.id.as_str() == *binary_id)
             .unwrap();
         // With Rust 1.79 and later, the actual name has - replaced with _. Just check for either.
         assert!(
-            bin.name.as_str() == *name || bin.name.as_str() == name.replace('-', "_"),
-            "binary name matches (expected: {name}, actual: {})",
+            bin.name.as_str() == *binary_name || bin.name.as_str() == binary_name.replace('-', "_"),
+            "binary name matches (expected: {binary_name}, actual: {})",
             bin.name,
         );
-        if *platform_is_target {
-            assert_eq!(BuildPlatform::Target, bin.build_platform);
-        } else {
-            assert_eq!(BuildPlatform::Host, bin.build_platform);
-        }
+        assert_eq!(*build_platform, bin.build_platform);
     }
     Ok(())
 }
@@ -150,7 +155,7 @@ fn test_run() -> Result<()> {
                     );
                     let run_status = run_statuses.last_status();
 
-                    if run_status.result != fixture.status.to_test_status(1) {
+                    if run_status.result != make_execution_result(fixture.status, 1) {
                         false
                     } else {
                         // Extracting descriptions works for segfaults on Unix but not on Windows.
@@ -264,7 +269,7 @@ fn test_run_ignored() -> Result<()> {
                         fixture.name
                     );
                     let run_status = run_statuses.last_status();
-                    run_status.result == fixture.status.to_test_status(1)
+                    run_status.result == make_execution_result(fixture.status, 1)
                 }
             };
             if !valid {

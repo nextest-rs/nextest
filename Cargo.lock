@@ -884,6 +884,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
+name = "fixture-data"
+version = "0.1.0"
+dependencies = [
+ "maplit",
+ "nextest-metadata",
+ "nextest-workspace-hack",
+ "once_cell",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1779,6 +1789,7 @@ dependencies = [
  "duct",
  "dunce",
  "either",
+ "fixture-data",
  "future-queue",
  "futures",
  "guppy",
