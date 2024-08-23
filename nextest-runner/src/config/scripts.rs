@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
-    errors::{ConfigParseCompiledDataError, InvalidConfigScriptName, SetupScriptError},
+    errors::{ConfigFiltersetOrCfgParseError, InvalidConfigScriptName, SetupScriptError},
     list::TestList,
     platform::BuildPlatforms,
     test_command::{apply_ld_dyld_env, create_command, LocalExecuteContext},
@@ -330,13 +330,13 @@ impl CompiledProfileScripts<PreBuildPlatform> {
         graph: &PackageGraph,
         profile_name: &str,
         source: &DeserializedProfileScriptConfig,
-        errors: &mut Vec<ConfigParseCompiledDataError>,
+        errors: &mut Vec<ConfigFiltersetOrCfgParseError>,
     ) -> Option<Self> {
         if source.platform.host.is_none()
             && source.platform.target.is_none()
             && source.filter.is_none()
         {
-            errors.push(ConfigParseCompiledDataError {
+            errors.push(ConfigFiltersetOrCfgParseError {
                 profile_name: profile_name.to_owned(),
                 not_specified: true,
                 host_parse_error: None,
@@ -367,7 +367,7 @@ impl CompiledProfileScripts<PreBuildPlatform> {
                 let platform_parse_error = maybe_platform_err.err();
                 let parse_errors = maybe_parse_err.err();
 
-                errors.push(ConfigParseCompiledDataError {
+                errors.push(ConfigFiltersetOrCfgParseError {
                     profile_name: profile_name.to_owned(),
                     not_specified: false,
                     host_parse_error: host_platform_parse_error,
@@ -938,7 +938,7 @@ mod tests {
         )
         .expect_err("config is invalid");
         match error.kind() {
-            ConfigParseErrorKind::CompiledDataParseError(compile_errors) => {
+            ConfigParseErrorKind::FiltersetOrCfgParseError(compile_errors) => {
                 assert_eq!(
                     compile_errors.len(),
                     1,

@@ -91,9 +91,9 @@ pub enum ConfigParseErrorKind {
     /// An error occurred while deserializing the config (version only).
     #[error(transparent)]
     VersionOnlyDeserializeError(Box<serde_path_to_error::Error<toml::de::Error>>),
-    /// Errors occurred while parsing compiled data.
+    /// Errors occurred while parsing filtersets or `cfg()` predicates.
     #[error("error parsing compiled data (destructure this variant for more details)")]
-    CompiledDataParseError(Vec<ConfigParseCompiledDataError>),
+    FiltersetOrCfgParseError(Vec<ConfigFiltersetOrCfgParseError>),
     /// An invalid set of test groups was defined by the user.
     #[error("invalid test groups defined: {}\n(test groups cannot start with '@tool:' unless specified by a tool)", .0.iter().join(", "))]
     InvalidTestGroupsDefined(BTreeSet<CustomTestGroup>),
@@ -157,12 +157,12 @@ pub enum ConfigParseErrorKind {
     },
 }
 
-/// An error that occurred while parsing config overrides or setup scripts.
+/// An error that occurred while parsing filtersets or `cfg()` predicates in configuration.
 ///
-/// Part of [`ConfigParseErrorKind::CompiledDataParseError`].
+/// Part of [`ConfigParseErrorKind::FiltersetOrCfgParseError`].
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct ConfigParseCompiledDataError {
+pub struct ConfigFiltersetOrCfgParseError {
     /// The name of the profile under which the data was found.
     pub profile_name: String,
 
@@ -179,7 +179,7 @@ pub struct ConfigParseCompiledDataError {
     pub parse_errors: Option<FilterExpressionParseErrors>,
 }
 
-impl ConfigParseCompiledDataError {
+impl ConfigFiltersetOrCfgParseError {
     /// Returns [`miette::Report`]s for each error recorded by self.
     pub fn reports(&self) -> impl Iterator<Item = miette::Report> + '_ {
         let not_specified_report = self.not_specified.then(|| {
