@@ -347,13 +347,13 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
         } else {
             // Mismatch both string and expression filters. nextest-runner returns:
             // * first, ignored
-            // * then, expression
             // * then, for string
+            // * then, expression
             let expected_test = get_expected_test(&test.suite_info.binary_id, test.name);
             let reason = if expected_test.status.is_ignored() {
                 MismatchReason::Ignored
             } else {
-                MismatchReason::Expression
+                MismatchReason::String
             };
             assert_eq!(
                 test.test_info.filter_match,

@@ -285,8 +285,12 @@ impl<'filter> TestFilter<'filter> {
                         MatchEmptyPatterns | MatchWithPatterns,
                         MatchEmptyPatterns | MatchWithPatterns,
                     ) => None,
-                    // If rejected by at least one of the filtering strategies, the test is rejected
-                    (_, Mismatch(reason)) | (Mismatch(reason), _) => {
+                    // If rejected by at least one of the filtering strategies, the test is
+                    // rejected. Note we use the _name_ mismatch reason first. That's because
+                    // expression-based matches can also match against the default set. If a test
+                    // fails both name and expression matches, then the name reason is more directly
+                    // relevant.
+                    (Mismatch(reason), _) | (_, Mismatch(reason)) => {
                         Some(FilterMatch::Mismatch { reason })
                     }
                 }
