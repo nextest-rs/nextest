@@ -1,4 +1,6 @@
-[32;1m    Starting[0m [1m4[0m tests across [1m2[0m binaries ([1m19[0m skipped; run ID: [1me55650c7-c8dc-4c4d-b3fc-ebb8f0c3fd55[0m, nextest profile: [1mdefault[0m)
+------------
+[32;1m Nextest run[0m ID [1me55650c7-c8dc-4c4d-b3fc-ebb8f0c3fd55[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m4[0m tests across [1m2[0m binaries ([1m19[0m skipped)
 [32;1m        PASS[0m [   0.005s] [35;1mnextest-tests::basic[0m [36mtests[0m[36m::[0m[34;1mtest_success[0m
 [32;1m        PASS[0m [   0.006s] [35;1mnextest-tests::basic[0m [36mtests[0m[36m::[0m[34;1mtest_success_should_panic[0m
 [32;1m        PASS[0m [   0.006s] [35;1mnextest-tests::other[0m [36mtests[0m[36m::[0m[34;1mother_test_success[0m

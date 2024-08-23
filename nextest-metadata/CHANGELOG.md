@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1] - 2024-08-23
+
+### Added
+
+- New exit code `NO_TESTS_RUN = 4`, indicating no tests to run.
+- Support for a new mismatch reason for tests and binaries: that they are not in the default set.
+
 ## [0.11.0] - 2024-05-23
 
 ### Added
@@ -210,6 +217,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.11.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.1
 [0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.0
 [0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.10.0
 [0.9.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.9.3

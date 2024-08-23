@@ -1,5 +1,6 @@
 [profile.default]
 final-status-level = "slow"
+default-set = "not (package(integration-tests) | test(test_parse))"
 
 [[profile.default.overrides]]
 # test_subprocess_doesnt_exit runs a sleep command for 360 seconds. If integration tests take longer

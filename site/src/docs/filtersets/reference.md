@@ -38,6 +38,9 @@ This section contains the full set of operators supported by the filterset DSL.
 `platform(host)` or `platform(target)`
 : Include all tests that are [built for the host or target platform](../running.md#filtering-by-build-platform), respectively.
 
+`default()` <!-- md:version 0.9.75 -->
+: The default set of tests to run; see [_Running a subset of tests by default_](../running.md#running-a-subset-of-tests-by-default) for more information.
+
 !!! tip "Binary exclusions"
 
     If a filterset always excludes a particular binary, it will not be run, even to

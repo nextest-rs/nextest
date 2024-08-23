@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0] - 2024-08-23
+
+### Added
+
+- New APIs: `CompiledExpr::matches_binary` and `matches_test`.
+- Support for parsing default sets and the `default()` predicate.
+
+### Changed
+
+- `FilteringExpr::parse` now takes a `ParseContext`.
+- The `matches_binary` and `matches_test` functions now take an `EvalContext`.
+- MSRV updated to Rust 1.75.
+
 ## [0.9.0] - 2024-05-23
 
 ### Changed
@@ -109,6 +122,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.10.0
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.9.0
 [0.8.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.8.0
 [0.7.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.7.1

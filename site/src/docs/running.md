@@ -58,9 +58,65 @@ To only run tests that match certain names:
 cargo nextest run <test-name1> <test-name2>...
 ```
 
+### Filtersets
+
+Tests can also be selected using the [filterset DSL]. See that page for more information.
+
+For example, to run all tests except those in the `very-slow-tests` crate:
+
+```
+cargo nextest run -E 'not package(very-slow-tests)'
+```
+
+### Running a subset of tests by default
+
+<!-- md:version 0.9.75 -->
+
+By default, all discovered tests are run. To only run some tests by default, set the `default-set`
+configuration.
+
+For example, some tests might need access to special resources not available to developer
+workstations. To not run tests in the `special-tests` crate by default, but to run them with the
+`ci` profile:
+
+```toml
+[profile.default]
+default-set = 'not package(special-tests)'
+
+[profile.ci]
+default-set = 'all()'
+```
+
+The default set is available in the filterset DSL via the `default()` predicate.
+
+!!! info "Filtersets override the default set"
+
+    Specifying any filtersets on the command line overrides the default set. To consider the default set of tests, use `default()`.
+
+    - For example, `cargo nextest run -E 'test(my_test)'` will run all tests that contain `my_test` in the name, even if they're not in the default set.
+    - To only include tests in the default set, use `cargo nextest run -E 'default() & test(my_test)'`.
+    - To run all tests, overriding the default set, use `cargo nextest run -E 'all()'`.
+
+    Specifying non-filterset arguments does not override the default set.
+
+Because skipping some tests can be surprising, nextest prints the number of tests and binaries
+skipped due to their presence in the default set. For example:
+
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/default-set-output.ansi
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/default-set-output.ansi | ../scripts/strip-ansi.sh
+    ```
+
 ### `--skip` and `--exact`
 
-Nextest does not support `--skip` and `--exact` directly; instead, it supports more powerful [filtersets] which supersede these options.
+Nextest does not support `--skip` and `--exact` directly; instead, use a filterset which supersedes these options.
 
 Here are some examples:
 
@@ -79,7 +135,7 @@ For example, to only run tests for the host platform:
 cargo nextest run -E 'platform(host)'
 ```
 
-[filtersets]: filtersets/index.md
+[filterset DSL]: filtersets/index.md
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
 

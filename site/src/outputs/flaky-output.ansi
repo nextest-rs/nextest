@@ -1,6 +1,7 @@
 $ cargo nextest run test_flaky_mod_2 --retries 2
-
-[32;1m    Starting[0m [1m1[0m test across [1m2[0m binaries ([1m11[0m skipped; run ID: [1m7859d0ee-55ab-4892-9127-24f4bf805f36[0m, nextest profile: [1mdefault[0m)
+------------
+[32;1m Nextest run[0m ID [1m7859d0ee-55ab-4892-9127-24f4bf805f36[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m1[0m test across [1m2[0m binaries ([1m11[0m skipped)
 [35;1m  TRY 1 FAIL[0m [   0.003s] [35;1mnextest-tests::basic[0m [34;1mtest_flaky_mod_2[0m
 
 [35;1m--- [0m[35;1mTRY[0m [35;1m1[0m [35;1mSTDOUT:        [0m[35;1mnextest-tests::basic[0m [34;1mtest_flaky_mod_2[0m[35;1m ---[0m

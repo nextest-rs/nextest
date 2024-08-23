@@ -43,6 +43,12 @@ cargo nextest list
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
 
+## Filtering tests by default
+
+<!-- md:version 0.9.75 -->
+
+`cargo nextest list` has the same behavior as `run` with default sets; see [_Running a subset of tests by default_](running.md#running-a-subset-of-tests-by-default) for more information.
+
 ## Options and arguments
 
 === "Summarized output"

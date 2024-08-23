@@ -9,7 +9,7 @@ dir = "target/nextest"
 # This section defines the default nextest profile. Custom profiles are layered
 # on top of the default profile.
 [profile.default]
-# The set of tests run by `cargo nextest run` by default. By default, this is all tests.
+# The set of tests run by `cargo nextest run` by default.
 default-set = "all()"
 
 # "retries" defines the number of times a test should be retried. If set to a

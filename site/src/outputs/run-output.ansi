@@ -1,14 +1,19 @@
-[32;1m    Starting[0m [1m11[0m tests across [1m3[0m binaries ([1m177[0m skipped; run ID: [1m80a68266-5eda-4b66-83ba-be7955bcdac9[0m, nextest profile: [1mdefault[0m)
+------------
+[32;1m Nextest run[0m ID [1m1f79aa0d-4ec8-4a5c-aa83-5e8dc2f36573[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m14[0m tests across [1m3[0m binaries ([1m177[0m tests [33;1mskipped[0m)
 [32;1m        PASS[0m [   0.005s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mno_capture_settings[0m
-[32;1m        PASS[0m [   0.011s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_3[0m
-[32;1m        PASS[0m [   0.012s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_1[0m
+[32;1m        PASS[0m [   0.004s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mtest_final_warnings[0m
+[32;1m        PASS[0m [   0.004s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mtest_progress_bar_prefix[0m
+[32;1m        PASS[0m [   0.010s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_3[0m
+[32;1m        PASS[0m [   0.011s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_2[0m
+[32;1m        PASS[0m [   0.011s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_1[0m
 [32;1m        PASS[0m [   0.011s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_with_interrupt[0m
 [32;1m        PASS[0m [   0.013s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_dont_show_immediate[0m
-[32;1m        PASS[0m [   0.013s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_2[0m
 [32;1m        PASS[0m [   0.013s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_show_immediate[0m
-[32;1m        PASS[0m [   0.014s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_write_status_line[0m
-[32;1m        PASS[0m [   0.015s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_dont_store_final[0m
-[32;1m        PASS[0m [   0.020s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_dont_write_status_line[0m
-[32;1m        PASS[0m [   0.023s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_4[0m
+[32;1m        PASS[0m [   0.012s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_write_status_line[0m
+[32;1m        PASS[0m [   0.014s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_dont_store_final[0m
+[32;1m        PASS[0m [   0.014s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mtest_write_skip_counts[0m
+[32;1m        PASS[0m [   0.018s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_dont_write_status_line[0m
+[32;1m        PASS[0m [   0.019s] [35;1mnextest-runner[0m [36mreporter::tests[0m[36m::[0m[34;1mon_test_finished_store_final_4[0m
 ------------
-[32;1m     Summary[0m [   0.025s] [1m11[0m tests run: [1m11[0m [32;1mpassed[0m, [1m177[0m [33;1mskipped[0m
+[32;1m     Summary[0m [   0.021s] [1m14[0m tests run: [1m14[0m [32;1mpassed[0m, [1m177[0m [33;1mskipped[0m

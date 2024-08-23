@@ -8,6 +8,18 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.75] - 2024-08-23
+
+### Added
+
+- Support for default sets of tests to run via the `default-set` configuration. See [_Running a
+  subset of tests by default_](https://nexte.st/docs/running#running-a-subset-of-tests-by-default)
+  for more information.
+- A new `--no-tests` option controls the behavior of nextest when no tests are run. The possible
+  values are `pass`, `warn` and `fail`. Per the behavior changed described in [discussion
+  #1646](https://github.com/nextest-rs/nextest/discussions/1646), the current default is `warn`, and
+  it will change to `fail` in the future.
+
 ## [0.9.74] - 2024-08-18
 
 ### Added
@@ -1032,6 +1044,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.75]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.75
 [0.9.74]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.74
 [0.9.73]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.73
 [0.9.72]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.72
