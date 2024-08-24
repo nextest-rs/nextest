@@ -15,7 +15,7 @@ use crate::{
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
 use itertools::Itertools;
-use nextest_filtering::errors::FilterExpressionParseErrors;
+use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::RustBinaryId;
 use smol_str::SmolStr;
 use std::{borrow::Cow, collections::BTreeSet, env::JoinPathsError, fmt, process::ExitStatus};
@@ -176,7 +176,7 @@ pub struct ConfigFiltersetOrCfgParseError {
     pub target_parse_error: Option<target_spec::Error>,
 
     /// The expression, and the errors that occurred.
-    pub parse_errors: Option<FilterExpressionParseErrors>,
+    pub parse_errors: Option<FiltersetParseErrors>,
 }
 
 impl ConfigFiltersetOrCfgParseError {

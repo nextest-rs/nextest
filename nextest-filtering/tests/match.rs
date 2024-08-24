@@ -9,9 +9,8 @@ use guppy::{
     PackageId,
 };
 use nextest_filtering::{
-    errors::{FilterExpressionParseErrors, ParseSingleError},
-    BinaryQuery, CompiledExpr, EvalContext, FilteringExpr, FilteringExprKind, ParseContext,
-    TestQuery,
+    errors::{FiltersetParseErrors, ParseSingleError},
+    BinaryQuery, CompiledExpr, EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery,
 };
 use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use test_case::test_case;
@@ -31,12 +30,12 @@ fn mk_pid(c: char) -> PackageId {
     ))
 }
 
-fn parse(input: &str, graph: &PackageGraph) -> FilteringExpr {
+fn parse(input: &str, graph: &PackageGraph) -> Filterset {
     let cx = ParseContext {
         graph,
-        kind: FilteringExprKind::Test,
+        kind: FiltersetKind::Test,
     };
-    let expr = FilteringExpr::parse(input.to_owned(), &cx).unwrap();
+    let expr = Filterset::parse(input.to_owned(), &cx).unwrap();
     eprintln!("expression: {expr:?}");
     expr
 }
@@ -388,7 +387,7 @@ fn test_expr_rdeps() {
 #[test]
 fn test_expr_with_no_matching_packages() {
     #[track_caller]
-    fn assert_error(errors: &FilterExpressionParseErrors) {
+    fn assert_error(errors: &FiltersetParseErrors) {
         assert_eq!(errors.errors.len(), 1);
         assert!(matches!(
             errors.errors[0],
@@ -399,19 +398,19 @@ fn test_expr_with_no_matching_packages() {
     let graph = load_graph();
     let cx = ParseContext {
         graph: &graph,
-        kind: FilteringExprKind::Test,
+        kind: FiltersetKind::Test,
     };
 
-    let errors = FilteringExpr::parse("deps(does-not-exist)".to_owned(), &cx).unwrap_err();
+    let errors = Filterset::parse("deps(does-not-exist)".to_owned(), &cx).unwrap_err();
     assert_error(&errors);
 
-    let errors = FilteringExpr::parse("deps(=does-not-exist)".to_owned(), &cx).unwrap_err();
+    let errors = Filterset::parse("deps(=does-not-exist)".to_owned(), &cx).unwrap_err();
     assert_error(&errors);
 
-    let errors = FilteringExpr::parse("deps(~does-not-exist)".to_owned(), &cx).unwrap_err();
+    let errors = Filterset::parse("deps(~does-not-exist)".to_owned(), &cx).unwrap_err();
     assert_error(&errors);
 
-    let errors = FilteringExpr::parse("deps(/does-not/)".to_owned(), &cx).unwrap_err();
+    let errors = Filterset::parse("deps(/does-not/)".to_owned(), &cx).unwrap_err();
     assert_error(&errors);
 }
 

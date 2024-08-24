@@ -45,12 +45,12 @@ pub fn get_num_cpus() -> usize {
 
 /// Overall configuration for nextest.
 ///
-/// This is the root data structure for nextest configuration. Most runner-specific configuration is managed
-/// through [profiles](NextestProfile), obtained through the [`profile`](Self::profile) method.
+/// This is the root data structure for nextest configuration. Most runner-specific configuration is
+/// managed through [profiles](NextestProfile), obtained through the [`profile`](Self::profile)
+/// method.
 ///
-/// For more about configuration, see
-/// [Configuration](https://nexte.st/book/configuration.html) in the nextest
-/// book.
+/// For more about configuration, see [_Configuration_](https://nexte.st/docs/configuration) in the
+/// nextest book.
 #[derive(Clone, Debug)]
 pub struct NextestConfig {
     workspace_root: Utf8PathBuf,

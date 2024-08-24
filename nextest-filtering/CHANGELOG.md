@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Types renamed from `FilteringExpr` to `Filterset`.
+
 ## [0.10.0] - 2024-08-23
 
 ### Added

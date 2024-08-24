@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Parsing for filtering expressions
+//! Parsing for filtersets.
 //!
 //! The parsing strategy is based on the following blog post:
 //! `<https://eyalkalderon.com/blog/nom-error-recovery/>`
@@ -41,7 +41,7 @@ pub(crate) fn new_span<'a>(input: &'a str, errors: &'a mut Vec<ParseSingleError>
     }
 }
 
-/// A filter expression that hasn't been compiled against a package graph.
+/// A filterset that hasn't been compiled against a package graph.
 ///
 /// Not part of the public API. Exposed for testing only.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,7 +96,7 @@ impl<S> fmt::Display for SetDef<S> {
     }
 }
 
-/// A filter expression that hasn't been compiled against a package graph.
+/// A filterset that hasn't been compiled against a package graph.
 ///
 /// XXX: explain why `S` is required (for equality checking w/tests), or replace it with its own
 /// structure.
@@ -772,7 +772,7 @@ fn parse_or_operator<'i>(input: &mut Span<'i>) -> PResult<Option<OrOperator>> {
                 // This is not a valid OR operator in this position, but catch it to provide a better
                 // experience.
                 let op = alt(("||", "OR ")).parse_next(input)?;
-                // || is not supported in filter expressions: suggest using | instead.
+                // || is not supported in filtersets: suggest using | instead.
                 let length = op.len();
                 let err = ParseSingleError::InvalidOrOperator((start, length).into());
                 input.state.report_error(err);
@@ -873,7 +873,7 @@ fn parse_and_or_difference_operator<'i>(
             |input: &mut Span<'i>| {
                 let start = input.location();
                 let op = alt(("&&", "AND ")).parse_next(input)?;
-                // && is not supported in filter expressions: suggest using & instead.
+                // && is not supported in filtersets: suggest using & instead.
                 let length = op.len();
                 let err = ParseSingleError::InvalidAndOperator((start, length).into());
                 input.state.report_error(err);

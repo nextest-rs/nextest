@@ -8,7 +8,7 @@ use fixture_data::{
     models::{TestCaseFixtureStatus, TestSuiteFixture},
     nextest_tests::{get_expected_test, EXPECTED_TEST_SUITES},
 };
-use nextest_filtering::{FilteringExpr, FilteringExprKind, ParseContext};
+use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     config::{NextestConfig, RetryPolicy},
@@ -219,9 +219,9 @@ fn test_run_ignored() -> Result<()> {
 
     let pcx = ParseContext {
         graph: &PACKAGE_GRAPH,
-        kind: FilteringExprKind::Test,
+        kind: FiltersetKind::Test,
     };
-    let expr = FilteringExpr::parse("not test(test_slow_timeout)".to_owned(), &pcx).unwrap();
+    let expr = Filterset::parse("not test(test_slow_timeout)".to_owned(), &pcx).unwrap();
 
     let test_filter = TestFilterBuilder::new(
         RunIgnored::IgnoredOnly,
@@ -299,20 +299,20 @@ fn test_run_ignored() -> Result<()> {
     Ok(())
 }
 
-/// Test that filter expressions with regular substring filters behave as expected.
+/// Test that filtersets with regular substring filters behave as expected.
 #[test]
 fn test_filter_expr_with_string_filters() -> Result<()> {
     set_env_vars();
 
     let pcx = ParseContext {
         graph: &PACKAGE_GRAPH,
-        kind: FilteringExprKind::Test,
+        kind: FiltersetKind::Test,
     };
-    let expr = FilteringExpr::parse(
+    let expr = Filterset::parse(
         "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
         &pcx,
     )
-    .expect("filter expression is valid");
+    .expect("filterset is valid");
 
     let test_filter = TestFilterBuilder::new(
         RunIgnored::Default,
@@ -366,20 +366,20 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
     Ok(())
 }
 
-/// Test that filter expressions without regular substring filters behave as expected.
+/// Test that filtersets without regular substring filters behave as expected.
 #[test]
 fn test_filter_expr_without_string_filters() -> Result<()> {
     set_env_vars();
 
     let pcx = ParseContext {
         graph: &PACKAGE_GRAPH,
-        kind: FilteringExprKind::Test,
+        kind: FiltersetKind::Test,
     };
-    let expr = FilteringExpr::parse(
+    let expr = Filterset::parse(
         "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
         &pcx,
     )
-    .expect("filter expression is valid");
+    .expect("filterset is valid");
 
     let test_filter =
         TestFilterBuilder::new(RunIgnored::Default, None, Vec::<String>::new(), vec![expr])
@@ -596,9 +596,9 @@ fn test_termination() -> Result<()> {
 
     let pcx = ParseContext {
         graph: &PACKAGE_GRAPH,
-        kind: FilteringExprKind::Test,
+        kind: FiltersetKind::Test,
     };
-    let expr = FilteringExpr::parse("test(/^test_slow_timeout/)".to_owned(), &pcx).unwrap();
+    let expr = Filterset::parse("test(/^test_slow_timeout/)".to_owned(), &pcx).unwrap();
     let test_filter = TestFilterBuilder::new(
         RunIgnored::IgnoredOnly,
         None,

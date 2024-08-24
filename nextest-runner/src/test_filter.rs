@@ -15,7 +15,7 @@ use crate::{
     partition::{Partitioner, PartitionerBuilder},
 };
 use aho_corasick::AhoCorasick;
-use nextest_filtering::{EvalContext, FilteringExpr, TestQuery};
+use nextest_filtering::{EvalContext, Filterset, TestQuery};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use std::fmt;
 
@@ -50,7 +50,7 @@ enum TestFilterExprs {
     DefaultSet,
 
     /// Filtersets to match against. A match can be against any of the sets.
-    Sets(Vec<FilteringExpr>),
+    Sets(Vec<Filterset>),
 }
 
 #[derive(Clone, Debug)]
@@ -86,7 +86,7 @@ impl TestFilterBuilder {
         run_ignored: RunIgnored,
         partitioner_builder: Option<PartitionerBuilder>,
         patterns: impl IntoIterator<Item = impl Into<String>>,
-        exprs: Vec<FilteringExpr>,
+        exprs: Vec<Filterset>,
     ) -> Result<Self, TestFilterBuilderError> {
         let mut patterns: Vec<_> = patterns.into_iter().map(|s| s.into()).collect();
         patterns.sort_unstable();

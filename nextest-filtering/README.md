@@ -7,8 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE-MIT)
 
-Logic for parsing [filter expressions](https://nexte.st/book/filter-expressions) used by
-cargo-nextest.
+Logic for parsing [filtersets](https://nexte.st/docs/filtersets) used by cargo-nextest.
 
 ## Contributing
 

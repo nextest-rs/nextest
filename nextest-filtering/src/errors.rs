@@ -1,15 +1,15 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::expression::FilteringExprKind;
+use crate::expression::FiltersetKind;
 use miette::{Diagnostic, SourceSpan};
 use std::fmt;
 use thiserror::Error;
 
-/// A set of errors that occurred while parsing a filter expression.
+/// A set of errors that occurred while parsing a filterset.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct FilterExpressionParseErrors {
+pub struct FiltersetParseErrors {
     /// The input string.
     pub input: String,
 
@@ -17,7 +17,7 @@ pub struct FilterExpressionParseErrors {
     pub errors: Vec<ParseSingleError>,
 }
 
-impl FilterExpressionParseErrors {
+impl FiltersetParseErrors {
     pub(crate) fn new(input: impl Into<String>, errors: Vec<ParseSingleError>) -> Self {
         Self {
             input: input.into(),
@@ -26,7 +26,7 @@ impl FilterExpressionParseErrors {
     }
 }
 
-/// An individual error that occurred while parsing a filter expression.
+/// An individual error that occurred while parsing a filterset.
 #[derive(Clone, Debug, Error, Diagnostic, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseSingleError {
@@ -56,7 +56,7 @@ pub enum ParseSingleError {
     #[error("predicate not allowed in `{kind}` expressions")]
     BannedPredicate {
         /// The kind of expression.
-        kind: FilteringExprKind,
+        kind: FiltersetKind,
 
         /// The span of the banned predicate.
         #[label("this predicate causes {reason}")]
