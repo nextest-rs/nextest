@@ -71,4 +71,4 @@ echo "This is some debugging output" >&2
 $@
 ```
 
-[stringent rules]: https://nexte.st/book/custom-test-harnesses.html#manually-implementing-a-test-harness
+[stringent rules]: https://nexte.st/docs/design/custom-test-harnesses/#manually-implementing-a-test-harness

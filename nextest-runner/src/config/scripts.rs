@@ -18,7 +18,7 @@ use camino::Utf8Path;
 use camino_tempfile::Utf8TempPath;
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use indexmap::IndexMap;
-use nextest_filtering::{EvalContext, FilteringExpr, FilteringExprKind, ParseContext, TestQuery};
+use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery};
 use serde::{de::Error, Deserialize};
 use smol_str::SmolStr;
 use std::{
@@ -353,11 +353,11 @@ impl CompiledProfileScripts<PreBuildPlatform> {
         let cx = ParseContext {
             graph,
             // TODO: probably want to restrict the set of expressions here.
-            kind: FilteringExprKind::Test,
+            kind: FiltersetKind::Test,
         };
 
         let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(FilteringExpr::parse(filter.clone(), &cx)).transpose()
+            Some(Filterset::parse(filter.clone(), &cx)).transpose()
         });
 
         match (host_spec, target_spec, filter_expr) {
@@ -475,7 +475,7 @@ impl fmt::Display for ScriptId {
 pub(super) struct ProfileScriptData {
     host_spec: MaybeTargetSpec,
     target_spec: MaybeTargetSpec,
-    expr: Option<FilteringExpr>,
+    expr: Option<Filterset>,
 }
 
 /// Deserialized form of profile-specific script configuration before compilation.
@@ -486,7 +486,7 @@ pub(super) struct DeserializedProfileScriptConfig {
     #[serde(default)]
     pub(super) platform: PlatformStrings,
 
-    /// The filter expression to match against.
+    /// The filterset to match against.
     #[serde(default)]
     filter: Option<String>,
 
@@ -926,7 +926,7 @@ mod tests {
             ]
         }]
 
-        ; "invalid filter expression"
+        ; "invalid filterset"
     )]
     fn parse_scripts_invalid_compile(
         config_contents: &str,

@@ -38,12 +38,12 @@ pub(crate) fn compile(
 
 fn check_banned_predicates(
     expr: &ParsedExpr,
-    kind: FilteringExprKind,
+    kind: FiltersetKind,
     errors: &mut Vec<ParseSingleError>,
 ) {
     match kind {
-        FilteringExprKind::Test => {}
-        FilteringExprKind::DefaultSet => {
+        FiltersetKind::Test => {}
+        FiltersetKind::DefaultSet => {
             // The `default` predicate is banned.
             Wrapped(expr).collapse_frames(|layer: ExprFrame<&SetDef, ()>| {
                 if let ExprFrame::Set(SetDef::Default(span)) = layer {

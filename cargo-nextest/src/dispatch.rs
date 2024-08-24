@@ -12,7 +12,7 @@ use clap::{builder::BoolishValueParser, ArgAction, Args, Parser, Subcommand, Val
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use log::warn;
-use nextest_filtering::{EvalContext, FilteringExpr, FilteringExprKind, ParseContext};
+use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
@@ -278,7 +278,7 @@ enum Command {
     ///
     /// Use --message-format json to get machine-readable output.
     ///
-    /// For more information, see <https://nexte.st/book/listing>.
+    /// For more information, see <https://nexte.st/docs/listing>.
     List {
         #[clap(flatten)]
         cargo_options: CargoOptions,
@@ -315,7 +315,7 @@ enum Command {
     /// This command builds test binaries and queries them for the tests they contain,
     /// then runs each test in parallel.
     ///
-    /// For more information, see <https://nexte.st/book/running>.
+    /// For more information, see <https://nexte.st/docs/running>.
     #[command(visible_alias = "r")]
     Run(RunOpts),
     /// Build and archive tests
@@ -521,9 +521,15 @@ struct TestBuildFilter {
     )]
     pub(crate) platform_filter: PlatformFilterOpts,
 
-    /// Test filter expression (see {n}<https://nexte.st/book/filter-expressions>)
-    #[arg(long, short = 'E', value_name = "EXPR", action(ArgAction::Append))]
-    filter_expr: Vec<String>,
+    /// Test filterset (see {n}<https://nexte.st/docs/filtersets>).
+    #[arg(
+        long,
+        alias = "filter-expr",
+        short = 'E',
+        value_name = "EXPR",
+        action(ArgAction::Append)
+    )]
+    filterset: Vec<String>,
 
     /// Test name filters
     #[arg(help_heading = None, name = "FILTERS")]
@@ -575,10 +581,7 @@ impl TestBuildFilter {
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }
 
-    fn make_test_filter_builder(
-        &self,
-        filter_exprs: Vec<FilteringExpr>,
-    ) -> Result<TestFilterBuilder> {
+    fn make_test_filter_builder(&self, filter_exprs: Vec<Filterset>) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
         let mut patterns = self.pre_double_dash_filters.clone();
@@ -649,7 +652,7 @@ impl TestBuildFilter {
 
         if !skip_exact.is_empty() {
             return Err(ExpectedError::test_binary_args_parse_error(
-                "unsupported\n(hint: use a filter expression instead: <https://nexte.st/book/filter-expressions>)",
+                "unsupported\n(hint: use a filterset instead: <https://nexte.st/docs/filtersets>)",
                 skip_exact,
             ));
         }
@@ -1427,7 +1430,7 @@ struct App {
 fn check_experimental_filtering(_output: OutputContext) {
     const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
     if std::env::var(EXPERIMENTAL_ENV).is_ok() {
-        log::warn!("filter expressions are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set");
+        log::warn!("filtersets are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set");
     }
 }
 
@@ -1438,16 +1441,16 @@ impl App {
         Ok(Self { base, build_filter })
     }
 
-    fn build_filtering_expressions(&self) -> Result<Vec<FilteringExpr>> {
+    fn build_filtering_expressions(&self) -> Result<Vec<Filterset>> {
         let pcx = ParseContext {
             graph: self.base.graph(),
-            kind: FilteringExprKind::Test,
+            kind: FiltersetKind::Test,
         };
         let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
-            .filter_expr
+            .filterset
             .iter()
-            .map(|input| FilteringExpr::parse(input.clone(), &pcx))
+            .map(|input| Filterset::parse(input.clone(), &pcx))
             .partition_result();
 
         if !all_errors.is_empty() {
@@ -2124,9 +2127,10 @@ mod tests {
             "cargo nextest list --archive-file my-archive.tar.zst --workspace-remap foo",
             "cargo nextest list --archive-file my-archive.tar.zst --config target.'cfg(all())'.runner=\"my-runner\"",
             // ---
-            // Filter expressions
+            // Filtersets
             // ---
             "cargo nextest list -E deps(foo)",
+            "cargo nextest run --filterset 'test(bar)' --package=my-package test-filter",
             "cargo nextest run --filter-expr 'test(bar)' --package=my-package test-filter",
             // ---
             // Test binary arguments
@@ -2357,8 +2361,14 @@ mod tests {
             // unsupported
             // ---
             ("foo -- --bar", "unsupported"),
-            ("foo -- --exact", "unsupported\n(hint: use a filter expression instead: <https://nexte.st/book/filter-expressions>)"),
-            ("foo -- --skip", "unsupported\n(hint: use a filter expression instead: <https://nexte.st/book/filter-expressions>)"),
+            (
+                "foo -- --exact",
+                "unsupported\n(hint: use a filterset instead: <https://nexte.st/docs/filtersets>)",
+            ),
+            (
+                "foo -- --skip",
+                "unsupported\n(hint: use a filterset instead: <https://nexte.st/docs/filtersets>)",
+            ),
         ];
 
         for (a, b) in valid {

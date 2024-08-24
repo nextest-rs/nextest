@@ -16,7 +16,7 @@ This repository contains the source code for:
     [![nextest-metadata on crates.io](https://img.shields.io/crates/v/nextest-metadata)](https://crates.io/crates/nextest-metadata)
     [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-metadata)
     [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/nextest_metadata)
-  - [**nextest-filtering**](nextest-filtering): parser and evaluator for [filtersets](https://nexte.st/book/filtersets)
+  - [**nextest-filtering**](nextest-filtering): parser and evaluator for [filtersets](https://nexte.st/docs/filtersets)
     [![nextest-filtering on crates.io](https://img.shields.io/crates/v/nextest-filtering)](https://crates.io/crates/nextest-filtering)
     [![Documentation (latest release)](https://img.shields.io/badge/docs-latest-brightgreen)](https://docs.rs/nextest-filtering)
     [![Documentation (main)](https://img.shields.io/badge/docs-main-purple)](https://nexte.st/rustdoc/nextest_filtering)
@@ -27,7 +27,7 @@ The minimum supported Rust version to _run_ nextest with is **Rust 1.41.** Nexte
 
 The minimum supported Rust version to _build_ nextest with is **Rust 1.75.** For building, at least the last 3 versions of stable Rust are supported at any given time.
 
-See the [stability policy](https://nexte.st/book/stability) for more details.
+See the [stability policy](https://nexte.st/docs/stability/) for more details.
 
 While a crate is pre-release status (0.x.x) it may have its MSRV bumped in a patch release. Once a
 crate has reached 1.x, any MSRV bump will be accompanied with a new minor version.

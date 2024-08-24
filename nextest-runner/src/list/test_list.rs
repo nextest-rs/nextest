@@ -1061,7 +1061,7 @@ mod tests {
     use guppy::CargoMetadata;
     use indoc::indoc;
     use maplit::btreemap;
-    use nextest_filtering::{CompiledExpr, FilteringExpr, FilteringExprKind, ParseContext};
+    use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable};
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
@@ -1084,7 +1084,7 @@ mod tests {
 
         let cx = ParseContext {
             graph: &PACKAGE_GRAPH_FIXTURE,
-            kind: FilteringExprKind::Test,
+            kind: FiltersetKind::Test,
         };
 
         let test_filter = TestFilterBuilder::new(
@@ -1092,7 +1092,7 @@ mod tests {
             None,
             iter::empty::<String>(),
             // Test against the platform() predicate because this is the most important one here.
-            vec![FilteringExpr::parse("platform(target)".to_owned(), &cx).unwrap()],
+            vec![Filterset::parse("platform(target)".to_owned(), &cx).unwrap()],
         )
         .unwrap();
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();

@@ -12,7 +12,7 @@ use crate::{
     reporter::TestOutputDisplay,
 };
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
-use nextest_filtering::{CompiledExpr, FilteringExpr, FilteringExprKind, ParseContext, TestQuery};
+use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext, TestQuery};
 use serde::{Deserialize, Deserializer};
 use smol_str::SmolStr;
 use std::{collections::HashMap, time::Duration};
@@ -379,9 +379,9 @@ impl CompiledData<PreBuildPlatform> {
         let default_set = default_set.and_then(|filter| {
             let cx = ParseContext {
                 graph,
-                kind: FilteringExprKind::DefaultSet,
+                kind: FiltersetKind::DefaultSet,
             };
-            match FilteringExpr::parse(filter.to_owned(), &cx) {
+            match Filterset::parse(filter.to_owned(), &cx) {
                 Ok(expr) => Some(CompiledDefaultSet {
                     expr: expr.compiled,
                     profile: profile_name.to_owned(),
@@ -491,7 +491,7 @@ pub(crate) struct OverrideId {
 pub(super) struct ProfileOverrideData {
     host_spec: MaybeTargetSpec,
     target_spec: MaybeTargetSpec,
-    expr: Option<FilteringExpr>,
+    expr: Option<Filterset>,
     threads_required: Option<ThreadsRequired>,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
@@ -527,13 +527,13 @@ impl CompiledOverride<PreBuildPlatform> {
             graph,
             // In the future, based on the settings we may want to have restrictions on the kind
             // here.
-            kind: FilteringExprKind::Test,
+            kind: FiltersetKind::Test,
         };
 
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
         let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(FilteringExpr::parse(filter.clone(), &cx)).transpose()
+            Some(Filterset::parse(filter.clone(), &cx)).transpose()
         });
 
         match (host_spec, target_spec, filter_expr) {
@@ -605,8 +605,8 @@ impl CompiledOverride<FinalConfig> {
         &self.data.target_spec
     }
 
-    /// Returns the filter expression, if any.
-    pub(crate) fn filter(&self) -> Option<&FilteringExpr> {
+    /// Returns the filterset, if any.
+    pub(crate) fn filter(&self) -> Option<&Filterset> {
         self.data.expr.as_ref()
     }
 }
@@ -646,7 +646,7 @@ pub(super) struct DeserializedOverride {
     /// The host and/or target platforms to match against.
     #[serde(default)]
     platform: PlatformStrings,
-    /// The filter expression to match against.
+    /// The filterset to match against.
     #[serde(default)]
     filter: Option<String>,
     /// Overrides. (This used to use serde(flatten) but that has issues:
@@ -967,7 +967,7 @@ mod tests {
             ]
         }]
 
-        ; "invalid filter expression"
+        ; "invalid filterset"
     )]
     #[test_case(
         // Not strictly an override error, but convenient to put here.

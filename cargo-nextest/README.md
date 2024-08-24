@@ -14,8 +14,8 @@ For documentation and usage, see [the nextest site](https://nexte.st).
 ## Installation
 
 While you can install cargo-nextest from source, using the pre-built binaries is recommended.
-See [Pre-built binaries](https://nexte.st/book/pre-built-binaries) on the nextest site
-for more information.
+See [Pre-built binaries](https://nexte.st/docs/installation/pre-built-binaries) on the nextest
+site for more information.
 
 ## Contributing
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    errors::{FilterExpressionParseErrors, ParseSingleError},
+    errors::{FiltersetParseErrors, ParseSingleError},
     parsing::{
         new_span, parse, DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob,
         ParsedExpr, SetDef,
@@ -131,7 +131,7 @@ pub enum FilteringSet {
     None,
 }
 
-/// A query for a binary, passed into [`FilteringExpr::matches_binary`].
+/// A query for a binary, passed into [`Filterset::matches_binary`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BinaryQuery<'a> {
     /// The package ID.
@@ -150,7 +150,7 @@ pub struct BinaryQuery<'a> {
     pub platform: BuildPlatform,
 }
 
-/// A query for a specific test, passed into [`FilteringExpr::matches_test`].
+/// A query for a specific test, passed into [`Filterset::matches_test`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TestQuery<'a> {
     /// The binary query.
@@ -160,11 +160,11 @@ pub struct TestQuery<'a> {
     pub test_name: &'a str,
 }
 
-/// Filtering expression.
+/// A filterset that has been parsed and compiled.
 ///
 /// Used to filter tests to run.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FilteringExpr {
+pub struct Filterset {
     /// The raw expression passed in.
     pub input: String,
 
@@ -188,13 +188,13 @@ pub enum CompiledExpr {
 }
 
 impl CompiledExpr {
-    /// Returns a value indicating all tests are accepted by this filter expression.
+    /// Returns a value indicating all tests are accepted by this filterset.
     pub const ALL: Self = CompiledExpr::Set(FilteringSet::All);
 
-    /// Returns a value indicating if the given binary is accepted by this filter expression.
+    /// Returns a value indicating if the given binary is accepted by this filterset.
     ///
     /// The value is:
-    /// * `Some(true)` if this binary is definitely accepted by this filter expression.
+    /// * `Some(true)` if this binary is definitely accepted by this filterset.
     /// * `Some(false)` if this binary is definitely not accepted.
     /// * `None` if this binary might or might not be accepted.
     pub fn matches_binary(&self, query: &BinaryQuery<'_>, cx: &EvalContext<'_>) -> Option<bool> {
@@ -212,7 +212,7 @@ impl CompiledExpr {
         })
     }
 
-    /// Returns true if the given test is accepted by this filter expression.
+    /// Returns true if the given test is accepted by this filterset.
     pub fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         use ExprFrame::*;
         Wrapped(self).collapse_frames(|layer: ExprFrame<&FilteringSet, bool>| match layer {
@@ -277,23 +277,23 @@ pub struct ParseContext<'a> {
     ///
     /// In some cases, expressions must restrict themselves to a subset of the full filtering
     /// language. This is used to determine what subset of the language is allowed.
-    pub kind: FilteringExprKind,
+    pub kind: FiltersetKind,
 }
 
-/// The kind of filtering expression being parsed.
+/// The kind of filterset being parsed.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum FilteringExprKind {
-    /// A test filter expression.
+pub enum FiltersetKind {
+    /// A test filterset.
     Test,
 
-    /// A default-set filter expression.
+    /// A default-set filterset.
     ///
     /// To prevent recursion, default-set expressions cannot contain `default()` themselves. (This
     /// is a limited kind of the infinite recursion checking we'll need to do in the future.)
     DefaultSet,
 }
 
-impl fmt::Display for FilteringExprKind {
+impl fmt::Display for FiltersetKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Test => write!(f, "test"),
@@ -309,24 +309,20 @@ pub struct EvalContext<'a> {
     pub default_set: &'a CompiledExpr,
 }
 
-impl FilteringExpr {
-    /// Parse a filtering expression
-    pub fn parse(
-        input: String,
-        cx: &ParseContext<'_>,
-    ) -> Result<Self, FilterExpressionParseErrors> {
+impl Filterset {
+    /// Parse a filterset.
+    pub fn parse(input: String, cx: &ParseContext<'_>) -> Result<Self, FiltersetParseErrors> {
         let mut errors = Vec::new();
         match parse(new_span(&input, &mut errors)) {
             Ok(parsed_expr) => {
                 if !errors.is_empty() {
-                    return Err(FilterExpressionParseErrors::new(input.clone(), errors));
+                    return Err(FiltersetParseErrors::new(input.clone(), errors));
                 }
 
                 match parsed_expr {
                     ExprResult::Valid(parsed) => {
-                        let compiled = crate::compile::compile(&parsed, cx).map_err(|errors| {
-                            FilterExpressionParseErrors::new(input.clone(), errors)
-                        })?;
+                        let compiled = crate::compile::compile(&parsed, cx)
+                            .map_err(|errors| FiltersetParseErrors::new(input.clone(), errors))?;
                         Ok(Self {
                             input,
                             parsed,
@@ -338,7 +334,7 @@ impl FilteringExpr {
                         // If an ParsedExpr::Error is produced, we should also have an error inside
                         // errors and we should already have returned
                         // IMPROVE this is an internal error => add log to suggest opening an bug ?
-                        Err(FilterExpressionParseErrors::new(
+                        Err(FiltersetParseErrors::new(
                             input,
                             vec![ParseSingleError::Unknown],
                         ))
@@ -349,7 +345,7 @@ impl FilteringExpr {
                 // should not happen
                 // According to our parsing strategy we should never produce an Err(_)
                 // IMPROVE this is an internal error => add log to suggest opening an bug ?
-                Err(FilterExpressionParseErrors::new(
+                Err(FiltersetParseErrors::new(
                     input,
                     vec![ParseSingleError::Unknown],
                 ))
@@ -357,17 +353,17 @@ impl FilteringExpr {
         }
     }
 
-    /// Returns a value indicating if the given binary is accepted by this filter expression.
+    /// Returns a value indicating if the given binary is accepted by this filterset.
     ///
     /// The value is:
-    /// * `Some(true)` if this binary is definitely accepted by this filter expression.
+    /// * `Some(true)` if this binary is definitely accepted by this filterset.
     /// * `Some(false)` if this binary is definitely not accepted.
     /// * `None` if this binary might or might not be accepted.
     pub fn matches_binary(&self, query: &BinaryQuery<'_>, cx: &EvalContext<'_>) -> Option<bool> {
         self.compiled.matches_binary(query, cx)
     }
 
-    /// Returns true if the given test is accepted by this filter expression.
+    /// Returns true if the given test is accepted by this filterset.
     pub fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         self.compiled.matches_test(query, cx)
     }

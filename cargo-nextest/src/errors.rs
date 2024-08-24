@@ -3,7 +3,7 @@
 
 use camino::Utf8PathBuf;
 use itertools::Itertools;
-use nextest_filtering::errors::FilterExpressionParseErrors;
+use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{errors::*, redact::Redactor};
 use owo_colors::{OwoColorize, Stream};
@@ -223,9 +223,9 @@ pub enum ExpectedError {
         name: &'static str,
         var_name: &'static str,
     },
-    #[error("filter expression parse error")]
-    FilterExpressionParseError {
-        all_errors: Vec<FilterExpressionParseErrors>,
+    #[error("filterset parse error")]
+    FiltersetParseError {
+        all_errors: Vec<FiltersetParseErrors>,
     },
     #[error("test binary args parse error")]
     TestBinaryArgsParseError {
@@ -341,10 +341,8 @@ impl ExpectedError {
         }
     }
 
-    pub(crate) fn filter_expression_parse_error(
-        all_errors: Vec<FilterExpressionParseErrors>,
-    ) -> Self {
-        Self::FilterExpressionParseError { all_errors }
+    pub(crate) fn filter_expression_parse_error(all_errors: Vec<FiltersetParseErrors>) -> Self {
+        Self::FiltersetParseError { all_errors }
     }
 
     pub(crate) fn setup_script_failed() -> Self {
@@ -422,7 +420,7 @@ impl ExpectedError {
             Self::ExperimentalFeatureNotEnabled { .. } => {
                 NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
             }
-            Self::FilterExpressionParseError { .. } => NextestExitCode::INVALID_FILTER_EXPRESSION,
+            Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
         }
     }
 
@@ -804,7 +802,7 @@ impl ExpectedError {
                 );
                 None
             }
-            Self::FilterExpressionParseError { all_errors } => {
+            Self::FiltersetParseError { all_errors } => {
                 for errors in all_errors {
                     for single_error in &errors.errors {
                         let report = miette::Report::new(single_error.clone())
@@ -813,7 +811,7 @@ impl ExpectedError {
                     }
                 }
 
-                log::error!("failed to parse filter expression");
+                log::error!("failed to parse filterset");
                 None
             }
             Self::TestBinaryArgsParseError { reason, args } => {
