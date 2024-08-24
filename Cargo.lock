@@ -1794,7 +1794,7 @@ dependencies = [
  "futures",
  "guppy",
  "home",
- "http 0.2.12",
+ "http 1.1.0",
  "humantime-serde",
  "indexmap 2.4.0",
  "indicatif",
