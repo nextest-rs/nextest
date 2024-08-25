@@ -72,8 +72,8 @@ cargo nextest run -E 'not package(very-slow-tests)'
 
 <!-- md:version 0.9.75 -->
 
-By default, all discovered tests are run. To only run some tests by default, set the `default-set`
-configuration.
+By default, all discovered, non-ignored tests are run. To only run some tests by default, set the
+`default-set` configuration.
 
 For example, some tests might need access to special resources not available to developer
 workstations. To not run tests in the `special-tests` crate by default, but to run them with the
@@ -89,15 +89,13 @@ default-set = 'all()'
 
 The default set is available in the filterset DSL via the `default()` predicate.
 
-!!! info "Filtersets override the default set"
+!!! info "Overriding the default set"
 
-    Specifying any filtersets on the command line overrides the default set. To consider the default set of tests, use `default()`.
+    <!-- md:version 0.9.76 -->
 
-    - For example, `cargo nextest run -E 'test(my_test)'` will run all tests that contain `my_test` in the name, even if they're not in the default set.
-    - To only include tests in the default set, use `cargo nextest run -E 'default() & test(my_test)'`.
-    - To run all tests, overriding the default set, use `cargo nextest run -E 'all()'`.
+    By default, command-line arguments are interpreted with respect to the default set. For example, `cargo nextest -E 'all()'` will run all tests within the default set.
 
-    Specifying non-filterset arguments does not override the default set.
+    To override the default set on the command line, use `--bound=all`. For example, `cargo nextest -E 'all()' --bound=all` will run all tests, including those not in the default set.
 
 Because skipping some tests can be surprising, nextest prints the number of tests and binaries
 skipped due to their presence in the default set. For example:
@@ -113,6 +111,16 @@ skipped due to their presence in the default set. For example:
     ```bash exec="true" result="text"
     cat src/outputs/default-set-output.ansi | ../scripts/strip-ansi.sh
     ```
+
+!!! tip "Default set vs ignored tests"
+
+    The default set and `#[ignore]` can both be used to filter out some tests by default. However, there are key distinctions between the two:
+
+    1. The default set is defined in nextest's configuration while ignored tests are annotated within Rust code.
+    2. Default sets can be separately configured per-profile. Ignored tests cannot.
+    3. Default sets are a nextest feature, while ignored tests also work with `cargo test`.
+
+    In practice, `#[ignore]` is often used for failing tests, while the default set is typically used to filter out tests that are very slow or require specific resources.
 
 ### `--skip` and `--exact`
 
@@ -147,8 +155,8 @@ cargo nextest run -E 'platform(host)'
 `-j`, `--test-threads`
 : Number of tests to run simultaneously. Note that this is separate from the number of build jobs to run simultaneously, which is specified by `--build-jobs`.
 
-`--run-ignored ignored-only`
-: Run only ignored tests.
+`--run-ignored only` <!-- md:version 0.9.76 -->
+: Run only ignored tests. (With prior nextest versions, use `--run-ignored ignored-only`.)
 
 `--run-ignored all`
 : Run both ignored and non-ignored tests.
