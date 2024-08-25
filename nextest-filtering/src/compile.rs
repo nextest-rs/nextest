@@ -116,31 +116,31 @@ fn compile_set_def(
     packages: &[PackageMetadata<'_>],
     cache: &mut DependsCache<'_>,
     errors: &mut Vec<ParseSingleError>,
-) -> FilteringSet {
+) -> FiltersetLeaf {
     match set {
-        SetDef::Package(matcher, span) => FilteringSet::Packages(expect_non_empty(
+        SetDef::Package(matcher, span) => FiltersetLeaf::Packages(expect_non_empty(
             matching_packages(matcher, packages),
             *span,
             errors,
         )),
-        SetDef::Deps(matcher, span) => FilteringSet::Packages(expect_non_empty(
+        SetDef::Deps(matcher, span) => FiltersetLeaf::Packages(expect_non_empty(
             dependencies_packages(matcher, packages, cache),
             *span,
             errors,
         )),
-        SetDef::Rdeps(matcher, span) => FilteringSet::Packages(expect_non_empty(
+        SetDef::Rdeps(matcher, span) => FiltersetLeaf::Packages(expect_non_empty(
             rdependencies_packages(matcher, packages, cache),
             *span,
             errors,
         )),
-        SetDef::Kind(matcher, span) => FilteringSet::Kind(matcher.clone(), *span),
-        SetDef::Binary(matcher, span) => FilteringSet::Binary(matcher.clone(), *span),
-        SetDef::BinaryId(matcher, span) => FilteringSet::BinaryId(matcher.clone(), *span),
-        SetDef::Platform(platform, span) => FilteringSet::Platform(*platform, *span),
-        SetDef::Test(matcher, span) => FilteringSet::Test(matcher.clone(), *span),
-        SetDef::Default(_) => FilteringSet::Default,
-        SetDef::All => FilteringSet::All,
-        SetDef::None => FilteringSet::None,
+        SetDef::Kind(matcher, span) => FiltersetLeaf::Kind(matcher.clone(), *span),
+        SetDef::Binary(matcher, span) => FiltersetLeaf::Binary(matcher.clone(), *span),
+        SetDef::BinaryId(matcher, span) => FiltersetLeaf::BinaryId(matcher.clone(), *span),
+        SetDef::Platform(platform, span) => FiltersetLeaf::Platform(*platform, *span),
+        SetDef::Test(matcher, span) => FiltersetLeaf::Test(matcher.clone(), *span),
+        SetDef::Default(_) => FiltersetLeaf::Default,
+        SetDef::All => FiltersetLeaf::All,
+        SetDef::None => FiltersetLeaf::None,
     }
 }
 
