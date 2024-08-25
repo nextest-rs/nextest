@@ -8,6 +8,26 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.76] - 2024-08-25
+
+### Added
+
+- A new `--bound=all` option disables the default set on the command line.
+- `--run-ignored ignored-only` has been shortened to `--run-ignored only`. (The old name still works
+  as an alias.)
+
+### Fixed
+
+- Documentation links updated to point to the new website.
+
+### Changed
+
+- Previously, passing in any `-E` options would disable the default set. However in practice that
+  was found to be too confusing, and this behavior has been removed. Instead, use `--bound`.
+
+  This is technically a breaking change, but default sets aren't in wide use yet so this should have
+  minimal impact.
+
 ## [0.9.75] - 2024-08-23
 
 ### Added
@@ -1044,6 +1064,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.76]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.76
 [0.9.75]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.75
 [0.9.74]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.74
 [0.9.73]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.73

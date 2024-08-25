@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.3] - 2024-08-25
+
+### Changed
+
+- `NextestExitCode::INVALID_FILTER_EXPRESSION` has been renamed to
+  `NextestExitCode::INVALID_FILTERSET`. The old name is kept around as a deprecated alias -- it will
+  be removed in the next major version.
+
 ## [0.11.2] - 2024-08-23
 
 ### Added
@@ -221,6 +229,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.11.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.3
 [0.11.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.2
 [0.11.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.1
 [0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.0
