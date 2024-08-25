@@ -25,11 +25,10 @@ jobs:
       - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
       - name: Install nextest for help text in docs
         uses: taiki-e/install-action@nextest
-      - name: Install rye
-        uses: eifinger/setup-rye@a64bd427414a77fd506d9a85a590ab36d71cf86a # v4.2.3
+      - name: Install uv
+        uses: eifinger/setup-uv@19a0b38226f7b4528b76eddba08d257a4641dee4 # v1.0.1
         with:
           enable-cache: true
-          working-directory: site
       - name: Build rustdoc
         run: ./scripts/build-rustdoc.sh
       - name: Build site
