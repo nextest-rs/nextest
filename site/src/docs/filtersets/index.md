@@ -2,6 +2,8 @@
 
 Nextest supports a domain-specific language (DSL) for choosing sets of tests called **filtersets** (formerly **filter expressions**). The DSL is inspired by, and is similar to, [Bazel query](https://bazel.build/docs/query-how-to) and [Mercurial revsets](https://www.mercurial-scm.org/repo/hg/help/revsets).
 
+Filtersets are specified on the command line with `-E`, or `--filterset` <!-- md:version 0.9.76 -->. (In prior versions of nextest, use `--filter-expr`.)
+
 ## Example: Running all tests in a crate and its dependencies
 
 To run all tests in `my-crate` and its dependencies, run:
@@ -26,6 +28,16 @@ This is equivalent to:
 cargo nextest run -E 'test(my_test) + package(my-crate)'
 ```
 
+!!! warning "If both filtersets and substring filters are specified..."
+
+    If you pass in both a filterset and a substring-based filter, tests must match **both** of them. In other words, the union of all filtersets is intersected with the union of substring filters.
+
+    For example, the command:
+
+        cargo nextest run -E 'package(foo)' -- test_bar test_baz
+
+    will run all tests that meet **both** conditions: in package `foo`, and match either `test_bar` or `test_baz`.
+
 ### Examples of filtersets
 
 `package(serde) and test(deserialize)`
@@ -37,15 +49,17 @@ cargo nextest run -E 'test(my_test) + package(my-crate)'
 `not (test(/parse[0-9]*/) | test(run))`
 : Matches every test not matching the regex `parse[0-9]*` or the substring `run`.
 
-!!! warning "If both filtersets and substring filters are specified..."
+### Filtersets with the default set
 
-    If you pass in both a filterset and a substring-based filter, tests must match **both** of them. In other words, the union of all filtersets is intersected with the union of substring filters.
+<!-- md:version 0.9.76 -->
 
-    For example, the command:
+If [a default set](../running.md#running-a-subset-of-tests-by-default) of tests is configured, then filtersets on the command line are intersected with the default set.
 
-        cargo nextest run -E 'package(foo)' -- test_bar test_baz
+To match against all tests, not just the default set, pass in `--bound=all`.
 
-    will run all tests that meet **both** conditions: in package `foo`, and match either `test_bar` or `test_baz`.
+Filtersets specified in configuration (for example, in [per-test
+settings](../configuration/per-test-overrides.md), or `default-set` itself) do not take into account
+the default set.
 
 ## DSL reference
 
