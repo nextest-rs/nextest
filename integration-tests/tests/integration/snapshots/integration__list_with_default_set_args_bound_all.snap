@@ -1,0 +1,8 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: with_args_bound_all_output.stdout_as_str()
+---
+cdylib-example:
+    tests::test_multiply_two_cdylib
+nextest-tests::basic:
+    test_stdin_closed

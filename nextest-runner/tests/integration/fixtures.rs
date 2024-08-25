@@ -24,7 +24,7 @@ use nextest_runner::{
         TestRunner,
     },
     target_runner::TargetRunner,
-    test_filter::TestFilterBuilder,
+    test_filter::{FilterBound, TestFilterBuilder},
     test_output::TestOutput,
 };
 use once_cell::sync::Lazy;
@@ -264,6 +264,7 @@ impl FixtureTargets {
             workspace_root(),
             self.env.to_owned(),
             &ecx,
+            FilterBound::All,
             get_num_cpus(),
         )
         .context("Failed to make test list")

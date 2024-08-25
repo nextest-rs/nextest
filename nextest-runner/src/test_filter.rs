@@ -35,6 +35,16 @@ pub enum RunIgnored {
     All,
 }
 
+/// A higher-level filter.
+#[derive(Clone, Copy, Debug)]
+pub enum FilterBound {
+    /// Filter with the default set.
+    DefaultSet,
+
+    /// Do not perform any higher-level filtering.
+    All,
+}
+
 /// A builder for `TestFilter` instances.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TestFilterBuilder {
@@ -47,7 +57,7 @@ pub struct TestFilterBuilder {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum TestFilterExprs {
     /// No filtersets specified to filter against -- match the default set of tests.
-    DefaultSet,
+    All,
 
     /// Filtersets to match against. A match can be against any of the sets.
     Sets(Vec<Filterset>),
@@ -100,7 +110,7 @@ impl TestFilterBuilder {
         };
 
         let exprs = if exprs.is_empty() {
-            TestFilterExprs::DefaultSet
+            TestFilterExprs::All
         } else {
             TestFilterExprs::Sets(exprs)
         };
@@ -119,7 +129,7 @@ impl TestFilterBuilder {
             run_ignored,
             partitioner_builder: None,
             name_match: NameMatch::EmptyPatterns,
-            exprs: TestFilterExprs::DefaultSet,
+            exprs: TestFilterExprs::All,
         }
     }
 
@@ -132,13 +142,11 @@ impl TestFilterBuilder {
         &self,
         test_binary: &RustTestArtifact<'_>,
         ecx: &EvalContext<'_>,
+        bound: FilterBound,
     ) -> FilterBinaryMatch {
         let query = test_binary.to_binary_query();
-        match &self.exprs {
-            TestFilterExprs::DefaultSet => FilterBinaryMatch::from_result(
-                ecx.default_set.matches_binary(&query, ecx),
-                BinaryMismatchReason::DefaultSet,
-            ),
+        let expr_result = match &self.exprs {
+            TestFilterExprs::All => FilterBinaryMatch::Definite,
             TestFilterExprs::Sets(exprs) => exprs.iter().fold(
                 FilterBinaryMatch::Mismatch {
                     // Just use this as a placeholder as the lowest possible value.
@@ -151,6 +159,19 @@ impl TestFilterBuilder {
                     ))
                 },
             ),
+        };
+
+        // If none of the expressions matched, then there's no need to check the default set.
+        if !expr_result.is_match() {
+            return expr_result;
+        }
+
+        match bound {
+            FilterBound::All => expr_result,
+            FilterBound::DefaultSet => expr_result.logic_and(FilterBinaryMatch::from_result(
+                ecx.default_set.matches_binary(&query, ecx),
+                BinaryMismatchReason::DefaultSet,
+            )),
         }
     }
 
@@ -196,12 +217,38 @@ impl FilterBinaryMatch {
         }
     }
 
+    fn is_match(self) -> bool {
+        match self {
+            Self::Definite | Self::Possible => true,
+            Self::Mismatch { .. } => false,
+        }
+    }
+
     fn logic_or(self, other: Self) -> Self {
         match (self, other) {
             (Self::Definite, _) | (_, Self::Definite) => Self::Definite,
             (Self::Possible, _) | (_, Self::Possible) => Self::Possible,
+            (Self::Mismatch { reason: r1 }, Self::Mismatch { reason: r2 }) => Self::Mismatch {
+                reason: r1.prefer_expression(r2),
+            },
+        }
+    }
+
+    fn logic_and(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Definite, Self::Definite) => Self::Definite,
+            (Self::Definite, Self::Possible)
+            | (Self::Possible, Self::Definite)
+            | (Self::Possible, Self::Possible) => Self::Possible,
             (Self::Mismatch { reason: r1 }, Self::Mismatch { reason: r2 }) => {
-                Self::Mismatch { reason: r1.max(r2) }
+                // If one of the mismatch reasons is `Expression` and the other is `DefaultSet`, we
+                // return Expression.
+                Self::Mismatch {
+                    reason: r1.prefer_expression(r2),
+                }
+            }
+            (Self::Mismatch { reason }, _) | (_, Self::Mismatch { reason }) => {
+                Self::Mismatch { reason }
             }
         }
     }
@@ -220,7 +267,7 @@ pub enum BinaryMismatchReason {
 }
 
 impl BinaryMismatchReason {
-    fn max(self, other: Self) -> Self {
+    fn prefer_expression(self, other: Self) -> Self {
         match (self, other) {
             (Self::Expression, _) | (_, Self::Expression) => Self::Expression,
             (Self::DefaultSet, Self::DefaultSet) => Self::DefaultSet,
@@ -251,6 +298,7 @@ impl<'filter> TestFilter<'filter> {
         test_binary: &RustTestArtifact<'_>,
         test_name: &str,
         ecx: &EvalContext<'_>,
+        bound: FilterBound,
         ignored: bool,
     ) -> FilterMatch {
         self.filter_ignored_mismatch(ignored)
@@ -278,7 +326,7 @@ impl<'filter> TestFilter<'filter> {
                 use FilterNameMatch::*;
                 match (
                     self.filter_name_match(test_name),
-                    self.filter_expression_match(test_binary, test_name, ecx),
+                    self.filter_expression_match(test_binary, test_name, ecx, bound),
                 ) {
                     // Tests must be accepted by both expressions and filters.
                     (
@@ -341,25 +389,31 @@ impl<'filter> TestFilter<'filter> {
         test_binary: &RustTestArtifact<'_>,
         test_name: &str,
         ecx: &EvalContext<'_>,
+        bound: FilterBound,
     ) -> FilterNameMatch {
         let query = TestQuery {
             binary_query: test_binary.to_binary_query(),
             test_name,
         };
 
-        match &self.builder.exprs {
-            TestFilterExprs::DefaultSet => {
-                if ecx.default_set.matches_test(&query, ecx) {
-                    FilterNameMatch::MatchEmptyPatterns
-                } else {
-                    FilterNameMatch::Mismatch(MismatchReason::DefaultSet)
-                }
-            }
+        let expr_result = match &self.builder.exprs {
+            TestFilterExprs::All => FilterNameMatch::MatchEmptyPatterns,
             TestFilterExprs::Sets(exprs) => {
                 if exprs.iter().any(|expr| expr.matches_test(&query, ecx)) {
                     FilterNameMatch::MatchWithPatterns
                 } else {
-                    FilterNameMatch::Mismatch(MismatchReason::Expression)
+                    return FilterNameMatch::Mismatch(MismatchReason::Expression);
+                }
+            }
+        };
+
+        match bound {
+            FilterBound::All => expr_result,
+            FilterBound::DefaultSet => {
+                if ecx.default_set.matches_test(&query, ecx) {
+                    expr_result
+                } else {
+                    FilterNameMatch::Mismatch(MismatchReason::DefaultSet)
                 }
             }
         }

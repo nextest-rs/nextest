@@ -1,0 +1,5 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: package_example_output.stdout_as_str()
+---
+

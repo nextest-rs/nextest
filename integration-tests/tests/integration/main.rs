@@ -729,7 +729,7 @@ fn test_list_with_default_set() {
         default_set_output.stdout_as_str()
     );
 
-    // Show the output with -E 'all()' (includes all tests).
+    // Show the output with -E 'all()' (does not include tests not in default-set).
     let all_tests_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
@@ -747,7 +747,24 @@ fn test_list_with_default_set() {
         all_tests_output.stdout_as_str()
     );
 
-    // -E 'default()' (same as not passing -E)
+    // Show the output with --bound=all (does include tests not in default-set).
+    let bound_all_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--profile=with-default-set",
+            "--workspace",
+            "--all-targets",
+            "--bound=all",
+        ])
+        .output();
+    insta::assert_snapshot!(
+        "list_with_default_set_bound_all",
+        bound_all_output.stdout_as_str()
+    );
+
+    // -E 'default()' --bound=all (same as no arguments).
     let default_tests_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
@@ -756,6 +773,7 @@ fn test_list_with_default_set() {
             "--profile=with-default-set",
             "-E",
             "default()",
+            "--bound=all",
             "--workspace",
             "--all-targets",
         ])
@@ -764,10 +782,51 @@ fn test_list_with_default_set() {
         "list_with_default_set_expr_default",
         default_tests_output.stdout_as_str()
     );
+    assert_eq!(
+        default_tests_output.stdout_as_str(),
+        default_set_output.stdout_as_str(),
+        "default() and no arguments are the same"
+    );
 
-    // Show the output of the default set with additional regular arguments passed in (*should* be
-    // affected by the default set).
-    let default_set_with_args_output = CargoNextestCli::new()
+    // -E 'package(cdylib-example)' --bound default-set (empty).
+    let package_example_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--profile=with-default-set",
+            "-E",
+            "package(cdylib-example)",
+            "--workspace",
+            "--all-targets",
+        ])
+        .output();
+    insta::assert_snapshot!(
+        "list_with_default_set_expr_package",
+        package_example_output.stdout_as_str(),
+    );
+
+    // -E 'package(cdylib-example)' --bound=all (includes cdylib-example).
+    let package_example_bound_all_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--profile=with-default-set",
+            "-E",
+            "package(cdylib-example)",
+            "--bound=all",
+            "--workspace",
+            "--all-targets",
+        ])
+        .output();
+    insta::assert_snapshot!(
+        "list_with_default_set_expr_package_bound_all",
+        package_example_bound_all_output.stdout_as_str(),
+    );
+
+    // With additional regular arguments passed in (should be affected by the default set).
+    let with_args_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
@@ -781,7 +840,26 @@ fn test_list_with_default_set() {
         .output();
     insta::assert_snapshot!(
         "list_with_default_set_args",
-        default_set_with_args_output.stdout_as_str()
+        with_args_output.stdout_as_str()
+    );
+
+    // With --bound=all.
+    let with_args_bound_all_output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--profile=with-default-set",
+            "test_stdin_closed",
+            "cdylib",
+            "--workspace",
+            "--all-targets",
+            "--bound=all",
+        ])
+        .output();
+    insta::assert_snapshot!(
+        "list_with_default_set_args_bound_all",
+        with_args_bound_all_output.stdout_as_str(),
     );
 }
 

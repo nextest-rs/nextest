@@ -1,0 +1,6 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: package_example_bound_all_output.stdout_as_str()
+---
+cdylib-example:
+    tests::test_multiply_two_cdylib
