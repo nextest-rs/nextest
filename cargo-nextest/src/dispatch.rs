@@ -631,7 +631,7 @@ impl TestBuildFilter {
                         ignore_filters.push((s.clone(), RunIgnored::All));
                         false
                     } else if s == "--ignored" {
-                        ignore_filters.push((s.clone(), RunIgnored::IgnoredOnly));
+                        ignore_filters.push((s.clone(), RunIgnored::Only));
                         false
                     } else if s == "--" {
                         read_trailing_filters = true;
@@ -703,8 +703,14 @@ impl FilterBoundOpt {
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum RunIgnoredOpt {
+    /// Run non-ignored tests.
     Default,
-    IgnoredOnly,
+
+    /// Run ignored tests.
+    #[clap(alias = "ignored-only")]
+    Only,
+
+    /// Run both ignored and non-ignored tests.
     All,
 }
 
@@ -712,7 +718,7 @@ impl From<RunIgnoredOpt> for RunIgnored {
     fn from(opt: RunIgnoredOpt) -> Self {
         match opt {
             RunIgnoredOpt::Default => RunIgnored::Default,
-            RunIgnoredOpt::IgnoredOnly => RunIgnored::IgnoredOnly,
+            RunIgnoredOpt::Only => RunIgnored::Only,
             RunIgnoredOpt::All => RunIgnored::All,
         }
     }
@@ -2371,6 +2377,7 @@ mod tests {
             // ---
             // ignored
             // ---
+            ("foo -- --ignored", "foo --run-ignored only"),
             ("foo -- --ignored", "foo --run-ignored ignored-only"),
             ("foo -- --include-ignored", "foo --run-ignored all"),
             // ---
