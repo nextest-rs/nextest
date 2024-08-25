@@ -108,9 +108,9 @@ impl fmt::Display for NameMatcher {
     }
 }
 
-/// Define a set of tests
+/// A leaf node in a filterset expression tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FilteringSet {
+pub enum FiltersetLeaf {
     /// All tests in packages
     Packages(HashSet<PackageId>),
     /// All tests present in this kind of binary.
@@ -184,12 +184,12 @@ pub enum CompiledExpr {
     /// Accepts every test in both given expressions
     Intersection(Box<CompiledExpr>, Box<CompiledExpr>),
     /// Accepts every test in a set
-    Set(FilteringSet),
+    Set(FiltersetLeaf),
 }
 
 impl CompiledExpr {
     /// Returns a value indicating all tests are accepted by this filterset.
-    pub const ALL: Self = CompiledExpr::Set(FilteringSet::All);
+    pub const ALL: Self = CompiledExpr::Set(FiltersetLeaf::All);
 
     /// Returns a value indicating if the given binary is accepted by this filterset.
     ///
@@ -199,7 +199,7 @@ impl CompiledExpr {
     /// * `None` if this binary might or might not be accepted.
     pub fn matches_binary(&self, query: &BinaryQuery<'_>, cx: &EvalContext<'_>) -> Option<bool> {
         use ExprFrame::*;
-        Wrapped(self).collapse_frames(|layer: ExprFrame<&FilteringSet, Option<bool>>| {
+        Wrapped(self).collapse_frames(|layer: ExprFrame<&FiltersetLeaf, Option<bool>>| {
             match layer {
                 Set(set) => set.matches_binary(query, cx),
                 Not(a) => a.logic_not(),
@@ -215,7 +215,7 @@ impl CompiledExpr {
     /// Returns true if the given test is accepted by this filterset.
     pub fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         use ExprFrame::*;
-        Wrapped(self).collapse_frames(|layer: ExprFrame<&FilteringSet, bool>| match layer {
+        Wrapped(self).collapse_frames(|layer: ExprFrame<&FiltersetLeaf, bool>| match layer {
             Set(set) => set.matches_test(query, cx),
             Not(a) => !a,
             Union(a, b) => a || b,
@@ -237,7 +237,7 @@ impl NameMatcher {
     }
 }
 
-impl FilteringSet {
+impl FiltersetLeaf {
     fn matches_test(&self, query: &TestQuery<'_>, cx: &EvalContext) -> bool {
         match self {
             Self::All => true,
@@ -498,7 +498,7 @@ impl<Set> MappableFrame for ExprFrame<Set, PartiallyApplied> {
 pub(crate) struct Wrapped<T>(pub(crate) T);
 
 impl<'a> Collapsible for Wrapped<&'a CompiledExpr> {
-    type FrameToken = ExprFrame<&'a FilteringSet, PartiallyApplied>;
+    type FrameToken = ExprFrame<&'a FiltersetLeaf, PartiallyApplied>;
 
     fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
         match self.0 {
