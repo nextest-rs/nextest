@@ -36,7 +36,7 @@ use nextest_runner::{
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
-    test_filter::{RunIgnored, TestFilterBuilder},
+    test_filter::{FilterBound, RunIgnored, TestFilterBuilder},
     write_str::WriteStr,
     RustcCli,
 };
@@ -531,6 +531,20 @@ struct TestBuildFilter {
     )]
     filterset: Vec<String>,
 
+    /// Higher-level filter to intersect with.
+    ///
+    /// If the value is `default-set`, only tests in the default set are selected regardless of any
+    /// other filters. If the value is `all`, the configured default set is ignored for the purposes
+    /// of applying the other filter options.
+    #[arg(
+        long,
+        value_enum,
+        value_name = "BOUND",
+        require_equals = true,
+        default_value_t
+    )]
+    bound: FilterBoundOpt,
+
     /// Test name filters
     #[arg(help_heading = None, name = "FILTERS")]
     pre_double_dash_filters: Vec<String>,
@@ -575,6 +589,7 @@ impl TestBuildFilter {
             workspace_root,
             env,
             ecx,
+            self.bound.to_filter_bound(),
             // TODO: do we need to allow customizing this?
             get_num_cpus(),
         )
@@ -664,6 +679,25 @@ impl TestBuildFilter {
             ));
         }
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum FilterBoundOpt {
+    /// The default set of tests.
+    #[default]
+    DefaultSet,
+
+    /// All tests, ignoring the default set.
+    All,
+}
+
+impl FilterBoundOpt {
+    fn to_filter_bound(self) -> FilterBound {
+        match self {
+            Self::DefaultSet => FilterBound::DefaultSet,
+            Self::All => FilterBound::All,
+        }
     }
 }
 
@@ -2132,6 +2166,8 @@ mod tests {
             "cargo nextest list -E deps(foo)",
             "cargo nextest run --filterset 'test(bar)' --package=my-package test-filter",
             "cargo nextest run --filter-expr 'test(bar)' --package=my-package test-filter",
+            "cargo nextest list -E 'deps(foo)' --bound=all",
+            "cargo nextest list -E 'deps(foo)' --bound=default-set",
             // ---
             // Test binary arguments
             // ---

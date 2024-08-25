@@ -12,7 +12,7 @@ use crate::{
     reuse_build::PathMapper,
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand},
-    test_filter::{BinaryMismatchReason, FilterBinaryMatch, TestFilterBuilder},
+    test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilterBuilder},
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -228,6 +228,7 @@ impl<'g> TestList<'g> {
         workspace_root: Utf8PathBuf,
         env: EnvironmentMap,
         ecx: &EvalContext<'_>,
+        bound: FilterBound,
         list_threads: usize,
     ) -> Result<Self, CreateTestListError>
     where
@@ -251,7 +252,7 @@ impl<'g> TestList<'g> {
 
         let stream = futures::stream::iter(test_artifacts).map(|test_binary| {
             async {
-                let binary_match = filter.filter_binary_match(&test_binary, ecx);
+                let binary_match = filter.filter_binary_match(&test_binary, ecx, bound);
                 match binary_match {
                     FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
                         log::debug!(
@@ -266,6 +267,7 @@ impl<'g> TestList<'g> {
                             test_binary,
                             filter,
                             ecx,
+                            bound,
                             non_ignored.as_str(),
                             ignored.as_str(),
                         )?;
@@ -313,6 +315,7 @@ impl<'g> TestList<'g> {
         filter: &TestFilterBuilder,
         env: EnvironmentMap,
         ecx: &EvalContext<'_>,
+        bound: FilterBound,
     ) -> Result<Self, CreateTestListError> {
         let mut test_count = 0;
 
@@ -321,7 +324,7 @@ impl<'g> TestList<'g> {
         let rust_suites = test_bin_outputs
             .into_iter()
             .map(|(test_binary, non_ignored, ignored)| {
-                let binary_match = filter.filter_binary_match(&test_binary, ecx);
+                let binary_match = filter.filter_binary_match(&test_binary, ecx, bound);
                 match binary_match {
                     FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
                         log::debug!(
@@ -333,6 +336,7 @@ impl<'g> TestList<'g> {
                             test_binary,
                             filter,
                             ecx,
+                            bound,
                             non_ignored.as_ref(),
                             ignored.as_ref(),
                         )?;
@@ -566,6 +570,7 @@ impl<'g> TestList<'g> {
         test_binary: RustTestArtifact<'g>,
         filter: &TestFilterBuilder,
         ecx: &EvalContext<'_>,
+        bound: FilterBound,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
     ) -> Result<(RustBinaryId, RustTestSuite<'g>), CreateTestListError> {
@@ -583,6 +588,7 @@ impl<'g> TestList<'g> {
                         &test_binary,
                         test_name,
                         ecx,
+                        bound,
                         false,
                     ),
                 },
@@ -599,7 +605,13 @@ impl<'g> TestList<'g> {
                 test_name.into(),
                 RustTestCaseSummary {
                     ignored: true,
-                    filter_match: ignored_filter.filter_match(&test_binary, test_name, ecx, true),
+                    filter_match: ignored_filter.filter_match(
+                        &test_binary,
+                        test_name,
+                        ecx,
+                        bound,
+                        true,
+                    ),
                 },
             );
         }
@@ -1165,6 +1177,7 @@ mod tests {
             &test_filter,
             fake_env,
             &ecx,
+            FilterBound::All,
         )
         .expect("valid output");
         assert_eq!(

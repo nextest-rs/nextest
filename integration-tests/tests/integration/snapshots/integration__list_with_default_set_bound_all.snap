@@ -1,7 +1,9 @@
 ---
 source: integration-tests/tests/integration/main.rs
-expression: all_tests_output.stdout_as_str()
+expression: bound_all_output.stdout_as_str()
 ---
+cdylib-example:
+    tests::test_multiply_two_cdylib
 cdylib-link:
     test_multiply_two
 nextest-derive:
@@ -16,6 +18,8 @@ nextest-tests::basic:
     test_failure_assert
     test_failure_error
     test_failure_should_panic
+    test_flaky_mod_4
+    test_flaky_mod_6
     test_result_failure
     test_stdin_closed
     test_subprocess_doesnt_exit
