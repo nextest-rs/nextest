@@ -36,7 +36,7 @@ importance of stable, dependable CLI interfaces.
 
 In those cases, we will follow the following procedure:
 
-1. On the nextest issue tracker, an issue will be filed under the [_behavior-change_ label](https://github.com/nextest-rs/nextest/issues?q=is%3Aopen+label%3Abehavior-change+sort%3Aupdated-desc). This issue will outline the motivation, and be used for coordination and feedback.
+1. On the nextest discussion board, an announcement will be created under the [_behavior-change_ label](https://github.com/nextest-rs/nextest/discussions?discussions_q=label%3Abehavior-change+is%3Aopen). This issue will outline the motivation, and be used for coordination and feedback.
 2. The behavior will be marked as deprecated and a warning will be provided within the CLI. If applicable, an alternative will be provided in the warning message. If there is no alternative, a configuration option and/or environment variable will be provided to silence the warning.
 3. A timeline to change the behavior will be provided. The timeline will be at least 3 months long to provide ample time for users to adapt to the new behavior.
 4. After that time has elapsed, the behavior will be changed in the following version of nextest.
