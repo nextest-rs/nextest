@@ -223,13 +223,8 @@ fn test_run_ignored() -> Result<()> {
     };
     let expr = Filterset::parse("not test(test_slow_timeout)".to_owned(), &pcx).unwrap();
 
-    let test_filter = TestFilterBuilder::new(
-        RunIgnored::IgnoredOnly,
-        None,
-        Vec::<String>::new(),
-        vec![expr],
-    )
-    .unwrap();
+    let test_filter =
+        TestFilterBuilder::new(RunIgnored::Only, None, Vec::<String>::new(), vec![expr]).unwrap();
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     let config = load_config();
     let profile = config
@@ -599,13 +594,8 @@ fn test_termination() -> Result<()> {
         kind: FiltersetKind::Test,
     };
     let expr = Filterset::parse("test(/^test_slow_timeout/)".to_owned(), &pcx).unwrap();
-    let test_filter = TestFilterBuilder::new(
-        RunIgnored::IgnoredOnly,
-        None,
-        Vec::<String>::new(),
-        vec![expr],
-    )
-    .unwrap();
+    let test_filter =
+        TestFilterBuilder::new(RunIgnored::Only, None, Vec::<String>::new(), vec![expr]).unwrap();
 
     let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
     let config = load_config();

@@ -29,7 +29,7 @@ pub enum RunIgnored {
     Default,
 
     /// Only run tests that are ignored.
-    IgnoredOnly,
+    Only,
 
     /// Run both ignored and non-ignored tests.
     All,
@@ -352,7 +352,7 @@ impl<'filter> TestFilter<'filter> {
 
     fn filter_ignored_mismatch(&self, ignored: bool) -> Option<FilterMatch> {
         match self.builder.run_ignored {
-            RunIgnored::IgnoredOnly => {
+            RunIgnored::Only => {
                 if !ignored {
                     return Some(FilterMatch::Mismatch {
                         reason: MismatchReason::Ignored,
