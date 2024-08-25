@@ -28,7 +28,7 @@ itertools = "0.13.0"
 miette = { workspace = true, features = ["fancy"] }
 nextest-filtering = { version = "=0.10.0", path = "../nextest-filtering" }
 nextest-runner = { version = "=0.58.0", path = "../nextest-runner" }
-nextest-metadata = { version = "=0.11.2", path = "../nextest-metadata" }
+nextest-metadata = { version = "=0.11.3", path = "../nextest-metadata" }
 once_cell = "1.19.0"
 owo-colors.workspace = true
 pathdiff = { version = "0.2.1", features = ["camino"] }
