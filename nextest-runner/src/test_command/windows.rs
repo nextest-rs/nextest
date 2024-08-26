@@ -113,7 +113,7 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
             },
             fs::OPEN_EXISTING,
             0,
-            0,
+            null_mut(),
         );
 
         if handle == fnd::INVALID_HANDLE_VALUE {
