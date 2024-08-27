@@ -95,7 +95,7 @@ Setup scripts can define environment variables that will be exposed to tests tha
 For example, let's say you have a script `my-env-script.sh`:
 
 ```bash
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Exit with 1 if NEXTEST_ENV isn't defined.
 if [ -z "$NEXTEST_ENV" ]; then
