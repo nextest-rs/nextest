@@ -242,7 +242,7 @@ impl FiltersetLeaf {
         match self {
             Self::All => true,
             Self::None => false,
-            Self::Default => cx.default_set.matches_test(query, cx),
+            Self::Default => cx.default_filter.matches_test(query, cx),
             Self::Test(matcher, _) => matcher.is_match(query.test_name),
             Self::Binary(matcher, _) => matcher.is_match(query.binary_query.binary_name),
             Self::BinaryId(matcher, _) => matcher.is_match(query.binary_query.binary_id.as_str()),
@@ -256,7 +256,7 @@ impl FiltersetLeaf {
         match self {
             Self::All => Logic::top(),
             Self::None => Logic::bottom(),
-            Self::Default => cx.default_set.matches_binary(query, cx),
+            Self::Default => cx.default_filter.matches_binary(query, cx),
             Self::Test(_, _) => None,
             Self::Binary(matcher, _) => Some(matcher.is_match(query.binary_name)),
             Self::BinaryId(matcher, _) => Some(matcher.is_match(query.binary_id.as_str())),
@@ -286,18 +286,18 @@ pub enum FiltersetKind {
     /// A test filterset.
     Test,
 
-    /// A default-set filterset.
+    /// A default-filter filterset.
     ///
-    /// To prevent recursion, default-set expressions cannot contain `default()` themselves. (This
-    /// is a limited kind of the infinite recursion checking we'll need to do in the future.)
-    DefaultSet,
+    /// To prevent recursion, default-filter expressions cannot contain `default()` themselves.
+    /// (This is a limited kind of the infinite recursion checking we'll need to do in the future.)
+    DefaultFilter,
 }
 
 impl fmt::Display for FiltersetKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Test => write!(f, "test"),
-            Self::DefaultSet => write!(f, "default-set"),
+            Self::DefaultFilter => write!(f, "default-filter"),
         }
     }
 }
@@ -306,7 +306,7 @@ impl fmt::Display for FiltersetKind {
 #[derive(Copy, Clone, Debug)]
 pub struct EvalContext<'a> {
     /// The default set of tests to run.
-    pub default_set: &'a CompiledExpr,
+    pub default_filter: &'a CompiledExpr,
 }
 
 impl Filterset {

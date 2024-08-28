@@ -8,6 +8,17 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.77] - 2024-08-28
+
+### Changed
+
+A couple of UI changes:
+
+- `default-set` is now `default-filter`.
+- `--bound=all` is now `--ignore-default-filter`.
+
+Sorry about the breakage here -- this should be the last of the changes.
+
 ## [0.9.76] - 2024-08-25
 
 ### Added

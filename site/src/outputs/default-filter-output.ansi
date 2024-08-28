@@ -1,6 +1,6 @@
 ------------
 [32;1m Nextest run[0m ID [1ma7a1750d-895c-47a9-a72c-bd1e0bce6d19[0m with nextest profile: [1mdefault[0m
-[32;1m    Starting[0m [1m233[0m tests across [1m10[0m binaries ([1m14[0m tests and [1m2[0m binaries [33;1mskipped[0m via [1mprofile.default.default-set[0m)
+[32;1m    Starting[0m [1m233[0m tests across [1m10[0m binaries ([1m14[0m tests and [1m2[0m binaries [33;1mskipped[0m via [1mprofile.default.default-filter[0m)
 [32;1m        PASS[0m [   0.007s] [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_complex_error[0m
 [32;1m        PASS[0m [   0.007s] [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_expected_eof[0m
 [32;1m        PASS[0m [   0.007s] [35;1mnextest-filtering[0m [36mparsing::tests[0m[36m::[0m[34;1mtest_expected_expr[0m

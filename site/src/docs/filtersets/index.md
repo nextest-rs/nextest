@@ -53,13 +53,13 @@ cargo nextest run -E 'test(my_test) + package(my-crate)'
 
 <!-- md:version 0.9.76 -->
 
-If [a default set](../running.md#running-a-subset-of-tests-by-default) of tests is configured, then filtersets on the command line are intersected with the default set.
+If [a default filter](../running.md#running-a-subset-of-tests-by-default) for tests is configured, filtersets on the command line are intersected with the default filter.
 
-To match against all tests, not just the default set, pass in `--bound=all`.
+To match against all tests, not just the default set, pass in `--ignore-default-filter`.
 
 Filtersets specified in configuration (for example, in [per-test
-settings](../configuration/per-test-overrides.md), or `default-set` itself) do not take into account
-the default set.
+settings](../configuration/per-test-overrides.md), or `default-filter` itself) do not take into
+account the default filter.
 
 ## DSL reference
 

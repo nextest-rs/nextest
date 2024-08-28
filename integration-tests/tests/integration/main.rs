@@ -709,17 +709,17 @@ fn test_show_config_test_groups() {
 }
 
 #[test]
-fn test_list_with_default_set() {
+fn test_list_with_default_filter() {
     set_env_vars();
     let p = TempProject::new().unwrap();
 
-    // Show the output of the default set (does not include tests not in default-set).
+    // Show the output of the default filter (does not include tests not in default-filter).
     let default_set_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "list",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "--workspace",
             "--all-targets",
         ])
@@ -729,13 +729,13 @@ fn test_list_with_default_set() {
         default_set_output.stdout_as_str()
     );
 
-    // Show the output with -E 'all()' (does not include tests not in default-set).
+    // Show the output with -E 'all()' (does not include tests not in default-filter).
     let all_tests_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "list",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "-E",
             "all()",
             "--workspace",
@@ -747,16 +747,16 @@ fn test_list_with_default_set() {
         all_tests_output.stdout_as_str()
     );
 
-    // Show the output with --bound=all (does include tests not in default-set).
+    // Show the output with --ignore-default-filter (does include tests not in default-filter).
     let bound_all_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "list",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "--workspace",
             "--all-targets",
-            "--bound=all",
+            "--ignore-default-filter",
         ])
         .output();
     insta::assert_snapshot!(
@@ -764,16 +764,16 @@ fn test_list_with_default_set() {
         bound_all_output.stdout_as_str()
     );
 
-    // -E 'default()' --bound=all (same as no arguments).
+    // -E 'default()' --ignore-default-filter (same as no arguments).
     let default_tests_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "list",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "-E",
             "default()",
-            "--bound=all",
+            "--ignore-default-filter",
             "--workspace",
             "--all-targets",
         ])
@@ -788,13 +788,13 @@ fn test_list_with_default_set() {
         "default() and no arguments are the same"
     );
 
-    // -E 'package(cdylib-example)' --bound default-set (empty).
+    // -E 'package(cdylib-example)' (empty)
     let package_example_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "list",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "-E",
             "package(cdylib-example)",
             "--workspace",
@@ -806,16 +806,16 @@ fn test_list_with_default_set() {
         package_example_output.stdout_as_str(),
     );
 
-    // -E 'package(cdylib-example)' --bound=all (includes cdylib-example).
+    // -E 'package(cdylib-example)' --ignore-default-filter (includes cdylib-example).
     let package_example_bound_all_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "list",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "-E",
             "package(cdylib-example)",
-            "--bound=all",
+            "--ignore-default-filter",
             "--workspace",
             "--all-targets",
         ])
@@ -825,13 +825,13 @@ fn test_list_with_default_set() {
         package_example_bound_all_output.stdout_as_str(),
     );
 
-    // With additional regular arguments passed in (should be affected by the default set).
+    // With additional regular arguments passed in (should be affected by the default fitler).
     let with_args_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "list",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "test_stdin_closed",
             "cdylib",
             "--workspace",
@@ -843,18 +843,18 @@ fn test_list_with_default_set() {
         with_args_output.stdout_as_str()
     );
 
-    // With --bound=all.
+    // With --ignore-default-filter.
     let with_args_bound_all_output = CargoNextestCli::new()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),
             "list",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "test_stdin_closed",
             "cdylib",
             "--workspace",
             "--all-targets",
-            "--bound=all",
+            "--ignore-default-filter",
         ])
         .output();
     insta::assert_snapshot!(
@@ -864,7 +864,7 @@ fn test_list_with_default_set() {
 }
 
 #[test]
-fn test_run_with_default_set() {
+fn test_run_with_default_filter() {
     set_env_vars();
     let p = TempProject::new().unwrap();
 
@@ -873,7 +873,7 @@ fn test_run_with_default_set() {
             "--manifest-path",
             p.manifest_path().as_str(),
             "run",
-            "--profile=with-default-set",
+            "--profile=with-default-filter",
             "--workspace",
             "--all-targets",
         ])
@@ -885,7 +885,7 @@ fn test_run_with_default_set() {
         Some(NextestExitCode::TEST_RUN_FAILED),
         "correct exit code for command\n{output}"
     );
-    check_run_output(&output.stderr, RunProperty::WithDefaultSet as u64);
+    check_run_output(&output.stderr, RunProperty::WithDefaultFilter as u64);
 }
 
 #[test]

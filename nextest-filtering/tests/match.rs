@@ -88,7 +88,7 @@ fn test_expr_package_contains() {
     let pid_b = mk_pid('b');
     let pid_c = mk_pid('c');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
     assert!(expr.matches_test(
         &TestQuery {
@@ -125,7 +125,7 @@ fn test_expr_package_equal() {
     let pid_b = mk_pid('b');
     let pid_c = mk_pid('c');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -163,7 +163,7 @@ fn test_expr_package_regex() {
     let pid_b = mk_pid('b');
     let pid_c = mk_pid('c');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -202,7 +202,7 @@ fn test_expr_binary_id_glob() {
     let pid_b = mk_pid('b');
     let pid_c = mk_pid('c');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -244,7 +244,7 @@ fn test_expr_deps() {
     let pid_f = mk_pid('f');
     let pid_g = mk_pid('g');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     // a-d are deps of d
@@ -321,7 +321,7 @@ fn test_expr_rdeps() {
     let pid_f = mk_pid('f');
     let pid_g = mk_pid('g');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
     // a-c are not rdeps of d
     assert!(!expr.matches_test(
@@ -421,7 +421,7 @@ fn test_expr_kind() {
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -457,7 +457,7 @@ fn test_expr_binary() {
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -493,7 +493,7 @@ fn test_expr_platform() {
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -541,7 +541,7 @@ fn test_expr_kind_partial() {
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -570,7 +570,7 @@ fn test_expr_test() {
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -606,7 +606,7 @@ fn test_expr_test_not() {
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(!expr.matches_test(
@@ -636,7 +636,7 @@ fn test_expr_test_union(input: &str) {
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -673,7 +673,7 @@ fn test_expr_test_difference(input: &str) {
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(expr.matches_test(
@@ -710,7 +710,7 @@ fn test_expr_test_intersect(input: &str) {
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     assert!(!expr.matches_test(
@@ -750,7 +750,7 @@ fn test_binary_query() {
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');
     let cx = EvalContext {
-        default_set: &CompiledExpr::ALL,
+        default_filter: &CompiledExpr::ALL,
     };
 
     // binary = foo should match the first predicate (pid_a should not be relevant).

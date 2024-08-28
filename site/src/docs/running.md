@@ -70,10 +70,10 @@ cargo nextest run -E 'not package(very-slow-tests)'
 
 ### Running a subset of tests by default
 
-<!-- md:version 0.9.75 -->
+<!-- md:version 0.9.78 -->
 
 By default, all discovered, non-ignored tests are run. To only run some tests by default, set the
-`default-set` configuration.
+`default-filter` configuration.
 
 For example, some tests might need access to special resources not available to developer
 workstations. To not run tests in the `special-tests` crate by default, but to run them with the
@@ -81,35 +81,35 @@ workstations. To not run tests in the `special-tests` crate by default, but to r
 
 ```toml
 [profile.default]
-default-set = 'not package(special-tests)'
+default-filter = 'not package(special-tests)'
 
 [profile.ci]
-default-set = 'all()'
+default-filter = 'all()'
 ```
 
-The default set is available in the filterset DSL via the `default()` predicate.
+The default filter is available in the filterset DSL via the `default()` predicate.
 
-!!! info "Overriding the default set"
+!!! info "Overriding the default filter"
 
     <!-- md:version 0.9.76 -->
 
-    By default, command-line arguments are interpreted with respect to the default set. For example, `cargo nextest -E 'all()'` will run all tests within the default set.
+    By default, command-line arguments are always interpreted with respect to the default filter. For example, `cargo nextest -E 'all()'` will run all tests that match the default filter.
 
-    To override the default set on the command line, use `--bound=all`. For example, `cargo nextest -E 'all()' --bound=all` will run all tests, including those not in the default set.
+    To override the default set on the command line, use `--ignore-default-filter`. For example, `cargo nextest -E 'all()' --ignore-default-filter` will run all tests, including those not in the default set.
 
 Because skipping some tests can be surprising, nextest prints the number of tests and binaries
-skipped due to their presence in the default set. For example:
+skipped due to their presence in the default filter. For example:
 
 === "Colorized"
 
     ```bash exec="true" result="ansi"
-    cat src/outputs/default-set-output.ansi
+    cat src/outputs/default-filter-output.ansi
     ```
 
 === "Plaintext"
 
     ```bash exec="true" result="text"
-    cat src/outputs/default-set-output.ansi | ../scripts/strip-ansi.sh
+    cat src/outputs/default-filter-output.ansi | ../scripts/strip-ansi.sh
     ```
 
 !!! tip "Default set vs ignored tests"
