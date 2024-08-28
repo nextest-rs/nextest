@@ -1689,7 +1689,7 @@ dependencies = [
 
 [[package]]
 name = "nextest-metadata"
-version = "0.11.3"
+version = "0.12.0"
 dependencies = [
  "camino",
  "nextest-workspace-hack",
