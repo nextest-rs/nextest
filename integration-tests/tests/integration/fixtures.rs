@@ -314,7 +314,7 @@ impl CheckResult {
 #[repr(u64)]
 pub enum RunProperty {
     Relocated = 1,
-    WithDefaultSet = 2,
+    WithDefaultFilter = 2,
 }
 
 fn debug_run_properties(properties: u64) -> String {
@@ -322,8 +322,8 @@ fn debug_run_properties(properties: u64) -> String {
     if properties & RunProperty::Relocated as u64 != 0 {
         ret.push_str("relocated ");
     }
-    if properties & RunProperty::WithDefaultSet as u64 != 0 {
-        ret.push_str("with-default-set ");
+    if properties & RunProperty::WithDefaultFilter as u64 != 0 {
+        ret.push_str("with-default-filter ");
     }
     ret
 }
@@ -345,7 +345,7 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
 
     for (binary_id, fixture) in &*EXPECTED_TEST_SUITES {
         if fixture.has_property(TestSuiteFixtureProperty::NotInDefaultSet)
-            && properties & RunProperty::WithDefaultSet as u64 != 0
+            && properties & RunProperty::WithDefaultFilter as u64 != 0
         {
             eprintln!("*** skipping {binary_id}");
             for test in &fixture.test_cases {
@@ -363,7 +363,7 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
             let name = format!("{} {}", binary_id, test.name);
 
             if test.has_property(TestCaseFixtureProperty::NotInDefaultSet)
-                && properties & RunProperty::WithDefaultSet as u64 != 0
+                && properties & RunProperty::WithDefaultFilter as u64 != 0
             {
                 eprintln!("*** skipping {name}");
                 assert!(

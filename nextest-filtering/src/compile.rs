@@ -43,7 +43,7 @@ fn check_banned_predicates(
 ) {
     match kind {
         FiltersetKind::Test => {}
-        FiltersetKind::DefaultSet => {
+        FiltersetKind::DefaultFilter => {
             // The `default` predicate is banned.
             Wrapped(expr).collapse_frames(|layer: ExprFrame<&SetDef, ()>| {
                 if let ExprFrame::Set(SetDef::Default(span)) = layer {

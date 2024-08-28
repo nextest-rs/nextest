@@ -253,7 +253,7 @@ impl FixtureTargets {
             target_runner,
         };
         let ecx = EvalContext {
-            default_set: &CompiledExpr::ALL,
+            default_filter: &CompiledExpr::ALL,
         };
 
         TestList::new(

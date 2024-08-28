@@ -485,8 +485,8 @@ impl NextestConfig {
             ));
         }
 
-        // Grab the compiled data (default-set, overrides and setup scripts) for this config, adding
-        // them in reversed order (we'll flip it around at the end).
+        // Grab the compiled data (default-filter, overrides and setup scripts) for this config,
+        // adding them in reversed order (we'll flip it around at the end).
         compiled_out.default.extend_reverse(this_compiled.default);
         for (name, mut data) in this_compiled.other {
             match compiled_out.other.entry(name) {
@@ -585,7 +585,7 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
-    // Invariant: `compiled_data.default_set` is always present.
+    // Invariant: `compiled_data.default_filter` is always present.
     pub(super) compiled_data: CompiledData<State>,
 }
 
@@ -603,14 +603,14 @@ impl<'cfg, State> NextestProfile<'cfg, State> {
     /// Returns the context in which to evaluate filtersets.
     pub fn filterset_ecx(&self) -> EvalContext<'_> {
         EvalContext {
-            default_set: &self.default_set().expr,
+            default_filter: &self.default_filter().expr,
         }
     }
 
     /// Returns the default set of tests to run.
-    pub fn default_set(&self) -> &CompiledDefaultSet {
+    pub fn default_filter(&self) -> &CompiledDefaultSet {
         self.compiled_data
-            .default_set
+            .default_filter
             .as_ref()
             .expect("compiled data always has default set")
     }
@@ -899,7 +899,7 @@ struct StoreConfigImpl {
 
 #[derive(Clone, Debug)]
 pub(super) struct DefaultProfileImpl {
-    default_set: String,
+    default_filter: String,
     test_threads: TestThreads,
     threads_required: ThreadsRequired,
     retries: RetryPolicy,
@@ -919,9 +919,9 @@ pub(super) struct DefaultProfileImpl {
 impl DefaultProfileImpl {
     fn new(p: CustomProfileImpl) -> Self {
         Self {
-            default_set: p
-                .default_set
-                .expect("default-set present in default profile"),
+            default_filter: p
+                .default_filter
+                .expect("default-filter present in default profile"),
             test_threads: p
                 .test_threads
                 .expect("test-threads present in default profile"),
@@ -969,8 +969,8 @@ impl DefaultProfileImpl {
         }
     }
 
-    pub(super) fn default_set(&self) -> &str {
-        &self.default_set
+    pub(super) fn default_filter(&self) -> &str {
+        &self.default_filter
     }
 
     pub(super) fn overrides(&self) -> &[DeserializedOverride] {
@@ -995,7 +995,7 @@ struct DefaultJunitImpl {
 pub(super) struct CustomProfileImpl {
     /// The default set of tests run by `cargo nextest run`.
     #[serde(default)]
-    default_set: Option<String>,
+    default_filter: Option<String>,
     #[serde(default, deserialize_with = "super::deserialize_retry_policy")]
     retries: Option<RetryPolicy>,
     #[serde(default)]
@@ -1032,8 +1032,8 @@ impl CustomProfileImpl {
         self.test_threads
     }
 
-    pub(super) fn default_set(&self) -> Option<&str> {
-        self.default_set.as_deref()
+    pub(super) fn default_filter(&self) -> Option<&str> {
+        self.default_filter.as_deref()
     }
 
     pub(super) fn overrides(&self) -> &[DeserializedOverride] {

@@ -719,9 +719,10 @@ impl RustTestSuiteStatusSummary {
     /// In this case, the contents of [`RustTestSuiteSummary::test_cases`] is empty.
     pub const SKIPPED: Self = Self::new_const("skipped");
 
-    /// The test binary was not executed because no filtersets were specified, and the binary
-    /// doesn't match the default set.
-    pub const SKIPPED_DEFAULT_SET: Self = Self::new_const("skipped-default-set");
+    /// The binary doesn't match the profile's `default-filter`.
+    ///
+    /// This is the lowest-priority reason for skipping a binary.
+    pub const SKIPPED_DEFAULT_FILTER: Self = Self::new_const("skipped-default-filter");
 }
 
 /// Serializable information about an individual test case within a Rust test suite.
@@ -779,9 +780,10 @@ pub enum MismatchReason {
     /// This test is in a different partition.
     Partition,
 
-    /// No test filtersets are specified on the command line, so the default-set filter was used.
-    /// This test is filtered out by it.
-    DefaultSet,
+    /// This test is filtered out by the default-filter.
+    ///
+    /// This is the lowest-priority reason for skipping a test.
+    DefaultFilter,
 }
 
 impl fmt::Display for MismatchReason {
@@ -793,7 +795,9 @@ impl fmt::Display for MismatchReason {
                 write!(f, "does not match the provided expression filters")
             }
             MismatchReason::Partition => write!(f, "is in a different partition"),
-            MismatchReason::DefaultSet => write!(f, "is filtered out by the default-set filter"),
+            MismatchReason::DefaultFilter => {
+                write!(f, "is filtered out by the profile's default-filter")
+            }
         }
     }
 }

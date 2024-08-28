@@ -169,7 +169,7 @@ impl TestFilterBuilder {
         match bound {
             FilterBound::All => expr_result,
             FilterBound::DefaultSet => expr_result.logic_and(FilterBinaryMatch::from_result(
-                ecx.default_set.matches_binary(&query, ecx),
+                ecx.default_filter.matches_binary(&query, ecx),
                 BinaryMismatchReason::DefaultSet,
             )),
         }
@@ -410,10 +410,10 @@ impl<'filter> TestFilter<'filter> {
         match bound {
             FilterBound::All => expr_result,
             FilterBound::DefaultSet => {
-                if ecx.default_set.matches_test(&query, ecx) {
+                if ecx.default_filter.matches_test(&query, ecx) {
                     expr_result
                 } else {
-                    FilterNameMatch::Mismatch(MismatchReason::DefaultSet)
+                    FilterNameMatch::Mismatch(MismatchReason::DefaultFilter)
                 }
             }
         }

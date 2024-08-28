@@ -278,7 +278,7 @@ impl CompiledByProfile {
         let default = CompiledData::new(
             graph,
             "default",
-            Some(config.default_profile().default_set()),
+            Some(config.default_profile().default_filter()),
             config.default_profile().overrides(),
             config.default_profile().setup_scripts(),
             &mut errors,
@@ -291,7 +291,7 @@ impl CompiledByProfile {
                     CompiledData::new(
                         graph,
                         profile_name,
-                        profile.default_set(),
+                        profile.default_filter(),
                         profile.overrides(),
                         profile.scripts(),
                         &mut errors,
@@ -315,7 +315,7 @@ impl CompiledByProfile {
     pub(super) fn for_default_config() -> Self {
         Self {
             default: CompiledData {
-                default_set: Some(CompiledDefaultSet::for_default_config()),
+                default_filter: Some(CompiledDefaultSet::for_default_config()),
                 overrides: vec![],
                 scripts: vec![],
             },
@@ -326,7 +326,7 @@ impl CompiledByProfile {
 
 /// A compiled form of the default set of tests for a profile.
 ///
-/// Returned by [`NextestProfile::default_set`].
+/// Returned by [`NextestProfile::default_filter`].
 // TODO: generalize this? `Source` isn't right because it includes overrides, and we don't support
 // overrides for the default set.
 #[derive(Clone, Debug)]
@@ -338,7 +338,7 @@ pub struct CompiledDefaultSet {
     /// around it by only storing the compiled expression here, and by setting it to `all()` (which
     /// matches the config).
     ///
-    /// This does make the default config's default-set a bit of a lie, but it's a lie we'll live
+    /// This does make the default config's default-filter a bit of a lie, but it's a lie we'll live
     /// with.
     pub expr: CompiledExpr,
 
@@ -354,15 +354,15 @@ impl CompiledDefaultSet {
         }
     }
 
-    /// Returns the name of the config key for this default set.
+    /// Returns the name of the config key for this default filter.
     pub fn config_name(&self) -> String {
-        format!("profile.{}.default-set", self.profile)
+        format!("profile.{}.default-filter", self.profile)
     }
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct CompiledData<State> {
-    pub(super) default_set: Option<CompiledDefaultSet>,
+    pub(super) default_filter: Option<CompiledDefaultSet>,
     pub(super) overrides: Vec<CompiledOverride<State>>,
     pub(super) scripts: Vec<CompiledProfileScripts<State>>,
 }
@@ -371,15 +371,15 @@ impl CompiledData<PreBuildPlatform> {
     fn new(
         graph: &PackageGraph,
         profile_name: &str,
-        default_set: Option<&str>,
+        default_filter: Option<&str>,
         overrides: &[DeserializedOverride],
         scripts: &[DeserializedProfileScriptConfig],
         errors: &mut Vec<ConfigFiltersetOrCfgParseError>,
     ) -> Self {
-        let default_set = default_set.and_then(|filter| {
+        let default_filter = default_filter.and_then(|filter| {
             let cx = ParseContext {
                 graph,
-                kind: FiltersetKind::DefaultSet,
+                kind: FiltersetKind::DefaultFilter,
             };
             match Filterset::parse(filter.to_owned(), &cx) {
                 Ok(expr) => Some(CompiledDefaultSet {
@@ -411,16 +411,16 @@ impl CompiledData<PreBuildPlatform> {
             .filter_map(|source| CompiledProfileScripts::new(graph, profile_name, source, errors))
             .collect();
         Self {
-            default_set,
+            default_filter,
             overrides,
             scripts,
         }
     }
 
     pub(super) fn extend_reverse(&mut self, other: Self) {
-        // For the default-set, other wins (it is last, and after reversing, it will be first).
-        if other.default_set.is_some() {
-            self.default_set = other.default_set;
+        // For the default filter, other wins (it is last, and after reversing, it will be first).
+        if other.default_filter.is_some() {
+            self.default_filter = other.default_filter;
         }
         self.overrides.extend(other.overrides.into_iter().rev());
         self.scripts.extend(other.scripts.into_iter().rev());
@@ -433,13 +433,13 @@ impl CompiledData<PreBuildPlatform> {
 
     /// Chains this data with another set of data, treating `other` as lower-priority than `self`.
     pub(super) fn chain(self, other: Self) -> Self {
-        let default_set = self.default_set.or(other.default_set);
+        let default_filter = self.default_filter.or(other.default_filter);
         let mut overrides = self.overrides;
         let mut setup_scripts = self.scripts;
         overrides.extend(other.overrides);
         setup_scripts.extend(other.scripts);
         Self {
-            default_set,
+            default_filter,
             overrides,
             scripts: setup_scripts,
         }
@@ -449,7 +449,7 @@ impl CompiledData<PreBuildPlatform> {
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledData<FinalConfig> {
-        let default_set = self.default_set;
+        let default_filter = self.default_filter;
         let overrides = self
             .overrides
             .into_iter()
@@ -461,7 +461,7 @@ impl CompiledData<PreBuildPlatform> {
             .map(|setup_script| setup_script.apply_build_platforms(build_platforms))
             .collect();
         CompiledData {
-            default_set,
+            default_filter,
             overrides,
             scripts: setup_scripts,
         }
@@ -973,17 +973,17 @@ mod tests {
         // Not strictly an override error, but convenient to put here.
         indoc! {r#"
             [profile.ci]
-            default-set = "test(foo) or default()"
+            default-filter = "test(foo) or default()"
         "#},
         "ci",
         &[MietteJsonReport {
-            message: "predicate not allowed in `default-set` expressions".to_owned(),
+            message: "predicate not allowed in `default-filter` expressions".to_owned(),
             labels: vec![
                 MietteJsonLabel { label: "this predicate causes infinite recursion".to_owned(), span: MietteJsonSpan { offset: 13, length: 9 } }
             ]
         }]
 
-        ; "default-set with default"
+        ; "default-filter with default"
     )]
     fn parse_overrides_invalid(
         config_contents: &str,
