@@ -8,7 +8,7 @@
 
 ### Removed
 
-- `NextestExitCode::INVALID_FILTERSET` no longer exists.
+- `NextestExitCode::INVALID_FILTER_EXPRESSION` has been renamed to `INVALID_FILTERSET`.
 
 ## [0.11.3] - 2024-08-25
 
