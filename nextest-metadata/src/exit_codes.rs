@@ -63,10 +63,6 @@ impl NextestExitCode {
     /// A filterset failed to parse.
     pub const INVALID_FILTERSET: i32 = 94;
 
-    /// Deprecated form of [`Self::INVALID_FILTERSET`].
-    #[deprecated(since = "0.11.3", note = "Use `INVALID_FILTERSET` instead")]
-    pub const INVALID_FILTER_EXPRESSION: i32 = Self::INVALID_FILTERSET;
-
     /// A self-update was requested but this version of cargo-nextest cannot perform self-updates.
     pub const SELF_UPDATE_UNAVAILABLE: i32 = 93;
 

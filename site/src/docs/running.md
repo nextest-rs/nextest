@@ -91,8 +91,6 @@ The default filter is available in the filterset DSL via the `default()` predica
 
 !!! info "Overriding the default filter"
 
-    <!-- md:version 0.9.76 -->
-
     By default, command-line arguments are always interpreted with respect to the default filter. For example, `cargo nextest -E 'all()'` will run all tests that match the default filter.
 
     To override the default set on the command line, use `--ignore-default-filter`. For example, `cargo nextest -E 'all()' --ignore-default-filter` will run all tests, including those not in the default set.

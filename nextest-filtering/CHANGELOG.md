@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.0] - 2024-08-28
+
+### Changed
+
+- Renamed references from "default-set" to "default-filter" to match cargo-nextest changes.
+
 ## [0.11.0] - 2024-08-25
 
 ### Changed
@@ -128,6 +134,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.12.0
 [0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.11.0
 [0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.10.0
 [0.9.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.9.0
