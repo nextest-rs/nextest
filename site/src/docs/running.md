@@ -70,7 +70,7 @@ cargo nextest run -E 'not package(very-slow-tests)'
 
 ### Running a subset of tests by default
 
-<!-- md:version 0.9.78 -->
+<!-- md:version 0.9.77 -->
 
 By default, all discovered, non-ignored tests are run. To only run some tests by default, set the
 `default-filter` configuration.

@@ -51,7 +51,7 @@ cargo nextest run -E 'test(my_test) + package(my-crate)'
 
 ### Filtersets with the default set
 
-<!-- md:version 0.9.78 -->
+<!-- md:version 0.9.77 -->
 
 If [a default filter](../running.md#running-a-subset-of-tests-by-default) for tests is configured,
 filtersets on the command line are intersected with the default filter.
