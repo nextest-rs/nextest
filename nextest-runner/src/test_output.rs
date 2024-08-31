@@ -1,5 +1,10 @@
 //! Utilities for capture output from tests run in a child process
 
+use crate::{
+    errors::CollectTestOutputError,
+    reporter::{heuristic_extract_description, DescriptionKind},
+    runner::ExecutionResult,
+};
 use bstr::{ByteSlice, Lines};
 use bytes::{Bytes, BytesMut};
 use std::{borrow::Cow, sync::OnceLock};
@@ -84,7 +89,25 @@ impl TestSingleOutput {
     }
 }
 
-/// The complete captured output of a child process
+/// The complete captured output of a child process.
+#[derive(Clone, Debug)]
+pub enum TestExecutionOutput {
+    /// The process was run and the output was captured.
+    Output(TestOutput),
+
+    /// There was an execution failure.
+    ExecFail {
+        /// A single-line message.
+        message: String,
+
+        /// The full description, including other errors, to print out.
+        description: String,
+    },
+}
+
+/// The output of a test.
+///
+/// Part of [`TestExecutionOutput`].
 #[derive(Clone, Debug)]
 pub enum TestOutput {
     /// The output was split into stdout and stderr.
@@ -101,15 +124,33 @@ pub enum TestOutput {
         /// The captured output.
         output: TestSingleOutput,
     },
+}
 
-    /// The output was an execution failure.
-    ExecFail {
-        /// A single-line message.
-        message: String,
+impl TestOutput {
+    /// Attempts to extract a description of a test failure from the output of the test.
+    pub fn heuristic_extract_description(
+        &self,
+        exec_result: ExecutionResult,
+    ) -> Option<DescriptionKind<'_>> {
+        match self {
+            Self::Split { stdout, stderr } => {
+                if let Some(kind) =
+                    heuristic_extract_description(exec_result, &stdout.buf, &stderr.buf)
+                {
+                    return Some(kind);
+                }
+            }
+            Self::Combined { output } => {
+                if let Some(kind) =
+                    heuristic_extract_description(exec_result, &output.buf, &output.buf)
+                {
+                    return Some(kind);
+                }
+            }
+        }
 
-        /// The full description, including other errors, to print out.
-        description: String,
-    },
+        None
+    }
 }
 
 /// The size of each buffered reader's buffer, and the size at which we grow
@@ -119,12 +160,10 @@ pub enum TestOutput {
 /// most linux, windows, and macos systems.
 const CHUNK_SIZE: usize = 4 * 1024;
 
-use crate::errors::CollectTestOutputError as Err;
-
 /// Collects the stdout and/or stderr streams into a single buffer
 pub async fn collect_test_output(
     streams: Option<crate::test_command::Output>,
-) -> Result<Option<TestOutput>, Err> {
+) -> Result<Option<TestOutput>, CollectTestOutputError> {
     use tokio::io::AsyncBufReadExt as _;
 
     let Some(output) = streams else {
@@ -146,7 +185,7 @@ pub async fn collect_test_output(
                 tokio::select! {
                     res = stdout.fill_buf(), if !out_done => {
                         let read = {
-                            let buf = res.map_err(Err::ReadStdout)?;
+                            let buf = res.map_err(CollectTestOutputError::ReadStdout)?;
                             stdout_acc.extend_from_slice(buf);
                             buf.len()
                         };
@@ -156,7 +195,7 @@ pub async fn collect_test_output(
                     }
                     res = stderr.fill_buf(), if !err_done => {
                         let read = {
-                            let buf = res.map_err(Err::ReadStderr)?;
+                            let buf = res.map_err(CollectTestOutputError::ReadStderr)?;
                             stderr_acc.extend_from_slice(buf);
                             buf.len()
                         };
@@ -179,7 +218,10 @@ pub async fn collect_test_output(
 
             loop {
                 let read = {
-                    let buf = output.fill_buf().await.map_err(Err::ReadStdout)?;
+                    let buf = output
+                        .fill_buf()
+                        .await
+                        .map_err(CollectTestOutputError::ReadStdout)?;
                     acc.extend_from_slice(buf);
                     buf.len()
                 };

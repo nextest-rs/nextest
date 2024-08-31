@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::runner::{AbortStatus, ExecutionResult};
+use bstr::ByteSlice;
 use once_cell::sync::Lazy;
 use quick_junit::Output;
-use regex::{Regex, RegexBuilder};
+use regex::bytes::{Regex, RegexBuilder};
 use std::fmt;
 
 // This regex works for the default panic handler for Rust -- other panic handlers may not work,
@@ -38,24 +39,24 @@ pub enum DescriptionKind<'a> {
     ///
     /// The output is borrowed from standard error.
     StackTrace {
-        /// The stack trace as a substring of the standard error.
-        stderr_output: &'a str,
+        /// The stack trace as a subslice of the standard error.
+        stderr_output: &'a [u8],
     },
 
     /// An error string was found in the output.
     ///
     /// The output is borrowed from standard error.
     ErrorStr {
-        /// The error string as a substring of the standard error.
-        stderr_output: &'a str,
+        /// The error string as a subslice of the standard error.
+        stderr_output: &'a [u8],
     },
 
     /// A should-panic test did not panic.
     ///
     /// The output is borrowed from standard output.
     ShouldPanic {
-        /// The should-panic of the test as a substring of the standard output.
-        stdout_output: &'a str,
+        /// The should-panic of the test as a subslice of the standard output.
+        stdout_output: &'a [u8],
     },
 }
 
@@ -107,13 +108,13 @@ impl fmt::Display for DescriptionKindDisplay<'_> {
                 Ok(())
             }
             DescriptionKind::StackTrace { stderr_output } => {
-                write!(f, "{}", stderr_output)
+                write!(f, "{}", String::from_utf8_lossy(stderr_output))
             }
             DescriptionKind::ErrorStr { stderr_output } => {
-                write!(f, "{}", stderr_output)
+                write!(f, "{}", String::from_utf8_lossy(stderr_output))
             }
             DescriptionKind::ShouldPanic { stdout_output } => {
-                write!(f, "{}", stdout_output)
+                write!(f, "{}", String::from_utf8_lossy(stdout_output))
             }
         }
     }
@@ -122,8 +123,8 @@ impl fmt::Display for DescriptionKindDisplay<'_> {
 /// Attempts to heuristically extract a description of the test failure from the output of the test.
 pub fn heuristic_extract_description<'a>(
     exec_result: ExecutionResult,
-    stdout: &'a str,
-    stderr: &'a str,
+    stdout: &'a [u8],
+    stderr: &'a [u8],
 ) -> Option<DescriptionKind<'a>> {
     // If the test crashed with a signal, use that.
     if let ExecutionResult::Fail {
@@ -148,32 +149,32 @@ pub fn heuristic_extract_description<'a>(
     None
 }
 
-fn heuristic_should_panic(stdout: &str) -> Option<&str> {
+fn heuristic_should_panic(stdout: &[u8]) -> Option<&[u8]> {
     stdout
         .lines()
-        .find(|line| line.contains("note: test did not panic as expected"))
+        .find(|line| line.contains_str("note: test did not panic as expected"))
 }
 
-fn heuristic_stack_trace(stderr: &str) -> Option<&str> {
+fn heuristic_stack_trace(stderr: &[u8]) -> Option<&[u8]> {
     let panicked_at_match = PANICKED_AT_REGEX.find(stderr)?;
     // If the previous line starts with "Error: ", grab it as well -- it contains the error with
     // result-based test failures.
     let mut start = panicked_at_match.start();
-    let prefix = stderr[..start].trim_end_matches('\n');
-    if let Some(prev_line_start) = prefix.rfind('\n') {
-        if prefix[prev_line_start..].starts_with("\nError:") {
+    let prefix = stderr[..start].trim_end_with(|c| c == '\n' || c == '\r');
+    if let Some(prev_line_start) = prefix.rfind("\n") {
+        if prefix[prev_line_start..].starts_with_str("\nError:") {
             start = prev_line_start + 1;
         }
     }
 
-    Some(stderr[start..].trim_end())
+    Some(stderr[start..].trim_end_with(|c| c.is_whitespace()))
 }
 
-fn heuristic_error_str(stderr: &str) -> Option<&str> {
+fn heuristic_error_str(stderr: &[u8]) -> Option<&[u8]> {
     // Starting Rust 1.66, Result-based errors simply print out "Error: ".
     let error_match = ERROR_REGEX.find(stderr)?;
     let start = error_match.start();
-    Some(stderr[start..].trim_end())
+    Some(stderr[start..].trim_end_with(|c| c.is_whitespace()))
 }
 
 #[cfg(test)]
@@ -181,7 +182,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_heuristic_extract_description() {
+    fn test_heuristic_should_panic() {
         let tests: &[(&str, &str)] = &[(
             "running 1 test
 test test_failure_should_panic - should panic ... FAILED
@@ -199,7 +200,10 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out;
         )];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_should_panic(input), Some(*output));
+            assert_eq!(
+                heuristic_should_panic(input.as_bytes()),
+                Some(output.as_bytes())
+            );
         }
     }
 
@@ -233,7 +237,10 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
         ];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_stack_trace(input), Some(*output));
+            assert_eq!(
+                heuristic_stack_trace(input.as_bytes()),
+                Some(output.as_bytes())
+            );
         }
     }
 
@@ -245,7 +252,10 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
         )];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_error_str(input), Some(*output));
+            assert_eq!(
+                heuristic_error_str(input.as_bytes()),
+                Some(output.as_bytes()),
+            );
         }
     }
 }

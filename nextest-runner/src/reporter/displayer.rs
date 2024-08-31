@@ -16,7 +16,7 @@ use crate::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
         FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
     },
-    test_output::{TestOutput, TestSingleOutput},
+    test_output::{TestExecutionOutput, TestOutput, TestSingleOutput},
 };
 use chrono::{DateTime, FixedOffset};
 use debug_ignore::DebugIgnore;
@@ -1354,7 +1354,7 @@ impl<'a> TestReporterImpl<'a> {
         };
 
         match &run_status.output {
-            Some(TestOutput::Split { stdout, stderr }) => {
+            Some(TestExecutionOutput::Output(TestOutput::Split { stdout, stderr })) => {
                 if !stdout.is_empty() {
                     write!(writer, "\n{}", "--- ".style(header_style))?;
                     let out_len = self.write_attempt(run_status, header_style, writer)?;
@@ -1388,7 +1388,7 @@ impl<'a> TestReporterImpl<'a> {
                 }
             }
 
-            Some(TestOutput::Combined { output }) => {
+            Some(TestExecutionOutput::Output(TestOutput::Combined { output })) => {
                 if !output.is_empty() {
                     write!(writer, "\n{}", "--- ".style(header_style))?;
                     let out_len = self.write_attempt(run_status, header_style, writer)?;
@@ -1406,7 +1406,7 @@ impl<'a> TestReporterImpl<'a> {
                 }
             }
 
-            Some(TestOutput::ExecFail { description, .. }) => {
+            Some(TestExecutionOutput::ExecFail { description, .. }) => {
                 write!(writer, "\n{}", "--- ".style(header_style))?;
                 let out_len = self.write_attempt(run_status, header_style, writer)?;
                 // The width is to align test instances.
