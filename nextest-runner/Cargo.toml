@@ -99,7 +99,7 @@ newtype-uuid.workspace = true
 console-subscriber = { version = "0.4.0", optional = true }
 unicode-ident = "1.0.12"
 unicode-normalization = "0.1.23"
-indexmap = { version = "2.4.0", features = ["serde"] }
+indexmap = { version = "2.5.0", features = ["serde"] }
 smallvec = "1.13.2"
 nextest-workspace-hack.workspace = true
 
