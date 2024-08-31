@@ -3,7 +3,8 @@
 
 mod libtest;
 
-use super::*;
+use super::TestEvent;
+use crate::errors::WriteEventError;
 pub use libtest::{EmitNextestObject, LibtestReporter};
 
 /// Error returned when a user-supplied format version fails to be parsed to a
