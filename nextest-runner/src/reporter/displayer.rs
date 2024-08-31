@@ -5,9 +5,7 @@
 //!
 //! The main structure in this module is [`TestReporter`].
 
-mod aggregator;
-pub mod structured;
-
+use super::structured::StructuredReporter;
 use crate::{
     config::{NextestProfile, ScriptId},
     errors::WriteEventError,
@@ -20,7 +18,6 @@ use crate::{
     },
     test_output::{TestOutput, TestSingleOutput},
 };
-pub use aggregator::heuristic_extract_description;
 use chrono::{DateTime, FixedOffset};
 use debug_ignore::DebugIgnore;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -228,7 +225,7 @@ impl TestReporterBuilder {
         test_list: &TestList,
         profile: &NextestProfile<'a>,
         output: ReporterStderr<'a>,
-        structured_reporter: structured::StructuredReporter<'a>,
+        structured_reporter: StructuredReporter<'a>,
     ) -> TestReporter<'a> {
         let styles = Box::default();
         let binary_id_width = test_list
@@ -362,7 +359,7 @@ pub struct TestReporter<'a> {
     /// Used to aggregate events for JUnit reports written to disk
     metadata_reporter: EventAggregator<'a>,
     /// Used to emit test events in machine-readable format(s) to stdout
-    structured_reporter: structured::StructuredReporter<'a>,
+    structured_reporter: StructuredReporter<'a>,
 }
 
 impl<'a> TestReporter<'a> {

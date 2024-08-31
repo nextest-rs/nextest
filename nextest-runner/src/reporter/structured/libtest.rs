@@ -22,11 +22,10 @@
 //! users to move to the new format or stick to the format version(s) they were
 //! using before
 
-use super::{
-    FormatVersionError, FormatVersionErrorInner, TestEvent, TestEventKind, WriteEventError,
-};
+use super::{FormatVersionError, FormatVersionErrorInner, TestEvent, WriteEventError};
 use crate::{
     list::RustTestSuite,
+    reporter::TestEventKind,
     runner::ExecutionResult,
     test_output::{TestOutput, TestSingleOutput},
 };
