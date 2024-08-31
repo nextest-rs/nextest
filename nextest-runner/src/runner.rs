@@ -21,7 +21,7 @@ use crate::{
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
-    test_output::{CaptureStrategy, TestOutput, TestSingleOutput},
+    test_output::{CaptureStrategy, TestExecutionOutput, TestSingleOutput},
     time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
 };
 use async_scoped::TokioScope;
@@ -924,7 +924,7 @@ impl<'a> TestRunnerInner<'a> {
                 let message = error.to_string();
                 let description = DisplayErrorChain::new(error).to_string();
                 InternalExecuteStatus {
-                    output: Some(TestOutput::ExecFail {
+                    output: Some(TestExecutionOutput::ExecFail {
                         message,
                         description,
                     }),
@@ -1088,7 +1088,7 @@ impl<'a> TestRunnerInner<'a> {
         let status = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
 
         Ok(InternalExecuteStatus {
-            output: test_output,
+            output: test_output.map(TestExecutionOutput::Output),
             result: status,
             stopwatch_end: stopwatch.snapshot(),
             is_slow,
@@ -1409,7 +1409,7 @@ pub struct ExecuteStatus {
     /// The stdout and stderr output for this test.
     ///
     /// This is None if the output wasn't caught.
-    pub output: Option<TestOutput>,
+    pub output: Option<TestExecutionOutput>,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
@@ -1424,7 +1424,7 @@ pub struct ExecuteStatus {
 
 struct InternalExecuteStatus {
     // This is None if output wasn't captured.
-    output: Option<TestOutput>,
+    output: Option<TestExecutionOutput>,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
     is_slow: bool,

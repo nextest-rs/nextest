@@ -23,7 +23,7 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder},
-    test_output::TestOutput,
+    test_output::{TestExecutionOutput, TestOutput},
 };
 use pretty_assertions::assert_eq;
 use std::{io::Cursor, time::Duration};
@@ -172,19 +172,26 @@ fn test_run() -> Result<()> {
 
                         if can_extract_description {
                             // Check that stderr can be parsed heuristically.
-                            let Some(TestOutput::Split { stdout, stderr }) = &run_status.output
+                            let Some(TestExecutionOutput::Output(TestOutput::Split {
+                                stdout,
+                                stderr,
+                            })) = &run_status.output
                             else {
                                 panic!("this test should always use split output")
                             };
-                            let stdout = stdout.as_str_lossy();
-                            let stderr = stderr.as_str_lossy();
-                            println!("stderr: {stderr}");
-                            let description =
-                                heuristic_extract_description(run_status.result, stdout, stderr);
+
+                            println!("stderr: {}", stderr.as_str_lossy());
+                            let description = heuristic_extract_description(
+                                run_status.result,
+                                &stdout.buf,
+                                &stderr.buf,
+                            );
                             assert!(
                                 description.is_some(),
-                                "failed to extract description from {}\n*** stdout:\n{stdout}\n*** stderr:\n{stderr}\n",
-                                fixture.name
+                                "failed to extract description from {}\n*** stdout:\n{}\n*** stderr:\n{}\n",
+                                fixture.name,
+                                stdout.as_str_lossy(),
+                                stderr.as_str_lossy(),
                             );
                         }
                         true

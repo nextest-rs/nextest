@@ -3,14 +3,14 @@
 
 //! Metadata management.
 
-use super::{heuristic_extract_description, TestEvent};
+use super::TestEvent;
 use crate::{
     config::{NextestJunitConfig, NextestProfile},
     errors::WriteEventError,
     list::TestInstance,
     reporter::TestEventKind,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
-    test_output::TestOutput,
+    test_output::{TestExecutionOutput, TestOutput},
 };
 use camino::Utf8PathBuf;
 use debug_ignore::DebugIgnore;
@@ -301,45 +301,28 @@ fn set_execute_status_props(
     mut out: TestcaseOrRerun<'_>,
 ) {
     match &execute_status.output {
-        Some(TestOutput::Split { stdout, stderr }) => {
-            let stdout_lossy = stdout.as_str_lossy();
-            let stderr_lossy = stderr.as_str_lossy();
+        Some(TestExecutionOutput::Output(output)) => {
             if !is_success {
-                let description = heuristic_extract_description(
-                    execute_status.result,
-                    stdout_lossy,
-                    stderr_lossy,
-                );
+                let description = output.heuristic_extract_description(execute_status.result);
                 if let Some(description) = description {
                     out.set_description(description.display_human().to_junit_output());
                 }
             }
 
             if store_stdout_stderr {
-                out.set_system_out(stdout_lossy)
-                    .set_system_err(stderr_lossy);
-            }
-        }
-        Some(TestOutput::Combined { output }) => {
-            let output_lossy = output.as_str_lossy();
-            if !is_success {
-                let description = heuristic_extract_description(
-                    execute_status.result,
-                    // The output is combined so we just track all of it.
-                    output_lossy,
-                    output_lossy,
-                );
-                if let Some(description) = description {
-                    out.set_description(description.display_human().to_junit_output());
+                match output {
+                    TestOutput::Split { stdout, stderr } => {
+                        out.set_system_out(stdout.as_str_lossy())
+                            .set_system_err(stderr.as_str_lossy());
+                    }
+                    TestOutput::Combined { output } => {
+                        out.set_system_out(output.as_str_lossy())
+                            .set_system_err("(stdout and stderr are combined)");
+                    }
                 }
             }
-
-            if store_stdout_stderr {
-                out.set_system_out(output_lossy)
-                    .set_system_err("(stdout and stderr are combined)");
-            }
         }
-        Some(TestOutput::ExecFail {
+        Some(TestExecutionOutput::ExecFail {
             message,
             description,
         }) => {

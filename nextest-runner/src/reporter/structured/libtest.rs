@@ -27,7 +27,7 @@ use crate::{
     list::RustTestSuite,
     reporter::TestEventKind,
     runner::ExecutionResult,
-    test_output::{TestOutput, TestSingleOutput},
+    test_output::{TestExecutionOutput, TestOutput, TestSingleOutput},
 };
 use bstr::ByteSlice;
 use nextest_metadata::MismatchReason;
@@ -490,15 +490,15 @@ impl<'cfg> LibtestReporter<'cfg> {
 /// This function relies on the fact that nextest runs every individual test in
 /// isolation.
 fn strip_human_output_from_failed_test(
-    output: Option<&TestOutput>,
+    output: Option<&TestExecutionOutput>,
     out: &mut bytes::BytesMut,
     test_name: &str,
 ) -> Result<(), WriteEventError> {
     match output {
-        Some(TestOutput::Combined { output }) => {
+        Some(TestExecutionOutput::Output(TestOutput::Combined { output })) => {
             strip_human_stdout_or_combined(output, out, test_name)?;
         }
-        Some(TestOutput::Split { stdout, stderr }) => {
+        Some(TestExecutionOutput::Output(TestOutput::Split { stdout, stderr })) => {
             // This is not a case that we hit because we always set CaptureStrategy to Combined. But
             // handle it in a reasonable fashion.
             debug_assert!(false, "libtest output requires CaptureStrategy::Combined");
@@ -512,7 +512,7 @@ fn strip_human_output_from_failed_test(
                 write!(out, "{}", EscapedString(stderr.as_str_lossy())).map_err(fmt_err)?;
             }
         }
-        Some(TestOutput::ExecFail { description, .. }) => {
+        Some(TestExecutionOutput::ExecFail { description, .. }) => {
             write!(out, "--- EXEC FAIL ---\\n").map_err(fmt_err)?;
             write!(out, "{}", EscapedString(description)).map_err(fmt_err)?;
         }
@@ -633,7 +633,8 @@ impl<'s> std::fmt::Display for EscapedString<'s> {
 #[cfg(test)]
 mod test {
     use crate::{
-        reporter::structured::libtest::strip_human_output_from_failed_test, test_output::TestOutput,
+        reporter::structured::libtest::strip_human_output_from_failed_test,
+        test_output::{TestExecutionOutput, TestOutput},
     };
     use bytes::BytesMut;
 
@@ -683,7 +684,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
 
         let mut actual = bytes::BytesMut::new();
         strip_human_output_from_failed_test(
-            Some(&output),
+            Some(&TestExecutionOutput::Output(output)),
             &mut actual,
             "index::test::download_url_crates_io",
         )
@@ -709,7 +710,12 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         };
 
         let mut actual = bytes::BytesMut::new();
-        strip_human_output_from_failed_test(Some(&output), &mut actual, "non-existent").unwrap();
+        strip_human_output_from_failed_test(
+            Some(&TestExecutionOutput::Output(output)),
+            &mut actual,
+            "non-existent",
+        )
+        .unwrap();
 
         insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
     }
@@ -717,7 +723,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
     #[test]
     fn strips_human_output_exec_fail() {
         let output = {
-            TestOutput::ExecFail {
+            TestExecutionOutput::ExecFail {
                 message: "this is a message".to_owned(),
                 description: "this is a message\nthis is a description\n".to_owned(),
             }

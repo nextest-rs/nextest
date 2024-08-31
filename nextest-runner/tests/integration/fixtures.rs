@@ -25,7 +25,7 @@ use nextest_runner::{
     },
     target_runner::TargetRunner,
     test_filter::{FilterBound, TestFilterBuilder},
-    test_output::TestOutput,
+    test_output::{TestExecutionOutput, TestOutput},
 };
 use once_cell::sync::Lazy;
 use std::{
@@ -291,7 +291,9 @@ impl fmt::Debug for InstanceStatus {
             InstanceStatus::Skipped(reason) => write!(f, "skipped: {reason}"),
             InstanceStatus::Finished(run_statuses) => {
                 for run_status in run_statuses.iter() {
-                    let Some(TestOutput::Split { stdout, stderr }) = &run_status.output else {
+                    let Some(TestExecutionOutput::Output(TestOutput::Split { stdout, stderr })) =
+                        &run_status.output
+                    else {
                         panic!("this test should always use split output")
                     };
                     write!(
