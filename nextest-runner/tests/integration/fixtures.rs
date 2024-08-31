@@ -300,8 +300,8 @@ impl fmt::Debug for InstanceStatus {
                         run_status.retry_data.attempt,
                         run_status.retry_data.total_attempts,
                         run_status.result,
-                        stdout.to_str_lossy(),
-                        stderr.to_str_lossy(),
+                        stdout.as_str_lossy(),
+                        stderr.as_str_lossy(),
                     )?;
                 }
                 Ok(())
