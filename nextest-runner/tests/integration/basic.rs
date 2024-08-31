@@ -176,11 +176,11 @@ fn test_run() -> Result<()> {
                             else {
                                 panic!("this test should always use split output")
                             };
-                            let stdout = stdout.to_str_lossy();
-                            let stderr = stderr.to_str_lossy();
+                            let stdout = stdout.as_str_lossy();
+                            let stderr = stderr.as_str_lossy();
                             println!("stderr: {stderr}");
                             let description =
-                                heuristic_extract_description(run_status.result, &stdout, &stderr);
+                                heuristic_extract_description(run_status.result, stdout, stderr);
                             assert!(
                                 description.is_some(),
                                 "failed to extract description from {}\n*** stdout:\n{stdout}\n*** stderr:\n{stderr}\n",

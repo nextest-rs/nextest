@@ -509,7 +509,7 @@ fn strip_human_output_from_failed_test(
             // If stderr is not empty, just write all of it in.
             if !stderr.is_empty() {
                 write!(out, "\\n--- STDERR ---\\n").map_err(fmt_err)?;
-                write!(out, "{}", EscapedString(&stderr.to_str_lossy())).map_err(fmt_err)?;
+                write!(out, "{}", EscapedString(stderr.as_str_lossy())).map_err(fmt_err)?;
             }
         }
         Some(TestOutput::ExecFail { description, .. }) => {
@@ -555,7 +555,7 @@ fn strip_human_stdout_or_combined(
     } else {
         // This is most likely a custom test harness. Just write out the entire
         // output.
-        write!(out, "{}", EscapedString(&output.to_str_lossy())).map_err(fmt_err)?;
+        write!(out, "{}", EscapedString(output.as_str_lossy())).map_err(fmt_err)?;
     }
 
     Ok(())

@@ -2,7 +2,7 @@
 
 use bstr::{ByteSlice, Lines};
 use bytes::{Bytes, BytesMut};
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::OnceLock};
 use tokio::io::BufReader;
 
 /// The strategy used to capture test executable output
@@ -33,20 +33,42 @@ pub enum CaptureStrategy {
 pub struct TestSingleOutput {
     /// The raw output buffer
     pub buf: Bytes,
+
+    /// A string representation of the output, computed on first access.
+    ///
+    /// `None` means the output is valid UTF-8.
+    as_str: OnceLock<Option<Box<str>>>,
 }
 
 impl From<Bytes> for TestSingleOutput {
     #[inline]
     fn from(buf: Bytes) -> Self {
-        Self { buf }
+        Self {
+            buf,
+            as_str: OnceLock::new(),
+        }
     }
 }
 
 impl TestSingleOutput {
     /// Gets this output as a lossy UTF-8 string.
     #[inline]
-    pub fn to_str_lossy(&self) -> Cow<'_, str> {
-        String::from_utf8_lossy(&self.buf)
+    pub fn as_str_lossy(&self) -> &str {
+        let s = self
+            .as_str
+            .get_or_init(|| match String::from_utf8_lossy(&self.buf) {
+                // A borrowed string from `from_utf8_lossy` is always valid UTF-8. We can't store
+                // the `Cow` directly because that would be a self-referential struct. (Well, we
+                // could via a library like ouroboros, but that's really unnecessary.)
+                Cow::Borrowed(_) => None,
+                Cow::Owned(s) => Some(s.into_boxed_str()),
+            });
+
+        match s {
+            Some(s) => s,
+            // SAFETY: Immediately above, we've established that `None` means `buf` is valid UTF-8.
+            None => unsafe { std::str::from_utf8_unchecked(&self.buf) },
+        }
     }
 
     /// Iterates over lines in this output.

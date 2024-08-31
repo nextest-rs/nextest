@@ -302,13 +302,13 @@ fn set_execute_status_props(
 ) {
     match &execute_status.output {
         Some(TestOutput::Split { stdout, stderr }) => {
-            let stdout_lossy = stdout.to_str_lossy();
-            let stderr_lossy = stderr.to_str_lossy();
+            let stdout_lossy = stdout.as_str_lossy();
+            let stderr_lossy = stderr.as_str_lossy();
             if !is_success {
                 let description = heuristic_extract_description(
                     execute_status.result,
-                    &stdout_lossy,
-                    &stderr_lossy,
+                    stdout_lossy,
+                    stderr_lossy,
                 );
                 if let Some(description) = description {
                     out.set_description(description.display_human().to_junit_output());
@@ -321,13 +321,13 @@ fn set_execute_status_props(
             }
         }
         Some(TestOutput::Combined { output }) => {
-            let output_lossy = output.to_str_lossy();
+            let output_lossy = output.as_str_lossy();
             if !is_success {
                 let description = heuristic_extract_description(
                     execute_status.result,
                     // The output is combined so we just track all of it.
-                    &output_lossy,
-                    &output_lossy,
+                    output_lossy,
+                    output_lossy,
                 );
                 if let Some(description) = description {
                     out.set_description(description.display_human().to_junit_output());
