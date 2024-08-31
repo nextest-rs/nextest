@@ -5,6 +5,7 @@ use crate::runner::{AbortStatus, ExecutionResult};
 use once_cell::sync::Lazy;
 use quick_junit::Output;
 use regex::{Regex, RegexBuilder};
+use std::fmt;
 
 // This regex works for the default panic handler for Rust -- other panic handlers may not work,
 // which is why this is heuristic.
@@ -22,72 +23,138 @@ static ERROR_REGEX: Lazy<Regex> = Lazy::new(|| {
     builder.build().unwrap()
 });
 
-#[allow(unused_variables)]
-/// Not part of the public API: only used for testing.
-#[doc(hidden)]
+/// The return result of [`heuristic_extract_description`].
+#[derive(Clone, Copy, Debug)]
+pub enum DescriptionKind<'a> {
+    /// This was some kind of abort.
+    Abort {
+        /// The reason for the abort.
+        status: AbortStatus,
+        /// Whether the test leaked handles.
+        leaked: bool,
+    },
+
+    /// A stack trace was found in the output.
+    ///
+    /// The output is borrowed from standard error.
+    StackTrace {
+        /// The stack trace as a substring of the standard error.
+        stderr_output: &'a str,
+    },
+
+    /// An error string was found in the output.
+    ///
+    /// The output is borrowed from standard error.
+    ErrorStr {
+        /// The error string as a substring of the standard error.
+        stderr_output: &'a str,
+    },
+
+    /// A should-panic test did not panic.
+    ///
+    /// The output is borrowed from standard output.
+    ShouldPanic {
+        /// The should-panic of the test as a substring of the standard output.
+        stdout_output: &'a str,
+    },
+}
+
+impl DescriptionKind<'_> {
+    /// Displays the description as a user-friendly string.
+    pub fn display_human(&self) -> DescriptionKindDisplay<'_> {
+        DescriptionKindDisplay(*self)
+    }
+}
+
+/// A display wrapper for [`DescriptionKind`].
+#[derive(Clone, Copy, Debug)]
+pub struct DescriptionKindDisplay<'a>(DescriptionKind<'a>);
+
+impl<'a> DescriptionKindDisplay<'a> {
+    /// Returns the displayer in a JUnit-compatible format.
+    ///
+    /// This format filters out invalid XML characters.
+    pub fn to_junit_output(self) -> Output {
+        Output::new(self.to_string())
+    }
+}
+
+impl fmt::Display for DescriptionKindDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            DescriptionKind::Abort { status, leaked } => {
+                write!(f, "Test aborted")?;
+                match status {
+                    #[cfg(unix)]
+                    AbortStatus::UnixSignal(sig) => {
+                        let signal_str = crate::helpers::signal_str(sig)
+                            .map(|signal_str| format!("SIG{}", signal_str))
+                            .unwrap_or_else(|| sig.to_string());
+                        write!(f, " with signal {}", signal_str)?;
+                    }
+                    #[cfg(windows)]
+                    AbortStatus::WindowsNtStatus(exception) => {
+                        write!(
+                            f,
+                            " with code {}",
+                            crate::helpers::display_nt_status(exception)
+                        )?;
+                    }
+                }
+                if leaked {
+                    write!(f, ", and also leaked handles")?;
+                }
+                Ok(())
+            }
+            DescriptionKind::StackTrace { stderr_output } => {
+                write!(f, "{}", stderr_output)
+            }
+            DescriptionKind::ErrorStr { stderr_output } => {
+                write!(f, "{}", stderr_output)
+            }
+            DescriptionKind::ShouldPanic { stdout_output } => {
+                write!(f, "{}", stdout_output)
+            }
+        }
+    }
+}
+
+/// Attempts to heuristically extract a description of the test failure from the output of the test.
 pub fn heuristic_extract_description<'a>(
     exec_result: ExecutionResult,
     stdout: &'a str,
     stderr: &'a str,
-) -> Option<String> {
+) -> Option<DescriptionKind<'a>> {
     // If the test crashed with a signal, use that.
-    #[cfg(unix)]
     if let ExecutionResult::Fail {
-        abort_status: Some(AbortStatus::UnixSignal(sig)),
+        abort_status: Some(status),
         leaked,
     } = exec_result
     {
-        let signal_str = match crate::helpers::signal_str(sig) {
-            Some(signal_str) => format!(" SIG{signal_str}"),
-            None => String::new(),
-        };
-        return Some(format!(
-            "Test aborted with signal{signal_str} (code {sig}){}",
-            if leaked {
-                ", and also leaked handles"
-            } else {
-                ""
-            }
-        ));
+        return Some(DescriptionKind::Abort { status, leaked });
     }
 
-    #[cfg(windows)]
-    if let ExecutionResult::Fail {
-        abort_status: Some(AbortStatus::WindowsNtStatus(exception)),
-        leaked,
-    } = exec_result
-    {
-        return Some(format!(
-            "Test aborted with code {}{}",
-            crate::helpers::display_nt_status(exception),
-            if leaked {
-                ", and also leaked handles"
-            } else {
-                ""
-            }
-        ));
+    // Try the heuristic stack trace extraction first to try and grab more information first.
+    if let Some(stderr_output) = heuristic_stack_trace(stderr) {
+        return Some(DescriptionKind::StackTrace { stderr_output });
+    }
+    if let Some(stderr_output) = heuristic_error_str(stderr) {
+        return Some(DescriptionKind::ErrorStr { stderr_output });
+    }
+    if let Some(stdout_output) = heuristic_should_panic(stdout) {
+        return Some(DescriptionKind::ShouldPanic { stdout_output });
     }
 
-    // Try the heuristic stack trace extraction first as they're the more common kinds of test.
-    if let Some(description) = heuristic_stack_trace(stderr) {
-        return Some(description);
-    }
-    if let Some(description) = heuristic_error_str(stderr) {
-        return Some(description);
-    }
-    heuristic_should_panic(stdout)
-}
-
-fn heuristic_should_panic(stdout: &str) -> Option<String> {
-    for line in stdout.lines() {
-        if line.contains("note: test did not panic as expected") {
-            return Some(Output::new(line).into_string());
-        }
-    }
     None
 }
 
-fn heuristic_stack_trace(stderr: &str) -> Option<String> {
+fn heuristic_should_panic(stdout: &str) -> Option<&str> {
+    stdout
+        .lines()
+        .find(|line| line.contains("note: test did not panic as expected"))
+}
+
+fn heuristic_stack_trace(stderr: &str) -> Option<&str> {
     let panicked_at_match = PANICKED_AT_REGEX.find(stderr)?;
     // If the previous line starts with "Error: ", grab it as well -- it contains the error with
     // result-based test failures.
@@ -99,14 +166,14 @@ fn heuristic_stack_trace(stderr: &str) -> Option<String> {
         }
     }
 
-    Some(Output::new(stderr[start..].trim_end()).into_string())
+    Some(stderr[start..].trim_end())
 }
 
-fn heuristic_error_str(stderr: &str) -> Option<String> {
+fn heuristic_error_str(stderr: &str) -> Option<&str> {
     // Starting Rust 1.66, Result-based errors simply print out "Error: ".
     let error_match = ERROR_REGEX.find(stderr)?;
     let start = error_match.start();
-    Some(Output::new(stderr[start..].trim_end()).into_string())
+    Some(stderr[start..].trim_end())
 }
 
 #[cfg(test)]
@@ -132,7 +199,7 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out;
         )];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_should_panic(input).as_deref(), Some(*output));
+            assert_eq!(heuristic_should_panic(input), Some(*output));
         }
     }
 
@@ -166,7 +233,7 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
         ];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_stack_trace(input).as_deref(), Some(*output));
+            assert_eq!(heuristic_stack_trace(input), Some(*output));
         }
     }
 
@@ -178,7 +245,7 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
         )];
 
         for (input, output) in tests {
-            assert_eq!(heuristic_error_str(input).as_deref(), Some(*output));
+            assert_eq!(heuristic_error_str(input), Some(*output));
         }
     }
 }
