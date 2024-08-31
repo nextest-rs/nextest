@@ -311,7 +311,7 @@ fn set_execute_status_props(
                     &stderr_lossy,
                 );
                 if let Some(description) = description {
-                    out.set_description(description);
+                    out.set_description(description.display_human().to_junit_output());
                 }
             }
 
@@ -330,7 +330,7 @@ fn set_execute_status_props(
                     &output_lossy,
                 );
                 if let Some(description) = description {
-                    out.set_description(description);
+                    out.set_description(description.display_human().to_junit_output());
                 }
             }
 
