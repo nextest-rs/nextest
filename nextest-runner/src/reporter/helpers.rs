@@ -60,7 +60,37 @@ pub enum DescriptionKind<'a> {
     },
 }
 
-impl DescriptionKind<'_> {
+impl<'a> DescriptionKind<'a> {
+    /// Returns the subslice of standard error that contains the description.
+    pub fn stderr_output(&self) -> Option<&'a [u8]> {
+        match self {
+            DescriptionKind::Abort { .. } => None,
+            DescriptionKind::StackTrace { stderr_output } => Some(*stderr_output),
+            DescriptionKind::ErrorStr { stderr_output } => Some(*stderr_output),
+            DescriptionKind::ShouldPanic { .. } => None,
+        }
+    }
+
+    /// Returns the subslice of standard output that contains the description.
+    pub fn stdout_output(&self) -> Option<&'a [u8]> {
+        match self {
+            DescriptionKind::Abort { .. } => None,
+            DescriptionKind::StackTrace { .. } => None,
+            DescriptionKind::ErrorStr { .. } => None,
+            DescriptionKind::ShouldPanic { stdout_output } => Some(*stdout_output),
+        }
+    }
+
+    /// Returns the subslice of combined output (either stdout or stderr) that contains the description.
+    pub fn combined_output(&self) -> Option<&'a [u8]> {
+        match self {
+            DescriptionKind::Abort { .. } => None,
+            DescriptionKind::StackTrace { stderr_output } => Some(*stderr_output),
+            DescriptionKind::ErrorStr { stderr_output } => Some(*stderr_output),
+            DescriptionKind::ShouldPanic { stdout_output } => Some(*stdout_output),
+        }
+    }
+
     /// Displays the description as a user-friendly string.
     pub fn display_human(&self) -> DescriptionKindDisplay<'_> {
         DescriptionKindDisplay(*self)
@@ -181,6 +211,25 @@ fn heuristic_error_str(stderr: &[u8]) -> Option<&[u8]> {
     // should be more careful. But it's hard to tell what's printed by the error and what's printed
     // by destructors, so we lean on the side of caution.
     Some(stderr[start..].trim_end_with(|c| c.is_whitespace()))
+}
+
+/// Given a slice, find the index of the point at which highlighting should end.
+///
+/// Returns a value in the range [0, slice.len()].
+pub(super) fn highlight_end(slice: &[u8]) -> usize {
+    // We want to highlight the first two lines of the output.
+    let mut iter = slice.find_iter(b"\n");
+    match iter.next() {
+        Some(_) => {
+            match iter.next() {
+                Some(second) => second,
+                // No second newline found, so highlight the entire slice.
+                None => slice.len(),
+            }
+        }
+        // No newline found, so highlight the entire slice.
+        None => slice.len(),
+    }
 }
 
 #[cfg(test)]
@@ -347,6 +396,30 @@ some more text at the end, followed by some newlines"#,
             let error_str =
                 heuristic_error_str(input.as_bytes()).expect("error string should have been found");
             assert_eq!(DisplayWrapper(error_str), DisplayWrapper(output.as_bytes()));
+        }
+    }
+
+    #[test]
+    fn test_highlight_end() {
+        let tests: &[(&str, usize)] = &[
+            ("", 0),
+            ("\n", 1),
+            ("foo", 3),
+            ("foo\n", 4),
+            ("foo\nbar", 7),
+            ("foo\nbar\n", 7),
+            ("foo\nbar\nbaz", 7),
+            ("foo\nbar\nbaz\n", 7),
+            ("\nfoo\nbar\nbaz", 4),
+        ];
+
+        for (input, output) in tests {
+            assert_eq!(
+                highlight_end(input.as_bytes()),
+                *output,
+                "for input {:?}",
+                input
+            );
         }
     }
 
