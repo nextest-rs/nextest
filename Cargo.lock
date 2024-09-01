@@ -375,6 +375,7 @@ dependencies = [
  "once_cell",
  "owo-colors 4.0.0",
  "pathdiff",
+ "quick-junit",
  "semver",
  "serde_json",
  "shell-words",
