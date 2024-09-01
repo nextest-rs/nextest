@@ -4,7 +4,6 @@
 use crate::runner::{AbortStatus, ExecutionResult};
 use bstr::ByteSlice;
 use once_cell::sync::Lazy;
-use quick_junit::Output;
 use regex::bytes::{Regex, RegexBuilder};
 use std::fmt;
 
@@ -120,15 +119,6 @@ pub struct ByteSubslice<'a> {
 /// A display wrapper for [`DescriptionKind`].
 #[derive(Clone, Copy, Debug)]
 pub struct DescriptionKindDisplay<'a>(DescriptionKind<'a>);
-
-impl<'a> DescriptionKindDisplay<'a> {
-    /// Returns the displayer in a JUnit-compatible format.
-    ///
-    /// This format filters out invalid XML characters.
-    pub fn to_junit_output(self) -> Output {
-        Output::new(self.to_string())
-    }
-}
 
 impl fmt::Display for DescriptionKindDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

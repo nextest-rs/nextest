@@ -14,7 +14,9 @@ use crate::{
 };
 use camino::Utf8PathBuf;
 use debug_ignore::DebugIgnore;
-use quick_junit::{NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite};
+use quick_junit::{
+    NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite, XmlString,
+};
 use std::{borrow::Cow, collections::HashMap, fs::File};
 
 #[derive(Clone, Debug)]
@@ -245,7 +247,7 @@ enum TestcaseOrRerun<'a> {
 }
 
 impl TestcaseOrRerun<'_> {
-    fn set_message(&mut self, message: impl Into<String>) -> &mut Self {
+    fn set_message(&mut self, message: impl Into<XmlString>) -> &mut Self {
         match self {
             TestcaseOrRerun::Testcase(testcase) => {
                 testcase.status.set_message(message.into());
@@ -257,7 +259,7 @@ impl TestcaseOrRerun<'_> {
         self
     }
 
-    fn set_description(&mut self, description: impl Into<String>) -> &mut Self {
+    fn set_description(&mut self, description: impl Into<XmlString>) -> &mut Self {
         match self {
             TestcaseOrRerun::Testcase(testcase) => {
                 testcase.status.set_description(description.into());
@@ -269,7 +271,7 @@ impl TestcaseOrRerun<'_> {
         self
     }
 
-    fn set_system_out(&mut self, system_out: impl Into<String>) -> &mut Self {
+    fn set_system_out(&mut self, system_out: impl Into<XmlString>) -> &mut Self {
         match self {
             TestcaseOrRerun::Testcase(testcase) => {
                 testcase.set_system_out(system_out.into());
@@ -281,7 +283,7 @@ impl TestcaseOrRerun<'_> {
         self
     }
 
-    fn set_system_err(&mut self, system_err: impl Into<String>) -> &mut Self {
+    fn set_system_err(&mut self, system_err: impl Into<XmlString>) -> &mut Self {
         match self {
             TestcaseOrRerun::Testcase(testcase) => {
                 testcase.set_system_err(system_err.into());
@@ -305,7 +307,7 @@ fn set_execute_status_props(
             if !is_success {
                 let description = output.heuristic_extract_description(execute_status.result);
                 if let Some(description) = description {
-                    out.set_description(description.display_human().to_junit_output());
+                    out.set_description(description.display_human().to_string());
                 }
             }
 
