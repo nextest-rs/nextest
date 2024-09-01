@@ -167,6 +167,9 @@ fn heuristic_stack_trace(stderr: &[u8]) -> Option<&[u8]> {
         }
     }
 
+    // TODO: this grabs too much -- it is possible that destructors print out further messages so we
+    // should be more careful. But it's hard to tell what's printed by the panic and what's printed
+    // by destructors, so we lean on the side of caution.
     Some(stderr[start..].trim_end_with(|c| c.is_whitespace()))
 }
 
@@ -174,6 +177,9 @@ fn heuristic_error_str(stderr: &[u8]) -> Option<&[u8]> {
     // Starting Rust 1.66, Result-based errors simply print out "Error: ".
     let error_match = ERROR_REGEX.find(stderr)?;
     let start = error_match.start();
+    // TODO: this grabs too much -- it is possible that destructors print out further messages so we
+    // should be more careful. But it's hard to tell what's printed by the error and what's printed
+    // by destructors, so we lean on the side of caution.
     Some(stderr[start..].trim_end_with(|c| c.is_whitespace()))
 }
 
@@ -200,10 +206,9 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out;
         )];
 
         for (input, output) in tests {
-            assert_eq!(
-                heuristic_should_panic(input.as_bytes()),
-                Some(output.as_bytes())
-            );
+            let extracted = heuristic_should_panic(input.as_bytes())
+                .expect("should-panic message should have been found");
+            assert_eq!(DisplayWrapper(extracted), DisplayWrapper(output.as_bytes()));
         }
     }
 
@@ -227,20 +232,107 @@ thread 'test_result_failure' panicked at 'assertion failed: `(left == right)`
   left: `1`,
  right: `0`: the test returned a termination value with a non-zero status code (1) which indicates a failure', /rustc/fe5b13d681f25ee6474be29d748c65adcd91f69e/library/test/src/lib.rs:186:5
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+more text at the end, followed by some newlines
+
+
             "#,
                 r#"Error: Custom { kind: InvalidData, error: "this is an error" }
 thread 'test_result_failure' panicked at 'assertion failed: `(left == right)`
   left: `1`,
  right: `0`: the test returned a termination value with a non-zero status code (1) which indicates a failure', /rustc/fe5b13d681f25ee6474be29d748c65adcd91f69e/library/test/src/lib.rs:186:5
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+more text at the end, followed by some newlines"#,
+            ),
+            // With RUST_BACKTRACE=1
+            (
+                r#"
+some initial text
+line 2
+line 3
+thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
+test
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/panicking.rs:652:5
+   1: core::panicking::panic_fmt
+             at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/panicking.rs:72:14
+   2: nextest_runner::reporter::helpers::tests::test_heuristic_stack_trace
+             at ./src/reporter/helpers.rs:237:9
+   3: nextest_runner::reporter::helpers::tests::test_heuristic_stack_trace::{{closure}}
+             at ./src/reporter/helpers.rs:236:36
+   4: core::ops::function::FnOnce::call_once
+             at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/ops/function.rs:250:5
+   5: core::ops::function::FnOnce::call_once
+             at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+more text at the end, followed by some newlines
+
+
+"#,
+                r#"thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
+test
+stack backtrace:
+   0: rust_begin_unwind
+             at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/panicking.rs:652:5
+   1: core::panicking::panic_fmt
+             at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/panicking.rs:72:14
+   2: nextest_runner::reporter::helpers::tests::test_heuristic_stack_trace
+             at ./src/reporter/helpers.rs:237:9
+   3: nextest_runner::reporter::helpers::tests::test_heuristic_stack_trace::{{closure}}
+             at ./src/reporter/helpers.rs:236:36
+   4: core::ops::function::FnOnce::call_once
+             at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/ops/function.rs:250:5
+   5: core::ops::function::FnOnce::call_once
+             at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+more text at the end, followed by some newlines"#,
+            ),
+            // RUST_BACKTRACE=full
+            (
+                r#"
+some initial text
+thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
+test
+stack backtrace:
+   0:     0x61e6da135fe5 - std::backtrace_rs::backtrace::libunwind::trace::h23054e327d0d4b55
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/../../backtrace/src/backtrace/libunwind.rs:116:5
+   1:     0x61e6da135fe5 - std::backtrace_rs::backtrace::trace_unsynchronized::h0cc587407d7f7f64
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/../../backtrace/src/backtrace/mod.rs:66:5
+   2:     0x61e6da135fe5 - std::sys_common::backtrace::_print_fmt::h4feeb59774730d6b
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/sys_common/backtrace.rs:68:5
+   3:     0x61e6da135fe5 - <std::sys_common::backtrace::_print::DisplayBacktrace as core::fmt::Display>::fmt::hd736fd5964392270
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/sys_common/backtrace.rs:44:22
+   4:     0x61e6da16433b - core::fmt::rt::Argument::fmt::h105051d8ea1ade1e
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/fmt/rt.rs:165:63
+   5:     0x61e6da16433b - core::fmt::write::hc6043626647b98ea
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/fmt/mod.rs:1168:21
+some more text at the end, followed by some newlines
+
+
+"#,
+                r#"thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
+test
+stack backtrace:
+   0:     0x61e6da135fe5 - std::backtrace_rs::backtrace::libunwind::trace::h23054e327d0d4b55
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/../../backtrace/src/backtrace/libunwind.rs:116:5
+   1:     0x61e6da135fe5 - std::backtrace_rs::backtrace::trace_unsynchronized::h0cc587407d7f7f64
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/../../backtrace/src/backtrace/mod.rs:66:5
+   2:     0x61e6da135fe5 - std::sys_common::backtrace::_print_fmt::h4feeb59774730d6b
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/sys_common/backtrace.rs:68:5
+   3:     0x61e6da135fe5 - <std::sys_common::backtrace::_print::DisplayBacktrace as core::fmt::Display>::fmt::hd736fd5964392270
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/std/src/sys_common/backtrace.rs:44:22
+   4:     0x61e6da16433b - core::fmt::rt::Argument::fmt::h105051d8ea1ade1e
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/fmt/rt.rs:165:63
+   5:     0x61e6da16433b - core::fmt::write::hc6043626647b98ea
+                               at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/fmt/mod.rs:1168:21
+some more text at the end, followed by some newlines"#,
             ),
         ];
 
         for (input, output) in tests {
-            assert_eq!(
-                heuristic_stack_trace(input.as_bytes()),
-                Some(output.as_bytes())
-            );
+            let trace = heuristic_stack_trace(input.as_bytes())
+                .expect("stack trace should have been found");
+            assert_eq!(DisplayWrapper(trace), DisplayWrapper(output.as_bytes()));
         }
     }
 
@@ -252,10 +344,19 @@ note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"#,
         )];
 
         for (input, output) in tests {
-            assert_eq!(
-                heuristic_error_str(input.as_bytes()),
-                Some(output.as_bytes()),
-            );
+            let error_str =
+                heuristic_error_str(input.as_bytes()).expect("error string should have been found");
+            assert_eq!(DisplayWrapper(error_str), DisplayWrapper(output.as_bytes()));
+        }
+    }
+
+    // Wrapper so that panic messages show up nicely in the test output.
+    #[derive(Eq, PartialEq)]
+    struct DisplayWrapper<'a>(&'a [u8]);
+
+    impl<'a> fmt::Debug for DisplayWrapper<'a> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}", String::from_utf8_lossy(self.0))
         }
     }
 }
