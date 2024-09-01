@@ -39,55 +39,63 @@ pub enum DescriptionKind<'a> {
     ///
     /// The output is borrowed from standard error.
     StackTrace {
-        /// The stack trace as a subslice of the standard error.
-        stderr_output: &'a [u8],
+        /// The subslice of standard error that contains the stack trace.
+        stderr_subslice: ByteSubslice<'a>,
     },
 
     /// An error string was found in the output.
     ///
     /// The output is borrowed from standard error.
     ErrorStr {
-        /// The error string as a subslice of the standard error.
-        stderr_output: &'a [u8],
+        /// The subslice of standard error that contains the stack trace.
+        stderr_subslice: ByteSubslice<'a>,
     },
 
     /// A should-panic test did not panic.
     ///
     /// The output is borrowed from standard output.
     ShouldPanic {
-        /// The should-panic of the test as a subslice of the standard output.
-        stdout_output: &'a [u8],
+        /// The subslice of standard output that contains the should-panic message.
+        stdout_subslice: ByteSubslice<'a>,
     },
 }
 
 impl<'a> DescriptionKind<'a> {
     /// Returns the subslice of standard error that contains the description.
-    pub fn stderr_output(&self) -> Option<&'a [u8]> {
+    pub fn stderr_subslice(&self) -> Option<ByteSubslice<'a>> {
         match self {
             DescriptionKind::Abort { .. } => None,
-            DescriptionKind::StackTrace { stderr_output } => Some(*stderr_output),
-            DescriptionKind::ErrorStr { stderr_output } => Some(*stderr_output),
+            DescriptionKind::StackTrace { stderr_subslice }
+            | DescriptionKind::ErrorStr {
+                stderr_subslice, ..
+            } => Some(*stderr_subslice),
             DescriptionKind::ShouldPanic { .. } => None,
         }
     }
 
     /// Returns the subslice of standard output that contains the description.
-    pub fn stdout_output(&self) -> Option<&'a [u8]> {
+    pub fn stdout_subslice(&self) -> Option<ByteSubslice<'a>> {
         match self {
             DescriptionKind::Abort { .. } => None,
             DescriptionKind::StackTrace { .. } => None,
             DescriptionKind::ErrorStr { .. } => None,
-            DescriptionKind::ShouldPanic { stdout_output } => Some(*stdout_output),
+            DescriptionKind::ShouldPanic {
+                stdout_subslice, ..
+            } => Some(*stdout_subslice),
         }
     }
 
     /// Returns the subslice of combined output (either stdout or stderr) that contains the description.
-    pub fn combined_output(&self) -> Option<&'a [u8]> {
+    pub fn combined_subslice(&self) -> Option<ByteSubslice<'a>> {
         match self {
             DescriptionKind::Abort { .. } => None,
-            DescriptionKind::StackTrace { stderr_output } => Some(*stderr_output),
-            DescriptionKind::ErrorStr { stderr_output } => Some(*stderr_output),
-            DescriptionKind::ShouldPanic { stdout_output } => Some(*stdout_output),
+            DescriptionKind::StackTrace { stderr_subslice }
+            | DescriptionKind::ErrorStr {
+                stderr_subslice, ..
+            } => Some(*stderr_subslice),
+            DescriptionKind::ShouldPanic {
+                stdout_subslice, ..
+            } => Some(*stdout_subslice),
         }
     }
 
@@ -95,6 +103,18 @@ impl<'a> DescriptionKind<'a> {
     pub fn display_human(&self) -> DescriptionKindDisplay<'_> {
         DescriptionKindDisplay(*self)
     }
+}
+
+/// A subslice of a byte slice.
+///
+/// This type tracks the start index of the subslice from the parent slice.
+#[derive(Clone, Copy, Debug)]
+pub struct ByteSubslice<'a> {
+    /// The slice.
+    pub slice: &'a [u8],
+
+    /// The start index of the subslice from the parent slice.
+    pub start: usize,
 }
 
 /// A display wrapper for [`DescriptionKind`].
@@ -137,14 +157,15 @@ impl fmt::Display for DescriptionKindDisplay<'_> {
                 }
                 Ok(())
             }
-            DescriptionKind::StackTrace { stderr_output } => {
-                write!(f, "{}", String::from_utf8_lossy(stderr_output))
+            DescriptionKind::StackTrace { stderr_subslice } => {
+                // Strip invalid XML characters.
+                write!(f, "{}", String::from_utf8_lossy(stderr_subslice.slice))
             }
-            DescriptionKind::ErrorStr { stderr_output } => {
-                write!(f, "{}", String::from_utf8_lossy(stderr_output))
+            DescriptionKind::ErrorStr { stderr_subslice } => {
+                write!(f, "{}", String::from_utf8_lossy(stderr_subslice.slice))
             }
-            DescriptionKind::ShouldPanic { stdout_output } => {
-                write!(f, "{}", String::from_utf8_lossy(stdout_output))
+            DescriptionKind::ShouldPanic { stdout_subslice } => {
+                write!(f, "{}", String::from_utf8_lossy(stdout_subslice.slice))
             }
         }
     }
@@ -166,26 +187,39 @@ pub fn heuristic_extract_description<'a>(
     }
 
     // Try the heuristic stack trace extraction first to try and grab more information first.
-    if let Some(stderr_output) = heuristic_stack_trace(stderr) {
-        return Some(DescriptionKind::StackTrace { stderr_output });
+    if let Some(stderr_subslice) = heuristic_stack_trace(stderr) {
+        return Some(DescriptionKind::StackTrace { stderr_subslice });
     }
-    if let Some(stderr_output) = heuristic_error_str(stderr) {
-        return Some(DescriptionKind::ErrorStr { stderr_output });
+    if let Some(stderr_subslice) = heuristic_error_str(stderr) {
+        return Some(DescriptionKind::ErrorStr { stderr_subslice });
     }
-    if let Some(stdout_output) = heuristic_should_panic(stdout) {
-        return Some(DescriptionKind::ShouldPanic { stdout_output });
+    if let Some(stdout_subslice) = heuristic_should_panic(stdout) {
+        return Some(DescriptionKind::ShouldPanic { stdout_subslice });
     }
 
     None
 }
 
-fn heuristic_should_panic(stdout: &[u8]) -> Option<&[u8]> {
-    stdout
+fn heuristic_should_panic(stdout: &[u8]) -> Option<ByteSubslice<'_>> {
+    let line = stdout
         .lines()
-        .find(|line| line.contains_str("note: test did not panic as expected"))
+        .find(|line| line.contains_str("note: test did not panic as expected"))?;
+
+    // SAFETY: line is a subslice of stdout.
+    let start = unsafe { line.as_ptr().offset_from(stdout.as_ptr()) };
+
+    let start = usize::try_from(start).unwrap_or_else(|error| {
+        panic!(
+            "negative offset from stdout.as_ptr() ({:x}) to line.as_ptr() ({:x}): {}",
+            stdout.as_ptr() as usize,
+            line.as_ptr() as usize,
+            error
+        )
+    });
+    Some(ByteSubslice { slice: line, start })
 }
 
-fn heuristic_stack_trace(stderr: &[u8]) -> Option<&[u8]> {
+fn heuristic_stack_trace(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
     let panicked_at_match = PANICKED_AT_REGEX.find(stderr)?;
     // If the previous line starts with "Error: ", grab it as well -- it contains the error with
     // result-based test failures.
@@ -200,17 +234,24 @@ fn heuristic_stack_trace(stderr: &[u8]) -> Option<&[u8]> {
     // TODO: this grabs too much -- it is possible that destructors print out further messages so we
     // should be more careful. But it's hard to tell what's printed by the panic and what's printed
     // by destructors, so we lean on the side of caution.
-    Some(stderr[start..].trim_end_with(|c| c.is_whitespace()))
+    Some(ByteSubslice {
+        slice: stderr[start..].trim_end_with(|c| c.is_whitespace()),
+        start,
+    })
 }
 
-fn heuristic_error_str(stderr: &[u8]) -> Option<&[u8]> {
+fn heuristic_error_str(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
     // Starting Rust 1.66, Result-based errors simply print out "Error: ".
     let error_match = ERROR_REGEX.find(stderr)?;
     let start = error_match.start();
+
     // TODO: this grabs too much -- it is possible that destructors print out further messages so we
     // should be more careful. But it's hard to tell what's printed by the error and what's printed
     // by destructors, so we lean on the side of caution.
-    Some(stderr[start..].trim_end_with(|c| c.is_whitespace()))
+    Some(ByteSubslice {
+        slice: stderr[start..].trim_end_with(|c| c.is_whitespace()),
+        start,
+    })
 }
 
 /// Given a slice, find the index of the point at which highlighting should end.
@@ -257,7 +298,14 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out;
         for (input, output) in tests {
             let extracted = heuristic_should_panic(input.as_bytes())
                 .expect("should-panic message should have been found");
-            assert_eq!(DisplayWrapper(extracted), DisplayWrapper(output.as_bytes()));
+            assert_eq!(
+                DisplayWrapper(extracted.slice),
+                DisplayWrapper(output.as_bytes())
+            );
+            assert_eq!(
+                extracted.start,
+                extracted.slice.as_ptr() as usize - input.as_bytes().as_ptr() as usize
+            );
         }
     }
 
@@ -379,9 +427,16 @@ some more text at the end, followed by some newlines"#,
         ];
 
         for (input, output) in tests {
-            let trace = heuristic_stack_trace(input.as_bytes())
+            let extracted = heuristic_stack_trace(input.as_bytes())
                 .expect("stack trace should have been found");
-            assert_eq!(DisplayWrapper(trace), DisplayWrapper(output.as_bytes()));
+            assert_eq!(
+                DisplayWrapper(extracted.slice),
+                DisplayWrapper(output.as_bytes())
+            );
+            assert_eq!(
+                extracted.start,
+                extracted.slice.as_ptr() as usize - input.as_bytes().as_ptr() as usize
+            );
         }
     }
 
@@ -393,9 +448,16 @@ some more text at the end, followed by some newlines"#,
         )];
 
         for (input, output) in tests {
-            let error_str =
+            let extracted =
                 heuristic_error_str(input.as_bytes()).expect("error string should have been found");
-            assert_eq!(DisplayWrapper(error_str), DisplayWrapper(output.as_bytes()));
+            assert_eq!(
+                DisplayWrapper(extracted.slice),
+                DisplayWrapper(output.as_bytes())
+            );
+            assert_eq!(
+                extracted.start,
+                extracted.slice.as_ptr() as usize - input.as_bytes().as_ptr() as usize
+            );
         }
     }
 

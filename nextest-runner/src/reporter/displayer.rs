@@ -5,7 +5,7 @@
 //!
 //! The main structure in this module is [`TestReporter`].
 
-use super::structured::StructuredReporter;
+use super::{helpers::ByteSubslice, structured::StructuredReporter};
 use crate::{
     config::{NextestProfile, ScriptId},
     errors::WriteEventError,
@@ -1376,14 +1376,11 @@ impl<'a> TestReporterImpl<'a> {
                             self.write_instance(*test_instance, writer)?;
                             writeln!(writer, "{}", " ---".style(header_style))?;
 
-                            // SAFETY: stdout matches d.stdout_output
-                            unsafe {
-                                self.write_test_single_output_with_description(
-                                    stdout,
-                                    description.and_then(|d| d.stdout_output()),
-                                    writer,
-                                )?;
-                            }
+                            self.write_test_single_output_with_description(
+                                stdout,
+                                description.and_then(|d| d.stdout_subslice()),
+                                writer,
+                            )?;
                         }
 
                         if !stderr.is_empty() {
@@ -1399,14 +1396,11 @@ impl<'a> TestReporterImpl<'a> {
                             self.write_instance(*test_instance, writer)?;
                             writeln!(writer, "{}", " ---".style(header_style))?;
 
-                            // SAFETY: stderr matches d.stderr_output
-                            unsafe {
-                                self.write_test_single_output_with_description(
-                                    stderr,
-                                    description.and_then(|d| d.stderr_output()),
-                                    writer,
-                                )?;
-                            }
+                            self.write_test_single_output_with_description(
+                                stderr,
+                                description.and_then(|d| d.stderr_subslice()),
+                                writer,
+                            )?;
                         }
                     }
                     TestOutput::Combined { output } => {
@@ -1423,14 +1417,11 @@ impl<'a> TestReporterImpl<'a> {
                             self.write_instance(*test_instance, writer)?;
                             writeln!(writer, "{}", " ---".style(header_style))?;
 
-                            // SAFETY: output matches d.combined_output
-                            unsafe {
-                                self.write_test_single_output_with_description(
-                                    output,
-                                    description.and_then(|d| d.combined_output()),
-                                    writer,
-                                )?;
-                            }
+                            self.write_test_single_output_with_description(
+                                output,
+                                description.and_then(|d| d.combined_subslice()),
+                                writer,
+                            )?;
                         }
                     }
                 }
@@ -1467,27 +1458,23 @@ impl<'a> TestReporterImpl<'a> {
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         // SAFETY: The description is not provided.
-        unsafe { self.write_test_single_output_with_description(output, None, writer) }
+        self.write_test_single_output_with_description(output, None, writer)
     }
 
-    /// Writes a test output to the writer, along with a subslice of the output to highlight.
+    /// Writes a test output to the writer, along with optionally a subslice of the output to
+    /// highlight.
     ///
-    /// # Safety
-    ///
-    /// `description`, if provided, must be a subslice of `output.buf`.
-    unsafe fn write_test_single_output_with_description(
+    /// The description must be a subslice of the output.
+    fn write_test_single_output_with_description(
         &self,
         output: &TestSingleOutput,
-        description: Option<&[u8]>,
+        description: Option<ByteSubslice<'_>>,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         if self.styles.is_colorized {
             const RESET_COLOR: &[u8] = b"\x1b[0m";
-            if let Some(subslice) = description {
-                // SAFETY: Preconditions are guaranteed by the caller.
-                let start =
-                    unsafe { subslice.as_ptr().byte_offset_from(output.buf.as_ptr()) } as usize;
-                let end = start + highlight_end(subslice);
+            if let Some(ByteSubslice { start, slice }) = description {
+                let end = start + highlight_end(slice);
 
                 // Output the start and end of the test without stripping ANSI escapes, then reset
                 // the color afterwards in case the output is malformed.
