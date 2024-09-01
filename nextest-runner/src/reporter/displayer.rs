@@ -1481,7 +1481,7 @@ impl<'a> TestReporterImpl<'a> {
                 writer.write_all(&output.buf[..start])?;
                 writer.write_all(RESET_COLOR)?;
 
-                write!(writer, "{}", FmtPrefix(&self.styles.count))?;
+                write!(writer, "{}", FmtPrefix(&self.styles.fail))?;
 
                 // Strip ANSI escapes from this part of the output. It's unlikely there are any, but
                 // strip it just in case.
@@ -1489,7 +1489,7 @@ impl<'a> TestReporterImpl<'a> {
                 no_color.write_all(&output.buf[start..end])?;
                 let writer = no_color.into_inner()?;
 
-                write!(writer, "{}", FmtSuffix(&self.styles.count))?;
+                write!(writer, "{}", FmtSuffix(&self.styles.fail))?;
 
                 // `end` is guaranteed to be within the bounds of `output.buf`. (It is actually safe
                 // for it to be equal to `output.buf.len()` -- it gets treated as an empty list in

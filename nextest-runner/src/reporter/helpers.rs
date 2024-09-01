@@ -210,7 +210,9 @@ fn heuristic_should_panic(stdout: &[u8]) -> Option<ByteSubslice<'_>> {
 }
 
 fn heuristic_panic_message(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
-    let panicked_at_match = PANICKED_AT_REGEX.find(stderr)?;
+    // Look for the last instance to handle situations like proptest which repeatedly print out
+    // `panicked at ...` messages.
+    let panicked_at_match = PANICKED_AT_REGEX.find_iter(stderr).last()?;
     // If the previous line starts with "Error: ", grab it as well -- it contains the error with
     // result-based test failures.
     let mut start = panicked_at_match.start();
@@ -300,7 +302,7 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out;
     }
 
     #[test]
-    fn test_heuristic_stack_trace() {
+    fn test_heuristic_panic_message() {
         let tests: &[(&str, &str)] = &[
             (
                 "thread 'main' panicked at 'foo', src/lib.rs:1\n",
@@ -330,7 +332,17 @@ thread 'test_result_failure' panicked at 'assertion failed: `(left == right)`
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 more text at the end, followed by some newlines"#,
             ),
-            // With RUST_BACKTRACE=1
+            // Multiple panics: only the last one should be extracted.
+            (
+                r#"
+thread 'main' panicked at src/lib.rs:1:
+foo
+thread 'main' panicked at src/lib.rs:2:
+bar
+"#,
+                r#"thread 'main' panicked at src/lib.rs:2:
+bar"#,
+            ), // With RUST_BACKTRACE=1
             (
                 r#"
 some initial text
