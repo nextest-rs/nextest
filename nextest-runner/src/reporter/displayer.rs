@@ -11,7 +11,7 @@ use crate::{
     errors::WriteEventError,
     helpers::{io_write_test_name, plural},
     list::{SkipCounts, TestInstance, TestList},
-    reporter::aggregator::EventAggregator,
+    reporter::{aggregator::EventAggregator, helpers::highlight_end},
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
         FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
@@ -1354,55 +1354,85 @@ impl<'a> TestReporterImpl<'a> {
         };
 
         match &run_status.output {
-            Some(TestExecutionOutput::Output(TestOutput::Split { stdout, stderr })) => {
-                if !stdout.is_empty() {
-                    write!(writer, "\n{}", "--- ".style(header_style))?;
-                    let out_len = self.write_attempt(run_status, header_style, writer)?;
-                    // The width is to align test instances.
-                    write!(
-                        writer,
-                        "{:width$}",
-                        "STDOUT:".style(header_style),
-                        width = (21 - out_len)
-                    )?;
-                    self.write_instance(*test_instance, writer)?;
-                    writeln!(writer, "{}", " ---".style(header_style))?;
+            Some(TestExecutionOutput::Output(output)) => {
+                let description = if self.styles.is_colorized {
+                    output.heuristic_extract_description(run_status.result)
+                } else {
+                    None
+                };
 
-                    self.write_test_single_output(stdout, writer)?;
-                }
+                match output {
+                    TestOutput::Split { stdout, stderr } => {
+                        if !stdout.is_empty() {
+                            write!(writer, "\n{}", "--- ".style(header_style))?;
+                            let out_len = self.write_attempt(run_status, header_style, writer)?;
+                            // The width is to align test instances.
+                            write!(
+                                writer,
+                                "{:width$}",
+                                "STDOUT:".style(header_style),
+                                width = (21 - out_len)
+                            )?;
+                            self.write_instance(*test_instance, writer)?;
+                            writeln!(writer, "{}", " ---".style(header_style))?;
 
-                if !stderr.is_empty() {
-                    write!(writer, "\n{}", "--- ".style(header_style))?;
-                    let out_len = self.write_attempt(run_status, header_style, writer)?;
-                    // The width is to align test instances.
-                    write!(
-                        writer,
-                        "{:width$}",
-                        "STDERR:".style(header_style),
-                        width = (21 - out_len)
-                    )?;
-                    self.write_instance(*test_instance, writer)?;
-                    writeln!(writer, "{}", " ---".style(header_style))?;
+                            // SAFETY: stdout matches d.stdout_output
+                            unsafe {
+                                self.write_test_single_output_with_description(
+                                    stdout,
+                                    description.and_then(|d| d.stdout_output()),
+                                    writer,
+                                )?;
+                            }
+                        }
 
-                    self.write_test_single_output(stderr, writer)?;
-                }
-            }
+                        if !stderr.is_empty() {
+                            write!(writer, "\n{}", "--- ".style(header_style))?;
+                            let out_len = self.write_attempt(run_status, header_style, writer)?;
+                            // The width is to align test instances.
+                            write!(
+                                writer,
+                                "{:width$}",
+                                "STDERR:".style(header_style),
+                                width = (21 - out_len)
+                            )?;
+                            self.write_instance(*test_instance, writer)?;
+                            writeln!(writer, "{}", " ---".style(header_style))?;
 
-            Some(TestExecutionOutput::Output(TestOutput::Combined { output })) => {
-                if !output.is_empty() {
-                    write!(writer, "\n{}", "--- ".style(header_style))?;
-                    let out_len = self.write_attempt(run_status, header_style, writer)?;
-                    // The width is to align test instances.
-                    write!(
-                        writer,
-                        "{:width$}",
-                        "OUTPUT:".style(header_style),
-                        width = (21 - out_len)
-                    )?;
-                    self.write_instance(*test_instance, writer)?;
-                    writeln!(writer, "{}", " ---".style(header_style))?;
+                            // SAFETY: stderr matches d.stderr_output
+                            unsafe {
+                                self.write_test_single_output_with_description(
+                                    stderr,
+                                    description.and_then(|d| d.stderr_output()),
+                                    writer,
+                                )?;
+                            }
+                        }
+                    }
+                    TestOutput::Combined { output } => {
+                        if !output.is_empty() {
+                            write!(writer, "\n{}", "--- ".style(header_style))?;
+                            let out_len = self.write_attempt(run_status, header_style, writer)?;
+                            // The width is to align test instances.
+                            write!(
+                                writer,
+                                "{:width$}",
+                                "OUTPUT:".style(header_style),
+                                width = (21 - out_len)
+                            )?;
+                            self.write_instance(*test_instance, writer)?;
+                            writeln!(writer, "{}", " ---".style(header_style))?;
 
-                    self.write_test_single_output(output, writer)?;
+                            // SAFETY: output matches d.combined_output
+                            unsafe {
+                                self.write_test_single_output_with_description(
+                                    output,
+                                    description.and_then(|d| d.combined_output()),
+                                    writer,
+                                )?;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1430,17 +1460,61 @@ impl<'a> TestReporterImpl<'a> {
         writeln!(writer)
     }
 
+    /// Writes a test output to the writer.
     fn write_test_single_output(
         &self,
         output: &TestSingleOutput,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
+        // SAFETY: The description is not provided.
+        unsafe { self.write_test_single_output_with_description(output, None, writer) }
+    }
+
+    /// Writes a test output to the writer, along with a subslice of the output to highlight.
+    ///
+    /// # Safety
+    ///
+    /// `description`, if provided, must be a subslice of `output.buf`.
+    unsafe fn write_test_single_output_with_description(
+        &self,
+        output: &TestSingleOutput,
+        description: Option<&[u8]>,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
         if self.styles.is_colorized {
             const RESET_COLOR: &[u8] = b"\x1b[0m";
-            // Output the text without stripping ANSI escapes, then reset the color afterwards in
-            // case the output is malformed.
-            writer.write_all(&output.buf)?;
-            writer.write_all(RESET_COLOR)?;
+            if let Some(subslice) = description {
+                // SAFETY: Preconditions are guaranteed by the caller.
+                let start =
+                    unsafe { subslice.as_ptr().byte_offset_from(output.buf.as_ptr()) } as usize;
+                let end = start + highlight_end(subslice);
+
+                // Output the start and end of the test without stripping ANSI escapes, then reset
+                // the color afterwards in case the output is malformed.
+                writer.write_all(&output.buf[..start])?;
+                writer.write_all(RESET_COLOR)?;
+
+                write!(writer, "{}", FmtPrefix(&self.styles.count))?;
+
+                // Strip ANSI escapes from this part of the output. It's unlikely there are any, but
+                // strip it just in case.
+                let mut no_color = strip_ansi_escapes::Writer::new(writer);
+                no_color.write_all(&output.buf[start..end])?;
+                let writer = no_color.into_inner()?;
+
+                write!(writer, "{}", FmtSuffix(&self.styles.count))?;
+
+                // `end` is guaranteed to be within the bounds of `output.buf`. (It is actually safe
+                // for it to be equal to `output.buf.len()` -- it gets treated as an empty list in
+                // that case.)
+                writer.write_all(&output.buf[end..])?;
+                writer.write_all(RESET_COLOR)?;
+            } else {
+                // Output the text without stripping ANSI escapes, then reset the color afterwards
+                // in case the output is malformed.
+                writer.write_all(&output.buf)?;
+                writer.write_all(RESET_COLOR)?;
+            }
         } else {
             // Strip ANSI escapes from the output if nextest itself isn't colorized.
             let mut no_color = strip_ansi_escapes::Writer::new(writer);
@@ -1488,6 +1562,22 @@ impl<'a> fmt::Debug for TestReporter<'a> {
             .field("stdout", &"BufferWriter { .. }")
             .field("stderr", &"BufferWriter { .. }")
             .finish()
+    }
+}
+
+struct FmtPrefix<'a>(&'a Style);
+
+impl fmt::Display for FmtPrefix<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt_prefix(f)
+    }
+}
+
+struct FmtSuffix<'a>(&'a Style);
+
+impl fmt::Display for FmtSuffix<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt_suffix(f)
     }
 }
 
