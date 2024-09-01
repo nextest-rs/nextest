@@ -32,6 +32,7 @@ nextest-metadata = { version = "=0.12.0", path = "../nextest-metadata" }
 once_cell = "1.19.0"
 owo-colors.workspace = true
 pathdiff = { version = "0.2.1", features = ["camino"] }
+quick-junit.workspace = true
 semver = "1.0.23"
 shell-words = "1.1.0"
 supports-color = "2.1.0"

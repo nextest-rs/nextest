@@ -34,10 +34,10 @@ pub enum DescriptionKind<'a> {
         leaked: bool,
     },
 
-    /// A stack trace was found in the output.
+    /// A panic message was found in the output.
     ///
     /// The output is borrowed from standard error.
-    StackTrace {
+    PanicMessage {
         /// The subslice of standard error that contains the stack trace.
         stderr_subslice: ByteSubslice<'a>,
     },
@@ -64,7 +64,7 @@ impl<'a> DescriptionKind<'a> {
     pub fn stderr_subslice(&self) -> Option<ByteSubslice<'a>> {
         match self {
             DescriptionKind::Abort { .. } => None,
-            DescriptionKind::StackTrace { stderr_subslice }
+            DescriptionKind::PanicMessage { stderr_subslice }
             | DescriptionKind::ErrorStr {
                 stderr_subslice, ..
             } => Some(*stderr_subslice),
@@ -76,7 +76,7 @@ impl<'a> DescriptionKind<'a> {
     pub fn stdout_subslice(&self) -> Option<ByteSubslice<'a>> {
         match self {
             DescriptionKind::Abort { .. } => None,
-            DescriptionKind::StackTrace { .. } => None,
+            DescriptionKind::PanicMessage { .. } => None,
             DescriptionKind::ErrorStr { .. } => None,
             DescriptionKind::ShouldPanic {
                 stdout_subslice, ..
@@ -88,7 +88,7 @@ impl<'a> DescriptionKind<'a> {
     pub fn combined_subslice(&self) -> Option<ByteSubslice<'a>> {
         match self {
             DescriptionKind::Abort { .. } => None,
-            DescriptionKind::StackTrace { stderr_subslice }
+            DescriptionKind::PanicMessage { stderr_subslice }
             | DescriptionKind::ErrorStr {
                 stderr_subslice, ..
             } => Some(*stderr_subslice),
@@ -147,7 +147,7 @@ impl fmt::Display for DescriptionKindDisplay<'_> {
                 }
                 Ok(())
             }
-            DescriptionKind::StackTrace { stderr_subslice } => {
+            DescriptionKind::PanicMessage { stderr_subslice } => {
                 // Strip invalid XML characters.
                 write!(f, "{}", String::from_utf8_lossy(stderr_subslice.slice))
             }
@@ -177,8 +177,8 @@ pub fn heuristic_extract_description<'a>(
     }
 
     // Try the heuristic stack trace extraction first to try and grab more information first.
-    if let Some(stderr_subslice) = heuristic_stack_trace(stderr) {
-        return Some(DescriptionKind::StackTrace { stderr_subslice });
+    if let Some(stderr_subslice) = heuristic_panic_message(stderr) {
+        return Some(DescriptionKind::PanicMessage { stderr_subslice });
     }
     if let Some(stderr_subslice) = heuristic_error_str(stderr) {
         return Some(DescriptionKind::ErrorStr { stderr_subslice });
@@ -209,7 +209,7 @@ fn heuristic_should_panic(stdout: &[u8]) -> Option<ByteSubslice<'_>> {
     Some(ByteSubslice { slice: line, start })
 }
 
-fn heuristic_stack_trace(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
+fn heuristic_panic_message(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
     let panicked_at_match = PANICKED_AT_REGEX.find(stderr)?;
     // If the previous line starts with "Error: ", grab it as well -- it contains the error with
     // result-based test failures.
@@ -247,7 +247,7 @@ fn heuristic_error_str(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
 /// Given a slice, find the index of the point at which highlighting should end.
 ///
 /// Returns a value in the range [0, slice.len()].
-pub(super) fn highlight_end(slice: &[u8]) -> usize {
+pub fn highlight_end(slice: &[u8]) -> usize {
     // We want to highlight the first two lines of the output.
     let mut iter = slice.find_iter(b"\n");
     match iter.next() {
@@ -417,7 +417,7 @@ some more text at the end, followed by some newlines"#,
         ];
 
         for (input, output) in tests {
-            let extracted = heuristic_stack_trace(input.as_bytes())
+            let extracted = heuristic_panic_message(input.as_bytes())
                 .expect("stack trace should have been found");
             assert_eq!(
                 DisplayWrapper(extracted.slice),

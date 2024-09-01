@@ -1,6 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::ExtractOutputFormat;
 use camino::Utf8PathBuf;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
@@ -249,6 +250,19 @@ pub enum ExpectedError {
         #[from]
         err: FormatVersionError,
     },
+    #[error("extract read error")]
+    DebugExtractReadError {
+        kind: &'static str,
+        path: Utf8PathBuf,
+        #[source]
+        err: std::io::Error,
+    },
+    #[error("extract write error")]
+    DebugExtractWriteError {
+        format: ExtractOutputFormat,
+        #[source]
+        err: std::io::Error,
+    },
 }
 
 impl ExpectedError {
@@ -386,7 +400,8 @@ impl ExpectedError {
             | Self::DialoguerError { .. }
             | Self::SignalHandlerSetupError { .. }
             | Self::ShowTestGroupsError { .. }
-            | Self::InvalidMessageFormatVersion { .. } => NextestExitCode::SETUP_ERROR,
+            | Self::InvalidMessageFormatVersion { .. }
+            | Self::DebugExtractReadError { .. } => NextestExitCode::SETUP_ERROR,
             Self::ConfigParseError { err } => {
                 // Experimental features not being enabled are their own error.
                 match err.kind() {
@@ -412,9 +427,9 @@ impl ExpectedError {
             Self::TestRunFailed => NextestExitCode::TEST_RUN_FAILED,
             Self::NoTestsRun { .. } => NextestExitCode::NO_TESTS_RUN,
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
-            Self::WriteTestListError { .. } | Self::WriteEventError { .. } => {
-                NextestExitCode::WRITE_OUTPUT_ERROR
-            }
+            Self::WriteTestListError { .. }
+            | Self::WriteEventError { .. }
+            | Self::DebugExtractWriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             #[cfg(feature = "self-update")]
             Self::UpdateError { .. } => NextestExitCode::UPDATE_ERROR,
             Self::ExperimentalFeatureNotEnabled { .. } => {
@@ -831,6 +846,17 @@ impl ExpectedError {
             }
             Self::InvalidMessageFormatVersion { err } => {
                 log::error!("error parsing message format version");
+                Some(err as &dyn Error)
+            }
+            Self::DebugExtractReadError { kind, path, err } => {
+                log::error!(
+                    "error reading {kind} file `{}`",
+                    path.if_supports_color(Stream::Stderr, |x| x.bold()),
+                );
+                Some(err as &dyn Error)
+            }
+            Self::DebugExtractWriteError { format, err } => {
+                log::error!("error writing {format} output");
                 Some(err as &dyn Error)
             }
         };

@@ -30,9 +30,15 @@ use nextest_runner::{
     partition::PartitionerBuilder,
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     redact::Redactor,
-    reporter::{structured, FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder},
+    reporter::{
+        heuristic_extract_description, highlight_end, structured, DescriptionKind,
+        FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder,
+    },
     reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
-    runner::{configure_handle_inheritance, FinalRunStats, RunStatsFailureKind, TestRunnerBuilder},
+    runner::{
+        configure_handle_inheritance, ExecutionResult, FinalRunStats, RunStatsFailureKind,
+        TestRunnerBuilder,
+    },
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -42,10 +48,12 @@ use nextest_runner::{
 };
 use once_cell::sync::OnceCell;
 use owo_colors::{OwoColorize, Stream, Style};
+use quick_junit::XmlString;
 use semver::Version;
 use std::{
     collections::BTreeSet,
     env::VarError,
+    fmt,
     io::{Cursor, Write},
     sync::Arc,
 };
@@ -170,6 +178,7 @@ impl AppOpts {
                 output_writer,
             ),
             Command::Self_ { command } => command.exec(self.common.output),
+            Command::Debug { command } => command.exec(self.common.output),
         }
     }
 }
@@ -377,6 +386,15 @@ enum Command {
     Self_ {
         #[clap(subcommand)]
         command: SelfCommand,
+    },
+    /// Debug commands
+    ///
+    /// The commands in this section are for nextest's own developers and those integrating with it
+    /// to debug issues. They are not part of the public API and may change at any time.
+    #[clap(hide = true)]
+    Debug {
+        #[clap(subcommand)]
+        command: DebugCommand,
     },
 }
 
@@ -1967,6 +1985,172 @@ impl SelfCommand {
                     }
                 }
             }
+        }
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum DebugCommand {
+    /// Show the data that nextest would extract from standard output or standard error.
+    ///
+    /// Text extraction is a heuristic process driven by a bunch of regexes and other similar logic.
+    /// This command shows what nextest would extract from a given input.
+    Extract {
+        /// The path to the standard output produced by the test process.
+        #[arg(long, required_unless_present_any = ["stderr", "combined"])]
+        stdout: Option<Utf8PathBuf>,
+
+        /// The path to the standard error produced by the test process.
+        #[arg(long, required_unless_present_any = ["stdout", "combined"])]
+        stderr: Option<Utf8PathBuf>,
+
+        /// The combined output produced by the test process.
+        #[arg(long, conflicts_with_all = ["stdout", "stderr"])]
+        combined: Option<Utf8PathBuf>,
+
+        /// The kind of output to produce.
+        #[arg(value_enum)]
+        output_format: ExtractOutputFormat,
+    },
+}
+
+impl DebugCommand {
+    fn exec(self, output: OutputOpts) -> Result<i32> {
+        let _ = output.init();
+
+        match self {
+            DebugCommand::Extract {
+                stdout,
+                stderr,
+                combined,
+                output_format,
+            } => {
+                // Either stdout + stderr or combined must be present.
+                if let Some(combined) = combined {
+                    let combined = std::fs::read(&combined).map_err(|err| {
+                        ExpectedError::DebugExtractReadError {
+                            kind: "combined",
+                            path: combined,
+                            err,
+                        }
+                    })?;
+
+                    let description_kind = extract_description(&combined, &combined);
+                    display_description_kind(description_kind, output_format)?;
+                } else {
+                    let stdout = stdout
+                        .map(|path| {
+                            std::fs::read(&path).map_err(|err| {
+                                ExpectedError::DebugExtractReadError {
+                                    kind: "stdout",
+                                    path,
+                                    err,
+                                }
+                            })
+                        })
+                        .transpose()?
+                        .unwrap_or_default();
+                    let stderr = stderr
+                        .map(|path| {
+                            std::fs::read(&path).map_err(|err| {
+                                ExpectedError::DebugExtractReadError {
+                                    kind: "stderr",
+                                    path,
+                                    err,
+                                }
+                            })
+                        })
+                        .transpose()?
+                        .unwrap_or_default();
+
+                    let description_kind = extract_description(&stdout, &stderr);
+                    display_description_kind(description_kind, output_format)?;
+                }
+            }
+        }
+
+        Ok(0)
+    }
+}
+
+fn extract_description<'a>(stdout: &'a [u8], stderr: &'a [u8]) -> Option<DescriptionKind<'a>> {
+    // The execution result is a generic one.
+    heuristic_extract_description(
+        ExecutionResult::Fail {
+            abort_status: None,
+            leaked: false,
+        },
+        stdout,
+        stderr,
+    )
+}
+
+fn display_description_kind(
+    kind: Option<DescriptionKind<'_>>,
+    output_format: ExtractOutputFormat,
+) -> Result<()> {
+    match output_format {
+        ExtractOutputFormat::Raw => {
+            if let Some(kind) = kind {
+                if let Some(out) = kind.combined_subslice() {
+                    return std::io::stdout().write_all(out.slice).map_err(|err| {
+                        ExpectedError::DebugExtractWriteError {
+                            format: output_format,
+                            err,
+                        }
+                    });
+                }
+            }
+        }
+        ExtractOutputFormat::JunitDescription => {
+            if let Some(kind) = kind {
+                println!(
+                    "{}",
+                    XmlString::new(kind.display_human().to_string()).as_str()
+                );
+            }
+        }
+        ExtractOutputFormat::Highlight => {
+            if let Some(kind) = kind {
+                if let Some(out) = kind.combined_subslice() {
+                    let end = highlight_end(out.slice);
+                    return std::io::stdout()
+                        .write_all(&out.slice[..end])
+                        .map_err(|err| ExpectedError::DebugExtractWriteError {
+                            format: output_format,
+                            err,
+                        });
+                }
+            }
+        }
+    }
+
+    eprintln!("(no description found)");
+    Ok(())
+}
+
+/// Output format for `nextest debug extract`.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum ExtractOutputFormat {
+    /// Show the raw text extracted.
+    Raw,
+
+    /// Show what would be put in the description field of JUnit reports.
+    ///
+    /// This is similar to `Raw`, but is valid Unicode, and strips out ANSI escape codes and other
+    /// invalid XML characters.
+    JunitDescription,
+
+    /// Show what would be highlighted in nextest's output.
+    Highlight,
+}
+
+impl fmt::Display for ExtractOutputFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Raw => write!(f, "raw"),
+            Self::JunitDescription => write!(f, "junit-description"),
+            Self::Highlight => write!(f, "highlight"),
         }
     }
 }

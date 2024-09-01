@@ -11,4 +11,4 @@ mod helpers;
 pub mod structured;
 
 pub use displayer::*;
-pub use helpers::{heuristic_extract_description, DescriptionKind};
+pub use helpers::{heuristic_extract_description, highlight_end, DescriptionKind};
