@@ -299,6 +299,8 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out;
                 extracted.slice.as_ptr() as usize - input.as_bytes().as_ptr() as usize
             );
         }
+
+        panic!("test fail!");
     }
 
     #[test]

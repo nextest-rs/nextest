@@ -18,6 +18,7 @@ use crate::{
     },
     test_output::{TestExecutionOutput, TestOutput, TestSingleOutput},
 };
+use bstr::ByteSlice;
 use chrono::{DateTime, FixedOffset};
 use debug_ignore::DebugIgnore;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -1469,7 +1470,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         output: &TestSingleOutput,
         description: Option<ByteSubslice<'_>>,
-        writer: &mut dyn Write,
+        mut writer: &mut dyn Write,
     ) -> io::Result<()> {
         if self.styles.is_colorized {
             const RESET_COLOR: &[u8] = b"\x1b[0m";
@@ -1481,15 +1482,24 @@ impl<'a> TestReporterImpl<'a> {
                 writer.write_all(&output.buf[..start])?;
                 writer.write_all(RESET_COLOR)?;
 
-                write!(writer, "{}", FmtPrefix(&self.styles.fail))?;
+                // Some systems (e.g. GitHub Actions, Buildomat) don't handle multiline ANSI
+                // coloring -- they reset colors after each line. To work around that,
+                // we reset and re-apply colors for each line.
+                for line in output.buf[start..end].lines_with_terminator() {
+                    write!(writer, "{}", FmtPrefix(&self.styles.fail))?;
 
-                // Strip ANSI escapes from this part of the output. It's unlikely there are any, but
-                // strip it just in case.
-                let mut no_color = strip_ansi_escapes::Writer::new(writer);
-                no_color.write_all(&output.buf[start..end])?;
-                let writer = no_color.into_inner()?;
+                    // Write everything before the newline, stripping ANSI escapes.
+                    let mut no_color = strip_ansi_escapes::Writer::new(writer);
+                    let trimmed = line.trim_end_with(|c| c == '\n' || c == '\r');
+                    no_color.write_all(trimmed.as_bytes())?;
+                    writer = no_color.into_inner()?;
 
-                write!(writer, "{}", FmtSuffix(&self.styles.fail))?;
+                    // End coloring.
+                    write!(writer, "{}", FmtSuffix(&self.styles.fail))?;
+
+                    // Now write the newline, if present.
+                    writer.write_all(&line[trimmed.len()..])?;
+                }
 
                 // `end` is guaranteed to be within the bounds of `output.buf`. (It is actually safe
                 // for it to be equal to `output.buf.len()` -- it gets treated as an empty list in
