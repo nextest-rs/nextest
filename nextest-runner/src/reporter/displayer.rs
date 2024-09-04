@@ -18,6 +18,7 @@ use crate::{
     },
     test_output::{TestExecutionOutput, TestOutput, TestSingleOutput},
 };
+use bstr::ByteSlice;
 use chrono::{DateTime, FixedOffset};
 use debug_ignore::DebugIgnore;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -1472,30 +1473,8 @@ impl<'a> TestReporterImpl<'a> {
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         if self.styles.is_colorized {
-            const RESET_COLOR: &[u8] = b"\x1b[0m";
-            if let Some(ByteSubslice { start, slice }) = description {
-                let end = start + highlight_end(slice);
-
-                // Output the start and end of the test without stripping ANSI escapes, then reset
-                // the color afterwards in case the output is malformed.
-                writer.write_all(&output.buf[..start])?;
-                writer.write_all(RESET_COLOR)?;
-
-                write!(writer, "{}", FmtPrefix(&self.styles.fail))?;
-
-                // Strip ANSI escapes from this part of the output. It's unlikely there are any, but
-                // strip it just in case.
-                let mut no_color = strip_ansi_escapes::Writer::new(writer);
-                no_color.write_all(&output.buf[start..end])?;
-                let writer = no_color.into_inner()?;
-
-                write!(writer, "{}", FmtSuffix(&self.styles.fail))?;
-
-                // `end` is guaranteed to be within the bounds of `output.buf`. (It is actually safe
-                // for it to be equal to `output.buf.len()` -- it gets treated as an empty list in
-                // that case.)
-                writer.write_all(&output.buf[end..])?;
-                writer.write_all(RESET_COLOR)?;
+            if let Some(subslice) = description {
+                write_output_with_highlight(&output.buf, subslice, &self.styles.fail, writer)?;
             } else {
                 // Output the text without stripping ANSI escapes, then reset the color afterwards
                 // in case the output is malformed.
@@ -1550,6 +1529,49 @@ impl<'a> fmt::Debug for TestReporter<'a> {
             .field("stderr", &"BufferWriter { .. }")
             .finish()
     }
+}
+
+const RESET_COLOR: &[u8] = b"\x1b[0m";
+
+fn write_output_with_highlight(
+    output: &[u8],
+    ByteSubslice { slice, start }: ByteSubslice,
+    highlight_style: &Style,
+    mut writer: &mut dyn Write,
+) -> io::Result<()> {
+    let end = start + highlight_end(slice);
+
+    // Output the start and end of the test without stripping ANSI escapes, then reset
+    // the color afterwards in case the output is malformed.
+    writer.write_all(&output[..start])?;
+    writer.write_all(RESET_COLOR)?;
+
+    // Some systems (e.g. GitHub Actions, Buildomat) don't handle multiline ANSI
+    // coloring -- they reset colors after each line. To work around that,
+    // we reset and re-apply colors for each line.
+    for line in output[start..end].lines_with_terminator() {
+        write!(writer, "{}", FmtPrefix(highlight_style))?;
+
+        // Write everything before the newline, stripping ANSI escapes.
+        let mut no_color = strip_ansi_escapes::Writer::new(writer);
+        let trimmed = line.trim_end_with(|c| c == '\n' || c == '\r');
+        no_color.write_all(trimmed.as_bytes())?;
+        writer = no_color.into_inner()?;
+
+        // End coloring.
+        write!(writer, "{}", FmtSuffix(highlight_style))?;
+
+        // Now write the newline, if present.
+        writer.write_all(&line[trimmed.len()..])?;
+    }
+
+    // `end` is guaranteed to be within the bounds of `output.buf`. (It is actually safe
+    // for it to be equal to `output.buf.len()` -- it gets treated as an empty list in
+    // that case.)
+    writer.write_all(&output[end..])?;
+    writer.write_all(RESET_COLOR)?;
+
+    Ok(())
 }
 
 struct FmtPrefix<'a>(&'a Style);
@@ -2542,6 +2564,65 @@ mod tests {
             skip_counts,
             "profile.my-profile.default-filter",
             &Styles::default(),
+            &mut buf,
+        )
+        .unwrap();
+        String::from_utf8(buf).unwrap()
+    }
+
+    #[test]
+    fn test_write_output_with_highlight() {
+        const RESET_COLOR: &str = "\u{1b}[0m";
+        const BOLD_RED: &str = "\u{1b}[31;1m";
+
+        assert_eq!(
+            write_output_with_highlight_buf("output", 0, Some(6)),
+            format!("{RESET_COLOR}{BOLD_RED}output{RESET_COLOR}{RESET_COLOR}")
+        );
+
+        assert_eq!(
+            write_output_with_highlight_buf("output", 1, Some(5)),
+            format!("o{RESET_COLOR}{BOLD_RED}utpu{RESET_COLOR}t{RESET_COLOR}")
+        );
+
+        assert_eq!(
+            write_output_with_highlight_buf("output\nhighlight 1\nhighlight 2", 7, None),
+            format!(
+                "output\n{RESET_COLOR}\
+                {BOLD_RED}highlight 1{RESET_COLOR}\n\
+                {BOLD_RED}highlight 2{RESET_COLOR}{RESET_COLOR}"
+            )
+        );
+
+        assert_eq!(
+            write_output_with_highlight_buf(
+                "output\nhighlight 1\nhighlight 2\nnot highlighted",
+                7,
+                None
+            ),
+            format!(
+                "output\n{RESET_COLOR}\
+                {BOLD_RED}highlight 1{RESET_COLOR}\n\
+                {BOLD_RED}highlight 2{RESET_COLOR}\n\
+                not highlighted{RESET_COLOR}"
+            )
+        );
+    }
+
+    fn write_output_with_highlight_buf(output: &str, start: usize, end: Option<usize>) -> String {
+        // We're not really testing non-UTF-8 output here, and using strings results in much more
+        // readable error messages.
+        let mut buf = Vec::new();
+        let end = end.unwrap_or(output.len());
+
+        let subslice = ByteSubslice {
+            start,
+            slice: &output.as_bytes()[start..end],
+        };
+        write_output_with_highlight(
+            output.as_bytes(),
+            subslice,
+            &Style::new().red().bold(),
             &mut buf,
         )
         .unwrap();
