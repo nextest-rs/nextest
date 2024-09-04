@@ -388,7 +388,7 @@ dependencies = [
  "semver",
  "serde_json",
  "shell-words",
- "supports-color 2.1.0",
+ "supports-color 3.0.1",
  "supports-unicode",
  "swrite",
  "thiserror",
@@ -1578,7 +1578,7 @@ dependencies = [
  "cfg-if",
  "miette-derive",
  "owo-colors 4.0.0",
- "supports-color 3.0.0",
+ "supports-color 3.0.1",
  "supports-hyperlinks",
  "supports-unicode",
  "terminal_size",
@@ -2801,9 +2801,9 @@ dependencies = [
 
 [[package]]
 name = "supports-color"
-version = "3.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9829b314621dfc575df4e409e79f9d6a66a3bd707ab73f23cb4aa3a854ac854f"
+checksum = "8775305acf21c96926c900ad056abeef436701108518cf890020387236ac5a77"
 dependencies = [
  "is_ci",
 ]
