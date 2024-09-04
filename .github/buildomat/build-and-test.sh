@@ -8,6 +8,9 @@ set -o xtrace
 
 PLATFORM="$1"
 
+# Enable ANSI colors in Cargo and nextest output.
+export CARGO_TERM_COLOR=always
+
 cargo --version
 rustc --version
 
