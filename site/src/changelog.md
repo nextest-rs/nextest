@@ -8,6 +8,18 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.78] - 2024-09-05
+
+### Added
+
+For failing tests, if nextest finds text matching patterns that indicate failure, such as "thread
+panicked at", it now highlights those lines (if color is enabled).
+
+Rust's libtest doesn't provide structured output for this, so nextest uses heuristics. These
+heuristics will be tweaked over time; to see what nextest would highlight, run `cargo nextest debug
+extract highlight`, and provide either `--stdout` and `--stderr`, or `--combined` if stdout and
+stderr are combined.
+
 ## [0.9.77] - 2024-08-28
 
 ### Changed
@@ -1075,6 +1087,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.78]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.78
 [0.9.77]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.77
 [0.9.76]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.76
 [0.9.75]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.75

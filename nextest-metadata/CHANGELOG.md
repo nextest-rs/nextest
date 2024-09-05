@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.12.1] - 2024-09-05
+
+Internal dependency updates.
+
 ## [0.12.0] - 2024-08-28
 
 ### Changed
@@ -239,6 +243,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.12.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.1
 [0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.0
 [0.11.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.3
 [0.11.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.2
