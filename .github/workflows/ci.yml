@@ -92,6 +92,18 @@ jobs:
         run: cargo test --doc
       - name: Test with locally built nextest
         run: cargo local-nt run --profile ci
+      - name: Upload results
+        # Run this step even if the test step ahead fails
+        if: "!cancelled()"
+        uses: trunk-io/analytics-uploader@main
+        with:
+          # Path to your test results.
+          junit-paths: target/nextest/ci/junit.xml
+          # Provide your Trunk organization slug.
+          org-slug: nextest-rs
+          # Provide your Trunk API token as a GitHub secret.
+          token: ${{ secrets.TRUNK_API_TOKEN }}
+        continue-on-error: true
       - name: Test with latest nextest release
         run: cargo nextest run --profile ci
       - name: Test without double-spawning
