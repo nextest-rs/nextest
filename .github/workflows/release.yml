@@ -163,7 +163,8 @@ jobs:
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        # Temporarily pin Rust to 1.80: https://github.com/nextest-rs/nextest/issues/1690
+        uses: dtolnay/rust-toolchain@1.80.1
       - uses: taiki-e/upload-rust-binary-action@3bbb07bb7f438d0fdf6ce5118bdf9e6e21c0b2a5 # v1.22.0
         with:
           bin: cargo-nextest
