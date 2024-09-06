@@ -35,5 +35,5 @@ nextest-metadata.workspace = true
 pathdiff = { version = "0.2.1", features = ["camino"] }
 regex = "1.10.6"
 serde_json = "1.0.128"
-insta = { version = "1.39.0", default-features = false }
+insta = { version = "1.40.0", default-features = false }
 target-spec.workspace = true
