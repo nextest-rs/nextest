@@ -3,7 +3,7 @@
 
 use crate::{
     cargo_cli::{CargoCli, CargoOptions},
-    output::{should_redact, OutputContext, OutputOpts, OutputWriter},
+    output::{should_redact, OutputContext, OutputOpts, OutputWriter, StderrStyles},
     reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
     ExpectedError, Result, ReuseBuildKind,
 };
@@ -47,7 +47,7 @@ use nextest_runner::{
     RustcCli,
 };
 use once_cell::sync::OnceCell;
-use owo_colors::{OwoColorize, Stream, Style};
+use owo_colors::OwoColorize;
 use quick_junit::XmlString;
 use semver::Version;
 use std::{
@@ -71,16 +71,32 @@ pub struct CargoNextestApp {
 }
 
 impl CargoNextestApp {
+    /// Initializes the output context.
+    pub fn init_output(&self) -> OutputContext {
+        match &self.subcommand {
+            NextestSubcommand::Nextest(args) => args.common.output.init(),
+            NextestSubcommand::Ntr(args) => args.common.output.init(),
+            #[cfg(unix)]
+            // Double-spawned processes should never use coloring.
+            NextestSubcommand::DoubleSpawn(_) => OutputContext::color_never_init(),
+        }
+    }
+
     /// Executes the app.
-    pub fn exec(self, cli_args: Vec<String>, output_writer: &mut OutputWriter) -> Result<i32> {
+    pub fn exec(
+        self,
+        cli_args: Vec<String>,
+        output: OutputContext,
+        output_writer: &mut OutputWriter,
+    ) -> Result<i32> {
         #[cfg(feature = "experimental-tokio-console")]
         nextest_runner::console::init();
 
         match self.subcommand {
-            NextestSubcommand::Nextest(app) => app.exec(cli_args, output_writer),
-            NextestSubcommand::Ntr(opts) => opts.exec(cli_args, output_writer),
+            NextestSubcommand::Nextest(app) => app.exec(cli_args, output, output_writer),
+            NextestSubcommand::Ntr(opts) => opts.exec(cli_args, output, output_writer),
             #[cfg(unix)]
-            NextestSubcommand::DoubleSpawn(opts) => opts.exec(),
+            NextestSubcommand::DoubleSpawn(opts) => opts.exec(output),
         }
     }
 }
@@ -111,9 +127,12 @@ impl AppOpts {
     /// Execute the command.
     ///
     /// Returns the exit code.
-    fn exec(self, cli_args: Vec<String>, output_writer: &mut OutputWriter) -> Result<i32> {
-        let output = self.common.output.init();
-
+    fn exec(
+        self,
+        cli_args: Vec<String>,
+        output: OutputContext,
+        output_writer: &mut OutputWriter,
+    ) -> Result<i32> {
         match self.command {
             Command::List {
                 cargo_options,
@@ -173,8 +192,8 @@ impl AppOpts {
             }
             Command::ShowConfig { command } => command.exec(
                 self.common.manifest_path,
-                self.common.output,
                 self.common.config_opts,
+                output,
                 output_writer,
             ),
             Command::Self_ { command } => command.exec(self.common.output),
@@ -408,9 +427,12 @@ struct NtrOpts {
 }
 
 impl NtrOpts {
-    fn exec(self, cli_args: Vec<String>, output_writer: &mut OutputWriter) -> Result<i32> {
-        let output = self.common.output.init();
-
+    fn exec(
+        self,
+        cli_args: Vec<String>,
+        output: OutputContext,
+        output_writer: &mut OutputWriter,
+    ) -> Result<i32> {
         let base = BaseApp::new(
             output,
             self.run_opts.reuse_build,
@@ -1079,9 +1101,11 @@ impl BaseApp {
                 let host = HostPlatform::current(PlatformLibdir::from_rustc_stdout(
                     RustcCli::print_host_libdir().read(),
                 ))?;
-                let target = if let Some(triple) =
-                    discover_target_triple(&cargo_configs, cargo_opts.target.as_deref())
-                {
+                let target = if let Some(triple) = discover_target_triple(
+                    &cargo_configs,
+                    cargo_opts.target.as_deref(),
+                    &output.stderr_styles(),
+                ) {
                     let libdir = PlatformLibdir::from_rustc_stdout(
                         RustcCli::print_target_libdir(&triple).read(),
                     );
@@ -1189,6 +1213,8 @@ impl BaseApp {
     }
 
     fn check_version_config_initial(&self, version_cfg: &NextestVersionConfig) -> Result<()> {
+        let styles = self.output.stderr_styles();
+
         match version_cfg.eval(
             &self.current_version,
             self.config_opts.override_version_check,
@@ -1210,8 +1236,8 @@ impl BaseApp {
             } => {
                 log::warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
-                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
-                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    required.style(styles.bold),
+                    current.style(styles.bold),
                 );
                 if let Some(tool) = tool {
                     log::info!(
@@ -1267,6 +1293,8 @@ impl BaseApp {
     }
 
     fn check_version_config_final(&self, version_cfg: &NextestVersionConfig) -> Result<()> {
+        let styles = self.output.stderr_styles();
+
         match version_cfg.eval(
             &self.current_version,
             self.config_opts.override_version_check,
@@ -1288,8 +1316,8 @@ impl BaseApp {
             } => {
                 log::warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
-                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
-                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    required.style(styles.bold),
+                    current.style(styles.bold),
                 );
                 if let Some(tool) = tool {
                     log::info!(
@@ -1303,6 +1331,7 @@ impl BaseApp {
                 crate::helpers::log_needs_update(
                     log::Level::Info,
                     crate::helpers::BYPASS_VERSION_TEXT,
+                    &styles,
                 );
 
                 Ok(())
@@ -1333,8 +1362,13 @@ impl BaseApp {
     }
 
     fn load_runner(&self, build_platforms: &BuildPlatforms) -> &TargetRunner {
-        self.target_runner
-            .get_or_init(|| runner_for_target(&self.cargo_configs, build_platforms))
+        self.target_runner.get_or_init(|| {
+            runner_for_target(
+                &self.cargo_configs,
+                build_platforms,
+                &self.output.stderr_styles(),
+            )
+        })
     }
 
     fn exec_archive(
@@ -1798,11 +1832,10 @@ impl ShowConfigCommand {
     fn exec(
         self,
         manifest_path: Option<Utf8PathBuf>,
-        output: OutputOpts,
         config_opts: ConfigOpts,
+        output: OutputContext,
         output_writer: &mut OutputWriter,
     ) -> Result<i32> {
-        let output = output.init();
         match self {
             Self::Version {} => {
                 let mut cargo_cli =
@@ -1856,6 +1889,7 @@ impl ShowConfigCommand {
                         crate::helpers::log_needs_update(
                             log::Level::Error,
                             crate::helpers::BYPASS_VERSION_TEXT,
+                            &output.stderr_styles(),
                         );
                         Ok(nextest_metadata::NextestExitCode::REQUIRED_VERSION_NOT_MET)
                     }
@@ -1863,6 +1897,7 @@ impl ShowConfigCommand {
                         crate::helpers::log_needs_update(
                             log::Level::Warn,
                             crate::helpers::BYPASS_VERSION_TEXT,
+                            &output.stderr_styles(),
                         );
                         Ok(nextest_metadata::NextestExitCode::RECOMMENDED_VERSION_NOT_MET)
                     }
@@ -2199,6 +2234,7 @@ fn acquire_graph_data(
 fn discover_target_triple(
     cargo_configs: &CargoConfigs,
     target_cli_option: Option<&str>,
+    styles: &StderrStyles,
 ) -> Option<TargetTriple> {
     match TargetTriple::find(cargo_configs, target_cli_option) {
         Ok(Some(triple)) => {
@@ -2216,7 +2252,7 @@ fn discover_target_triple(
             None
         }
         Err(err) => {
-            warn_on_err("target triple", &err);
+            warn_on_err("target triple", &err, styles);
             None
         }
     }
@@ -2225,52 +2261,48 @@ fn discover_target_triple(
 fn runner_for_target(
     cargo_configs: &CargoConfigs,
     build_platforms: &BuildPlatforms,
+    styles: &StderrStyles,
 ) -> TargetRunner {
     match TargetRunner::new(cargo_configs, build_platforms) {
         Ok(runner) => {
             if build_platforms.target.is_some() {
                 if let Some(runner) = runner.target() {
-                    log_platform_runner("for the target platform, ", runner);
+                    log_platform_runner("for the target platform, ", runner, styles);
                 }
                 if let Some(runner) = runner.host() {
-                    log_platform_runner("for the host platform, ", runner);
+                    log_platform_runner("for the host platform, ", runner, styles);
                 }
             } else {
                 // If triple is None, then the host and target platforms use the same runner if
                 // any.
                 if let Some(runner) = runner.target() {
-                    log_platform_runner("", runner);
+                    log_platform_runner("", runner, styles);
                 }
             }
             runner
         }
         Err(err) => {
-            warn_on_err("target runner", &err);
+            warn_on_err("target runner", &err, styles);
             TargetRunner::empty()
         }
     }
 }
 
-fn log_platform_runner(prefix: &str, runner: &PlatformRunner) {
+fn log_platform_runner(prefix: &str, runner: &PlatformRunner, styles: &StderrStyles) {
     let runner_command = shell_words::join(std::iter::once(runner.binary()).chain(runner.args()));
     log::info!(
         "{prefix}using target runner `{}` defined by {}",
-        runner_command.if_supports_color(Stream::Stderr, |s| s.bold()),
+        runner_command.style(styles.bold),
         runner.source()
     )
 }
 
-fn warn_on_err(thing: &str, err: &(dyn std::error::Error)) {
+fn warn_on_err(thing: &str, err: &(dyn std::error::Error), styles: &StderrStyles) {
     let mut s = String::with_capacity(256);
     swrite!(s, "could not determine {thing}: {err}");
     let mut next_error = err.source();
     while let Some(err) = next_error {
-        swrite!(
-            s,
-            "\n  {} {}",
-            "caused by:".if_supports_color(Stream::Stderr, |s| s.style(Style::new().yellow())),
-            err
-        );
+        swrite!(s, "\n  {} {}", "caused by:".style(styles.warning_text), err);
         next_error = err.source();
     }
 

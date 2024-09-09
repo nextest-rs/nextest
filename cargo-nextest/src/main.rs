@@ -14,10 +14,12 @@ fn main() -> Result<()> {
         .collect();
 
     let opts = CargoNextestApp::parse();
-    match opts.exec(cli_args, &mut OutputWriter::default()) {
+    let output = opts.init_output();
+
+    match opts.exec(cli_args, output, &mut OutputWriter::default()) {
         Ok(code) => std::process::exit(code),
         Err(error) => {
-            error.display_to_stderr();
+            error.display_to_stderr(&output.stderr_styles());
             std::process::exit(error.process_exit_code())
         }
     }

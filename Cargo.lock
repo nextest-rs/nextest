@@ -388,7 +388,7 @@ dependencies = [
  "semver",
  "serde_json",
  "shell-words",
- "supports-color 2.1.0",
+ "supports-color",
  "supports-unicode",
  "swrite",
  "thiserror",
@@ -1449,17 +1449,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
 
 [[package]]
-name = "is-terminal"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f23ff5ef2b80d608d61efee834934d862cd92461afc0560dedf493e4c033738b"
-dependencies = [
- "hermit-abi",
- "libc",
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "is_ci"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1578,7 +1567,7 @@ dependencies = [
  "cfg-if",
  "miette-derive",
  "owo-colors 4.0.0",
- "supports-color 3.0.0",
+ "supports-color",
  "supports-hyperlinks",
  "supports-unicode",
  "terminal_size",
@@ -1813,7 +1802,6 @@ dependencies = [
  "miette",
  "miniz_oxide",
  "num-traits",
- "owo-colors 4.0.0",
  "proc-macro2",
  "quote",
  "rand",
@@ -1946,9 +1934,6 @@ name = "owo-colors"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caff54706df99d2a78a5a4e3455ff45448d81ef1bb63c22cd14052ca0e993a3f"
-dependencies = [
- "supports-color 2.1.0",
-]
 
 [[package]]
 name = "pathdiff"
@@ -2791,19 +2776,9 @@ checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
 name = "supports-color"
-version = "2.1.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6398cde53adc3c4557306a96ce67b302968513830a77a95b2b17305d9719a89"
-dependencies = [
- "is-terminal",
- "is_ci",
-]
-
-[[package]]
-name = "supports-color"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9829b314621dfc575df4e409e79f9d6a66a3bd707ab73f23cb4aa3a854ac854f"
+checksum = "8775305acf21c96926c900ad056abeef436701108518cf890020387236ac5a77"
 dependencies = [
  "is_ci",
 ]
