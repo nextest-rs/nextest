@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{output::Color, ExpectedError, Result};
+use crate::{output::OutputContext, ExpectedError, Result};
 use camino::Utf8PathBuf;
 use clap::Args;
 use nextest_runner::double_spawn::double_spawn_child_init;
@@ -17,9 +17,8 @@ pub(crate) struct DoubleSpawnOpts {
 }
 
 impl DoubleSpawnOpts {
-    pub(crate) fn exec(self) -> Result<i32> {
-        // This double-spawned process should never use coloring.
-        Color::Never.init();
+    // output is passed in to ensure that the context is initialized.
+    pub(crate) fn exec(self, _output: OutputContext) -> Result<i32> {
         double_spawn_child_init();
         let args = shell_words::split(&self.args).map_err(|err| {
             ExpectedError::DoubleSpawnParseArgsError {

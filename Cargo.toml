@@ -24,7 +24,9 @@ guppy = "0.17.7"
 maplit = "1.0.2"
 miette = "7.2.0"
 once_cell = "1.19.0"
-owo-colors = { version = "4.0.0", features = ["supports-colors"] }
+# note: we don't use owo-colors' if_supports_color support for now, instead preferring to use our
+# own supports-color + stylesheets everywhere.
+owo-colors = "4.0.0"
 newtype-uuid = { version = "1.1.0", features = ["v4"] }
 nextest-metadata = { version = "0.12.1", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"

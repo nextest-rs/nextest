@@ -1,13 +1,13 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::ExtractOutputFormat;
+use crate::{output::StderrStyles, ExtractOutputFormat};
 use camino::Utf8PathBuf;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::{errors::*, redact::Redactor};
-use owo_colors::{OwoColorize, Stream};
+use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, string::FromUtf8Error};
 use thiserror::Error;
@@ -440,17 +440,14 @@ impl ExpectedError {
     }
 
     /// Displays this error to stderr.
-    pub fn display_to_stderr(&self) {
+    pub fn display_to_stderr(&self, styles: &StderrStyles) {
         let mut next_error = match &self {
             Self::SetCurrentDirFailed { error } => {
                 log::error!("could not change to requested directory");
                 Some(error as &dyn Error)
             }
             Self::CargoMetadataExecFailed { command, err } => {
-                log::error!(
-                    "failed to execute `{}`",
-                    command.if_supports_color(Stream::Stderr, |x| x.bold())
-                );
+                log::error!("failed to execute `{}`", command.style(styles.bold));
                 Some(err as &dyn Error)
             }
             Self::CargoMetadataFailed { .. } => {
@@ -458,10 +455,7 @@ impl ExpectedError {
                 None
             }
             Self::CargoLocateProjectExecFailed { command, err } => {
-                log::error!(
-                    "failed to execute `{}`",
-                    command.if_supports_color(Stream::Stderr, |x| x.bold())
-                );
+                log::error!("failed to execute `{}`", command.style(styles.bold));
                 Some(err as &dyn Error)
             }
             Self::CargoLocateProjectFailed { .. } => {
@@ -475,7 +469,7 @@ impl ExpectedError {
             Self::WorkspaceRootInvalid { workspace_root } => {
                 log::error!(
                     "workspace root `{}` is invalid",
-                    workspace_root.if_supports_color(Stream::Stderr, |x| x.bold())
+                    workspace_root.style(styles.bold)
                 );
                 None
             }
@@ -491,7 +485,7 @@ impl ExpectedError {
                     ReuseBuildKind::ReuseWithWorkspaceRemap { workspace_root } => {
                         format!(
                             "\n(hint: ensure that project source is available at {})",
-                            workspace_root.if_supports_color(Stream::Stderr, |x| x.bold())
+                            workspace_root.style(styles.bold)
                         )
                     }
                     ReuseBuildKind::Reuse => {
@@ -503,14 +497,14 @@ impl ExpectedError {
                 };
                 log::error!(
                     "workspace root manifest at {} does not exist{hint_str}",
-                    path.if_supports_color(Stream::Stderr, |x| x.bold())
+                    path.style(styles.bold)
                 );
                 None
             }
             Self::StoreDirCreateError { store_dir, err } => {
                 log::error!(
                     "failed to create store dir at `{}`",
-                    store_dir.if_supports_color(Stream::Stderr, |x| x.bold())
+                    store_dir.style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
@@ -527,9 +521,7 @@ impl ExpectedError {
                                 "for config file `{}`{}, failed to parse overrides for profile: {}",
                                 err.config_file(),
                                 provided_by_tool(err.tool()),
-                                override_error
-                                    .profile_name
-                                    .if_supports_color(Stream::Stderr, |p| p.bold()),
+                                override_error.profile_name.style(styles.bold)
                             );
                             for report in override_error.reports() {
                                 log::error!(target: "cargo_nextest::no_heading", "{report:?}");
@@ -543,18 +535,14 @@ impl ExpectedError {
                     } => {
                         let known_groups_str = known_groups
                             .iter()
-                            .map(|group_name| {
-                                group_name.if_supports_color(Stream::Stderr, |x| x.bold())
-                            })
+                            .map(|group_name| group_name.style(styles.bold))
                             .join(", ");
                         let mut errors_str = String::new();
                         for error in errors {
                             errors_str.push_str(&format!(
                                 " - group `{}` in overrides for profile `{}`\n",
-                                error.name.if_supports_color(Stream::Stderr, |x| x.bold()),
-                                error
-                                    .profile_name
-                                    .if_supports_color(Stream::Stderr, |x| x.bold())
+                                error.name.style(styles.bold),
+                                error.profile_name.style(styles.bold)
                             ));
                         }
 
@@ -572,18 +560,14 @@ impl ExpectedError {
                     } => {
                         let known_scripts_str = known_scripts
                             .iter()
-                            .map(|group_name| {
-                                group_name.if_supports_color(Stream::Stderr, |x| x.bold())
-                            })
+                            .map(|group_name| group_name.style(styles.bold))
                             .join(", ");
                         let mut errors_str = String::new();
                         for error in errors {
                             errors_str.push_str(&format!(
                                 " - script `{}` specified within profile `{}`\n",
-                                error.name.if_supports_color(Stream::Stderr, |x| x.bold()),
-                                error
-                                    .profile_name
-                                    .if_supports_color(Stream::Stderr, |x| x.bold())
+                                error.name.style(styles.bold),
+                                error.profile_name.style(styles.bold)
                             ));
                         }
 
@@ -598,15 +582,11 @@ impl ExpectedError {
                     ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known } => {
                         let unknown_str = unknown
                             .iter()
-                            .map(|feature_name| {
-                                feature_name.if_supports_color(Stream::Stderr, |x| x.bold())
-                            })
+                            .map(|feature_name| feature_name.style(styles.bold))
                             .join(", ");
                         let known_str = known
                             .iter()
-                            .map(|feature_name| {
-                                feature_name.if_supports_color(Stream::Stderr, |x| x.bold())
-                            })
+                            .map(|feature_name| feature_name.style(styles.bold))
                             .join(", ");
 
                         log::error!(
@@ -639,14 +619,14 @@ impl ExpectedError {
             Self::MetadataMaterializeError { arg_name, err } => {
                 log::error!(
                     "error reading metadata from argument {}",
-                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold())
+                    format!("--{arg_name}").style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
             Self::UnknownArchiveFormat { archive_file, err } => {
                 log::error!(
                     "failed to autodetect archive format for {}",
-                    archive_file.if_supports_color(Stream::Stderr, |x| x.bold())
+                    archive_file.style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
@@ -657,16 +637,14 @@ impl ExpectedError {
             } => {
                 log::error!(
                     "error creating archive `{}`",
-                    redactor
-                        .redact_path(archive_file)
-                        .if_supports_color(Stream::Stderr, |x| x.bold())
+                    redactor.redact_path(archive_file).style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
             Self::ArchiveExtractError { archive_file, err } => {
                 log::error!(
                     "error extracting archive `{}`",
-                    archive_file.if_supports_color(Stream::Stderr, |x| x.bold())
+                    archive_file.style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
@@ -677,17 +655,14 @@ impl ExpectedError {
             Self::PathMapperConstructError { arg_name, err } => {
                 log::error!(
                     "argument {} specified `{}` that couldn't be read",
-                    format!("--{arg_name}").if_supports_color(Stream::Stderr, |x| x.bold()),
-                    err.input().if_supports_color(Stream::Stderr, |x| x.bold())
+                    format!("--{arg_name}").style(styles.bold),
+                    err.input().style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
             Self::CargoMetadataParseError { file_name, err } => {
                 let metadata_source = match file_name {
-                    Some(path) => format!(
-                        " from file `{}`",
-                        path.if_supports_color(Stream::Stderr, |x| x.bold())
-                    ),
+                    Some(path) => format!(" from file `{}`", path.style(styles.bold)),
                     None => "".to_owned(),
                 };
                 log::error!("error parsing Cargo metadata{}", metadata_source);
@@ -702,26 +677,20 @@ impl ExpectedError {
                 Some(err as &dyn Error)
             }
             Self::BuildExecFailed { command, err } => {
-                log::error!(
-                    "failed to execute `{}`",
-                    command.if_supports_color(Stream::Stderr, |x| x.bold())
-                );
+                log::error!("failed to execute `{}`", command.style(styles.bold));
                 Some(err as &dyn Error)
             }
             Self::BuildFailed { command, exit_code } => {
                 let with_code_str = match exit_code {
                     Some(code) => {
-                        format!(
-                            " with code {}",
-                            code.if_supports_color(Stream::Stderr, |x| x.bold())
-                        )
+                        format!(" with code {}", code.style(styles.bold))
                     }
                     None => "".to_owned(),
                 };
 
                 log::error!(
                     "command `{}` exited{}",
-                    command.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    command.style(styles.bold),
                     with_code_str,
                 );
 
@@ -771,8 +740,8 @@ impl ExpectedError {
             } => {
                 log::error!(
                     "this repository requires nextest version {}, but the current version is {}",
-                    required.if_supports_color(Stream::Stderr, |x| x.bold()),
-                    current.if_supports_color(Stream::Stderr, |x| x.bold()),
+                    required.style(styles.bold),
+                    current.style(styles.bold),
                 );
                 if let Some(tool) = tool {
                     log::info!(
@@ -785,6 +754,7 @@ impl ExpectedError {
                 crate::helpers::log_needs_update(
                     log::Level::Info,
                     crate::helpers::BYPASS_VERSION_TEXT,
+                    styles,
                 );
                 None
             }
@@ -797,7 +767,7 @@ impl ExpectedError {
             Self::UpdateError { err } => {
                 log::error!(
                     "failed to update nextest (please update manually by visiting <{}>)",
-                    "https://get.nexte.st".if_supports_color(Stream::Stderr, |x| x.bold())
+                    "https://get.nexte.st".style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
@@ -849,10 +819,7 @@ impl ExpectedError {
                 Some(err as &dyn Error)
             }
             Self::DebugExtractReadError { kind, path, err } => {
-                log::error!(
-                    "error reading {kind} file `{}`",
-                    path.if_supports_color(Stream::Stderr, |x| x.bold()),
-                );
+                log::error!("error reading {kind} file `{}`", path.style(styles.bold),);
                 Some(err as &dyn Error)
             }
             Self::DebugExtractWriteError { format, err } => {

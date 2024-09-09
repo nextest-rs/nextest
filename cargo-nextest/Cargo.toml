@@ -35,7 +35,7 @@ pathdiff = { version = "0.2.1", features = ["camino"] }
 quick-junit.workspace = true
 semver = "1.0.23"
 shell-words = "1.1.0"
-supports-color = "2.1.0"
+supports-color = "3.0.1"
 supports-unicode = "3.0.0"
 serde_json = "1.0.128"
 swrite.workspace = true
