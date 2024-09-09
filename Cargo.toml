@@ -19,7 +19,7 @@ license = "MIT OR Apache-2.0"
 bstr = { version = "1.10.0", default-features = false, features = ["std"] }
 debug-ignore = "1.0.5"
 fixture-data = { path = "fixture-data" }
-globset = "0.4.14"
+globset = "0.4.15"
 guppy = "0.17.7"
 maplit = "1.0.2"
 miette = "7.2.0"
