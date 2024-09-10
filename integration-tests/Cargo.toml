@@ -17,23 +17,20 @@ path = "test-helpers/cargo-nextest-dup.rs"
 # then cargo will unify features for cargo-nextest, and it will be built with self-update enabled.
 # We could ask distributors to always include `--package cargo-nextest` instead, but they're likely
 # to forget. None of our current tests depend on self-update, so just don't include it by default.
-cargo-nextest = { path = "../cargo-nextest", default-features = false, features = [
-    "default-no-update",
-] }
-# we don't use the tracing support
-color-eyre = { version = "0.6.3", default-features = false }
-clap = { version = "4.5.17", features = ["derive", "env"] }
-enable-ansi-support = "0.2.1"
+cargo-nextest.workspace = true
+color-eyre.workspace = true
+clap = { workspace = true, features = ["env"] }
+enable-ansi-support.workspace = true
 nextest-workspace-hack.workspace = true
 
 [dev-dependencies]
-camino = "1.1.9"
-camino-tempfile = "1.1.1"
-cfg-if = "1.0.0"
+camino-tempfile.workspace = true
+camino.workspace = true
+cfg-if.workspace = true
 fixture-data.workspace = true
+insta.workspace = true
 nextest-metadata.workspace = true
-pathdiff = { version = "0.2.1", features = ["camino"] }
-regex = "1.10.6"
-serde_json = "1.0.128"
-insta = { version = "1.40.0", default-features = false }
+pathdiff.workspace = true
+regex.workspace = true
+serde_json.workspace = true
 target-spec.workspace = true
