@@ -12,12 +12,12 @@ categories = ["development-tools::testing"]
 rust-version.workspace = true
 
 [dependencies]
-camino = { version = "1.1.9", features = ["serde1"] }
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = "1.0.128"
-target-spec.workspace = true
-smol_str = { version = "0.3.1", features = ["serde"] }
+camino = { workspace = true, features = ["serde1"] }
 nextest-workspace-hack.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+smol_str.workspace = true
+target-spec.workspace = true
 
 [dev-dependencies]
-test-case = "3.3.1"
+test-case.workspace = true
