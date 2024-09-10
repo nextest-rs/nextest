@@ -12,38 +12,38 @@ edition = "2021"
 rust-version.workspace = true
 
 [dependencies]
-camino = "1.1.9"
-cfg-if = "1.0.0"
-clap = { version = "4.5.17", features = ["derive", "env", "unicode", "wrap_help"] }
-# we don't use the tracing support
-color-eyre = { version = "0.6.3", default-features = false }
-dialoguer = "0.11.0"
-duct = "0.13.7"
-enable-ansi-support = "0.2.1"
-# we don't use the default formatter so we don't need default features
-env_logger = { version = "0.11.5", default-features = false }
+camino.workspace = true
+cfg-if.workspace = true
+clap = { workspace = true, features = ["derive", "env", "unicode", "wrap_help"] }
+color-eyre.workspace = true
+dialoguer.workspace = true
+duct.workspace = true
+enable-ansi-support.workspace = true
+env_logger.workspace = true
 guppy.workspace = true
-log = "0.4.22"
-itertools = "0.13.0"
+log.workspace = true
+itertools.workspace = true
 miette = { workspace = true, features = ["fancy"] }
+# Instead of using workspace dependencies which have floating versions, we pin exact versions here
+# to avoid compatibility issues.
 nextest-filtering = { version = "=0.12.0", path = "../nextest-filtering" }
-nextest-runner = { version = "=0.61.0", path = "../nextest-runner" }
 nextest-metadata = { version = "=0.12.1", path = "../nextest-metadata" }
-once_cell = "1.19.0"
-owo-colors.workspace = true
-pathdiff = { version = "0.2.1", features = ["camino"] }
-quick-junit.workspace = true
-semver = "1.0.23"
-shell-words = "1.1.0"
-supports-color = "3.0.1"
-supports-unicode = "3.0.0"
-serde_json = "1.0.128"
-swrite.workspace = true
-thiserror = "1.0.63"
+nextest-runner = { version = "=0.61.0", path = "../nextest-runner" }
 nextest-workspace-hack.workspace = true
+once_cell.workspace = true
+owo-colors.workspace = true
+pathdiff.workspace = true
+quick-junit.workspace = true
+semver.workspace = true
+serde_json.workspace = true
+shell-words.workspace = true
+supports-color.workspace = true
+supports-unicode.workspace = true
+swrite.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
-camino-tempfile = "1.1.1"
+camino-tempfile.workspace = true
 
 [features]
 default = ["default-no-update", "self-update"]
