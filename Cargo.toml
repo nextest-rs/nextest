@@ -33,6 +33,7 @@ config = { version = "0.14.0", default-features = false, features = [
     "preserve_order",
 ] }
 chrono = "0.4.38"
+clap = { version = "4.5.17", features = ["derive"] }
 console-subscriber = "0.4.0"
 debug-ignore = "1.0.5"
 display-error-chain = "0.2.1"
@@ -102,7 +103,8 @@ unicode-ident = "1.0.13"
 unicode-normalization = "0.1.23"
 win32job = "2.0.0"
 windows-sys = "0.59.0"
-xxhash-rust = { version = "0.8.12", features = ["xxh64"] }
+winnow = "0.6.18"
+xxhash-rust = "0.8.12"
 zstd = { version = "0.13.2", features = ["zstdmt"] }
 
 # make backtrace + color-eyre faster on debug builds
