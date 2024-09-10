@@ -1732,7 +1732,6 @@ dependencies = [
  "display-error-chain",
  "duct",
  "dunce",
- "either",
  "fixture-data",
  "future-queue",
  "futures",
