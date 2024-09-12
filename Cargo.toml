@@ -108,7 +108,7 @@ supports-color = "3.0.1"
 supports-unicode = "3.0.0"
 swrite = "0.1.0"
 tar = "0.4.41"
-target-spec = { version = "3.2.1", features = ["custom", "summaries"] }
+target-spec = { version = "3.2.2", features = ["custom", "summaries"] }
 target-spec-miette = "0.4.0"
 test-case = "3.3.1"
 test-strategy = "0.4.0"
