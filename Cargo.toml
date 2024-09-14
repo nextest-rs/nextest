@@ -80,7 +80,7 @@ nextest-filtering = { version = "0.12.0", path = "nextest-filtering" }
 nextest-metadata = { version = "0.12.1", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
 nix = { version = "0.29.0", default-features = false, features = ["signal"] }
-once_cell = "1.19.0"
+once_cell = "1.20.0"
 owo-colors = "4.0.0"
 pathdiff = { version = "0.2.1", features = ["camino"] }
 pin-project-lite = "0.2.14"
