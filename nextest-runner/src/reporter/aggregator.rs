@@ -328,7 +328,7 @@ fn set_execute_status_props(
             message,
             description,
         }) => {
-            out.set_message(format!("Test execution failed: {}", message));
+            out.set_message(format!("Test execution failed: {message}"));
             out.set_description(description);
         }
         None => {

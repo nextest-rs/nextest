@@ -357,7 +357,7 @@ mod tests {
             ..Default::default()
         };
         let actual = RustBuildMeta::<BinaryListState>::from_summary(summary);
-        assert!(matches!(actual, Err(RustBuildMetaParseError::Unsupported { .. })), "Expect the parse result to be an error of RustBuildMetaParseError::Unsupported, actual {:?}", actual);
+        assert!(matches!(actual, Err(RustBuildMetaParseError::Unsupported { .. })), "Expect the parse result to be an error of RustBuildMetaParseError::Unsupported, actual {actual:?}");
     }
 
     #[test]
@@ -439,15 +439,11 @@ mod tests {
 
         assert!(
             dylib_paths.contains(&host_libdir),
-            "{:?} should contain {}",
-            dylib_paths,
-            host_libdir
+            "{dylib_paths:?} should contain {host_libdir}"
         );
         assert!(
             dylib_paths.contains(&target_libdir),
-            "{:?} should contain {}",
-            dylib_paths,
-            target_libdir
+            "{dylib_paths:?} should contain {target_libdir}"
         );
     }
 
@@ -483,8 +479,7 @@ mod tests {
 
         assert!(
             dylib_paths.clone().into_iter().all_unique(),
-            "{:?} should not contain duplicate paths",
-            dylib_paths
+            "{dylib_paths:?} should not contain duplicate paths"
         );
     }
 }

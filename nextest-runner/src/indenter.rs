@@ -60,10 +60,10 @@ pub type Inserter = dyn FnMut(usize, &mut dyn WriteStr) -> io::Result<()>;
 impl Format<'_> {
     fn insert_indentation(&mut self, line: usize, f: &mut dyn WriteStr) -> io::Result<()> {
         match self {
-            Format::Uniform { indentation } => write!(f, "{}", indentation),
+            Format::Uniform { indentation } => write!(f, "{indentation}"),
             Format::Numbered { ind } => {
                 if line == 0 {
-                    write!(f, "{: >4}: ", ind)
+                    write!(f, "{ind: >4}: ")
                 } else {
                     write!(f, "      ")
                 }
@@ -117,7 +117,7 @@ where
                 self.needs_indent = false;
             }
 
-            self.inner.write_fmt(format_args!("{}", line))?;
+            self.inner.write_fmt(format_args!("{line}"))?;
         }
 
         Ok(())

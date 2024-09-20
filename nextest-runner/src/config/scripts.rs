@@ -700,7 +700,7 @@ mod tests {
             ConfigParseErrorKind::ExperimentalFeatureNotEnabled { feature } => {
                 assert_eq!(*feature, ConfigExperimental::SetupScripts);
             }
-            other => panic!("unexpected error kind: {:?}", other),
+            other => panic!("unexpected error kind: {other:?}"),
         }
 
         // Now, check with the experimental feature enabled.

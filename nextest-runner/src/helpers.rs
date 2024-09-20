@@ -217,7 +217,7 @@ pub(crate) fn convert_rel_path_to_main_sep(rel_path: &Utf8Path) -> Utf8PathBuf {
 pub(crate) fn rel_path_join(rel_path: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
     assert!(rel_path.is_relative(), "rel_path {rel_path} is relative");
     assert!(path.is_relative(), "path {path} is relative",);
-    format!("{}/{}", rel_path, path).into()
+    format!("{rel_path}/{path}").into()
 }
 
 #[derive(Debug)]

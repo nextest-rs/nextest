@@ -285,8 +285,7 @@ pub fn check_list_binaries_output(stdout: &[u8]) {
 
     assert_eq!(
         expected_binary_ids, actual_binary_ids,
-        "expected binaries:\n{:?}\nactual binaries\n{:?}",
-        expected_binary_ids, actual_binary_ids
+        "expected binaries:\n{expected_binary_ids:?}\nactual binaries\n{actual_binary_ids:?}"
     );
 }
 

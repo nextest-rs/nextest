@@ -103,8 +103,7 @@ mod tests {
         let output = String::from_utf8(output).expect("the output should be valid utf-8");
         assert!(
             output.starts_with("rustc"),
-            "The output should start with rustc, but the actual output is: {}",
-            output
+            "The output should start with rustc, but the actual output is: {output}"
         );
     }
 
@@ -117,8 +116,7 @@ mod tests {
         let output = String::from_utf8(output).expect("the output should be valid utf-8");
         assert!(
             output.starts_with("cargo"),
-            "The output should start with cargo, but the actual output is: {}",
-            output
+            "The output should start with cargo, but the actual output is: {output}"
         );
     }
 
