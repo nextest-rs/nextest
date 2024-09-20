@@ -196,7 +196,7 @@ fn test_expr_package_regex() {
 fn test_expr_binary_id_glob() {
     let graph = load_graph();
     let expr = parse("binary_id(crate_[ab])", &graph);
-    println!("{:?}", expr);
+    println!("{expr:?}");
 
     let pid_a = mk_pid('a');
     let pid_b = mk_pid('b');

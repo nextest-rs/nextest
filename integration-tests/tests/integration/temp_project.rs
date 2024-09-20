@@ -143,7 +143,7 @@ mod unix {
         // This creates a Unix domain socket by binding it to a path.
         use std::os::unix::net::UnixListener;
 
-        UnixListener::bind(path).wrap_err_with(|| format!("failed to bind UDS at {}", path))?;
+        UnixListener::bind(path).wrap_err_with(|| format!("failed to bind UDS at {path}"))?;
         Ok(UdsStatus::Created)
     }
 }

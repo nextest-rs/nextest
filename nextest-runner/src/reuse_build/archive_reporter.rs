@@ -65,8 +65,7 @@ impl ArchiveReporter {
                 write!(writer, "{:>12} ", "Warning".style(self.styles.bold))?;
                 writeln!(
                     writer,
-                    "could not find standard library for host (proc macro tests may not work): {}",
-                    error
+                    "could not find standard library for host (proc macro tests may not work): {error}"
                 )?;
             }
             ArchiveEvent::ExtraPathMissing { path, warn } => {

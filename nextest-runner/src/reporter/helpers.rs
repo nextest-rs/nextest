@@ -129,9 +129,9 @@ impl fmt::Display for DescriptionKindDisplay<'_> {
                     #[cfg(unix)]
                     AbortStatus::UnixSignal(sig) => {
                         let signal_str = crate::helpers::signal_str(sig)
-                            .map(|signal_str| format!("SIG{}", signal_str))
+                            .map(|signal_str| format!("SIG{signal_str}"))
                             .unwrap_or_else(|| sig.to_string());
-                        write!(f, " with signal {}", signal_str)?;
+                        write!(f, " with signal {signal_str}")?;
                     }
                     #[cfg(windows)]
                     AbortStatus::WindowsNtStatus(exception) => {
@@ -481,8 +481,7 @@ some more text at the end, followed by some newlines"#,
             assert_eq!(
                 highlight_end(input.as_bytes()),
                 *output,
-                "for input {:?}",
-                input
+                "for input {input:?}"
             );
         }
     }

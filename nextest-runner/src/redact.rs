@@ -54,7 +54,7 @@ impl Redactor {
         for (source, replacement) in linked_path_redactions {
             redactions.push(Redaction::Path {
                 path: build_meta.target_directory.join(&source),
-                replacement: format!("{}/{}", TARGET_DIR_REDACTION, replacement),
+                replacement: format!("{TARGET_DIR_REDACTION}/{replacement}"),
             });
             redactions.push(Redaction::Path {
                 path: source,
@@ -83,7 +83,7 @@ impl Redactor {
                         } else {
                             // Always use "/" as the separator, even on Windows, to ensure stable
                             // output across OSes.
-                            let path = Utf8PathBuf::from(format!("{}/{}", replacement, suffix));
+                            let path = Utf8PathBuf::from(format!("{replacement}/{suffix}"));
                             return RedactorOutput::Redacted(
                                 convert_rel_path_to_forward_slash(&path).into(),
                             );

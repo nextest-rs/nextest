@@ -161,7 +161,7 @@ impl RecursionDepth {
 impl fmt::Display for RecursionDepth {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Finite(n) => write!(f, "{}", n),
+            Self::Finite(n) => write!(f, "{n}"),
             Self::Infinite => write!(f, "infinite"),
         }
     }

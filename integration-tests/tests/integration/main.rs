@@ -441,7 +441,7 @@ fn test_run_from_archive_with_no_includes() {
         _ = extracted_target
             .join(path)
             .symlink_metadata()
-            .map(|_| panic!("file {} must not be included in the archive", path));
+            .map(|_| panic!("file {path} must not be included in the archive"));
     }
 }
 
@@ -478,7 +478,7 @@ archive.include = [
         _ = extracted_target
             .join(path)
             .symlink_metadata()
-            .map(|_| panic!("file {} must not be included in the archive", path));
+            .map(|_| panic!("file {path} must not be included in the archive"));
     }
 }
 

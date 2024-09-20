@@ -1441,7 +1441,7 @@ impl<'a> TestReporterImpl<'a> {
                 self.write_instance(*test_instance, writer)?;
                 writeln!(writer, "{}", " ---".style(header_style))?;
 
-                writeln!(writer, "{}", description)?;
+                writeln!(writer, "{description}")?;
             }
 
             None => {

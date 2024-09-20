@@ -54,8 +54,8 @@ mod tests {
 
         for &input in valid {
             let path = de_relative_path(input.into_deserializer())
-                .wrap_err_with(|| format!("error deserializing valid path {:?}: error", input))?;
-            assert_eq!(path, Utf8PathBuf::from(input), "path matches: {:?}", path);
+                .wrap_err_with(|| format!("error deserializing valid path {input:?}: error"))?;
+            assert_eq!(path, Utf8PathBuf::from(input), "path matches: {path:?}");
         }
 
         for &input in invalid {
@@ -66,8 +66,7 @@ mod tests {
             assert_eq!(
                 error.to_string(),
                 format!(
-                    "invalid value: string {:?}, expected a relative path with no parent components",
-                    input
+                    "invalid value: string {input:?}, expected a relative path with no parent components"
                 )
             );
         }

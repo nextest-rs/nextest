@@ -34,7 +34,7 @@ impl ExtractedCustomPlatform {
                 error,
             })?;
 
-        let path = temp_dir.path().join(format!("{}.json", triple_str));
+        let path = temp_dir.path().join(format!("{triple_str}.json"));
 
         std::fs::write(&path, json).map_err(|error| {
             TargetTripleError::CustomPlatformWriteError {
