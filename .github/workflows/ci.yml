@@ -131,7 +131,7 @@ jobs:
   test-archive-target-runner:
     name: Test archives with a target runner
     # gcc-mingw-w64-x86-64-win32 requires Ubuntu 22.04
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
       - name: Install Rust toolchain
