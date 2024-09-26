@@ -36,6 +36,71 @@ use fixtures::*;
 use temp_project::TempProject;
 
 #[test]
+fn test_version() {
+    // Note that this is slightly overdetermined: details like the length of the short commit hash
+    // are not part of the format, and we have some flexibility in changing it.
+    let version_regex =
+        regex::Regex::new(r"^cargo-nextest (0\.9\.\d+) \(([a-f0-9]{9}) (\d{4}-\d{2}-\d{2})\)\n$")
+            .unwrap();
+
+    set_env_vars();
+
+    // First run nextest with -V to get a one-line version string.
+    let output = CargoNextestCli::new().args(["-V"]).output();
+    let short_stdout = output.stdout_as_str();
+    let captures = version_regex
+        .captures(&short_stdout)
+        .unwrap_or_else(|| panic!("short version matches regex: {short_stdout}"));
+
+    let version = captures.get(1).unwrap().as_str();
+    let short_hash = captures.get(2).unwrap().as_str();
+    let date = captures.get(3).unwrap().as_str();
+
+    let output = CargoNextestCli::new().args(["--version"]).output();
+    let long_stdout = output.stdout_as_str();
+
+    // Check that all expected lines are found.
+    let mut lines = long_stdout.lines();
+
+    // Line 1 is the version line. Check that it matches the short version line.
+    let version_line = lines.next().unwrap();
+    assert_eq!(
+        version_line,
+        short_stdout.trim_end(),
+        "long version line 1 matches short version"
+    );
+
+    // Line 2 is of the form "release: 0.9.0".
+    let release_line = lines.next().unwrap();
+    assert_eq!(release_line, format!("release: {}", version));
+
+    // Line 3 is the commit hash.
+    let commit_hash_line = lines.next().unwrap();
+    assert!(
+        commit_hash_line.starts_with(&format!("commit-hash: {}", short_hash)),
+        "commit hash line matches short hash: {commit_hash_line}"
+    );
+
+    // Line 4 is the commit date.
+    let commit_date_line = lines.next().unwrap();
+    assert_eq!(commit_date_line, format!("commit-date: {}", date));
+
+    // Line 5 is the host. Just check that it begins with "host: ".
+    let host_line = lines.next().unwrap();
+    assert!(
+        host_line.starts_with("host: "),
+        "host line starts with 'host: ': {host_line}"
+    );
+
+    // Line 6 is the OS. Just check that it begins with "os: ".
+    let os_line = lines.next().unwrap();
+    assert!(
+        os_line.starts_with("os: "),
+        "os line starts with 'os: ': {os_line}"
+    );
+}
+
+#[test]
 fn test_list_default() {
     set_env_vars();
     let p = TempProject::new().unwrap();

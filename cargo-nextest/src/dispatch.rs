@@ -5,6 +5,7 @@ use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{should_redact, OutputContext, OutputOpts, OutputWriter, StderrStyles},
     reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
+    version::VersionInfo,
     ExpectedError, Result, ReuseBuildKind,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -64,7 +65,13 @@ use swrite::{swrite, SWrite};
 /// This binary should typically be invoked as `cargo nextest` (in which case
 /// this message will not be seen), not `cargo-nextest`.
 #[derive(Debug, Parser)]
-#[command(version, bin_name = "cargo", styles = crate::output::clap_styles::style(), max_term_width = 100)]
+#[command(
+    version = VersionInfo::new().to_short_string(),
+    long_version = VersionInfo::new().to_long_string(),
+    bin_name = "cargo",
+    styles = crate::output::clap_styles::style(),
+    max_term_width = 100,
+)]
 pub struct CargoNextestApp {
     #[clap(subcommand)]
     subcommand: NextestSubcommand,
@@ -114,7 +121,11 @@ enum NextestSubcommand {
 }
 
 #[derive(Debug, Args)]
-#[command(version)]
+#[clap(
+    version = VersionInfo::new().to_short_string(),
+    long_version = VersionInfo::new().to_long_string(),
+    display_name = "cargo-nextest",
+)]
 struct AppOpts {
     #[clap(flatten)]
     common: CommonOpts,

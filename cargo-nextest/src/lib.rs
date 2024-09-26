@@ -23,6 +23,7 @@ mod output;
 mod reuse_build;
 #[cfg(feature = "self-update")]
 mod update;
+mod version;
 
 #[doc(hidden)]
 pub use dispatch::*;

@@ -14,7 +14,7 @@ rust-version.workspace = true
 [dependencies]
 camino.workspace = true
 cfg-if.workspace = true
-clap = { workspace = true, features = ["derive", "env", "unicode", "wrap_help"] }
+clap = { workspace = true, features = ["derive", "env", "string", "unicode", "wrap_help"] }
 color-eyre.workspace = true
 dialoguer.workspace = true
 duct.workspace = true
@@ -31,6 +31,7 @@ nextest-metadata = { version = "=0.12.1", path = "../nextest-metadata" }
 nextest-runner = { version = "=0.61.0", path = "../nextest-runner" }
 nextest-workspace-hack.workspace = true
 once_cell.workspace = true
+os_info.workspace = true
 owo-colors.workspace = true
 pathdiff.workspace = true
 quick-junit.workspace = true
@@ -41,6 +42,9 @@ supports-color.workspace = true
 supports-unicode.workspace = true
 swrite.workspace = true
 thiserror.workspace = true
+
+[build-dependencies]
+camino.workspace = true
 
 [dev-dependencies]
 camino-tempfile.workspace = true
