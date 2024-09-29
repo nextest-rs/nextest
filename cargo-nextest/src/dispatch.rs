@@ -5,8 +5,7 @@ use crate::{
     cargo_cli::{CargoCli, CargoOptions},
     output::{should_redact, OutputContext, OutputOpts, OutputWriter, StderrStyles},
     reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
-    version::VersionInfo,
-    ExpectedError, Result, ReuseBuildKind,
+    version, ExpectedError, Result, ReuseBuildKind,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{builder::BoolishValueParser, ArgAction, Args, Parser, Subcommand, ValueEnum};
@@ -66,8 +65,8 @@ use swrite::{swrite, SWrite};
 /// this message will not be seen), not `cargo-nextest`.
 #[derive(Debug, Parser)]
 #[command(
-    version = VersionInfo::new().to_short_string(),
-    long_version = VersionInfo::new().to_long_string(),
+    version = version::short(),
+    long_version = version::long(),
     bin_name = "cargo",
     styles = crate::output::clap_styles::style(),
     max_term_width = 100,
@@ -122,8 +121,8 @@ enum NextestSubcommand {
 
 #[derive(Debug, Args)]
 #[clap(
-    version = VersionInfo::new().to_short_string(),
-    long_version = VersionInfo::new().to_long_string(),
+    version = version::short(),
+    long_version = version::long(),
     display_name = "cargo-nextest",
 )]
 struct AppOpts {
