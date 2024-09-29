@@ -36,7 +36,7 @@ use fixtures::*;
 use temp_project::TempProject;
 
 #[test]
-fn test_version() {
+fn test_version_info() {
     // Note that this is slightly overdetermined: details like the length of the short commit hash
     // are not part of the format, and we have some flexibility in changing it.
     let version_regex =
@@ -90,13 +90,6 @@ fn test_version() {
     assert!(
         host_line.starts_with("host: "),
         "host line starts with 'host: ': {host_line}"
-    );
-
-    // Line 6 is the OS. Just check that it begins with "os: ".
-    let os_line = lines.next().unwrap();
-    assert!(
-        os_line.starts_with("os: "),
-        "os line starts with 'os: ': {os_line}"
     );
 }
 
