@@ -90,7 +90,7 @@ quick-junit = "0.5.0"
 rand = "0.8.5"
 recursion = "0.5.2"
 regex = "1.10.6"
-regex-syntax = "0.8.4"
+regex-syntax = "0.8.5"
 semver = "1.0.23"
 self_update = { version = "0.41.0", default-features = false, features = [
     "archive-tar",
