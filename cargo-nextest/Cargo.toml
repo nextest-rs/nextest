@@ -28,7 +28,7 @@ miette = { workspace = true, features = ["fancy"] }
 # to avoid compatibility issues.
 nextest-filtering = { version = "=0.12.0", path = "../nextest-filtering" }
 nextest-metadata = { version = "=0.12.1", path = "../nextest-metadata" }
-nextest-runner = { version = "=0.61.0", path = "../nextest-runner" }
+nextest-runner = { version = "=0.62.0", path = "../nextest-runner" }
 nextest-workspace-hack.workspace = true
 once_cell.workspace = true
 owo-colors.workspace = true
