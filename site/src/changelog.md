@@ -8,6 +8,19 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.79-rc.1] - 2024-10-02
+
+### Added
+
+- Expanded version information: `cargo nextest -V` now shows commit and date information similar to `rustc` and `cargo`, and `cargo nextest --version` shows this information in long form.
+
+### Fixed
+
+- Nextest will now enable colors by default in more situations, particularly over SSH connections. For more information, see [this issue](https://github.com/zkat/supports-color/pull/19).
+- Fixed a case of `cargo metadata` parsing with renamed packages ([#1746]).
+
+[#1746]: https://github.com/nextest-rs/nextest/issues/1746
+
 ## [0.9.78] - 2024-09-05
 
 ### Added
@@ -1087,6 +1100,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.79-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.79-rc.1
 [0.9.78]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.78
 [0.9.77]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.77
 [0.9.76]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.76
