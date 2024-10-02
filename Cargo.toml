@@ -58,7 +58,7 @@ fixture-data = { path = "fixture-data" }
 future-queue = "0.3.0"
 futures = "0.3.30"
 globset = "0.4.15"
-guppy = "0.17.7"
+guppy = "0.17.8"
 home = "0.5.9"
 http = "1.1.0"
 humantime-serde = "1.1.1"
