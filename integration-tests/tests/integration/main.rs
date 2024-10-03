@@ -39,9 +39,10 @@ use temp_project::TempProject;
 fn test_version_info() {
     // Note that this is slightly overdetermined: details like the length of the short commit hash
     // are not part of the format, and we have some flexibility in changing it.
-    let version_regex =
-        regex::Regex::new(r"^cargo-nextest (0\.9\.\d+) \(([a-f0-9]{9}) (\d{4}-\d{2}-\d{2})\)\n$")
-            .unwrap();
+    let version_regex = regex::Regex::new(
+        r"^cargo-nextest (0\.9\.[0-9\-a-z\.]+) \(([a-f0-9]{9}) (\d{4}-\d{2}-\d{2})\)\n$",
+    )
+    .unwrap();
 
     set_env_vars();
 
