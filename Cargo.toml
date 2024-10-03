@@ -62,7 +62,7 @@ guppy = "0.17.8"
 home = "0.5.9"
 http = "1.1.0"
 humantime-serde = "1.1.1"
-indexmap = "2.5.0"
+indexmap = "2.6.0"
 indicatif = "0.17.8"
 indoc = "2.0.5"
 insta = { version = "1.40.0", default-features = false }
