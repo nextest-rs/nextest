@@ -1,0 +1,32 @@
+title: "Feature request: "
+labels: ["feature-requsts"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for filing a feature request! Please fill out the sections below.
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: "What is the high-level goal you're trying to achieve?"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: "What is the feature you're proposing?"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: "Do you have any alternative solutions or workarounds in mind?"
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: |
+        Add other context about the feature request here. For example, platform-specific details.
