@@ -22,6 +22,9 @@ if [[ $PUBLISH_CARGO_NEXTEST == "1" ]]; then
     # This does unfortunately mean that Cargo's own `.cargo_vcs_info.json` will be incorrect, but
     # what can you do.
     git add cargo-nextest/nextest-commit-info
+    # Set the Git user info so the commit doesn't fail.
+    git config user.email "bot@nexte.st"
+    git config user.name "Nextest Bot"
     git commit -m "Write out commit info for cargo-nextest"
 
     # Publish cargo-nextest.
