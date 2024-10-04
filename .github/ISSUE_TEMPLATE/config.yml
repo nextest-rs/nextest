@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Feature request
-    url: https://github.com/nextest-rs/nextest/discussions/categories/feature-requests
+    url: https://github.com/nextest-rs/nextest/discussions/new?category=feature-requests
     about: File a feature request in the Discussions section.
   - name: Q&A
-    url: https://github.com/nextest-rs/nextest/discussions/categories/q-a
+    url: https://github.com/nextest-rs/nextest/discussions/new?category=q-a
     about: Ask a question in the Discussions section.
