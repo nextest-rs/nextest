@@ -29,11 +29,171 @@ use serde::Deserialize;
 use std::{
     borrow::Cow,
     cmp::Reverse,
-    fmt::{self, Write as _},
+    fmt::{self, Formatter, Write as _},
     io,
     io::{BufWriter, Write},
+    str::FromStr,
     time::Duration,
 };
+
+/// When to display test output in the reporter.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+pub struct TestOutputDisplayStreams {
+    /// When to display the stdout output of a test in the reporter
+    pub stdout: Option<TestOutputDisplay>,
+    /// When to display the stderr output of a test in the reporter
+    pub stderr: Option<TestOutputDisplay>,
+}
+
+impl TestOutputDisplayStreams {
+    /// Create a `TestOutputDisplayStreams` with both stdout and stderr set to `Immediate`
+    pub fn create_immediate() -> Self {
+        Self {
+            stdout: Some(TestOutputDisplay::Immediate),
+            stderr: Some(TestOutputDisplay::Immediate),
+        }
+    }
+    /// Create a `TestOutputDisplayStreams` with both stdout and stderr set to `Final`
+    pub fn create_final() -> Self {
+        Self {
+            stdout: Some(TestOutputDisplay::Final),
+            stderr: Some(TestOutputDisplay::Final),
+        }
+    }
+    /// Create a `TestOutputDisplayStreams` with both stdout and stderr set to `ImmediateFinal`
+    pub fn create_immediate_final() -> Self {
+        Self {
+            stdout: Some(TestOutputDisplay::ImmediateFinal),
+            stderr: Some(TestOutputDisplay::ImmediateFinal),
+        }
+    }
+    /// Create a `TestOutputDisplayStreams` with both stdout and stderr set to `Never`
+    pub fn create_never() -> Self {
+        Self {
+            stdout: Some(TestOutputDisplay::Never),
+            stderr: Some(TestOutputDisplay::Never),
+        }
+    }
+
+    /// Which output streams should be output immediately
+    ///
+    /// # Returns
+    /// Returns `None` when no output streams should be output
+    pub fn display_output_immediate(&self) -> Option<DisplayOutput> {
+        let stdout = self.stdout.map_or(false, |t| t.is_immediate());
+        let stderr = self.stderr.map_or(false, |t| t.is_immediate());
+        if stdout || stderr {
+            Some(DisplayOutput { stdout, stderr })
+        } else {
+            None
+        }
+    }
+
+    /// Which output streams should be output at the end
+    ///
+    /// # Returns
+    /// Returns `None` when no output streams should be output
+    pub fn display_output_final(&self) -> Option<DisplayOutput> {
+        let stdout = self.stdout.map_or(false, |t| t.is_final());
+        let stderr = self.stderr.map_or(false, |t| t.is_final());
+        if stdout || stderr {
+            Some(DisplayOutput { stdout, stderr })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TestOutputDisplayStreams {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(TestOutputDisplayStreamsVisitor)
+    }
+}
+
+struct TestOutputDisplayStreamsVisitor;
+impl<'de> serde::de::Visitor<'de> for TestOutputDisplayStreamsVisitor {
+    type Value = TestOutputDisplayStreams;
+
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+        formatter.write_str(
+            "a string with 'never', 'immediate', 'immediate-final' or 'final',\
+or a map with 'stdout' and/or 'stderr' as keys and the preceding values",
+        )
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        // the input is a string so we expect a TestOutputDisplay value
+        match v {
+            "never" => Ok(TestOutputDisplayStreams::create_never()),
+            "immediate" => Ok(TestOutputDisplayStreams::create_immediate()),
+            "immediate-final" => Ok(TestOutputDisplayStreams::create_immediate_final()),
+            "final" => Ok(TestOutputDisplayStreams::create_final()),
+            _ => Err(E::invalid_value(
+                serde::de::Unexpected::Str(v),
+                &"unrecognized value, expected 'never', 'immediate', 'immediate-final' or 'final'\
+or a map with 'stdout' and/or 'stderr' as keys and the preceding values",
+            )),
+        }
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        use serde::de::Error;
+
+        // the input is a map, so we expect stdout and/or stderr as keys and TestOutputDisplay values
+        // as the value
+        let mut stdout = None;
+        let mut stderr = None;
+        while let Some((key, value)) = map.next_entry::<&str, &str>()? {
+            match key {
+                "stdout" => {
+                    if stdout.is_some() {
+                        return Err(A::Error::duplicate_field("stdout"));
+                    }
+                    stdout = Some(TestOutputDisplay::from_str(value).map_err(|_| {
+                        A::Error::invalid_value(
+                            serde::de::Unexpected::Str(value),
+                            &"'never', 'immediate', 'immediate-final', or 'final'",
+                        )
+                    })?);
+                }
+                "stderr" => {
+                    if stderr.is_some() {
+                        return Err(A::Error::duplicate_field("stderr"));
+                    }
+                    stderr = Some(TestOutputDisplay::from_str(value).map_err(|_| {
+                        A::Error::invalid_value(
+                            serde::de::Unexpected::Str(value),
+                            &"'never', 'immediate', 'immediate-final', or 'final'",
+                        )
+                    })?);
+                }
+                _ => return Err(A::Error::unknown_field(key, &["stdout", "stderr"])),
+            }
+        }
+        Ok(TestOutputDisplayStreams { stdout, stderr })
+    }
+}
+
+/// Simplified [`TestOutputDisplayStreams`] to tell which output streams should be output
+///
+/// Used after the Never/Immediate/Final distinction has been made.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DisplayOutput {
+    /// Display the stdout output of the test
+    stdout: bool,
+    /// Display the stderr output of the test
+    stderr: bool,
+}
 
 /// When to display test output in the reporter.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -69,6 +229,22 @@ impl TestOutputDisplay {
         match self {
             TestOutputDisplay::Final | TestOutputDisplay::ImmediateFinal => true,
             TestOutputDisplay::Immediate | TestOutputDisplay::Never => false,
+        }
+    }
+}
+
+impl FromStr for TestOutputDisplay {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "immediate" => Ok(TestOutputDisplay::Immediate),
+            "immediate-final" => Ok(TestOutputDisplay::ImmediateFinal),
+            "final" => Ok(TestOutputDisplay::Final),
+            "never" => Ok(TestOutputDisplay::Never),
+            _ => Err(
+                "unrecognized value, expected 'never', 'immediate', 'immediate-final', or 'final'",
+            ),
         }
     }
 }
@@ -162,8 +338,8 @@ pub enum ReporterStderr<'a> {
 #[derive(Debug, Default)]
 pub struct TestReporterBuilder {
     no_capture: bool,
-    failure_output: Option<TestOutputDisplay>,
-    success_output: Option<TestOutputDisplay>,
+    failure_output: TestOutputDisplayStreams,
+    success_output: TestOutputDisplayStreams,
     status_level: Option<StatusLevel>,
     final_status_level: Option<FinalStatusLevel>,
 
@@ -182,14 +358,14 @@ impl TestReporterBuilder {
     }
 
     /// Sets the conditions under which test failures are output.
-    pub fn set_failure_output(&mut self, failure_output: TestOutputDisplay) -> &mut Self {
-        self.failure_output = Some(failure_output);
+    pub fn set_failure_output(&mut self, failure_output: TestOutputDisplayStreams) -> &mut Self {
+        self.failure_output = failure_output;
         self
     }
 
     /// Sets the conditions under which test successes are output.
-    pub fn set_success_output(&mut self, success_output: TestOutputDisplay) -> &mut Self {
-        self.success_output = Some(success_output);
+    pub fn set_success_output(&mut self, success_output: TestOutputDisplayStreams) -> &mut Self {
+        self.success_output = success_output;
         self
     }
 
@@ -250,14 +426,14 @@ impl TestReporterBuilder {
 
         // failure_output and success_output are meaningless if the runner isn't capturing any
         // output.
-        let force_success_output = match self.no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.success_output,
-        };
-        let force_failure_output = match self.no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.failure_output,
-        };
+        let mut force_success_output = self.success_output;
+        let mut force_failure_output = self.failure_output;
+        if self.no_capture {
+            force_success_output.stdout = Some(TestOutputDisplay::Never);
+            force_success_output.stderr = Some(TestOutputDisplay::Never);
+            force_failure_output.stdout = Some(TestOutputDisplay::Never);
+            force_failure_output.stderr = Some(TestOutputDisplay::Never);
+        }
 
         let stderr = match output {
             ReporterStderr::Terminal if self.no_capture => {
@@ -567,7 +743,7 @@ enum FinalOutput {
     Skipped(#[allow(dead_code)] MismatchReason),
     Executed {
         run_statuses: ExecutionStatuses,
-        display_output: bool,
+        display_output: Option<DisplayOutput>,
     },
 }
 
@@ -583,8 +759,8 @@ impl FinalOutput {
 struct TestReporterImpl<'a> {
     default_filter_config: String,
     status_levels: StatusLevels,
-    force_success_output: Option<TestOutputDisplay>,
-    force_failure_output: Option<TestOutputDisplay>,
+    force_success_output: TestOutputDisplayStreams,
+    force_failure_output: TestOutputDisplayStreams,
     no_capture: bool,
     binary_id_width: usize,
     styles: Box<Styles>,
@@ -772,8 +948,11 @@ impl<'a> TestReporterImpl<'a> {
                         !run_status.result.is_success(),
                         "only failing tests are retried"
                     );
-                    if self.failure_output(*failure_output).is_immediate() {
-                        self.write_output(test_instance, run_status, true, writer)?;
+                    if let Some(display_output) = self
+                        .failure_output(*failure_output)
+                        .display_output_immediate()
+                    {
+                        self.write_output(test_instance, run_status, true, display_output, writer)?;
                     }
 
                     // The final output doesn't show retries, so don't store this result in
@@ -838,8 +1017,8 @@ impl<'a> TestReporterImpl<'a> {
                 if output_on_test_finished.write_status_line {
                     self.write_status_line(*test_instance, describe, writer)?;
                 }
-                if output_on_test_finished.show_immediate {
-                    self.write_output(test_instance, last_status, true, writer)?;
+                if let Some(display_output) = output_on_test_finished.show_immediate {
+                    self.write_output(test_instance, last_status, true, display_output, writer)?;
                 }
                 if let OutputStoreFinal::Yes { display_output } =
                     output_on_test_finished.store_final
@@ -1031,8 +1210,14 @@ impl<'a> TestReporterImpl<'a> {
                                     run_statuses.describe(),
                                     writer,
                                 )?;
-                                if *display_output {
-                                    self.write_output(test_instance, last_status, false, writer)?;
+                                if let Some(display_output) = *display_output {
+                                    self.write_output(
+                                        test_instance,
+                                        last_status,
+                                        false,
+                                        display_output,
+                                        writer,
+                                    )?;
                                 }
                             }
                         }
@@ -1344,6 +1529,7 @@ impl<'a> TestReporterImpl<'a> {
         test_instance: &TestInstance<'a>,
         run_status: &ExecuteStatus,
         is_retry: bool,
+        display_output: DisplayOutput,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let (header_style, _output_style) = if is_retry {
@@ -1364,7 +1550,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 match output {
                     TestOutput::Split { stdout, stderr } => {
-                        if !stdout.is_empty() {
+                        if !stdout.is_empty() && display_output.stdout {
                             write!(writer, "\n{}", "--- ".style(header_style))?;
                             let out_len = self.write_attempt(run_status, header_style, writer)?;
                             // The width is to align test instances.
@@ -1384,7 +1570,7 @@ impl<'a> TestReporterImpl<'a> {
                             )?;
                         }
 
-                        if !stderr.is_empty() {
+                        if !stderr.is_empty() && display_output.stderr {
                             write!(writer, "\n{}", "--- ".style(header_style))?;
                             let out_len = self.write_attempt(run_status, header_style, writer)?;
                             // The width is to align test instances.
@@ -1405,7 +1591,7 @@ impl<'a> TestReporterImpl<'a> {
                         }
                     }
                     TestOutput::Combined { output } => {
-                        if !output.is_empty() {
+                        if !output.is_empty() && display_output.stdout {
                             write!(writer, "\n{}", "--- ".style(header_style))?;
                             let out_len = self.write_attempt(run_status, header_style, writer)?;
                             // The width is to align test instances.
@@ -1513,12 +1699,18 @@ impl<'a> TestReporterImpl<'a> {
         }
     }
 
-    fn success_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_success_output.unwrap_or(test_setting)
+    fn success_output(&self, test_setting: TestOutputDisplayStreams) -> TestOutputDisplayStreams {
+        TestOutputDisplayStreams {
+            stdout: self.force_success_output.stdout.or(test_setting.stdout),
+            stderr: self.force_success_output.stderr.or(test_setting.stderr),
+        }
     }
 
-    fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_failure_output.unwrap_or(test_setting)
+    fn failure_output(&self, test_setting: TestOutputDisplayStreams) -> TestOutputDisplayStreams {
+        TestOutputDisplayStreams {
+            stdout: self.force_failure_output.stdout.or(test_setting.stdout),
+            stderr: self.force_failure_output.stderr.or(test_setting.stderr),
+        }
     }
 }
 
@@ -1681,17 +1873,18 @@ struct StatusLevels {
 impl StatusLevels {
     fn compute_output_on_test_finished(
         &self,
-        display: TestOutputDisplay,
+        display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         test_status_level: StatusLevel,
         test_final_status_level: FinalStatusLevel,
     ) -> OutputOnTestFinished {
         let write_status_line = self.status_level >= test_status_level;
 
-        let is_immediate = display.is_immediate();
+        let is_immediate = display.display_output_immediate();
         // We store entries in the final output map if either the final status level is high enough or
         // if `display` says we show the output at the end.
-        let is_final = display.is_final() || self.final_status_level >= test_final_status_level;
+        let is_final = display.display_output_final().is_some()
+            || self.final_status_level >= test_final_status_level;
 
         // This table is tested below. The basic invariant is that we generally follow what
         // is_immediate and is_final suggests, except:
@@ -1716,19 +1909,24 @@ impl StatusLevels {
         //
         // [2] If there's a signal, we shouldn't display output twice at the end since it's
         // redundant -- instead, just show the output as part of the immediate display.
-        let show_immediate = is_immediate && cancel_status <= Some(CancelReason::Signal);
+        let show_immediate = if cancel_status <= Some(CancelReason::Signal) {
+            is_immediate
+        } else {
+            None
+        };
 
         let store_final = if is_final && cancel_status < Some(CancelReason::Signal)
-            || !is_immediate && is_final && cancel_status == Some(CancelReason::Signal)
+            || is_immediate.is_none() && is_final && cancel_status == Some(CancelReason::Signal)
         {
             OutputStoreFinal::Yes {
-                display_output: display.is_final(),
+                display_output: display.display_output_final(),
             }
-        } else if is_immediate && is_final && cancel_status == Some(CancelReason::Signal) {
+        } else if is_immediate.is_some() && is_final && cancel_status == Some(CancelReason::Signal)
+        {
             // In this special case, we already display the output once as the test is being
             // cancelled, so don't display it again at the end since that's redundant.
             OutputStoreFinal::Yes {
-                display_output: false,
+                display_output: None,
             }
         } else {
             OutputStoreFinal::No
@@ -1745,7 +1943,7 @@ impl StatusLevels {
 #[derive(Debug, PartialEq, Eq)]
 struct OutputOnTestFinished {
     write_status_line: bool,
-    show_immediate: bool,
+    show_immediate: Option<DisplayOutput>,
     store_final: OutputStoreFinal,
 }
 
@@ -1756,7 +1954,9 @@ enum OutputStoreFinal {
 
     /// Store the output. display_output controls whether stdout and stderr should actually be
     /// displayed at the end.
-    Yes { display_output: bool },
+    Yes {
+        display_output: Option<DisplayOutput>,
+    },
 }
 
 fn status_str(result: ExecutionResult) -> Cow<'static, str> {
@@ -2025,7 +2225,7 @@ pub enum TestEventKind<'a> {
         delay_before_next_attempt: Duration,
 
         /// Whether failure outputs are printed out.
-        failure_output: TestOutputDisplay,
+        failure_output: TestOutputDisplayStreams,
     },
 
     /// A retry has started.
@@ -2043,10 +2243,10 @@ pub enum TestEventKind<'a> {
         test_instance: TestInstance<'a>,
 
         /// Test setting for success output.
-        success_output: TestOutputDisplay,
+        success_output: TestOutputDisplayStreams,
 
         /// Test setting for failure output.
-        failure_output: TestOutputDisplay,
+        failure_output: TestOutputDisplayStreams,
 
         /// Whether the JUnit report should store success output for this test.
         junit_store_success_output: bool,
@@ -2201,7 +2401,7 @@ mod tests {
 
     #[proptest(cases = 64)]
     fn on_test_finished_dont_write_status_line(
-        display: TestOutputDisplay,
+        display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         #[filter(StatusLevel::Pass < #test_status_level)] test_status_level: StatusLevel,
         test_final_status_level: FinalStatusLevel,
@@ -2223,7 +2423,7 @@ mod tests {
 
     #[proptest(cases = 64)]
     fn on_test_finished_write_status_line(
-        display: TestOutputDisplay,
+        display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         #[filter(StatusLevel::Pass >= #test_status_level)] test_status_level: StatusLevel,
         test_final_status_level: FinalStatusLevel,
@@ -2245,7 +2445,7 @@ mod tests {
     #[proptest(cases = 64)]
     fn on_test_finished_with_interrupt(
         // We always hide output on interrupt.
-        display: TestOutputDisplay,
+        display: TestOutputDisplayStreams,
         // cancel_status is fixed to Interrupt.
 
         // In this case, the status levels are not relevant for is_immediate and is_final.
@@ -2263,13 +2463,13 @@ mod tests {
             test_status_level,
             test_final_status_level,
         );
-        assert!(!actual.show_immediate);
+        assert!(actual.show_immediate.is_none());
         assert_eq!(actual.store_final, OutputStoreFinal::No);
     }
 
     #[proptest(cases = 64)]
     fn on_test_finished_dont_show_immediate(
-        #[filter(!#display.is_immediate())] display: TestOutputDisplay,
+        #[filter(#display.display_output_immediate().is_none())] display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         // The status levels are not relevant for show_immediate.
         test_status_level: StatusLevel,
@@ -2286,12 +2486,12 @@ mod tests {
             test_status_level,
             test_final_status_level,
         );
-        assert!(!actual.show_immediate);
+        assert!(actual.show_immediate.is_none());
     }
 
     #[proptest(cases = 64)]
     fn on_test_finished_show_immediate(
-        #[filter(#display.is_immediate())] display: TestOutputDisplay,
+        #[filter(#display.display_output_immediate().is_some())] display: TestOutputDisplayStreams,
         #[filter(#cancel_status <= Some(CancelReason::Signal))] cancel_status: Option<CancelReason>,
         // The status levels are not relevant for show_immediate.
         test_status_level: StatusLevel,
@@ -2308,14 +2508,14 @@ mod tests {
             test_status_level,
             test_final_status_level,
         );
-        assert!(actual.show_immediate);
+        assert!(actual.show_immediate.is_some());
     }
 
     // Where we don't store final output: if display.is_final() is false, and if the test final
     // status level is too high.
     #[proptest(cases = 64)]
     fn on_test_finished_dont_store_final(
-        #[filter(!#display.is_final())] display: TestOutputDisplay,
+        #[filter(#display.display_output_final().is_none())] display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         // The status level is not relevant for store_final.
         test_status_level: StatusLevel,
@@ -2352,7 +2552,7 @@ mod tests {
         };
 
         let actual = status_levels.compute_output_on_test_finished(
-            TestOutputDisplay::Final,
+            TestOutputDisplayStreams::create_final(),
             cancel_status,
             test_status_level,
             test_final_status_level,
@@ -2360,7 +2560,10 @@ mod tests {
         assert_eq!(
             actual.store_final,
             OutputStoreFinal::Yes {
-                display_output: true
+                display_output: Some(DisplayOutput {
+                    stdout: true,
+                    stderr: true,
+                })
             }
         );
     }
@@ -2379,7 +2582,7 @@ mod tests {
         };
 
         let actual = status_levels.compute_output_on_test_finished(
-            TestOutputDisplay::ImmediateFinal,
+            TestOutputDisplayStreams::create_immediate_final(),
             cancel_status,
             test_status_level,
             test_final_status_level,
@@ -2387,7 +2590,10 @@ mod tests {
         assert_eq!(
             actual.store_final,
             OutputStoreFinal::Yes {
-                display_output: true
+                display_output: Some(DisplayOutput {
+                    stdout: true,
+                    stderr: true,
+                })
             }
         );
     }
@@ -2405,7 +2611,7 @@ mod tests {
         };
 
         let actual = status_levels.compute_output_on_test_finished(
-            TestOutputDisplay::ImmediateFinal,
+            TestOutputDisplayStreams::create_immediate_final(),
             Some(CancelReason::Signal),
             test_status_level,
             test_final_status_level,
@@ -2413,7 +2619,7 @@ mod tests {
         assert_eq!(
             actual.store_final,
             OutputStoreFinal::Yes {
-                display_output: false,
+                display_output: None,
             }
         );
     }
@@ -2421,7 +2627,7 @@ mod tests {
     // Case 4: if display.is_final() is *false* but the test_final_status_level is low enough.
     #[proptest(cases = 64)]
     fn on_test_finished_store_final_4(
-        #[filter(!#display.is_final())] display: TestOutputDisplay,
+        #[filter(#display.display_output_final().is_none())] display: TestOutputDisplayStreams,
         #[filter(#cancel_status <= Some(CancelReason::Signal))] cancel_status: Option<CancelReason>,
         // The status level is not relevant for store_final.
         test_status_level: StatusLevel,
@@ -2443,7 +2649,7 @@ mod tests {
         assert_eq!(
             actual.store_final,
             OutputStoreFinal::Yes {
-                display_output: false,
+                display_output: None,
             }
         );
     }
@@ -2635,8 +2841,8 @@ mod tests {
         let mut builder = TestReporterBuilder::default();
         builder
             .set_no_capture(true)
-            .set_failure_output(TestOutputDisplay::Immediate)
-            .set_success_output(TestOutputDisplay::Immediate)
+            .set_failure_output(TestOutputDisplayStreams::create_immediate())
+            .set_success_output(TestOutputDisplayStreams::create_immediate())
             .set_status_level(StatusLevel::Fail);
         let test_list = TestList::empty();
         let config = NextestConfig::default_config("/fake/dir");
@@ -2653,14 +2859,24 @@ mod tests {
         );
         assert!(reporter.inner.no_capture, "no_capture is true");
         assert_eq!(
-            reporter.inner.force_failure_output,
+            reporter.inner.force_failure_output.stdout,
             Some(TestOutputDisplay::Never),
-            "failure output is never, overriding other settings"
+            "failure output for stdout is never, overriding other settings"
         );
         assert_eq!(
-            reporter.inner.force_success_output,
+            reporter.inner.force_failure_output.stderr,
             Some(TestOutputDisplay::Never),
-            "success output is never, overriding other settings"
+            "failure output for stderr is never, overriding other settings"
+        );
+        assert_eq!(
+            reporter.inner.force_success_output.stdout,
+            Some(TestOutputDisplay::Never),
+            "success output for stdout is never, overriding other settings"
+        );
+        assert_eq!(
+            reporter.inner.force_success_output.stderr,
+            Some(TestOutputDisplay::Never),
+            "success output for stderr is never, overriding other settings"
         );
         assert_eq!(
             reporter.inner.status_levels.status_level,
