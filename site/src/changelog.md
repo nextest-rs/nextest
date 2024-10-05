@@ -8,6 +8,26 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.80] - 2024-10-05
+
+### Added
+
+Support for `--skip` and `--exact` as emulated test binary arguments. The semantics match those of `libtest` binaries.
+
+For example, to run all tests other than those matching the substring `slow_tests`:
+
+```
+cargo nextest run -- --skip slow_tests
+```
+
+To run all tests matching either the substring `my_test` or the exact string `exact_test`:
+
+```
+cargo nextest run -- my_test --exact exact_test
+```
+
+Thanks to [svix-jplatte](https://github.com/svix-jplatte) for your first contribution!
+
 ## [0.9.79] - 2024-10-02
 
 ### Added
@@ -1100,6 +1120,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.80]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.80
 [0.9.79]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.79
 [0.9.78]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.78
 [0.9.77]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.77
