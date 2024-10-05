@@ -122,9 +122,23 @@ skipped due to their presence in the default filter. For example:
 
 ### `--skip` and `--exact`
 
-Nextest does not support `--skip` and `--exact` directly; instead, use a filterset which supersedes these options.
+<!-- md:version 0.9.80 -->
 
-Here are some examples:
+Nextest accepts the `--skip` and `--exact` arguments after `--`, emulating the corresponding arguments accepted by `cargo test`. These arguments match test names.
+
+For example, to run all tests matching the substring `test3`, but not including `skip1` or `skip2`:
+
+```
+cargo nextest run -- --skip skip1 --skip skip2 test3
+```
+
+To run all tests matching either exactly `test1` or the substring `test2`:
+
+```
+cargo nextest run -- --exact test1 test2
+```
+
+Alternatively, and in prior versions of nextest, use a [filterset](filtersets/index.md). Some examples:
 
 |               Cargo test command                |                     Nextest command                     |
 | :---------------------------------------------: | :-----------------------------------------------------: |
