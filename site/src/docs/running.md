@@ -93,7 +93,7 @@ The default filter is available in the filterset DSL via the `default()` predica
 
     By default, command-line arguments are always interpreted with respect to the default filter. For example, `cargo nextest -E 'all()'` will run all tests that match the default filter.
 
-    To override the default set on the command line, use `--ignore-default-filter`. For example, `cargo nextest -E 'all()' --ignore-default-filter` will run all tests, including those not in the default set.
+    To override the default filter on the command line, use `--ignore-default-filter`. For example, `cargo nextest -E 'all()' --ignore-default-filter` will run all tests, including those not in the default filter.
 
 Because skipping some tests can be surprising, nextest prints the number of tests and binaries
 skipped due to their presence in the default filter. For example:
@@ -110,21 +110,23 @@ skipped due to their presence in the default filter. For example:
     cat src/outputs/default-filter-output.ansi | ../scripts/strip-ansi.sh
     ```
 
-!!! tip "Default set vs ignored tests"
+!!! tip "Default filter vs ignored tests"
 
-    The default set and `#[ignore]` can both be used to filter out some tests by default. However, there are key distinctions between the two:
+    The default filter and `#[ignore]` can both be used to filter out some tests by default. However, there are key distinctions between the two:
 
-    1. The default set is defined in nextest's configuration while ignored tests are annotated within Rust code.
-    2. Default sets can be separately configured per-profile. Ignored tests cannot.
-    3. Default sets are a nextest feature, while ignored tests also work with `cargo test`.
+    1. The default filter is defined in nextest's configuration while ignored tests are annotated within Rust code.
+    2. Default filters can be separately configured per-profile. Ignored tests are global to the repository.
+    3. Default filters are a nextest feature, while ignored tests also work with `cargo test`.
 
-    In practice, `#[ignore]` is often used for failing tests, while the default set is typically used to filter out tests that are very slow or require specific resources.
+    In practice, `#[ignore]` is often used for failing tests, while the default filter is typically used to filter out tests that are very slow or require specific resources.
 
 ### `--skip` and `--exact`
 
-<!-- md:version 0.9.80 -->
+<!-- md:version 0.9.81-->
 
-Nextest accepts the `--skip` and `--exact` arguments after `--`, emulating the corresponding arguments accepted by `cargo test`. These arguments match test names.
+Nextest accepts the `--skip` and `--exact` arguments after `--`, emulating the corresponding
+arguments accepted by `cargo test`. The `--skip` and `--exact` arguments apply to test name filters
+passed in after `--`.
 
 For example, to run all tests matching the substring `test3`, but not including `skip1` or `skip2`:
 
@@ -132,18 +134,25 @@ For example, to run all tests matching the substring `test3`, but not including 
 cargo nextest run -- --skip skip1 --skip skip2 test3
 ```
 
-To run all tests matching either exactly `test1` or the substring `test2`:
+To run all tests matching exactly the names `test1` and `test2`:
 
 ```
-cargo nextest run -- --exact test1 test2
+cargo nextest run -- test1 test2 --exact
+```
+
+To run all tests except those matching exactly `slow_module::my_test`:
+
+```
+cargo nextest run -- --exact --skip slow_module::my_test
 ```
 
 Alternatively, and in prior versions of nextest, use a [filterset](filtersets/index.md). Some examples:
 
-|               Cargo test command                |                     Nextest command                     |
-| :---------------------------------------------: | :-----------------------------------------------------: |
-| `cargo test -- --skip skip1 --skip skip2 test3` | `cargo nextest run -E 'test(test3) - test(/skip[12]/)'` |
-|       `cargo test -- --exact test1 test2`       |  `cargo nextest run -E 'test(=test1) + test(=test2)'`   |
+|                `cargo test` command                 |                Nextest filterset command                |
+| :-------------------------------------------------: | :-----------------------------------------------------: |
+|   `cargo test -- --skip skip1 --skip skip2 test3`   | `cargo nextest run -E 'test(test3) - test(/skip[12]/)'` |
+|         `cargo test -- test1 test2 --exact`         |  `cargo nextest run -E 'test(=test1) + test(=test2)'`   |
+| `cargo test -- --exact --skip slow_module::my_test` | `cargo nextest run -E 'not test(=slow_module::my_test)` |
 
 ### Filtering by build platform
 
@@ -152,7 +161,9 @@ While cross-compiling code, some tests (e.g. proc-macro tests) may need to be ru
 For example, to only run tests for the host platform:
 
 ```
+
 cargo nextest run -E 'platform(host)'
+
 ```
 
 [filterset DSL]: filtersets/index.md
