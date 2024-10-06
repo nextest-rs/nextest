@@ -122,7 +122,7 @@ skipped due to their presence in the default filter. For example:
 
 ### `--skip` and `--exact`
 
-<!-- md:version 0.9.81-->
+<!-- md:version 0.9.81 -->
 
 Nextest accepts the `--skip` and `--exact` arguments after `--`, emulating the corresponding
 arguments accepted by `cargo test`. The `--skip` and `--exact` arguments apply to test name filters
