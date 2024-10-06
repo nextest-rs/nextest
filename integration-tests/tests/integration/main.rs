@@ -396,6 +396,27 @@ fn test_run() {
     );
     check_run_output(&output.stderr, 0);
 
+    // --exact with nothing else should be the same as above.
+    let output = CargoNextestCli::new()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "--exact",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}"
+    );
+    check_run_output(&output.stderr, 0);
+
     // Check the output with --skip.
     let output = CargoNextestCli::new()
         .args([
@@ -446,7 +467,6 @@ fn test_run() {
             "--workspace",
             "--all-targets",
             "--",
-            "--exact",
             "test_multiply_two",
             "--exact",
             "tests::test_multiply_two_cdylib",
@@ -485,14 +505,14 @@ fn test_run() {
             "--workspace",
             "--all-targets",
             "--",
-            "--exact",
             "test_multiply_two",
+            // Note the position of --exact doesn't matter.
             "--exact",
             "tests::test_multiply_two_cdylib",
             "--skip",
             "cdylib",
         ])
-        // This should only select the test_multiply_two test, which passes. So don't pass in
+        // This should only select the two test_multiply_two tests, which pass. So don't pass in
         // unchecked(true) here.
         .output();
     check_run_output(
@@ -552,12 +572,11 @@ fn test_run() {
             "-E",
             "not test(cdylib)",
             "--",
-            "--exact",
             "test_multiply_two",
             "--exact",
             "tests::test_multiply_two_cdylib",
         ])
-        // This should only select the test_multiply_two test, which passes. So don't pass in
+        // This should only select the two test_multiply_two tests, which pass. So don't pass in
         // unchecked(true) here.
         .output();
     check_run_output(

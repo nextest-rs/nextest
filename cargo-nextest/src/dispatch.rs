@@ -600,7 +600,7 @@ struct TestBuildFilter {
     /// - --ignored:         Only run ignored tests{n}
     /// - --include-ignored: Run both ignored and non-ignored tests{n}
     /// - --skip PATTERN:    Skip tests that match the pattern{n}
-    /// - --exact PATTERN:   Only run tests that exactly match the pattern
+    /// - --exact:           Run tests that exactly match patterns after `--`
     #[arg(help_heading = None, value_name = "FILTERS_AND_ARGS", last = true)]
     filters: Vec<String>,
 }
@@ -670,6 +670,24 @@ impl TestBuildFilter {
         run_ignored: &mut Option<RunIgnored>,
         patterns: &mut TestFilterPatterns,
     ) -> Result<()> {
+        // First scan to see if `--exact` is specified. If so, then everything here will be added to
+        // `--exact`.
+        let mut is_exact = false;
+        for arg in &self.filters {
+            if arg == "--" {
+                break;
+            }
+            if arg == "--exact" {
+                if is_exact {
+                    return Err(ExpectedError::test_binary_args_parse_error(
+                        "duplicated",
+                        vec![arg.clone()],
+                    ));
+                }
+                is_exact = true;
+            }
+        }
+
         let mut ignore_filters = Vec::new();
         let mut read_trailing_filters = false;
 
@@ -678,7 +696,11 @@ impl TestBuildFilter {
         let mut it = self.filters.iter();
         while let Some(arg) = it.next() {
             if read_trailing_filters || !arg.starts_with('-') {
-                patterns.add_substring_pattern(arg.clone());
+                if is_exact {
+                    patterns.add_exact_pattern(arg.clone());
+                } else {
+                    patterns.add_substring_pattern(arg.clone());
+                }
             } else if arg == "--include-ignored" {
                 ignore_filters.push((arg.clone(), RunIgnored::All));
             } else if arg == "--ignored" {
@@ -695,14 +717,7 @@ impl TestBuildFilter {
 
                 patterns.add_skip_pattern(skip_arg.clone());
             } else if arg == "--exact" {
-                let exact_arg = it.next().ok_or_else(|| {
-                    ExpectedError::test_binary_args_parse_error(
-                        "missing required argument",
-                        vec![arg.clone()],
-                    )
-                })?;
-
-                patterns.add_exact_pattern(exact_arg.clone());
+                // Already handled above.
             } else {
                 unsupported_args.push(arg.clone());
             }
@@ -2605,13 +2620,13 @@ mod tests {
             // skip and exact
             // ---
             (
-                "foo -- --skip my-pattern --skip your-pattern --exact exact1 pattern2",
+                "foo -- --skip my-pattern --skip your-pattern exact1 --exact pattern2",
                 {
                     let mut patterns = TestFilterPatterns::default();
                     patterns.add_skip_pattern("my-pattern".to_owned());
                     patterns.add_skip_pattern("your-pattern".to_owned());
                     patterns.add_exact_pattern("exact1".to_owned());
-                    patterns.add_substring_pattern("pattern2".to_owned());
+                    patterns.add_exact_pattern("pattern2".to_owned());
                     patterns
                 },
             ),
@@ -2622,6 +2637,7 @@ mod tests {
             // ---
             ("foo -- --include-ignored --include-ignored", "duplicated"),
             ("foo -- --ignored --ignored", "duplicated"),
+            ("foo -- --exact --exact", "duplicated"),
             // ---
             // mutually exclusive
             // ---
@@ -2631,7 +2647,6 @@ mod tests {
             // missing required argument
             // ---
             ("foo -- --skip", "missing required argument"),
-            ("foo -- --exact", "missing required argument"),
             // ---
             // unsupported
             // ---
