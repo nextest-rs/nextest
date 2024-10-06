@@ -8,6 +8,12 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.81] - 2024-10-06
+
+### Fixed
+
+Fixed semantics of `--exact` to match Rust's libtest: `--exact` now makes it so that all filters passed in after `--` (including `--skip` filters) are matched exactly.
+
 ## [0.9.80] - 2024-10-05
 
 ### Added
@@ -1120,6 +1126,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.81]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.81
 [0.9.80]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.80
 [0.9.79]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.79
 [0.9.78]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.78
