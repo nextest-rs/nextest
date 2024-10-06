@@ -715,7 +715,11 @@ impl TestBuildFilter {
                     )
                 })?;
 
-                patterns.add_skip_pattern(skip_arg.clone());
+                if is_exact {
+                    patterns.add_skip_exact_pattern(skip_arg.clone());
+                } else {
+                    patterns.add_skip_pattern(skip_arg.clone());
+                }
             } else if arg == "--exact" {
                 // Already handled above.
             } else {
@@ -2617,14 +2621,30 @@ mod tests {
         ];
         let skip_exact = &[
             // ---
+            // skip
+            // ---
+            ("foo -- --skip my-pattern --skip your-pattern", {
+                let mut patterns = TestFilterPatterns::default();
+                patterns.add_skip_pattern("my-pattern".to_owned());
+                patterns.add_skip_pattern("your-pattern".to_owned());
+                patterns
+            }),
+            ("foo -- pattern1 --skip my-pattern --skip your-pattern", {
+                let mut patterns = TestFilterPatterns::default();
+                patterns.add_substring_pattern("pattern1".to_owned());
+                patterns.add_skip_pattern("my-pattern".to_owned());
+                patterns.add_skip_pattern("your-pattern".to_owned());
+                patterns
+            }),
+            // ---
             // skip and exact
             // ---
             (
                 "foo -- --skip my-pattern --skip your-pattern exact1 --exact pattern2",
                 {
                     let mut patterns = TestFilterPatterns::default();
-                    patterns.add_skip_pattern("my-pattern".to_owned());
-                    patterns.add_skip_pattern("your-pattern".to_owned());
+                    patterns.add_skip_exact_pattern("my-pattern".to_owned());
+                    patterns.add_skip_exact_pattern("your-pattern".to_owned());
                     patterns.add_exact_pattern("exact1".to_owned());
                     patterns.add_exact_pattern("pattern2".to_owned());
                     patterns

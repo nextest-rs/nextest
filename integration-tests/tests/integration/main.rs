@@ -510,9 +510,9 @@ fn test_run() {
             "--exact",
             "tests::test_multiply_two_cdylib",
             "--skip",
-            "cdylib",
+            "tests::test_multiply_two_cdylib",
         ])
-        // This should only select the two test_multiply_two tests, which pass. So don't pass in
+        // This should only select the one test_multiply_two test, which pass. So don't pass in
         // unchecked(true) here.
         .output();
     check_run_output(
@@ -529,7 +529,7 @@ fn test_run() {
             "--workspace",
             "--all-targets",
             "-E",
-            "(test(=test_multiply_two) | test(=tests::test_multiply_two_cdylib)) & not test(cdylib)",
+            "(test(=test_multiply_two) | test(=tests::test_multiply_two_cdylib)) & not test(=tests::test_multiply_two_cdylib)",
         ])
         // This should only select the test_multiply_two test, which passes. So don't pass in
         // unchecked(true) here.
@@ -576,7 +576,7 @@ fn test_run() {
             "--exact",
             "tests::test_multiply_two_cdylib",
         ])
-        // This should only select the two test_multiply_two tests, which pass. So don't pass in
+        // This should only select the test_multiply_two test, which passes. So don't pass in
         // unchecked(true) here.
         .output();
     check_run_output(

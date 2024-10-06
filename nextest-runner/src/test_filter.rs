@@ -63,7 +63,7 @@ enum TestFilterExprs {
     Sets(Vec<Filterset>),
 }
 
-/// A set of patterns for test filters.
+/// A set of string-based patterns for test filters.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TestFilterPatterns {
     /// The only patterns specified (if any) are skip patterns: match the default set of tests minus
@@ -71,6 +71,9 @@ pub enum TestFilterPatterns {
     SkipOnly {
         /// Skip patterns.
         skip_patterns: Vec<String>,
+
+        /// Skip patterns to match exactly.
+        skip_exact_patterns: HashSet<String>,
     },
 
     /// At least one substring or exact pattern is specified.
@@ -83,11 +86,14 @@ pub enum TestFilterPatterns {
         /// Substring patterns.
         patterns: Vec<String>,
 
-        /// Patterns passed in via `--exact`.
+        /// Patterns to match exactly.
         exact_patterns: HashSet<String>,
 
         /// Patterns passed in via `--skip`.
         skip_patterns: Vec<String>,
+
+        /// Skip patterns to match exactly.
+        skip_exact_patterns: HashSet<String>,
     },
 }
 
@@ -95,6 +101,7 @@ impl Default for TestFilterPatterns {
     fn default() -> Self {
         Self::SkipOnly {
             skip_patterns: Vec::new(),
+            skip_exact_patterns: HashSet::new(),
         }
     }
 }
@@ -112,6 +119,7 @@ impl TestFilterPatterns {
                 patterns: substring_patterns,
                 exact_patterns: HashSet::new(),
                 skip_patterns: Vec::new(),
+                skip_exact_patterns: HashSet::new(),
             }
         }
     }
@@ -119,11 +127,15 @@ impl TestFilterPatterns {
     /// Adds a regular pattern to the set of patterns.
     pub fn add_substring_pattern(&mut self, pattern: String) {
         match self {
-            Self::SkipOnly { skip_patterns } => {
+            Self::SkipOnly {
+                skip_patterns,
+                skip_exact_patterns,
+            } => {
                 *self = Self::Patterns {
                     patterns: vec![pattern],
                     exact_patterns: HashSet::new(),
                     skip_patterns: mem::take(skip_patterns),
+                    skip_exact_patterns: mem::take(skip_exact_patterns),
                 };
             }
             Self::Patterns { patterns, .. } => {
@@ -135,11 +147,15 @@ impl TestFilterPatterns {
     /// Adds an exact pattern to the set of patterns.
     pub fn add_exact_pattern(&mut self, pattern: String) {
         match self {
-            Self::SkipOnly { skip_patterns } => {
+            Self::SkipOnly {
+                skip_patterns,
+                skip_exact_patterns,
+            } => {
                 *self = Self::Patterns {
                     patterns: Vec::new(),
                     exact_patterns: [pattern].into_iter().collect(),
                     skip_patterns: mem::take(skip_patterns),
+                    skip_exact_patterns: mem::take(skip_exact_patterns),
                 };
             }
             Self::Patterns { exact_patterns, .. } => {
@@ -151,7 +167,7 @@ impl TestFilterPatterns {
     /// Adds a skip pattern to the set of patterns.
     pub fn add_skip_pattern(&mut self, pattern: String) {
         match self {
-            Self::SkipOnly { skip_patterns } => {
+            Self::SkipOnly { skip_patterns, .. } => {
                 skip_patterns.push(pattern);
             }
             Self::Patterns { skip_patterns, .. } => {
@@ -160,9 +176,30 @@ impl TestFilterPatterns {
         }
     }
 
+    /// Adds a skip pattern to match exactly.
+    pub fn add_skip_exact_pattern(&mut self, pattern: String) {
+        match self {
+            Self::SkipOnly {
+                skip_exact_patterns,
+                ..
+            } => {
+                skip_exact_patterns.insert(pattern);
+            }
+            Self::Patterns {
+                skip_exact_patterns,
+                ..
+            } => {
+                skip_exact_patterns.insert(pattern);
+            }
+        }
+    }
+
     fn resolve(self) -> Result<ResolvedFilterPatterns, TestFilterBuilderError> {
         match self {
-            Self::SkipOnly { mut skip_patterns } => {
+            Self::SkipOnly {
+                mut skip_patterns,
+                skip_exact_patterns,
+            } => {
                 if skip_patterns.is_empty() {
                     Ok(ResolvedFilterPatterns::All)
                 } else {
@@ -172,6 +209,7 @@ impl TestFilterPatterns {
                     Ok(ResolvedFilterPatterns::SkipOnly {
                         skip_patterns,
                         skip_pattern_matcher,
+                        skip_exact_patterns,
                     })
                 }
             }
@@ -179,6 +217,7 @@ impl TestFilterPatterns {
                 mut patterns,
                 exact_patterns,
                 mut skip_patterns,
+                skip_exact_patterns,
             } => {
                 // sort_unstable allows the PartialEq implementation to work correctly.
                 patterns.sort_unstable();
@@ -191,6 +230,7 @@ impl TestFilterPatterns {
                     patterns,
                     exact_patterns,
                     skip_patterns,
+                    skip_exact_patterns,
                     pattern_matcher,
                     skip_pattern_matcher,
                 })
@@ -211,6 +251,7 @@ enum ResolvedFilterPatterns {
     SkipOnly {
         skip_patterns: Vec<String>,
         skip_pattern_matcher: Box<AhoCorasick>,
+        skip_exact_patterns: HashSet<String>,
     },
 
     /// Match tests that match the patterns and don't match the skip patterns.
@@ -218,6 +259,7 @@ enum ResolvedFilterPatterns {
         patterns: Vec<String>,
         exact_patterns: HashSet<String>,
         skip_patterns: Vec<String>,
+        skip_exact_patterns: HashSet<String>,
         pattern_matcher: Box<AhoCorasick>,
         skip_pattern_matcher: Box<AhoCorasick>,
     },
@@ -236,9 +278,12 @@ impl ResolvedFilterPatterns {
             Self::SkipOnly {
                 // skip_patterns is covered by the matcher.
                 skip_patterns: _,
+                skip_exact_patterns,
                 skip_pattern_matcher,
             } => {
-                if skip_pattern_matcher.is_match(test_name) {
+                if skip_exact_patterns.contains(test_name)
+                    || skip_pattern_matcher.is_match(test_name)
+                {
                     FilterNameMatch::Mismatch(MismatchReason::String)
                 } else {
                     FilterNameMatch::MatchWithPatterns
@@ -250,11 +295,14 @@ impl ResolvedFilterPatterns {
                 exact_patterns,
                 // skip_patterns is covered by the matcher.
                 skip_patterns: _,
+                skip_exact_patterns,
                 pattern_matcher,
                 skip_pattern_matcher,
             } => {
                 // skip overrides all other patterns.
-                if skip_pattern_matcher.is_match(test_name) {
+                if skip_exact_patterns.contains(test_name)
+                    || skip_pattern_matcher.is_match(test_name)
+                {
                     FilterNameMatch::Mismatch(MismatchReason::String)
                 } else if exact_patterns.contains(test_name) || pattern_matcher.is_match(test_name)
                 {
@@ -274,19 +322,25 @@ impl PartialEq for ResolvedFilterPatterns {
             (
                 Self::SkipOnly {
                     skip_patterns,
+                    skip_exact_patterns,
                     // The matcher is derived from `skip_patterns`, so it can be ignored.
                     skip_pattern_matcher: _,
                 },
                 Self::SkipOnly {
                     skip_patterns: other_skip_patterns,
+                    skip_exact_patterns: other_skip_exact_patterns,
                     skip_pattern_matcher: _,
                 },
-            ) => skip_patterns == other_skip_patterns,
+            ) => {
+                skip_patterns == other_skip_patterns
+                    && skip_exact_patterns == other_skip_exact_patterns
+            }
             (
                 Self::Patterns {
                     patterns,
                     exact_patterns,
                     skip_patterns,
+                    skip_exact_patterns,
                     // The matchers are derived from `patterns` and `skip_patterns`, so they can be
                     // ignored.
                     pattern_matcher: _,
@@ -296,6 +350,7 @@ impl PartialEq for ResolvedFilterPatterns {
                     patterns: other_patterns,
                     exact_patterns: other_exact_patterns,
                     skip_patterns: other_skip_patterns,
+                    skip_exact_patterns: other_skip_exact_patterns,
                     pattern_matcher: _,
                     skip_pattern_matcher: _,
                 },
@@ -303,6 +358,7 @@ impl PartialEq for ResolvedFilterPatterns {
                 patterns == other_patterns
                     && exact_patterns == other_exact_patterns
                     && skip_patterns == other_skip_patterns
+                    && skip_exact_patterns == other_skip_exact_patterns
             }
             _ => false,
         }
@@ -739,6 +795,7 @@ mod tests {
         patterns.add_substring_pattern("bar".to_string());
         patterns.add_exact_pattern("baz".to_string());
         patterns.add_skip_pattern("quux".to_string());
+        patterns.add_skip_exact_pattern("quuz".to_string());
 
         let resolved = patterns.clone().resolve().unwrap();
 
@@ -792,7 +849,13 @@ mod tests {
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
 
-        // Skip and exact patterns -- in this case, add `baz` to the skip list.
+        // Skip-exact patterns.
+        assert_eq!(
+            resolved.name_match("quuz"),
+            FilterNameMatch::Mismatch(MismatchReason::String),
+        );
+
+        // Skip overrides regular patterns -- in this case, add `baz` to the skip list.
         patterns.add_skip_pattern("baz".to_string());
         let resolved = patterns.resolve().unwrap();
         assert_eq!(
@@ -806,6 +869,7 @@ mod tests {
         let mut patterns = TestFilterPatterns::default();
         patterns.add_skip_pattern("foo".to_string());
         patterns.add_skip_pattern("bar".to_string());
+        patterns.add_skip_exact_pattern("baz".to_string());
 
         let resolved = patterns.clone().resolve().unwrap();
 
@@ -827,13 +891,19 @@ mod tests {
             FilterNameMatch::Mismatch(MismatchReason::String),
         );
 
-        // Anything that doesn't match the skip filter should match.
+        // Test exact matches.
         assert_eq!(
             resolved.name_match("baz"),
-            FilterNameMatch::MatchWithPatterns,
+            FilterNameMatch::Mismatch(MismatchReason::String),
         );
         assert_eq!(
             resolved.name_match("abazb"),
+            FilterNameMatch::MatchWithPatterns,
+        );
+
+        // Anything that doesn't match the skip filter should match.
+        assert_eq!(
+            resolved.name_match("quux"),
             FilterNameMatch::MatchWithPatterns,
         );
     }
