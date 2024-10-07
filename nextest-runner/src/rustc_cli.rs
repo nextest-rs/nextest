@@ -4,6 +4,7 @@
 use crate::cargo_config::TargetTriple;
 use camino::Utf8PathBuf;
 use std::{borrow::Cow, path::PathBuf};
+use tracing::{debug, trace};
 
 /// Create a rustc CLI call.
 #[derive(Clone, Debug)]
@@ -46,7 +47,7 @@ impl<'a> RustcCli<'a> {
     /// [`Vec<u8>`].
     pub fn read(&self) -> Option<Vec<u8>> {
         let expression = self.to_expression();
-        log::trace!("Executing command: {:?}", expression);
+        trace!("Executing command: {:?}", expression);
         let output = match expression
             .stdout_capture()
             .stderr_capture()
@@ -55,16 +56,16 @@ impl<'a> RustcCli<'a> {
         {
             Ok(output) => output,
             Err(e) => {
-                log::debug!("Failed to spawn the child process: {}", e);
+                debug!("Failed to spawn the child process: {}", e);
                 return None;
             }
         };
         if !output.status.success() {
-            log::debug!("execution failed with {}", output.status);
-            log::debug!("stdout:");
-            log::debug!("{}", String::from_utf8_lossy(&output.stdout));
-            log::debug!("stderr:");
-            log::debug!("{}", String::from_utf8_lossy(&output.stderr));
+            debug!("execution failed with {}", output.status);
+            debug!("stdout:");
+            debug!("{}", String::from_utf8_lossy(&output.stdout));
+            debug!("stderr:");
+            debug!("{}", String::from_utf8_lossy(&output.stderr));
             return None;
         }
         Some(output.stdout)

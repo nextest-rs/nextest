@@ -39,7 +39,6 @@ indexmap = { workspace = true, features = ["serde"] }
 indicatif.workspace = true
 is_ci.workspace = true
 itertools.workspace = true
-log.workspace = true
 miette.workspace = true
 newtype-uuid.workspace = true
 nextest-filtering.workspace = true
@@ -79,6 +78,7 @@ tokio = { workspace = true, features = [
 ] }
 toml.workspace = true
 toml_edit = { workspace = true, features = ["serde"] }
+tracing.workspace = true
 unicode-ident.workspace = true
 unicode-normalization.workspace = true
 xxhash-rust = { workspace = true, features = ["xxh64"] }

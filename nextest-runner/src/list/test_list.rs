@@ -36,6 +36,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 use tokio::runtime::Runtime;
+use tracing::debug;
 
 /// A Rust test binary built by Cargo. This artifact hasn't been run yet so there's no information
 /// about the tests within it.
@@ -236,7 +237,7 @@ impl<'g> TestList<'g> {
         I::IntoIter: Send,
     {
         let updated_dylib_path = Self::create_dylib_path(&rust_build_meta)?;
-        log::debug!(
+        debug!(
             "updated {}: {}",
             dylib_path_envvar(),
             updated_dylib_path.to_string_lossy(),
@@ -255,7 +256,7 @@ impl<'g> TestList<'g> {
                 let binary_match = filter.filter_binary_match(&test_binary, ecx, bound);
                 match binary_match {
                     FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
-                        log::debug!(
+                        debug!(
                             "executing test binary to obtain test list \
                             (match result is {binary_match:?}): {}",
                             test_binary.binary_id,
@@ -274,7 +275,7 @@ impl<'g> TestList<'g> {
                         Ok::<_, CreateTestListError>((bin, info))
                     }
                     FilterBinaryMatch::Mismatch { reason } => {
-                        log::debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
+                        debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
                         Ok(Self::process_skipped(test_binary, reason))
                     }
                 }
@@ -327,7 +328,7 @@ impl<'g> TestList<'g> {
                 let binary_match = filter.filter_binary_match(&test_binary, ecx, bound);
                 match binary_match {
                     FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
-                        log::debug!(
+                        debug!(
                             "processing output for binary \
                             (match result is {binary_match:?}): {}",
                             test_binary.binary_id,
@@ -344,7 +345,7 @@ impl<'g> TestList<'g> {
                         Ok((bin, info))
                     }
                     FilterBinaryMatch::Mismatch { reason } => {
-                        log::debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
+                        debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
                         Ok(Self::process_skipped(test_binary, reason))
                     }
                 }

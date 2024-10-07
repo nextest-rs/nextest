@@ -6,6 +6,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use toml_edit::Item;
+use tracing::debug;
 
 /// The source of a Cargo config.
 ///
@@ -71,7 +72,7 @@ impl CargoConfigs {
             match Utf8PathBuf::try_from(path) {
                 Ok(path) => target_paths.push(path),
                 Err(error) => {
-                    log::debug!("for RUST_TARGET_PATH, {error}");
+                    debug!("for RUST_TARGET_PATH, {error}");
                 }
             }
         }

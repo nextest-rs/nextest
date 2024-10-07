@@ -17,6 +17,7 @@ use nextest_metadata::{
 };
 use owo_colors::OwoColorize;
 use std::{collections::HashSet, io};
+use tracing::warn;
 
 /// A Rust test binary built by Cargo.
 #[derive(Clone, Debug)]
@@ -322,7 +323,7 @@ impl<'g> BinaryListBuildState<'g> {
         let in_workspace = self.graph.metadata(&package_id).map_or_else(
             |_| {
                 // Warn about processing a package that isn't in the package graph.
-                log::warn!(
+                warn!(
                     target: "nextest-runner::list",
                     "warning: saw package ID `{}` which wasn't produced by cargo metadata",
                     package_id

@@ -15,6 +15,7 @@ use std::{
     str::FromStr,
 };
 use target_spec::Platform;
+use tracing::{debug, info, warn};
 
 /// Update backend using mukti
 #[derive(Clone, Debug)]
@@ -29,7 +30,7 @@ pub struct MuktiBackend {
 impl MuktiBackend {
     /// Fetch releases.
     pub fn fetch_releases(&self, current_version: Version) -> Result<NextestReleases, UpdateError> {
-        log::info!(target: "nextest-runner::update", "checking for self-updates");
+        info!(target: "nextest-runner::update", "checking for self-updates");
         // Is the URL a file that exists on disk? If so, use that.
         let as_path = Utf8Path::new(&self.url);
         let releases_buf = if as_path.exists() {
@@ -111,7 +112,7 @@ impl NextestReleases {
         perform_setup_fn: impl FnOnce(&Version) -> bool,
     ) -> Result<CheckStatus<'a>, UpdateError> {
         let (version, version_data) = self.get_version_data(version)?;
-        log::debug!(
+        debug!(
             target: "nextest-runner::update",
             "current version is {}, update version is {version}",
             self.current_version,
@@ -129,7 +130,7 @@ impl NextestReleases {
 
         // Look for data for this platform.
         let triple = self.target_triple();
-        log::debug!(target: "nextest-runner::update", "target triple: {triple}");
+        debug!(target: "nextest-runner::update", "target triple: {triple}");
 
         let location = version_data
             .locations
@@ -199,7 +200,7 @@ impl NextestReleases {
             match serde_json::from_value::<NextestReleaseMetadata>(release_data.metadata.clone()) {
                 Ok(metadata) => Some(metadata),
                 Err(error) => {
-                    log::warn!(
+                    warn!(
                         target: "nextest-runner::update",
                         "failed to parse custom release metadata: {error}",
                     );
@@ -356,7 +357,7 @@ impl<'a> MuktiUpdateContext<'a> {
             .download_to(&mut tmp_archive_buf)
             .map_err(UpdateError::SelfUpdate)?;
 
-        log::debug!(target: "nextest-runner::update", "downloaded to {tmp_archive_path}");
+        debug!(target: "nextest-runner::update", "downloaded to {tmp_archive_path}");
 
         let tmp_archive =
             tmp_archive_buf
@@ -386,7 +387,7 @@ impl<'a> MuktiUpdateContext<'a> {
         // need to make this file executable.
 
         let new_exe = tmp_dir_path.join(self.bin_path_in_archive);
-        log::debug!(target: "nextest-runner::update", "extracted to {new_exe}, replacing existing binary");
+        debug!(target: "nextest-runner::update", "extracted to {new_exe}, replacing existing binary");
 
         let tmp_backup_dir = camino_tempfile::Builder::new()
             .prefix(&tmp_backup_dir_prefix)
@@ -405,7 +406,7 @@ impl<'a> MuktiUpdateContext<'a> {
 
         // Finally, run `cargo nextest self setup` if requested.
         if self.perform_setup {
-            log::info!(target: "nextest-runner::update", "running `cargo nextest self setup`");
+            info!(target: "nextest-runner::update", "running `cargo nextest self setup`");
             let mut cmd = std::process::Command::new(&self.context.bin_install_path);
             cmd.args(["nextest", "self", "setup", "--source", "self-update"]);
             let status = cmd.status().map_err(UpdateError::SelfSetup)?;

@@ -15,6 +15,7 @@ use nextest_metadata::{
 };
 use target_spec::summaries::PlatformSummary;
 pub use target_spec::Platform;
+use tracing::debug;
 
 /// A representation of host and target platform.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -279,26 +280,26 @@ impl PlatformLibdir {
             let v = v.ok_or(PlatformLibdirUnavailable::RUSTC_FAILED)?;
 
             let s = String::from_utf8(v).map_err(|e| {
-                log::debug!("failed to convert the output to a string: {e}");
+                debug!("failed to convert the output to a string: {e}");
                 PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR
             })?;
 
             let mut lines = s.lines();
             let Some(out) = lines.next() else {
-                log::debug!("empty output");
+                debug!("empty output");
                 return Err(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR);
             };
 
             let trimmed = out.trim();
             if trimmed.is_empty() {
-                log::debug!("empty output");
+                debug!("empty output");
                 return Err(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR);
             }
 
             // If there's another line, it must be empty.
             for line in lines {
                 if !line.trim().is_empty() {
-                    log::debug!("unexpected additional output: {line}");
+                    debug!("unexpected additional output: {line}");
                     return Err(PlatformLibdirUnavailable::RUSTC_OUTPUT_ERROR);
                 }
             }

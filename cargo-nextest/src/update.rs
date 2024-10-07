@@ -8,6 +8,7 @@ use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersion};
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::cmp::Ordering;
+use tracing::info;
 
 // Returns the smallest version with a `self setup` command.
 fn min_version_with_setup() -> Version {
@@ -61,7 +62,7 @@ pub(crate) fn perform_update(
 
     match status {
         CheckStatus::AlreadyOnRequested(version) => {
-            log::info!(
+            info!(
                 "cargo-nextest is already at the latest version: {}",
                 version.style(styles.bold),
             );
@@ -71,7 +72,7 @@ pub(crate) fn perform_update(
             current_version,
             requested,
         } => {
-            log::info!(
+            info!(
                 "not performing downgrade from {} to {}\n\
             (pass in --force to force downgrade)",
                 current_version.style(styles.bold),
@@ -80,7 +81,7 @@ pub(crate) fn perform_update(
             Ok(NextestExitCode::UPDATE_DOWNGRADE_NOT_PERFORMED)
         }
         CheckStatus::Success(ctx) => {
-            log::info!(
+            info!(
                 "{} available: {} -> {}",
                 match ctx.version.cmp(&current_version) {
                     Ordering::Greater => "update",
@@ -115,13 +116,13 @@ pub(crate) fn perform_update(
             if should_apply {
                 ctx.do_update()
                     .map_err(|err| ExpectedError::UpdateError { err })?;
-                log::info!(
+                info!(
                     "cargo-nextest updated to {}",
                     ctx.version.style(styles.bold)
                 );
                 Ok(0)
             } else {
-                log::info!("update canceled");
+                info!("update canceled");
                 Ok(NextestExitCode::UPDATE_CANCELED)
             }
         }

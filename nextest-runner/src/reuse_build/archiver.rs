@@ -23,6 +23,7 @@ use std::{
     io::{self, BufWriter, Write},
     time::{Instant, SystemTime},
 };
+use tracing::{debug, trace};
 use zstd::Encoder;
 
 /// Archive format.
@@ -547,7 +548,7 @@ impl<'a, W: Write> Archiver<'a, W> {
         let mut stack = vec![(limit, src_path.to_owned(), rel_path.to_owned(), metadata)];
 
         while let Some((depth, src_path, rel_path, metadata)) = stack.pop() {
-            log::trace!(
+            trace!(
                 target: "nextest-runner",
                 "processing `{src_path}` with metadata {metadata:?} \
                  (depth: {depth})",
@@ -567,7 +568,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                 }
 
                 // Iterate over this directory.
-                log::debug!(
+                debug!(
                     target: "nextest-runner",
                     "recursing into `{}`",
                     src_path
@@ -625,7 +626,7 @@ impl<'a, W: Write> Archiver<'a, W> {
     ) -> Result<(), ArchiveCreateError> {
         // Check added_files to ensure we aren't adding duplicate files.
         if !self.added_files.contains(dest) {
-            log::debug!(
+            debug!(
                 target: "nextest-runner",
                 "adding `{src}` to archive as `{dest}`",
             );

@@ -28,6 +28,7 @@ use std::{
     collections::{hash_map, BTreeMap, BTreeSet, HashMap},
     time::Duration,
 };
+use tracing::warn;
 
 /// Gets the number of available CPUs and caches the value.
 #[inline]
@@ -35,7 +36,7 @@ pub fn get_num_cpus() -> usize {
     static NUM_CPUS: Lazy<usize> = Lazy::new(|| match std::thread::available_parallelism() {
         Ok(count) => count.into(),
         Err(err) => {
-            log::warn!("unable to determine num-cpus ({err}), assuming 1 logical CPU");
+            warn!("unable to determine num-cpus ({err}), assuming 1 logical CPU");
             1
         }
     });
@@ -120,7 +121,7 @@ impl NextestConfig {
                     }
                 }
 
-                log::warn!(
+                warn!(
                     "ignoring unknown configuration keys in config file {config_file}{}:{unknown_str}",
                     provided_by_tool(tool),
                 )
@@ -376,7 +377,7 @@ impl NextestConfig {
             .filter(|p| p.starts_with("default-") && !NextestConfig::DEFAULT_PROFILES.contains(p))
             .collect();
         if !unknown_default_profiles.is_empty() {
-            log::warn!(
+            warn!(
                 "unknown profiles in the reserved `default-` namespace in config file {}{}:",
                 config_file
                     .strip_prefix(workspace_root)
@@ -385,7 +386,7 @@ impl NextestConfig {
             );
 
             for profile in unknown_default_profiles {
-                log::warn!("  {profile}");
+                warn!("  {profile}");
             }
         }
 

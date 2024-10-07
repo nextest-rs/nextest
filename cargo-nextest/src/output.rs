@@ -3,14 +3,26 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use clap::{Args, ValueEnum};
-use env_logger::fmt::Formatter;
-use log::{Level, LevelFilter, Record};
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
 use nextest_runner::{reporter::ReporterStderr, write_str::WriteStr};
 use owo_colors::{style, OwoColorize, Style};
 use std::{
+    fmt,
     io::{self, BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,
+};
+use tracing::{
+    field::{Field, Visit},
+    level_filters::LevelFilter,
+    Event, Level, Subscriber,
+};
+use tracing_subscriber::{
+    filter::Targets,
+    fmt::{format, FmtContext, FormatEvent, FormatFields},
+    layer::SubscriberExt,
+    registry::LookupSpan,
+    util::SubscriberInitExt,
+    Layer,
 };
 
 pub(crate) mod clap_styles {
@@ -114,6 +126,75 @@ pub enum Color {
 
 static INIT_LOGGER: std::sync::Once = std::sync::Once::new();
 
+struct SimpleFormatter {
+    styles: LogStyles,
+}
+
+impl<S, N> FormatEvent<S, N> for SimpleFormatter
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'a> FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        _ctx: &FmtContext<'_, S, N>,
+        mut writer: format::Writer<'_>,
+        event: &Event<'_>,
+    ) -> fmt::Result {
+        let metadata = event.metadata();
+
+        if metadata.target() != "cargo_nextest::no_heading" {
+            match *metadata.level() {
+                Level::ERROR => {
+                    write!(writer, "{}: ", "error".style(self.styles.error))?;
+                }
+                Level::WARN => {
+                    write!(writer, "{}: ", "warning".style(self.styles.warning))?;
+                }
+                Level::INFO => {
+                    write!(writer, "{}: ", "info".style(self.styles.info))?;
+                }
+                Level::DEBUG => {
+                    write!(writer, "{}: ", "debug".style(self.styles.debug))?;
+                }
+                Level::TRACE => {
+                    write!(writer, "{}: ", "trace".style(self.styles.trace))?;
+                }
+            }
+        }
+
+        let mut visitor = MessageVisitor {
+            writer: &mut writer,
+            error: None,
+        };
+
+        event.record(&mut visitor);
+
+        if let Some(error) = visitor.error {
+            return Err(error);
+        }
+
+        writeln!(writer)
+    }
+}
+
+static MESSAGE_FIELD: &str = "message";
+
+struct MessageVisitor<'writer, 'a> {
+    writer: &'a mut format::Writer<'writer>,
+    error: Option<fmt::Error>,
+}
+
+impl<'writer, 'a> Visit for MessageVisitor<'writer, 'a> {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        if field.name() == MESSAGE_FIELD {
+            if let Err(error) = write!(self.writer, "{:?}", value) {
+                self.error = Some(error);
+            }
+        }
+    }
+}
+
 impl Color {
     pub(crate) fn init(self) {
         // Pass the styles in as a stylesheet to ensure we use the latest supports-color here.
@@ -123,11 +204,24 @@ impl Color {
         }
 
         INIT_LOGGER.call_once(|| {
-            env_logger::Builder::new()
-                .filter_level(LevelFilter::Info)
-                .parse_env("NEXTEST_LOG")
-                .format(move |f, record| format_fn(f, record, &log_styles))
-                .init();
+            let level_str = std::env::var_os("NEXTEST_LOG").unwrap_or_default();
+            let level_str = level_str
+                .into_string()
+                .unwrap_or_else(|_| panic!("NEXTEST_LOG is not UTF-8"));
+
+            // If the level string is empty, use the standard level filter instead.
+            let targets = if level_str.is_empty() {
+                Targets::new().with_default(LevelFilter::INFO)
+            } else {
+                level_str.parse().expect("unable to parse NEXTEST_LOG")
+            };
+
+            let layer = tracing_subscriber::fmt::layer()
+                .event_format(SimpleFormatter { styles: log_styles })
+                .with_writer(std::io::stderr)
+                .with_filter(targets);
+
+            tracing_subscriber::registry().with(layer).init();
 
             miette::set_hook(Box::new(move |_| {
                 let theme_styles = if self.should_colorize(supports_color::Stream::Stderr) {
@@ -176,27 +270,13 @@ impl Color {
     }
 }
 
-fn format_fn(f: &mut Formatter, record: &Record<'_>, styles: &LogStyles) -> std::io::Result<()> {
-    if record.target() == "cargo_nextest::no_heading" {
-        writeln!(f, "{}", record.args())?;
-        return Ok(());
-    }
-
-    match record.level() {
-        Level::Error => writeln!(f, "{}: {}", "error".style(styles.error), record.args()),
-        Level::Warn => writeln!(f, "{}: {}", "warning".style(styles.warning), record.args()),
-        Level::Info => writeln!(f, "{}: {}", "info".style(styles.info), record.args()),
-        Level::Debug => writeln!(f, "{}: {}", "debug".style(styles.debug), record.args()),
-        _other => Ok(()),
-    }
-}
-
 #[derive(Debug, Default)]
 struct LogStyles {
     error: Style,
     warning: Style,
     info: Style,
     debug: Style,
+    trace: Style,
 }
 
 impl LogStyles {
@@ -205,6 +285,7 @@ impl LogStyles {
         self.warning = style().yellow().bold();
         self.info = style().bold();
         self.debug = style().bold();
+        self.trace = style().dimmed();
     }
 }
 

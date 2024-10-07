@@ -11,6 +11,7 @@ use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, string::FromUtf8Error};
 use thiserror::Error;
+use tracing::{error, info, Level};
 
 pub(crate) type Result<T, E = ExpectedError> = std::result::Result<T, E>;
 
@@ -443,11 +444,11 @@ impl ExpectedError {
     pub fn display_to_stderr(&self, styles: &StderrStyles) {
         let mut next_error = match &self {
             Self::SetCurrentDirFailed { error } => {
-                log::error!("could not change to requested directory");
+                error!("could not change to requested directory");
                 Some(error as &dyn Error)
             }
             Self::CargoMetadataExecFailed { command, err } => {
-                log::error!("failed to execute `{}`", command.style(styles.bold));
+                error!("failed to execute `{}`", command.style(styles.bold));
                 Some(err as &dyn Error)
             }
             Self::CargoMetadataFailed { .. } => {
@@ -455,7 +456,7 @@ impl ExpectedError {
                 None
             }
             Self::CargoLocateProjectExecFailed { command, err } => {
-                log::error!("failed to execute `{}`", command.style(styles.bold));
+                error!("failed to execute `{}`", command.style(styles.bold));
                 Some(err as &dyn Error)
             }
             Self::CargoLocateProjectFailed { .. } => {
@@ -463,18 +464,18 @@ impl ExpectedError {
                 None
             }
             Self::WorkspaceRootInvalidUtf8 { err } => {
-                log::error!("workspace root is not valid UTF-8");
+                error!("workspace root is not valid UTF-8");
                 Some(err as &dyn Error)
             }
             Self::WorkspaceRootInvalid { workspace_root } => {
-                log::error!(
+                error!(
                     "workspace root `{}` is invalid",
                     workspace_root.style(styles.bold)
                 );
                 None
             }
             Self::ProfileNotFound { err } => {
-                log::error!("{}", err);
+                error!("{}", err);
                 err.source()
             }
             Self::RootManifestNotFound {
@@ -495,21 +496,21 @@ impl ExpectedError {
                     }
                     ReuseBuildKind::Normal => String::new(),
                 };
-                log::error!(
+                error!(
                     "workspace root manifest at {} does not exist{hint_str}",
                     path.style(styles.bold)
                 );
                 None
             }
             Self::StoreDirCreateError { store_dir, err } => {
-                log::error!(
+                error!(
                     "failed to create store dir at `{}`",
                     store_dir.style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
             Self::CargoConfigError { err } => {
-                log::error!("{}", err);
+                error!("{}", err);
                 err.source()
             }
             Self::ConfigParseError { err } => {
@@ -517,14 +518,14 @@ impl ExpectedError {
                     ConfigParseErrorKind::FiltersetOrCfgParseError(errors) => {
                         // Override errors are printed out using miette.
                         for override_error in errors {
-                            log::error!(
+                            error!(
                                 "for config file `{}`{}, failed to parse overrides for profile: {}",
                                 err.config_file(),
                                 provided_by_tool(err.tool()),
                                 override_error.profile_name.style(styles.bold)
                             );
                             for report in override_error.reports() {
-                                log::error!(target: "cargo_nextest::no_heading", "{report:?}");
+                                error!(target: "cargo_nextest::no_heading", "{report:?}");
                             }
                         }
                         None
@@ -546,7 +547,7 @@ impl ExpectedError {
                             ));
                         }
 
-                        log::error!(
+                        error!(
                             "for config file `{}`{}, unknown test groups defined \
                             (known groups: {known_groups_str}):\n{errors_str}",
                             err.config_file(),
@@ -571,7 +572,7 @@ impl ExpectedError {
                             ));
                         }
 
-                        log::error!(
+                        error!(
                             "for config file `{}`{}, unknown scripts defined \
                         (known scripts: {known_scripts_str}):\n{errors_str}",
                             err.config_file(),
@@ -589,7 +590,7 @@ impl ExpectedError {
                             .map(|feature_name| feature_name.style(styles.bold))
                             .join(", ");
 
-                        log::error!(
+                        error!(
                             "for config file `{}`{}, unknown experimental features defined:
                              {unknown_str} (known features: {known_str}):",
                             err.config_file(),
@@ -599,32 +600,32 @@ impl ExpectedError {
                     }
                     _ => {
                         // These other errors are printed out normally.
-                        log::error!("{}", err);
+                        error!("{}", err);
                         err.source()
                     }
                 }
             }
             Self::TestFilterBuilderError { err } => {
-                log::error!("{err}");
+                error!("{err}");
                 err.source()
             }
             Self::UnknownHostPlatform { err } => {
-                log::error!("the host platform was unknown to nextest");
+                error!("the host platform was unknown to nextest");
                 Some(err as &dyn Error)
             }
             Self::TargetTripleError { err } => {
-                log::error!("{err}");
+                error!("{err}");
                 err.source()
             }
             Self::MetadataMaterializeError { arg_name, err } => {
-                log::error!(
+                error!(
                     "error reading metadata from argument {}",
                     format!("--{arg_name}").style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
             Self::UnknownArchiveFormat { archive_file, err } => {
-                log::error!(
+                error!(
                     "failed to autodetect archive format for {}",
                     archive_file.style(styles.bold)
                 );
@@ -635,25 +636,25 @@ impl ExpectedError {
                 err,
                 redactor,
             } => {
-                log::error!(
+                error!(
                     "error creating archive `{}`",
                     redactor.redact_path(archive_file).style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
             Self::ArchiveExtractError { archive_file, err } => {
-                log::error!(
+                error!(
                     "error extracting archive `{}`",
                     archive_file.style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
             Self::RustBuildMetaParseError { err } => {
-                log::error!("error parsing Rust build metadata");
+                error!("error parsing Rust build metadata");
                 Some(err as &dyn Error)
             }
             Self::PathMapperConstructError { arg_name, err } => {
-                log::error!(
+                error!(
                     "argument {} specified `{}` that couldn't be read",
                     format!("--{arg_name}").style(styles.bold),
                     err.input().style(styles.bold)
@@ -665,19 +666,19 @@ impl ExpectedError {
                     Some(path) => format!(" from file `{}`", path.style(styles.bold)),
                     None => "".to_owned(),
                 };
-                log::error!("error parsing Cargo metadata{}", metadata_source);
+                error!("error parsing Cargo metadata{}", metadata_source);
                 Some(err as &dyn Error)
             }
             Self::FromMessagesError { err } => {
-                log::error!("failed to parse messages generated by Cargo");
+                error!("failed to parse messages generated by Cargo");
                 Some(err as &dyn Error)
             }
             Self::CreateTestListError { err } => {
-                log::error!("creating test list failed");
+                error!("creating test list failed");
                 Some(err as &dyn Error)
             }
             Self::BuildExecFailed { command, err } => {
-                log::error!("failed to execute `{}`", command.style(styles.bold));
+                error!("failed to execute `{}`", command.style(styles.bold));
                 Some(err as &dyn Error)
             }
             Self::BuildFailed { command, exit_code } => {
@@ -688,7 +689,7 @@ impl ExpectedError {
                     None => "".to_owned(),
                 };
 
-                log::error!(
+                error!(
                     "command `{}` exited{}",
                     command.style(styles.bold),
                     with_code_str,
@@ -697,27 +698,27 @@ impl ExpectedError {
                 None
             }
             Self::TestRunnerBuildError { err } => {
-                log::error!("failed to build test runner");
+                error!("failed to build test runner");
                 Some(err as &dyn Error)
             }
             Self::ConfigureHandleInheritanceError { err } => {
-                log::error!("{err}");
+                error!("{err}");
                 err.source()
             }
             Self::WriteTestListError { err } => {
-                log::error!("failed to write test list to output");
+                error!("failed to write test list to output");
                 Some(err as &dyn Error)
             }
             Self::WriteEventError { err } => {
-                log::error!("failed to write event to output");
+                error!("failed to write event to output");
                 Some(err as &dyn Error)
             }
             Self::SetupScriptFailed => {
-                log::error!("setup script failed");
+                error!("setup script failed");
                 None
             }
             Self::TestRunFailed => {
-                log::error!("test run failed");
+                error!("test run failed");
                 None
             }
             Self::NoTestsRun { is_default } => {
@@ -726,11 +727,11 @@ impl ExpectedError {
                 } else {
                     ""
                 };
-                log::error!("no tests to run{hint_str}");
+                error!("no tests to run{hint_str}");
                 None
             }
             Self::ShowTestGroupsError { err } => {
-                log::error!("{err}");
+                error!("{err}");
                 err.source()
             }
             Self::RequiredVersionNotMet {
@@ -738,13 +739,13 @@ impl ExpectedError {
                 current,
                 tool,
             } => {
-                log::error!(
+                error!(
                     "this repository requires nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
                 if let Some(tool) = tool {
-                    log::info!(
+                    info!(
                         target: "cargo_nextest::no_heading",
                         "(required version specified by tool `{}`)",
                         tool,
@@ -752,7 +753,7 @@ impl ExpectedError {
                 }
 
                 crate::helpers::log_needs_update(
-                    log::Level::Info,
+                    Level::INFO,
                     crate::helpers::BYPASS_VERSION_TEXT,
                     styles,
                 );
@@ -760,30 +761,29 @@ impl ExpectedError {
             }
             #[cfg(feature = "self-update")]
             Self::UpdateVersionParseError { err } => {
-                log::error!("failed to parse --version");
+                error!("failed to parse --version");
                 Some(err as &dyn Error)
             }
             #[cfg(feature = "self-update")]
             Self::UpdateError { err } => {
-                log::error!(
+                error!(
                     "failed to update nextest (please update manually by visiting <{}>)",
                     "https://get.nexte.st".style(styles.bold)
                 );
                 Some(err as &dyn Error)
             }
             Self::DialoguerError { err } => {
-                log::error!("error reading input prompt");
+                error!("error reading input prompt");
                 Some(err as &dyn Error)
             }
             Self::SignalHandlerSetupError { err } => {
-                log::error!("error setting up signal handler");
+                error!("error setting up signal handler");
                 Some(err as &dyn Error)
             }
             Self::ExperimentalFeatureNotEnabled { name, var_name } => {
-                log::error!(
+                error!(
                     "{} is an experimental feature and must be enabled with {}=1",
-                    name,
-                    var_name
+                    name, var_name
                 );
                 None
             }
@@ -792,44 +792,44 @@ impl ExpectedError {
                     for single_error in &errors.errors {
                         let report = miette::Report::new(single_error.clone())
                             .with_source_code(errors.input.to_owned());
-                        log::error!(target: "cargo_nextest::no_heading", "{:?}", report);
+                        error!(target: "cargo_nextest::no_heading", "{:?}", report);
                     }
                 }
 
-                log::error!("failed to parse filterset");
+                error!("failed to parse filterset");
                 None
             }
             Self::TestBinaryArgsParseError { reason, args } => {
-                log::error!(
+                error!(
                     "failed to parse test binary arguments `{}`: arguments are {reason}",
                     args.join(", "),
                 );
                 None
             }
             Self::DoubleSpawnParseArgsError { args, err } => {
-                log::error!("[double-spawn] failed to parse arguments `{args}`");
+                error!("[double-spawn] failed to parse arguments `{args}`");
                 Some(err as &dyn Error)
             }
             Self::DoubleSpawnExecError { command, err } => {
-                log::error!("[double-spawn] failed to exec `{command:?}`");
+                error!("[double-spawn] failed to exec `{command:?}`");
                 Some(err as &dyn Error)
             }
             Self::InvalidMessageFormatVersion { err } => {
-                log::error!("error parsing message format version");
+                error!("error parsing message format version");
                 Some(err as &dyn Error)
             }
             Self::DebugExtractReadError { kind, path, err } => {
-                log::error!("error reading {kind} file `{}`", path.style(styles.bold),);
+                error!("error reading {kind} file `{}`", path.style(styles.bold),);
                 Some(err as &dyn Error)
             }
             Self::DebugExtractWriteError { format, err } => {
-                log::error!("error writing {format} output");
+                error!("error writing {format} output");
                 Some(err as &dyn Error)
             }
         };
 
         while let Some(err) = next_error {
-            log::error!(target: "cargo_nextest::no_heading", "\nCaused by:\n  {}", err);
+            error!(target: "cargo_nextest::no_heading", "\nCaused by:\n  {}", err);
             next_error = err.source();
         }
     }

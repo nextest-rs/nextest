@@ -52,6 +52,7 @@ use tokio::{
     runtime::Runtime,
     sync::{broadcast, mpsc::UnboundedSender},
 };
+use tracing::{debug, warn};
 
 #[derive(Debug)]
 struct BackoffIter {
@@ -370,7 +371,7 @@ impl<'a> TestRunnerInner<'a> {
                                 tokio::select! {
                                     _ = receiver.recv(), if running_tests > 0 => {
                                         running_tests -= 1;
-                                        log::debug!(
+                                        debug!(
                                             "stopping tests: running tests down to {running_tests}"
                                         );
                                     }
@@ -447,7 +448,7 @@ impl<'a> TestRunnerInner<'a> {
             {
                 let setup_scripts = self.profile.setup_scripts(self.test_list);
                 let total = setup_scripts.len();
-                log::debug!("running {} setup scripts", total);
+                debug!("running {} setup scripts", total);
 
                 let mut setup_script_data = SetupScriptExecuteData::new();
 
@@ -498,7 +499,7 @@ impl<'a> TestRunnerInner<'a> {
                     scope.spawn_cancellable(script_fut, || ());
                     let script_and_env_map = completion_receiver.blocking_recv().unwrap_or_else(|_| {
                         // This should never happen.
-                        log::warn!("setup script future did not complete -- this is a bug, please report it");
+                        warn!("setup script future did not complete -- this is a bug, please report it");
                         None
                     });
                     if let Some((script, env_map)) = script_and_env_map {

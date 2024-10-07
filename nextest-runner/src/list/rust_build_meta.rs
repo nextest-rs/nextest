@@ -15,6 +15,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     marker::PhantomData,
 };
+use tracing::warn;
 
 /// Rust-related metadata used for builds and test runs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -123,7 +124,7 @@ impl RustBuildMeta<TestListState> {
             .map(|libdir| libdir.to_path_buf())
             .collect::<Vec<_>>();
         if libdirs.is_empty() {
-            log::warn!("failed to detect the rustc libdir, may fail to list or run tests");
+            warn!("failed to detect the rustc libdir, may fail to list or run tests");
         }
 
         // Cargo puts linked paths before base output directories.
