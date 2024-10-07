@@ -11,7 +11,6 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{builder::BoolishValueParser, ArgAction, Args, Parser, Subcommand, ValueEnum};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
-use log::warn;
 use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
@@ -58,6 +57,7 @@ use std::{
     sync::Arc,
 };
 use swrite::{swrite, SWrite};
+use tracing::{debug, info, warn, Level};
 
 /// A next-generation test runner for Rust.
 ///
@@ -1228,7 +1228,7 @@ impl BaseApp {
 
         let experimental = version_only_config.experimental();
         if !experimental.is_empty() {
-            log::info!(
+            info!(
                 "experimental features enabled: {}",
                 experimental
                     .iter()
@@ -1269,13 +1269,13 @@ impl BaseApp {
                 current,
                 tool,
             } => {
-                log::warn!(
+                warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
                 if let Some(tool) = tool {
-                    log::info!(
+                    info!(
                         target: "cargo_nextest::no_heading",
                         "(recommended version specified by tool `{}`)",
                         tool,
@@ -1289,13 +1289,12 @@ impl BaseApp {
                 current,
                 tool,
             } => {
-                log::info!(
+                info!(
                     "overriding version check (required: {}, current: {})",
-                    required,
-                    current
+                    required, current
                 );
                 if let Some(tool) = tool {
-                    log::info!(
+                    info!(
                         target: "cargo_nextest::no_heading",
                         "(required version specified by tool `{}`)",
                         tool,
@@ -1309,13 +1308,12 @@ impl BaseApp {
                 current,
                 tool,
             } => {
-                log::info!(
+                info!(
                     "overriding version check (recommended: {}, current: {})",
-                    recommended,
-                    current,
+                    recommended, current,
                 );
                 if let Some(tool) = tool {
-                    log::info!(
+                    info!(
                         target: "cargo_nextest::no_heading",
                         "(recommended version specified by tool `{}`)",
                         tool,
@@ -1349,13 +1347,13 @@ impl BaseApp {
                 current,
                 tool,
             } => {
-                log::warn!(
+                warn!(
                     "this repository recommends nextest version {}, but the current version is {}",
                     required.style(styles.bold),
                     current.style(styles.bold),
                 );
                 if let Some(tool) = tool {
-                    log::info!(
+                    info!(
                         target: "cargo_nextest::no_heading",
                         "(recommended version specified by tool `{}`)",
                         tool,
@@ -1364,7 +1362,7 @@ impl BaseApp {
 
                 // Don't need to print extra text here -- this is a warning, not an error.
                 crate::helpers::log_needs_update(
-                    log::Level::Info,
+                    Level::INFO,
                     crate::helpers::BYPASS_VERSION_TEXT,
                     &styles,
                 );
@@ -1382,13 +1380,13 @@ impl BaseApp {
     fn load_double_spawn(&self) -> &DoubleSpawnInfo {
         self.double_spawn.get_or_init(|| {
             if std::env::var("NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN").is_ok() {
-                log::warn!(
+                warn!(
                     "double-spawn is no longer experimental: \
                      NEXTEST_EXPERIMENTAL_DOUBLE_SPAWN does not need to be set"
                 );
             }
             if std::env::var("NEXTEST_DOUBLE_SPAWN") == Ok("0".to_owned()) {
-                log::info!("NEXTEST_DOUBLE_SPAWN=0 set, disabling double-spawn for test processes");
+                info!("NEXTEST_DOUBLE_SPAWN=0 set, disabling double-spawn for test processes");
                 DoubleSpawnInfo::disabled()
             } else {
                 DoubleSpawnInfo::try_enable()
@@ -1537,7 +1535,7 @@ struct App {
 fn check_experimental_filtering(_output: OutputContext) {
     const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
     if std::env::var(EXPERIMENTAL_ENV).is_ok() {
-        log::warn!("filtersets are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set");
+        warn!("filtersets are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set");
     }
 }
 
@@ -1922,7 +1920,7 @@ impl ShowConfigCommand {
                     NextestVersionEval::Satisfied => Ok(0),
                     NextestVersionEval::Error { .. } => {
                         crate::helpers::log_needs_update(
-                            log::Level::Error,
+                            Level::ERROR,
                             crate::helpers::BYPASS_VERSION_TEXT,
                             &output.stderr_styles(),
                         );
@@ -1930,7 +1928,7 @@ impl ShowConfigCommand {
                     }
                     NextestVersionEval::Warn { .. } => {
                         crate::helpers::log_needs_update(
-                            log::Level::Warn,
+                            Level::WARN,
                             crate::helpers::BYPASS_VERSION_TEXT,
                             &output.stderr_styles(),
                         );
@@ -2049,7 +2047,7 @@ impl SelfCommand {
                             output,
                         )
                     } else {
-                        log::info!("this version of cargo-nextest cannot perform self-updates\n\
+                        info!("this version of cargo-nextest cannot perform self-updates\n\
                                     (hint: this usually means nextest was installed by a package manager)");
                         Ok(nextest_metadata::NextestExitCode::SELF_UPDATE_UNAVAILABLE)
                     }
@@ -2273,7 +2271,7 @@ fn discover_target_triple(
 ) -> Option<TargetTriple> {
     match TargetTriple::find(cargo_configs, target_cli_option) {
         Ok(Some(triple)) => {
-            log::debug!(
+            debug!(
                 "using target triple `{}` defined by `{}`; {}",
                 triple.platform.triple_str(),
                 triple.source,
@@ -2282,7 +2280,7 @@ fn discover_target_triple(
             Some(triple)
         }
         Ok(None) => {
-            log::debug!("no target triple found, assuming no cross-compilation");
+            debug!("no target triple found, assuming no cross-compilation");
 
             None
         }
@@ -2325,7 +2323,7 @@ fn runner_for_target(
 
 fn log_platform_runner(prefix: &str, runner: &PlatformRunner, styles: &StderrStyles) {
     let runner_command = shell_words::join(std::iter::once(runner.binary()).chain(runner.args()));
-    log::info!(
+    info!(
         "{prefix}using target runner `{}` defined by {}",
         runner_command.style(styles.bold),
         runner.source()
@@ -2341,7 +2339,7 @@ fn warn_on_err(thing: &str, err: &(dyn std::error::Error), styles: &StderrStyles
         next_error = err.source();
     }
 
-    log::warn!("{}", s);
+    warn!("{}", s);
 }
 
 #[cfg(test)]

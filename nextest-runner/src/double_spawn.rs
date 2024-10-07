@@ -103,6 +103,7 @@ mod imp {
     use super::*;
     use nix::sys::signal::{SigSet, Signal};
     use std::path::PathBuf;
+    use tracing::warn;
 
     #[derive(Clone, Debug)]
     pub(super) struct DoubleSpawnInfo {
@@ -117,7 +118,7 @@ mod imp {
             // TODO: Always use /proc/self/exe directly on Linux, just make sure it's always accessible
             let current_exe = get_current_exe().map_or_else(
                 |error| {
-                    log::warn!(
+                    warn!(
                         "unable to determine current exe, will not use double-spawning \
                         for better isolation: {error}"
                     );
@@ -194,7 +195,7 @@ mod imp {
         let mut sigset = SigSet::empty();
         sigset.add(Signal::SIGTSTP);
         if sigset.thread_unblock().is_err() {
-            log::warn!("[double-spawn] unable to unblock SIGTSTP in child");
+            warn!("[double-spawn] unable to unblock SIGTSTP in child");
         }
     }
 }

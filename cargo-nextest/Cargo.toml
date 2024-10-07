@@ -19,9 +19,7 @@ color-eyre.workspace = true
 dialoguer.workspace = true
 duct.workspace = true
 enable-ansi-support.workspace = true
-env_logger.workspace = true
 guppy.workspace = true
-log.workspace = true
 itertools.workspace = true
 miette = { workspace = true, features = ["fancy"] }
 # Instead of using workspace dependencies which have floating versions, we pin exact versions here
@@ -41,6 +39,8 @@ supports-color.workspace = true
 supports-unicode.workspace = true
 swrite.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, default-features = false }
 
 [build-dependencies]
 camino.workspace = true

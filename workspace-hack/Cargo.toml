@@ -31,6 +31,8 @@ rand = { version = "0.8.5" }
 serde = { version = "1.0.210", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.128", features = ["unbounded_depth"] }
 tokio = { version = "1.40.0", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
+tracing-core = { version = "0.1.32" }
+tracing-subscriber = { version = "0.3.18", default-features = false, features = ["fmt", "tracing-log"] }
 xxhash-rust = { version = "0.8.12", default-features = false, features = ["xxh3", "xxh64"] }
 zerocopy = { version = "0.7.35", features = ["derive", "simd"] }
 
