@@ -1,3 +1,7 @@
+---
+icon: material/vector-combine
+---
+
 # Integrations with other tools
 
 A number of other tools in the Rust ecosystem have integrated with nextest. Some of the more prominent ones are:

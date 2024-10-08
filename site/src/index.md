@@ -1,6 +1,7 @@
 ---
-title: Nextest
+title: Home
 description: A next-generation test runner for Rust.
+icon: material/home
 ---
 
 # cargo-nextest
@@ -17,7 +18,7 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 - **[Up to 3× as fast](docs/benchmarks/index.md) as cargo test.** Nextest uses a [state-of-the-art execution model](docs/design/how-it-works.md) for faster, more reliable test runs.
 - **Identify [slow](docs/features/slow-tests.md) and [leaky](docs/features/leaky-tests.md) tests.** Use nextest to detect misbehaving tests, identify bottlenecks during test execution, and optionally terminate tests if they take too long.
 - **Filter tests using an embedded language.** Use powerful [filtersets](docs/filtersets/index.md) to specify granular subsets of tests on the command-line, and to enable [per-test overrides](docs/configuration/per-test-overrides.md).
-- **Configure [per-test settings](docs/configuration/per-test-overrides.md)**. [Automatically retry](docs/features/retries.md#per-test-overrides) subsets of tests, mark them as [heavy](docs/configuration/threads-required.md), or [run them serially](docs/configuration/test-groups.md).
+- **Configure [per-test settings](docs/configuration/per-test-overrides.md)**. [Automatically retry](docs/features/retries.md#per-test-settings) subsets of tests, mark them as [heavy](docs/configuration/threads-required.md), or [run them serially](docs/configuration/test-groups.md).
 - **Designed for CI.** Nextest addresses real-world pain points in continuous integration scenarios:
   - Use **[pre-built binaries](docs/installation/pre-built-binaries.md)** for quick installation.
   - Set up CI-specific **[configuration profiles](docs/configuration/index.md)**.

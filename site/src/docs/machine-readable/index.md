@@ -1,4 +1,8 @@
-# Machine-readable output
+---
+icon: material/message-processing-outline
+---
+
+# Machine-readable output formats
 
 Nextest provides a number of ways to obtain output suitable for consumption by other tools or infrastructure.
 

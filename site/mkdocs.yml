@@ -12,9 +12,7 @@ theme:
   name: material
   custom_dir: overrides
   features:
-    - navigation.tabs
     - navigation.sections
-    - navigation.indexes
     - navigation.footer
     - navigation.instant
     - navigation.instant.progress
@@ -67,60 +65,58 @@ hooks:
   - overrides/hooks/shortcodes.py
 
 nav:
-  - Home:
-      - index.md
-      - "Installation":
-          - "Pre-built binaries": docs/installation/pre-built-binaries.md
-          - docs/installation/from-source.md
-          - docs/installation/updating.md
+  - index.md
+  - "Getting started":
+      - "Pre-built binaries": docs/installation/pre-built-binaries.md
+      - docs/installation/from-source.md
+      - docs/installation/updating.md
       - "Platform-specific notes":
           - docs/installation/windows.md
           - docs/installation/macos.md
       - docs/installation/release-urls.md
-      - changelog.md
-  - Usage:
+  - "Using nextest":
       - docs/running.md
       - docs/listing.md
       - docs/reporting.md
-      - "Features":
-          - docs/features/retries.md
-          - docs/features/slow-tests.md
+  - "Features":
+      - docs/features/retries.md
+      - docs/features/slow-tests.md
+      - "More features":
           - docs/features/leaky-tests.md
           - docs/features/target-runners.md
-      - "Features for CI":
           - docs/ci-features/archiving.md
           - "Partitioning/sharding runs": docs/ci-features/partitioning.md
       - "Filterset DSL":
-          - docs/filtersets/index.md
+          - "About filtersets": docs/filtersets/index.md
           - "DSL reference": docs/filtersets/reference.md
-      - Configuration:
-          - docs/configuration/index.md
-          - docs/configuration/per-test-overrides.md
+      - "Integrations":
+          - "Overview": docs/integrations/index.md
+          - docs/integrations/test-coverage.md
+          - "Miri interpreter": docs/integrations/miri.md
+          - docs/integrations/criterion.md
+          - "cargo-mutants": docs/integrations/cargo-mutants.md
+  - Configuration:
+      - "Configuring nextest": docs/configuration/index.md
+      - docs/configuration/per-test-overrides.md
+      - "More configuration":
           - "Specifying platforms": docs/configuration/specifying-platforms.md
           - "Environment variables": docs/configuration/env-vars.md
           - "Minimum versions": docs/configuration/minimum-versions.md
           - "Heavy tests": docs/configuration/threads-required.md
           - "Mutual exclusion and rate-limiting": docs/configuration/test-groups.md
           - docs/configuration/setup-scripts.md
-      - Machine-readable output:
-          - docs/machine-readable/index.md
+  - Machine-readable output:
+      - "About output formats": docs/machine-readable/index.md
+      - "JUnit support": docs/machine-readable/junit.md
+      - "More formats":
           - "Test and binary lists": docs/machine-readable/list.md
-          - "JUnit support": docs/machine-readable/junit.md
           - docs/machine-readable/libtest-json.md
-      - "Integrations":
-          - docs/integrations/index.md
-          - docs/integrations/test-coverage.md
-          - "Miri interpreter": docs/integrations/miri.md
-          - docs/integrations/criterion.md
-          - "cargo-mutants": docs/integrations/cargo-mutants.md
-      - "Stability policy":
-          - docs/stability/index.md
-      - "Design":
-          - docs/design/how-it-works.md
-          - docs/design/custom-test-harnesses.md
-  - Benchmarks:
-      - docs/benchmarks/index.md
-  - "Crates.io": "https://crates.io/crates/cargo-nextest"
+  - "Stability policy": docs/stability/index.md
+  - "Design":
+      - docs/design/how-it-works.md
+      - docs/design/custom-test-harnesses.md
+  - "Benchmarks": docs/benchmarks/index.md
+  - changelog.md
 
 markdown_extensions:
   # Python Markdown

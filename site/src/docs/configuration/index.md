@@ -1,4 +1,8 @@
-# Configuration
+---
+icon: material/tune
+---
+
+# Configuring nextest
 
 cargo-nextest supports repository-specific configuration at the location `.config/nextest.toml` from the Cargo workspace root. The location of the configuration file can be overridden with the `--config-file` option.
 

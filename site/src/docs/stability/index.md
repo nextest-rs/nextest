@@ -1,3 +1,7 @@
+---
+icon: material/ship-wheel
+---
+
 # Stability policy
 
 This section contains information on how cargo-nextest will evolve in a backwards-compatible way over time.

@@ -1,3 +1,7 @@
+---
+icon: material/speedometer
+---
+
 # Benchmarks
 
 Nextest's [execution model](../design/how-it-works.md) generally leads to faster test runs than Cargo. How much faster depends on the specifics, but here are some general guidelines:
