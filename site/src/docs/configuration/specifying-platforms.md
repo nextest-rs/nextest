@@ -22,7 +22,7 @@ While cross-compiling code, nextest's per-test overrides support filtering by ei
 
 If `platform` is set to a string, then nextest will consider it to be the _target_ filter. For example, if the following is specified:
 
-```toml title
+```toml
 [[profile.default.overrides]]
 platform = 'aarch64-apple-darwin'
 slow-timeout = "120s"
