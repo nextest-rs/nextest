@@ -22,9 +22,6 @@ Here is a recommended profile for CI runs:
 
 ```toml title="Configuring a CI profile in <code>.config/nextest.toml</code>"
 [profile.ci]
-# Print out output for failing tests as soon as they fail, and also at the end
-# of the run (for easy scrollability).
-failure-output = "immediate-final"
 # Do not cancel the test run on the first failure.
 fail-fast = false
 ```
