@@ -596,7 +596,7 @@ struct TestBuildFilter {
 
     /// Test name filters and emulated test binary arguments.
     ///
-    /// Arguments supported:{n}
+    /// Supported arguments:{n}
     /// - --ignored:         Only run ignored tests{n}
     /// - --include-ignored: Run both ignored and non-ignored tests{n}
     /// - --skip PATTERN:    Skip tests that match the pattern{n}
