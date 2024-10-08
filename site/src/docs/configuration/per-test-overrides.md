@@ -20,6 +20,9 @@ At least one of these fields must be specified:
 
 ## Supported overrides
 
+`retries`
+: The number of retries, or a more complex [retry policy](../features/retries.md) for this test.
+
 `threads-required`
 : Number of [threads required](threads-required.md) for this test.
 
