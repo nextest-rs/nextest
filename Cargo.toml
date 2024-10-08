@@ -74,7 +74,7 @@ miette = "7.2.0"
 mukti-metadata = "0.2.1"
 # note: we don't use owo-colors' if_supports_color support for now, instead preferring to use our
 # own supports-color + stylesheets everywhere.
-newtype-uuid = { version = "1.1.0", features = ["v4"] }
+newtype-uuid = { version = "1.1.2", features = ["v4"] }
 nextest-filtering = { version = "0.12.0", path = "nextest-filtering" }
 nextest-metadata = { version = "0.12.1", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
