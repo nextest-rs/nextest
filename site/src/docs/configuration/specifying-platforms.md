@@ -8,7 +8,7 @@ icon: material/laptop
 
 For example, with the following configuration:
 
-```toml
+```toml title="Platform overrides in <code>.config/nextest.toml</code>"
 [[profile.default.overrides]]
 platform = 'cfg(target_os = "linux")'
 retries = 3
@@ -22,7 +22,7 @@ While cross-compiling code, nextest's per-test overrides support filtering by ei
 
 If `platform` is set to a string, then nextest will consider it to be the _target_ filter. For example, if the following is specified:
 
-```toml
+```toml title
 [[profile.default.overrides]]
 platform = 'aarch64-apple-darwin'
 slow-timeout = "120s"
@@ -38,7 +38,7 @@ In addition to a plain string, `platform` can also be set to a map with `host` a
 
 For example:
 
-```toml
+```toml title="Cross-compile overrides"
 [[profile.default.overrides]]
 platform = { host = 'cfg(target_os = "macos")' }
 retries = 1

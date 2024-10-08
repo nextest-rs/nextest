@@ -21,7 +21,7 @@ Setup scripts are configured in two parts: _defining scripts_, and _setting up r
 
 Setup scripts are defined using the top-level `script` configuration. For example, to define a script named "my-script", which runs `my-script.sh`:
 
-```toml
+```toml title="Setup script definition in <code>.config/nextest.toml</code>"
 [script.my-script]
 command = 'my-script.sh'
 ```
@@ -45,7 +45,7 @@ Setup scripts can have the following configuration options attached to them:
 
 ### Example
 
-```toml
+```toml title="Advanced setup script definition"
 [script.db-generate]
 command = 'cargo run -p db-generate'
 slow-timeout = { period = "60s", terminate-after = 2 }
@@ -58,7 +58,7 @@ capture-stderr = false
 
 In configuration, you can create rules for when to use scripts on a per-profile basis. This is done via the `profile.<profile-name>.scripts` array. For example, you can set up a script that generates a database if tests from the `db-tests` package, or any packages that depend on it, are run.
 
-```toml
+```toml title="Basic rules"
 [[profile.default.scripts]]
 filter = 'rdeps(db-tests)'
 setup = 'db-generate'
@@ -68,7 +68,7 @@ setup = 'db-generate'
 
 Setup scripts can also filter based on platform, using the rules listed in [_Specifying platforms_](../configuration/specifying-platforms.md):
 
-```toml
+```toml title="Platform-specific rules"
 [[profile.default.scripts]]
 platform = { host = "cfg(unix)" }
 setup = 'script1'
@@ -76,7 +76,7 @@ setup = 'script1'
 
 A set of scripts can also be specified. All scripts in the set will be executed.
 
-```toml
+```toml title="Multiple setup scripts"
 [[profile.default.scripts]]
 filter = 'test(/^script_tests::/)'
 setup = ['script1', 'script2']

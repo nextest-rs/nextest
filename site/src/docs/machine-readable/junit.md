@@ -8,7 +8,7 @@ Nextest can produce output in the [JUnit/XUnit XML format](https://llg.cubic.org
 
 To enable JUnit support, add this to your [nextest configuration](../configuration/index.md):
 
-```toml
+```toml title="Basic JUnit configuration in <code>.config/nextest.toml</code>
 [profile.ci.junit]  # this can be some other profile, too
 path = "junit.xml"
 ```
@@ -34,11 +34,11 @@ Configuration options supported for JUnit reports, within the `junit` section:
 `store-failure-output`
 : Whether to store output for failing tests in the `<system-out>` and `<system-err>` elements. Defaults to true.
 
-The `store-success-output` and `store-failure-output` configuration can also be configured as [per-test overrides](../configuration/per-test-overrides.md).
+The `store-success-output` and `store-failure-output` configuration can also be configured on a [per-test basis](../configuration/per-test-overrides.md).
 
 ### Example configuration
 
-```toml
+```toml title="Per-test JUnit settings"
 [profile.default.junit]
 path = "junit.xml"
 # These are the default values, specified for clarity.

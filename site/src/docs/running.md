@@ -79,7 +79,7 @@ For example, some tests might need access to special resources not available to 
 workstations. To not run tests in the `special-tests` crate by default, but to run them with the
 `ci` profile:
 
-```toml
+```toml title="Default filter configuration in <code>.config/nextest.toml</code>"
 [profile.default]
 default-filter = 'not package(special-tests)'
 

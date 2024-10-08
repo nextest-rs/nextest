@@ -43,7 +43,7 @@ At least one of these fields must be specified:
 
 ## Example
 
-```toml
+```toml title="Basic example for per-test settings in <code>.config/nextest.toml</code>"
 [profile.ci]
 retries = 1
 
@@ -81,7 +81,7 @@ Precedence is evaluated separately for each override. If a particular override d
 
 ### Example
 
-```toml
+```toml title="Example for per-test settings in <code>.config/nextest.toml</code>"
 [profile.default]
 retries = 0  # this is the default, so it doesn't need to be specified
 slow-timeout = "30s"

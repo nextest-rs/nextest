@@ -13,9 +13,9 @@ If you're cross-compiling Rust code, you may wish to run tests through a wrapper
 
 If you're on Linux cross-compiling to Windows, you can choose to run tests through [Wine](https://www.winehq.org/).
 
-If you add the following to `.cargo/config.toml:`
+If you add the following to `.cargo/config.toml`:
 
-```toml
+```toml title="Target runner in <code>.cargo/config.toml</code>"
 [target.x86_64-pc-windows-msvc]
 runner = "wine"
 ```

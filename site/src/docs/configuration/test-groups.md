@@ -44,7 +44,7 @@ Test groups are specified in [nextest's configuration](index.md) by:
 
 For example:
 
-```toml
+```toml title="Test groups in <code>.config/nextest.toml</code>"
 [test-groups]
 resource-limited = { max-threads = 4 }
 serial-integration = { max-threads = 1 }

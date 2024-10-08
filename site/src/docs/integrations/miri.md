@@ -39,7 +39,7 @@ This does not require installing any special toolchain, and will work even if yo
 
 If nextest detects a Miri environment, it uses the `default-miri` profile by default. Add repository-specific Miri configuration to this profile. For example, to [terminate tests](../features/slow-tests.md#terminating-tests-after-a-timeout) after 2 minutes, add this to `.config/nextest.toml`:
 
-```toml
+```toml title="Miri configuration in <code>.config/nextest.toml</code>
 [profile.default-miri]
 slow-timeout = { period = "60s", terminate-after = 2 }
 ```

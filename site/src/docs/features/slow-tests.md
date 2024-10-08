@@ -26,7 +26,7 @@ For tests that take more than a certain amount of time (by default 60 seconds), 
 
 To customize how long it takes before a test is marked slow, use the `slow-timeout` [configuration parameter](../configuration/index.md). For example, to set a timeout of 2 minutes before a test is marked slow, add this to `.config/nextest.toml`:
 
-```toml
+```toml title="Slow tests in <code>.config/nextest.toml</code>"
 [profile.default]
 slow-timeout = "2m"
 ```
@@ -37,7 +37,7 @@ Nextest uses the `humantime` parser: see [its documentation](https://docs.rs/hum
 
 Nextest lets you optionally specify a number of `slow-timeout` periods after which a test is terminated. For example, to configure a slow timeout of 30 seconds and for tests to be terminated after 120 seconds (4 periods of 30 seconds), add this to `.config/nextest.toml`:
 
-```toml
+```toml title="Slow tests with termination"
 [profile.default]
 slow-timeout = { period = "30s", terminate-after = 4 }
 ```
@@ -68,14 +68,14 @@ On Unix platforms, nextest creates a [process group] for each test. On timing ou
 
 To customize the grace period, use the `slow-timeout.grace-period` configuration setting. For example, with the `ci` profile, to terminate tests after 5 minutes with a grace period of 30 seconds:
 
-```toml
+```toml title="Termination grace period"
 [profile.ci]
 slow-timeout = { period = "60s", terminate-after = 5, grace-period = "30s" }
 ```
 
 To send SIGKILL to a process immediately, without a grace period, set `slow-timeout.grace-period` to zero:
 
-```toml
+```toml title="Termination without a grace period"
 [profile.ci]
 slow-timeout = { period = "60s", terminate-after = 5, grace-period = "0s" }
 ```
@@ -89,13 +89,13 @@ On Windows, nextest terminates the test immediately in a manner akin to SIGKILL.
 [process group]: https://en.wikipedia.org/wiki/Process_group
 [job objects]: https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects
 
-## Per-test overrides
+## Per-test settings
 
-Nextest supports [per-test overrides](../configuration/per-test-overrides.md) for the `slow-timeout` and `terminate-after` settings.
+Nextest supports [per-test settings](../configuration/per-test-overrides.md) for `slow-timeout` and `terminate-after`.
 
 For example, some end-to-end tests might take longer to run and sometimes get stuck. For tests containing the substring `test_e2e`, to configure a slow timeout of 120 seconds, and to terminate tests after 10 minutes:
 
-```toml
+```toml title="Per-test slow timeouts"
 [[profile.default.overrides]]
 filter = 'test(test_e2e)'
 slow-timeout = { period = "120s", terminate-after = 5 }
