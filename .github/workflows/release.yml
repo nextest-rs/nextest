@@ -11,7 +11,7 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-filtering-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
         with:
           persist-credentials: false
       - name: Install Rust
@@ -36,7 +36,7 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-metadata-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
         with:
           persist-credentials: false
       - name: Install Rust
@@ -61,7 +61,7 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'nextest-runner-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
         with:
           persist-credentials: false
       - name: Install Rust
@@ -86,7 +86,7 @@ jobs:
     if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
         with:
           persist-credentials: false
       # Note: do not publish this until binaries are built and uploaded below. This is so that
@@ -161,7 +161,7 @@ jobs:
             build-tool: cross
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/upload-rust-binary-action@3bbb07bb7f438d0fdf6ce5118bdf9e6e21c0b2a5 # v1.22.0
@@ -208,11 +208,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone nextest repository
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
         with:
           path: nextest
       - name: Clone release-meta repository
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
         with:
           repository: nextest-rs/release-meta
           ref: main
