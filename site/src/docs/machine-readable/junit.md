@@ -8,7 +8,7 @@ Nextest can produce output in the [JUnit/XUnit XML format](https://llg.cubic.org
 
 To enable JUnit support, add this to your [nextest configuration](../configuration/index.md):
 
-```toml title="Basic JUnit configuration in <code>.config/nextest.toml</code>
+```toml title="Basic JUnit configuration in <code>.config/nextest.toml</code>"
 [profile.ci.junit]  # this can be some other profile, too
 path = "junit.xml"
 ```
