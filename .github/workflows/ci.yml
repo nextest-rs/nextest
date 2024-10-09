@@ -120,7 +120,7 @@ jobs:
         run: ./scripts/nextest-without-rustup.sh run --profile ci
 
       - name: Upload nextest binary
-        uses: actions/upload-artifact@604373da6381bf24206979c74d06a550515601b9 # v4.4.1
+        uses: actions/upload-artifact@84480863f228bb9747b473957fcc9e309aa96097 # v4.4.2
         with:
           name: cargo-nextest-${{ matrix.os }}-${{ matrix.rust-version }}
           path: |
@@ -188,7 +188,7 @@ jobs:
 
       # Upload the archive for use in the next job.
       - name: Upload archive
-        uses: actions/upload-artifact@604373da6381bf24206979c74d06a550515601b9 # v4.4.1
+        uses: actions/upload-artifact@84480863f228bb9747b473957fcc9e309aa96097 # v4.4.2
         with:
           name: fixture-archive
           path: target/fixture-archive.tar.zst
