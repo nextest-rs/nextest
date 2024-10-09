@@ -43,7 +43,7 @@ config = { version = "0.14.0", default-features = false, features = [
     "preserve_order",
 ] }
 chrono = "0.4.38"
-clap = { version = "4.5.19", features = ["derive"] }
+clap = { version = "4.5.20", features = ["derive"] }
 console-subscriber = "0.4.0"
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
