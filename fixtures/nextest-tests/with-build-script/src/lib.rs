@@ -12,4 +12,17 @@ mod tests {
         let contents = std::fs::read(&path).expect("test file exists in OUT_DIR");
         assert_eq!(contents, b"test-contents");
     }
+
+    #[test]
+    fn test_build_script_vars_set() {
+        // Since the build script wrote `cargo::rustc-env` instructions, these variables are
+        // expected to be set by nextest
+        #[cfg(new_format)]
+        {
+            let val = std::env::var("BUILD_SCRIPT_NEW_FMT").expect("BUILD_SCRIPT_NEW_FMT is valid");
+            assert_eq!(val, "new_val");
+        }
+        let val = std::env::var("BUILD_SCRIPT_OLD_FMT").expect("BUILD_SCRIPT_OLD_FMT is valid");
+        assert_eq!(val, "old_val");
+    }
 }
