@@ -14,7 +14,10 @@ use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeSet, HashMap},
     ffi::{OsStr, OsString},
+    fs::File,
+    io::{BufRead, BufReader},
 };
+use tracing::warn;
 
 mod imp;
 pub use imp::{Child, Output};
@@ -74,7 +77,8 @@ impl TestCommand {
         {
             // Convert the output directory to an absolute path.
             let out_dir = lctx.rust_build_meta.target_directory.join(out_dir);
-            cmd.env("OUT_DIR", out_dir);
+            cmd.env("OUT_DIR", &out_dir);
+            apply_build_script_env(&mut cmd, out_dir);
         }
 
         // Expose paths to non-test binaries at runtime so that relocated paths work.
@@ -191,6 +195,55 @@ fn apply_package_env(cmd: &mut std::process::Command, package: &PackageMetadata<
     );
 }
 
+/// Applies environment variables spcified by the build script via `cargo::rustc-env`
+fn apply_build_script_env(cmd: &mut std::process::Command, out_dir: Utf8PathBuf) {
+    let Some(out_dir_parent) = out_dir.parent() else {
+        warn!("could not determine parent directory of output directory {out_dir}");
+        return;
+    };
+    let Ok(out_file) = File::open(out_dir_parent.join("output")) else {
+        warn!("could not find build script output file at {out_dir_parent}/output");
+        return;
+    };
+    parse_build_script_output(
+        BufReader::new(out_file),
+        &out_dir_parent.join("output"),
+        |key, val| {
+            cmd.env(key, val);
+        },
+    );
+}
+
+/// Parses the build script output and calls the callback for each key value pair of `VAR=val`
+///
+/// This is mainly split out into a separate function from [`apply_build_script_env`] for easier
+/// unit testing
+fn parse_build_script_output<R, Cb>(out_file: R, out_file_path: &Utf8Path, mut callback: Cb)
+where
+    R: BufRead,
+    Cb: FnMut(&str, &str),
+{
+    for line in out_file.lines() {
+        let Ok(line) = line else {
+            warn!("found line with invalid UTF8 in build script output file at {out_file_path}");
+            continue;
+        };
+        // `cargo::rustc-env` is the official syntax since `cargo` 1.77, `cargo:rustc-env` is
+        // supported for backwards compatibility
+        let Some(key_val) = line
+            .strip_prefix("cargo::rustc-env=")
+            .or_else(|| line.strip_prefix("cargo:rustc-env="))
+        else {
+            continue;
+        };
+        let Some(split) = key_val.find('=') else {
+            warn!("rustc-env variable '{key_val}' has no value in {out_file_path}, skipping");
+            continue;
+        };
+        callback(&key_val[..split], &key_val[split + 1..]);
+    }
+}
+
 /// This is a workaround for a macOS SIP issue:
 /// https://github.com/nextest-rs/nextest/pull/84
 ///
@@ -234,5 +287,26 @@ pub(crate) fn apply_ld_dyld_env(cmd: &mut std::process::Command, dylib_path: &Os
     // Also add the dylib path envvar under the NEXTEST_ prefix.
     if is_sip_sanitized(dylib_path_envvar()) {
         cmd.env("NEXTEST_".to_owned() + dylib_path_envvar(), dylib_path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn parse_build_script_output() {
+        let out_file = "some_other_line\ncargo::rustc-env=NEW_VAR=new_val\ncargo:rustc-env=OLD_VAR=old_val\ncargo::rustc-env=NEW_MISSING_VALUE\ncargo:rustc-env=OLD_MISSING_VALUE";
+
+        let mut key_vals = Vec::new();
+        super::parse_build_script_output(
+            std::io::BufReader::new(std::io::Cursor::new(out_file)),
+            camino::Utf8Path::new("<test input>"),
+            |key, val| key_vals.push((key.to_owned(), val.to_owned())),
+        );
+
+        assert_eq!(key_vals.len(), 2);
+        assert_eq!(key_vals[0].0, "NEW_VAR");
+        assert_eq!(key_vals[0].1, "new_val");
+        assert_eq!(key_vals[1].0, "OLD_VAR");
+        assert_eq!(key_vals[1].1, "old_val");
     }
 }
