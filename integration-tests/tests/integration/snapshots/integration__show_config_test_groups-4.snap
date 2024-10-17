@@ -48,5 +48,6 @@ group: @global
       nextest-tests::example/other:
           tests::other_example_success
       with-build-script:
+          tests::test_build_script_vars_set
           tests::test_out_dir_present
 

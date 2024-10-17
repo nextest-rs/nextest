@@ -14,7 +14,10 @@ use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeSet, HashMap},
     ffi::{OsStr, OsString},
+    fs::File,
+    io::{BufRead, BufReader},
 };
+use tracing::warn;
 
 mod imp;
 pub use imp::{Child, Output};
@@ -74,7 +77,8 @@ impl TestCommand {
         {
             // Convert the output directory to an absolute path.
             let out_dir = lctx.rust_build_meta.target_directory.join(out_dir);
-            cmd.env("OUT_DIR", out_dir);
+            cmd.env("OUT_DIR", &out_dir);
+            apply_build_script_env(&mut cmd, out_dir);
         }
 
         // Expose paths to non-test binaries at runtime so that relocated paths work.
@@ -189,6 +193,34 @@ fn apply_package_env(cmd: &mut std::process::Command, package: &PackageMetadata<
             .minimum_rust_version()
             .map_or(String::new(), |v| v.to_string()),
     );
+}
+
+/// Applies environment variables spcified by the build script via `cargo::rustc-env`
+fn apply_build_script_env(cmd: &mut std::process::Command, out_dir: Utf8PathBuf) {
+    let Some(out_dir_parent) = out_dir.parent() else {
+        warn!("could not determine parent directory of output directory {out_dir}");
+        return;
+    };
+    let Ok(out_file) = File::open(out_dir_parent.join("output")) else {
+        warn!("could not find build script output file at {out_dir_parent}/output");
+        return;
+    };
+    for line in BufReader::new(out_file).lines() {
+        let Ok(line) = line else {
+            warn!("found line with invalid UTF8 in build script output file at {out_dir_parent}/output");
+            continue;
+        };
+        // `cargo::rustc-env` is the official syntax since `cargo` 1.77, `cargo:rustc-env` is
+        // supported for backwards compatibility
+        let Some(key_val) = line
+            .strip_prefix("cargo::rustc-env=")
+            .or_else(|| line.strip_prefix("cargo:rustc-env="))
+        else {
+            continue;
+        };
+        let split = key_val.find('=').unwrap();
+        cmd.env(&key_val[..split], &key_val[split + 1..]);
+    }
 }
 
 /// This is a workaround for a macOS SIP issue:
