@@ -166,6 +166,7 @@ pub static EXPECTED_TEST_SUITES: Lazy<BTreeMap<RustBinaryId, TestSuiteFixture>> 
             "with-build-script",
             BuildPlatform::Target,
             vec![
+                TestCaseFixture::new("tests::test_build_script_vars_set", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("tests::test_out_dir_present", TestCaseFixtureStatus::Pass),
             ],
         ),
