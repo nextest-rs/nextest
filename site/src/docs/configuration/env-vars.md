@@ -152,6 +152,9 @@ Nextest also sets these environment variables at runtime, matching the behavior 
 
 Additionally, environment variables specified in [the `[env]` section of `.cargo/config.toml`](https://doc.rust-lang.org/cargo/reference/config.html#env) are also set.
 
+Since `cargo test` also sets variables specified in the build script via [`cargo::rustc-env`](https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-env) at test runtime, `nextest` does the same.
+However, note that [`cargo` discourages using these variables at runtime](https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-env).
+
 ### Dynamic library paths
 
 Nextest sets the dynamic library path at runtime, similar to [what Cargo does](https://doc.rust-lang.org/cargo/reference/environment-variables.html#dynamic-library-paths). This helps with locating shared libraries that are part of the build process. The variable name depends on the platform:
