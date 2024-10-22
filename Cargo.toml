@@ -95,7 +95,7 @@ self_update = { version = "0.41.0", default-features = false, features = [
     "archive-tar",
     "compression-flate2",
 ] }
-serde = { version = "1.0.210", features = ["derive"] }
+serde = { version = "1.0.211", features = ["derive"] }
 serde_ignored = "0.1.10"
 serde_json = "1.0.132"
 serde_path_to_error = "0.1.16"
