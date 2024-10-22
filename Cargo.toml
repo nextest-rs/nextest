@@ -47,7 +47,7 @@ clap = { version = "4.5.20", features = ["derive"] }
 console-subscriber = "0.4.0"
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
-display-error-chain = "0.2.1"
+display-error-chain = "0.2.2"
 duct = "0.13.7"
 dunce = "1.0.5"
 enable-ansi-support = "0.2.1"
