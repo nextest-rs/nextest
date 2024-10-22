@@ -747,9 +747,9 @@ dependencies = [
 
 [[package]]
 name = "display-error-chain"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d305e5a3904ee14166439a70feef04853c1234226dbb27ede127b88dc5a4a9d"
+checksum = "0bc2146e86bc19f52f4c064a64782f05f139ca464ed72937301631e73f8d6cf5"
 
 [[package]]
 name = "duct"
