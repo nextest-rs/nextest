@@ -189,10 +189,13 @@ jobs:
     name: Test archives with a runner (destination)
     strategy:
       matrix:
-        os:
-          - ubuntu-24.04
-          - windows-latest
-    runs-on: ${{ matrix.os }}
+        data:
+          - os: ubuntu-24.04
+            # The artifact name is set by the upload job, which is ubuntu-latest.
+            artifact-name: ubuntu-latest
+          - os: windows-latest
+            artifact-name: windows-latest
+    runs-on: ${{ matrix.data.os }}
     needs:
       - test-archive-target-runner
       - build
@@ -201,7 +204,7 @@ jobs:
       - name: Download nextest binary
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
-          name: cargo-nextest-${{ matrix.os }}-stable
+          name: cargo-nextest-${{ matrix.data.artifact-name }}-stable
           path: nextest-bin
       - name: Download archive
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
@@ -209,7 +212,7 @@ jobs:
           name: fixture-archive
           path: fixture-archive
       - name: Run test fixtures (host)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.data.artifact-name == 'ubuntu-latest' }}
         env:
           CARGO_NEXTEST: nextest-bin/cargo-nextest
         run: |
@@ -219,7 +222,7 @@ jobs:
             --workspace-remap $GITHUB_WORKSPACE/fixtures/nextest-tests \
             -E 'platform(host)'
       - name: Run test fixtures (target)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.data.artifact-name == 'windows-latest' }}
         shell: bash
         env:
           CARGO_NEXTEST: nextest-bin/cargo-nextest.exe
