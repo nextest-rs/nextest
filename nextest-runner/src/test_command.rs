@@ -55,6 +55,20 @@ impl TestCommand {
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
         lctx.env.apply_env(&mut cmd);
 
+        if let Some(out_dir) = lctx
+            .rust_build_meta
+            .build_script_out_dirs
+            .get(package.id().repr())
+        {
+            // Convert the output directory to an absolute path.
+            let out_dir = lctx.rust_build_meta.target_directory.join(out_dir);
+            cmd.env("OUT_DIR", &out_dir);
+
+            // Apply the user-provided environment variables from the build script. This is
+            // supported by cargo test, but discouraged.
+            apply_build_script_env(&mut cmd, &out_dir);
+        }
+
         cmd.current_dir(cwd)
             // This environment variable is set to indicate that tests are being run under nextest.
             .env("NEXTEST", "1")
@@ -69,17 +83,6 @@ impl TestCommand {
         apply_package_env(&mut cmd, package);
 
         apply_ld_dyld_env(&mut cmd, lctx.dylib_path);
-
-        if let Some(out_dir) = lctx
-            .rust_build_meta
-            .build_script_out_dirs
-            .get(package.id().repr())
-        {
-            // Convert the output directory to an absolute path.
-            let out_dir = lctx.rust_build_meta.target_directory.join(out_dir);
-            cmd.env("OUT_DIR", &out_dir);
-            apply_build_script_env(&mut cmd, out_dir);
-        }
 
         // Expose paths to non-test binaries at runtime so that relocated paths work.
         // These paths aren't exposed by Cargo at runtime, so use a NEXTEST_BIN_EXE prefix.
@@ -196,7 +199,7 @@ fn apply_package_env(cmd: &mut std::process::Command, package: &PackageMetadata<
 }
 
 /// Applies environment variables spcified by the build script via `cargo::rustc-env`
-fn apply_build_script_env(cmd: &mut std::process::Command, out_dir: Utf8PathBuf) {
+fn apply_build_script_env(cmd: &mut std::process::Command, out_dir: &Utf8Path) {
     let Some(out_dir_parent) = out_dir.parent() else {
         warn!("could not determine parent directory of output directory {out_dir}");
         return;
@@ -225,7 +228,7 @@ where
 {
     for line in out_file.lines() {
         let Ok(line) = line else {
-            warn!("found line with invalid UTF8 in build script output file at {out_file_path}");
+            warn!("in build script output `{out_file_path}`, found line with invalid UTF-8");
             continue;
         };
         // `cargo::rustc-env` is the official syntax since `cargo` 1.77, `cargo:rustc-env` is
@@ -236,11 +239,11 @@ where
         else {
             continue;
         };
-        let Some(split) = key_val.find('=') else {
+        let Some((k, v)) = key_val.split_once('=') else {
             warn!("rustc-env variable '{key_val}' has no value in {out_file_path}, skipping");
             continue;
         };
-        callback(&key_val[..split], &key_val[split + 1..]);
+        callback(k, v);
     }
 }
 
@@ -292,21 +295,35 @@ pub(crate) fn apply_ld_dyld_env(cmd: &mut std::process::Command, dylib_path: &Os
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use indoc::indoc;
+
     #[test]
-    fn parse_build_script_output() {
-        let out_file = "some_other_line\ncargo::rustc-env=NEW_VAR=new_val\ncargo:rustc-env=OLD_VAR=old_val\ncargo::rustc-env=NEW_MISSING_VALUE\ncargo:rustc-env=OLD_MISSING_VALUE";
+    fn parse_build_script() {
+        let out_file = indoc! {"
+            some_other_line
+            cargo::rustc-env=NEW_VAR=new_val
+            cargo:rustc-env=OLD_VAR=old_val
+            cargo::rustc-env=NEW_MISSING_VALUE
+            cargo:rustc-env=OLD_MISSING_VALUE
+            cargo:rustc-env=NEW_EMPTY_VALUE=
+        "};
 
         let mut key_vals = Vec::new();
-        super::parse_build_script_output(
-            std::io::BufReader::new(std::io::Cursor::new(out_file)),
-            camino::Utf8Path::new("<test input>"),
+        parse_build_script_output(
+            BufReader::new(std::io::Cursor::new(out_file)),
+            Utf8Path::new("<test input>"),
             |key, val| key_vals.push((key.to_owned(), val.to_owned())),
         );
 
-        assert_eq!(key_vals.len(), 2);
-        assert_eq!(key_vals[0].0, "NEW_VAR");
-        assert_eq!(key_vals[0].1, "new_val");
-        assert_eq!(key_vals[1].0, "OLD_VAR");
-        assert_eq!(key_vals[1].1, "old_val");
+        assert_eq!(
+            key_vals,
+            vec![
+                ("NEW_VAR".to_owned(), "new_val".to_owned()),
+                ("OLD_VAR".to_owned(), "old_val".to_owned()),
+                ("NEW_EMPTY_VALUE".to_owned(), "".to_owned()),
+            ],
+            "parsed key-value pairs match"
+        );
     }
 }
