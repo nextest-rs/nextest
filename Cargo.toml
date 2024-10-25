@@ -44,7 +44,7 @@ config = { version = "0.14.1", default-features = false, features = [
 ] }
 chrono = "0.4.38"
 clap = { version = "4.5.20", features = ["derive"] }
-console-subscriber = "0.4.0"
+console-subscriber = "0.4.1"
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
 display-error-chain = "0.2.2"
