@@ -987,10 +987,14 @@ impl<'a> TestInstance<'a> {
         }
     }
 
-    /// Return a reasonable key for sorting. This is (binary ID, test name).
+    /// Return an identifier for test instances, including being able to sort
+    /// them.
     #[inline]
-    pub(crate) fn sort_key(&self) -> (&'a str, &'a str) {
-        ((self.suite_info.binary_id.as_str()), self.name)
+    pub(crate) fn id(&self) -> TestInstanceId<'a> {
+        TestInstanceId {
+            binary_id: &self.suite_info.binary_id,
+            test_name: self.name,
+        }
     }
 
     /// Returns the corresponding [`TestQuery`] for this `TestInstance`.
@@ -1050,6 +1054,18 @@ impl<'a> TestInstance<'a> {
             &self.suite_info.non_test_binaries,
         )
     }
+}
+
+/// A key for identifying and sorting test instances.
+///
+/// Returned by [`TestInstance::id`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) struct TestInstanceId<'a> {
+    /// The binary ID.
+    pub binary_id: &'a RustBinaryId,
+
+    /// The name of the test.
+    pub test_name: &'a str,
 }
 
 /// Context required for test execution.

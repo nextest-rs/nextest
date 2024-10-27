@@ -1012,10 +1012,11 @@ impl<'a> TestReporterImpl<'a> {
                     // Sort the final outputs for a friendlier experience.
                     self.final_outputs
                         .sort_by_key(|(test_instance, final_output)| {
-                            // Use the final status level, reversed (i.e. failing tests are printed at the very end).
+                            // Use the final status level, reversed (i.e.
+                            // failing tests are printed at the very end).
                             (
                                 Reverse(final_output.final_status_level()),
-                                test_instance.sort_key(),
+                                test_instance.id(),
                             )
                         });
 
