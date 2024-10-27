@@ -16,7 +16,7 @@ use crate::{
         ChildError, ConfigureHandleInheritanceError, ErrorList, RunTestError, SetupScriptError,
         TestRunnerBuildError, TestRunnerExecuteErrors,
     },
-    list::{TestExecuteContext, TestInstance, TestList},
+    list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
     reporter::{
         CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestEventKind, TestOutputDisplay,
     },
@@ -35,6 +35,7 @@ use nextest_metadata::{FilterMatch, MismatchReason};
 use quick_junit::ReportUuid;
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
+    collections::BTreeMap,
     convert::Infallible,
     fmt::Write,
     num::NonZeroUsize,
@@ -49,7 +50,11 @@ use std::{
 use tokio::{
     process::Child,
     runtime::Runtime,
-    sync::{broadcast, mpsc::UnboundedSender, oneshot},
+    sync::{
+        broadcast,
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
     task::JoinError,
 };
 use tracing::{debug, warn};
@@ -252,24 +257,25 @@ impl<'a> TestRunner<'a> {
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
     {
-        let (report_cancel_sender, report_cancel_receiver) = oneshot::channel();
+        let (report_cancel_tx, report_cancel_rx) = oneshot::channel();
 
-        // If report_cancel_sender is None, at least one error has occurred and the runner has been
-        // instructed to shut down. first_error is also set to Some in that case.
-        let mut report_cancel_sender = Some(report_cancel_sender);
+        // If report_cancel_tx is None, at least one error has occurred and the
+        // runner has been instructed to shut down. first_error is also set to
+        // Some in that case.
+        let mut report_cancel_tx = Some(report_cancel_tx);
         let mut first_error = None;
 
         let res = self
             .inner
-            .execute(&mut self.handler, report_cancel_receiver, |event| {
+            .execute(&mut self.handler, report_cancel_rx, |event| {
                 match callback(event) {
                     Ok(()) => {}
                     Err(error) => {
                         // If the callback fails, we need to let the runner know to start shutting
                         // down. But we keep reporting results in case the callback starts working
                         // again.
-                        if let Some(report_cancel_sender) = report_cancel_sender.take() {
-                            let _ = report_cancel_sender.send(());
+                        if let Some(report_cancel_tx) = report_cancel_tx.take() {
+                            let _ = report_cancel_tx.send(());
                             first_error = Some(error);
                         }
                     }
@@ -315,7 +321,7 @@ impl<'a> TestRunnerInner<'a> {
     fn execute<F>(
         &self,
         signal_handler: &mut SignalHandler,
-        report_cancel_receiver: oneshot::Receiver<()>,
+        report_cancel_rx: oneshot::Receiver<()>,
         callback: F,
     ) -> Result<RunStats, Vec<JoinError>>
     where
@@ -344,24 +350,16 @@ impl<'a> TestRunnerInner<'a> {
 
         let _guard = self.runtime.enter();
 
-        // Messages sent over this channel include:
-        // - SIGSTOP/SIGCONT
-        // - Shutdown signals (once)
-        // - Signals twice
-        // 32 should be more than enough.
-        let (req_tx, _req_rx) = broadcast::channel::<RunUnitRequest>(32);
-        let req_tx_ref = &req_tx;
-
-        let mut report_cancel_receiver = std::pin::pin!(report_cancel_receiver);
+        let mut report_cancel_rx = std::pin::pin!(report_cancel_rx);
 
         let ((), results) = TokioScope::scope_and_block(move |scope| {
-            let (resp_tx, mut resp_rx) = tokio::sync::mpsc::unbounded_channel();
+            let (resp_tx, mut resp_rx) = unbounded_channel();
             let (cancellation_sender, _cancel_receiver) = broadcast::channel(1);
 
             let exec_cancellation_sender = cancellation_sender.clone();
             let exec_fut = async move {
                 let mut signals_done = false;
-                let mut report_cancel_receiver_done = false;
+                let mut report_cancel_rx_done = false;
 
                 loop {
                     let internal_event = tokio::select! {
@@ -383,8 +381,8 @@ impl<'a> TestRunnerInner<'a> {
                                 }
                             }
                         },
-                        res = &mut report_cancel_receiver, if !report_cancel_receiver_done => {
-                            report_cancel_receiver_done = true;
+                        res = &mut report_cancel_rx, if !report_cancel_rx_done => {
+                            report_cancel_rx_done = true;
                             match res {
                                 Ok(()) => {
                                     InternalEvent::ReportCancel
@@ -396,7 +394,7 @@ impl<'a> TestRunnerInner<'a> {
                                     // the sender isn't kept alive. In those cases, we just ignore
                                     // the error and carry on.
                                     debug!(
-                                        "report_cancel_receiver was dropped early: \
+                                        "report_cancel_rx was dropped early: \
                                          shutdown ordering issue?",
                                     );
                                     continue;
@@ -410,33 +408,42 @@ impl<'a> TestRunnerInner<'a> {
                         Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Stop))) => {
                             // This is in reality bounded by the number of tests
                             // currently running.
-                            let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-                            let mut running_tests = req_tx_ref
-                                .send(RunUnitRequest::Signal(SignalRequest::Stop(sender)))
-                                .expect(
-                                "at least one receiver stays open so this should never error out",
-                            );
-                            // One event to account for the receiver held open at the top.
-                            running_tests -= 1;
+                            let (status_tx, mut status_rx) = unbounded_channel();
+                            ctx_mut.broadcast_request(RunUnitRequest::Signal(SignalRequest::Stop(
+                                status_tx,
+                            )));
 
-                            // There's a possibility of a race condition between a test exiting and
-                            // sending the message to the receiver. For that reason, don't wait more
-                            // than 100ms on children to stop.
+                            debug!(
+                                remaining = status_rx.sender_strong_count(),
+                                "stopping tests"
+                            );
+
+                            // There's a possibility of a race condition between
+                            // a test exiting and sending the message to the
+                            // receiver. For that reason, don't wait more than
+                            // 100ms on children to stop.
                             let mut sleep =
                                 std::pin::pin!(tokio::time::sleep(Duration::from_millis(100)));
 
                             loop {
                                 tokio::select! {
-                                    _ = receiver.recv(), if running_tests > 0 => {
-                                        running_tests -= 1;
+                                    res = status_rx.recv() => {
                                         debug!(
-                                            "stopping tests: running tests down to {running_tests}"
+                                            res = ?res,
+                                            remaining = status_rx.sender_strong_count(),
+                                            "test stopped",
                                         );
+                                        if res.is_none() {
+                                            // No remaining message in the
+                                            // channel's buffer.
+                                            break;
+                                        }
                                     }
                                     _ = &mut sleep => {
-                                        break;
-                                    }
-                                    else => {
+                                        debug!(
+                                            remaining = status_rx.sender_strong_count(),
+                                            "timeout waiting for tests to stop, ignoring",
+                                        );
                                         break;
                                     }
                                 };
@@ -448,8 +455,8 @@ impl<'a> TestRunnerInner<'a> {
                         #[cfg(unix)]
                         Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Continue))) => {
                             // Nextest has been resumed. Resume all the tests as well.
-                            let _ =
-                                req_tx_ref.send(RunUnitRequest::Signal(SignalRequest::Continue));
+                            ctx_mut
+                                .broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                         }
                         #[cfg(not(unix))]
                         Ok(Some(HandleEventResponse::JobControl(e))) => {
@@ -486,8 +493,9 @@ impl<'a> TestRunnerInner<'a> {
                                     // Ignore errors here: if there are no receivers to cancel, so
                                     // be it. Also note the ordering here: cancelled_ref is set
                                     // *before* this is sent.
-                                    let _ = req_tx_ref
-                                        .send(RunUnitRequest::Signal(SignalRequest::Shutdown(req)));
+                                    ctx_mut.broadcast_request(RunUnitRequest::Signal(
+                                        SignalRequest::Shutdown(req),
+                                    ));
                                 }
                             }
                         }
@@ -508,28 +516,33 @@ impl<'a> TestRunnerInner<'a> {
                 // Run setup scripts one by one.
                 for (index, script) in setup_scripts.into_iter().enumerate() {
                     let this_resp_tx = resp_tx.clone();
-                    let (completion_sender, completion_receiver) = tokio::sync::oneshot::channel();
+                    let (completion_sender, completion_receiver) = oneshot::channel();
 
                     let script_id = script.id.clone();
                     let config = script.config;
 
                     let script_fut = async move {
-                        // Subscribe to the receiver *before* checking cancelled_ref. The ordering is
-                        // important to avoid race conditions with the code that first sets
-                        // cancelled_ref and then sends the notification.
-                        let mut this_req_rx = req_tx_ref.subscribe();
-
                         if cancelled_ref.load(Ordering::Acquire) {
                             // Check for test cancellation.
                             return;
                         }
 
+                        let (req_rx_tx, req_rx_rx) = oneshot::channel();
                         let _ = this_resp_tx.send(InternalTestEvent::SetupScriptStarted {
                             script_id: script_id.clone(),
                             config,
                             index,
                             total,
+                            req_rx_tx,
                         });
+                        let mut req_rx = match req_rx_rx.await {
+                            Ok(req_rx) => req_rx,
+                            Err(_) => {
+                                // The receiver was dropped -- most likely the
+                                // test exited.
+                                return;
+                            }
+                        };
 
                         let packet = SetupScriptPacket {
                             script_id: script_id.clone(),
@@ -537,7 +550,7 @@ impl<'a> TestRunnerInner<'a> {
                         };
 
                         let (status, env_map) = self
-                            .run_setup_script(packet, &this_resp_tx, &mut this_req_rx)
+                            .run_setup_script(packet, &this_resp_tx, &mut req_rx)
                             .await;
                         let status = status.into_external();
 
@@ -549,7 +562,7 @@ impl<'a> TestRunnerInner<'a> {
                             status,
                         });
 
-                        drain_req_rx(this_req_rx);
+                        drain_req_rx(req_rx);
                         _ = completion_sender.send(env_map.map(|env_map| (script, env_map)));
                     };
 
@@ -590,11 +603,6 @@ impl<'a> TestRunnerInner<'a> {
                         };
 
                         let fut = async move {
-                            // Subscribe to the receiver *before* checking cancelled_ref. The ordering is
-                            // important to avoid race conditions with the code that first sets
-                            // cancelled_ref and then sends the notification.
-                            let mut this_req_rx = req_tx_ref.subscribe();
-
                             if cancelled_ref.load(Ordering::Acquire) {
                                 // Check for test cancellation.
                                 return;
@@ -616,14 +624,29 @@ impl<'a> TestRunnerInner<'a> {
                                 return;
                             }
 
-                            // Failure to send means the receiver was dropped.
-                            let _ = this_resp_tx.send(InternalTestEvent::Started { test_instance });
+                            let (req_rx_tx, req_rx_rx) = oneshot::channel();
 
-                            let mut run_statuses = vec![];
+                            // Wait for the Started event to be processed by the
+                            // execution future.
+                            _ = this_resp_tx.send(InternalTestEvent::Started {
+                                test_instance,
+                                req_rx_tx,
+                            });
+                            let mut req_rx = match req_rx_rx.await {
+                                Ok(rx) => rx,
+                                Err(_) => {
+                                    // The receiver was dropped, which means the
+                                    // test was cancelled.
+                                    return;
+                                }
+                            };
+
+                            let mut attempt = 0;
                             let mut delay = Duration::ZERO;
-                            loop {
+                            let last_run_status = loop {
+                                attempt += 1;
                                 let retry_data = RetryData {
-                                    attempt: run_statuses.len() + 1,
+                                    attempt,
                                     total_attempts,
                                 };
 
@@ -651,17 +674,17 @@ impl<'a> TestRunnerInner<'a> {
                                 };
 
                                 let run_status = self
-                                    .run_test(packet, &this_resp_tx, &mut this_req_rx)
+                                    .run_test(packet, &this_resp_tx, &mut req_rx)
                                     .await
                                     .into_external(retry_data);
 
                                 if run_status.result.is_success() {
                                     // The test succeeded.
-                                    run_statuses.push(run_status);
-                                    break;
-                                } else if retry_data.attempt < retry_data.total_attempts
-                                    && !cancelled_ref.load(Ordering::Acquire)
-                                {
+                                    break run_status;
+                                } else if cancelled_ref.load(Ordering::Acquire) {
+                                    // The test was cancelled.
+                                    break run_status;
+                                } else if retry_data.attempt < retry_data.total_attempts {
                                     // Retry this test: send a retry event, then retry the loop.
                                     delay = backoff_iter
                                         .next()
@@ -671,11 +694,10 @@ impl<'a> TestRunnerInner<'a> {
                                         InternalTestEvent::AttemptFailedWillRetry {
                                             test_instance,
                                             failure_output: settings.failure_output(),
-                                            run_status: run_status.clone(),
+                                            run_status,
                                             delay_before_next_attempt: delay,
                                         },
                                     );
-                                    run_statuses.push(run_status);
 
                                     tokio::select! {
                                         _ = tokio::time::sleep(delay) => {}
@@ -688,10 +710,9 @@ impl<'a> TestRunnerInner<'a> {
                                     }
                                 } else {
                                     // This test failed and is out of retries.
-                                    run_statuses.push(run_status);
-                                    break;
+                                    break run_status;
                                 }
-                            }
+                            };
 
                             // At this point, either:
                             // * the test has succeeded, or
@@ -703,10 +724,10 @@ impl<'a> TestRunnerInner<'a> {
                                 failure_output: settings.failure_output(),
                                 junit_store_success_output: settings.junit_store_success_output(),
                                 junit_store_failure_output: settings.junit_store_failure_output(),
-                                run_statuses: ExecutionStatuses::new(run_statuses),
+                                last_run_status,
                             });
 
-                            drain_req_rx(this_req_rx);
+                            drain_req_rx(req_rx);
                         };
                         (threads_required, test_group, fut)
                     })
@@ -742,7 +763,7 @@ impl<'a> TestRunnerInner<'a> {
         &self,
         script: SetupScriptPacket<'a>,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
-        req_rx: &mut tokio::sync::broadcast::Receiver<RunUnitRequest>,
+        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
     ) -> (InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
         let mut stopwatch = crate::time::stopwatch();
 
@@ -779,7 +800,7 @@ impl<'a> TestRunnerInner<'a> {
         script: SetupScriptPacket<'a>,
         stopwatch: &mut StopwatchStart,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
-        req_rx: &mut tokio::sync::broadcast::Receiver<RunUnitRequest>,
+        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
     ) -> Result<(InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>), SetupScriptError>
     {
         let mut cmd = script.make_command(&self.double_spawn, self.test_list)?;
@@ -972,7 +993,7 @@ impl<'a> TestRunnerInner<'a> {
         &self,
         test: TestPacket<'a, '_>,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
-        req_rx: &mut broadcast::Receiver<RunUnitRequest>,
+        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
     ) -> InternalExecuteStatus {
         let mut stopwatch = crate::time::stopwatch();
         let delay_before_start = test.delay_before_start;
@@ -1004,7 +1025,7 @@ impl<'a> TestRunnerInner<'a> {
         test: TestPacket<'a, '_>,
         stopwatch: &mut StopwatchStart,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
-        req_rx: &mut broadcast::Receiver<RunUnitRequest>,
+        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
     ) -> Result<InternalExecuteStatus, RunTestError> {
         let ctx = TestExecuteContext {
             double_spawn: &self.double_spawn,
@@ -1130,9 +1151,24 @@ impl<'a> TestRunnerInner<'a> {
                 let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
+                    // All of the branches here need to check for
+                    // `!child_fds.is_done()`, because if child_fds is done we
+                    // want to hit the `else` block right away.
                     () = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {}
                     () = sleep, if !child_fds.is_done() => {
                         break true;
+                    }
+                    recv = req_rx.recv(), if !child_fds.is_done() => {
+                        // The sender stays open longer than the whole loop, and the buffer is big
+                        // enough for all messages ever sent through this channel, so a RecvError
+                        // should never happen.
+                        let req = recv.expect("a RecvError should never happen here");
+
+                        match req {
+                            RunUnitRequest::Signal(_) => {
+                                // The process is done executing, so signals are moot.
+                            }
+                        }
                     }
                     else => {
                         break false;
@@ -1172,8 +1208,8 @@ impl<'a> TestRunnerInner<'a> {
     }
 }
 
-/// Drains the request receiver of any messages, including those that are related to SIGTSTP.
-fn drain_req_rx(mut receiver: broadcast::Receiver<RunUnitRequest>) {
+/// Drains the request receiver of any messages.
+fn drain_req_rx(mut receiver: UnboundedReceiver<RunUnitRequest>) {
     loop {
         let message = receiver.try_recv();
         match message {
@@ -1193,7 +1229,7 @@ async fn handle_signal_request(
     // These annotations are needed to silence lints on non-Unix platforms.
     #[allow(unused_variables)] stopwatch: &mut StopwatchStart,
     #[allow(unused_mut, unused_variables)] mut interval_sleep: Pin<&mut PausableSleep>,
-    req_rx: &mut broadcast::Receiver<RunUnitRequest>,
+    req_rx: &mut UnboundedReceiver<RunUnitRequest>,
     job: Option<&imp::Job>,
     grace_period: Duration,
 ) {
@@ -1806,7 +1842,7 @@ enum HandleEventResponse {
     JobControl(JobControlEvent),
 }
 
-struct CallbackContext<F> {
+struct CallbackContext<'a, F> {
     callback: F,
     run_id: ReportUuid,
     profile_name: String,
@@ -1814,13 +1850,13 @@ struct CallbackContext<F> {
     stopwatch: StopwatchStart,
     run_stats: RunStats,
     fail_fast: bool,
-    setup_scripts_running: usize,
-    running: usize,
+    running_setup_script: Option<ContextSetupScript<'a>>,
+    running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
     cancel_state: Option<CancelReason>,
     signal_count: Option<SignalCount>,
 }
 
-impl<'a, F> CallbackContext<F>
+impl<'a, F> CallbackContext<'a, F>
 where
     F: FnMut(TestEvent<'a>) + Send,
 {
@@ -1843,8 +1879,8 @@ where
                 ..RunStats::default()
             },
             fail_fast,
-            setup_scripts_running: 0,
-            running: 0,
+            running_setup_script: None,
+            running_tests: BTreeMap::new(),
             cancel_state: None,
             signal_count: None,
         }
@@ -1889,8 +1925,18 @@ where
                 config,
                 index,
                 total,
+                req_rx_tx,
             }) => {
-                self.setup_scripts_running += 1;
+                let (req_tx, req_rx) = unbounded_channel();
+                match req_rx_tx.send(req_rx) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        // The test task died?
+                        debug!(?script_id, "test task died, ignoring");
+                        return Ok(None);
+                    }
+                }
+                self.new_setup_script(script_id.clone(), config, index, total, req_tx);
                 self.callback(TestEventKind::SetupScriptStarted {
                     index,
                     total,
@@ -1919,7 +1965,7 @@ where
                 total,
                 status,
             }) => {
-                self.setup_scripts_running -= 1;
+                self.finish_setup_script();
                 self.run_stats.on_setup_script_finished(&status);
                 // Setup scripts failing always cause the entire test run to be cancelled
                 // (--no-fail-fast is ignored).
@@ -1942,12 +1988,24 @@ where
                     Ok(None)
                 }
             }
-            InternalEvent::Test(InternalTestEvent::Started { test_instance }) => {
-                self.running += 1;
+            InternalEvent::Test(InternalTestEvent::Started {
+                test_instance,
+                req_rx_tx,
+            }) => {
+                let (req_tx, req_rx) = unbounded_channel();
+                match req_rx_tx.send(req_rx) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        // The test task died?
+                        debug!(test = ?test_instance.id(), "test task died, ignoring");
+                        return Ok(None);
+                    }
+                }
+                self.new_test(test_instance, req_tx);
                 self.callback(TestEventKind::TestStarted {
                     test_instance,
                     current_stats: self.run_stats,
-                    running: self.running,
+                    running: self.running_tests.len(),
                     cancel_state: self.cancel_state,
                 })
             }
@@ -1967,12 +2025,16 @@ where
                 failure_output,
                 run_status,
                 delay_before_next_attempt,
-            }) => self.callback(TestEventKind::TestAttemptFailedWillRetry {
-                test_instance,
-                failure_output,
-                run_status,
-                delay_before_next_attempt,
-            }),
+            }) => {
+                let instance = self.existing_test(test_instance.id());
+                instance.attempt_failed_will_retry(run_status.clone());
+                self.callback(TestEventKind::TestAttemptFailedWillRetry {
+                    test_instance,
+                    failure_output,
+                    run_status,
+                    delay_before_next_attempt,
+                })
+            }
             InternalEvent::Test(InternalTestEvent::RetryStarted {
                 test_instance,
                 retry_data,
@@ -1986,9 +2048,9 @@ where
                 failure_output,
                 junit_store_success_output,
                 junit_store_failure_output,
-                run_statuses,
+                last_run_status,
             }) => {
-                self.running -= 1;
+                let run_statuses = self.finish_test(test_instance.id(), last_run_status);
                 self.run_stats.on_test_finished(&run_statuses);
 
                 // should this run be cancelled because of a failure?
@@ -2002,7 +2064,7 @@ where
                     junit_store_failure_output,
                     run_statuses,
                     current_stats: self.run_stats,
-                    running: self.running,
+                    running: self.running(),
                     cancel_state: self.cancel_state,
                 })?;
 
@@ -2024,7 +2086,116 @@ where
                     reason,
                 })
             }
-            InternalEvent::Signal(SignalEvent::Shutdown(event)) => {
+            InternalEvent::Signal(event) => self.handle_signal_event(event),
+            InternalEvent::ReportCancel => {
+                self.begin_cancel(CancelReason::ReportError);
+                Err(InternalCancel::Report)
+            }
+        }
+    }
+
+    fn new_setup_script(
+        &mut self,
+        id: ScriptId,
+        config: &'a ScriptConfig,
+        index: usize,
+        total: usize,
+        req_tx: UnboundedSender<RunUnitRequest>,
+    ) {
+        let prev = self.running_setup_script.replace(ContextSetupScript {
+            id,
+            config,
+            index,
+            total,
+            req_tx,
+        });
+        debug_assert!(
+            prev.is_none(),
+            "new setup script expected, but already exists: {prev:?}",
+        );
+    }
+
+    fn finish_setup_script(&mut self) {
+        let prev = self.running_setup_script.take();
+        debug_assert!(
+            prev.is_some(),
+            "existing setup script expected, but already exists: {prev:?}",
+        );
+    }
+
+    fn new_test(&mut self, instance: TestInstance<'a>, req_tx: UnboundedSender<RunUnitRequest>) {
+        let prev = self.running_tests.insert(
+            instance.id(),
+            ContextTestInstance {
+                instance,
+                past_attempts: Vec::new(),
+                req_tx,
+            },
+        );
+        if let Some(prev) = prev {
+            panic!("new test instance expected, but already exists: {prev:?}");
+        }
+    }
+
+    fn existing_test(&mut self, key: TestInstanceId<'a>) -> &mut ContextTestInstance<'a> {
+        self.running_tests
+            .get_mut(&key)
+            .expect("existing test instance expected but not found")
+    }
+
+    fn finish_test(
+        &mut self,
+        key: TestInstanceId<'a>,
+        last_run_status: ExecuteStatus,
+    ) -> ExecutionStatuses {
+        self.running_tests
+            .remove(&key)
+            .unwrap_or_else(|| {
+                panic!(
+                    "existing test instance {key:?} expected, \
+                     but not found"
+                )
+            })
+            .finish(last_run_status)
+    }
+
+    fn setup_scripts_running(&self) -> usize {
+        if self.running_setup_script.is_some() {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn running(&self) -> usize {
+        self.running_tests.len()
+    }
+
+    fn broadcast_request(&self, req: RunUnitRequest) {
+        if let Some(setup_script) = &self.running_setup_script {
+            if let Err(error) = setup_script.req_tx.send(req.clone()) {
+                // The most likely reason for this error is that the setup script
+                // has exited but we haven't processed the exit event yet.
+                debug!(?setup_script.id, ?error, "failed to send request to setup script");
+            }
+        }
+
+        for (key, instance) in &self.running_tests {
+            if let Err(error) = instance.req_tx.send(req.clone()) {
+                // The most likely reason for this error is that the test
+                // instance has exited but we haven't processed the exit event
+                // yet.
+                debug!(?key, ?error, "failed to send request to test instance");
+            }
+        }
+    }
+
+    fn handle_signal_event(
+        &mut self,
+        event: SignalEvent,
+    ) -> Result<Option<HandleEventResponse>, InternalCancel> {
+        match event {
+            SignalEvent::Shutdown(event) => {
                 let signal_count = self.increment_signal_count();
                 let req = signal_count.to_request(event);
 
@@ -2040,12 +2211,12 @@ where
                 Err(InternalCancel::Signal(req))
             }
             #[cfg(unix)]
-            InternalEvent::Signal(SignalEvent::JobControl(JobControlEvent::Stop)) => {
+            SignalEvent::JobControl(JobControlEvent::Stop) => {
                 // Debounce stop signals.
                 if !self.stopwatch.is_paused() {
                     self.callback(TestEventKind::RunPaused {
-                        setup_scripts_running: self.setup_scripts_running,
-                        running: self.running,
+                        setup_scripts_running: self.setup_scripts_running(),
+                        running: self.running(),
                     })?;
                     self.stopwatch.pause();
                     Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Stop)))
@@ -2054,13 +2225,13 @@ where
                 }
             }
             #[cfg(unix)]
-            InternalEvent::Signal(SignalEvent::JobControl(JobControlEvent::Continue)) => {
+            SignalEvent::JobControl(JobControlEvent::Continue) => {
                 // Debounce continue signals.
                 if self.stopwatch.is_paused() {
                     self.stopwatch.resume();
                     self.callback(TestEventKind::RunContinued {
-                        setup_scripts_running: self.setup_scripts_running,
-                        running: self.running,
+                        setup_scripts_running: self.setup_scripts_running(),
+                        running: self.running(),
                     })?;
                     Ok(Some(HandleEventResponse::JobControl(
                         JobControlEvent::Continue,
@@ -2068,10 +2239,6 @@ where
                 } else {
                     Ok(None)
                 }
-            }
-            InternalEvent::ReportCancel => {
-                self.begin_cancel(CancelReason::ReportError);
-                Err(InternalCancel::Report)
             }
         }
     }
@@ -2095,8 +2262,8 @@ where
         if self.cancel_state < Some(reason) {
             self.cancel_state = Some(reason);
             self.basic_callback(TestEventKind::RunBeginCancel {
-                setup_scripts_running: self.setup_scripts_running,
-                running: self.running,
+                setup_scripts_running: self.setup_scripts_running(),
+                running: self.running(),
                 reason,
             });
         }
@@ -2110,6 +2277,40 @@ where
             elapsed: stopwatch_end.duration,
             run_stats: self.run_stats,
         })
+    }
+}
+
+#[derive(Debug)]
+struct ContextSetupScript<'a> {
+    id: ScriptId,
+    // Store these details primarily for debugging.
+    #[allow(dead_code)]
+    config: &'a ScriptConfig,
+    #[allow(dead_code)]
+    index: usize,
+    #[allow(dead_code)]
+    total: usize,
+    req_tx: UnboundedSender<RunUnitRequest>,
+}
+
+#[derive(Debug)]
+struct ContextTestInstance<'a> {
+    // Store the instance primarily for debugging.
+    #[allow(dead_code)]
+    instance: TestInstance<'a>,
+    past_attempts: Vec<ExecuteStatus>,
+    req_tx: UnboundedSender<RunUnitRequest>,
+}
+
+impl<'a> ContextTestInstance<'a> {
+    fn attempt_failed_will_retry(&mut self, run_status: ExecuteStatus) {
+        self.past_attempts.push(run_status);
+    }
+
+    fn finish(self, last_run_status: ExecuteStatus) -> ExecutionStatuses {
+        let mut attempts = self.past_attempts;
+        attempts.push(last_run_status);
+        ExecutionStatuses::new(attempts)
     }
 }
 
@@ -2128,6 +2329,8 @@ enum InternalTestEvent<'a> {
         config: &'a ScriptConfig,
         index: usize,
         total: usize,
+        // See the note in the `Started` variant.
+        req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest>>,
     },
     SetupScriptSlow {
         script_id: ScriptId,
@@ -2144,6 +2347,17 @@ enum InternalTestEvent<'a> {
     },
     Started {
         test_instance: TestInstance<'a>,
+        // The channel over which to return the unit request.
+        //
+        // The callback context is solely responsible for coordinating the
+        // creation of all channels, such that it acts as the source of truth
+        // for which units to broadcast messages out to. This oneshot channel is
+        // used to let each test instance know to go ahead and start running
+        // tests.
+        //
+        // Why do we use unbounded channels? Mostly to make life simpler --
+        // these are low-traffic channels that we don't expect to be backed up.
+        req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest>>,
     },
     Slow {
         test_instance: TestInstance<'a>,
@@ -2167,7 +2381,7 @@ enum InternalTestEvent<'a> {
         failure_output: TestOutputDisplay,
         junit_store_success_output: bool,
         junit_store_failure_output: bool,
-        run_statuses: ExecutionStatuses,
+        last_run_status: ExecuteStatus,
     },
     Skipped {
         test_instance: TestInstance<'a>,
@@ -2322,7 +2536,7 @@ mod imp {
     pub(super) async fn terminate_child(
         child: &mut Child,
         mode: TerminateMode,
-        _req_rx: &mut broadcast::Receiver<RunUnitRequest>,
+        _req_rx: &mut UnboundedReceiver<RunUnitRequest>,
         job: Option<&Job>,
         _grace_period: Duration,
     ) {
@@ -2407,7 +2621,7 @@ mod imp {
     pub(super) async fn terminate_child(
         child: &mut Child,
         mode: TerminateMode,
-        req_rx: &mut broadcast::Receiver<RunUnitRequest>,
+        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
         _job: Option<&Job>,
         grace_period: Duration,
     ) {
