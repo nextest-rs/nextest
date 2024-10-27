@@ -1940,7 +1940,9 @@ where
 
                 let cancel_reason = match event {
                     #[cfg(unix)]
-                    ShutdownEvent::Hangup | ShutdownEvent::Term => CancelReason::Signal,
+                    ShutdownEvent::Hangup | ShutdownEvent::Term | ShutdownEvent::Quit => {
+                        CancelReason::Signal
+                    }
                     ShutdownEvent::Interrupt => CancelReason::Interrupt,
                 };
 
@@ -2251,7 +2253,7 @@ mod imp {
 #[cfg(unix)]
 mod imp {
     use super::*;
-    use libc::{SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGSTOP, SIGTERM, SIGTSTP};
+    use libc::{SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGSTOP, SIGTERM, SIGTSTP};
     use std::os::unix::process::CommandExt;
 
     // This is a no-op on non-windows platforms.
@@ -2322,6 +2324,7 @@ mod imp {
                 TerminateMode::Timeout => SIGTERM,
                 TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Hangup)) => SIGHUP,
                 TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Term)) => SIGTERM,
+                TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Quit)) => SIGQUIT,
                 TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Interrupt)) => {
                     SIGINT
                 }

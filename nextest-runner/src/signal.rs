@@ -68,6 +68,7 @@ mod imp {
         sigint: SignalWithDone,
         sighup: SignalWithDone,
         sigterm: SignalWithDone,
+        sigquit: SignalWithDone,
         sigtstp: SignalWithDone,
         sigcont: SignalWithDone,
     }
@@ -77,6 +78,7 @@ mod imp {
             let sigint = SignalWithDone::new(SignalKind::interrupt())?;
             let sighup = SignalWithDone::new(SignalKind::hangup())?;
             let sigterm = SignalWithDone::new(SignalKind::terminate())?;
+            let sigquit = SignalWithDone::new(SignalKind::quit())?;
             let sigtstp = SignalWithDone::new(SignalKind::from_raw(libc::SIGTSTP))?;
             let sigcont = SignalWithDone::new(SignalKind::from_raw(libc::SIGCONT))?;
 
@@ -84,6 +86,7 @@ mod imp {
                 sigint,
                 sighup,
                 sigterm,
+                sigquit,
                 sigtstp,
                 sigcont,
             })
@@ -108,6 +111,12 @@ mod imp {
                         match recv {
                             Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Term)),
                             None => self.sigterm.done = true,
+                        }
+                    }
+                    recv = self.sigquit.signal.recv(), if !self.sigquit.done => {
+                        match recv {
+                            Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Quit)),
+                            None => self.sigquit.done = true,
                         }
                     }
                     recv = self.sigtstp.signal.recv(), if !self.sigtstp.done => {
@@ -206,5 +215,7 @@ pub(crate) enum ShutdownEvent {
     Hangup,
     #[cfg(unix)]
     Term,
+    #[cfg(unix)]
+    Quit,
     Interrupt,
 }
