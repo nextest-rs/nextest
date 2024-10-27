@@ -253,10 +253,17 @@ pub(crate) fn extract_abort_status(exit_status: ExitStatus) -> Option<AbortStatu
 
 #[cfg(unix)]
 pub(crate) fn signal_str(signal: i32) -> Option<&'static str> {
-    // These signal numbers are the same on at least Linux, macOS and FreeBSD.
+    // These signal numbers are the same on at least Linux, macOS, FreeBSD and illumos.
+    //
+    // TODO: glibc has sigabbrev_np, and POSIX-1.2024 adds sig2str which has been available on
+    // illumos for many years:
+    // https://pubs.opengroup.org/onlinepubs/9799919799/functions/sig2str.html. We should use these
+    // if available.
     match signal {
         1 => Some("HUP"),
         2 => Some("INT"),
+        3 => Some("QUIT"),
+        4 => Some("ILL"),
         5 => Some("TRAP"),
         6 => Some("ABRT"),
         8 => Some("FPE"),
@@ -265,10 +272,6 @@ pub(crate) fn signal_str(signal: i32) -> Option<&'static str> {
         13 => Some("PIPE"),
         14 => Some("ALRM"),
         15 => Some("TERM"),
-        24 => Some("XCPU"),
-        25 => Some("XFSZ"),
-        26 => Some("VTALRM"),
-        27 => Some("PROF"),
         _ => None,
     }
 }
