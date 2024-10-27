@@ -165,6 +165,8 @@ where
 
         let mut visitor = MessageVisitor {
             writer: &mut writer,
+            // Show other fields for debug or trace output.
+            show_other: *metadata.level() >= Level::DEBUG,
             error: None,
         };
 
@@ -182,6 +184,7 @@ static MESSAGE_FIELD: &str = "message";
 
 struct MessageVisitor<'writer, 'a> {
     writer: &'a mut format::Writer<'writer>,
+    show_other: bool,
     error: Option<fmt::Error>,
 }
 
@@ -189,6 +192,10 @@ impl<'writer, 'a> Visit for MessageVisitor<'writer, 'a> {
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         if field.name() == MESSAGE_FIELD {
             if let Err(error) = write!(self.writer, "{:?}", value) {
+                self.error = Some(error);
+            }
+        } else if self.show_other {
+            if let Err(error) = write!(self.writer, "; {} = {:?}", field.name(), value) {
                 self.error = Some(error);
             }
         }
@@ -224,9 +231,14 @@ impl Color {
             cfg_if::cfg_if! {
                 if #[cfg(feature = "experimental-tokio-console")] {
                     let console_layer = nextest_runner::console::spawn();
-                    tracing_subscriber::registry().with(layer).with(console_layer).init();
+                    tracing_subscriber::registry()
+                        .with(layer)
+                        .with(console_layer)
+                        .init();
                 } else {
-                    tracing_subscriber::registry().with(layer).init();
+                    tracing_subscriber::registry()
+                        .with(layer)
+                        .init();
                 }
             }
 
