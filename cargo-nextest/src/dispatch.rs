@@ -22,6 +22,7 @@ use nextest_runner::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
+    input::InputHandlerKind,
     list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
         TestList,
@@ -986,6 +987,13 @@ struct TestReporterOpts {
     #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR", value_parser = BoolishValueParser::new())]
     hide_progress_bar: bool,
 
+    /// Disable handling of input keys from the terminal.
+    ///
+    /// By default, when running a terminal, nextest accepts the `t` key to dump
+    /// test information. This flag disables that behavior.
+    #[arg(long, env = "NEXTEST_NO_INPUT_HANDLER", value_parser = BoolishValueParser::new())]
+    no_input_handler: bool,
+
     /// Format to use for test results (experimental).
     #[arg(
         long,
@@ -1780,12 +1788,16 @@ impl App {
             .color
             .should_colorize(supports_color::Stream::Stderr);
 
-        let mut reporter = reporter_opts
-            .to_builder(no_capture, should_colorize)
-            .set_verbose(self.base.output.verbose)
-            .build(&test_list, &profile, output, structured_reporter);
+        let signal_handler = SignalHandlerKind::Standard;
+        let input_handler = if reporter_opts.no_input_handler {
+            InputHandlerKind::Noop
+        } else {
+            // This means that the input handler determines whether it should be
+            // enabled.
+            InputHandlerKind::Standard
+        };
 
-        let handler = SignalHandlerKind::Standard;
+        // Make the runner.
         let runner_builder = match runner_opts.to_builder(cap_strat) {
             Some(runner_builder) => runner_builder,
             None => {
@@ -1798,10 +1810,17 @@ impl App {
             &test_list,
             &profile,
             cli_args,
-            handler,
+            signal_handler,
+            input_handler,
             double_spawn.clone(),
             target_runner.clone(),
         )?;
+
+        // Make the reporter.
+        let mut reporter = reporter_opts
+            .to_builder(no_capture, should_colorize)
+            .set_verbose(self.base.output.verbose)
+            .build(&test_list, &profile, output, structured_reporter);
 
         configure_handle_inheritance(no_capture)?;
         let run_stats = runner.try_execute(|event| {

@@ -25,6 +25,7 @@ cargo_metadata.workspace = true
 config.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
+crossterm.workspace = true
 debug-ignore.workspace = true
 duct.workspace = true
 future-queue.workspace = true
@@ -69,6 +70,7 @@ thiserror.workspace = true
 # For parsing of .cargo/config.toml files
 tokio = { workspace = true, features = [
     "fs",
+    "io-std",
     "io-util",
     "macros",
     "process",

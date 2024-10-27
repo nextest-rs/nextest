@@ -9,6 +9,7 @@ use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
     double_spawn::DoubleSpawnInfo,
+    input::InputHandlerKind,
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     runner::{FinalRunStats, RunStatsFailureKind, TestRunnerBuilder},
     signal::SignalHandlerKind,
@@ -237,6 +238,7 @@ fn test_run_with_target_runner() -> Result<()> {
             &profile,
             vec![],
             SignalHandlerKind::Noop,
+            InputHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             target_runner,
         )

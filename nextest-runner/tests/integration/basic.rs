@@ -13,6 +13,7 @@ use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
     config::{NextestConfig, RetryPolicy},
     double_spawn::DoubleSpawnInfo,
+    input::InputHandlerKind,
     list::BinaryList,
     platform::BuildPlatforms,
     reporter::{UnitErrorDescription, UnitKind},
@@ -122,6 +123,7 @@ fn test_run() -> Result<()> {
             &profile,
             vec![], // we aren't testing CLI args at the moment
             SignalHandlerKind::Noop,
+            InputHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
@@ -250,6 +252,7 @@ fn test_run_ignored() -> Result<()> {
             &profile,
             vec![],
             SignalHandlerKind::Noop,
+            InputHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
@@ -486,6 +489,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
             &profile,
             vec![],
             SignalHandlerKind::Noop,
+            InputHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
@@ -637,6 +641,7 @@ fn test_termination() -> Result<()> {
             &profile,
             vec![],
             SignalHandlerKind::Noop,
+            InputHandlerKind::Noop,
             DoubleSpawnInfo::disabled(),
             TargetRunner::empty(),
         )
