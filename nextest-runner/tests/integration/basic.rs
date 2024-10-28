@@ -172,19 +172,19 @@ fn test_run() -> Result<()> {
 
                         if can_extract_description {
                             // Check that stderr can be parsed heuristically.
-                            let Some(TestExecutionOutput::Output(TestOutput::Split {
-                                stdout,
-                                stderr,
-                            })) = &run_status.output
+                            let TestExecutionOutput::Output(TestOutput::Split(split)) =
+                                &run_status.output
                             else {
                                 panic!("this test should always use split output")
                             };
+                            let stdout = split.stdout.as_ref().expect("stdout should be captured");
+                            let stderr = split.stderr.as_ref().expect("stderr should be captured");
 
                             println!("stderr: {}", stderr.as_str_lossy());
                             let description = heuristic_extract_description(
                                 run_status.result,
-                                &stdout.buf,
-                                &stderr.buf,
+                                Some(&stdout.buf),
+                                Some(&stderr.buf),
                             );
                             assert!(
                                 description.is_some(),

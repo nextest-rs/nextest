@@ -16,7 +16,7 @@ use crate::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
         FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
     },
-    test_output::{TestExecutionOutput, TestOutput, TestSingleOutput},
+    test_output::{ChildSingleOutput, TestExecutionOutput, TestOutput},
 };
 use bstr::ByteSlice;
 use chrono::{DateTime, FixedOffset};
@@ -1319,21 +1319,26 @@ impl<'a> TestReporterImpl<'a> {
             (self.styles.fail, self.styles.fail_output)
         };
 
-        if !run_status.stdout.is_empty() {
-            write!(writer, "\n{}", "--- ".style(header_style))?;
-            write!(writer, "{:21}", "STDOUT:".style(header_style))?;
-            self.write_setup_script(script_id, command, args, writer)?;
-            writeln!(writer, "{}", " ---".style(header_style))?;
+        if let Some(stdout) = &run_status.output.stdout {
+            if !stdout.is_empty() {
+                write!(writer, "\n{}", "--- ".style(header_style))?;
+                write!(writer, "{:21}", "STDOUT:".style(header_style))?;
+                self.write_setup_script(script_id, command, args, writer)?;
+                writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_single_output(&run_status.stdout, writer)?;
+                self.write_test_single_output(stdout, writer)?;
+            }
         }
-        if !run_status.stderr.is_empty() {
-            write!(writer, "\n{}", "--- ".style(header_style))?;
-            write!(writer, "{:21}", "STDERR:".style(header_style))?;
-            self.write_setup_script(script_id, command, args, writer)?;
-            writeln!(writer, "{}", " ---".style(header_style))?;
 
-            self.write_test_single_output(&run_status.stderr, writer)?;
+        if let Some(stderr) = &run_status.output.stderr {
+            if !stderr.is_empty() {
+                write!(writer, "\n{}", "--- ".style(header_style))?;
+                write!(writer, "{:21}", "STDERR:".style(header_style))?;
+                self.write_setup_script(script_id, command, args, writer)?;
+                writeln!(writer, "{}", " ---".style(header_style))?;
+
+                self.write_test_single_output(stderr, writer)?;
+            }
         }
 
         writeln!(writer)
@@ -1355,7 +1360,7 @@ impl<'a> TestReporterImpl<'a> {
         };
 
         match &run_status.output {
-            Some(TestExecutionOutput::Output(output)) => {
+            TestExecutionOutput::Output(output) => {
                 let description = if self.styles.is_colorized {
                     output.heuristic_extract_description(run_status.result)
                 } else {
@@ -1363,45 +1368,51 @@ impl<'a> TestReporterImpl<'a> {
                 };
 
                 match output {
-                    TestOutput::Split { stdout, stderr } => {
-                        if !stdout.is_empty() {
-                            write!(writer, "\n{}", "--- ".style(header_style))?;
-                            let out_len = self.write_attempt(run_status, header_style, writer)?;
-                            // The width is to align test instances.
-                            write!(
-                                writer,
-                                "{:width$}",
-                                "STDOUT:".style(header_style),
-                                width = (21 - out_len)
-                            )?;
-                            self.write_instance(*test_instance, writer)?;
-                            writeln!(writer, "{}", " ---".style(header_style))?;
+                    TestOutput::Split(split) => {
+                        if let Some(stdout) = &split.stdout {
+                            if !stdout.is_empty() {
+                                write!(writer, "\n{}", "--- ".style(header_style))?;
+                                let out_len =
+                                    self.write_attempt(run_status, header_style, writer)?;
+                                // The width is to align test instances.
+                                write!(
+                                    writer,
+                                    "{:width$}",
+                                    "STDOUT:".style(header_style),
+                                    width = (21 - out_len)
+                                )?;
+                                self.write_instance(*test_instance, writer)?;
+                                writeln!(writer, "{}", " ---".style(header_style))?;
 
-                            self.write_test_single_output_with_description(
-                                stdout,
-                                description.and_then(|d| d.stdout_subslice()),
-                                writer,
-                            )?;
+                                self.write_test_single_output_with_description(
+                                    stdout,
+                                    description.and_then(|d| d.stdout_subslice()),
+                                    writer,
+                                )?;
+                            }
                         }
 
-                        if !stderr.is_empty() {
-                            write!(writer, "\n{}", "--- ".style(header_style))?;
-                            let out_len = self.write_attempt(run_status, header_style, writer)?;
-                            // The width is to align test instances.
-                            write!(
-                                writer,
-                                "{:width$}",
-                                "STDERR:".style(header_style),
-                                width = (21 - out_len)
-                            )?;
-                            self.write_instance(*test_instance, writer)?;
-                            writeln!(writer, "{}", " ---".style(header_style))?;
+                        if let Some(stderr) = &split.stderr {
+                            if !stderr.is_empty() {
+                                write!(writer, "\n{}", "--- ".style(header_style))?;
+                                let out_len =
+                                    self.write_attempt(run_status, header_style, writer)?;
+                                // The width is to align test instances.
+                                write!(
+                                    writer,
+                                    "{:width$}",
+                                    "STDERR:".style(header_style),
+                                    width = (21 - out_len)
+                                )?;
+                                self.write_instance(*test_instance, writer)?;
+                                writeln!(writer, "{}", " ---".style(header_style))?;
 
-                            self.write_test_single_output_with_description(
-                                stderr,
-                                description.and_then(|d| d.stderr_subslice()),
-                                writer,
-                            )?;
+                                self.write_test_single_output_with_description(
+                                    stderr,
+                                    description.and_then(|d| d.stderr_subslice()),
+                                    writer,
+                                )?;
+                            }
                         }
                     }
                     TestOutput::Combined { output } => {
@@ -1428,7 +1439,7 @@ impl<'a> TestReporterImpl<'a> {
                 }
             }
 
-            Some(TestExecutionOutput::ExecFail { description, .. }) => {
+            TestExecutionOutput::ExecFail { description, .. } => {
                 write!(writer, "\n{}", "--- ".style(header_style))?;
                 let out_len = self.write_attempt(run_status, header_style, writer)?;
                 // The width is to align test instances.
@@ -1443,10 +1454,6 @@ impl<'a> TestReporterImpl<'a> {
 
                 writeln!(writer, "{description}")?;
             }
-
-            None => {
-                // The output wasn't captured.
-            }
         }
 
         writeln!(writer)
@@ -1455,7 +1462,7 @@ impl<'a> TestReporterImpl<'a> {
     /// Writes a test output to the writer.
     fn write_test_single_output(
         &self,
-        output: &TestSingleOutput,
+        output: &ChildSingleOutput,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         // SAFETY: The description is not provided.
@@ -1468,7 +1475,7 @@ impl<'a> TestReporterImpl<'a> {
     /// The description must be a subslice of the output.
     fn write_test_single_output_with_description(
         &self,
-        output: &TestSingleOutput,
+        output: &ChildSingleOutput,
         description: Option<ByteSubslice<'_>>,
         writer: &mut dyn Write,
     ) -> io::Result<()> {

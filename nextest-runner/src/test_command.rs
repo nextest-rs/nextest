@@ -20,7 +20,7 @@ use std::{
 use tracing::warn;
 
 mod imp;
-pub use imp::{Child, Output};
+pub(crate) use imp::{Child, ChildFds, ChildOutputMut};
 
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {

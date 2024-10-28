@@ -303,7 +303,7 @@ fn set_execute_status_props(
     mut out: TestcaseOrRerun<'_>,
 ) {
     match &execute_status.output {
-        Some(TestExecutionOutput::Output(output)) => {
+        TestExecutionOutput::Output(output) => {
             if !is_success {
                 let description = output.heuristic_extract_description(execute_status.result);
                 if let Some(description) = description {
@@ -313,9 +313,13 @@ fn set_execute_status_props(
 
             if store_stdout_stderr {
                 match output {
-                    TestOutput::Split { stdout, stderr } => {
-                        out.set_system_out(stdout.as_str_lossy())
-                            .set_system_err(stderr.as_str_lossy());
+                    TestOutput::Split(split) => {
+                        if let Some(stdout) = &split.stdout {
+                            out.set_system_out(stdout.as_str_lossy());
+                        }
+                        if let Some(stderr) = &split.stderr {
+                            out.set_system_err(stderr.as_str_lossy());
+                        }
                     }
                     TestOutput::Combined { output } => {
                         out.set_system_out(output.as_str_lossy())
@@ -324,15 +328,12 @@ fn set_execute_status_props(
                 }
             }
         }
-        Some(TestExecutionOutput::ExecFail {
+        TestExecutionOutput::ExecFail {
             message,
             description,
-        }) => {
+        } => {
             out.set_message(format!("Test execution failed: {message}"));
             out.set_description(description);
-        }
-        None => {
-            out.set_message("Test failed, but output was not captured");
         }
     }
 }
