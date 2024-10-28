@@ -162,10 +162,12 @@ impl fmt::Display for DescriptionKindDisplay<'_> {
 }
 
 /// Attempts to heuristically extract a description of the test failure from the output of the test.
+///
+/// `None` indicates that output wasn't captured -- in those cases there isn't much we can do.
 pub fn heuristic_extract_description<'a>(
     exec_result: ExecutionResult,
-    stdout: &'a [u8],
-    stderr: &'a [u8],
+    stdout: Option<&'a [u8]>,
+    stderr: Option<&'a [u8]>,
 ) -> Option<DescriptionKind<'a>> {
     // If the test crashed with a signal, use that.
     if let ExecutionResult::Fail {
@@ -177,14 +179,19 @@ pub fn heuristic_extract_description<'a>(
     }
 
     // Try the heuristic stack trace extraction first to try and grab more information first.
-    if let Some(stderr_subslice) = heuristic_panic_message(stderr) {
-        return Some(DescriptionKind::PanicMessage { stderr_subslice });
+    if let Some(stderr) = stderr {
+        if let Some(stderr_subslice) = heuristic_panic_message(stderr) {
+            return Some(DescriptionKind::PanicMessage { stderr_subslice });
+        }
+        if let Some(stderr_subslice) = heuristic_error_str(stderr) {
+            return Some(DescriptionKind::ErrorStr { stderr_subslice });
+        }
     }
-    if let Some(stderr_subslice) = heuristic_error_str(stderr) {
-        return Some(DescriptionKind::ErrorStr { stderr_subslice });
-    }
-    if let Some(stdout_subslice) = heuristic_should_panic(stdout) {
-        return Some(DescriptionKind::ShouldPanic { stdout_subslice });
+
+    if let Some(stdout) = stdout {
+        if let Some(stdout_subslice) = heuristic_should_panic(stdout) {
+            return Some(DescriptionKind::ShouldPanic { stdout_subslice });
+        }
     }
 
     None

@@ -1,5 +1,6 @@
 ---
 source: nextest-runner/src/reporter/structured/libtest.rs
 expression: "std::str::from_utf8(&actual).unwrap()"
+snapshot_kind: text
 ---
-(output not captured)
+(stdout not captured)\n(stderr not captured)

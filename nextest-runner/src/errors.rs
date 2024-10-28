@@ -18,7 +18,13 @@ use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::RustBinaryId;
 use smol_str::SmolStr;
-use std::{borrow::Cow, collections::BTreeSet, env::JoinPathsError, fmt, process::ExitStatus};
+use std::{
+    borrow::Cow,
+    collections::BTreeSet,
+    env::JoinPathsError,
+    fmt::{self, Write as _},
+    process::ExitStatus,
+};
 use target_spec_miette::IntoMietteDiagnostic;
 use thiserror::Error;
 
@@ -220,11 +226,11 @@ pub(crate) enum RunTestError {
     #[error("error spawning test process")]
     Spawn(#[source] std::io::Error),
 
-    #[error("error waiting for setup script to exit")]
-    Wait(#[source] std::io::Error),
-
-    #[error("error collecting test output")]
-    CollectOutput(#[from] CollectTestOutputError),
+    #[error("errors while managing test process")]
+    Child {
+        /// The errors that occurred; guaranteed to be non-empty.
+        errors: ErrorList<ChildError>,
+    },
 }
 
 /// An error that occurred while setting up or running a setup script.
@@ -238,13 +244,12 @@ pub(crate) enum SetupScriptError {
     #[error("error executing setup script")]
     ExecFail(#[source] std::io::Error),
 
-    /// An error occurred while collecting the output of the setup script.
-    #[error("error collecting setup script output")]
-    CollectOutput(#[from] CollectTestOutputError),
-
-    /// An error occurred while waiting for the setup script to exit.
-    #[error("error waiting for setup script to exit")]
-    Wait(#[source] std::io::Error),
+    /// One or more errors occurred while managing the child process.
+    #[error("errors while managing setup script process")]
+    Child {
+        /// The errors that occurred; guaranteed to be non-empty.
+        errors: ErrorList<ChildError>,
+    },
 
     /// An error occurred while opening the setup script environment file.
     #[error("error opening environment file `{path}`")]
@@ -277,10 +282,53 @@ pub(crate) enum SetupScriptError {
     EnvFileReservedKey { key: String },
 }
 
-/// An error was returned while collecting test output.
+/// A list of errors that implements `Error`.
+///
+/// In the future, we'll likely want to replace this with a `miette::Diagnostic`-based error, since
+/// that supports multiple causes via "related".
+#[derive(Clone, Debug)]
+pub struct ErrorList<T>(pub Vec<T>);
+
+impl<T: std::error::Error> fmt::Display for ErrorList<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // If a single error occurred, pretend that this is just that.
+        if self.0.len() == 1 {
+            return write!(f, "{}", self.0[0]);
+        }
+
+        // Otherwise, list all errors.
+        writeln!(f, "{} errors occurred:", self.0.len())?;
+        for error in &self.0 {
+            writeln!(f, "- {}", error)?;
+            // Also display the chain of causes here, since we can't return a single error in the
+            // causes section below.
+            let mut indent = indenter::indented(f).with_str("  ");
+            let mut cause = error.source();
+            while let Some(cause_error) = cause {
+                writeln!(indent, "Caused by: {}", cause_error)?;
+                cause = cause_error.source();
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<T: std::error::Error> std::error::Error for ErrorList<T> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        if self.0.len() == 1 {
+            self.0[0].source()
+        } else {
+            // More than one error occurred, so we can't return a single error here. Instead, we
+            // return `None` and display the chain of causes in `fmt::Display`.
+            None
+        }
+    }
+}
+
+/// An error was returned during the process of managing a child process.
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum CollectTestOutputError {
+pub enum ChildError {
     /// An error occurred while reading standard output.
     #[error("error reading standard output")]
     ReadStdout(#[source] std::io::Error),
@@ -288,6 +336,14 @@ pub enum CollectTestOutputError {
     /// An error occurred while reading standard error.
     #[error("error reading standard error")]
     ReadStderr(#[source] std::io::Error),
+
+    /// An error occurred while reading a combined stream.
+    #[error("error reading combined stream")]
+    ReadCombined(#[source] std::io::Error),
+
+    /// An error occurred while waiting for the child process to exit.
+    #[error("error waiting for child process to exit")]
+    Wait(#[source] std::io::Error),
 }
 
 /// An unknown test group was specified in the config.

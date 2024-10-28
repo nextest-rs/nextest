@@ -291,11 +291,12 @@ impl fmt::Debug for InstanceStatus {
             InstanceStatus::Skipped(reason) => write!(f, "skipped: {reason}"),
             InstanceStatus::Finished(run_statuses) => {
                 for run_status in run_statuses.iter() {
-                    let Some(TestExecutionOutput::Output(TestOutput::Split { stdout, stderr })) =
-                        &run_status.output
+                    let TestExecutionOutput::Output(TestOutput::Split(split)) = &run_status.output
                     else {
                         panic!("this test should always use split output")
                     };
+                    let stdout = split.stdout.as_ref().expect("stdout should be captured");
+                    let stderr = split.stderr.as_ref().expect("stderr should be captured");
                     write!(
                         f,
                         "({}/{}) {:?}\n---STDOUT---\n{}\n\n---STDERR---\n{}\n\n",

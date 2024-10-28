@@ -1732,6 +1732,7 @@ dependencies = [
  "home",
  "http",
  "humantime-serde",
+ "indenter",
  "indexmap 2.6.0",
  "indicatif",
  "indoc",

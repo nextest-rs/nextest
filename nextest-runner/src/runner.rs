@@ -12,7 +12,7 @@ use crate::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::{
-        CollectTestOutputError, ConfigureHandleInheritanceError, RunTestError, SetupScriptError,
+        ChildError, ConfigureHandleInheritanceError, ErrorList, RunTestError, SetupScriptError,
         TestRunnerBuildError,
     },
     list::{TestExecuteContext, TestInstance, TestList},
@@ -21,15 +21,15 @@ use crate::{
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
-    test_output::{CaptureStrategy, TestExecutionOutput, TestSingleOutput},
+    test_command::{ChildFds, ChildOutputMut},
+    test_output::{CaptureStrategy, ChildSplitOutput, TestExecutionOutput},
     time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
 };
 use async_scoped::TokioScope;
-use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, FixedOffset};
 use display_error_chain::DisplayErrorChain;
 use future_queue::StreamExt;
-use futures::{future::try_join, prelude::*};
+use futures::prelude::*;
 use nextest_metadata::{FilterMatch, MismatchReason};
 use quick_junit::ReportUuid;
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
@@ -47,7 +47,6 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::{AsyncRead, AsyncReadExt},
     process::Child,
     runtime::Runtime,
     sync::{broadcast, mpsc::UnboundedSender},
@@ -694,14 +693,17 @@ impl<'a> TestRunnerInner<'a> {
         {
             Ok((status, env_map)) => (status, env_map),
             Err(error) => {
-                // Put the error chain inside stderr.
+                // Put the error chain inside stderr. (This is not a great solution, but it's fine
+                // for now.)
                 let mut stderr = bytes::BytesMut::new();
                 writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
 
                 (
                     InternalSetupScriptExecuteStatus {
-                        stdout: Bytes::new(),
-                        stderr: stderr.freeze(),
+                        output: ChildSplitOutput {
+                            stdout: None,
+                            stderr: Some(stderr.freeze().into()),
+                        },
                         result: ExecutionResult::ExecFail,
                         stopwatch_end: stopwatch.snapshot(),
                         is_slow: false,
@@ -768,30 +770,17 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        // TODO: capture output
-        let child_stdout = child.stdout.take();
-        let child_stderr = child.stderr.take();
-        let mut stdout = bytes::BytesMut::new();
-        let mut stderr = bytes::BytesMut::new();
+        let mut child_fds = ChildFds::new_split(child.stdout.take(), child.stderr.take());
+        let mut child_acc = child_fds.make_acc();
 
         let (res, leaked) = {
-            // Set up futures for reading from stdout and stderr.
-            let mut collect_output_fut = std::pin::pin!(collect_output(
-                child_stdout,
-                &mut stdout,
-                child_stderr,
-                &mut stderr
-            ));
-            let mut collect_output_done = false;
-
             let res = loop {
                 tokio::select! {
-                    res = &mut collect_output_fut, if !collect_output_done => {
-                        collect_output_done = true;
-                        res?;
+                    _ = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {
+                        // Some data was read from the child's stdout/stderr.
                     }
                     res = child.wait() => {
-                        // The test finished executing.
+                        // The setup script finished executing.
                         break res;
                     }
                     _ = &mut interval_sleep, if status.is_none() => {
@@ -853,11 +842,10 @@ impl<'a> TestRunnerInner<'a> {
                 let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
-                    res = &mut collect_output_fut, if !collect_output_done => {
-                        collect_output_done = true;
-                        res?;
+                    _ = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {
+                        // Some data was read from the child's stdout/stderr.
                     }
-                    () = sleep, if !collect_output_done => {
+                    () = sleep, if !child_fds.is_done() => {
                         break true;
                     }
                     else => {
@@ -869,8 +857,23 @@ impl<'a> TestRunnerInner<'a> {
             (res, leaked)
         };
 
-        let output = res.map_err(SetupScriptError::Wait)?;
-        let exit_status = output;
+        let mut errors = child_fds.into_errors();
+        let exit_status = match res {
+            Ok(exit_status) => Some(exit_status),
+            Err(err) => {
+                errors.push(ChildError::Wait(err));
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            // TODO: we may wish to return whatever parts of the output we did collect here.
+            return Err(SetupScriptError::Child {
+                errors: ErrorList(errors),
+            });
+        }
+
+        let exit_status = exit_status.expect("None always results in early return");
 
         let status = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
 
@@ -880,10 +883,17 @@ impl<'a> TestRunnerInner<'a> {
             None
         };
 
+        let (stdout, stderr) = match child_acc {
+            ChildOutputMut::Split { stdout, stderr } => (
+                stdout.map(|x| x.freeze().into()),
+                stderr.map(|x| x.freeze().into()),
+            ),
+            ChildOutputMut::Combined(_) => unreachable!("setup scripts are always split"),
+        };
+
         Ok((
             InternalSetupScriptExecuteStatus {
-                stdout: stdout.freeze(),
-                stderr: stderr.freeze(),
+                output: ChildSplitOutput { stdout, stderr },
                 result: status,
                 stopwatch_end: stopwatch.snapshot(),
                 is_slow,
@@ -925,10 +935,10 @@ impl<'a> TestRunnerInner<'a> {
                 let message = error.to_string();
                 let description = DisplayErrorChain::new(error).to_string();
                 InternalExecuteStatus {
-                    output: Some(TestExecutionOutput::ExecFail {
+                    output: TestExecutionOutput::ExecFail {
                         message,
                         description,
-                    }),
+                    },
                     result: ExecutionResult::ExecFail,
                     stopwatch_end: stopwatch.snapshot(),
                     is_slow: false,
@@ -972,9 +982,13 @@ impl<'a> TestRunnerInner<'a> {
         // best-effort thing.
         let job = imp::Job::create().ok();
 
-        let crate::test_command::Child { mut child, output } = cmd
+        let crate::test_command::Child {
+            mut child,
+            mut child_fds,
+        } = cmd
             .spawn(self.capture_strategy)
             .map_err(RunTestError::Spawn)?;
+        let mut child_acc = child_fds.make_acc();
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
@@ -991,19 +1005,10 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        let mut test_output = None;
-
         let (res, leaked) = {
-            let mut collect_output_fut =
-                std::pin::pin!(crate::test_output::collect_test_output(output));
-            let mut collect_output_done = false;
-
             let res = loop {
                 tokio::select! {
-                    res = &mut collect_output_fut, if !collect_output_done => {
-                        collect_output_done = true;
-                        test_output = res?;
-                    }
+                    () = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {}
                     res = child.wait() => {
                         // The test finished executing.
                         break res;
@@ -1031,10 +1036,16 @@ impl<'a> TestRunnerInner<'a> {
                         }
 
                         if will_terminate {
-                            // attempt to terminate the slow test.
-                            // as there is a race between shutting down a slow test and its own completion
-                            // we silently ignore errors to avoid printing false warnings.
-                            imp::terminate_child(&mut child, TerminateMode::Timeout, forward_receiver, job.as_ref(), slow_timeout.grace_period).await;
+                            // Attempt to terminate the slow test. As there is a race between
+                            // shutting down a slow test and its own completion, we silently ignore
+                            // errors to avoid printing false warnings.
+                            imp::terminate_child(
+                                &mut child,
+                                TerminateMode::Timeout,
+                                forward_receiver,
+                                job.as_ref(),
+                                slow_timeout.grace_period,
+                            ).await;
                             status = Some(ExecutionResult::Timeout);
                             if slow_timeout.grace_period.is_zero() {
                                 break child.wait().await;
@@ -1067,11 +1078,8 @@ impl<'a> TestRunnerInner<'a> {
                 let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
-                    res = &mut collect_output_fut, if !collect_output_done => {
-                        collect_output_done = true;
-                        test_output = res?;
-                    }
-                    () = sleep, if !collect_output_done => {
+                    () = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {}
+                    () = sleep, if !child_fds.is_done() => {
                         break true;
                     }
                     else => {
@@ -1083,14 +1091,28 @@ impl<'a> TestRunnerInner<'a> {
             (res, leaked)
         };
 
-        let output = res.map_err(RunTestError::Wait)?;
-        let exit_status = output;
+        let mut errors = child_fds.into_errors();
+        let exit_status = match res {
+            Ok(exit_status) => Some(exit_status),
+            Err(err) => {
+                errors.push(ChildError::Wait(err));
+                None
+            }
+        };
 
-        let status = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
+        if !errors.is_empty() {
+            // TODO: we may wish to return whatever parts of the output we did collect here.
+            return Err(RunTestError::Child {
+                errors: ErrorList(errors),
+            });
+        }
+
+        let exit_status = exit_status.expect("None always results in early return");
+        let result = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
 
         Ok(InternalExecuteStatus {
-            output: test_output.map(TestExecutionOutput::Output),
-            result: status,
+            output: TestExecutionOutput::Output(child_acc.freeze()),
+            result,
             stopwatch_end: stopwatch.snapshot(),
             is_slow,
             delay_before_start,
@@ -1190,53 +1212,6 @@ fn create_execution_result(exit_status: ExitStatus, leaked: bool) -> ExecutionRe
         ExecutionResult::Fail {
             abort_status,
             leaked,
-        }
-    }
-}
-
-fn collect_output<'a>(
-    child_stdout: Option<tokio::process::ChildStdout>,
-    stdout: &'a mut BytesMut,
-    child_stderr: Option<tokio::process::ChildStderr>,
-    stderr: &'a mut BytesMut,
-) -> impl Future<Output = Result<(), CollectTestOutputError>> + 'a {
-    // Set up futures for reading from stdout and stderr.
-    let stdout_fut = async {
-        if let Some(mut child_stdout) = child_stdout {
-            read_all_to_bytes(stdout, &mut child_stdout)
-                .await
-                .map_err(CollectTestOutputError::ReadStdout)
-        } else {
-            Ok(())
-        }
-    };
-
-    let stderr_fut = async {
-        if let Some(mut child_stderr) = child_stderr {
-            read_all_to_bytes(stderr, &mut child_stderr)
-                .await
-                .map_err(CollectTestOutputError::ReadStderr)
-        } else {
-            Ok(())
-        }
-    };
-
-    try_join(stdout_fut, stderr_fut).map_ok(|_| ())
-}
-
-async fn read_all_to_bytes(
-    bytes: &mut bytes::BytesMut,
-    mut input: &mut (dyn AsyncRead + Unpin + Send),
-) -> std::io::Result<()> {
-    // Reborrow it as AsyncReadExt::read_buf expects
-    // Sized self.
-    let input = &mut input;
-
-    loop {
-        bytes.reserve(4096);
-        let bytes_read = input.read_buf(bytes).await?;
-        if bytes_read == 0 {
-            break Ok(());
         }
     }
 }
@@ -1408,9 +1383,7 @@ pub struct ExecuteStatus {
     /// Retry-related data.
     pub retry_data: RetryData,
     /// The stdout and stderr output for this test.
-    ///
-    /// This is None if the output wasn't caught.
-    pub output: Option<TestExecutionOutput>,
+    pub output: TestExecutionOutput,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
@@ -1424,8 +1397,7 @@ pub struct ExecuteStatus {
 }
 
 struct InternalExecuteStatus {
-    // This is None if output wasn't captured.
-    output: Option<TestExecutionOutput>,
+    output: TestExecutionOutput,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
     is_slow: bool,
@@ -1449,10 +1421,8 @@ impl InternalExecuteStatus {
 /// Information about the execution of a setup script.
 #[derive(Clone, Debug)]
 pub struct SetupScriptExecuteStatus {
-    /// Standard output for this setup script.
-    pub stdout: TestSingleOutput,
-    /// Standard error for this setup script.
-    pub stderr: TestSingleOutput,
+    /// Output for this setup script.
+    pub output: ChildSplitOutput,
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the script started.
@@ -1466,8 +1436,7 @@ pub struct SetupScriptExecuteStatus {
 }
 
 struct InternalSetupScriptExecuteStatus {
-    stdout: Bytes,
-    stderr: Bytes,
+    output: ChildSplitOutput,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
     is_slow: bool,
@@ -1477,8 +1446,7 @@ struct InternalSetupScriptExecuteStatus {
 impl InternalSetupScriptExecuteStatus {
     fn into_external(self) -> SetupScriptExecuteStatus {
         SetupScriptExecuteStatus {
-            stdout: self.stdout.into(),
-            stderr: self.stderr.into(),
+            output: self.output,
             result: self.result,
             start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.duration,

@@ -35,6 +35,7 @@ guppy.workspace = true
 # added a config.toml there
 home.workspace = true
 humantime-serde.workspace = true
+indenter.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
 indicatif.workspace = true
 is_ci.workspace = true

@@ -1,14 +1,12 @@
 //! Utilities for capture output from tests run in a child process
 
 use crate::{
-    errors::CollectTestOutputError,
     reporter::{heuristic_extract_description, DescriptionKind},
     runner::ExecutionResult,
 };
 use bstr::{ByteSlice, Lines};
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use std::{borrow::Cow, sync::OnceLock};
-use tokio::io::BufReader;
 
 /// The strategy used to capture test executable output
 #[derive(Copy, Clone, PartialEq, Default, Debug)]
@@ -31,11 +29,12 @@ pub enum CaptureStrategy {
     None,
 }
 
-/// A single output for a test.
+/// A single output for a test or setup script: standard output, standard error, or a combined
+/// buffer.
 ///
 /// This is a wrapper around a [`Bytes`] that provides some convenience methods.
 #[derive(Clone, Debug)]
-pub struct TestSingleOutput {
+pub struct ChildSingleOutput {
     /// The raw output buffer
     pub buf: Bytes,
 
@@ -45,7 +44,7 @@ pub struct TestSingleOutput {
     as_str: OnceLock<Option<Box<str>>>,
 }
 
-impl From<Bytes> for TestSingleOutput {
+impl From<Bytes> for ChildSingleOutput {
     #[inline]
     fn from(buf: Bytes) -> Self {
         Self {
@@ -55,7 +54,7 @@ impl From<Bytes> for TestSingleOutput {
     }
 }
 
-impl TestSingleOutput {
+impl ChildSingleOutput {
     /// Gets this output as a lossy UTF-8 string.
     #[inline]
     pub fn as_str_lossy(&self) -> &str {
@@ -111,19 +110,25 @@ pub enum TestExecutionOutput {
 #[derive(Clone, Debug)]
 pub enum TestOutput {
     /// The output was split into stdout and stderr.
-    Split {
-        /// The captured stdout.
-        stdout: TestSingleOutput,
-
-        /// The captured stderr.
-        stderr: TestSingleOutput,
-    },
+    Split(ChildSplitOutput),
 
     /// The output was combined into stdout and stderr.
     Combined {
         /// The captured output.
-        output: TestSingleOutput,
+        output: ChildSingleOutput,
     },
+}
+
+/// The output of a child process (test or setup script) with split stdout and stderr.
+///
+/// Part of [`TestOutput`], and can be used independently as well.
+#[derive(Clone, Debug)]
+pub struct ChildSplitOutput {
+    /// The captured stdout, or `None` if the output was not captured.
+    pub stdout: Option<ChildSingleOutput>,
+
+    /// The captured stderr, or `None` if the output was not captured.
+    pub stderr: Option<ChildSingleOutput>,
 }
 
 impl TestOutput {
@@ -133,16 +138,19 @@ impl TestOutput {
         exec_result: ExecutionResult,
     ) -> Option<DescriptionKind<'_>> {
         match self {
-            Self::Split { stdout, stderr } => {
-                if let Some(kind) =
-                    heuristic_extract_description(exec_result, &stdout.buf, &stderr.buf)
-                {
+            Self::Split(split) => {
+                if let Some(kind) = heuristic_extract_description(
+                    exec_result,
+                    split.stdout.as_ref().map(|x| x.buf.as_ref()),
+                    split.stderr.as_ref().map(|x| x.buf.as_ref()),
+                ) {
                     return Some(kind);
                 }
             }
             Self::Combined { output } => {
+                // Pass in the same buffer for both stdout and stderr.
                 if let Some(kind) =
-                    heuristic_extract_description(exec_result, &output.buf, &output.buf)
+                    heuristic_extract_description(exec_result, Some(&output.buf), Some(&output.buf))
                 {
                     return Some(kind);
                 }
@@ -150,91 +158,5 @@ impl TestOutput {
         }
 
         None
-    }
-}
-
-/// The size of each buffered reader's buffer, and the size at which we grow
-/// the interleaved buffer.
-///
-/// This size is not totally arbitrary, but rather the (normal) page size on
-/// most linux, windows, and macos systems.
-const CHUNK_SIZE: usize = 4 * 1024;
-
-/// Collects the stdout and/or stderr streams into a single buffer
-pub async fn collect_test_output(
-    streams: Option<crate::test_command::Output>,
-) -> Result<Option<TestOutput>, CollectTestOutputError> {
-    use tokio::io::AsyncBufReadExt as _;
-
-    let Some(output) = streams else {
-        return Ok(None);
-    };
-
-    match output {
-        crate::test_command::Output::Split { stdout, stderr } => {
-            let mut stdout = BufReader::with_capacity(CHUNK_SIZE, stdout);
-            let mut stderr = BufReader::with_capacity(CHUNK_SIZE, stderr);
-
-            let mut stdout_acc = BytesMut::with_capacity(CHUNK_SIZE);
-            let mut stderr_acc = BytesMut::with_capacity(CHUNK_SIZE);
-
-            let mut out_done = false;
-            let mut err_done = false;
-
-            loop {
-                tokio::select! {
-                    res = stdout.fill_buf(), if !out_done => {
-                        let read = {
-                            let buf = res.map_err(CollectTestOutputError::ReadStdout)?;
-                            stdout_acc.extend_from_slice(buf);
-                            buf.len()
-                        };
-
-                        stdout.consume(read);
-                        out_done = read == 0;
-                    }
-                    res = stderr.fill_buf(), if !err_done => {
-                        let read = {
-                            let buf = res.map_err(CollectTestOutputError::ReadStderr)?;
-                            stderr_acc.extend_from_slice(buf);
-                            buf.len()
-                        };
-
-                        stderr.consume(read);
-                        err_done = read == 0;
-                    }
-                    else => break,
-                };
-            }
-
-            Ok(Some(TestOutput::Split {
-                stdout: stdout_acc.freeze().into(),
-                stderr: stderr_acc.freeze().into(),
-            }))
-        }
-        crate::test_command::Output::Combined(output) => {
-            let mut output = BufReader::with_capacity(CHUNK_SIZE, output);
-            let mut acc = BytesMut::with_capacity(CHUNK_SIZE);
-
-            loop {
-                let read = {
-                    let buf = output
-                        .fill_buf()
-                        .await
-                        .map_err(CollectTestOutputError::ReadStdout)?;
-                    acc.extend_from_slice(buf);
-                    buf.len()
-                };
-
-                output.consume(read);
-                if read == 0 {
-                    break;
-                }
-            }
-
-            Ok(Some(TestOutput::Combined {
-                output: acc.freeze().into(),
-            }))
-        }
     }
 }

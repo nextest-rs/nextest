@@ -27,7 +27,7 @@ use crate::{
     list::RustTestSuite,
     reporter::TestEventKind,
     runner::ExecutionResult,
-    test_output::{TestExecutionOutput, TestOutput, TestSingleOutput},
+    test_output::{ChildSingleOutput, TestExecutionOutput, TestOutput},
 };
 use bstr::ByteSlice;
 use nextest_metadata::MismatchReason;
@@ -377,7 +377,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                         write!(out, r#","stdout":""#).map_err(fmt_err)?;
 
                         strip_human_output_from_failed_test(
-                            last_status.output.as_ref(),
+                            &last_status.output,
                             out,
                             test_instance.name,
                         )?;
@@ -490,41 +490,50 @@ impl<'cfg> LibtestReporter<'cfg> {
 /// This function relies on the fact that nextest runs every individual test in
 /// isolation.
 fn strip_human_output_from_failed_test(
-    output: Option<&TestExecutionOutput>,
+    output: &TestExecutionOutput,
     out: &mut bytes::BytesMut,
     test_name: &str,
 ) -> Result<(), WriteEventError> {
     match output {
-        Some(TestExecutionOutput::Output(TestOutput::Combined { output })) => {
+        TestExecutionOutput::Output(TestOutput::Combined { output }) => {
             strip_human_stdout_or_combined(output, out, test_name)?;
         }
-        Some(TestExecutionOutput::Output(TestOutput::Split { stdout, stderr })) => {
+        TestExecutionOutput::Output(TestOutput::Split(split)) => {
             // This is not a case that we hit because we always set CaptureStrategy to Combined. But
-            // handle it in a reasonable fashion.
-            debug_assert!(false, "libtest output requires CaptureStrategy::Combined");
-            if !stdout.is_empty() {
-                write!(out, "--- STDOUT ---\\n").map_err(fmt_err)?;
-                strip_human_stdout_or_combined(stdout, out, test_name)?;
+            // handle it in a reasonable fashion. (We do have a unit test for this case, so gate the
+            // assertion with cfg(not(test)).)
+            #[cfg(not(test))]
+            {
+                debug_assert!(false, "libtest output requires CaptureStrategy::Combined");
+            }
+            if let Some(stdout) = &split.stdout {
+                if !stdout.is_empty() {
+                    write!(out, "--- STDOUT ---\\n").map_err(fmt_err)?;
+                    strip_human_stdout_or_combined(stdout, out, test_name)?;
+                }
+            } else {
+                write!(out, "(stdout not captured)").map_err(fmt_err)?;
             }
             // If stderr is not empty, just write all of it in.
-            if !stderr.is_empty() {
-                write!(out, "\\n--- STDERR ---\\n").map_err(fmt_err)?;
-                write!(out, "{}", EscapedString(stderr.as_str_lossy())).map_err(fmt_err)?;
+            if let Some(stderr) = &split.stderr {
+                if !stderr.is_empty() {
+                    write!(out, "\\n--- STDERR ---\\n").map_err(fmt_err)?;
+                    write!(out, "{}", EscapedString(stderr.as_str_lossy())).map_err(fmt_err)?;
+                }
+            } else {
+                writeln!(out, "\\n(stderr not captured)").map_err(fmt_err)?;
             }
         }
-        Some(TestExecutionOutput::ExecFail { description, .. }) => {
+        TestExecutionOutput::ExecFail { description, .. } => {
             write!(out, "--- EXEC FAIL ---\\n").map_err(fmt_err)?;
             write!(out, "{}", EscapedString(description)).map_err(fmt_err)?;
-        }
-        None => {
-            write!(out, "(output not captured)").map_err(fmt_err)?;
         }
     }
     Ok(())
 }
 
 fn strip_human_stdout_or_combined(
-    output: &TestSingleOutput,
+    output: &ChildSingleOutput,
     out: &mut bytes::BytesMut,
     test_name: &str,
 ) -> Result<(), WriteEventError> {
@@ -634,7 +643,7 @@ impl<'s> std::fmt::Display for EscapedString<'s> {
 mod test {
     use crate::{
         reporter::structured::libtest::strip_human_output_from_failed_test,
-        test_output::{TestExecutionOutput, TestOutput},
+        test_output::{ChildSplitOutput, TestExecutionOutput, TestOutput},
     };
     use bytes::BytesMut;
 
@@ -684,7 +693,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
 
         let mut actual = bytes::BytesMut::new();
         strip_human_output_from_failed_test(
-            Some(&TestExecutionOutput::Output(output)),
+            &TestExecutionOutput::Output(output),
             &mut actual,
             "index::test::download_url_crates_io",
         )
@@ -711,7 +720,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
 
         let mut actual = bytes::BytesMut::new();
         strip_human_output_from_failed_test(
-            Some(&TestExecutionOutput::Output(output)),
+            &TestExecutionOutput::Output(output),
             &mut actual,
             "non-existent",
         )
@@ -730,7 +739,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         };
 
         let mut actual = bytes::BytesMut::new();
-        strip_human_output_from_failed_test(Some(&output), &mut actual, "non-existent").unwrap();
+        strip_human_output_from_failed_test(&output, &mut actual, "non-existent").unwrap();
 
         insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
     }
@@ -738,7 +747,15 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
     #[test]
     fn strips_human_output_none() {
         let mut actual = bytes::BytesMut::new();
-        strip_human_output_from_failed_test(None, &mut actual, "non-existent").unwrap();
+        strip_human_output_from_failed_test(
+            &TestExecutionOutput::Output(TestOutput::Split(ChildSplitOutput {
+                stdout: None,
+                stderr: None,
+            })),
+            &mut actual,
+            "non-existent",
+        )
+        .unwrap();
 
         insta::assert_snapshot!(std::str::from_utf8(&actual).unwrap());
     }

@@ -2145,8 +2145,8 @@ fn extract_description<'a>(stdout: &'a [u8], stderr: &'a [u8]) -> Option<Descrip
             abort_status: None,
             leaked: false,
         },
-        stdout,
-        stderr,
+        Some(stdout),
+        Some(stderr),
     )
 }
 
