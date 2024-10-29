@@ -221,7 +221,14 @@ impl Color {
                 .with_writer(std::io::stderr)
                 .with_filter(targets);
 
-            tracing_subscriber::registry().with(layer).init();
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "experimental-tokio-console")] {
+                    let console_layer = nextest_runner::console::spawn();
+                    tracing_subscriber::registry().with(layer).with(console_layer).init();
+                } else {
+                    tracing_subscriber::registry().with(layer).init();
+                }
+            }
 
             miette::set_hook(Box::new(move |_| {
                 let theme_styles = if self.should_colorize(supports_color::Stream::Stderr) {

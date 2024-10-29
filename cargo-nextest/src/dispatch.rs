@@ -95,9 +95,6 @@ impl CargoNextestApp {
         output: OutputContext,
         output_writer: &mut OutputWriter,
     ) -> Result<i32> {
-        #[cfg(feature = "experimental-tokio-console")]
-        nextest_runner::console::init();
-
         match self.subcommand {
             NextestSubcommand::Nextest(app) => app.exec(cli_args, output, output_writer),
             NextestSubcommand::Ntr(opts) => opts.exec(cli_args, output, output_writer),

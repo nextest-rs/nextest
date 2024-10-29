@@ -96,6 +96,7 @@ self_update = { workspace = true, optional = true }
 ### tokio-console support, not enabled by default
 ###
 console-subscriber = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
@@ -144,4 +145,4 @@ path = "test-helpers/passthrough.rs"
 
 [features]
 self-update = ["self_update", "http", "mukti-metadata"]
-experimental-tokio-console = ["console-subscriber", "tokio/tracing"]
+experimental-tokio-console = ["console-subscriber", "tracing-subscriber", "tokio/tracing"]

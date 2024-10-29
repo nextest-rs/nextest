@@ -5,7 +5,14 @@
 //!
 //! This is currently not shipped with release builds but is available as a debugging tool.
 
-/// Initializes the Tokio console subscriber.
-pub fn init() {
-    console_subscriber::init();
+use tracing::Subscriber;
+use tracing_subscriber::{registry::LookupSpan, Layer};
+
+/// Spawns the Tokio console subscriber in a background thread, returning a tracing `Layer` that
+/// refers to it.
+pub fn spawn<S>() -> impl Layer<S>
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    console_subscriber::spawn()
 }

@@ -1776,6 +1776,7 @@ dependencies = [
  "toml",
  "toml_edit",
  "tracing",
+ "tracing-subscriber",
  "unicode-ident",
  "unicode-normalization",
  "win32job",
