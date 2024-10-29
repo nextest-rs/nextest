@@ -1821,11 +1821,11 @@ impl App {
                     }
                 }
             }
-            FinalRunStats::Canceled(RunStatsFailureKind::SetupScript)
+            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
             | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
                 Err(ExpectedError::setup_script_failed())
             }
-            FinalRunStats::Canceled(RunStatsFailureKind::Test { .. })
+            FinalRunStats::Cancelled(RunStatsFailureKind::Test { .. })
             | FinalRunStats::Failed(RunStatsFailureKind::Test { .. }) => {
                 Err(ExpectedError::test_run_failed())
             }
