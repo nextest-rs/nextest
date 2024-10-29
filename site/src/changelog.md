@@ -8,6 +8,26 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.82] - 2024-10-28
+
+### Added
+
+- For crates with a build script, nextest now reads their output and sets environment variables from
+  within them for tests. This matches `cargo test`'s behavior. However, note that this usage [is
+  discouraged by Cargo](https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-env).
+
+  Thanks to [chrjabs](https://github.com/chrjabs) for your first contribution!
+
+- On Unix platforms, nextest now also intercepts the `SIGQUIT` signal, in addition to the existing
+  `SIGINT`, `SIGTERM`, etc. More signals will be added to this list as makes sense.
+
+### Internal improvements
+
+- Switch internal logging over to the fantastic `tracing` library. Nextest doesn't do much
+  structured logging or event/span logging yet, but tracing provides a great foundation to add that
+  in the future.
+- Internal dependency updates.
+
 ## [0.9.81] - 2024-10-06
 
 ### Fixed
@@ -1126,6 +1146,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.82]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.82
 [0.9.81]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.81
 [0.9.80]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.80
 [0.9.79]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.79
