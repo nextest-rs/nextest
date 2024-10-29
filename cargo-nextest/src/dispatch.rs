@@ -31,7 +31,8 @@ use nextest_runner::{
     redact::Redactor,
     reporter::{
         heuristic_extract_description, highlight_end, structured, DescriptionKind,
-        FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder,
+        FinalStatusLevel, StatusLevel, TestOutputDisplay, TestOutputDisplayStreams,
+        TestReporterBuilder,
     },
     reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
     runner::{
@@ -54,6 +55,7 @@ use std::{
     env::VarError,
     fmt,
     io::{Cursor, Write},
+    str::FromStr,
     sync::Arc,
 };
 use swrite::{swrite, SWrite};
@@ -928,7 +930,10 @@ enum MessageFormat {
 #[derive(Debug, Default, Args)]
 #[command(next_help_heading = "Reporter options")]
 struct TestReporterOpts {
-    /// Output stdout and stderr on failure
+    /// Output stdout and/or stderr on failure
+    ///
+    /// Takes the form of: '{value}' or 'stdout={value}' or 'stdout={value},stderr={value}'
+    /// where {value} is one of: 'immediate', 'immediate-final', 'final', 'never'
     #[arg(
         long,
         value_enum,
@@ -936,9 +941,12 @@ struct TestReporterOpts {
         value_name = "WHEN",
         env = "NEXTEST_FAILURE_OUTPUT",
     )]
-    failure_output: Option<TestOutputDisplayOpt>,
+    failure_output: Option<TestOutputDisplayStreamsOpt>,
 
-    /// Output stdout and stderr on success
+    /// Output stdout and/or stderr on success
+    ///
+    /// Takes the form of: '{value}' or 'stdout={value}' or 'stdout={value},stderr={value}'
+    /// where {value} is one of: 'immediate', 'immediate-final', 'final', 'never'
     #[arg(
         long,
         value_enum,
@@ -946,7 +954,7 @@ struct TestReporterOpts {
         value_name = "WHEN",
         env = "NEXTEST_SUCCESS_OUTPUT",
     )]
-    success_output: Option<TestOutputDisplayOpt>,
+    success_output: Option<TestOutputDisplayStreamsOpt>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output
@@ -1017,6 +1025,68 @@ impl TestReporterOpts {
         }
         builder.set_hide_progress_bar(self.hide_progress_bar);
         builder
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TestOutputDisplayStreamsOpt {
+    stdout: Option<TestOutputDisplayOpt>,
+    stderr: Option<TestOutputDisplayOpt>,
+}
+
+impl FromStr for TestOutputDisplayStreamsOpt {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // expected input has three forms
+        // - "{value}":                         where value is one of [immediate, immediate-final, final, never]
+        // - "{stream}={value}":                where {stream} is one of [stdout, stderr]
+        // - "{stream}={value},{stream=value}": where the two {stream} keys cannot be the same
+        let (stdout, stderr) = if let Some((left, right)) = s.split_once(',') {
+            // the "{stream}={value},{stream=value}" case
+            let left = left
+                .split_once('=')
+                .map(|l| (l.0, TestOutputDisplayOpt::from_str(l.1, false)));
+            let right = right
+                .split_once('=')
+                .map(|r| (r.0, TestOutputDisplayOpt::from_str(r.1, false)));
+            match (left, right) {
+                (Some(("stderr", Ok(stderr))), Some(("stdout", Ok(stdout)))) => (Some(stdout), Some(stderr)),
+                (Some(("stdout", Ok(stdout))), Some(("stderr", Ok(stderr)))) => (Some(stdout), Some(stderr)),
+                (Some((stream @ "stdout" | stream @ "stderr", Err(_))), _) => return Err(format!("\n  unrecognized setting for {stream}: [possible values: immediate, immediate-final, final, never]")),
+                (_, Some((stream @ "stdout" | stream @ "stderr", Err(_)))) => return Err(format!("\n  unrecognized setting for {stream}: [possible values: immediate, immediate-final, final, never]")),
+                (Some(("stdout", _)), Some(("stdout", _))) => return Err("\n  stdout specified twice".to_string()),
+                (Some(("stderr", _)), Some(("stderr", _))) => return Err("\n  stderr specified twice".to_string()),
+                (Some((stream, _)), Some(("stdout" | "stderr", _))) => return Err(format!("\n  unrecognized output stream '{stream}': [possible values: stdout, stderr]")),
+                (Some(("stdout" | "stderr", _)), Some((stream, _))) => return Err(format!("\n  unrecognized output stream '{stream}': [possible values: stdout, stderr]")),
+                (_, _) => return Err("\n  [possible values: immediate, immediate-final, final, never], or specify one or both output streams: stdout={}, stderr={}, stdout={},stderr={}".to_string()),
+            }
+        } else if let Some((stream, right)) = s.split_once('=') {
+            // the "{stream}={value}" case
+            let value = TestOutputDisplayOpt::from_str(right, false);
+            match (stream, value) {
+                ("stderr", Ok(stderr)) => (None, Some(stderr)),
+                ("stdout", Ok(stdout)) => (Some(stdout), None),
+                ("stdout" | "stderr", Err(_)) => return Err(format!("\n  unrecognized setting for {stream}: [possible values: immediate, immediate-final, final, never]")),
+                (_, _) => return Err("\n  unrecognized output stream, possible values: [stdout={}, stderr={}, stdout={},stderr={}]".to_string())
+            }
+        } else if let Ok(value) = TestOutputDisplayOpt::from_str(s, false) {
+            // the "{value}" case
+            (Some(value), Some(value))
+        } else {
+            // did not recognize one of the three cases
+            return Err("\n  [possible values: immediate, immediate-final, final, never], or specify one or both output streams: stdout={}, stderr={}, stdout={},stderr={}".to_string());
+        };
+        Ok(Self { stdout, stderr })
+    }
+}
+
+impl From<TestOutputDisplayStreamsOpt> for TestOutputDisplayStreams {
+    fn from(value: TestOutputDisplayStreamsOpt) -> Self {
+        Self {
+            stdout: value.stdout.map(TestOutputDisplay::from),
+            stderr: value.stderr.map(TestOutputDisplay::from),
+        }
     }
 }
 

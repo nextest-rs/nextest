@@ -17,7 +17,8 @@ use crate::{
     },
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::{
-        CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestEventKind, TestOutputDisplay,
+        CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestEventKind,
+        TestOutputDisplayStreams,
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
@@ -2059,7 +2060,7 @@ enum InternalTestEvent<'a> {
     },
     AttemptFailedWillRetry {
         test_instance: TestInstance<'a>,
-        failure_output: TestOutputDisplay,
+        failure_output: TestOutputDisplayStreams,
         run_status: ExecuteStatus,
         delay_before_next_attempt: Duration,
     },
@@ -2069,8 +2070,8 @@ enum InternalTestEvent<'a> {
     },
     Finished {
         test_instance: TestInstance<'a>,
-        success_output: TestOutputDisplay,
-        failure_output: TestOutputDisplay,
+        success_output: TestOutputDisplayStreams,
+        failure_output: TestOutputDisplayStreams,
         junit_store_success_output: bool,
         junit_store_failure_output: bool,
         run_statuses: ExecutionStatuses,
