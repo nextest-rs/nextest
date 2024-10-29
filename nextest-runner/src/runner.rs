@@ -36,7 +36,6 @@ use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
     convert::Infallible,
     fmt::Write,
-    marker::PhantomData,
     num::NonZeroUsize,
     pin::Pin,
     process::{ExitStatus, Stdio},
@@ -49,7 +48,7 @@ use std::{
 use tokio::{
     process::Child,
     runtime::Runtime,
-    sync::{broadcast, mpsc::UnboundedSender},
+    sync::{broadcast, mpsc::UnboundedSender, oneshot},
 };
 use tracing::{debug, warn};
 
@@ -237,17 +236,43 @@ impl<'a> TestRunner<'a> {
     ///
     /// Accepts a callback that is called with the results of each test. If the callback returns an
     /// error, the test run terminates and the callback is no longer called.
-    pub fn try_execute<E, F>(mut self, callback: F) -> Result<RunStats, E>
+    pub fn try_execute<E, F>(mut self, mut callback: F) -> Result<RunStats, E>
     where
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
     {
-        let run_stats = self.inner.try_execute(&mut self.handler, callback);
+        let (report_cancel_sender, report_cancel_receiver) = oneshot::channel();
+
+        // If report_cancel_sender is None, at least one error has occurred and the runner has been
+        // instructed to shut down. first_error is also set to Some in that case.
+        let mut report_cancel_sender = Some(report_cancel_sender);
+        let mut first_error = None;
+
+        let run_stats = self
+            .inner
+            .execute(&mut self.handler, report_cancel_receiver, |event| {
+                match callback(event) {
+                    Ok(()) => {}
+                    Err(error) => {
+                        // If the callback fails, we need to let the runner know to start shutting
+                        // down. But we keep reporting results in case the callback starts working
+                        // again.
+                        if let Some(report_cancel_sender) = report_cancel_sender.take() {
+                            let _ = report_cancel_sender.send(());
+                            first_error = Some(error);
+                        }
+                    }
+                }
+            });
+
         // On Windows, the stdout and stderr futures might spawn processes that keep the runner
         // stuck indefinitely if it's dropped the normal way. Shut it down aggressively, being OK
         // with leaked resources.
         self.inner.runtime.shutdown_background();
-        run_stats
+        if let Some(error) = first_error {
+            return Err(error);
+        }
+        Ok(run_stats)
     }
 }
 
@@ -268,22 +293,19 @@ struct TestRunnerInner<'a> {
 }
 
 impl<'a> TestRunnerInner<'a> {
-    fn try_execute<E, F>(
+    fn execute<F>(
         &self,
         signal_handler: &mut SignalHandler,
+        report_cancel_receiver: oneshot::Receiver<()>,
         callback: F,
-    ) -> Result<RunStats, E>
+    ) -> RunStats
     where
-        F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
-        E: Send,
+        F: FnMut(TestEvent<'a>) + Send,
     {
         // TODO: add support for other test-running approaches, measure performance.
 
-        // This is move so that sender is moved into it. When the scope finishes the sender is
-        // dropped, and the receiver below completes iteration.
-
-        let canceled = AtomicBool::new(false);
-        let canceled_ref = &canceled;
+        let cancelled = AtomicBool::new(false);
+        let cancelled_ref = &cancelled;
 
         let mut ctx = CallbackContext::new(
             callback,
@@ -295,15 +317,11 @@ impl<'a> TestRunnerInner<'a> {
         );
 
         // Send the initial event.
-        // (Don't need to set the canceled atomic if this fails because the run hasn't started
+        // (Don't need to set the cancelled atomic if this fails because the run hasn't started
         // yet.)
-        ctx.run_started(self.test_list)?;
-
-        // Stores the first error that occurred. This error is propagated up.
-        let mut first_error = None;
+        ctx.run_started(self.test_list);
 
         let ctx_mut = &mut ctx;
-        let first_error_mut = &mut first_error;
 
         let _guard = self.runtime.enter();
 
@@ -315,13 +333,16 @@ impl<'a> TestRunnerInner<'a> {
         let (forward_sender, _forward_receiver) = broadcast::channel::<SignalForwardEvent>(32);
         let forward_sender_ref = &forward_sender;
 
+        let mut report_cancel_receiver = std::pin::pin!(report_cancel_receiver);
+
         TokioScope::scope_and_block(move |scope| {
             let (run_sender, mut run_receiver) = tokio::sync::mpsc::unbounded_channel();
-            let (cancellation_sender, _cancellation_receiver) = broadcast::channel(1);
+            let (cancellation_sender, _cancel_receiver) = broadcast::channel(1);
 
             let exec_cancellation_sender = cancellation_sender.clone();
             let exec_fut = async move {
                 let mut signals_done = false;
+                let mut report_cancel_receiver_done = false;
 
                 loop {
                     let internal_event = tokio::select! {
@@ -343,6 +364,26 @@ impl<'a> TestRunnerInner<'a> {
                                 }
                             }
                         },
+                        res = &mut report_cancel_receiver, if !report_cancel_receiver_done => {
+                            report_cancel_receiver_done = true;
+                            match res {
+                                Ok(()) => {
+                                    InternalEvent::ReportCancel
+                                }
+                                Err(_) => {
+                                    // In normal operation, the sender is kept alive until the end
+                                    // of the run, so this should never fail. However there are
+                                    // circumstances around shutdown where it may be possible that
+                                    // the sender isn't kept alive. In those cases, we just ignore
+                                    // the error and carry on.
+                                    debug!(
+                                        "report_cancel_receiver was dropped early: \
+                                         shutdown ordering issue?",
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
                     };
 
                     match ctx_mut.handle_event(internal_event) {
@@ -398,39 +439,30 @@ impl<'a> TestRunnerInner<'a> {
                             match e {}
                         }
                         Ok(None) => {}
-                        Err(err) => {
-                            // If an error happens, it is because either the callback failed or
-                            // a cancellation notice was received. If the callback failed, we need
-                            // to send a further cancellation notice as well.
-                            //
-                            // Also note the ordering here: canceled_ref is set *before*
-                            // notifications are broadcast. This prevents race conditions.
-                            canceled_ref.store(true, Ordering::Release);
+                        Err(cancel) => {
+                            // A cancellation notice was received. Note the ordering here:
+                            // cancelled_ref is set *before* notifications are broadcast. This
+                            // prevents race conditions.
+                            cancelled_ref.store(true, Ordering::Release);
                             let _ = exec_cancellation_sender.send(());
-                            match err {
-                                InternalError::Error(err) => {
-                                    // Ignore errors that happen during error cancellation.
-                                    if first_error_mut.is_none() {
-                                        *first_error_mut = Some(err);
-                                    }
-                                    let _ = ctx_mut.begin_cancel(CancelReason::ReportError);
+                            match cancel {
+                                // Some of the branches here don't do anything, but are specified
+                                // for readability.
+                                InternalCancel::Report => {
+                                    // An error was produced by the reporter, and cancellation has
+                                    // begun.
                                 }
-                                InternalError::TestFailureCanceled(err) => {
-                                    // A test failure has caused cancellation to begin.
-                                    if first_error_mut.is_none() {
-                                        *first_error_mut = err;
-                                    }
+                                InternalCancel::TestFailure => {
+                                    // A test failure has caused cancellation to begin. Nothing to
+                                    // do here.
                                 }
-                                InternalError::SignalCanceled(forward_event, err) => {
-                                    // A signal has caused cancellation to begin.
-                                    if first_error_mut.is_none() {
-                                        *first_error_mut = err;
-                                    }
-                                    // Let all the child processes know about the signal, and
-                                    // continue to handle events.
+                                InternalCancel::Signal(forward_event) => {
+                                    // A signal has caused cancellation to begin. Let all the child
+                                    // processes know about the signal, and continue to handle
+                                    // events.
                                     //
                                     // Ignore errors here: if there are no receivers to cancel, so
-                                    // be it. Also note the ordering here: canceled_ref is set
+                                    // be it. Also note the ordering here: cancelled_ref is set
                                     // *before* this is sent.
                                     let _ = forward_sender_ref
                                         .send(SignalForwardEvent::Shutdown(forward_event));
@@ -460,12 +492,12 @@ impl<'a> TestRunnerInner<'a> {
                     let config = script.config;
 
                     let script_fut = async move {
-                        // Subscribe to the receiver *before* checking canceled_ref. The ordering is
+                        // Subscribe to the receiver *before* checking cancelled_ref. The ordering is
                         // important to avoid race conditions with the code that first sets
-                        // canceled_ref and then sends the notification.
+                        // cancelled_ref and then sends the notification.
                         let mut this_forward_receiver = forward_sender_ref.subscribe();
 
-                        if canceled_ref.load(Ordering::Acquire) {
+                        if cancelled_ref.load(Ordering::Acquire) {
                             // Check for test cancellation.
                             return;
                         }
@@ -518,7 +550,7 @@ impl<'a> TestRunnerInner<'a> {
                 let run_fut = futures::stream::iter(self.test_list.iter_tests())
                     .map(move |test_instance| {
                         let this_run_sender = run_sender.clone();
-                        let mut cancellation_receiver = cancellation_sender.subscribe();
+                        let mut cancel_receiver = cancellation_sender.subscribe();
 
                         let query = test_instance.to_test_query();
                         let settings = self.profile.settings_for(&query);
@@ -531,12 +563,12 @@ impl<'a> TestRunnerInner<'a> {
                         };
 
                         let fut = async move {
-                            // Subscribe to the receiver *before* checking canceled_ref. The ordering is
+                            // Subscribe to the receiver *before* checking cancelled_ref. The ordering is
                             // important to avoid race conditions with the code that first sets
-                            // canceled_ref and then sends the notification.
+                            // cancelled_ref and then sends the notification.
                             let mut this_forward_receiver = forward_sender_ref.subscribe();
 
-                            if canceled_ref.load(Ordering::Acquire) {
+                            if cancelled_ref.load(Ordering::Acquire) {
                                 // Check for test cancellation.
                                 return;
                             }
@@ -569,8 +601,8 @@ impl<'a> TestRunnerInner<'a> {
                                     total_attempts,
                                 };
 
-                                if canceled_ref.load(Ordering::Acquire) {
-                                    // The test run has been canceled. Don't run any further tests.
+                                if cancelled_ref.load(Ordering::Acquire) {
+                                    // The test run has been cancelled. Don't run any further tests.
                                     break;
                                 }
 
@@ -599,7 +631,7 @@ impl<'a> TestRunnerInner<'a> {
                                     run_statuses.push(run_status);
                                     break;
                                 } else if retry_data.attempt < retry_data.total_attempts
-                                    && !canceled_ref.load(Ordering::Acquire)
+                                    && !cancelled_ref.load(Ordering::Acquire)
                                 {
                                     // Retry this test: send a retry event, then retry the loop.
                                     delay = backoff_iter
@@ -619,10 +651,10 @@ impl<'a> TestRunnerInner<'a> {
                                     tokio::select! {
                                         _ = tokio::time::sleep(delay) => {}
                                         // Cancel the sleep if the run is cancelled.
-                                        _ = cancellation_receiver.recv() => {
+                                        _ = cancel_receiver.recv() => {
                                             // Don't need to do anything special for this because
-                                            // cancellation_receiver gets a message after
-                                            // canceled_ref is set.
+                                            // cancel_receiver gets a message after
+                                            // cancelled_ref is set.
                                         }
                                     }
                                 } else {
@@ -659,19 +691,8 @@ impl<'a> TestRunnerInner<'a> {
             }
         });
 
-        match ctx.run_finished() {
-            Ok(()) => {}
-            Err(err) => {
-                if first_error.is_none() {
-                    first_error = Some(err);
-                }
-            }
-        }
-
-        match first_error {
-            None => Ok(ctx.run_stats),
-            Some(err) => Err(err),
-        }
+        ctx.run_finished();
+        ctx.run_stats
     }
 
     // ---
@@ -1461,7 +1482,7 @@ impl InternalSetupScriptExecuteStatus {
 pub struct RunStats {
     /// The total number of tests that were expected to be run at the beginning.
     ///
-    /// If the test run is canceled, this will be more than `finished_count` at the end.
+    /// If the test run is cancelled, this will be more than `finished_count` at the end.
     pub initial_run_count: usize,
 
     /// The total number of tests that finished running.
@@ -1469,7 +1490,7 @@ pub struct RunStats {
 
     /// The total number of setup scripts that were expected to be run at the beginning.
     ///
-    /// If the test run is canceled, this will be more than `finished_count` at the end.
+    /// If the test run is cancelled, this will be more than `finished_count` at the end.
     pub setup_scripts_initial_count: usize,
 
     /// The total number of setup scripts that finished running.
@@ -1536,14 +1557,14 @@ impl RunStats {
         {
             FinalRunStats::Failed(RunStatsFailureKind::SetupScript)
         } else if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
-            FinalRunStats::Canceled(RunStatsFailureKind::SetupScript)
+            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
         } else if self.failed > 0 || self.exec_failed > 0 || self.timed_out > 0 {
             FinalRunStats::Failed(RunStatsFailureKind::Test {
                 initial_run_count: self.initial_run_count,
                 not_run: self.initial_run_count.saturating_sub(self.finished_count),
             })
         } else if self.initial_run_count > self.finished_count {
-            FinalRunStats::Canceled(RunStatsFailureKind::Test {
+            FinalRunStats::Cancelled(RunStatsFailureKind::Test {
                 initial_run_count: self.initial_run_count,
                 not_run: self.initial_run_count.saturating_sub(self.finished_count),
             })
@@ -1625,8 +1646,8 @@ pub enum FinalRunStats {
     /// The test run was successful, or is successful so far, but no tests were selected to run.
     NoTestsRun,
 
-    /// The test run was canceled.
-    Canceled(RunStatsFailureKind),
+    /// The test run was cancelled.
+    Cancelled(RunStatsFailureKind),
 
     /// At least one test failed.
     Failed(RunStatsFailureKind),
@@ -1680,7 +1701,7 @@ enum ShutdownForwardEvent {
     Twice,
 }
 
-struct CallbackContext<F, E> {
+struct CallbackContext<F> {
     callback: F,
     run_id: ReportUuid,
     profile_name: String,
@@ -1692,12 +1713,11 @@ struct CallbackContext<F, E> {
     running: usize,
     cancel_state: Option<CancelReason>,
     signal_count: Option<SignalCount>,
-    phantom: PhantomData<E>,
 }
 
-impl<'a, F, E> CallbackContext<F, E>
+impl<'a, F> CallbackContext<F>
 where
-    F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
+    F: FnMut(TestEvent<'a>) + Send,
 {
     fn new(
         callback: F,
@@ -1722,11 +1742,10 @@ where
             running: 0,
             cancel_state: None,
             signal_count: None,
-            phantom: PhantomData,
         }
     }
 
-    fn run_started(&mut self, test_list: &'a TestList) -> Result<(), E> {
+    fn run_started(&mut self, test_list: &'a TestList) {
         self.basic_callback(TestEventKind::RunStarted {
             test_list,
             run_id: self.run_id,
@@ -1736,7 +1755,7 @@ where
     }
 
     #[inline]
-    fn basic_callback(&mut self, kind: TestEventKind<'a>) -> Result<(), E> {
+    fn basic_callback(&mut self, kind: TestEventKind<'a>) {
         let snapshot = self.stopwatch.snapshot();
         let event = TestEvent {
             timestamp: snapshot.end_time().fixed_offset(),
@@ -1750,15 +1769,15 @@ where
     fn callback(
         &mut self,
         kind: TestEventKind<'a>,
-    ) -> Result<Option<JobControlEvent>, InternalError<E>> {
-        self.basic_callback(kind).map_err(InternalError::Error)?;
+    ) -> Result<Option<JobControlEvent>, InternalCancel> {
+        self.basic_callback(kind);
         Ok(None)
     }
 
     fn handle_event(
         &mut self,
         event: InternalEvent<'a>,
-    ) -> Result<Option<JobControlEvent>, InternalError<E>> {
+    ) -> Result<Option<JobControlEvent>, InternalCancel> {
         match event {
             InternalEvent::Test(InternalTestEvent::SetupScriptStarted {
                 script_id,
@@ -1812,9 +1831,8 @@ where
                 })?;
 
                 if fail_cancel {
-                    Err(InternalError::TestFailureCanceled(
-                        self.begin_cancel(CancelReason::SetupScriptFailure).err(),
-                    ))
+                    self.begin_cancel(CancelReason::SetupScriptFailure);
+                    Err(InternalCancel::TestFailure)
                 } else {
                     Ok(None)
                 }
@@ -1868,7 +1886,7 @@ where
                 self.running -= 1;
                 self.run_stats.on_test_finished(&run_statuses);
 
-                // should this run be canceled because of a failure?
+                // should this run be cancelled because of a failure?
                 let fail_cancel = self.fail_fast && !run_statuses.last_status().result.is_success();
 
                 self.callback(TestEventKind::TestFinished {
@@ -1885,9 +1903,8 @@ where
 
                 if fail_cancel {
                     // A test failed: start cancellation.
-                    Err(InternalError::TestFailureCanceled(
-                        self.begin_cancel(CancelReason::TestFailure).err(),
-                    ))
+                    self.begin_cancel(CancelReason::TestFailure);
+                    Err(InternalCancel::TestFailure)
                 } else {
                     Ok(None)
                 }
@@ -1914,10 +1931,8 @@ where
                     ShutdownEvent::Interrupt => CancelReason::Interrupt,
                 };
 
-                Err(InternalError::SignalCanceled(
-                    forward_event,
-                    self.begin_cancel(cancel_reason).err(),
-                ))
+                self.begin_cancel(cancel_reason);
+                Err(InternalCancel::Signal(forward_event))
             }
             #[cfg(unix)]
             InternalEvent::Signal(SignalEvent::JobControl(JobControlEvent::Stop)) => {
@@ -1947,6 +1962,10 @@ where
                     Ok(None)
                 }
             }
+            InternalEvent::ReportCancel => {
+                self.begin_cancel(CancelReason::ReportError);
+                Err(InternalCancel::Report)
+            }
         }
     }
 
@@ -1965,19 +1984,18 @@ where
 
     /// Begin cancellation of a test run. Report it if the current cancel state is less than
     /// the required one.
-    fn begin_cancel(&mut self, reason: CancelReason) -> Result<(), E> {
+    fn begin_cancel(&mut self, reason: CancelReason) {
         if self.cancel_state < Some(reason) {
             self.cancel_state = Some(reason);
             self.basic_callback(TestEventKind::RunBeginCancel {
                 setup_scripts_running: self.setup_scripts_running,
                 running: self.running,
                 reason,
-            })?;
+            });
         }
-        Ok(())
     }
 
-    fn run_finished(&mut self) -> Result<(), E> {
+    fn run_finished(&mut self) {
         let stopwatch_end = self.stopwatch.snapshot();
         self.basic_callback(TestEventKind::RunFinished {
             start_time: stopwatch_end.start_time.fixed_offset(),
@@ -1993,6 +2011,7 @@ where
 enum InternalEvent<'a> {
     Test(InternalTestEvent<'a>),
     Signal(SignalEvent),
+    ReportCancel,
 }
 
 #[derive(Debug)]
@@ -2050,10 +2069,10 @@ enum InternalTestEvent<'a> {
 }
 
 #[derive(Debug)]
-enum InternalError<E> {
-    Error(E),
-    TestFailureCanceled(Option<E>),
-    SignalCanceled(ShutdownForwardEvent, Option<E>),
+enum InternalCancel {
+    Report,
+    TestFailure,
+    Signal(ShutdownForwardEvent),
 }
 
 /// Whether a test passed, failed or an error occurred while executing the test.
@@ -2423,11 +2442,11 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Canceled(RunStatsFailureKind::Test {
+            FinalRunStats::Cancelled(RunStatsFailureKind::Test {
                 initial_run_count: 42,
                 not_run: 1
             }),
-            "initial run count > final run count => canceled"
+            "initial run count > final run count => cancelled"
         );
         assert_eq!(
             RunStats {
@@ -2490,7 +2509,7 @@ mod tests {
                 ..RunStats::default()
             }
             .summarize_final(),
-            FinalRunStats::Canceled(RunStatsFailureKind::SetupScript),
+            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript),
             "setup script failed => failure"
         );
 

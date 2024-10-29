@@ -965,7 +965,7 @@ impl<'a> TestReporterImpl<'a> {
                 let summary_style = match stats_summary {
                     FinalRunStats::Success => self.styles.pass,
                     FinalRunStats::NoTestsRun => self.styles.skip,
-                    FinalRunStats::Failed(_) | FinalRunStats::Canceled(_) => self.styles.fail,
+                    FinalRunStats::Failed(_) | FinalRunStats::Cancelled(_) => self.styles.fail,
                 };
                 write!(
                     writer,
@@ -1843,7 +1843,7 @@ fn write_final_warnings(
             initial_run_count,
             not_run,
         })
-        | FinalRunStats::Canceled(RunStatsFailureKind::Test {
+        | FinalRunStats::Cancelled(RunStatsFailureKind::Test {
             initial_run_count,
             not_run,
         }) if not_run > 0 => {
@@ -2091,7 +2091,7 @@ pub enum TestEventKind<'a> {
         /// The number of tests still running.
         running: usize,
 
-        /// The reason this run was canceled.
+        /// The reason this run was cancelled.
         reason: CancelReason,
     },
 
@@ -2771,7 +2771,7 @@ mod tests {
         assert_eq!(warnings, "warning: 5/8 tests were not run due to signal\n");
 
         let warnings = final_warnings_for(
-            FinalRunStats::Canceled(RunStatsFailureKind::Test {
+            FinalRunStats::Cancelled(RunStatsFailureKind::Test {
                 initial_run_count: 1,
                 not_run: 1,
             }),
@@ -2798,7 +2798,7 @@ mod tests {
 
         // No warnings for setup script cancellation.
         let warnings = final_warnings_for(
-            FinalRunStats::Canceled(RunStatsFailureKind::SetupScript),
+            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript),
             Some(CancelReason::Interrupt),
         );
         assert_eq!(warnings, "");
