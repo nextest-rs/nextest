@@ -1082,6 +1082,9 @@ impl<'a> TestRunnerInner<'a> {
                     () = sleep, if !child_fds.is_done() => {
                         break true;
                     }
+                    _ = forward_receiver.recv() => {
+                        // XXX: Why does this hang here?
+                    }
                     else => {
                         break false;
                     }
