@@ -12,7 +12,7 @@ use crate::{
     errors::{ConfigFiltersetOrCfgParseError, InvalidConfigScriptName, SetupScriptError},
     list::TestList,
     platform::BuildPlatforms,
-    test_command::{apply_ld_dyld_env, create_command, LocalExecuteContext},
+    test_command::{apply_ld_dyld_env, create_command},
 };
 use camino::Utf8Path;
 use camino_tempfile::Utf8TempPath;
@@ -146,26 +146,6 @@ pub(crate) struct SetupScript<'profile> {
 }
 
 impl<'profile> SetupScript<'profile> {
-    /// Turns self into a command that can be executed.
-    pub(crate) fn make_command(
-        &self,
-        double_spawn: &DoubleSpawnInfo,
-        test_list: &TestList<'_>,
-    ) -> Result<SetupScriptCommand, SetupScriptError> {
-        let lctx = LocalExecuteContext {
-            rust_build_meta: test_list.rust_build_meta(),
-            double_spawn,
-            dylib_path: test_list.updated_dylib_path(),
-            env: test_list.cargo_env(),
-        };
-        SetupScriptCommand::new(
-            &lctx,
-            self.config.program().to_owned(),
-            self.config.args(),
-            test_list.workspace_root(),
-        )
-    }
-
     pub(crate) fn is_enabled(&self, test: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         self.compiled
             .iter()
@@ -186,16 +166,15 @@ pub(crate) struct SetupScriptCommand {
 impl SetupScriptCommand {
     /// Creates a new `SetupScriptCommand` for a setup script.
     pub(crate) fn new(
-        lctx: &LocalExecuteContext<'_>,
-        program: String,
-        args: &[String],
-        cwd: &Utf8Path,
+        config: &ScriptConfig,
+        double_spawn: &DoubleSpawnInfo,
+        test_list: &TestList<'_>,
     ) -> Result<Self, SetupScriptError> {
-        let mut cmd = create_command(program, args, lctx.double_spawn);
+        let mut cmd = create_command(config.program().to_owned(), config.args(), double_spawn);
 
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
-        lctx.env.apply_env(&mut cmd);
+        test_list.cargo_env().apply_env(&mut cmd);
 
         let env_path = camino_tempfile::Builder::new()
             .prefix("nextest-env")
@@ -203,15 +182,15 @@ impl SetupScriptCommand {
             .map_err(SetupScriptError::TempPath)?
             .into_temp_path();
 
-        cmd.current_dir(cwd)
+        cmd.current_dir(test_list.workspace_root())
             // This environment variable is set to indicate that tests are being run under nextest.
             .env("NEXTEST", "1")
             // Setup scripts can define environment variables which are written out here.
             .env("NEXTEST_ENV", &env_path);
 
-        apply_ld_dyld_env(&mut cmd, lctx.dylib_path);
+        apply_ld_dyld_env(&mut cmd, test_list.updated_dylib_path());
 
-        let double_spawn = lctx.double_spawn.spawn_context();
+        let double_spawn = double_spawn.spawn_context();
 
         Ok(Self {
             command: cmd,
