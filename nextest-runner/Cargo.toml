@@ -60,6 +60,7 @@ shell-words.workspace = true
 smallvec.workspace = true
 smol_str = { workspace = true, features = ["serde"] }
 strip-ansi-escapes.workspace = true
+swrite.workspace = true
 tar.workspace = true
 # For cfg expression evaluation for [target.'cfg()'] expressions
 target-spec.workspace = true

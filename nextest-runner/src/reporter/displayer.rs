@@ -29,11 +29,11 @@ use serde::Deserialize;
 use std::{
     borrow::Cow,
     cmp::Reverse,
-    fmt::{self, Write as _},
-    io,
+    fmt, io,
     io::{BufWriter, Write},
     time::Duration,
 };
+use swrite::{swrite, SWrite};
 
 /// When to display test output in the reporter.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -485,18 +485,17 @@ fn progress_bar_prefix(
 
 fn progress_bar_msg(current_stats: &RunStats, running: usize, styles: &Styles) -> String {
     let mut s = format!("{} running, ", running.style(styles.count));
-    // Writing to strings is infallible.
-    let _ = write_summary_str(current_stats, styles, &mut s);
+    write_summary_str(current_stats, styles, &mut s);
     s
 }
 
-fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) -> fmt::Result {
-    write!(
+fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) {
+    swrite!(
         out,
         "{} {}",
         run_stats.passed.style(styles.count),
         "passed".style(styles.pass)
-    )?;
+    );
 
     if run_stats.passed_slow > 0 || run_stats.flaky > 0 || run_stats.leaky > 0 {
         let mut text = Vec::with_capacity(3);
@@ -521,45 +520,43 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) ->
                 "leaky".style(styles.skip),
             ));
         }
-        write!(out, " ({})", text.join(", "))?;
+        swrite!(out, " ({})", text.join(", "));
     }
-    write!(out, ", ")?;
+    swrite!(out, ", ");
 
     if run_stats.failed > 0 {
-        write!(
+        swrite!(
             out,
             "{} {}, ",
             run_stats.failed.style(styles.count),
             "failed".style(styles.fail),
-        )?;
+        );
     }
 
     if run_stats.exec_failed > 0 {
-        write!(
+        swrite!(
             out,
             "{} {}, ",
             run_stats.exec_failed.style(styles.count),
             "exec failed".style(styles.fail),
-        )?;
+        );
     }
 
     if run_stats.timed_out > 0 {
-        write!(
+        swrite!(
             out,
             "{} {}, ",
             run_stats.timed_out.style(styles.count),
             "timed out".style(styles.fail),
-        )?;
+        );
     }
 
-    write!(
+    swrite!(
         out,
         "{} {}",
         run_stats.skipped.style(styles.count),
         "skipped".style(styles.skip),
-    )?;
-
-    Ok(())
+    );
 }
 
 #[derive(Debug)]
@@ -998,8 +995,7 @@ impl<'a> TestReporterImpl<'a> {
                 );
 
                 let mut summary_str = String::new();
-                // Writing to a string is infallible.
-                let _ = write_summary_str(run_stats, &self.styles, &mut summary_str);
+                write_summary_str(run_stats, &self.styles, &mut summary_str);
                 writeln!(writer, " {tests_str} run: {summary_str}")?;
 
                 // Don't print out test outputs after Ctrl-C, but *do* print them after SIGTERM or
