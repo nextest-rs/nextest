@@ -7,7 +7,7 @@
 
 use crate::{
     config::{
-        NextestProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScript, SetupScriptEnvMap,
+        NextestProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScriptCommand, SetupScriptEnvMap,
         SetupScriptExecuteData, SlowTimeout, TestGroup, TestSettings, TestThreads,
     },
     double_spawn::DoubleSpawnInfo,
@@ -509,8 +509,13 @@ impl<'a> TestRunnerInner<'a> {
                             total,
                         });
 
+                        let packet = SetupScriptPacket {
+                            script_id: script_id.clone(),
+                            config,
+                        };
+
                         let (status, env_map) = self
-                            .run_setup_script(&script, &this_run_sender, &mut this_forward_receiver)
+                            .run_setup_script(packet, &this_run_sender, &mut this_forward_receiver)
                             .await;
                         let status = status.into_external();
 
@@ -613,16 +618,19 @@ impl<'a> TestRunnerInner<'a> {
                                     });
                                 }
 
+                                // Some of this information is only useful for event reporting, but
+                                // it's a lot easier to pass it in than to try and hook on
+                                // additional information later.
+                                let packet = TestPacket {
+                                    test_instance,
+                                    retry_data,
+                                    settings: &settings,
+                                    setup_script_data: &setup_script_data,
+                                    delay_before_start: delay,
+                                };
+
                                 let run_status = self
-                                    .run_test(
-                                        test_instance,
-                                        retry_data,
-                                        &settings,
-                                        &setup_script_data,
-                                        &this_run_sender,
-                                        &mut this_forward_receiver,
-                                        delay,
-                                    )
+                                    .run_test(packet, &this_run_sender, &mut this_forward_receiver)
                                     .await
                                     .into_external(retry_data);
 
@@ -702,7 +710,7 @@ impl<'a> TestRunnerInner<'a> {
     /// Run an individual setup script in its own process.
     async fn run_setup_script(
         &self,
-        script: &SetupScript<'a>,
+        script: SetupScriptPacket<'a>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
     ) -> (InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
@@ -736,10 +744,9 @@ impl<'a> TestRunnerInner<'a> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn run_setup_script_inner(
         &self,
-        script: &SetupScript<'a>,
+        script: SetupScriptPacket<'a>,
         stopwatch: &mut StopwatchStart,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
@@ -816,14 +823,12 @@ impl<'a> TestRunnerInner<'a> {
                         };
 
                         if !slow_timeout.grace_period.is_zero() {
-                            let _ = run_sender.send(InternalTestEvent::SetupScriptSlow {
-                                script_id: script.id.clone(),
-                                config: script.config,
-                                // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
-                                // slightly longer.
-                                elapsed: timeout_hit * slow_timeout.period,
+                            let _ = run_sender.send(script.slow_event(
+                                // Pass in the slow timeout period times timeout_hit, since
+                                // stopwatch.elapsed() tends to be slightly longer.
+                                timeout_hit * slow_timeout.period,
                                 will_terminate,
-                            });
+                            ));
                         }
 
                         if will_terminate {
@@ -925,30 +930,17 @@ impl<'a> TestRunnerInner<'a> {
     }
 
     /// Run an individual test in its own process.
-    #[allow(clippy::too_many_arguments)]
     async fn run_test(
         &self,
-        test: TestInstance<'a>,
-        retry_data: RetryData,
-        settings: &TestSettings,
-        setup_script_data: &SetupScriptExecuteData<'a>,
+        test: TestPacket<'a, '_>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
-        delay_before_start: Duration,
     ) -> InternalExecuteStatus {
         let mut stopwatch = crate::time::stopwatch();
+        let delay_before_start = test.delay_before_start;
 
         match self
-            .run_test_inner(
-                test,
-                retry_data,
-                &mut stopwatch,
-                settings,
-                setup_script_data,
-                run_sender,
-                forward_receiver,
-                delay_before_start,
-            )
+            .run_test_inner(test, &mut stopwatch, run_sender, forward_receiver)
             .await
         {
             Ok(run_status) => run_status,
@@ -969,31 +961,26 @@ impl<'a> TestRunnerInner<'a> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn run_test_inner(
         &self,
-        test: TestInstance<'a>,
-        retry_data: RetryData,
+        test: TestPacket<'a, '_>,
         stopwatch: &mut StopwatchStart,
-        settings: &TestSettings,
-        setup_script_data: &SetupScriptExecuteData<'a>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
         forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
-        delay_before_start: Duration,
     ) -> Result<InternalExecuteStatus, RunTestError> {
         let ctx = TestExecuteContext {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
         };
-        let mut cmd = test.make_command(&ctx, self.test_list);
+        let mut cmd = test.test_instance.make_command(&ctx, self.test_list);
         let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.
-        command_mut.env("__NEXTEST_ATTEMPT", format!("{}", retry_data.attempt));
+        command_mut.env("__NEXTEST_ATTEMPT", format!("{}", test.retry_data.attempt));
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
         command_mut.stdin(Stdio::null());
-        setup_script_data.apply(
-            &test.to_test_query(),
+        test.setup_script_data.apply(
+            &test.test_instance.to_test_query(),
             &self.profile.filterset_ecx(),
             command_mut,
         );
@@ -1016,8 +1003,8 @@ impl<'a> TestRunnerInner<'a> {
         let _ = imp::assign_process_to_job(&child, job.as_ref());
 
         let mut status: Option<ExecutionResult> = None;
-        let slow_timeout = settings.slow_timeout();
-        let leak_timeout = settings.leak_timeout();
+        let slow_timeout = test.settings.slow_timeout();
+        let leak_timeout = test.settings.leak_timeout();
         let mut is_slow = false;
 
         // Use a pausable_sleep rather than an interval here because it's much harder to pause and
@@ -1046,14 +1033,12 @@ impl<'a> TestRunnerInner<'a> {
                         };
 
                         if !slow_timeout.grace_period.is_zero() {
-                            let _ = run_sender.send(InternalTestEvent::Slow {
-                                test_instance: test,
-                                retry_data,
-                                // Pass in the slow timeout period times timeout_hit, since stopwatch.elapsed() tends to be
-                                // slightly longer.
-                                elapsed: timeout_hit * slow_timeout.period,
+                            let _ = run_sender.send(test.slow_event(
+                                // Pass in the slow timeout period times timeout_hit, since
+                                // stopwatch.elapsed() tends to be slightly longer.
+                                timeout_hit * slow_timeout.period,
                                 will_terminate,
-                            });
+                            ));
                         }
 
                         if will_terminate {
@@ -1136,7 +1121,7 @@ impl<'a> TestRunnerInner<'a> {
             result,
             stopwatch_end: stopwatch.snapshot(),
             is_slow,
-            delay_before_start,
+            delay_before_start: test.delay_before_start,
         })
     }
 }
@@ -1699,6 +1684,52 @@ enum SignalForwardEvent {
 enum ShutdownForwardEvent {
     Once(ShutdownEvent),
     Twice,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TestPacket<'a, 'test> {
+    test_instance: TestInstance<'a>,
+    retry_data: RetryData,
+    settings: &'test TestSettings,
+    setup_script_data: &'test SetupScriptExecuteData<'a>,
+    delay_before_start: Duration,
+}
+
+impl<'a> TestPacket<'a, '_> {
+    fn slow_event(&self, elapsed: Duration, will_terminate: bool) -> InternalTestEvent<'a> {
+        InternalTestEvent::Slow {
+            test_instance: self.test_instance,
+            retry_data: self.retry_data,
+            elapsed,
+            will_terminate,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct SetupScriptPacket<'a> {
+    script_id: ScriptId,
+    config: &'a ScriptConfig,
+}
+
+impl<'a> SetupScriptPacket<'a> {
+    /// Turns self into a command that can be executed.
+    fn make_command(
+        &self,
+        double_spawn: &DoubleSpawnInfo,
+        test_list: &TestList<'_>,
+    ) -> Result<SetupScriptCommand, SetupScriptError> {
+        SetupScriptCommand::new(self.config, double_spawn, test_list)
+    }
+
+    fn slow_event(&self, elapsed: Duration, will_terminate: bool) -> InternalTestEvent<'a> {
+        InternalTestEvent::SetupScriptSlow {
+            script_id: self.script_id.clone(),
+            config: self.config,
+            elapsed,
+            will_terminate,
+        }
+    }
 }
 
 struct CallbackContext<F> {
