@@ -42,7 +42,7 @@ cc = { version = "1.1.31", default-features = false, features = ["parallel"] }
 proc-macro2 = { version = "1.0.89" }
 quote = { version = "1.0.37" }
 serde = { version = "1.0.214", features = ["alloc", "derive"] }
-syn = { version = "2.0.85", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.86", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
