@@ -13,7 +13,7 @@ use crate::{
     double_spawn::DoubleSpawnInfo,
     errors::{
         ChildError, ConfigureHandleInheritanceError, ErrorList, RunTestError, SetupScriptError,
-        TestRunnerBuildError,
+        TestRunnerBuildError, TestRunnerExecuteErrors,
     },
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::{
@@ -49,6 +49,7 @@ use tokio::{
     process::Child,
     runtime::Runtime,
     sync::{broadcast, mpsc::UnboundedSender, oneshot},
+    task::JoinError,
 };
 use tracing::{debug, warn};
 
@@ -221,7 +222,12 @@ impl<'a> TestRunner<'a> {
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.
-    pub fn execute<F>(self, mut callback: F) -> RunStats
+    ///
+    /// Returns an error if any of the tasks panicked.
+    pub fn execute<F>(
+        self,
+        mut callback: F,
+    ) -> Result<RunStats, TestRunnerExecuteErrors<Infallible>>
     where
         F: FnMut(TestEvent<'a>) + Send,
     {
@@ -229,14 +235,18 @@ impl<'a> TestRunner<'a> {
             callback(test_event);
             Ok(())
         })
-        .expect("Err branch is infallible")
     }
 
     /// Executes the listed tests, each one in its own process.
     ///
     /// Accepts a callback that is called with the results of each test. If the callback returns an
     /// error, the test run terminates and the callback is no longer called.
-    pub fn try_execute<E, F>(mut self, mut callback: F) -> Result<RunStats, E>
+    ///
+    /// Returns an error if any of the tasks panicked.
+    pub fn try_execute<E, F>(
+        mut self,
+        mut callback: F,
+    ) -> Result<RunStats, TestRunnerExecuteErrors<E>>
     where
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: Send,
@@ -248,7 +258,7 @@ impl<'a> TestRunner<'a> {
         let mut report_cancel_sender = Some(report_cancel_sender);
         let mut first_error = None;
 
-        let run_stats = self
+        let res = self
             .inner
             .execute(&mut self.handler, report_cancel_receiver, |event| {
                 match callback(event) {
@@ -269,10 +279,18 @@ impl<'a> TestRunner<'a> {
         // stuck indefinitely if it's dropped the normal way. Shut it down aggressively, being OK
         // with leaked resources.
         self.inner.runtime.shutdown_background();
-        if let Some(error) = first_error {
-            return Err(error);
+
+        match (res, first_error) {
+            (Ok(run_stats), None) => Ok(run_stats),
+            (Ok(_), Some(report_error)) => Err(TestRunnerExecuteErrors {
+                report_error: Some(report_error),
+                join_errors: Vec::new(),
+            }),
+            (Err(join_errors), report_error) => Err(TestRunnerExecuteErrors {
+                report_error,
+                join_errors,
+            }),
         }
-        Ok(run_stats)
     }
 }
 
@@ -298,7 +316,7 @@ impl<'a> TestRunnerInner<'a> {
         signal_handler: &mut SignalHandler,
         report_cancel_receiver: oneshot::Receiver<()>,
         callback: F,
-    ) -> RunStats
+    ) -> Result<RunStats, Vec<JoinError>>
     where
         F: FnMut(TestEvent<'a>) + Send,
     {
@@ -335,7 +353,7 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut report_cancel_receiver = std::pin::pin!(report_cancel_receiver);
 
-        TokioScope::scope_and_block(move |scope| {
+        let ((), results) = TokioScope::scope_and_block(move |scope| {
             let (run_sender, mut run_receiver) = tokio::sync::mpsc::unbounded_channel();
             let (cancellation_sender, _cancel_receiver) = broadcast::channel(1);
 
@@ -699,7 +717,16 @@ impl<'a> TestRunnerInner<'a> {
         });
 
         ctx.run_finished();
-        ctx.run_stats
+
+        // Were there any join errors?
+        let join_errors = results
+            .into_iter()
+            .filter_map(|r| r.err())
+            .collect::<Vec<_>>();
+        if !join_errors.is_empty() {
+            return Err(join_errors);
+        }
+        Ok(ctx.run_stats)
     }
 
     // ---

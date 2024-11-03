@@ -843,6 +843,43 @@ pub enum TestRunnerBuildError {
     SignalHandlerSetupError(#[from] SignalHandlerSetupError),
 }
 
+/// Errors that occurred while managing test runner Tokio tasks.
+#[derive(Debug, Error)]
+pub struct TestRunnerExecuteErrors<E> {
+    /// An error that occurred while reporting results to the reporter callback.
+    pub report_error: Option<E>,
+
+    /// Join errors (typically panics) that occurred while running the test
+    /// runner.
+    pub join_errors: Vec<tokio::task::JoinError>,
+}
+
+impl<E: std::error::Error> fmt::Display for TestRunnerExecuteErrors<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(report_error) = &self.report_error {
+            write!(f, "error reporting results: {}", report_error)?;
+        }
+
+        if !self.join_errors.is_empty() {
+            if self.report_error.is_some() {
+                write!(f, "; ")?;
+            }
+
+            write!(f, "errors joining tasks: ")?;
+
+            for (i, join_error) in self.join_errors.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+
+                write!(f, "{}", join_error)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Represents an unknown archive format.
 ///
 /// Returned by [`ArchiveFormat::autodetect`].
