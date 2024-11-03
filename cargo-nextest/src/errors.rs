@@ -173,6 +173,11 @@ pub enum ExpectedError {
         err: WriteEventError,
     },
     #[error(transparent)]
+    TestRunnerExecuteErrors {
+        #[from]
+        err: TestRunnerExecuteErrors<WriteEventError>,
+    },
+    #[error(transparent)]
     ConfigureHandleInheritanceError {
         #[from]
         err: ConfigureHandleInheritanceError,
@@ -430,6 +435,9 @@ impl ExpectedError {
             Self::ArchiveCreateError { .. } => NextestExitCode::ARCHIVE_CREATION_FAILED,
             Self::WriteTestListError { .. }
             | Self::WriteEventError { .. }
+            // TestRunnerExecuteErrors isn't _quite_ a WRITE_OUTPUT_ERROR, but
+            // we keep this for backwards compatibility.
+            | Self::TestRunnerExecuteErrors { .. }
             | Self::DebugExtractWriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             #[cfg(feature = "self-update")]
             Self::UpdateError { .. } => NextestExitCode::UPDATE_ERROR,
@@ -712,6 +720,10 @@ impl ExpectedError {
             Self::WriteEventError { err } => {
                 error!("failed to write event to output");
                 Some(err as &dyn Error)
+            }
+            Self::TestRunnerExecuteErrors { err } => {
+                error!("{err}");
+                None
             }
             Self::SetupScriptFailed => {
                 error!("setup script failed");

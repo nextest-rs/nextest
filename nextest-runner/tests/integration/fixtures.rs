@@ -321,32 +321,34 @@ pub(crate) fn execute_collect(
 ) {
     let mut instance_statuses = HashMap::new();
     configure_handle_inheritance(false).expect("configuring handle inheritance on Windows failed");
-    let run_stats = runner.execute(|event| {
-        let (test_instance, status) = match event.kind {
-            TestEventKind::TestSkipped {
-                test_instance,
-                reason,
-            } => (test_instance, InstanceStatus::Skipped(reason)),
-            TestEventKind::TestFinished {
-                test_instance,
-                run_statuses,
-                ..
-            } => (test_instance, InstanceStatus::Finished(run_statuses)),
-            _ => return,
-        };
+    let run_stats = runner
+        .execute(|event| {
+            let (test_instance, status) = match event.kind {
+                TestEventKind::TestSkipped {
+                    test_instance,
+                    reason,
+                } => (test_instance, InstanceStatus::Skipped(reason)),
+                TestEventKind::TestFinished {
+                    test_instance,
+                    run_statuses,
+                    ..
+                } => (test_instance, InstanceStatus::Finished(run_statuses)),
+                _ => return,
+            };
 
-        instance_statuses.insert(
-            (
-                test_instance.suite_info.binary_path.as_path(),
-                test_instance.name,
-            ),
-            InstanceValue {
-                binary_id: test_instance.suite_info.binary_id.as_str(),
-                cwd: test_instance.suite_info.cwd.as_path(),
-                status,
-            },
-        );
-    });
+            instance_statuses.insert(
+                (
+                    test_instance.suite_info.binary_path.as_path(),
+                    test_instance.name,
+                ),
+                InstanceValue {
+                    binary_id: test_instance.suite_info.binary_id.as_str(),
+                    cwd: test_instance.suite_info.cwd.as_path(),
+                    status,
+                },
+            );
+        })
+        .expect("no panics should happen during test execution");
 
     (instance_statuses, run_stats)
 }
