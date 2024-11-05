@@ -389,10 +389,9 @@ impl<'a> TestRunnerInner<'a> {
                     match ctx_mut.handle_event(internal_event) {
                         #[cfg(unix)]
                         Ok(Some(JobControlEvent::Stop)) => {
-                            // There are test_threads or fewer tests running so this buffer is
-                            // big enough.
-                            let (sender, mut receiver) =
-                                tokio::sync::mpsc::channel(self.test_threads);
+                            // This is in reality bounded by the number of tests
+                            // currently running.
+                            let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
                             let mut running_tests = forward_sender_ref
                                 .send(SignalForwardEvent::Stop(sender))
                                 .expect(
@@ -527,7 +526,7 @@ impl<'a> TestRunnerInner<'a> {
                             status,
                         });
 
-                        drain_forward_receiver(this_forward_receiver).await;
+                        drain_forward_receiver(this_forward_receiver);
                         _ = completion_sender.send(env_map.map(|env_map| (script, env_map)));
                     };
 
@@ -685,7 +684,7 @@ impl<'a> TestRunnerInner<'a> {
                                 run_statuses: ExecutionStatuses::new(run_statuses),
                             });
 
-                            drain_forward_receiver(this_forward_receiver).await;
+                            drain_forward_receiver(this_forward_receiver);
                         };
                         (threads_required, test_group, fut)
                     })
@@ -1127,14 +1126,14 @@ impl<'a> TestRunnerInner<'a> {
 }
 
 /// Drains the forward receiver of any messages, including those that are related to SIGTSTP.
-async fn drain_forward_receiver(mut receiver: broadcast::Receiver<SignalForwardEvent>) {
+fn drain_forward_receiver(mut receiver: broadcast::Receiver<SignalForwardEvent>) {
     loop {
         let message = receiver.try_recv();
         match message {
             #[cfg(unix)]
             Ok(SignalForwardEvent::Stop(sender)) => {
                 // The receiver being dead isn't really important.
-                let _ = sender.send(()).await;
+                let _ = sender.send(());
             }
             Err(broadcast::error::TryRecvError::Empty | broadcast::error::TryRecvError::Closed) => {
                 break;
@@ -1169,7 +1168,7 @@ async fn handle_forward_event(
             imp::job_control_child(child, JobControlEvent::Stop);
             // The receiver being dead probably means the main thread panicked
             // or similar.
-            let _ = sender.send(()).await;
+            let _ = sender.send(());
         }
         #[cfg(unix)]
         SignalForwardEvent::Continue => {
@@ -1674,7 +1673,7 @@ impl SignalCount {
 enum SignalForwardEvent {
     // The mpsc sender is used by each test to indicate that the stop signal has been sent.
     #[cfg(unix)]
-    Stop(tokio::sync::mpsc::Sender<()>),
+    Stop(UnboundedSender<()>),
     #[cfg(unix)]
     Continue,
     Shutdown(ShutdownForwardEvent),
@@ -2377,7 +2376,7 @@ mod imp {
                             SignalForwardEvent::Stop(sender) => {
                                 sleep.as_mut().pause();
                                 imp::job_control_child(child, JobControlEvent::Stop);
-                                let _ = sender.send(()).await;
+                                let _ = sender.send(());
                             }
                             SignalForwardEvent::Continue => {
                                 // Possible to receive a Continue at the beginning of execution.
