@@ -63,7 +63,7 @@ http = "1.1.0"
 humantime-serde = "1.1.1"
 indenter = "0.3.3"
 indexmap = "2.6.0"
-indicatif = "0.17.8"
+indicatif = "0.17.9"
 indoc = "2.0.5"
 insta = { version = "1.41.1", default-features = false }
 is_ci = "1.2.0"
