@@ -22,8 +22,9 @@
 //! users to move to the new format or stick to the format version(s) they were
 //! using before
 
-use super::{FormatVersionError, FormatVersionErrorInner, TestEvent, WriteEventError};
+use super::{TestEvent, WriteEventError};
 use crate::{
+    errors::{FormatVersionError, FormatVersionErrorInner},
     list::RustTestSuite,
     reporter::TestEventKind,
     runner::ExecutionResult,
@@ -159,7 +160,7 @@ impl<'cfg> LibtestReporter<'cfg> {
         let Some((major, minor)) = version.split_once('.') else {
             return Err(FormatVersionError {
                 input: version.into(),
-                err: FormatVersionErrorInner::InvalidFormat {
+                error: FormatVersionErrorInner::InvalidFormat {
                     expected: "<major>.<minor>",
                 },
             });
@@ -167,7 +168,7 @@ impl<'cfg> LibtestReporter<'cfg> {
 
         let major: u8 = major.parse().map_err(|err| FormatVersionError {
             input: version.into(),
-            err: FormatVersionErrorInner::InvalidInteger {
+            error: FormatVersionErrorInner::InvalidInteger {
                 which: "major",
                 err,
             },
@@ -175,7 +176,7 @@ impl<'cfg> LibtestReporter<'cfg> {
 
         let minor: u8 = minor.parse().map_err(|err| FormatVersionError {
             input: version.into(),
-            err: FormatVersionErrorInner::InvalidInteger {
+            error: FormatVersionErrorInner::InvalidInteger {
                 which: "minor",
                 err,
             },
@@ -186,7 +187,7 @@ impl<'cfg> LibtestReporter<'cfg> {
             o => {
                 return Err(FormatVersionError {
                     input: version.into(),
-                    err: FormatVersionErrorInner::InvalidValue {
+                    error: FormatVersionErrorInner::InvalidValue {
                         which: "major",
                         value: o,
                         range: (FormatMajorVersion::Unstable as u8)
@@ -201,7 +202,7 @@ impl<'cfg> LibtestReporter<'cfg> {
             o => {
                 return Err(FormatVersionError {
                     input: version.into(),
-                    err: FormatVersionErrorInner::InvalidValue {
+                    error: FormatVersionErrorInner::InvalidValue {
                         which: "minor",
                         value: o,
                         range: (FormatMinorVersion::First as u8)..(FormatMinorVersion::_Max as u8),

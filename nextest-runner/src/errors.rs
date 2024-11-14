@@ -628,6 +628,48 @@ pub enum RustBuildMetaParseError {
     },
 }
 
+/// Error returned when a user-supplied format version fails to be parsed to a
+/// valid and supported version.
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("invalid format version: {input}")]
+pub struct FormatVersionError {
+    /// The input that failed to parse.
+    pub input: String,
+    /// The underlying error.
+    #[source]
+    pub error: FormatVersionErrorInner,
+}
+
+/// The different errors that can occur when parsing and validating a format version.
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum FormatVersionErrorInner {
+    /// The input did not have a valid syntax.
+    #[error("expected format version in form of `{expected}`")]
+    InvalidFormat {
+        /// The expected pseudo format.
+        expected: &'static str,
+    },
+    /// A decimal integer was expected but could not be parsed.
+    #[error("version component `{which}` could not be parsed as an integer")]
+    InvalidInteger {
+        /// Which component was invalid.
+        which: &'static str,
+        /// The parse failure.
+        #[source]
+        err: std::num::ParseIntError,
+    },
+    /// The version component was not within the expected range.
+    #[error("version component `{which}` value {value} is out of range {range:?}")]
+    InvalidValue {
+        /// The component which was out of range.
+        which: &'static str,
+        /// The value that was parsed.
+        value: u8,
+        /// The range of valid values for the component.
+        range: std::ops::Range<u8>,
+    },
+}
+
 /// An error that occurs in [`BinaryList::from_messages`](crate::list::BinaryList::from_messages) or
 /// [`RustTestArtifact::from_binary_list`](crate::list::RustTestArtifact::from_binary_list).
 #[derive(Debug, Error)]
@@ -1634,6 +1676,5 @@ mod self_update_errors {
     }
 }
 
-pub use crate::reporter::structured::FormatVersionError;
 #[cfg(feature = "self-update")]
 pub use self_update_errors::*;
