@@ -7,7 +7,7 @@
 
 use super::{helpers::ByteSubslice, structured::StructuredReporter};
 use crate::{
-    config::{NextestProfile, ScriptId},
+    config::{EvaluatableProfile, ScriptId},
     errors::WriteEventError,
     helpers::{io_write_test_name, plural},
     list::{SkipCounts, TestInstance, TestList},
@@ -224,7 +224,7 @@ impl TestReporterBuilder {
     pub fn build<'a>(
         &self,
         test_list: &TestList,
-        profile: &NextestProfile<'a>,
+        profile: &EvaluatableProfile<'a>,
         output: ReporterStderr<'a>,
         structured_reporter: StructuredReporter<'a>,
     ) -> TestReporter<'a> {

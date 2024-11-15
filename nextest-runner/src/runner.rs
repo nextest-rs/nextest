@@ -7,8 +7,9 @@
 
 use crate::{
     config::{
-        NextestProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScriptCommand, SetupScriptEnvMap,
-        SetupScriptExecuteData, SlowTimeout, TestGroup, TestSettings, TestThreads,
+        EvaluatableProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScriptCommand,
+        SetupScriptEnvMap, SetupScriptExecuteData, SlowTimeout, TestGroup, TestSettings,
+        TestThreads,
     },
     double_spawn::DoubleSpawnInfo,
     errors::{
@@ -169,7 +170,7 @@ impl TestRunnerBuilder {
     pub fn build<'a>(
         self,
         test_list: &'a TestList,
-        profile: &'a NextestProfile<'a>,
+        profile: &'a EvaluatableProfile<'a>,
         cli_args: Vec<String>,
         handler_kind: SignalHandlerKind,
         double_spawn: DoubleSpawnInfo,
@@ -297,7 +298,7 @@ impl<'a> TestRunner<'a> {
 #[derive(Debug)]
 struct TestRunnerInner<'a> {
     capture_strategy: CaptureStrategy,
-    profile: &'a NextestProfile<'a>,
+    profile: &'a EvaluatableProfile<'a>,
     cli_args: Vec<String>,
     test_threads: usize,
     // This is Some if the user specifies a retry policy over the command-line.

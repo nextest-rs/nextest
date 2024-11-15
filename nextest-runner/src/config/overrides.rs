@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    CompiledProfileScripts, DeserializedProfileScriptConfig, NextestConfig, NextestConfigImpl,
-    NextestProfile,
+    CompiledProfileScripts, DeserializedProfileScriptConfig, EvaluatableProfile, NextestConfig,
+    NextestConfigImpl,
 };
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
@@ -20,7 +20,7 @@ use target_spec::{Platform, TargetSpec};
 
 /// Settings for individual tests.
 ///
-/// Returned by [`NextestProfile::settings_for`].
+/// Returned by [`EvaluatableProfile::settings_for`].
 ///
 /// The `Source` parameter tracks an optional source; this isn't used by any public APIs at the
 /// moment.
@@ -117,10 +117,7 @@ impl TestSettings {
 
 #[allow(dead_code)]
 impl<Source: Copy> TestSettings<Source> {
-    pub(super) fn new<'p>(
-        profile: &'p NextestProfile<'_, FinalConfig>,
-        query: &TestQuery<'_>,
-    ) -> Self
+    pub(super) fn new<'p>(profile: &'p EvaluatableProfile<'_>, query: &TestQuery<'_>) -> Self
     where
         Source: TrackSource<'p>,
     {
@@ -326,7 +323,7 @@ impl CompiledByProfile {
 
 /// A compiled form of the default filter for a profile.
 ///
-/// Returned by [`NextestProfile::default_filter`].
+/// Returned by [`EvaluatableProfile::default_filter`].
 #[derive(Clone, Debug)]
 pub struct CompiledDefaultFilter {
     /// The compiled expression.

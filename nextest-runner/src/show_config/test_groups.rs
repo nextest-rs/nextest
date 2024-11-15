@@ -3,8 +3,8 @@
 
 use crate::{
     config::{
-        CompiledOverride, CustomTestGroup, FinalConfig, MaybeTargetSpec, NextestProfile,
-        OverrideId, PreBuildPlatform, SettingSource, TestGroup, TestGroupConfig,
+        CompiledOverride, CustomTestGroup, EarlyProfile, EvaluatableProfile, FinalConfig,
+        MaybeTargetSpec, OverrideId, SettingSource, TestGroup, TestGroupConfig,
     },
     errors::ShowTestGroupsError,
     helpers::QuotedDisplay,
@@ -32,7 +32,7 @@ pub struct ShowTestGroups<'a> {
 impl<'a> ShowTestGroups<'a> {
     /// Validates that the given groups are known to this profile.
     pub fn validate_groups(
-        profile: &NextestProfile<'_, PreBuildPlatform>,
+        profile: &EarlyProfile<'_>,
         groups: impl IntoIterator<Item = TestGroup>,
     ) -> Result<ValidatedTestGroups, ShowTestGroupsError> {
         let groups = groups.into_iter().collect();
@@ -50,7 +50,7 @@ impl<'a> ShowTestGroups<'a> {
 
     /// Creates a new `ShowTestGroups` from the given profile and test list.
     pub fn new(
-        profile: &'a NextestProfile<'a>,
+        profile: &'a EvaluatableProfile<'a>,
         test_list: &'a TestList<'a>,
         settings: &ShowTestGroupSettings,
     ) -> Self {

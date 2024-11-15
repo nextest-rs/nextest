@@ -5,7 +5,7 @@
 
 use super::TestEvent;
 use crate::{
-    config::{NextestJunitConfig, NextestProfile},
+    config::{EvaluatableProfile, NextestJunitConfig},
     errors::WriteEventError,
     list::TestInstance,
     reporter::TestEventKind,
@@ -29,7 +29,7 @@ pub(crate) struct EventAggregator<'cfg> {
 }
 
 impl<'cfg> EventAggregator<'cfg> {
-    pub(crate) fn new(profile: &NextestProfile<'cfg>) -> Self {
+    pub(crate) fn new(profile: &EvaluatableProfile<'cfg>) -> Self {
         Self {
             store_dir: profile.store_dir().to_owned(),
             junit: profile.junit().map(MetadataJunit::new),

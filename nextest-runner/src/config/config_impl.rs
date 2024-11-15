@@ -47,7 +47,7 @@ pub fn get_num_cpus() -> usize {
 /// Overall configuration for nextest.
 ///
 /// This is the root data structure for nextest configuration. Most runner-specific configuration is
-/// managed through [profiles](NextestProfile), obtained through the [`profile`](Self::profile)
+/// managed through [profiles](EvaluatableProfile), obtained through the [`profile`](Self::profile)
 /// method.
 ///
 /// For more about configuration, see [_Configuration_](https://nexte.st/docs/configuration) in the
@@ -191,12 +191,9 @@ impl NextestConfig {
         }
     }
 
-    /// Returns the profile with the given name, or an error if a profile was specified but not
-    /// found.
-    pub fn profile(
-        &self,
-        name: impl AsRef<str>,
-    ) -> Result<NextestProfile<'_, PreBuildPlatform>, ProfileNotFound> {
+    /// Returns the profile with the given name, or an error if a profile was
+    /// specified but not found.
+    pub fn profile(&self, name: impl AsRef<str>) -> Result<EarlyProfile<'_>, ProfileNotFound> {
         self.make_profile(name.as_ref())
     }
 
@@ -510,13 +507,10 @@ impl NextestConfig {
         Config::builder().add_source(File::from_str(Self::DEFAULT_CONFIG, FileFormat::Toml))
     }
 
-    fn make_profile(
-        &self,
-        name: &str,
-    ) -> Result<NextestProfile<'_, PreBuildPlatform>, ProfileNotFound> {
+    fn make_profile(&self, name: &str) -> Result<EarlyProfile<'_>, ProfileNotFound> {
         let custom_profile = self.inner.get_profile(name)?;
 
-        // The profile was found: construct the NextestProfile.
+        // The profile was found: construct it.
         let mut store_dir = self.workspace_root.join(&self.inner.store.dir);
         store_dir.push(name);
 
@@ -526,7 +520,7 @@ impl NextestConfig {
             None => self.compiled.default.clone(),
         };
 
-        Ok(NextestProfile {
+        Ok(EarlyProfile {
             name: name.to_owned(),
             store_dir,
             default_profile: &self.inner.default_profile,
@@ -559,11 +553,11 @@ impl NextestConfig {
 
 /// The state of nextest profiles before build platforms have been applied.
 #[derive(Clone, Debug, Default)]
-pub struct PreBuildPlatform {}
+pub(super) struct PreBuildPlatform {}
 
 /// The state of nextest profiles after build platforms have been applied.
 #[derive(Clone, Debug)]
-pub struct FinalConfig {
+pub(crate) struct FinalConfig {
     // Evaluation result for host_spec on the host platform.
     pub(super) host_eval: bool,
     // Evaluation result for target_spec corresponding to tests that run on the host platform (e.g.
@@ -574,11 +568,11 @@ pub struct FinalConfig {
     pub(super) target_eval: bool,
 }
 
-/// A configuration profile for nextest. Contains most configuration used by the nextest runner.
+/// A nextest profile that can be obtained without identifying the host and
+/// target platforms.
 ///
 /// Returned by [`NextestConfig::profile`].
-#[derive(Clone, Debug)]
-pub struct NextestProfile<'cfg, State = FinalConfig> {
+pub struct EarlyProfile<'cfg> {
     name: String,
     store_dir: Utf8PathBuf,
     default_profile: &'cfg DefaultProfileImpl,
@@ -587,10 +581,58 @@ pub struct NextestProfile<'cfg, State = FinalConfig> {
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
     // Invariant: `compiled_data.default_filter` is always present.
-    pub(super) compiled_data: CompiledData<State>,
+    pub(super) compiled_data: CompiledData<PreBuildPlatform>,
 }
 
-impl<'cfg, State> NextestProfile<'cfg, State> {
+impl<'cfg> EarlyProfile<'cfg> {
+    /// Returns the absolute profile-specific store directory.
+    pub fn store_dir(&self) -> &Utf8Path {
+        &self.store_dir
+    }
+
+    /// Returns the global test group configuration.
+    pub fn test_group_config(&self) -> &'cfg BTreeMap<CustomTestGroup, TestGroupConfig> {
+        self.test_groups
+    }
+
+    /// Applies build platforms to make the profile ready for evaluation.
+    ///
+    /// This is a separate step from parsing the config and reading a profile so that cargo-nextest
+    /// can tell users about configuration parsing errors before building the binary list.
+    pub fn apply_build_platforms(
+        self,
+        build_platforms: &BuildPlatforms,
+    ) -> EvaluatableProfile<'cfg> {
+        let compiled_data = self.compiled_data.apply_build_platforms(build_platforms);
+        EvaluatableProfile {
+            name: self.name,
+            store_dir: self.store_dir,
+            default_profile: self.default_profile,
+            custom_profile: self.custom_profile,
+            scripts: self.scripts,
+            test_groups: self.test_groups,
+            compiled_data,
+        }
+    }
+}
+
+/// A configuration profile for nextest. Contains most configuration used by the nextest runner.
+///
+/// Returned by [`EarlyProfile::apply_build_platforms`].
+#[derive(Clone, Debug)]
+pub struct EvaluatableProfile<'cfg> {
+    name: String,
+    store_dir: Utf8PathBuf,
+    default_profile: &'cfg DefaultProfileImpl,
+    custom_profile: Option<&'cfg CustomProfileImpl>,
+    test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
+    // This is ordered because the scripts are used in the order they're defined.
+    scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
+    // Invariant: `compiled_data.default_filter` is always present.
+    pub(super) compiled_data: CompiledData<FinalConfig>,
+}
+
+impl<'cfg> EvaluatableProfile<'cfg> {
     /// Returns the name of the profile.
     pub fn name(&self) -> &str {
         &self.name
@@ -626,32 +668,6 @@ impl<'cfg, State> NextestProfile<'cfg, State> {
         self.scripts
     }
 
-    #[allow(dead_code)]
-    pub(super) fn custom_profile(&self) -> Option<&'cfg CustomProfileImpl> {
-        self.custom_profile
-    }
-}
-
-impl<'cfg> NextestProfile<'cfg, PreBuildPlatform> {
-    /// Applies build platforms to make the profile ready for evaluation.
-    ///
-    /// This is a separate step from parsing the config and reading a profile so that cargo-nextest
-    /// can tell users about configuration parsing errors before building the binary list.
-    pub fn apply_build_platforms(self, build_platforms: &BuildPlatforms) -> NextestProfile<'cfg> {
-        let compiled_data = self.compiled_data.apply_build_platforms(build_platforms);
-        NextestProfile {
-            name: self.name,
-            store_dir: self.store_dir,
-            default_profile: self.default_profile,
-            custom_profile: self.custom_profile,
-            scripts: self.scripts,
-            test_groups: self.test_groups,
-            compiled_data,
-        }
-    }
-}
-
-impl<'cfg> NextestProfile<'cfg, FinalConfig> {
     /// Returns the retry count for this profile.
     pub fn retries(&self) -> RetryPolicy {
         self.custom_profile
@@ -778,9 +794,14 @@ impl<'cfg> NextestProfile<'cfg, FinalConfig> {
             }
         })
     }
+
+    #[allow(dead_code)]
+    pub(super) fn custom_profile(&self) -> Option<&'cfg CustomProfileImpl> {
+        self.custom_profile
+    }
 }
 
-/// JUnit configuration for nextest, returned by a [`NextestProfile`].
+/// JUnit configuration for nextest, returned by an [`EvaluatableProfile`].
 #[derive(Clone, Debug)]
 pub struct NextestJunitConfig<'cfg> {
     path: Utf8PathBuf,

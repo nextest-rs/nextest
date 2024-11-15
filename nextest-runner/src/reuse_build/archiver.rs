@@ -4,8 +4,7 @@
 use super::{ArchiveCounts, ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
     config::{
-        get_num_cpus, ArchiveConfig, ArchiveIncludeOnMissing, FinalConfig, NextestProfile,
-        RecursionDepth,
+        get_num_cpus, ArchiveConfig, ArchiveIncludeOnMissing, EvaluatableProfile, RecursionDepth,
     },
     errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
@@ -59,7 +58,7 @@ impl ArchiveFormat {
 /// The output file is a Zstandard-compressed tarball (`.tar.zst`).
 #[allow(clippy::too_many_arguments)]
 pub fn archive_to_file<'a, F>(
-    profile: NextestProfile<'a, FinalConfig>,
+    profile: EvaluatableProfile<'a>,
     binary_list: &'a BinaryList,
     cargo_metadata: &'a str,
     graph: &'a PackageGraph,
