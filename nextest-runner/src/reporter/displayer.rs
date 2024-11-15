@@ -7,7 +7,7 @@
 
 use super::{helpers::ByteSubslice, structured::StructuredReporter};
 use crate::{
-    config::{EvaluatableProfile, ScriptId},
+    config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
     errors::WriteEventError,
     helpers::{io_write_test_name, plural},
     list::{SkipCounts, TestInstance, TestList},
@@ -315,7 +315,7 @@ impl TestReporterBuilder {
 
         TestReporter {
             inner: TestReporterImpl {
-                default_filter_config: profile.default_filter().config_name(),
+                default_filter: profile.default_filter().clone(),
                 status_levels: StatusLevels {
                     status_level,
                     final_status_level,
@@ -578,7 +578,7 @@ impl FinalOutput {
 }
 
 struct TestReporterImpl<'a> {
-    default_filter_config: String,
+    default_filter: CompiledDefaultFilter,
     status_levels: StatusLevels,
     force_success_output: Option<TestOutputDisplay>,
     force_failure_output: Option<TestOutputDisplay>,
@@ -627,7 +627,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 write_skip_counts(
                     test_list.skip_counts(),
-                    &self.default_filter_config,
+                    &self.default_filter,
                     &self.styles,
                     writer,
                 )?;
@@ -1595,7 +1595,7 @@ impl fmt::Display for FmtSuffix<'_> {
 
 fn write_skip_counts(
     skip_counts: &SkipCounts,
-    default_filter_config: &str,
+    default_filter: &CompiledDefaultFilter,
     styles: &Styles,
     writer: &mut dyn Write,
 ) -> io::Result<()> {
@@ -1617,7 +1617,7 @@ fn write_skip_counts(
                 writer,
                 " {} via {}",
                 "skipped".style(styles.skip),
-                default_filter_config.style(styles.count)
+                default_filter.display_config(styles.count)
             )?;
         } else {
             write!(writer, " {}", "skipped".style(styles.skip))?;
@@ -1632,7 +1632,11 @@ fn write_skip_counts(
                     styles,
                     writer,
                 )?;
-                write!(writer, " via {}", default_filter_config.style(styles.count))?;
+                write!(
+                    writer,
+                    " via {}",
+                    default_filter.display_config(styles.count)
+                )?;
             }
         }
         write!(writer, ")")?;
@@ -2193,8 +2197,11 @@ impl Styles {
 mod tests {
     use super::*;
     use crate::{
-        config::NextestConfig, platform::BuildPlatforms, reporter::structured::StructuredReporter,
+        config::{CompiledDefaultFilterSection, NextestConfig},
+        platform::BuildPlatforms,
+        reporter::structured::StructuredReporter,
     };
+    use nextest_filtering::CompiledExpr;
     use test_strategy::proptest;
 
     // ---
@@ -2460,112 +2467,120 @@ mod tests {
             skipped_tests_default_filter: 1,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
-        }), @" (1 test skipped via profile.my-profile.default-filter)");
+        }, false), @" (1 test skipped via profile.my-profile.default-filter)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 2,
             skipped_tests_default_filter: 2,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
-        }), @" (2 tests skipped via profile.my-profile.default-filter)");
+        }, false), @" (2 tests skipped via profile.my-profile.default-filter)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
             skipped_tests_default_filter: 0,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
-        }), @" (1 test skipped)");
+        }, false), @" (1 test skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 2,
             skipped_tests_default_filter: 0,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
-        }), @" (2 tests skipped)");
+        }, false), @" (2 tests skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 1,
-        }), @" (1 binary skipped via profile.my-profile.default-filter)");
+        }, false), @" (1 binary skipped via profile.my-profile.default-filter)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 2,
             skipped_binaries_default_filter: 2,
-        }), @" (2 binaries skipped via profile.my-profile.default-filter)");
+        }, true), @" (2 binaries skipped via default-filter in profile.my-profile.overrides)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 0,
-        }), @" (1 binary skipped)");
+        }, false), @" (1 binary skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 2,
             skipped_binaries_default_filter: 0,
-        }), @" (2 binaries skipped)");
+        }, false), @" (2 binaries skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
             skipped_tests_default_filter: 1,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 1,
-        }), @" (1 test and 1 binary skipped via profile.my-profile.default-filter)");
+        }, true), @" (1 test and 1 binary skipped via default-filter in profile.my-profile.overrides)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 2,
             skipped_tests_default_filter: 2,
             skipped_binaries: 3,
             skipped_binaries_default_filter: 3,
-        }), @" (2 tests and 3 binaries skipped via profile.my-profile.default-filter)");
+        }, false), @" (2 tests and 3 binaries skipped via profile.my-profile.default-filter)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
             skipped_tests_default_filter: 0,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 0,
-        }), @" (1 test and 1 binary skipped)");
+        }, false), @" (1 test and 1 binary skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 2,
             skipped_tests_default_filter: 0,
             skipped_binaries: 3,
             skipped_binaries_default_filter: 0,
-        }), @" (2 tests and 3 binaries skipped)");
+        }, false), @" (2 tests and 3 binaries skipped)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
             skipped_tests_default_filter: 0,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 1,
-        }), @" (1 test and 1 binary skipped, including 1 binary via profile.my-profile.default-filter)");
+        }, true), @" (1 test and 1 binary skipped, including 1 binary via default-filter in profile.my-profile.overrides)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 3,
             skipped_tests_default_filter: 2,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 0,
-        }), @" (3 tests and 1 binary skipped, including 2 tests via profile.my-profile.default-filter)");
+        }, false), @" (3 tests and 1 binary skipped, including 2 tests via profile.my-profile.default-filter)");
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
-        }), @"");
+        }, false), @"");
     }
 
-    fn skip_counts_str(skip_counts: &SkipCounts) -> String {
+    fn skip_counts_str(skip_counts: &SkipCounts, override_section: bool) -> String {
         let mut buf = Vec::new();
         write_skip_counts(
             skip_counts,
-            "profile.my-profile.default-filter",
+            &CompiledDefaultFilter {
+                expr: CompiledExpr::ALL,
+                profile: "my-profile".to_owned(),
+                section: if override_section {
+                    CompiledDefaultFilterSection::Override(0)
+                } else {
+                    CompiledDefaultFilterSection::Profile
+                },
+            },
             &Styles::default(),
             &mut buf,
         )

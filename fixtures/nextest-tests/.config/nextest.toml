@@ -77,6 +77,11 @@ retries = { backoff = "exponential", count = 2, jitter = true, delay = "1s" }
 [profile.with-default-filter]
 default-filter = "not (test(test_flaky) | package(cdylib-example))"
 
+# Platform-specific default filters.
+[[profile.with-default-filter.overrides]]
+platform = 'cfg(unix)'
+default-filter = "not (test(test_flaky) | package(cdylib-example) | test(test_cargo_env_vars))"
+
 [test-groups.flaky]
 max-threads = 4
 

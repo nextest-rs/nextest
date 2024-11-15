@@ -1410,6 +1410,7 @@ dependencies = [
  "enable-ansi-support",
  "fixture-data",
  "insta",
+ "itertools",
  "nextest-metadata",
  "nextest-workspace-hack",
  "pathdiff",

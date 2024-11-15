@@ -8,6 +8,25 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## Unreleased
+
+### Added
+
+- Per-platform default filters are now supported via overrides. For example, to
+  skip over tests with the substring `unix_tests` by default on Windows, add
+  this to `.config/nextest.toml`:
+
+  ```toml
+  [[profile.default.overrides]]
+  platform = "cfg(windows)"
+  default-filter = "not test(unix_tests)"
+  ```
+
+### Internal improvements
+
+- Internal targets updated to Rust 1.82.
+- Runner logic refactored to handle upcoming features.
+
 ## [0.9.82] - 2024-10-28
 
 ### Added

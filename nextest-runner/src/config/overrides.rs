@@ -7,12 +7,15 @@ use super::{
 };
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
-    errors::{ConfigFiltersetOrCfgParseError, ConfigParseErrorKind},
+    errors::{
+        ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection, ConfigParseErrorKind,
+    },
     platform::BuildPlatforms,
     reporter::TestOutputDisplay,
 };
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext, TestQuery};
+use owo_colors::{OwoColorize, Style};
 use serde::{Deserialize, Deserializer};
 use smol_str::SmolStr;
 use std::{collections::HashMap, time::Duration};
@@ -146,7 +149,7 @@ impl<Source: Copy> TestSettings<Source> {
                 continue;
             }
 
-            if let Some(expr) = &override_.data.expr {
+            if let Some(expr) = &override_.filter() {
                 if !expr.matches_test(query, &ecx) {
                     continue;
                 }
@@ -300,7 +303,7 @@ impl CompiledByProfile {
         if errors.is_empty() {
             Ok(Self { default, other })
         } else {
-            Err(ConfigParseErrorKind::FiltersetOrCfgParseError(errors))
+            Err(ConfigParseErrorKind::CompileErrors(errors))
         }
     }
 
@@ -312,7 +315,7 @@ impl CompiledByProfile {
     pub(super) fn for_default_config() -> Self {
         Self {
             default: CompiledData {
-                default_filter: Some(CompiledDefaultFilter::for_default_config()),
+                profile_default_filter: Some(CompiledDefaultFilter::for_default_config()),
                 overrides: vec![],
                 scripts: vec![],
             },
@@ -340,6 +343,9 @@ pub struct CompiledDefaultFilter {
 
     /// The profile name the default filter originates from.
     pub profile: String,
+
+    /// The section of the config that the default filter comes from.
+    pub section: CompiledDefaultFilterSection,
 }
 
 impl CompiledDefaultFilter {
@@ -347,18 +353,46 @@ impl CompiledDefaultFilter {
         Self {
             expr: CompiledExpr::ALL,
             profile: NextestConfig::DEFAULT_PROFILE.to_owned(),
+            section: CompiledDefaultFilterSection::Profile,
         }
     }
 
-    /// Returns the name of the config key for this default filter.
-    pub fn config_name(&self) -> String {
-        format!("profile.{}.default-filter", self.profile)
+    /// Displays a configuration string for the default filter.
+    pub fn display_config(&self, bold_style: Style) -> String {
+        match &self.section {
+            CompiledDefaultFilterSection::Profile => {
+                format!("profile.{}.default-filter", self.profile)
+                    .style(bold_style)
+                    .to_string()
+            }
+            CompiledDefaultFilterSection::Override(_) => {
+                format!(
+                    "default-filter in {}",
+                    format!("profile.{}.overrides", self.profile).style(bold_style)
+                )
+            }
+        }
     }
+}
+
+/// Within [`CompiledDefaultFilter`], the part of the config that the default
+/// filter comes from.
+#[derive(Clone, Copy, Debug)]
+pub enum CompiledDefaultFilterSection {
+    /// The config comes from the top-level `profile.<profile-name>.default-filter`.
+    Profile,
+
+    /// The config comes from the override at the given index.
+    Override(usize),
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct CompiledData<State> {
-    pub(super) default_filter: Option<CompiledDefaultFilter>,
+    // The default filter specified at the profile level.
+    //
+    // Overrides might also specify their own filters, and in that case the
+    // overrides take priority.
+    pub(super) profile_default_filter: Option<CompiledDefaultFilter>,
     pub(super) overrides: Vec<CompiledOverride<State>>,
     pub(super) scripts: Vec<CompiledProfileScripts<State>>,
 }
@@ -367,12 +401,12 @@ impl CompiledData<PreBuildPlatform> {
     fn new(
         graph: &PackageGraph,
         profile_name: &str,
-        default_filter: Option<&str>,
+        profile_default_filter: Option<&str>,
         overrides: &[DeserializedOverride],
         scripts: &[DeserializedProfileScriptConfig],
-        errors: &mut Vec<ConfigFiltersetOrCfgParseError>,
+        errors: &mut Vec<ConfigCompileError>,
     ) -> Self {
-        let default_filter = default_filter.and_then(|filter| {
+        let profile_default_filter = profile_default_filter.and_then(|filter| {
             let cx = ParseContext {
                 graph,
                 kind: FiltersetKind::DefaultFilter,
@@ -381,14 +415,17 @@ impl CompiledData<PreBuildPlatform> {
                 Ok(expr) => Some(CompiledDefaultFilter {
                     expr: expr.compiled,
                     profile: profile_name.to_owned(),
+                    section: CompiledDefaultFilterSection::Profile,
                 }),
                 Err(err) => {
-                    errors.push(ConfigFiltersetOrCfgParseError {
+                    errors.push(ConfigCompileError {
                         profile_name: profile_name.to_owned(),
-                        not_specified: false,
-                        host_parse_error: None,
-                        target_parse_error: None,
-                        parse_errors: Some(err),
+                        section: ConfigCompileSection::DefaultFilter,
+                        kind: ConfigCompileErrorKind::Parse {
+                            host_parse_error: None,
+                            target_parse_error: None,
+                            filter_parse_errors: vec![err],
+                        },
                     });
                     None
                 }
@@ -404,10 +441,13 @@ impl CompiledData<PreBuildPlatform> {
             .collect();
         let scripts = scripts
             .iter()
-            .filter_map(|source| CompiledProfileScripts::new(graph, profile_name, source, errors))
+            .enumerate()
+            .filter_map(|(index, source)| {
+                CompiledProfileScripts::new(graph, profile_name, index, source, errors)
+            })
             .collect();
         Self {
-            default_filter,
+            profile_default_filter,
             overrides,
             scripts,
         }
@@ -415,8 +455,8 @@ impl CompiledData<PreBuildPlatform> {
 
     pub(super) fn extend_reverse(&mut self, other: Self) {
         // For the default filter, other wins (it is last, and after reversing, it will be first).
-        if other.default_filter.is_some() {
-            self.default_filter = other.default_filter;
+        if other.profile_default_filter.is_some() {
+            self.profile_default_filter = other.profile_default_filter;
         }
         self.overrides.extend(other.overrides.into_iter().rev());
         self.scripts.extend(other.scripts.into_iter().rev());
@@ -429,13 +469,13 @@ impl CompiledData<PreBuildPlatform> {
 
     /// Chains this data with another set of data, treating `other` as lower-priority than `self`.
     pub(super) fn chain(self, other: Self) -> Self {
-        let default_filter = self.default_filter.or(other.default_filter);
+        let profile_default_filter = self.profile_default_filter.or(other.profile_default_filter);
         let mut overrides = self.overrides;
         let mut setup_scripts = self.scripts;
         overrides.extend(other.overrides);
         setup_scripts.extend(other.scripts);
         Self {
-            default_filter,
+            profile_default_filter,
             overrides,
             scripts: setup_scripts,
         }
@@ -445,7 +485,7 @@ impl CompiledData<PreBuildPlatform> {
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledData<FinalConfig> {
-        let default_filter = self.default_filter;
+        let profile_default_filter = self.profile_default_filter;
         let overrides = self
             .overrides
             .into_iter()
@@ -457,7 +497,7 @@ impl CompiledData<PreBuildPlatform> {
             .map(|setup_script| setup_script.apply_build_platforms(build_platforms))
             .collect();
         CompiledData {
-            default_filter,
+            profile_default_filter,
             overrides,
             scripts: setup_scripts,
         }
@@ -487,7 +527,7 @@ pub(crate) struct OverrideId {
 pub(super) struct ProfileOverrideData {
     host_spec: MaybeTargetSpec,
     target_spec: MaybeTargetSpec,
-    expr: Option<Filterset>,
+    filter: Option<FilterOrDefaultFilter>,
     threads_required: Option<ThreadsRequired>,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
@@ -504,18 +544,18 @@ impl CompiledOverride<PreBuildPlatform> {
         profile_name: &str,
         index: usize,
         source: &DeserializedOverride,
-        errors: &mut Vec<ConfigFiltersetOrCfgParseError>,
+        errors: &mut Vec<ConfigCompileError>,
     ) -> Option<Self> {
         if source.platform.host.is_none()
             && source.platform.target.is_none()
             && source.filter.is_none()
         {
-            errors.push(ConfigFiltersetOrCfgParseError {
+            errors.push(ConfigCompileError {
                 profile_name: profile_name.to_owned(),
-                not_specified: true,
-                host_parse_error: None,
-                target_parse_error: None,
-                parse_errors: None,
+                section: ConfigCompileSection::Override(index),
+                kind: ConfigCompileErrorKind::ConstraintsNotSpecified {
+                    default_filter_specified: source.default_filter.is_some(),
+                },
             });
             return None;
         }
@@ -528,42 +568,75 @@ impl CompiledOverride<PreBuildPlatform> {
 
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
-        let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
+        let filter = source.filter.as_ref().map_or(Ok(None), |filter| {
+            Some(Filterset::parse(filter.clone(), &cx)).transpose()
+        });
+        let default_filter = source.default_filter.as_ref().map_or(Ok(None), |filter| {
             Some(Filterset::parse(filter.clone(), &cx)).transpose()
         });
 
-        match (host_spec, target_spec, filter_expr) {
-            (Ok(host_spec), Ok(target_spec), Ok(expr)) => Some(Self {
-                id: OverrideId {
-                    profile_name: profile_name.into(),
-                    index,
-                },
-                state: PreBuildPlatform {},
-                data: ProfileOverrideData {
-                    host_spec,
-                    target_spec,
-                    expr,
-                    threads_required: source.threads_required,
-                    retries: source.retries,
-                    slow_timeout: source.slow_timeout,
-                    leak_timeout: source.leak_timeout,
-                    test_group: source.test_group.clone(),
-                    success_output: source.success_output,
-                    failure_output: source.failure_output,
-                    junit: source.junit,
-                },
-            }),
-            (maybe_host_err, maybe_platform_err, maybe_parse_err) => {
-                let host_platform_parse_error = maybe_host_err.err();
-                let platform_parse_error = maybe_platform_err.err();
-                let parse_errors = maybe_parse_err.err();
+        match (host_spec, target_spec, filter, default_filter) {
+            (Ok(host_spec), Ok(target_spec), Ok(filter), Ok(default_filter)) => {
+                // At most one of filter and default-filter can be specified.
+                let filter = match (filter, default_filter) {
+                    (Some(_), Some(_)) => {
+                        errors.push(ConfigCompileError {
+                            profile_name: profile_name.to_owned(),
+                            section: ConfigCompileSection::Override(index),
+                            kind: ConfigCompileErrorKind::FilterAndDefaultFilterSpecified,
+                        });
+                        return None;
+                    }
+                    (Some(filter), None) => Some(FilterOrDefaultFilter::Filter(filter)),
+                    (None, Some(default_filter)) => {
+                        let compiled = CompiledDefaultFilter {
+                            expr: default_filter.compiled,
+                            profile: profile_name.to_owned(),
+                            section: CompiledDefaultFilterSection::Override(index),
+                        };
+                        Some(FilterOrDefaultFilter::DefaultFilter(compiled))
+                    }
+                    (None, None) => None,
+                };
 
-                errors.push(ConfigFiltersetOrCfgParseError {
+                Some(Self {
+                    id: OverrideId {
+                        profile_name: profile_name.into(),
+                        index,
+                    },
+                    state: PreBuildPlatform {},
+                    data: ProfileOverrideData {
+                        host_spec,
+                        target_spec,
+                        filter,
+                        threads_required: source.threads_required,
+                        retries: source.retries,
+                        slow_timeout: source.slow_timeout,
+                        leak_timeout: source.leak_timeout,
+                        test_group: source.test_group.clone(),
+                        success_output: source.success_output,
+                        failure_output: source.failure_output,
+                        junit: source.junit,
+                    },
+                })
+            }
+            (maybe_host_err, maybe_target_err, maybe_filter_err, maybe_default_filter_err) => {
+                let host_parse_error = maybe_host_err.err();
+                let target_parse_error = maybe_target_err.err();
+                let filter_parse_errors = maybe_filter_err
+                    .err()
+                    .into_iter()
+                    .chain(maybe_default_filter_err.err())
+                    .collect();
+
+                errors.push(ConfigCompileError {
                     profile_name: profile_name.to_owned(),
-                    not_specified: false,
-                    host_parse_error: host_platform_parse_error,
-                    target_parse_error: platform_parse_error,
-                    parse_errors,
+                    section: ConfigCompileSection::Override(index),
+                    kind: ConfigCompileErrorKind::Parse {
+                        host_parse_error,
+                        target_parse_error,
+                        filter_parse_errors,
+                    },
                 });
                 None
             }
@@ -601,9 +674,28 @@ impl CompiledOverride<FinalConfig> {
         &self.data.target_spec
     }
 
-    /// Returns the filterset, if any.
+    /// Returns the filter to apply to overrides, if any.
     pub(crate) fn filter(&self) -> Option<&Filterset> {
-        self.data.expr.as_ref()
+        match self.data.filter.as_ref() {
+            Some(FilterOrDefaultFilter::Filter(filter)) => Some(filter),
+            _ => None,
+        }
+    }
+
+    /// Returns the default filter if it matches the platform.
+    pub(crate) fn default_filter_if_matches_platform(&self) -> Option<&CompiledDefaultFilter> {
+        match self.data.filter.as_ref() {
+            Some(FilterOrDefaultFilter::DefaultFilter(filter)) => {
+                // Which kind of evaluation to assume: matching the *target*
+                // filter against the *target* platform (host_eval +
+                // target_eval), or matching the *target* filter against the
+                // *host* platform (host_eval + host_test_eval)? The former
+                // makes much more sense, since in a cross-compile scenario you
+                // want to match a (host, target) pair.
+                (self.state.host_eval && self.state.target_eval).then_some(filter)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -635,6 +727,15 @@ impl MaybeTargetSpec {
     }
 }
 
+/// Either a filter override or a default filter specified for a platform.
+///
+/// At most one of these can be specified.
+#[derive(Clone, Debug)]
+pub(crate) enum FilterOrDefaultFilter {
+    Filter(Filterset),
+    DefaultFilter(CompiledDefaultFilter),
+}
+
 /// Deserialized form of profile overrides before compilation.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -647,6 +748,8 @@ pub(super) struct DeserializedOverride {
     filter: Option<String>,
     /// Overrides. (This used to use serde(flatten) but that has issues:
     /// https://github.com/serde-rs/serde/issues/2312.)
+    #[serde(default)]
+    default_filter: Option<String>,
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
     #[serde(default, deserialize_with = "super::deserialize_retry_policy")]
@@ -922,6 +1025,51 @@ mod tests {
     #[test_case(
         indoc! {r#"
             [[profile.default.overrides]]
+            default-filter = "test(test1)"
+            retries = 2
+        "#},
+        "default",
+        &[MietteJsonReport {
+            message: "for override with `default-filter`, `platform` must also be specified".to_owned(),
+            labels: vec![],
+        }]
+
+        ; "default-filter without platform"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            filter = 'test(test1)'
+            default-filter = "test(test2)"
+            retries = 2
+        "#},
+        "default",
+        &[MietteJsonReport {
+            message: "at most one of `filter` and `default-filter` must be specified".to_owned(),
+            labels: vec![],
+        }]
+
+        ; "both filter and default-filter specified"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            filter = 'test(test1)'
+            platform = 'cfg(unix)'
+            default-filter = "test(test2)"
+            retries = 2
+        "#},
+        "default",
+        &[MietteJsonReport {
+            message: "at most one of `filter` and `default-filter` must be specified".to_owned(),
+            labels: vec![],
+        }]
+
+        ; "both filter and default-filter specified with platform"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
             platform = {}
             retries = 2
         "#},
@@ -1000,7 +1148,7 @@ mod tests {
         )
         .expect_err("config is invalid");
         match err.kind() {
-            ConfigParseErrorKind::FiltersetOrCfgParseError(compile_errors) => {
+            ConfigParseErrorKind::CompileErrors(compile_errors) => {
                 assert_eq!(
                     compile_errors.len(),
                     1,
@@ -1013,6 +1161,7 @@ mod tests {
                 );
                 let handler = miette::JSONReportHandler::new();
                 let reports = error
+                    .kind
                     .reports()
                     .map(|report| {
                         let mut out = String::new();

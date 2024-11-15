@@ -24,7 +24,7 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
-use std::{fs::File, io::Write};
+use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::Platform;
 
 mod fixtures;
@@ -973,7 +973,7 @@ fn test_list_with_default_filter() {
         .output();
     insta::assert_snapshot!(
         "list_with_default_set_basic",
-        default_set_output.stdout_as_str()
+        default_filter_stdout(&default_set_output)
     );
 
     // Show the output with -E 'all()' (does not include tests not in default-filter).
@@ -991,7 +991,7 @@ fn test_list_with_default_filter() {
         .output();
     insta::assert_snapshot!(
         "list_with_default_set_expr_all",
-        all_tests_output.stdout_as_str()
+        default_filter_stdout(&all_tests_output)
     );
 
     // Show the output with --ignore-default-filter (does include tests not in default-filter).
@@ -1027,7 +1027,7 @@ fn test_list_with_default_filter() {
         .output();
     insta::assert_snapshot!(
         "list_with_default_set_expr_default",
-        default_tests_output.stdout_as_str()
+        default_filter_stdout(&default_tests_output)
     );
     assert_eq!(
         default_tests_output.stdout_as_str(),
@@ -1087,7 +1087,7 @@ fn test_list_with_default_filter() {
         .output();
     insta::assert_snapshot!(
         "list_with_default_set_args",
-        with_args_output.stdout_as_str()
+        with_args_output.stdout_as_str(),
     );
 
     // With --ignore-default-filter.
@@ -1108,6 +1108,33 @@ fn test_list_with_default_filter() {
         "list_with_default_set_args_bound_all",
         with_args_bound_all_output.stdout_as_str(),
     );
+}
+
+#[cfg(unix)]
+fn default_filter_stdout(output: &CargoNextestOutput) -> Cow<'_, str> {
+    output.stdout_as_str()
+}
+
+#[cfg(not(unix))]
+#[track_caller]
+fn default_filter_stdout(output: &CargoNextestOutput) -> Cow<'_, str> {
+    // On Unix platforms, we additionally filter out `test_cargo_env_vars` here
+    // as a test. Ensure that on non-Unix platforms it is present in the output,
+    // and remove it from the output.
+    let stdout = output.stdout_as_str();
+    assert!(
+        stdout.contains("test_cargo_env_vars"),
+        "test_cargo_env_vars should be in the output:\n------\n{output}"
+    );
+
+    itertools::Itertools::intersperse(
+        stdout
+            .lines()
+            .filter(|line| !line.contains("test_cargo_env_vars")),
+        "\n",
+    )
+    .chain(std::iter::once("\n"))
+    .collect()
 }
 
 #[test]

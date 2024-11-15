@@ -604,6 +604,24 @@ impl<'cfg> EarlyProfile<'cfg> {
         build_platforms: &BuildPlatforms,
     ) -> EvaluatableProfile<'cfg> {
         let compiled_data = self.compiled_data.apply_build_platforms(build_platforms);
+
+        let resolved_default_filter = {
+            // Look for the default filter in the first valid override.
+            let found_filter = compiled_data
+                .overrides
+                .iter()
+                .find_map(|override_data| override_data.default_filter_if_matches_platform());
+            found_filter.unwrap_or_else(|| {
+                // No overrides matching the default filter were found -- use
+                // the profile's default.
+                compiled_data
+                    .profile_default_filter
+                    .as_ref()
+                    .expect("compiled data always has default set")
+            })
+        }
+        .clone();
+
         EvaluatableProfile {
             name: self.name,
             store_dir: self.store_dir,
@@ -612,6 +630,7 @@ impl<'cfg> EarlyProfile<'cfg> {
             scripts: self.scripts,
             test_groups: self.test_groups,
             compiled_data,
+            resolved_default_filter,
         }
     }
 }
@@ -630,6 +649,9 @@ pub struct EvaluatableProfile<'cfg> {
     scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
     // Invariant: `compiled_data.default_filter` is always present.
     pub(super) compiled_data: CompiledData<FinalConfig>,
+    // The default filter that's been resolved after considering overrides (i.e.
+    // platforms).
+    resolved_default_filter: CompiledDefaultFilter,
 }
 
 impl<'cfg> EvaluatableProfile<'cfg> {
@@ -652,10 +674,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns the default set of tests to run.
     pub fn default_filter(&self) -> &CompiledDefaultFilter {
-        self.compiled_data
-            .default_filter
-            .as_ref()
-            .expect("compiled data always has default set")
+        &self.resolved_default_filter
     }
 
     /// Returns the global test group configuration.

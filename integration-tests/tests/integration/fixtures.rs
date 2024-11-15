@@ -382,6 +382,18 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
                 skip_count += 1;
                 continue;
             }
+            if cfg!(unix)
+                && test.has_property(TestCaseFixtureProperty::NotInDefaultSetUnix)
+                && properties & RunProperty::WithDefaultFilter as u64 != 0
+            {
+                eprintln!("*** skipping {name}");
+                assert!(
+                    !output.contains(&name),
+                    "test '{name}' should not be run with default set on Unix"
+                );
+                skip_count += 1;
+                continue;
+            }
             if test.has_property(TestCaseFixtureProperty::MatchesCdylib)
                 && properties & RunProperty::WithSkipCdylibFilter as u64 != 0
             {
