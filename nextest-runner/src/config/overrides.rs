@@ -913,7 +913,7 @@ mod tests {
         "#},
         "default",
         &[MietteJsonReport {
-            message: "at least one of `platform` and `filter` should be specified".to_owned(),
+            message: "at least one of `platform` and `filter` must be specified".to_owned(),
             labels: vec![],
         }]
 
@@ -927,7 +927,7 @@ mod tests {
         "#},
         "default",
         &[MietteJsonReport {
-            message: "at least one of `platform` and `filter` should be specified".to_owned(),
+            message: "at least one of `platform` and `filter` must be specified".to_owned(),
             labels: vec![],
         }]
 
