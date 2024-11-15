@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultSet, ConfigExperimental,
+    ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
     CustomTestGroup, DeserializedOverride, DeserializedProfileScriptConfig,
     NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId, SettingSource, SetupScripts,
     SlowTimeout, TestGroup, TestGroupConfig, TestSettings, TestThreads, ThreadsRequired,
@@ -609,7 +609,7 @@ impl<'cfg, State> NextestProfile<'cfg, State> {
     }
 
     /// Returns the default set of tests to run.
-    pub fn default_filter(&self) -> &CompiledDefaultSet {
+    pub fn default_filter(&self) -> &CompiledDefaultFilter {
         self.compiled_data
             .default_filter
             .as_ref()
