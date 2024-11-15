@@ -9,7 +9,10 @@ use super::{
 };
 use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
-    errors::{ConfigFiltersetOrCfgParseError, InvalidConfigScriptName, SetupScriptError},
+    errors::{
+        ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection, InvalidConfigScriptName,
+        SetupScriptError,
+    },
     list::TestList,
     platform::BuildPlatforms,
     test_command::{apply_ld_dyld_env, create_command},
@@ -307,19 +310,22 @@ impl CompiledProfileScripts<PreBuildPlatform> {
     pub(super) fn new(
         graph: &PackageGraph,
         profile_name: &str,
+        index: usize,
         source: &DeserializedProfileScriptConfig,
-        errors: &mut Vec<ConfigFiltersetOrCfgParseError>,
+        errors: &mut Vec<ConfigCompileError>,
     ) -> Option<Self> {
         if source.platform.host.is_none()
             && source.platform.target.is_none()
             && source.filter.is_none()
         {
-            errors.push(ConfigFiltersetOrCfgParseError {
+            errors.push(ConfigCompileError {
                 profile_name: profile_name.to_owned(),
-                not_specified: true,
-                host_parse_error: None,
-                target_parse_error: None,
-                parse_errors: None,
+                section: ConfigCompileSection::Script(index),
+                kind: ConfigCompileErrorKind::ConstraintsNotSpecified {
+                    // The default filter is not relevant for scripts -- it is a
+                    // configuration value, not a constraint.
+                    default_filter_specified: false,
+                },
             });
             return None;
         }
@@ -351,12 +357,14 @@ impl CompiledProfileScripts<PreBuildPlatform> {
                 let platform_parse_error = maybe_platform_err.err();
                 let parse_errors = maybe_parse_err.err();
 
-                errors.push(ConfigFiltersetOrCfgParseError {
+                errors.push(ConfigCompileError {
                     profile_name: profile_name.to_owned(),
-                    not_specified: false,
-                    host_parse_error: host_platform_parse_error,
-                    target_parse_error: platform_parse_error,
-                    parse_errors,
+                    section: ConfigCompileSection::Script(index),
+                    kind: ConfigCompileErrorKind::Parse {
+                        host_parse_error: host_platform_parse_error,
+                        target_parse_error: platform_parse_error,
+                        filter_parse_errors: parse_errors.into_iter().collect(),
+                    },
                 });
                 None
             }
@@ -922,7 +930,7 @@ mod tests {
         )
         .expect_err("config is invalid");
         match error.kind() {
-            ConfigParseErrorKind::FiltersetOrCfgParseError(compile_errors) => {
+            ConfigParseErrorKind::CompileErrors(compile_errors) => {
                 assert_eq!(
                     compile_errors.len(),
                     1,
@@ -935,6 +943,7 @@ mod tests {
                 );
                 let handler = miette::JSONReportHandler::new();
                 let reports = error
+                    .kind
                     .reports()
                     .map(|report| {
                         let mut out = String::new();

@@ -523,16 +523,41 @@ impl ExpectedError {
             }
             Self::ConfigParseError { err } => {
                 match err.kind() {
-                    ConfigParseErrorKind::FiltersetOrCfgParseError(errors) => {
-                        // Override errors are printed out using miette.
-                        for override_error in errors {
+                    ConfigParseErrorKind::CompileErrors(errors) => {
+                        // Compile errors are printed out using miette.
+                        for compile_error in errors {
+                            let section_str = match &compile_error.section {
+                                ConfigCompileSection::DefaultFilter => {
+                                    format!("profile.{}.default-filter", compile_error.profile_name)
+                                        .style(styles.bold)
+                                        .to_string()
+                                }
+                                ConfigCompileSection::Override(index) => {
+                                    let overrides =
+                                        format!("profile.{}.overrides", compile_error.profile_name);
+                                    format!(
+                                        "{} at index {}",
+                                        overrides.style(styles.bold),
+                                        index.style(styles.bold)
+                                    )
+                                }
+                                ConfigCompileSection::Script(index) => {
+                                    let scripts =
+                                        format!("profile.{}.scripts", compile_error.profile_name);
+                                    format!(
+                                        "{} at index {}",
+                                        scripts.style(styles.bold),
+                                        index.style(styles.bold)
+                                    )
+                                }
+                            };
                             error!(
-                                "for config file `{}`{}, failed to parse overrides for profile: {}",
+                                "for config file `{}`{}, failed to parse {}",
                                 err.config_file(),
                                 provided_by_tool(err.tool()),
-                                override_error.profile_name.style(styles.bold)
+                                section_str.style(styles.bold)
                             );
-                            for report in override_error.reports() {
+                            for report in compile_error.kind.reports() {
                                 error!(target: "cargo_nextest::no_heading", "{report:?}");
                             }
                         }

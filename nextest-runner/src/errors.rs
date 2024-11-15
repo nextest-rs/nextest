@@ -14,7 +14,7 @@ use crate::{
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::RustBinaryId;
 use smol_str::SmolStr;
@@ -97,9 +97,9 @@ pub enum ConfigParseErrorKind {
     /// An error occurred while deserializing the config (version only).
     #[error(transparent)]
     VersionOnlyDeserializeError(Box<serde_path_to_error::Error<toml::de::Error>>),
-    /// Errors occurred while parsing filtersets or `cfg()` predicates.
+    /// Errors occurred while compiling configuration strings.
     #[error("error parsing compiled data (destructure this variant for more details)")]
-    FiltersetOrCfgParseError(Vec<ConfigFiltersetOrCfgParseError>),
+    CompileErrors(Vec<ConfigCompileError>),
     /// An invalid set of test groups was defined by the user.
     #[error("invalid test groups defined: {}\n(test groups cannot start with '@tool:' unless specified by a tool)", .0.iter().join(", "))]
     InvalidTestGroupsDefined(BTreeSet<CustomTestGroup>),
@@ -163,57 +163,112 @@ pub enum ConfigParseErrorKind {
     },
 }
 
-/// An error that occurred while parsing filtersets or `cfg()` predicates in configuration.
-///
-/// Part of [`ConfigParseErrorKind::FiltersetOrCfgParseError`].
+/// An error that occurred while compiling overrides or scripts specified in
+/// configuration.
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct ConfigFiltersetOrCfgParseError {
+pub struct ConfigCompileError {
     /// The name of the profile under which the data was found.
     pub profile_name: String,
 
-    /// True if neither the platform nor the filter have been specified.
-    pub not_specified: bool,
+    /// The section within the profile where the error occurred.
+    pub section: ConfigCompileSection,
 
-    /// A potential error that occurred while parsing the host platform expression.
-    pub host_parse_error: Option<target_spec::Error>,
-
-    /// A potential error that occurred while parsing the target platform expression.
-    pub target_parse_error: Option<target_spec::Error>,
-
-    /// The expression, and the errors that occurred.
-    pub parse_errors: Option<FiltersetParseErrors>,
+    /// The kind of error that occurred.
+    pub kind: ConfigCompileErrorKind,
 }
 
-impl ConfigFiltersetOrCfgParseError {
+/// For a [`ConfigCompileError`], the section within the profile where the error
+/// occurred.
+#[derive(Debug)]
+pub enum ConfigCompileSection {
+    /// `profile.<profile-name>.default-filter`.
+    DefaultFilter,
+
+    /// `[[profile.<profile-name>.overrides]]` at the corresponding index.
+    Override(usize),
+
+    /// `[[profile.<profile-name>.scripts]]` at the corresponding index.
+    Script(usize),
+}
+
+/// The kind of error that occurred while parsing config overrides.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ConfigCompileErrorKind {
+    /// Neither `platform` nor `filter` were specified.
+    ConstraintsNotSpecified {
+        /// Whether `default-filter` was specified.
+        ///
+        /// If default-filter is specified, then specifying `filter` is not
+        /// allowed -- so we show a different message in that case.
+        default_filter_specified: bool,
+    },
+
+    /// Both `filter` and `default-filter` were specified.
+    ///
+    /// It only makes sense to specify one of the two.
+    FilterAndDefaultFilterSpecified,
+
+    /// One or more errors occured while parsing expressions.
+    Parse {
+        /// A potential error that occurred while parsing the host platform expression.
+        host_parse_error: Option<target_spec::Error>,
+
+        /// A potential error that occurred while parsing the target platform expression.
+        target_parse_error: Option<target_spec::Error>,
+
+        /// Filterset or default filter parse errors.
+        filter_parse_errors: Vec<FiltersetParseErrors>,
+    },
+}
+
+impl ConfigCompileErrorKind {
     /// Returns [`miette::Report`]s for each error recorded by self.
     pub fn reports(&self) -> impl Iterator<Item = miette::Report> + '_ {
-        let not_specified_report = self.not_specified.then(|| {
-            miette::Report::msg("at least one of `platform` and `filter` must be specified")
-        });
-        let host_parse_report = self
-            .host_parse_error
-            .as_ref()
-            .map(|error| miette::Report::new_boxed(error.clone().into_diagnostic()));
-        let target_parse_report = self
-            .target_parse_error
-            .as_ref()
-            .map(|error| miette::Report::new_boxed(error.clone().into_diagnostic()));
-        let parse_reports = self
-            .parse_errors
-            .as_ref()
-            .into_iter()
-            .flat_map(|parse_errors| {
-                parse_errors.errors.iter().map(|single_error| {
-                    miette::Report::new(single_error.clone())
-                        .with_source_code(parse_errors.input.to_owned())
-                })
-            });
-        not_specified_report
-            .into_iter()
-            .chain(host_parse_report)
-            .chain(target_parse_report)
-            .chain(parse_reports)
+        match self {
+            Self::ConstraintsNotSpecified {
+                default_filter_specified,
+            } => {
+                let message = if *default_filter_specified {
+                    "for override with `default-filter`, `platform` must also be specified"
+                } else {
+                    "at least one of `platform` and `filter` must be specified"
+                };
+                Either::Left(std::iter::once(miette::Report::msg(message)))
+            }
+            Self::FilterAndDefaultFilterSpecified => {
+                Either::Left(std::iter::once(miette::Report::msg(
+                    "at most one of `filter` and `default-filter` must be specified",
+                )))
+            }
+            Self::Parse {
+                host_parse_error,
+                target_parse_error,
+                filter_parse_errors,
+            } => {
+                let host_parse_report = host_parse_error
+                    .as_ref()
+                    .map(|error| miette::Report::new_boxed(error.clone().into_diagnostic()));
+                let target_parse_report = target_parse_error
+                    .as_ref()
+                    .map(|error| miette::Report::new_boxed(error.clone().into_diagnostic()));
+                let filter_parse_reports =
+                    filter_parse_errors.iter().flat_map(|filter_parse_errors| {
+                        filter_parse_errors.errors.iter().map(|single_error| {
+                            miette::Report::new(single_error.clone())
+                                .with_source_code(filter_parse_errors.input.to_owned())
+                        })
+                    });
+
+                Either::Right(
+                    host_parse_report
+                        .into_iter()
+                        .chain(target_parse_report)
+                        .chain(filter_parse_reports),
+                )
+            }
+        }
     }
 }
 

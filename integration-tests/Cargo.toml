@@ -29,6 +29,7 @@ camino.workspace = true
 cfg-if.workspace = true
 fixture-data.workspace = true
 insta.workspace = true
+itertools.workspace = true
 nextest-metadata.workspace = true
 pathdiff.workspace = true
 regex.workspace = true

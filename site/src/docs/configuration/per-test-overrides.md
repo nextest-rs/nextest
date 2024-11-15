@@ -16,7 +16,9 @@ At least one of these fields must be specified:
 : The [filterset](../filtersets/index.md) to match.
 
 `platform`
-: The [platforms](specifying-platforms.md) to match.
+: The platforms to match: either a string, or a map with `host` and `target`
+keys for cross-compiling. See [*Specifying platforms*](specifying-platforms.md)
+for more information.
 
 ## Supported overrides
 
@@ -40,6 +42,9 @@ At least one of these fields must be specified:
 
 `junit.store-success-output` and `junit.store-failure-output`
 : In [JUnit reports](../machine-readable/junit.md), whether to store output for passing and failing tests, respectively.
+
+`default-filter` <!-- md:version 0.9.83 -->
+: The [default filter](../running.md#running-a-subset-of-tests-by-default) on this platform. Only supported for overrides that specify `platform` and not `filter`.
 
 ## Example
 

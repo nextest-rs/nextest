@@ -1,6 +1,7 @@
 ---
 source: integration-tests/tests/integration/main.rs
-expression: all_tests_output.stdout_as_str()
+expression: default_filter_stdout(&all_tests_output)
+snapshot_kind: text
 ---
 cdylib-link:
     test_multiply_two
@@ -10,7 +11,6 @@ nextest-tests:
     tests::call_dylib_add_two
     tests::unit_test_success
 nextest-tests::basic:
-    test_cargo_env_vars
     test_cwd
     test_execute_bin
     test_failure_assert

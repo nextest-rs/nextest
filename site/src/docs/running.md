@@ -120,6 +120,18 @@ skipped due to their presence in the default filter. For example:
 
     In practice, `#[ignore]` is often used for failing tests, while the default filter is typically used to filter out tests that are very slow or require specific resources.
 
+#### Per-platform default filters
+
+<!-- md:version 0.9.83 -->
+
+Default filters can be set per-platform via [the `overrides` section](configuration/per-test-overrides.md).
+
+```toml title="Per-platform default filter configuration"
+[[profile.default.overrides]]
+platform = 'cfg(windows)'
+default-filter = 'not test()'
+```
+
 ### `--skip` and `--exact`
 
 <!-- md:version 0.9.81 -->
