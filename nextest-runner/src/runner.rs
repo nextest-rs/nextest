@@ -624,10 +624,10 @@ impl<'a> TestRunnerInner<'a> {
                                     total_attempts,
                                 };
 
-                                if cancelled_ref.load(Ordering::Acquire) {
-                                    // The test run has been cancelled. Don't run any further tests.
-                                    break;
-                                }
+                                // Note: do not check for cancellation here.
+                                // Only check for cancellation after the first
+                                // run, to avoid a situation where run_statuses
+                                // is empty.
 
                                 if retry_data.attempt > 1 {
                                     _ = this_run_sender.send(InternalTestEvent::RetryStarted {
