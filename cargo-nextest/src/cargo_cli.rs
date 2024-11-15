@@ -98,7 +98,8 @@ pub(crate) struct CargoOptions {
         long,
         value_name = "N",
         group = "cargo-opts",
-        help_heading = "Compilation options"
+        help_heading = "Compilation options",
+        allow_hyphen_values = true
     )]
     build_jobs: Option<String>,
 

@@ -2406,6 +2406,9 @@ mod tests {
             // Test negative test threads
             "cargo nextest run --jobs -3",
             "cargo nextest run --jobs 3",
+            // Test negative cargo build jobs
+            "cargo nextest run --build-jobs -1",
+            "cargo nextest run --build-jobs 1",
         ];
 
         let invalid: &[(&'static str, ErrorKind)] = &[
