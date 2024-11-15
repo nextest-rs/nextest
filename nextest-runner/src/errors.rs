@@ -189,7 +189,7 @@ impl ConfigFiltersetOrCfgParseError {
     /// Returns [`miette::Report`]s for each error recorded by self.
     pub fn reports(&self) -> impl Iterator<Item = miette::Report> + '_ {
         let not_specified_report = self.not_specified.then(|| {
-            miette::Report::msg("at least one of `platform` and `filter` should be specified")
+            miette::Report::msg("at least one of `platform` and `filter` must be specified")
         });
         let host_parse_report = self
             .host_parse_error
