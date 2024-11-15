@@ -1328,7 +1328,8 @@ fn test_setup_script_error() {
 
     assert_eq!(
         output.exit_status.code(),
-        Some(NextestExitCode::SETUP_SCRIPT_FAILED)
+        Some(NextestExitCode::SETUP_SCRIPT_FAILED),
+        "expected exit code to be SETUP_SCRIPT_FAILED\noutput: {output}",
     );
 }
 
