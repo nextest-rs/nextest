@@ -1,6 +1,10 @@
 # Changelog
 
-## [0.66.0] - 2024-10-28
+## [0.67.0] - 2024-11-15
+
+See the changelog for [cargo-nextest 0.9.84](https://nexte.st/changelog#0.9.84).
+
+## [0.66.0] - 2024-11-15
 
 See the changelog for [cargo-nextest 0.9.83](https://nexte.st/changelog#0.9.83).
 
@@ -490,6 +494,7 @@ Thanks to [Guiguiprim](https://github.com/Guiguiprim) for their contributions to
 
 - Initial version.
 
+[0.67.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.67.0
 [0.66.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.66.0
 [0.65.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.65.0
 [0.64.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-runner-0.64.0

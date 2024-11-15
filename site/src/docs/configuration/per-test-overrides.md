@@ -43,7 +43,7 @@ for more information.
 `junit.store-success-output` and `junit.store-failure-output`
 : In [JUnit reports](../machine-readable/junit.md), whether to store output for passing and failing tests, respectively.
 
-`default-filter` <!-- md:version 0.9.83 -->
+`default-filter` <!-- md:version 0.9.84 -->
 : The [default filter](../running.md#running-a-subset-of-tests-by-default) on this platform. Only supported for overrides that specify `platform` and not `filter`.
 
 ## Example

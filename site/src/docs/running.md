@@ -122,7 +122,7 @@ skipped due to their presence in the default filter. For example:
 
 #### Per-platform default filters
 
-<!-- md:version 0.9.83 -->
+<!-- md:version 0.9.84 -->
 
 Default filters can be set per-platform via [the `overrides` section](configuration/per-test-overrides.md).
 
