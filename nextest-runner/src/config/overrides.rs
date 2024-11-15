@@ -315,7 +315,7 @@ impl CompiledByProfile {
     pub(super) fn for_default_config() -> Self {
         Self {
             default: CompiledData {
-                default_filter: Some(CompiledDefaultSet::for_default_config()),
+                default_filter: Some(CompiledDefaultFilter::for_default_config()),
                 overrides: vec![],
                 scripts: vec![],
             },
@@ -324,13 +324,11 @@ impl CompiledByProfile {
     }
 }
 
-/// A compiled form of the default set of tests for a profile.
+/// A compiled form of the default filter for a profile.
 ///
 /// Returned by [`NextestProfile::default_filter`].
-// TODO: generalize this? `Source` isn't right because it includes overrides, and we don't support
-// overrides for the default set.
 #[derive(Clone, Debug)]
-pub struct CompiledDefaultSet {
+pub struct CompiledDefaultFilter {
     /// The compiled expression.
     ///
     /// This is a bit tricky -- in some cases, the default config is constructed without a
@@ -338,15 +336,16 @@ pub struct CompiledDefaultSet {
     /// around it by only storing the compiled expression here, and by setting it to `all()` (which
     /// matches the config).
     ///
-    /// This does make the default config's default-filter a bit of a lie, but it's a lie we'll live
-    /// with.
+    /// This does make the default-filter defined in default-config.toml a bit
+    /// of a lie (since we don't use it directly, but instead replicate it in
+    /// code). But it's not too bad.
     pub expr: CompiledExpr,
 
-    /// The profile name the default set originates from.
+    /// The profile name the default filter originates from.
     pub profile: String,
 }
 
-impl CompiledDefaultSet {
+impl CompiledDefaultFilter {
     fn for_default_config() -> Self {
         Self {
             expr: CompiledExpr::ALL,
@@ -362,7 +361,7 @@ impl CompiledDefaultSet {
 
 #[derive(Clone, Debug)]
 pub(super) struct CompiledData<State> {
-    pub(super) default_filter: Option<CompiledDefaultSet>,
+    pub(super) default_filter: Option<CompiledDefaultFilter>,
     pub(super) overrides: Vec<CompiledOverride<State>>,
     pub(super) scripts: Vec<CompiledProfileScripts<State>>,
 }
@@ -382,7 +381,7 @@ impl CompiledData<PreBuildPlatform> {
                 kind: FiltersetKind::DefaultFilter,
             };
             match Filterset::parse(filter.to_owned(), &cx) {
-                Ok(expr) => Some(CompiledDefaultSet {
+                Ok(expr) => Some(CompiledDefaultFilter {
                     expr: expr.compiled,
                     profile: profile_name.to_owned(),
                 }),
