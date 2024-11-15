@@ -122,7 +122,7 @@ pub(crate) fn perform_update(
                 );
                 Ok(0)
             } else {
-                info!("update canceled");
+                info!("update cancelled");
                 Ok(NextestExitCode::UPDATE_CANCELED)
             }
         }

@@ -462,7 +462,7 @@ fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &Pr
 }
 
 fn progress_bar_cancel_prefix(styles: &Styles) -> String {
-    format!("{:>12}", "Canceling".style(styles.fail))
+    format!("{:>12}", "Cancelling".style(styles.fail))
 }
 
 fn progress_bar_prefix(
@@ -872,7 +872,7 @@ impl<'a> TestReporterImpl<'a> {
                 write!(
                     writer,
                     "{:>12} due to {}",
-                    "Canceling".style(self.styles.fail),
+                    "Cancelling".style(self.styles.fail),
                     reason.to_static_str().style(self.styles.fail)
                 )?;
 
@@ -2694,16 +2694,16 @@ mod tests {
 
         for stats in run_stats_test_failure_examples() {
             let prefix = progress_bar_prefix(&stats, Some(CancelReason::TestFailure), &styles);
-            assert_eq!(prefix, "   Canceling".style(styles.fail).to_string());
+            assert_eq!(prefix, "  Cancelling".style(styles.fail).to_string());
         }
         for stats in run_stats_setup_script_failure_examples() {
             let prefix =
                 progress_bar_prefix(&stats, Some(CancelReason::SetupScriptFailure), &styles);
-            assert_eq!(prefix, "   Canceling".style(styles.fail).to_string());
+            assert_eq!(prefix, "  Cancelling".style(styles.fail).to_string());
         }
 
         let prefix = progress_bar_prefix(&RunStats::default(), Some(CancelReason::Signal), &styles);
-        assert_eq!(prefix, "   Canceling".style(styles.fail).to_string());
+        assert_eq!(prefix, "  Cancelling".style(styles.fail).to_string());
 
         let prefix = progress_bar_prefix(&RunStats::default(), None, &styles);
         assert_eq!(prefix, "     Running".style(styles.pass).to_string());

@@ -51,7 +51,8 @@ impl NextestExitCode {
     /// A downgrade was requested but not performed.
     pub const UPDATE_DOWNGRADE_NOT_PERFORMED: i32 = 81;
 
-    /// An update was available but the user canceled it.
+    // TODO: change this to UPDATE_CANCELLED
+    /// An update was available but the user cancelled it.
     pub const UPDATE_CANCELED: i32 = 82;
 
     /// A user issue happened while setting up a nextest invocation.
