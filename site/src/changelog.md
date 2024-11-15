@@ -22,6 +22,12 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
   default-filter = "not test(unix_tests)"
   ```
 
+- `cargo nextest run --build-jobs` now accepts negative numbers as arguments,
+  similar to other commands like `cargo nextest run --test-threads` and `cargo
+  build`. Negative numbers mean "use all available cores except for this many".
+
+  Thanks to [mattsse](https://github.com/mattsse) for your first contribution!
+
 ### Internal improvements
 
 - Internal targets updated to Rust 1.82.

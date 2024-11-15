@@ -99,7 +99,7 @@ pub(crate) struct CargoOptions {
         value_name = "N",
         group = "cargo-opts",
         help_heading = "Compilation options",
-        allow_hyphen_values = true
+        allow_negative_numbers = true
     )]
     build_jobs: Option<String>,
 

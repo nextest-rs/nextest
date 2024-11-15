@@ -2523,6 +2523,9 @@ mod tests {
             ),
             // Invalid test threads: 0
             ("cargo nextest run --jobs 0", ValueValidation),
+            // Test threads must be a number
+            ("cargo nextest run --jobs -twenty", UnknownArgument),
+            ("cargo nextest run --build-jobs -inf1", UnknownArgument),
         ];
 
         // Unset all NEXTEST_ env vars because they can conflict with the try_parse_from below.
