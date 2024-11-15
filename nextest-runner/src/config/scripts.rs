@@ -4,7 +4,7 @@
 //! Setup scripts.
 
 use super::{
-    ConfigIdentifier, FinalConfig, MaybeTargetSpec, NextestProfile, PlatformStrings,
+    ConfigIdentifier, EvaluatableProfile, FinalConfig, MaybeTargetSpec, PlatformStrings,
     PreBuildPlatform, SlowTimeout,
 };
 use crate::{
@@ -29,16 +29,13 @@ use std::{
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-/// Data about setup scripts, returned by a [`NextestProfile`].
+/// Data about setup scripts, returned by an [`EvaluatableProfile`].
 pub struct SetupScripts<'profile> {
     enabled_scripts: IndexMap<&'profile ScriptId, SetupScript<'profile>>,
 }
 
 impl<'profile> SetupScripts<'profile> {
-    pub(super) fn new(
-        profile: &'profile NextestProfile<'_, FinalConfig>,
-        test_list: &TestList<'_>,
-    ) -> Self {
+    pub(super) fn new(profile: &'profile EvaluatableProfile<'_>, test_list: &TestList<'_>) -> Self {
         Self::new_with_queries(
             profile,
             test_list
@@ -50,7 +47,7 @@ impl<'profile> SetupScripts<'profile> {
 
     // Creates a new `SetupScripts` instance for the given profile and matching tests.
     fn new_with_queries<'a>(
-        profile: &'profile NextestProfile<'_, FinalConfig>,
+        profile: &'profile EvaluatableProfile<'_>,
         matching_tests: impl IntoIterator<Item = TestQuery<'a>>,
     ) -> Self {
         let script_config = profile.script_config();

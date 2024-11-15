@@ -16,9 +16,8 @@ use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        get_num_cpus, ConfigExperimental, NextestConfig, NextestProfile, NextestVersionConfig,
-        NextestVersionEval, PreBuildPlatform, RetryPolicy, TestGroup, TestThreads, ToolConfigFile,
-        VersionOnlyConfig,
+        get_num_cpus, ConfigExperimental, EarlyProfile, NextestConfig, NextestVersionConfig,
+        NextestVersionEval, RetryPolicy, TestGroup, TestThreads, ToolConfigFile, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
@@ -1481,10 +1480,7 @@ impl BaseApp {
         &self.package_graph
     }
 
-    fn load_profile<'cfg>(
-        &self,
-        config: &'cfg NextestConfig,
-    ) -> Result<NextestProfile<'cfg, PreBuildPlatform>> {
+    fn load_profile<'cfg>(&self, config: &'cfg NextestConfig) -> Result<EarlyProfile<'cfg>> {
         let profile_name = self.config_opts.profile.as_deref().unwrap_or_else(|| {
             // The "official" way to detect a miri environment is with MIRI_SYSROOT.
             // https://github.com/rust-lang/miri/pull/2398#issuecomment-1190747685
@@ -1617,6 +1613,8 @@ impl App {
                     double_spawn,
                     target_runner,
                 };
+                let profile =
+                    profile.apply_build_platforms(&binary_list.rust_build_meta.build_platforms);
                 let ecx = profile.filterset_ecx();
 
                 let test_list =
@@ -1670,11 +1668,10 @@ impl App {
             double_spawn,
             target_runner,
         };
+        let profile = profile.apply_build_platforms(&build_platforms);
         let ecx = profile.filterset_ecx();
 
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
-
-        let profile = profile.apply_build_platforms(&build_platforms);
 
         let mut writer = output_writer.stdout_writer();
 
@@ -1751,12 +1748,13 @@ impl App {
             double_spawn,
             target_runner,
         };
+
+        let profile = profile.apply_build_platforms(build_platforms);
         let ecx = profile.filterset_ecx();
 
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
 
         let output = output_writer.reporter_output();
-        let profile = profile.apply_build_platforms(build_platforms);
 
         let mut reporter = reporter_opts
             .to_builder(no_capture)
