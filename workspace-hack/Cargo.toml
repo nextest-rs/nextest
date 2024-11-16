@@ -47,25 +47,25 @@ syn = { version = "2.0.87", features = ["extra-traits", "full", "visit", "visit-
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-sink = { version = "0.3.31", default-features = false, features = ["std"] }
-libc = { version = "0.2.163", features = ["extra_traits"] }
+libc = { version = "0.2.164", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.4.14", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 rustix = { version = "0.38.37", features = ["fs", "termios"] }
 smallvec = { version = "1.13.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.41.1", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-libc = { version = "0.2.163", features = ["extra_traits"] }
+libc = { version = "0.2.164", features = ["extra_traits"] }
 
 [target.x86_64-apple-darwin.dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-sink = { version = "0.3.31", default-features = false, features = ["std"] }
-libc = { version = "0.2.163", features = ["extra_traits"] }
+libc = { version = "0.2.164", features = ["extra_traits"] }
 rustix = { version = "0.38.37", features = ["fs", "termios"] }
 smallvec = { version = "1.13.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.41.1", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
-libc = { version = "0.2.163", features = ["extra_traits"] }
+libc = { version = "0.2.164", features = ["extra_traits"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
