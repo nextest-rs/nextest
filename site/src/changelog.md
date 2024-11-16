@@ -1,4 +1,3 @@
-
 ---
 icon: material/list-box
 toc_depth: 1
