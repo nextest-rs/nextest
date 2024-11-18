@@ -848,9 +848,7 @@ pub struct TestRunnerOpts {
     #[arg(long, conflicts_with = "no-run", overrides_with = "fail-fast")]
     no_fail_fast: bool,
 
-    /// Behavior if there are no tests to run.
-    ///
-    /// The default is currently `warn`, but it will change to `fail` in the future.
+    /// Behavior if there are no tests to run [default: fail]
     #[arg(
         long,
         value_enum,
@@ -862,13 +860,12 @@ pub struct TestRunnerOpts {
     no_tests: Option<NoTestsBehavior>,
 }
 
-#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 enum NoTestsBehavior {
     /// Silently exit with code 0.
     Pass,
 
     /// Produce a warning and exit with code 0.
-    #[default]
     Warn,
 
     /// Produce an error message and exit with code 4.
@@ -1798,27 +1795,15 @@ impl App {
 
         match run_stats.summarize_final() {
             FinalRunStats::Success => Ok(0),
-            FinalRunStats::NoTestsRun => {
-                match runner_opts.no_tests {
-                    Some(NoTestsBehavior::Pass) => Ok(0),
-                    Some(NoTestsBehavior::Warn) => {
-                        warn!("no tests to run");
-                        Ok(0)
-                    }
-                    Some(NoTestsBehavior::Fail) => {
-                        Err(ExpectedError::NoTestsRun { is_default: false })
-                    }
-                    None => {
-                        // This currently does not exit with a non-zero code, but will in the
-                        // future: https://github.com/nextest-rs/nextest/issues/1639
-                        warn!(
-                            "no tests to run -- this will become an error in the future\n\
-                             (hint: use `--no-tests` to customize)"
-                        );
-                        Ok(0)
-                    }
+            FinalRunStats::NoTestsRun => match runner_opts.no_tests {
+                Some(NoTestsBehavior::Pass) => Ok(0),
+                Some(NoTestsBehavior::Warn) => {
+                    warn!("no tests to run");
+                    Ok(0)
                 }
-            }
+                Some(NoTestsBehavior::Fail) => Err(ExpectedError::NoTestsRun { is_default: false }),
+                None => Err(ExpectedError::NoTestsRun { is_default: true }),
+            },
             FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
             | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
                 Err(ExpectedError::setup_script_failed())
