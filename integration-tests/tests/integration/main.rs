@@ -302,7 +302,14 @@ fn test_run_no_tests() {
             "-E",
             "none()",
         ])
+        .unchecked(true)
         .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::NO_TESTS_RUN),
+        "correct exit code for command\n{output}"
+    );
 
     let stderr = output.stderr_as_str();
     assert!(
@@ -310,7 +317,7 @@ fn test_run_no_tests() {
         "stderr contains 'Starting' message: {output}"
     );
     assert!(
-        stderr.contains("warning: no tests to run -- this will become an error in the future"),
+        stderr.contains("error: no tests to run\n(hint: use `--no-tests` to customize)"),
         "stderr contains no tests message: {output}"
     );
 
