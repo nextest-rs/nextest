@@ -74,6 +74,10 @@ pub(crate) fn make_execution_result(
             abort_status: None,
             leaked: false,
         },
+        TestCaseFixtureStatus::FailLeak => ExecutionResult::Fail {
+            abort_status: None,
+            leaked: true,
+        },
         TestCaseFixtureStatus::Leak => ExecutionResult::Leak,
     }
 }
