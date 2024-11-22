@@ -1,6 +1,7 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: default_profile_all_output.stdout_as_str()
+snapshot_kind: text
 ---
 group: flaky (max threads = 4)
     (no matches)
@@ -29,6 +30,7 @@ group: @global
           test_result_failure
           test_stdin_closed
           test_subprocess_doesnt_exit
+          test_subprocess_doesnt_exit_fail
           test_success
           test_success_should_panic
       nextest-tests::other:
@@ -49,4 +51,3 @@ group: @global
       with-build-script:
           tests::test_build_script_vars_set
           tests::test_out_dir_present
-

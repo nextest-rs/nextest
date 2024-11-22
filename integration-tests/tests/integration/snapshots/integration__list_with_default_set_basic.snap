@@ -19,6 +19,7 @@ nextest-tests::basic:
     test_result_failure
     test_stdin_closed
     test_subprocess_doesnt_exit
+    test_subprocess_doesnt_exit_fail
     test_success
     test_success_should_panic
 nextest-tests::other:

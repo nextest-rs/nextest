@@ -86,6 +86,7 @@ pub enum TestCaseFixtureStatus {
     Fail,
     Flaky { pass_attempt: usize },
     Leak,
+    FailLeak,
     Segfault,
     IgnoredPass,
     IgnoredFail,

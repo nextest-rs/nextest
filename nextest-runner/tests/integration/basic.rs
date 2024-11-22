@@ -516,9 +516,9 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                         TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::Leak => 1,
                         // Note that currently only the flaky test fixtures are controlled by overrides.
                         // If more tests are controlled by retry overrides, this may need to be updated.
-                        TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::Segfault => {
-                            profile_retries.count() + 1
-                        }
+                        TestCaseFixtureStatus::Fail
+                        | TestCaseFixtureStatus::FailLeak
+                        | TestCaseFixtureStatus::Segfault => profile_retries.count() + 1,
                         TestCaseFixtureStatus::IgnoredPass | TestCaseFixtureStatus::IgnoredFail => {
                             unreachable!("ignored tests should be skipped")
                         }

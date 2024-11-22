@@ -294,6 +294,7 @@ enum CheckResult {
     Pass,
     Leak,
     Fail,
+    FailLeak,
     Abort,
 }
 
@@ -304,6 +305,7 @@ impl CheckResult {
             CheckResult::Pass => Regex::new(&format!(r"PASS \[.*\] *{name}")).unwrap(),
             CheckResult::Leak => Regex::new(&format!(r"LEAK \[.*\] *{name}")).unwrap(),
             CheckResult::Fail => Regex::new(&format!(r"FAIL \[.*\] *{name}")).unwrap(),
+            CheckResult::FailLeak => Regex::new(&format!(r"FAIL \+ LEAK \[.*\] *{name}")).unwrap(),
             CheckResult::Abort => Regex::new(&format!(r"(ABORT|SIGSEGV) \[.*\] *{name}")).unwrap(),
         }
     }
@@ -445,6 +447,14 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
                     run_count += 1;
                     fail_count += 1;
                     CheckResult::Fail
+                }
+                TestCaseFixtureStatus::FailLeak => {
+                    run_count += 1;
+                    fail_count += 1;
+                    // Currently, fail + leak tests are not added to the
+                    // leak_count, just the fail_count. (Maybe this is worth
+                    // changing in the UI?)
+                    CheckResult::FailLeak
                 }
                 TestCaseFixtureStatus::Segfault => {
                     run_count += 1;

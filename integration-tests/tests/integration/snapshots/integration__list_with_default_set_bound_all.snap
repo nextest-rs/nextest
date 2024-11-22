@@ -1,6 +1,7 @@
 ---
 source: integration-tests/tests/integration/main.rs
 expression: bound_all_output.stdout_as_str()
+snapshot_kind: text
 ---
 cdylib-example:
     tests::test_multiply_two_cdylib
@@ -23,6 +24,7 @@ nextest-tests::basic:
     test_result_failure
     test_stdin_closed
     test_subprocess_doesnt_exit
+    test_subprocess_doesnt_exit_fail
     test_success
     test_success_should_panic
 nextest-tests::other:

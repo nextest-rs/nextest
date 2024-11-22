@@ -51,6 +51,7 @@ pub static EXPECTED_TEST_SUITES: Lazy<BTreeMap<RustBinaryId, TestSuiteFixture>> 
                 ),
                 TestCaseFixture::new("test_stdin_closed", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_subprocess_doesnt_exit", TestCaseFixtureStatus::Leak),
+                TestCaseFixture::new("test_subprocess_doesnt_exit_fail", TestCaseFixtureStatus::FailLeak),
                 TestCaseFixture::new("test_success", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_success_should_panic", TestCaseFixtureStatus::Pass),
             ],

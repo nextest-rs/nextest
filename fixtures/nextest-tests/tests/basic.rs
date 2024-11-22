@@ -308,6 +308,15 @@ fn test_subprocess_doesnt_exit() {
     cmd.spawn().unwrap();
 }
 
+#[cfg(any(unix, windows))]
+#[test]
+fn test_subprocess_doesnt_exit_fail() {
+    let mut cmd = sleep_cmd(360);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.spawn().unwrap();
+    panic!("this is a panic");
+}
+
 #[cfg(windows)]
 fn sleep_cmd(secs: usize) -> std::process::Command {
     // Apparently, this is the most reliable way to sleep for a bit on Windows.
