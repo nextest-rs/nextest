@@ -158,6 +158,10 @@ pub(super) fn set_env_vars() {
     // won't be in the search path when running integration tests.
     std::env::set_var("__NEXTEST_NO_CHECK_CARGO_ENV_VARS", "1");
 
+    // Display empty STDOUT and STDERR lines in the output of failed tests. This
+    // allows tests which make sure outputs are being displayed to work.
+    std::env::set_var("__NEXTEST_DISPLAY_EMPTY_OUTPUTS", "1");
+
     // Remove OUT_DIR from the environment, as it interferes with tests (some of them expect that
     // OUT_DIR isn't set.)
     std::env::remove_var("OUT_DIR");
@@ -299,7 +303,7 @@ enum CheckResult {
 }
 
 impl CheckResult {
-    fn make_regex(self, name: &str) -> Regex {
+    fn make_status_line_regex(self, name: &str) -> Regex {
         let name = regex::escape(name);
         match self {
             CheckResult::Pass => Regex::new(&format!(r"PASS \[.*\] *{name}")).unwrap(),
@@ -307,6 +311,26 @@ impl CheckResult {
             CheckResult::Fail => Regex::new(&format!(r"FAIL \[.*\] *{name}")).unwrap(),
             CheckResult::FailLeak => Regex::new(&format!(r"FAIL \+ LEAK \[.*\] *{name}")).unwrap(),
             CheckResult::Abort => Regex::new(&format!(r"(ABORT|SIGSEGV) \[.*\] *{name}")).unwrap(),
+        }
+    }
+
+    fn make_output_regexes(self, name: &str) -> Vec<(&'static str, Regex)> {
+        // By default, output is only displayed for fail, fail + leak, and abort
+        // tests.
+        match self {
+            CheckResult::Fail | CheckResult::FailLeak | CheckResult::Abort => {
+                vec![
+                    (
+                        "stdout",
+                        Regex::new(&format!("--- STDOUT: +{name} ---")).unwrap(),
+                    ),
+                    (
+                        "stderr",
+                        Regex::new(&format!("--- STDERR: +{name} ---")).unwrap(),
+                    ),
+                ]
+            }
+            CheckResult::Pass | CheckResult::Leak => vec![],
         }
     }
 }
@@ -469,11 +493,20 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
                 }
             };
             let name = format!("{} {}", binary_id, test.name);
-            let reg = result.make_regex(&name);
+            let reg = result.make_status_line_regex(&name);
             assert!(
                 reg.is_match(&output),
-                "{name}: result didn't match\n\n--- output ---\n{output}\n--- end output ---"
+                "{name}: status line result didn't match\n\n\
+                 --- output ---\n{output}\n--- end output ---"
             );
+
+            for (reg_name, reg) in result.make_output_regexes(&name) {
+                assert!(
+                    reg.is_match(&output),
+                    "{name}: output regex for {reg_name} didn't match\n\n\
+                     --- output ---\n{output}\n--- end output ---"
+                )
+            }
         }
     }
 

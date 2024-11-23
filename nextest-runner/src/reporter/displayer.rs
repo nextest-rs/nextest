@@ -313,6 +313,12 @@ impl TestReporterBuilder {
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
         };
 
+        // Ordinarily, empty stdout and stderr are not displayed. This
+        // environment variable is set in integration tests to ensure that they
+        // are.
+        let display_empty_outputs =
+            std::env::var_os("__NEXTEST_DISPLAY_EMPTY_OUTPUTS").map_or(false, |v| v == "1");
+
         TestReporter {
             inner: TestReporterImpl {
                 default_filter: profile.default_filter().clone(),
@@ -327,6 +333,7 @@ impl TestReporterBuilder {
                 styles,
                 cancel_status: None,
                 final_outputs: DebugIgnore(vec![]),
+                display_empty_outputs,
             },
             stderr,
             structured_reporter,
@@ -587,6 +594,7 @@ struct TestReporterImpl<'a> {
     styles: Box<Styles>,
     cancel_status: Option<CancelReason>,
     final_outputs: DebugIgnore<Vec<(TestInstance<'a>, FinalOutput)>>,
+    display_empty_outputs: bool,
 }
 
 impl<'a> TestReporterImpl<'a> {
@@ -1316,7 +1324,7 @@ impl<'a> TestReporterImpl<'a> {
         };
 
         if let Some(stdout) = &run_status.output.stdout {
-            if !stdout.is_empty() {
+            if self.display_empty_outputs || !stdout.is_empty() {
                 write!(writer, "\n{}", "--- ".style(header_style))?;
                 write!(writer, "{:21}", "STDOUT:".style(header_style))?;
                 self.write_setup_script(script_id, command, args, writer)?;
@@ -1327,7 +1335,7 @@ impl<'a> TestReporterImpl<'a> {
         }
 
         if let Some(stderr) = &run_status.output.stderr {
-            if !stderr.is_empty() {
+            if self.display_empty_outputs || !stderr.is_empty() {
                 write!(writer, "\n{}", "--- ".style(header_style))?;
                 write!(writer, "{:21}", "STDERR:".style(header_style))?;
                 self.write_setup_script(script_id, command, args, writer)?;
@@ -1366,7 +1374,7 @@ impl<'a> TestReporterImpl<'a> {
                 match output {
                     TestOutput::Split(split) => {
                         if let Some(stdout) = &split.stdout {
-                            if !stdout.is_empty() {
+                            if self.display_empty_outputs || !stdout.is_empty() {
                                 write!(writer, "\n{}", "--- ".style(header_style))?;
                                 let out_len =
                                     self.write_attempt(run_status, header_style, writer)?;
@@ -1389,7 +1397,7 @@ impl<'a> TestReporterImpl<'a> {
                         }
 
                         if let Some(stderr) = &split.stderr {
-                            if !stderr.is_empty() {
+                            if self.display_empty_outputs || !stderr.is_empty() {
                                 write!(writer, "\n{}", "--- ".style(header_style))?;
                                 let out_len =
                                     self.write_attempt(run_status, header_style, writer)?;
@@ -1412,7 +1420,7 @@ impl<'a> TestReporterImpl<'a> {
                         }
                     }
                     TestOutput::Combined { output } => {
-                        if !output.is_empty() {
+                        if self.display_empty_outputs || !output.is_empty() {
                             write!(writer, "\n{}", "--- ".style(header_style))?;
                             let out_len = self.write_attempt(run_status, header_style, writer)?;
                             // The width is to align test instances.
