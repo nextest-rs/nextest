@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.68.0] - 2024-11-15
+
+See the changelog for [cargo-nextest 0.9.85](https://nexte.st/changelog#0.9.85).
+
 ## [0.67.0] - 2024-11-15
 
 See the changelog for [cargo-nextest 0.9.84](https://nexte.st/changelog#0.9.84).

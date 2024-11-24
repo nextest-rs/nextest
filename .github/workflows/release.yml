@@ -164,6 +164,10 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+      - name: Install b2sum on macOS
+        if: startsWith(matrix.target, 'macos')
+        run: |
+          brew install b2sum
       - uses: taiki-e/upload-rust-binary-action@4398438f25ce68e99e82e90744c88604b9b218a3 # v1.23.0
         with:
           bin: cargo-nextest
@@ -173,6 +177,7 @@ jobs:
           target: ${{ matrix.build-target }}
           tar: all
           zip: windows
+          checksum: b2,sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_PROFILE_RELEASE_LTO: true
@@ -228,7 +233,7 @@ jobs:
       - name: Download mukti
         run: |
           mkdir -p ~/bin
-          curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/mukti-bin-0.7.4/mukti-bin-0.7.4-x86_64-unknown-linux-musl.tar.gz" \
+          curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/mukti-bin-0.7.8/mukti-bin-0.7.8-x86_64-unknown-linux-musl.tar.gz" \
             | tar xzf - -C ~/bin
       - name: Add release metadata
         run: |
