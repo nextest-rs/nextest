@@ -165,7 +165,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install b2sum on macOS
-        if: startsWith(matrix.target, 'macos')
+        if: startsWith(matrix.os, 'macos')
         run: |
           brew install b2sum
       - uses: taiki-e/upload-rust-binary-action@4398438f25ce68e99e82e90744c88604b9b218a3 # v1.23.0

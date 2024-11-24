@@ -8,7 +8,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.85-rc.1] - 2024-11-24
+## [0.9.85-rc.2] - 2024-11-24
 
 ### Changed
 
@@ -1192,7 +1192,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.85-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.85-rc.1
+[0.9.85-rc.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.85-rc.2
 [0.9.84]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.84
 [0.9.83]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.83
 [0.9.82]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.82
