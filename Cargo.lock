@@ -1150,6 +1150,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "home"
 version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1721,6 +1727,7 @@ dependencies = [
  "future-queue",
  "futures",
  "guppy",
+ "hex",
  "home",
  "http",
  "humantime-serde",
@@ -1755,6 +1762,7 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "serde_path_to_error",
+ "sha2",
  "shell-words",
  "smallvec",
  "smol_str",

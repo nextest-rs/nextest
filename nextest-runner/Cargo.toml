@@ -89,8 +89,10 @@ zstd.workspace = true
 ###
 ### Update-related features, optionally enabled
 ###
+hex = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 mukti-metadata = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 # TODO: remove dependency on self_update, build our own thing on top of mukti
 self_update = { workspace = true, optional = true }
 
@@ -146,5 +148,5 @@ name = "passthrough"
 path = "test-helpers/passthrough.rs"
 
 [features]
-self-update = ["self_update", "http", "mukti-metadata"]
-experimental-tokio-console = ["console-subscriber", "tracing-subscriber", "tokio/tracing"]
+self-update = ["dep:hex", "dep:self_update", "dep:http", "dep:mukti-metadata", "dep:sha2"]
+experimental-tokio-console = ["dep:console-subscriber", "dep:tracing-subscriber", "tokio/tracing"]
