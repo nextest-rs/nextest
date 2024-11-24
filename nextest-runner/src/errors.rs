@@ -1641,6 +1641,27 @@ mod self_update_errors {
             error: std::io::Error,
         },
 
+        /// An error occurred while reading from a temporary archive.
+        #[error("error reading from temporary archive at `{archive_path}`")]
+        TempArchiveRead {
+            /// The archive path for which there was an error.
+            archive_path: Utf8PathBuf,
+
+            /// The error that occurred.
+            #[source]
+            error: std::io::Error,
+        },
+
+        /// A checksum mismatch occurred. (Currently, the SHA-256 checksum is checked.)
+        #[error("SHA-256 checksum mismatch: expected: {expected}, actual: {actual}")]
+        ChecksumMismatch {
+            /// The expected checksum.
+            expected: String,
+
+            /// The actual checksum.
+            actual: String,
+        },
+
         /// An error occurred while renaming a file.
         #[error("error renaming `{source}` to `{dest}`")]
         FsRename {

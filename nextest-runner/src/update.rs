@@ -5,10 +5,13 @@
 
 use crate::errors::{UpdateError, UpdateVersionParseError};
 use camino::{Utf8Path, Utf8PathBuf};
-use mukti_metadata::{MuktiProject, MuktiReleasesJson, ReleaseLocation, ReleaseStatus};
+use mukti_metadata::{
+    DigestAlgorithm, MuktiProject, MuktiReleasesJson, ReleaseLocation, ReleaseStatus,
+};
 use self_update::{ArchiveKind, Compression, Download, Extract};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::{self, BufWriter},
@@ -373,6 +376,38 @@ impl<'a> MuktiUpdateContext<'a> {
                 error,
             })?;
         std::mem::drop(tmp_archive);
+
+        // Verify the checksum of the downloaded file if available.
+        let mut hasher = Sha256::default();
+        // Just read the file into memory for now -- it would be nice to have an
+        // incremental hasher that updates the hash as it's being downloaded,
+        // but it's not critical since our archives are quite small.
+        let mut tmp_archive =
+            fs::File::open(&tmp_archive_path).map_err(|error| UpdateError::TempArchiveRead {
+                archive_path: tmp_archive_path.clone(),
+                error,
+            })?;
+        io::copy(&mut tmp_archive, &mut hasher).map_err(|error| UpdateError::TempArchiveRead {
+            archive_path: tmp_archive_path.clone(),
+            error,
+        })?;
+        let hash = hasher.finalize();
+        let hash_str = hex::encode(hash);
+
+        match self.location.checksums.get(&DigestAlgorithm::SHA256) {
+            Some(checksum) => {
+                if checksum.0 != hash_str {
+                    return Err(UpdateError::ChecksumMismatch {
+                        expected: checksum.0.clone(),
+                        actual: hash_str,
+                    });
+                }
+                debug!(target: "nextest-runner::update", "SHA-256 checksum verified: {hash_str}");
+            }
+            None => {
+                warn!(target: "nextest-runner::update", "unable to verify SHA-256 checksum of downloaded archive ({hash_str})");
+            }
+        }
 
         // Now extract data from this archive.
         Extract::from_source(tmp_archive_path.as_std_path())
