@@ -106,7 +106,7 @@ shell-words = "1.1.0"
 smallvec = "1.13.2"
 smol_str = { version = "0.3.1", features = ["serde"] }
 strip-ansi-escapes = "0.2.0"
-supports-color = "3.0.1"
+supports-color = "3.0.2"
 supports-unicode = "3.0.0"
 swrite = "0.1.0"
 tar = "0.4.43"
