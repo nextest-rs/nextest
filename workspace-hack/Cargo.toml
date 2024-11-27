@@ -25,7 +25,7 @@ getrandom = { version = "0.2.15", default-features = false, features = ["std"] }
 indexmap = { version = "2.6.0", features = ["serde"] }
 log = { version = "0.4.22", default-features = false, features = ["std"] }
 memchr = { version = "2.7.4" }
-miette = { version = "7.2.0", features = ["fancy"] }
+miette = { version = "7.4.0", features = ["fancy"] }
 num-traits = { version = "0.2.19", default-features = false, features = ["libm", "std"] }
 rand = { version = "0.8.5" }
 serde = { version = "1.0.215", features = ["alloc", "derive"] }

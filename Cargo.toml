@@ -72,7 +72,7 @@ itertools = "0.13.0"
 libc = "0.2.165"
 log = "0.4.22"
 maplit = "1.0.2"
-miette = "7.2.0"
+miette = "7.4.0"
 mukti-metadata = "0.3.0"
 # note: we don't use owo-colors' if_supports_color support for now, instead preferring to use our
 # own supports-color + stylesheets everywhere.
