@@ -843,7 +843,7 @@ impl<'a> TestRunnerInner<'a> {
                         timeout_hit += 1;
                         let will_terminate = if let Some(terminate_after) = slow_timeout.terminate_after {
                             NonZeroUsize::new(timeout_hit as usize)
-                                .expect("timeout_hit cannot be non-zero")
+                                .expect("timeout_hit was just incremented")
                                 >= terminate_after
                         } else {
                             false
@@ -854,7 +854,7 @@ impl<'a> TestRunnerInner<'a> {
                                 // Pass in the slow timeout period times timeout_hit, since
                                 // stopwatch.elapsed() tends to be slightly longer.
                                 timeout_hit * slow_timeout.period,
-                                will_terminate,
+                                will_terminate.then_some(slow_timeout.grace_period)
                             ));
                         }
 
@@ -1053,7 +1053,7 @@ impl<'a> TestRunnerInner<'a> {
                         timeout_hit += 1;
                         let will_terminate = if let Some(terminate_after) = slow_timeout.terminate_after {
                             NonZeroUsize::new(timeout_hit as usize)
-                                .expect("timeout_hit cannot be non-zero")
+                                .expect("timeout_hit was just incremented")
                                 >= terminate_after
                         } else {
                             false
@@ -1064,7 +1064,7 @@ impl<'a> TestRunnerInner<'a> {
                                 // Pass in the slow timeout period times timeout_hit, since
                                 // stopwatch.elapsed() tends to be slightly longer.
                                 timeout_hit * slow_timeout.period,
-                                will_terminate,
+                                will_terminate.then_some(slow_timeout.grace_period),
                             ));
                         }
 
@@ -1723,7 +1723,11 @@ struct TestPacket<'a, 'test> {
 }
 
 impl<'a> TestPacket<'a, '_> {
-    fn slow_event(&self, elapsed: Duration, will_terminate: bool) -> InternalTestEvent<'a> {
+    fn slow_event(
+        &self,
+        elapsed: Duration,
+        will_terminate: Option<Duration>,
+    ) -> InternalTestEvent<'a> {
         InternalTestEvent::Slow {
             test_instance: self.test_instance,
             retry_data: self.retry_data,
@@ -1749,7 +1753,11 @@ impl<'a> SetupScriptPacket<'a> {
         SetupScriptCommand::new(self.config, double_spawn, test_list)
     }
 
-    fn slow_event(&self, elapsed: Duration, will_terminate: bool) -> InternalTestEvent<'a> {
+    fn slow_event(
+        &self,
+        elapsed: Duration,
+        will_terminate: Option<Duration>,
+    ) -> InternalTestEvent<'a> {
         InternalTestEvent::SetupScriptSlow {
             script_id: self.script_id.clone(),
             config: self.config,
@@ -1863,7 +1871,7 @@ where
                 command: config.program(),
                 args: config.args(),
                 elapsed,
-                will_terminate,
+                will_terminate: will_terminate.is_some(),
             }),
             InternalEvent::Test(InternalTestEvent::SetupScriptFinished {
                 script_id,
@@ -1913,7 +1921,7 @@ where
                 test_instance,
                 retry_data,
                 elapsed,
-                will_terminate,
+                will_terminate: will_terminate.is_some(),
             }),
             InternalEvent::Test(InternalTestEvent::AttemptFailedWillRetry {
                 test_instance,
@@ -2084,7 +2092,7 @@ enum InternalTestEvent<'a> {
         script_id: ScriptId,
         config: &'a ScriptConfig,
         elapsed: Duration,
-        will_terminate: bool,
+        will_terminate: Option<Duration>,
     },
     SetupScriptFinished {
         script_id: ScriptId,
@@ -2100,7 +2108,7 @@ enum InternalTestEvent<'a> {
         test_instance: TestInstance<'a>,
         retry_data: RetryData,
         elapsed: Duration,
-        will_terminate: bool,
+        will_terminate: Option<Duration>,
     },
     AttemptFailedWillRetry {
         test_instance: TestInstance<'a>,
