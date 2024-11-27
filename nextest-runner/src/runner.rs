@@ -407,7 +407,7 @@ impl<'a> TestRunnerInner<'a> {
 
                     match ctx_mut.handle_event(internal_event) {
                         #[cfg(unix)]
-                        Ok(Some(JobControlEvent::Stop)) => {
+                        Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Stop))) => {
                             // This is in reality bounded by the number of tests
                             // currently running.
                             let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -446,14 +446,17 @@ impl<'a> TestRunnerInner<'a> {
                             imp::raise_stop();
                         }
                         #[cfg(unix)]
-                        Ok(Some(JobControlEvent::Continue)) => {
+                        Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Continue))) => {
                             // Nextest has been resumed. Resume all the tests as well.
                             let _ = req_tx_ref.send(SignalRequest::Continue);
                         }
                         #[cfg(not(unix))]
-                        Ok(Some(e)) => {
+                        Ok(Some(HandleEventResponse::JobControl(e))) => {
                             // On platforms other than Unix this enum is expected to be empty;
-                            // we can check this assumption at compile time like so:
+                            // we can check this assumption at compile time like so.
+                            //
+                            // Rust 1.82 handles empty enums better, and this
+                            // won't be required after we bump the MSRV to that.
                             match e {}
                         }
                         Ok(None) => {}
@@ -1765,6 +1768,13 @@ impl<'a> SetupScriptPacket<'a> {
     }
 }
 
+/// The return result of `handle_event`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HandleEventResponse {
+    #[cfg_attr(not(unix), allow(dead_code))]
+    JobControl(JobControlEvent),
+}
+
 struct CallbackContext<F> {
     callback: F,
     run_id: ReportUuid,
@@ -1833,7 +1843,7 @@ where
     fn callback(
         &mut self,
         kind: TestEventKind<'a>,
-    ) -> Result<Option<JobControlEvent>, InternalCancel> {
+    ) -> Result<Option<HandleEventResponse>, InternalCancel> {
         self.basic_callback(kind);
         Ok(None)
     }
@@ -1841,7 +1851,7 @@ where
     fn handle_event(
         &mut self,
         event: InternalEvent<'a>,
-    ) -> Result<Option<JobControlEvent>, InternalCancel> {
+    ) -> Result<Option<HandleEventResponse>, InternalCancel> {
         match event {
             InternalEvent::Test(InternalTestEvent::SetupScriptStarted {
                 script_id,
@@ -2007,7 +2017,7 @@ where
                         running: self.running,
                     })?;
                     self.stopwatch.pause();
-                    Ok(Some(JobControlEvent::Stop))
+                    Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Stop)))
                 } else {
                     Ok(None)
                 }
@@ -2021,7 +2031,9 @@ where
                         setup_scripts_running: self.setup_scripts_running,
                         running: self.running,
                     })?;
-                    Ok(Some(JobControlEvent::Continue))
+                    Ok(Some(HandleEventResponse::JobControl(
+                        JobControlEvent::Continue,
+                    )))
                 } else {
                     Ok(None)
                 }
