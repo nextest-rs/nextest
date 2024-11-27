@@ -349,8 +349,8 @@ impl<'a> TestRunnerInner<'a> {
         // - Shutdown signals (once)
         // - Signals twice
         // 32 should be more than enough.
-        let (forward_sender, _forward_receiver) = broadcast::channel::<SignalForwardEvent>(32);
-        let forward_sender_ref = &forward_sender;
+        let (req_tx, _req_rx) = broadcast::channel::<SignalRequest>(32);
+        let req_tx_ref = &req_tx;
 
         let mut report_cancel_receiver = std::pin::pin!(report_cancel_receiver);
 
@@ -411,8 +411,8 @@ impl<'a> TestRunnerInner<'a> {
                             // This is in reality bounded by the number of tests
                             // currently running.
                             let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-                            let mut running_tests = forward_sender_ref
-                                .send(SignalForwardEvent::Stop(sender))
+                            let mut running_tests = req_tx_ref
+                                .send(SignalRequest::Stop(sender))
                                 .expect(
                                 "at least one receiver stays open so this should never error out",
                             );
@@ -448,7 +448,7 @@ impl<'a> TestRunnerInner<'a> {
                         #[cfg(unix)]
                         Ok(Some(JobControlEvent::Continue)) => {
                             // Nextest has been resumed. Resume all the tests as well.
-                            let _ = forward_sender_ref.send(SignalForwardEvent::Continue);
+                            let _ = req_tx_ref.send(SignalRequest::Continue);
                         }
                         #[cfg(not(unix))]
                         Ok(Some(e)) => {
@@ -474,7 +474,7 @@ impl<'a> TestRunnerInner<'a> {
                                     // A test failure has caused cancellation to begin. Nothing to
                                     // do here.
                                 }
-                                InternalCancel::Signal(forward_event) => {
+                                InternalCancel::Signal(req) => {
                                     // A signal has caused cancellation to begin. Let all the child
                                     // processes know about the signal, and continue to handle
                                     // events.
@@ -482,8 +482,8 @@ impl<'a> TestRunnerInner<'a> {
                                     // Ignore errors here: if there are no receivers to cancel, so
                                     // be it. Also note the ordering here: cancelled_ref is set
                                     // *before* this is sent.
-                                    let _ = forward_sender_ref
-                                        .send(SignalForwardEvent::Shutdown(forward_event));
+                                    let _ = req_tx_ref
+                                        .send(SignalRequest::Shutdown(req));
                                 }
                             }
                         }
@@ -513,7 +513,7 @@ impl<'a> TestRunnerInner<'a> {
                         // Subscribe to the receiver *before* checking cancelled_ref. The ordering is
                         // important to avoid race conditions with the code that first sets
                         // cancelled_ref and then sends the notification.
-                        let mut this_forward_receiver = forward_sender_ref.subscribe();
+                        let mut this_req_rx = req_tx_ref.subscribe();
 
                         if cancelled_ref.load(Ordering::Acquire) {
                             // Check for test cancellation.
@@ -533,7 +533,7 @@ impl<'a> TestRunnerInner<'a> {
                         };
 
                         let (status, env_map) = self
-                            .run_setup_script(packet, &this_run_sender, &mut this_forward_receiver)
+                            .run_setup_script(packet, &this_run_sender, &mut this_req_rx)
                             .await;
                         let status = status.into_external();
 
@@ -545,7 +545,7 @@ impl<'a> TestRunnerInner<'a> {
                             status,
                         });
 
-                        drain_forward_receiver(this_forward_receiver);
+                        drain_req_rx(this_req_rx);
                         _ = completion_sender.send(env_map.map(|env_map| (script, env_map)));
                     };
 
@@ -589,7 +589,7 @@ impl<'a> TestRunnerInner<'a> {
                             // Subscribe to the receiver *before* checking cancelled_ref. The ordering is
                             // important to avoid race conditions with the code that first sets
                             // cancelled_ref and then sends the notification.
-                            let mut this_forward_receiver = forward_sender_ref.subscribe();
+                            let mut this_req_rx = req_tx_ref.subscribe();
 
                             if cancelled_ref.load(Ordering::Acquire) {
                                 // Check for test cancellation.
@@ -648,7 +648,7 @@ impl<'a> TestRunnerInner<'a> {
                                 };
 
                                 let run_status = self
-                                    .run_test(packet, &this_run_sender, &mut this_forward_receiver)
+                                    .run_test(packet, &this_run_sender, &mut this_req_rx)
                                     .await
                                     .into_external(retry_data);
 
@@ -703,7 +703,7 @@ impl<'a> TestRunnerInner<'a> {
                                 run_statuses: ExecutionStatuses::new(run_statuses),
                             });
 
-                            drain_forward_receiver(this_forward_receiver);
+                            drain_req_rx(this_req_rx);
                         };
                         (threads_required, test_group, fut)
                     })
@@ -739,12 +739,12 @@ impl<'a> TestRunnerInner<'a> {
         &self,
         script: SetupScriptPacket<'a>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
-        forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+        req_rx: &mut tokio::sync::broadcast::Receiver<SignalRequest>,
     ) -> (InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
         let mut stopwatch = crate::time::stopwatch();
 
         match self
-            .run_setup_script_inner(script, &mut stopwatch, run_sender, forward_receiver)
+            .run_setup_script_inner(script, &mut stopwatch, run_sender, req_rx)
             .await
         {
             Ok((status, env_map)) => (status, env_map),
@@ -776,7 +776,7 @@ impl<'a> TestRunnerInner<'a> {
         script: SetupScriptPacket<'a>,
         stopwatch: &mut StopwatchStart,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
-        forward_receiver: &mut tokio::sync::broadcast::Receiver<SignalForwardEvent>,
+        req_rx: &mut tokio::sync::broadcast::Receiver<SignalRequest>,
     ) -> Result<(InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>), SetupScriptError>
     {
         let mut cmd = script.make_command(&self.double_spawn, self.test_list)?;
@@ -862,7 +862,7 @@ impl<'a> TestRunnerInner<'a> {
                             // attempt to terminate the slow test.
                             // as there is a race between shutting down a slow test and its own completion
                             // we silently ignore errors to avoid printing false warnings.
-                            imp::terminate_child(&mut child, TerminateMode::Timeout, forward_receiver, job.as_ref(), slow_timeout.grace_period).await;
+                            imp::terminate_child(&mut child, TerminateMode::Timeout, req_rx, job.as_ref(), slow_timeout.grace_period).await;
                             status = Some(ExecutionResult::Timeout);
                             if slow_timeout.grace_period.is_zero() {
                                 break child.wait().await;
@@ -872,13 +872,13 @@ impl<'a> TestRunnerInner<'a> {
                             interval_sleep.as_mut().reset_original_duration();
                         }
                     }
-                    recv = forward_receiver.recv() => {
-                        handle_forward_event(
+                    recv = req_rx.recv() => {
+                        handle_signal_request(
                             &mut child,
                             recv,
                             stopwatch,
                             interval_sleep.as_mut(),
-                            forward_receiver,
+                            req_rx,
                             job.as_ref(),
                             slow_timeout.grace_period
                         ).await;
@@ -961,13 +961,13 @@ impl<'a> TestRunnerInner<'a> {
         &self,
         test: TestPacket<'a, '_>,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
-        forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
+        req_rx: &mut broadcast::Receiver<SignalRequest>,
     ) -> InternalExecuteStatus {
         let mut stopwatch = crate::time::stopwatch();
         let delay_before_start = test.delay_before_start;
 
         match self
-            .run_test_inner(test, &mut stopwatch, run_sender, forward_receiver)
+            .run_test_inner(test, &mut stopwatch, run_sender, req_rx)
             .await
         {
             Ok(run_status) => run_status,
@@ -993,7 +993,7 @@ impl<'a> TestRunnerInner<'a> {
         test: TestPacket<'a, '_>,
         stopwatch: &mut StopwatchStart,
         run_sender: &UnboundedSender<InternalTestEvent<'a>>,
-        forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
+        req_rx: &mut broadcast::Receiver<SignalRequest>,
     ) -> Result<InternalExecuteStatus, RunTestError> {
         let ctx = TestExecuteContext {
             double_spawn: &self.double_spawn,
@@ -1075,7 +1075,7 @@ impl<'a> TestRunnerInner<'a> {
                             imp::terminate_child(
                                 &mut child,
                                 TerminateMode::Timeout,
-                                forward_receiver,
+                                req_rx,
                                 job.as_ref(),
                                 slow_timeout.grace_period,
                             ).await;
@@ -1088,13 +1088,13 @@ impl<'a> TestRunnerInner<'a> {
                             interval_sleep.as_mut().reset_original_duration();
                         }
                     }
-                    recv = forward_receiver.recv() => {
-                        handle_forward_event(
+                    recv = req_rx.recv() => {
+                        handle_signal_request(
                             &mut child,
                             recv,
                             stopwatch,
                             interval_sleep.as_mut(),
-                            forward_receiver,
+                            req_rx,
                             job.as_ref(),
                             slow_timeout.grace_period
                         ).await;
@@ -1153,13 +1153,13 @@ impl<'a> TestRunnerInner<'a> {
     }
 }
 
-/// Drains the forward receiver of any messages, including those that are related to SIGTSTP.
-fn drain_forward_receiver(mut receiver: broadcast::Receiver<SignalForwardEvent>) {
+/// Drains the request receiver of any messages, including those that are related to SIGTSTP.
+fn drain_req_rx(mut receiver: broadcast::Receiver<SignalRequest>) {
     loop {
         let message = receiver.try_recv();
         match message {
             #[cfg(unix)]
-            Ok(SignalForwardEvent::Stop(sender)) => {
+            Ok(SignalRequest::Stop(sender)) => {
                 // The receiver being dead isn't really important.
                 let _ = sender.send(());
             }
@@ -1171,24 +1171,24 @@ fn drain_forward_receiver(mut receiver: broadcast::Receiver<SignalForwardEvent>)
     }
 }
 
-async fn handle_forward_event(
+async fn handle_signal_request(
     child: &mut tokio::process::Child,
-    recv: Result<SignalForwardEvent, broadcast::error::RecvError>,
+    recv: Result<SignalRequest, broadcast::error::RecvError>,
     // These annotations are needed to silence lints on non-Unix platforms.
     #[allow(unused_variables)] stopwatch: &mut StopwatchStart,
     #[allow(unused_mut, unused_variables)] mut interval_sleep: Pin<&mut PausableSleep>,
-    forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
+    req_rx: &mut broadcast::Receiver<SignalRequest>,
     job: Option<&imp::Job>,
     grace_period: Duration,
 ) {
     // The sender stays open longer than the whole loop, and the buffer is big
     // enough for all messages ever sent through this channel, so a RecvError
     // should never happen.
-    let forward_event = recv.expect("a RecvError should never happen here");
+    let req = recv.expect("a RecvError should never happen here");
 
-    match forward_event {
+    match req {
         #[cfg(unix)]
-        SignalForwardEvent::Stop(sender) => {
+        SignalRequest::Stop(sender) => {
             // It isn't possible to receive a stop event twice since it gets
             // debounced in the main signal handler.
             stopwatch.pause();
@@ -1199,7 +1199,7 @@ async fn handle_forward_event(
             let _ = sender.send(());
         }
         #[cfg(unix)]
-        SignalForwardEvent::Continue => {
+        SignalRequest::Continue => {
             // It's possible to receive a resume event right at the beginning of
             // test execution, so debounce it.
             if stopwatch.is_paused() {
@@ -1208,11 +1208,11 @@ async fn handle_forward_event(
                 imp::job_control_child(child, JobControlEvent::Continue);
             }
         }
-        SignalForwardEvent::Shutdown(event) => {
+        SignalRequest::Shutdown(event) => {
             imp::terminate_child(
                 child,
                 TerminateMode::Signal(event),
-                forward_receiver,
+                req_rx,
                 job,
                 grace_period,
             )
@@ -1689,26 +1689,26 @@ enum SignalCount {
 }
 
 impl SignalCount {
-    fn to_forward_event(self, event: ShutdownEvent) -> ShutdownForwardEvent {
+    fn to_request(self, event: ShutdownEvent) -> ShutdownRequest {
         match self {
-            Self::Once => ShutdownForwardEvent::Once(event),
-            Self::Twice => ShutdownForwardEvent::Twice,
+            Self::Once => ShutdownRequest::Once(event),
+            Self::Twice => ShutdownRequest::Twice,
         }
     }
 }
 
 #[derive(Clone, Debug)]
-enum SignalForwardEvent {
+enum SignalRequest {
     // The mpsc sender is used by each test to indicate that the stop signal has been sent.
     #[cfg(unix)]
     Stop(UnboundedSender<()>),
     #[cfg(unix)]
     Continue,
-    Shutdown(ShutdownForwardEvent),
+    Shutdown(ShutdownRequest),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum ShutdownForwardEvent {
+enum ShutdownRequest {
     Once(ShutdownEvent),
     Twice,
 }
@@ -1987,7 +1987,7 @@ where
             }
             InternalEvent::Signal(SignalEvent::Shutdown(event)) => {
                 let signal_count = self.increment_signal_count();
-                let forward_event = signal_count.to_forward_event(event);
+                let req = signal_count.to_request(event);
 
                 let cancel_reason = match event {
                     #[cfg(unix)]
@@ -1998,7 +1998,7 @@ where
                 };
 
                 self.begin_cancel(cancel_reason);
-                Err(InternalCancel::Signal(forward_event))
+                Err(InternalCancel::Signal(req))
             }
             #[cfg(unix)]
             InternalEvent::Signal(SignalEvent::JobControl(JobControlEvent::Stop)) => {
@@ -2138,7 +2138,7 @@ enum InternalTestEvent<'a> {
 enum InternalCancel {
     Report,
     TestFailure,
-    Signal(ShutdownForwardEvent),
+    Signal(ShutdownRequest),
 }
 
 /// Whether a test passed, failed or an error occurred while executing the test.
@@ -2281,7 +2281,7 @@ mod imp {
     pub(super) async fn terminate_child(
         child: &mut Child,
         mode: TerminateMode,
-        _forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
+        _req_rx: &mut broadcast::Receiver<SignalRequest>,
         job: Option<&Job>,
         _grace_period: Duration,
     ) {
@@ -2366,7 +2366,7 @@ mod imp {
     pub(super) async fn terminate_child(
         child: &mut Child,
         mode: TerminateMode,
-        forward_receiver: &mut broadcast::Receiver<SignalForwardEvent>,
+        req_rx: &mut broadcast::Receiver<SignalRequest>,
         _job: Option<&Job>,
         grace_period: Duration,
     ) {
@@ -2375,13 +2375,11 @@ mod imp {
             let term_signal = match mode {
                 _ if grace_period.is_zero() => SIGKILL,
                 TerminateMode::Timeout => SIGTERM,
-                TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Hangup)) => SIGHUP,
-                TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Term)) => SIGTERM,
-                TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Quit)) => SIGQUIT,
-                TerminateMode::Signal(ShutdownForwardEvent::Once(ShutdownEvent::Interrupt)) => {
-                    SIGINT
-                }
-                TerminateMode::Signal(ShutdownForwardEvent::Twice) => SIGKILL,
+                TerminateMode::Signal(ShutdownRequest::Once(ShutdownEvent::Hangup)) => SIGHUP,
+                TerminateMode::Signal(ShutdownRequest::Once(ShutdownEvent::Term)) => SIGTERM,
+                TerminateMode::Signal(ShutdownRequest::Once(ShutdownEvent::Quit)) => SIGQUIT,
+                TerminateMode::Signal(ShutdownRequest::Once(ShutdownEvent::Interrupt)) => SIGINT,
+                TerminateMode::Signal(ShutdownRequest::Twice) => SIGKILL,
             };
             unsafe {
                 // We set up a process group while starting the test -- now send a signal to that
@@ -2402,26 +2400,26 @@ mod imp {
                         // The process exited.
                         break;
                     }
-                    recv = forward_receiver.recv() => {
+                    recv = req_rx.recv() => {
                         // The sender stays open longer than the whole loop, and the buffer is big
                         // enough for all messages ever sent through this channel, so a RecvError
                         // should never happen.
-                        let forward_event = recv.expect("a RecvError should never happen here");
+                        let req = recv.expect("a RecvError should never happen here");
 
-                        match forward_event {
-                            SignalForwardEvent::Stop(sender) => {
+                        match req {
+                            SignalRequest::Stop(sender) => {
                                 sleep.as_mut().pause();
                                 imp::job_control_child(child, JobControlEvent::Stop);
                                 let _ = sender.send(());
                             }
-                            SignalForwardEvent::Continue => {
+                            SignalRequest::Continue => {
                                 // Possible to receive a Continue at the beginning of execution.
                                 if !sleep.is_paused() {
                                     sleep.as_mut().resume();
                                 }
                                 imp::job_control_child(child, JobControlEvent::Continue);
                             }
-                            SignalForwardEvent::Shutdown(_) => {
+                            SignalRequest::Shutdown(_) => {
                                 // Receiving a shutdown signal while in this state always means kill
                                 // immediately.
                                 unsafe {
@@ -2449,7 +2447,7 @@ mod imp {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TerminateMode {
     Timeout,
-    Signal(ShutdownForwardEvent),
+    Signal(ShutdownRequest),
 }
 
 #[cfg(test)]
