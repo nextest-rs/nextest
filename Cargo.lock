@@ -1347,6 +1347,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indent_write"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cfe9645a18782869361d9c8732246be7b410ad4e919d3609ebabdac00ba12c3"
+
+[[package]]
 name = "indenter"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1731,7 +1737,7 @@ dependencies = [
  "home",
  "http",
  "humantime-serde",
- "indenter",
+ "indent_write",
  "indexmap 2.6.0",
  "indicatif",
  "indoc",
