@@ -7,8 +7,10 @@
 
 mod aggregator;
 mod displayer;
+mod events;
 mod helpers;
 pub mod structured;
 
 pub use displayer::*;
+pub use events::*;
 pub use helpers::{heuristic_extract_description, highlight_end, DescriptionKind};
