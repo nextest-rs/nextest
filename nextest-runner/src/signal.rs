@@ -60,99 +60,67 @@ impl SignalHandler {
 #[cfg(unix)]
 mod imp {
     use super::*;
-    use tokio::signal::unix::{signal, Signal, SignalKind};
+    use std::io;
+    use tokio::signal::unix::{signal, SignalKind};
+    use tokio_stream::{wrappers::SignalStream, StreamExt, StreamMap};
+
+    #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+    enum SignalId {
+        Int,
+        Hup,
+        Term,
+        Quit,
+        Tstp,
+        Cont,
+    }
 
     /// Signals for SIGINT, SIGTERM and SIGHUP on Unix.
     #[derive(Debug)]
     pub(super) struct Signals {
-        sigint: SignalWithDone,
-        sighup: SignalWithDone,
-        sigterm: SignalWithDone,
-        sigquit: SignalWithDone,
-        sigtstp: SignalWithDone,
-        sigcont: SignalWithDone,
+        // The number of streams is quite small, so a StreamMap (backed by a
+        // Vec) is a good option to store the list of streams to poll.
+        map: StreamMap<SignalId, SignalStream>,
     }
 
     impl Signals {
-        pub(super) fn new() -> std::io::Result<Self> {
-            let sigint = SignalWithDone::new(SignalKind::interrupt())?;
-            let sighup = SignalWithDone::new(SignalKind::hangup())?;
-            let sigterm = SignalWithDone::new(SignalKind::terminate())?;
-            let sigquit = SignalWithDone::new(SignalKind::quit())?;
-            let sigtstp = SignalWithDone::new(SignalKind::from_raw(libc::SIGTSTP))?;
-            let sigcont = SignalWithDone::new(SignalKind::from_raw(libc::SIGCONT))?;
+        pub(super) fn new() -> io::Result<Self> {
+            let mut map = StreamMap::new();
 
-            Ok(Self {
-                sigint,
-                sighup,
-                sigterm,
-                sigquit,
-                sigtstp,
-                sigcont,
-            })
+            // Set up basic signals.
+            map.extend([
+                (SignalId::Int, signal_stream(SignalKind::interrupt())?),
+                (SignalId::Hup, signal_stream(SignalKind::hangup())?),
+                (SignalId::Term, signal_stream(SignalKind::terminate())?),
+                (SignalId::Quit, signal_stream(SignalKind::quit())?),
+                (SignalId::Tstp, signal_stream(tstp_kind())?),
+                (SignalId::Cont, signal_stream(cont_kind())?),
+            ]);
+
+            Ok(Self { map })
         }
 
         pub(super) async fn recv(&mut self) -> Option<SignalEvent> {
-            loop {
-                tokio::select! {
-                    recv = self.sigint.signal.recv(), if !self.sigint.done => {
-                        match recv {
-                            Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Interrupt)),
-                            None => self.sigint.done = true,
-                        }
-                    }
-                    recv = self.sighup.signal.recv(), if !self.sighup.done => {
-                        match recv {
-                            Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Hangup)),
-                            None => self.sighup.done = true,
-                        }
-                    }
-                    recv = self.sigterm.signal.recv(), if !self.sigterm.done => {
-                        match recv {
-                            Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Term)),
-                            None => self.sigterm.done = true,
-                        }
-                    }
-                    recv = self.sigquit.signal.recv(), if !self.sigquit.done => {
-                        match recv {
-                            Some(()) => break Some(SignalEvent::Shutdown(ShutdownEvent::Quit)),
-                            None => self.sigquit.done = true,
-                        }
-                    }
-                    recv = self.sigtstp.signal.recv(), if !self.sigtstp.done => {
-                        match recv {
-                            Some(()) => break Some(SignalEvent::JobControl(JobControlEvent::Stop)),
-                            None => self.sigtstp.done = true,
-                        }
-                    }
-                    recv = self.sigcont.signal.recv(), if !self.sigcont.done => {
-                        match recv {
-                            Some(()) => break Some(SignalEvent::JobControl(JobControlEvent::Continue)),
-                            None => self.sigcont.done = true,
-                        }
-                    }
-                    else => {
-                        break None
-                    }
-                }
-            }
-        }
-    }
-
-    #[derive(Debug)]
-    struct SignalWithDone {
-        signal: Signal,
-        done: bool,
-    }
-
-    impl SignalWithDone {
-        fn new(kind: SignalKind) -> std::io::Result<Self> {
-            let signal = signal(kind)?;
-            Ok(Self {
-                signal,
-                done: false,
+            self.map.next().await.map(|(id, _)| match id {
+                SignalId::Int => SignalEvent::Shutdown(ShutdownEvent::Interrupt),
+                SignalId::Hup => SignalEvent::Shutdown(ShutdownEvent::Hangup),
+                SignalId::Term => SignalEvent::Shutdown(ShutdownEvent::Term),
+                SignalId::Quit => SignalEvent::Shutdown(ShutdownEvent::Quit),
+                SignalId::Tstp => SignalEvent::JobControl(JobControlEvent::Stop),
+                SignalId::Cont => SignalEvent::JobControl(JobControlEvent::Continue),
             })
         }
+    }
+
+    fn signal_stream(kind: SignalKind) -> io::Result<SignalStream> {
+        Ok(SignalStream::new(signal(kind)?))
+    }
+
+    fn tstp_kind() -> SignalKind {
+        SignalKind::from_raw(libc::SIGTSTP)
+    }
+
+    fn cont_kind() -> SignalKind {
+        SignalKind::from_raw(libc::SIGCONT)
     }
 }
 
