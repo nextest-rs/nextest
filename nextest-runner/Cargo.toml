@@ -78,6 +78,7 @@ tokio = { workspace = true, features = [
     "sync",
     "time",
 ] }
+tokio-stream = { workspace = true, features = ["signal"] }
 toml.workspace = true
 toml_edit = { workspace = true, features = ["serde"] }
 tracing.workspace = true
