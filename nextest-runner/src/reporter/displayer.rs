@@ -6,19 +6,20 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    helpers::ByteSubslice, structured::StructuredReporter, CancelReason, TestEvent, TestEventKind,
+    helpers::ByteSubslice, structured::StructuredReporter, CancelReason, DescriptionKind,
+    TestEvent, TestEventKind,
 };
 use crate::{
     config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
     errors::WriteEventError,
-    helpers::{io_write_test_name, plural},
+    helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
     list::{SkipCounts, TestInstance, TestList},
     reporter::{aggregator::EventAggregator, helpers::highlight_end},
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
         FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
     },
-    test_output::{ChildSingleOutput, TestExecutionOutput, TestOutput},
+    test_output::{ChildSingleOutput, ChildSplitOutput, TestExecutionOutput, TestOutput},
 };
 use bstr::ByteSlice;
 use debug_ignore::DebugIgnore;
@@ -29,8 +30,8 @@ use serde::Deserialize;
 use std::{
     borrow::Cow,
     cmp::Reverse,
-    fmt, io,
-    io::{BufWriter, Write},
+    fmt,
+    io::{self, BufWriter, Write},
     time::Duration,
 };
 use swrite::{swrite, SWrite};
@@ -229,13 +230,7 @@ impl TestReporterBuilder {
         structured_reporter: StructuredReporter<'a>,
     ) -> TestReporter<'a> {
         let styles = Box::default();
-        let binary_id_width = test_list
-            .iter()
-            .filter_map(|test_suite| {
-                (test_suite.status.test_count() > 0).then_some(test_suite.binary_id.len())
-            })
-            .max()
-            .unwrap_or_default();
+
         let aggregator = EventAggregator::new(profile);
 
         let status_level = self.status_level.unwrap_or_else(|| profile.status_level());
@@ -329,7 +324,6 @@ impl TestReporterBuilder {
                 force_success_output,
                 force_failure_output,
                 no_capture: self.no_capture,
-                binary_id_width,
                 styles,
                 cancel_status: None,
                 final_outputs: DebugIgnore(vec![]),
@@ -590,7 +584,6 @@ struct TestReporterImpl<'a> {
     force_success_output: Option<TestOutputDisplay>,
     force_failure_output: Option<TestOutputDisplay>,
     no_capture: bool,
-    binary_id_width: usize,
     styles: Box<Styles>,
     cancel_status: Option<CancelReason>,
     final_outputs: DebugIgnore<Vec<(TestInstance<'a>, FinalOutput)>>,
@@ -650,12 +643,14 @@ impl<'a> TestReporterImpl<'a> {
                 args,
                 ..
             } => {
-                write!(writer, "{:>12} ", "SETUP".style(self.styles.pass))?;
-                // index + 1 so that it displays as e.g. "1/2" and "2/2".
-                write!(writer, "[{:>9}] ", format!("{}/{}", index + 1, total))?;
-
-                self.write_setup_script(script_id, command, args, writer)?;
-                writeln!(writer)?;
+                writeln!(
+                    writer,
+                    "{:>12} [{:>9}] {}",
+                    "SETUP".style(self.styles.pass),
+                    // index + 1 so that it displays as e.g. "1/2" and "2/2".
+                    format!("{}/{}", index + 1, total),
+                    self.display_script_instance(script_id.clone(), command, args)
+                )?;
             }
             TestEventKind::SetupScriptSlow {
                 script_id,
@@ -671,8 +666,11 @@ impl<'a> TestReporterImpl<'a> {
                 }
 
                 self.write_slow_duration(*elapsed, writer)?;
-                self.write_setup_script(script_id, command, args, writer)?;
-                writeln!(writer)?;
+                writeln!(
+                    writer,
+                    "{}",
+                    self.display_script_instance(script_id.clone(), command, args)
+                )?;
             }
             TestEventKind::SetupScriptFinished {
                 script_id,
@@ -689,7 +687,7 @@ impl<'a> TestReporterImpl<'a> {
                 // Always display failing setup script output if it exists. We may change this in
                 // the future.
                 if !run_status.result.is_success() {
-                    self.write_setup_script_stdout_stderr(
+                    self.write_setup_script_execute_status(
                         script_id, command, args, run_status, writer,
                     )?;
                 }
@@ -698,13 +696,12 @@ impl<'a> TestReporterImpl<'a> {
                 // In no-capture mode, print out a test start event.
                 if self.no_capture {
                     // The spacing is to align test instances.
-                    write!(
+                    writeln!(
                         writer,
-                        "{:>12}             ",
+                        "{:>12}             {}",
                         "START".style(self.styles.pass),
+                        self.display_test_instance(*test_instance),
                     )?;
-                    self.write_instance(*test_instance, writer)?;
-                    writeln!(writer)?;
                 }
             }
             TestEventKind::TestSlow {
@@ -743,8 +740,7 @@ impl<'a> TestReporterImpl<'a> {
                 }
 
                 self.write_slow_duration(*elapsed, writer)?;
-                self.write_instance(*test_instance, writer)?;
-                writeln!(writer)?;
+                writeln!(writer, "{}", self.display_test_instance(*test_instance))?;
             }
 
             TestEventKind::TestAttemptFailedWillRetry {
@@ -769,8 +765,7 @@ impl<'a> TestReporterImpl<'a> {
                     self.write_duration(run_status.time_taken, writer)?;
 
                     // Print the name of the test.
-                    self.write_instance(*test_instance, writer)?;
-                    writeln!(writer)?;
+                    writeln!(writer, "{}", self.display_test_instance(*test_instance))?;
 
                     // This test is guaranteed to have failed.
                     assert!(
@@ -778,7 +773,7 @@ impl<'a> TestReporterImpl<'a> {
                         "only failing tests are retried"
                     );
                     if self.failure_output(*failure_output).is_immediate() {
-                        self.write_output(test_instance, run_status, true, writer)?;
+                        self.write_test_execute_status(test_instance, run_status, true, writer)?;
                     }
 
                     // The final output doesn't show retries, so don't store this result in
@@ -796,8 +791,7 @@ impl<'a> TestReporterImpl<'a> {
                         self.write_duration_by(*delay_before_next_attempt, writer)?;
 
                         // Print the name of the test.
-                        self.write_instance(*test_instance, writer)?;
-                        writeln!(writer)?;
+                        writeln!(writer, "{}", self.display_test_instance(*test_instance))?;
                     }
                 }
             }
@@ -812,12 +806,13 @@ impl<'a> TestReporterImpl<'a> {
                 let retry_string = format!("RETRY {attempt}/{total_attempts}");
                 write!(writer, "{:>12} ", retry_string.style(self.styles.retry))?;
 
-                // Add spacing to align test instances.
-                write!(writer, "[{:<9}] ", "")?;
-
-                // Print the name of the test.
-                self.write_instance(*test_instance, writer)?;
-                writeln!(writer)?;
+                // Add spacing to align test instances, then print the name of the test.
+                writeln!(
+                    writer,
+                    "[{:<9}] {}",
+                    "",
+                    self.display_test_instance(*test_instance)
+                )?;
             }
             TestEventKind::TestFinished {
                 test_instance,
@@ -844,7 +839,7 @@ impl<'a> TestReporterImpl<'a> {
                     self.write_status_line(*test_instance, describe, writer)?;
                 }
                 if output_on_test_finished.show_immediate {
-                    self.write_output(test_instance, last_status, true, writer)?;
+                    self.write_test_execute_status(test_instance, last_status, false, writer)?;
                 }
                 if let OutputStoreFinal::Yes { display_output } =
                     output_on_test_finished.store_final
@@ -1037,7 +1032,12 @@ impl<'a> TestReporterImpl<'a> {
                                     writer,
                                 )?;
                                 if *display_output {
-                                    self.write_output(test_instance, last_status, false, writer)?;
+                                    self.write_test_execute_status(
+                                        test_instance,
+                                        last_status,
+                                        false,
+                                        writer,
+                                    )?;
                                 }
                             }
                         }
@@ -1058,11 +1058,12 @@ impl<'a> TestReporterImpl<'a> {
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
-        // same spacing [   0.034s]
-        write!(writer, "[         ] ")?;
-
-        self.write_instance(test_instance, writer)?;
-        writeln!(writer)?;
+        // same spacing   [   0.034s]
+        writeln!(
+            writer,
+            "[         ] {}",
+            self.display_test_instance(test_instance)
+        )?;
 
         Ok(())
     }
@@ -1095,10 +1096,12 @@ impl<'a> TestReporterImpl<'a> {
             }
         }
 
-        write!(writer, "[{:>9}] ", format!("{}/{}", index + 1, total))?;
-
-        self.write_setup_script(script_id, command, args, writer)?;
-        writeln!(writer)?;
+        writeln!(
+            writer,
+            "[{:>9}] {}",
+            format!("{}/{}", index + 1, total),
+            self.display_script_instance(script_id.clone(), command, args)
+        )?;
 
         Ok(())
     }
@@ -1149,8 +1152,7 @@ impl<'a> TestReporterImpl<'a> {
         self.write_duration(last_status.time_taken, writer)?;
 
         // Print the name of the test.
-        self.write_instance(test_instance, writer)?;
-        writeln!(writer)?;
+        writeln!(writer, "{}", self.display_test_instance(test_instance))?;
 
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
@@ -1224,8 +1226,7 @@ impl<'a> TestReporterImpl<'a> {
         self.write_duration(last_status.time_taken, writer)?;
 
         // Print the name of the test.
-        self.write_instance(test_instance, writer)?;
-        writeln!(writer)?;
+        writeln!(writer, "{}", self.display_test_instance(test_instance))?;
 
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
@@ -1240,35 +1241,17 @@ impl<'a> TestReporterImpl<'a> {
         Ok(())
     }
 
-    fn write_instance(&self, instance: TestInstance<'a>, writer: &mut dyn Write) -> io::Result<()> {
-        write!(
-            writer,
-            "{:>width$} ",
-            instance
-                .suite_info
-                .binary_id
-                .style(self.styles.list_styles.binary_id),
-            width = self.binary_id_width
-        )?;
-
-        io_write_test_name(instance.name, &self.styles.list_styles, writer)
+    fn display_test_instance(&self, instance: TestInstance<'a>) -> DisplayTestInstance<'_> {
+        DisplayTestInstance::new(instance.id(), &self.styles.list_styles)
     }
 
-    fn write_setup_script(
+    fn display_script_instance(
         &self,
-        script_id: &ScriptId,
+        script_id: ScriptId,
         command: &str,
         args: &[String],
-        writer: &mut dyn Write,
-    ) -> io::Result<()> {
-        let full_command =
-            shell_words::join(std::iter::once(command).chain(args.iter().map(|arg| arg.as_ref())));
-        write!(
-            writer,
-            "{}: {}",
-            script_id.style(self.styles.script_id),
-            full_command
-        )
+    ) -> DisplayScriptInstance {
+        DisplayScriptInstance::new(script_id, command, args, self.styles.script_id)
     }
 
     fn write_duration(&self, duration: Duration, writer: &mut dyn Write) -> io::Result<()> {
@@ -1310,7 +1293,7 @@ impl<'a> TestReporterImpl<'a> {
         Ok(())
     }
 
-    fn write_setup_script_stdout_stderr(
+    fn write_setup_script_execute_status(
         &self,
         script_id: &ScriptId,
         command: &str,
@@ -1324,32 +1307,54 @@ impl<'a> TestReporterImpl<'a> {
             (self.styles.fail, self.styles.fail_output)
         };
 
-        if let Some(stdout) = &run_status.output.stdout {
-            if self.display_empty_outputs || !stdout.is_empty() {
-                write!(writer, "\n{}", "--- ".style(header_style))?;
-                write!(writer, "{:21}", "STDOUT:".style(header_style))?;
-                self.write_setup_script(script_id, command, args, writer)?;
-                writeln!(writer, "{}", " ---".style(header_style))?;
+        let stdout_header = {
+            format!(
+                "\n{} {:19} {}",
+                "---- ".style(header_style),
+                "STDOUT:".style(header_style),
+                self.display_script_instance(script_id.clone(), command, args),
+            )
+        };
 
-                self.write_test_single_output(stdout, writer)?;
-            }
-        }
+        let stderr_header = {
+            format!(
+                "\n{} {:19} {}",
+                "---- ".style(header_style),
+                "STDERR:".style(header_style),
+                self.display_script_instance(script_id.clone(), command, args),
+            )
+        };
 
-        if let Some(stderr) = &run_status.output.stderr {
-            if self.display_empty_outputs || !stderr.is_empty() {
-                write!(writer, "\n{}", "--- ".style(header_style))?;
-                write!(writer, "{:21}", "STDERR:".style(header_style))?;
-                self.write_setup_script(script_id, command, args, writer)?;
-                writeln!(writer, "{}", " ---".style(header_style))?;
-
-                self.write_test_single_output(stderr, writer)?;
-            }
-        }
+        self.write_setup_script_output(&stdout_header, &stderr_header, &run_status.output, writer)?;
 
         writeln!(writer)
     }
 
-    fn write_output(
+    fn write_setup_script_output(
+        &self,
+        stdout_header: &str,
+        stderr_header: &str,
+        output: &ChildSplitOutput,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        if let Some(stdout) = &output.stdout {
+            if self.display_empty_outputs || !stdout.is_empty() {
+                writeln!(writer, "{}", stdout_header)?;
+                self.write_test_single_output(stdout, writer)?;
+            }
+        }
+
+        if let Some(stderr) = &output.stderr {
+            if self.display_empty_outputs || !stderr.is_empty() {
+                writeln!(writer, "{}", stderr_header)?;
+                self.write_test_single_output(stderr, writer)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_test_execute_status(
         &self,
         test_instance: &TestInstance<'a>,
         run_status: &ExecuteStatus,
@@ -1372,96 +1377,130 @@ impl<'a> TestReporterImpl<'a> {
                     None
                 };
 
-                match output {
-                    TestOutput::Split(split) => {
-                        if let Some(stdout) = &split.stdout {
-                            if self.display_empty_outputs || !stdout.is_empty() {
-                                write!(writer, "\n{}", "--- ".style(header_style))?;
-                                let out_len =
-                                    self.write_attempt(run_status, header_style, writer)?;
-                                // The width is to align test instances.
-                                write!(
-                                    writer,
-                                    "{:width$}",
-                                    "STDOUT:".style(header_style),
-                                    width = (21 - out_len)
-                                )?;
-                                self.write_instance(*test_instance, writer)?;
-                                writeln!(writer, "{}", " ---".style(header_style))?;
+                let stdout_header = {
+                    let mut header = String::new();
+                    swrite!(header, "\n{}", "---- ".style(header_style));
+                    let out_len = self.write_attempt(run_status, header_style, &mut header);
+                    // The width is to align test instances.
+                    swrite!(
+                        header,
+                        "{:width$} {}",
+                        "STDOUT:".style(header_style),
+                        self.display_test_instance(*test_instance),
+                        width = (19 - out_len),
+                    );
+                    header
+                };
 
-                                self.write_test_single_output_with_description(
-                                    stdout,
-                                    description.and_then(|d| d.stdout_subslice()),
-                                    writer,
-                                )?;
-                            }
-                        }
+                let stderr_header = {
+                    let mut header = String::new();
+                    swrite!(header, "\n{}", "---- ".style(header_style));
+                    let out_len = self.write_attempt(run_status, header_style, &mut header);
+                    // The width is to align test instances.
+                    swrite!(
+                        header,
+                        "{:width$} {}",
+                        "STDERR:".style(header_style),
+                        self.display_test_instance(*test_instance),
+                        width = (19 - out_len),
+                    );
+                    header
+                };
 
-                        if let Some(stderr) = &split.stderr {
-                            if self.display_empty_outputs || !stderr.is_empty() {
-                                write!(writer, "\n{}", "--- ".style(header_style))?;
-                                let out_len =
-                                    self.write_attempt(run_status, header_style, writer)?;
-                                // The width is to align test instances.
-                                write!(
-                                    writer,
-                                    "{:width$}",
-                                    "STDERR:".style(header_style),
-                                    width = (21 - out_len)
-                                )?;
-                                self.write_instance(*test_instance, writer)?;
-                                writeln!(writer, "{}", " ---".style(header_style))?;
+                let combined_header = {
+                    let mut header = String::new();
+                    swrite!(header, "\n{}", "---- ".style(header_style));
+                    let out_len = self.write_attempt(run_status, header_style, &mut header);
+                    // The width is to align test instances.
+                    swrite!(
+                        header,
+                        "{:width$} {}",
+                        "OUTPUT:".style(header_style),
+                        self.display_test_instance(*test_instance),
+                        width = (19 - out_len),
+                    );
+                    header
+                };
 
-                                self.write_test_single_output_with_description(
-                                    stderr,
-                                    description.and_then(|d| d.stderr_subslice()),
-                                    writer,
-                                )?;
-                            }
-                        }
-                    }
-                    TestOutput::Combined { output } => {
-                        if self.display_empty_outputs || !output.is_empty() {
-                            write!(writer, "\n{}", "--- ".style(header_style))?;
-                            let out_len = self.write_attempt(run_status, header_style, writer)?;
-                            // The width is to align test instances.
-                            write!(
-                                writer,
-                                "{:width$}",
-                                "OUTPUT:".style(header_style),
-                                width = (21 - out_len)
-                            )?;
-                            self.write_instance(*test_instance, writer)?;
-                            writeln!(writer, "{}", " ---".style(header_style))?;
-
-                            self.write_test_single_output_with_description(
-                                output,
-                                description.and_then(|d| d.combined_subslice()),
-                                writer,
-                            )?;
-                        }
-                    }
-                }
+                self.write_test_output(
+                    &stdout_header,
+                    &stderr_header,
+                    &combined_header,
+                    output,
+                    description,
+                    writer,
+                )?;
             }
 
             TestExecutionOutput::ExecFail { description, .. } => {
-                write!(writer, "\n{}", "--- ".style(header_style))?;
-                let out_len = self.write_attempt(run_status, header_style, writer)?;
-                // The width is to align test instances.
-                write!(
-                    writer,
-                    "{:width$}",
-                    "EXECFAIL:".style(header_style),
-                    width = (21 - out_len)
-                )?;
-                self.write_instance(*test_instance, writer)?;
-                writeln!(writer, "{}", " ---".style(header_style))?;
+                let exec_fail_header = {
+                    let mut header = String::new();
+                    swrite!(header, "{}", "---- ".style(header_style));
+                    let out_len = self.write_attempt(run_status, header_style, &mut header);
+                    // The width is to align test instances.
+                    swrite!(
+                        header,
+                        "{:width$} {}",
+                        "EXECFAIL:".style(header_style),
+                        self.display_test_instance(*test_instance),
+                        width = (19 - out_len)
+                    );
+                    header
+                };
 
-                writeln!(writer, "{description}")?;
+                writeln!(writer, "\n{exec_fail_header}\n{description}")?;
             }
         }
 
         writeln!(writer)
+    }
+
+    fn write_test_output(
+        &self,
+        stdout_header: &str,
+        stderr_header: &str,
+        combined_header: &str,
+        output: &TestOutput,
+        description: Option<DescriptionKind<'_>>,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        match output {
+            TestOutput::Split(split) => {
+                if let Some(stdout) = &split.stdout {
+                    if self.display_empty_outputs || !stdout.is_empty() {
+                        writeln!(writer, "{}", stdout_header)?;
+                        self.write_test_single_output_with_description(
+                            stdout,
+                            description.and_then(|d| d.stdout_subslice()),
+                            writer,
+                        )?;
+                    }
+                }
+
+                if let Some(stderr) = &split.stderr {
+                    if self.display_empty_outputs || !stderr.is_empty() {
+                        writeln!(writer, "{}", stderr_header)?;
+                        self.write_test_single_output_with_description(
+                            stderr,
+                            description.and_then(|d| d.stderr_subslice()),
+                            writer,
+                        )?;
+                    }
+                }
+            }
+            TestOutput::Combined { output } => {
+                if self.display_empty_outputs || !output.is_empty() {
+                    writeln!(writer, "{}", combined_header)?;
+                    self.write_test_single_output_with_description(
+                        output,
+                        description.and_then(|d| d.combined_subslice()),
+                        writer,
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Writes a test output to the writer.
@@ -1503,25 +1542,15 @@ impl<'a> TestReporterImpl<'a> {
     }
 
     // Returns the number of characters written out to the screen.
-    fn write_attempt(
-        &self,
-        run_status: &ExecuteStatus,
-        style: Style,
-        writer: &mut dyn Write,
-    ) -> io::Result<usize> {
+    fn write_attempt(&self, run_status: &ExecuteStatus, style: Style, out: &mut String) -> usize {
         if run_status.retry_data.total_attempts > 1 {
             // 3 for 'TRY' + 1 for ' ' + length of the current attempt + 1 for following space.
             let attempt_str = format!("{}", run_status.retry_data.attempt);
             let out_len = 3 + 1 + attempt_str.len() + 1;
-            write!(
-                writer,
-                "{} {} ",
-                "TRY".style(style),
-                attempt_str.style(style)
-            )?;
-            Ok(out_len)
+            swrite!(out, "{} {} ", "TRY".style(style), attempt_str.style(style));
+            out_len
         } else {
-            Ok(0)
+            0
         }
     }
 

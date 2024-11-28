@@ -1,9 +1,14 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{list::Styles, runner::AbortStatus, write_str::WriteStr};
+use crate::{
+    config::ScriptId,
+    list::{Styles, TestInstanceId},
+    runner::AbortStatus,
+    write_str::WriteStr,
+};
 use camino::{Utf8Path, Utf8PathBuf};
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Style};
 use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
 
 pub(crate) mod plural {
@@ -84,6 +89,63 @@ pub(crate) mod plural {
     }
 }
 
+pub(crate) struct DisplayTestInstance<'a> {
+    instance: TestInstanceId<'a>,
+    styles: &'a Styles,
+}
+
+impl<'a> DisplayTestInstance<'a> {
+    pub(crate) fn new(instance: TestInstanceId<'a>, styles: &'a Styles) -> Self {
+        Self { instance, styles }
+    }
+}
+
+impl fmt::Display for DisplayTestInstance<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} ",
+            self.instance.binary_id.style(self.styles.binary_id),
+        )?;
+        fmt_write_test_name(self.instance.test_name, self.styles, f)
+    }
+}
+
+pub(crate) struct DisplayScriptInstance {
+    script_id: ScriptId,
+    full_command: String,
+    script_id_style: Style,
+}
+
+impl DisplayScriptInstance {
+    pub(crate) fn new(
+        script_id: ScriptId,
+        command: &str,
+        args: &[String],
+        script_id_style: Style,
+    ) -> Self {
+        let full_command =
+            shell_words::join(std::iter::once(command).chain(args.iter().map(|arg| arg.as_ref())));
+
+        Self {
+            script_id,
+            full_command,
+            script_id_style,
+        }
+    }
+}
+
+impl fmt::Display for DisplayScriptInstance {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}: {}",
+            self.script_id.style(self.script_id_style),
+            self.full_command,
+        )
+    }
+}
+
 /// Write out a test name.
 pub(crate) fn write_test_name(
     name: &str,
@@ -106,12 +168,12 @@ pub(crate) fn write_test_name(
     Ok(())
 }
 
-/// Write out a test name, `std::io::Write` version.
-pub(crate) fn io_write_test_name(
+/// Write out a test name, `std::fmt::Write` version.
+pub(crate) fn fmt_write_test_name(
     name: &str,
     style: &Styles,
-    writer: &mut dyn io::Write,
-) -> io::Result<()> {
+    writer: &mut dyn fmt::Write,
+) -> fmt::Result {
     // Look for the part of the test after the last ::, if any.
     let mut splits = name.rsplitn(2, "::");
     let trailing = splits.next().expect("test should have at least 1 element");
