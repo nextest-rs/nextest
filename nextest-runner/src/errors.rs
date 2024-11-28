@@ -14,6 +14,7 @@ use crate::{
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
+use indent_write::fmt::IndentWriter;
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::RustBinaryId;
@@ -345,7 +346,7 @@ pub(crate) enum SetupScriptError {
 pub struct ErrorList<T>(pub Vec<T>);
 
 impl<T: std::error::Error> fmt::Display for ErrorList<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, mut f: &mut fmt::Formatter) -> fmt::Result {
         // If a single error occurred, pretend that this is just that.
         if self.0.len() == 1 {
             return write!(f, "{}", self.0[0]);
@@ -357,12 +358,13 @@ impl<T: std::error::Error> fmt::Display for ErrorList<T> {
             writeln!(f, "- {}", error)?;
             // Also display the chain of causes here, since we can't return a single error in the
             // causes section below.
-            let mut indent = indenter::indented(f).with_str("  ");
+            let mut indent = IndentWriter::new("  ", f);
             let mut cause = error.source();
             while let Some(cause_error) = cause {
                 writeln!(indent, "Caused by: {}", cause_error)?;
                 cause = cause_error.source();
             }
+            f = indent.into_inner();
         }
         Ok(())
     }

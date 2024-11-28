@@ -5,6 +5,16 @@
 //!
 //! This module is adapted from [indenter](https://github.com/eyre-rs/indenter) and is used under the
 //! terms of the MIT or Apache-2.0 licenses.
+//!
+//! # Notes
+//!
+//! We previously used to use `indenter` to indent multi-line `fmt::Display`
+//! instances. However, at some point we needed to also indent
+//! `std::io::Write`s, not just `fmt::Write`. `indenter` 0.3.3 doesn't support
+//! `std::io::Write`, so we switched to `indent_write`.
+//!
+//! This file still has the `indenter` API. So we have both APIs floating around
+//! for a bit... oh well. Still in two minds about which one's better here.
 
 use crate::write_str::WriteStr;
 use std::io;
