@@ -25,6 +25,7 @@ use std::{
     env::JoinPathsError,
     fmt::{self, Write as _},
     process::ExitStatus,
+    sync::Arc,
 };
 use target_spec_miette::IntoMietteDiagnostic;
 use thiserror::Error;
@@ -383,24 +384,24 @@ impl<T: std::error::Error> std::error::Error for ErrorList<T> {
 }
 
 /// An error was returned during the process of managing a child process.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ChildError {
     /// An error occurred while reading standard output.
     #[error("error reading standard output")]
-    ReadStdout(#[source] std::io::Error),
+    ReadStdout(#[source] Arc<std::io::Error>),
 
     /// An error occurred while reading standard error.
     #[error("error reading standard error")]
-    ReadStderr(#[source] std::io::Error),
+    ReadStderr(#[source] Arc<std::io::Error>),
 
     /// An error occurred while reading a combined stream.
     #[error("error reading combined stream")]
-    ReadCombined(#[source] std::io::Error),
+    ReadCombined(#[source] Arc<std::io::Error>),
 
     /// An error occurred while waiting for the child process to exit.
     #[error("error waiting for child process to exit")]
-    Wait(#[source] std::io::Error),
+    Wait(#[source] Arc<std::io::Error>),
 }
 
 /// An unknown test group was specified in the config.
