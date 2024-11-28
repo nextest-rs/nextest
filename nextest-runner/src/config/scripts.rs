@@ -610,10 +610,9 @@ mod tests {
     use super::*;
     use crate::{
         config::{test_helpers::*, ConfigExperimental, NextestConfig, ToolConfigFile},
-        errors::{ConfigParseErrorKind, UnknownConfigScriptError},
+        errors::{ConfigParseErrorKind, DisplayErrorChain, UnknownConfigScriptError},
     };
     use camino_tempfile::tempdir;
-    use display_error_chain::DisplayErrorChain;
     use indoc::indoc;
     use maplit::btreeset;
     use test_case::test_case;
