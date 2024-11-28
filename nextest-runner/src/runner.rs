@@ -22,7 +22,7 @@ use crate::{
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
-    test_command::{ChildFds, ChildOutputMut},
+    test_command::{ChildAccumulator, ChildFds, ChildOutputMut},
     test_output::{CaptureStrategy, ChildSplitOutput, TestExecutionOutput},
     time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
 };
@@ -849,15 +849,13 @@ impl<'a> TestRunnerInner<'a> {
 
         let mut timeout_hit = 0;
 
-        let mut child_fds = ChildFds::new_split(child.stdout.take(), child.stderr.take());
-        let mut child_acc = child_fds.make_acc();
+        let child_fds = ChildFds::new_split(child.stdout.take(), child.stderr.take());
+        let mut child_acc = ChildAccumulator::new(child_fds);
 
         let (res, leaked) = {
             let res = loop {
                 tokio::select! {
-                    _ = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {
-                        // Some data was read from the child's stdout/stderr.
-                    }
+                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
                     res = child.wait() => {
                         // The setup script finished executing.
                         break res;
@@ -886,7 +884,14 @@ impl<'a> TestRunnerInner<'a> {
                             // attempt to terminate the slow test.
                             // as there is a race between shutting down a slow test and its own completion
                             // we silently ignore errors to avoid printing false warnings.
-                            imp::terminate_child(&mut child, TerminateMode::Timeout, req_rx, job.as_ref(), slow_timeout.grace_period).await;
+                            imp::terminate_child(
+                                &mut child,
+                                &mut child_acc,
+                                TerminateMode::Timeout,
+                                req_rx,
+                                job.as_ref(),
+                                slow_timeout.grace_period,
+                            ).await;
                             status = Some(ExecutionResult::Timeout);
                             if slow_timeout.grace_period.is_zero() {
                                 break child.wait().await;
@@ -905,6 +910,7 @@ impl<'a> TestRunnerInner<'a> {
                             RunUnitRequest::Signal(req) => {
                                 handle_signal_request(
                                     &mut child,
+                                    &mut child_acc,
                                     req,
                                     stopwatch,
                                     interval_sleep.as_mut(),
@@ -927,10 +933,8 @@ impl<'a> TestRunnerInner<'a> {
                 let sleep = tokio::time::sleep(leak_timeout);
 
                 tokio::select! {
-                    _ = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {
-                        // Some data was read from the child's stdout/stderr.
-                    }
-                    () = sleep, if !child_fds.is_done() => {
+                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
+                    () = sleep, if !child_acc.fds.is_done() => {
                         break true;
                     }
                     else => {
@@ -942,19 +946,18 @@ impl<'a> TestRunnerInner<'a> {
             (res, leaked)
         };
 
-        let mut errors = child_fds.into_errors();
         let exit_status = match res {
             Ok(exit_status) => Some(exit_status),
             Err(err) => {
-                errors.push(ChildError::Wait(err));
+                child_acc.errors.push(ChildError::Wait(Arc::new(err)));
                 None
             }
         };
 
-        if !errors.is_empty() {
+        if !child_acc.errors.is_empty() {
             // TODO: we may wish to return whatever parts of the output we did collect here.
             return Err(SetupScriptError::Child {
-                errors: ErrorList(errors),
+                errors: ErrorList(child_acc.errors),
             });
         }
 
@@ -968,7 +971,7 @@ impl<'a> TestRunnerInner<'a> {
             None
         };
 
-        let (stdout, stderr) = match child_acc {
+        let (stdout, stderr) = match child_acc.output {
             ChildOutputMut::Split { stdout, stderr } => (
                 stdout.map(|x| x.freeze().into()),
                 stderr.map(|x| x.freeze().into()),
@@ -1051,15 +1054,16 @@ impl<'a> TestRunnerInner<'a> {
 
         let crate::test_command::Child {
             mut child,
-            mut child_fds,
+            child_fds,
         } = cmd
             .spawn(self.capture_strategy)
             .map_err(RunTestError::Spawn)?;
-        let mut child_acc = child_fds.make_acc();
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
         let _ = imp::assign_process_to_job(&child, job.as_ref());
+
+        let mut child_acc = ChildAccumulator::new(child_fds);
 
         let mut status: Option<ExecutionResult> = None;
         let slow_timeout = test.settings.slow_timeout();
@@ -1075,7 +1079,7 @@ impl<'a> TestRunnerInner<'a> {
         let (res, leaked) = {
             let res = loop {
                 tokio::select! {
-                    () = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {}
+                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
                     res = child.wait() => {
                         // The test finished executing.
                         break res;
@@ -1106,6 +1110,7 @@ impl<'a> TestRunnerInner<'a> {
                             // errors to avoid printing false warnings.
                             imp::terminate_child(
                                 &mut child,
+                                &mut child_acc,
                                 TerminateMode::Timeout,
                                 req_rx,
                                 job.as_ref(),
@@ -1129,6 +1134,7 @@ impl<'a> TestRunnerInner<'a> {
                             RunUnitRequest::Signal(req) => {
                                 handle_signal_request(
                                     &mut child,
+                                    &mut child_acc,
                                     req,
                                     stopwatch,
                                     interval_sleep.as_mut(),
@@ -1152,13 +1158,13 @@ impl<'a> TestRunnerInner<'a> {
 
                 tokio::select! {
                     // All of the branches here need to check for
-                    // `!child_fds.is_done()`, because if child_fds is done we
+                    // `!child_acc.fds.is_done()`, because if child_fds is done we
                     // want to hit the `else` block right away.
-                    () = child_fds.fill_buf(&mut child_acc), if !child_fds.is_done() => {}
-                    () = sleep, if !child_fds.is_done() => {
+                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
+                    () = sleep, if !child_acc.fds.is_done() => {
                         break true;
                     }
-                    recv = req_rx.recv(), if !child_fds.is_done() => {
+                    recv = req_rx.recv(), if !child_acc.fds.is_done() => {
                         // The sender stays open longer than the whole loop, and the buffer is big
                         // enough for all messages ever sent through this channel, so a RecvError
                         // should never happen.
@@ -1179,19 +1185,18 @@ impl<'a> TestRunnerInner<'a> {
             (res, leaked)
         };
 
-        let mut errors = child_fds.into_errors();
         let exit_status = match res {
             Ok(exit_status) => Some(exit_status),
             Err(err) => {
-                errors.push(ChildError::Wait(err));
+                child_acc.errors.push(ChildError::Wait(Arc::new(err)));
                 None
             }
         };
 
-        if !errors.is_empty() {
+        if !child_acc.errors.is_empty() {
             // TODO: we may wish to return whatever parts of the output we did collect here.
             return Err(RunTestError::Child {
-                errors: ErrorList(errors),
+                errors: ErrorList(child_acc.errors),
             });
         }
 
@@ -1199,7 +1204,7 @@ impl<'a> TestRunnerInner<'a> {
         let result = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
 
         Ok(InternalExecuteStatus {
-            output: TestExecutionOutput::Output(child_acc.freeze()),
+            output: TestExecutionOutput::Output(child_acc.output.freeze()),
             result,
             stopwatch_end: stopwatch.snapshot(),
             is_slow,
@@ -1223,8 +1228,13 @@ fn drain_req_rx(mut receiver: UnboundedReceiver<RunUnitRequest>) {
     }
 }
 
+// It would be nice to fix this function to not have so many arguments, but this
+// code is actively being refactored right now and imposing too much structure
+// can cause more harm than good.
+#[allow(clippy::too_many_arguments)]
 async fn handle_signal_request(
-    child: &mut tokio::process::Child,
+    child: &mut Child,
+    child_acc: &mut ChildAccumulator,
     req: SignalRequest,
     // These annotations are needed to silence lints on non-Unix platforms.
     #[allow(unused_variables)] stopwatch: &mut StopwatchStart,
@@ -1258,6 +1268,7 @@ async fn handle_signal_request(
         SignalRequest::Shutdown(event) => {
             imp::terminate_child(
                 child,
+                child_acc,
                 TerminateMode::Signal(event),
                 req_rx,
                 job,
@@ -2539,6 +2550,7 @@ mod imp {
 
     pub(super) async fn terminate_child(
         child: &mut Child,
+        _child_acc: &mut ChildAccumulator,
         mode: TerminateMode,
         _req_rx: &mut UnboundedReceiver<RunUnitRequest>,
         job: Option<&Job>,
@@ -2622,8 +2634,11 @@ mod imp {
         unsafe { libc::raise(SIGSTOP) };
     }
 
+    // TODO: should this indicate whether the process exited immediately? Could
+    // do this with a non-async fn that optionally returns a future to await on.
     pub(super) async fn terminate_child(
         child: &mut Child,
+        child_acc: &mut ChildAccumulator,
         mode: TerminateMode,
         req_rx: &mut UnboundedReceiver<RunUnitRequest>,
         _job: Option<&Job>,
@@ -2655,6 +2670,7 @@ mod imp {
 
             loop {
                 tokio::select! {
+                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
                     _ = child.wait() => {
                         // The process exited.
                         break;
