@@ -64,10 +64,38 @@ impl PausableSleep {
         }
     }
 
-    /// Resets the inner sleep to now + the original duration.
-    pub(crate) fn reset_original_duration(self: Pin<&mut Self>) {
+    /// Resets the sleep to the given duration.
+    ///
+    /// * If the timer is currently running, it will be reset to
+    ///   `Instant::now()` plus the last duration provided via
+    ///   [`pausable_sleep`] or [`Self::reset`].
+    ///
+    /// * If it is currently paused, it will be reset to the new duration
+    ///   whenever it is resumed.
+    pub(crate) fn reset(self: Pin<&mut Self>, duration: Duration) {
         let this = self.project();
-        this.sleep.reset(Instant::now() + *this.duration);
+        *this.duration = duration;
+        match this.pause_state {
+            SleepPauseState::Running => {
+                this.sleep.reset(Instant::now() + duration);
+            }
+            SleepPauseState::Paused { remaining } => {
+                *remaining = duration;
+            }
+        }
+    }
+
+    /// Resets the sleep to the last duration provided.
+    ///
+    /// * If the timer is currently running, it will be reset to
+    ///   `Instant::now()` plus the last duration provided via
+    ///   [`pausable_sleep`] or [`Self::reset`].
+    ///
+    /// * If it is currently paused, it will be reset to the new duration
+    ///   whenever it is resumed.
+    pub(crate) fn reset_last_duration(self: Pin<&mut Self>) {
+        let duration = self.duration;
+        self.reset(duration);
     }
 }
 
@@ -76,14 +104,18 @@ impl Future for PausableSleep {
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
-        match &this.pause_state {
-            SleepPauseState::Running => this.sleep.poll(cx),
-            SleepPauseState::Paused { .. } => Poll::Pending,
-        }
+        // Always call into this.sleep.
+        //
+        // We don't do anything special for paused sleeps here. That's because
+        // on pause, the sleep is reset to a far future deadline. Calling poll
+        // will mean that the future gets registered with the time driver (so is
+        // not going to be stuck without a waker, even though the waker will
+        // never end up waking the task in practice).
+        this.sleep.poll(cx)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum SleepPauseState {
     Running,
     Paused { remaining: Duration },
@@ -96,4 +128,59 @@ fn far_future() -> Instant {
     // or convert specific date in the future to instant.
     // 1000 years overflows on macOS, 100 years overflows on FreeBSD.
     Instant::now() + Duration::from_secs(86400 * 365 * 30)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn reset_on_sleep() {
+        const TICK: Duration = Duration::from_millis(500);
+
+        // Create a very short timer.
+        let mut sleep = std::pin::pin!(pausable_sleep(Duration::from_millis(1)));
+
+        // Pause the timer.
+        sleep.as_mut().pause();
+        assert!(
+            !sleep.as_mut().sleep.is_elapsed(),
+            "underlying sleep has been suspended"
+        );
+
+        // Now set the timer to one tick. This should *not* cause the timer to
+        // be reset -- instead, the new timer should be buffered until the timer
+        // is resumed.
+        sleep.as_mut().reset(TICK);
+        assert_eq!(
+            sleep.as_ref().pause_state,
+            SleepPauseState::Paused { remaining: TICK }
+        );
+        assert!(
+            !sleep.as_mut().sleep.is_elapsed(),
+            "underlying sleep is still suspended"
+        );
+
+        // Now sleep for 2 ticks. The timer should still be paused and not
+        // completed.
+        tokio::time::sleep(2 * TICK).await;
+        assert!(
+            !sleep.as_mut().sleep.is_elapsed(),
+            "underlying sleep is still suspended after waiting 2 ticks"
+        );
+
+        // Now resume the timer and wait for it to complete. It should take
+        // around 1 tick starting from this point.
+
+        let now = Instant::now();
+        sleep.as_mut().resume();
+        sleep.as_mut().await;
+
+        assert!(
+            sleep.as_mut().sleep.is_elapsed(),
+            "underlying sleep has finally elapsed"
+        );
+
+        assert!(now.elapsed() >= TICK);
+    }
 }

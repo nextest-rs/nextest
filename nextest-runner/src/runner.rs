@@ -893,7 +893,7 @@ impl<'a> TestRunnerInner<'a> {
                             }
                             // Don't break here to give the wait task a chance to finish.
                         } else {
-                            interval_sleep.as_mut().reset_original_duration();
+                            interval_sleep.as_mut().reset_last_duration();
                         }
                     }
                     recv = req_rx.recv() => {
@@ -1117,7 +1117,7 @@ impl<'a> TestRunnerInner<'a> {
                             }
                             // Don't break here to give the wait task a chance to finish.
                         } else {
-                            interval_sleep.as_mut().reset_original_duration();
+                            interval_sleep.as_mut().reset_last_duration();
                         }
                     }
                     recv = req_rx.recv() => {
