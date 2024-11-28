@@ -346,6 +346,13 @@ pub(crate) enum SetupScriptError {
 #[derive(Clone, Debug)]
 pub struct ErrorList<T>(pub Vec<T>);
 
+impl<T> ErrorList<T> {
+    /// Returns true if the error list is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 impl<T: std::error::Error> fmt::Display for ErrorList<T> {
     fn fmt(&self, mut f: &mut fmt::Formatter) -> fmt::Result {
         // If a single error occurred, pretend that this is just that.
@@ -356,15 +363,8 @@ impl<T: std::error::Error> fmt::Display for ErrorList<T> {
         // Otherwise, list all errors.
         writeln!(f, "{} errors occurred:", self.0.len())?;
         for error in &self.0 {
-            writeln!(f, "- {}", error)?;
-            // Also display the chain of causes here, since we can't return a single error in the
-            // causes section below.
-            let mut indent = IndentWriter::new("  ", f);
-            let mut cause = error.source();
-            while let Some(cause_error) = cause {
-                writeln!(indent, "Caused by: {}", cause_error)?;
-                cause = cause_error.source();
-            }
+            let mut indent = IndentWriter::new_skip_initial("  ", f);
+            writeln!(indent, "* {}", DisplayErrorChain(error))?;
             f = indent.into_inner();
         }
         Ok(())
@@ -379,6 +379,44 @@ impl<T: std::error::Error> std::error::Error for ErrorList<T> {
             // More than one error occurred, so we can't return a single error here. Instead, we
             // return `None` and display the chain of causes in `fmt::Display`.
             None
+        }
+    }
+}
+
+/// A wrapper type to display a chain of errors with internal indentation.
+///
+/// This is similar to the display-error-chain crate, but uses IndentWriter
+/// internally to ensure that subsequent lines are also nested.
+pub(crate) struct DisplayErrorChain<E>(E);
+
+impl<E: std::error::Error> DisplayErrorChain<E> {
+    pub(crate) fn new(error: E) -> Self {
+        Self(error)
+    }
+}
+
+impl<E> fmt::Display for DisplayErrorChain<E>
+where
+    E: std::error::Error,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)?;
+
+        let Some(mut cause) = self.0.source() else {
+            return Ok(());
+        };
+
+        write!(f, "\n  caused by:")?;
+
+        let mut indent = IndentWriter::new_skip_initial("  ", f);
+        loop {
+            write!(indent, "\n- {}", cause)?;
+
+            let Some(next_cause) = cause.source() else {
+                break Ok(());
+            };
+
+            cause = next_cause;
         }
     }
 }
@@ -1757,3 +1795,100 @@ mod self_update_errors {
 
 #[cfg(feature = "self-update")]
 pub use self_update_errors::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_error_chain() {
+        let err1 = StringError::new("err1", None);
+
+        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&err1)), @"err1");
+
+        let err2 = StringError::new("err2", Some(err1));
+        let err3 = StringError::new("err3\nerr3 line 2", Some(err2));
+
+        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&err3)), @r"
+        err3
+        err3 line 2
+          caused by:
+          - err2
+          - err1
+        ");
+    }
+
+    #[test]
+    fn display_error_list() {
+        let err1 = StringError::new("err1", None);
+
+        let error_list = ErrorList(vec![err1.clone()]);
+        insta::assert_snapshot!(format!("{}", error_list), @"err1");
+        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @"err1");
+
+        let err2 = StringError::new("err2", Some(err1));
+        let err3 = StringError::new("err3", Some(err2));
+
+        let error_list = ErrorList(vec![err3.clone()]);
+        insta::assert_snapshot!(format!("{}", error_list), @"err3");
+        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @r"
+        err3
+          caused by:
+          - err2
+          - err1
+        ");
+
+        let err4 = StringError::new("err4", None);
+        let err5 = StringError::new("err5", Some(err4));
+        let err6 = StringError::new("err6\nerr6 line 2", Some(err5));
+
+        let error_list = ErrorList(vec![err3, err6]);
+
+        insta::assert_snapshot!(format!("{}", error_list), @r"
+        2 errors occurred:
+        * err3
+            caused by:
+            - err2
+            - err1
+        * err6
+          err6 line 2
+            caused by:
+            - err5
+            - err4
+        ");
+        insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @r"
+        2 errors occurred:
+        * err3
+            caused by:
+            - err2
+            - err1
+        * err6
+          err6 line 2
+            caused by:
+            - err5
+            - err4
+        ");
+    }
+
+    #[derive(Clone, Debug, Error)]
+    struct StringError {
+        message: String,
+        #[source]
+        source: Option<Box<StringError>>,
+    }
+
+    impl StringError {
+        fn new(message: impl Into<String>, source: Option<StringError>) -> Self {
+            Self {
+                message: message.into(),
+                source: source.map(Box::new),
+            }
+        }
+    }
+
+    impl fmt::Display for StringError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.message)
+        }
+    }
+}

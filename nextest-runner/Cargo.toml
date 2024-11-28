@@ -26,7 +26,6 @@ config.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
 debug-ignore.workspace = true
-display-error-chain.workspace = true
 duct.workspace = true
 future-queue.workspace = true
 futures.workspace = true

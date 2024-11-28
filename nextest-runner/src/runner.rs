@@ -13,8 +13,8 @@ use crate::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::{
-        ChildError, ConfigureHandleInheritanceError, ErrorList, RunTestError, SetupScriptError,
-        TestRunnerBuildError, TestRunnerExecuteErrors,
+        ChildError, ConfigureHandleInheritanceError, DisplayErrorChain, ErrorList, RunTestError,
+        SetupScriptError, TestRunnerBuildError, TestRunnerExecuteErrors,
     },
     list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
     reporter::{
@@ -28,7 +28,6 @@ use crate::{
 };
 use async_scoped::TokioScope;
 use chrono::{DateTime, FixedOffset, Local};
-use display_error_chain::DisplayErrorChain;
 use future_queue::StreamExt;
 use futures::prelude::*;
 use nextest_metadata::{FilterMatch, MismatchReason};

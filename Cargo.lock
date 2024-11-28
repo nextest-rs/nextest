@@ -745,12 +745,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "display-error-chain"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bc2146e86bc19f52f4c064a64782f05f139ca464ed72937301631e73f8d6cf5"
-
-[[package]]
 name = "duct"
 version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1726,7 +1720,6 @@ dependencies = [
  "config",
  "console-subscriber",
  "debug-ignore",
- "display-error-chain",
  "duct",
  "dunce",
  "fixture-data",
