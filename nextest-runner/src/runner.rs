@@ -888,6 +888,7 @@ impl<'a> TestRunnerInner<'a> {
                                 &mut child,
                                 &mut child_acc,
                                 TerminateMode::Timeout,
+                                stopwatch,
                                 req_rx,
                                 job.as_ref(),
                                 slow_timeout.grace_period,
@@ -1112,6 +1113,7 @@ impl<'a> TestRunnerInner<'a> {
                                 &mut child,
                                 &mut child_acc,
                                 TerminateMode::Timeout,
+                                stopwatch,
                                 req_rx,
                                 job.as_ref(),
                                 slow_timeout.grace_period,
@@ -1237,7 +1239,7 @@ async fn handle_signal_request(
     child_acc: &mut ChildAccumulator,
     req: SignalRequest,
     // These annotations are needed to silence lints on non-Unix platforms.
-    #[allow(unused_variables)] stopwatch: &mut StopwatchStart,
+    stopwatch: &mut StopwatchStart,
     #[allow(unused_mut, unused_variables)] mut interval_sleep: Pin<&mut PausableSleep>,
     req_rx: &mut UnboundedReceiver<RunUnitRequest>,
     job: Option<&imp::Job>,
@@ -1270,6 +1272,7 @@ async fn handle_signal_request(
                 child,
                 child_acc,
                 TerminateMode::Signal(event),
+                stopwatch,
                 req_rx,
                 job,
                 grace_period,
@@ -2552,6 +2555,7 @@ mod imp {
         child: &mut Child,
         _child_acc: &mut ChildAccumulator,
         mode: TerminateMode,
+        _stopwatch: &mut StopwatchStart,
         _req_rx: &mut UnboundedReceiver<RunUnitRequest>,
         job: Option<&Job>,
         _grace_period: Duration,
@@ -2640,6 +2644,7 @@ mod imp {
         child: &mut Child,
         child_acc: &mut ChildAccumulator,
         mode: TerminateMode,
+        stopwatch: &mut StopwatchStart,
         req_rx: &mut UnboundedReceiver<RunUnitRequest>,
         _job: Option<&Job>,
         grace_period: Duration,
@@ -2683,6 +2688,7 @@ mod imp {
 
                         match req {
                             RunUnitRequest::Signal(SignalRequest::Stop(sender)) => {
+                                stopwatch.pause();
                                 sleep.as_mut().pause();
                                 imp::job_control_child(child, JobControlEvent::Stop);
                                 let _ = sender.send(());
@@ -2690,6 +2696,7 @@ mod imp {
                             RunUnitRequest::Signal(SignalRequest::Continue) => {
                                 // Possible to receive a Continue at the beginning of execution.
                                 if !sleep.is_paused() {
+                                    stopwatch.resume();
                                     sleep.as_mut().resume();
                                 }
                                 imp::job_control_child(child, JobControlEvent::Continue);
