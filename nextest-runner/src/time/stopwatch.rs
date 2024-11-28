@@ -76,7 +76,7 @@ impl StopwatchStart {
 }
 
 /// A snapshot of the state of the stopwatch.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct StopwatchSnapshot {
     /// The time at which the stopwatch was started.
     pub(crate) start_time: DateTime<Local>,
@@ -90,7 +90,7 @@ pub(crate) struct StopwatchSnapshot {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum StopwatchPauseState {
+enum StopwatchPauseState {
     Running,
     Paused { paused_at: Instant },
 }

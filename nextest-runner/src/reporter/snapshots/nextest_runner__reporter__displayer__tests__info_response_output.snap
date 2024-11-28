@@ -1,0 +1,122 @@
+---
+source: nextest-runner/src/reporter/displayer.rs
+expression: "String::from_utf8(out).expect(\"output only consists of UTF-8\")"
+snapshot_kind: text
+---
+────────────
+info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed, 1 exec failed, 1 timed out, 5 skipped in 0.000s
+
+* 1/20:   setup: setup arg1 arg2
+  status: script running for 1.234s as PID 4567
+  stdout:
+    script stdout 1
+  stderr:
+    script stderr 1
+
+
+────────
+
+* 2/20:   setup-slow: setup-slow arg1 arg2
+  status: script running for 1.234s as PID 4568 (marked slow after 1.000s)
+  errors:
+    error reading standard output
+      caused by:
+      - read stdout error
+  output:
+    script output 2
+
+
+────────
+
+* 3/20:   setup-terminating: setup-terminating arg1 arg2
+  status: terminating script PID 5094 due to signal (script ran for 1.234s)
+  note:   fake termination method; spent 6.789s waiting for script to exit, will kill after another 9.786s
+  errors:
+    2 errors occurred executing script:
+    * error reading standard output
+        caused by:
+        - read stdout error
+    * error reading standard error
+        caused by:
+        - read stderr error
+
+  stdout:
+    script output 3
+  stderr:
+    script stderr 3
+
+
+────────
+
+* 4/20:   setup-exiting: setup-exiting arg1 arg2
+  status: script failed to execute after 1.234s (marked slow after 1.000s)
+  note:   spent 10.467s waiting for script PID 9987 to shut down, will mark as leaky after another 0.335s
+  errors:
+    error spawning child process
+      caused by:
+      - exec error
+
+
+────────
+
+* 5/20:   setup-exited: setup-exited arg1 arg2
+  status: script failed with leaked handles after 9.999s (marked slow after 3.000s)
+  errors:
+    error spawning child process
+      caused by:
+      - exec error
+
+
+────────
+
+* 6/20:   my-binary-id test1
+  status: test running for 0.400s as PID 12345
+  stdout:
+    abc
+  stderr:
+    def
+
+
+────────
+
+* 7/20:   my-binary-id test2
+  status: (attempt 2/3) terminating test PID 12346 due to timeout (test ran for 99.999s)
+  note:   fake termination method; spent 6.789s waiting for test to exit, will kill after another 9.786s
+  stdout:
+    abc
+  stderr:
+    def
+
+
+────────
+
+* 8/20:   my-binary-id test3
+  status: (attempt 2/3) test failed with unknown status after 99.999s (marked slow after 33.333s)
+  stdout:
+    abc
+  stderr:
+    def
+
+
+────────
+
+* 9/20:   my-binary-id test4
+  status: test passed after 99.999s (marked slow after 33.333s)
+  errors:
+    error waiting for child process to exit
+      caused by:
+      - error waiting
+  output:
+    abc
+    def
+    ghi
+
+
+────────
+
+* 10/20:  my-binary-id test4
+  status: (attempt 1/5) test failed to execute, currently waiting before next attempt
+  note:   waited 1.234s so far, will wait another 5.678s before retrying test
+
+info: missing 2 responses
+────────────

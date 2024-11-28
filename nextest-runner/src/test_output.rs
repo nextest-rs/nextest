@@ -112,6 +112,25 @@ pub enum ChildExecutionOutput {
     StartError(ChildStartError),
 }
 
+impl ChildExecutionOutput {
+    /// Returns true if there are any errors in this output.
+    pub(crate) fn has_errors(&self) -> bool {
+        match self {
+            ChildExecutionOutput::Output { errors, result, .. } => {
+                if errors.is_some() {
+                    return true;
+                }
+                if let Some(result) = result {
+                    return !result.is_success();
+                }
+
+                false
+            }
+            ChildExecutionOutput::StartError(_) => true,
+        }
+    }
+}
+
 /// The output of a child process: stdout and/or stderr.
 ///
 /// Part of [`ChildExecutionOutput`], and can be used independently as well.

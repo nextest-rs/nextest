@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    errors::ChildFdError,
-    test_output::{CaptureStrategy, ChildOutput, ChildSplitOutput},
+    errors::{ChildFdError, ErrorList},
+    test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
 };
 use bytes::BytesMut;
 use std::{io, process::Stdio, sync::Arc};
@@ -161,6 +161,17 @@ impl ChildAccumulator {
             self.errors.push(error);
         }
     }
+
+    pub(crate) fn snapshot_in_progress(
+        &self,
+        error_description: &'static str,
+    ) -> ChildExecutionOutput {
+        ChildExecutionOutput::Output {
+            result: None,
+            output: self.output.snapshot(),
+            errors: ErrorList::new(error_description, self.errors.clone()),
+        }
+    }
 }
 
 /// File descriptors (or Windows handles) for the child process.
@@ -273,6 +284,21 @@ impl ChildOutputMut {
         match self {
             Self::Combined(combined) => combined,
             _ => panic!("ChildOutput is not combined"),
+        }
+    }
+
+    /// Makes a snapshot of the current output, returning a [`TestOutput`].
+    ///
+    /// This requires cloning the output so it's more expensive than [`Self::freeze`].
+    pub(crate) fn snapshot(&self) -> ChildOutput {
+        match self {
+            Self::Split { stdout, stderr } => ChildOutput::Split(ChildSplitOutput {
+                stdout: stdout.as_ref().map(|x| x.clone().freeze().into()),
+                stderr: stderr.as_ref().map(|x| x.clone().freeze().into()),
+            }),
+            Self::Combined(combined) => ChildOutput::Combined {
+                output: combined.clone().freeze().into(),
+            },
         }
     }
 

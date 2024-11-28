@@ -18,13 +18,16 @@ use crate::{
     },
     list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
     reporter::{
-        CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestEventKind, TestOutputDisplay,
-        UnitKind,
+        CancelReason, FinalStatusLevel, InfoResponse, SetupScriptInfoResponse, StatusLevel,
+        TestEvent, TestEventKind, TestInfoResponse, TestOutputDisplay, UnitKind, UnitState,
     },
-    signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
+    signal::{
+        JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind,
+        SignalInfoEvent,
+    },
     target_runner::TargetRunner,
     test_command::{ChildAccumulator, ChildFds},
-    test_output::{CaptureStrategy, ChildExecutionOutput},
+    test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
 };
 use async_scoped::TokioScope;
@@ -37,6 +40,7 @@ use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
     collections::BTreeMap,
     convert::Infallible,
+    fmt,
     num::NonZeroUsize,
     pin::Pin,
     process::{ExitStatus, Stdio},
@@ -56,7 +60,7 @@ use tokio::{
     },
     task::JoinError,
 };
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn};
 
 #[derive(Debug)]
 struct BackoffIter {
@@ -254,7 +258,7 @@ impl<'a> TestRunner<'a> {
     ) -> Result<RunStats, TestRunnerExecuteErrors<E>>
     where
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
-        E: Send,
+        E: fmt::Debug + Send,
     {
         let (report_cancel_tx, report_cancel_rx) = oneshot::channel();
 
@@ -352,7 +356,7 @@ impl<'a> TestRunnerInner<'a> {
         let mut report_cancel_rx = std::pin::pin!(report_cancel_rx);
 
         let ((), results) = TokioScope::scope_and_block(move |scope| {
-            let (resp_tx, mut resp_rx) = unbounded_channel();
+            let (resp_tx, mut resp_rx) = unbounded_channel::<InternalTestEvent<'a>>();
             let (cancellation_sender, _cancel_receiver) = broadcast::channel(1);
 
             let exec_cancellation_sender = cancellation_sender.clone();
@@ -457,6 +461,61 @@ impl<'a> TestRunnerInner<'a> {
                             ctx_mut
                                 .broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                         }
+                        Ok(Some(HandleEventResponse::Info(_))) => {
+                            // In reality, this is bounded by the number of
+                            // tests running at the same time.
+                            let (sender, mut receiver) = unbounded_channel();
+                            ctx_mut.broadcast_request(RunUnitRequest::Query(
+                                RunUnitQuery::GetInfo(sender),
+                            ));
+
+                            let mut index = 0;
+                            let total = receiver.sender_strong_count();
+
+                            ctx_mut.info_started(total);
+                            debug!(expected = total, "waiting for info responses");
+
+                            loop {
+                                // Don't wait too long for tasks to respond, to
+                                // avoid a hung displayer.
+                                let sleep = tokio::time::sleep(Duration::from_millis(100));
+                                tokio::select! {
+                                    res = receiver.recv() => {
+                                        debug!(
+                                            expected = total,
+                                            remaining = receiver.sender_strong_count(),
+                                            "received info response",
+                                        );
+
+                                        if let Some(info) = res {
+                                            // TODO: ideally we would always get
+                                            // the expected number of messages.
+                                            // We should handle the case where
+                                            // tests have *just* finished
+                                            // slightly better -- should return
+                                            // a value in drain_req_rx.
+                                            ctx_mut.info_response(
+                                                index,
+                                                total,
+                                                info,
+                                            );
+                                            index += 1;
+                                        } else {
+                                            break;
+                                        }
+                                    }
+                                    _ = sleep => {
+                                        debug!(
+                                            remaining = receiver.sender_strong_count(),
+                                            "timeout waiting for tests to stop, ignoring",
+                                        );
+                                        break;
+                                    }
+                                };
+                            }
+
+                            ctx_mut.info_finished(receiver.sender_strong_count());
+                        }
                         #[cfg(not(unix))]
                         Ok(Some(HandleEventResponse::JobControl(e))) => {
                             // On platforms other than Unix this enum is expected to be empty;
@@ -551,6 +610,11 @@ impl<'a> TestRunnerInner<'a> {
                         let status = self
                             .run_setup_script(packet, &this_resp_tx, &mut req_rx)
                             .await;
+
+                        // Drain the request receiver, responding to any final
+                        // requests that may have been sent.
+                        drain_req_rx(req_rx, UnitExecuteStatus::SetupScript(&status));
+
                         let (status, env_map) = status.into_external();
 
                         let _ = this_resp_tx.send(InternalTestEvent::SetupScriptFinished {
@@ -561,7 +625,6 @@ impl<'a> TestRunnerInner<'a> {
                             status,
                         });
 
-                        drain_req_rx(req_rx);
                         _ = completion_sender.send(env_map.map(|env_map| (script, env_map)));
                     };
 
@@ -672,10 +735,8 @@ impl<'a> TestRunnerInner<'a> {
                                     delay_before_start: delay,
                                 };
 
-                                let run_status = self
-                                    .run_test(packet, &this_resp_tx, &mut req_rx)
-                                    .await
-                                    .into_external(retry_data);
+                                let run_status =
+                                    self.run_test(packet, &this_resp_tx, &mut req_rx).await;
 
                                 if run_status.result.is_success() {
                                     // The test succeeded.
@@ -689,6 +750,10 @@ impl<'a> TestRunnerInner<'a> {
                                         .next()
                                         .expect("backoff delay must be non-empty");
 
+                                    let run_status = run_status.into_external();
+                                    let previous_result = run_status.result;
+                                    let previous_slow = run_status.is_slow;
+
                                     let _ = this_resp_tx.send(
                                         InternalTestEvent::AttemptFailedWillRetry {
                                             test_instance,
@@ -699,6 +764,9 @@ impl<'a> TestRunnerInner<'a> {
                                     );
 
                                     handle_delay_between_attempts(
+                                        packet,
+                                        previous_result,
+                                        previous_slow,
                                         delay,
                                         &mut cancel_receiver,
                                         &mut req_rx,
@@ -710,10 +778,13 @@ impl<'a> TestRunnerInner<'a> {
                                 }
                             };
 
+                            drain_req_rx(req_rx, UnitExecuteStatus::Test(&last_run_status));
+
                             // At this point, either:
                             // * the test has succeeded, or
                             // * the test has failed and we've run out of retries.
                             // In either case, the test is finished.
+                            let last_run_status = last_run_status.into_external();
                             let _ = this_resp_tx.send(InternalTestEvent::Finished {
                                 test_instance,
                                 success_output: settings.success_output(),
@@ -722,8 +793,6 @@ impl<'a> TestRunnerInner<'a> {
                                 junit_store_failure_output: settings.junit_store_failure_output(),
                                 last_run_status,
                             });
-
-                            drain_req_rx(req_rx);
                         };
                         (threads_required, test_group, fut)
                     })
@@ -755,36 +824,39 @@ impl<'a> TestRunnerInner<'a> {
     // ---
 
     /// Run an individual setup script in its own process.
+    #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
     async fn run_setup_script(
         &self,
         script: SetupScriptPacket<'a>,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
-        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
-    ) -> InternalSetupScriptExecuteStatus {
+        req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
+    ) -> InternalSetupScriptExecuteStatus<'a> {
         let mut stopwatch = crate::time::stopwatch();
 
         match self
-            .run_setup_script_inner(script, &mut stopwatch, resp_tx, req_rx)
+            .run_setup_script_inner(script.clone(), &mut stopwatch, resp_tx, req_rx)
             .await
         {
             Ok(status) => status,
             Err(error) => InternalSetupScriptExecuteStatus {
+                script,
+                slow_after: None,
                 output: ChildExecutionOutput::StartError(error),
                 result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.snapshot(),
-                is_slow: false,
                 env_map: None,
             },
         }
     }
 
+    #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
     async fn run_setup_script_inner(
         &self,
         script: SetupScriptPacket<'a>,
         stopwatch: &mut StopwatchStart,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
-        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
-    ) -> Result<InternalSetupScriptExecuteStatus, ChildStartError> {
+        req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
+    ) -> Result<InternalSetupScriptExecuteStatus<'a>, ChildStartError> {
         let mut cmd = script.make_command(&self.double_spawn, self.test_list)?;
         let command_mut = cmd.command_mut();
 
@@ -809,6 +881,9 @@ impl<'a> TestRunnerInner<'a> {
         let (mut child, env_path) = cmd
             .spawn()
             .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
+        let child_pid = child
+            .id()
+            .expect("child has never been polled so must return a PID");
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
@@ -827,7 +902,6 @@ impl<'a> TestRunnerInner<'a> {
             .config
             .leak_timeout
             .unwrap_or(Duration::from_millis(100));
-        let mut is_slow = false;
 
         let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
 
@@ -835,6 +909,11 @@ impl<'a> TestRunnerInner<'a> {
 
         let child_fds = ChildFds::new_split(child.stdout.take(), child.stderr.take());
         let mut child_acc = ChildAccumulator::new(child_fds);
+
+        let mut cx = UnitContext {
+            packet: UnitPacket::SetupScript(script.clone()),
+            slow_after: None,
+        };
 
         let (res, leaked) = {
             let res = loop {
@@ -845,7 +924,9 @@ impl<'a> TestRunnerInner<'a> {
                         break res;
                     }
                     _ = &mut interval_sleep, if status.is_none() => {
-                        is_slow = true;
+                        // Mark the script as slow.
+                        cx.slow_after = Some(slow_timeout.period);
+
                         timeout_hit += 1;
                         let will_terminate = if let Some(terminate_after) = slow_timeout.terminate_after {
                             NonZeroUsize::new(timeout_hit as usize)
@@ -869,6 +950,7 @@ impl<'a> TestRunnerInner<'a> {
                             // as there is a race between shutting down a slow test and its own completion
                             // we silently ignore errors to avoid printing false warnings.
                             imp::terminate_child(
+                                &cx,
                                 &mut child,
                                 &mut child_acc,
                                 TerminateMode::Timeout,
@@ -894,6 +976,7 @@ impl<'a> TestRunnerInner<'a> {
                         match req {
                             RunUnitRequest::Signal(req) => {
                                 handle_signal_request(
+                                    &cx,
                                     &mut child,
                                     &mut child_acc,
                                     req,
@@ -904,29 +987,38 @@ impl<'a> TestRunnerInner<'a> {
                                     slow_timeout.grace_period
                                 ).await;
                             }
+                            RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
+                                _ = sender.send(script.info_response(
+                                    UnitState::Running {
+                                        pid: child_pid,
+                                        time_taken:             stopwatch.snapshot().active,
+                                        slow_after: cx.slow_after,
+                                    },
+                                    child_acc.snapshot_in_progress(UnitKind::WAITING_ON_SCRIPT_MESSAGE),
+                                ));
+                            }
                         }
                     }
                 }
             };
 
-            // Once the process is done executing, wait up to leak_timeout for the pipes to shut down.
-            // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
-            // didn't shut down properly. Now, this detects those cases and marks them as leaked.
-            let leaked = loop {
-                // Ignore stop and continue events here since the leak timeout should be very small.
-                // TODO: we may want to consider them.
-                let sleep = tokio::time::sleep(leak_timeout);
+            // Build a tentative status using status and the exit status.
+            let tentative_status = status.or_else(|| {
+                res.as_ref()
+                    .ok()
+                    .map(|res| create_execution_result(*res, &child_acc.errors, false))
+            });
 
-                tokio::select! {
-                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
-                    () = sleep, if !child_acc.fds.is_done() => {
-                        break true;
-                    }
-                    else => {
-                        break false;
-                    }
-                }
-            };
+            let leaked = detect_fd_leaks(
+                &cx,
+                child_pid,
+                &mut child_acc,
+                tentative_status,
+                leak_timeout,
+                stopwatch,
+                req_rx,
+            )
+            .await;
 
             (res, leaked)
         };
@@ -959,6 +1051,8 @@ impl<'a> TestRunnerInner<'a> {
         };
 
         Ok(InternalSetupScriptExecuteStatus {
+            script,
+            slow_after: cx.slow_after,
             output: ChildExecutionOutput::Output {
                 result: Some(exec_result),
                 output: child_acc.output.freeze(),
@@ -966,18 +1060,18 @@ impl<'a> TestRunnerInner<'a> {
             },
             result: exec_result,
             stopwatch_end: stopwatch.snapshot(),
-            is_slow,
             env_map,
         })
     }
 
     /// Run an individual test in its own process.
-    async fn run_test(
+    #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
+    async fn run_test<'test>(
         &self,
-        test: TestPacket<'a, '_>,
+        test: TestPacket<'a, 'test>,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
-        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
-    ) -> InternalExecuteStatus {
+        req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
+    ) -> InternalExecuteStatus<'a, 'test> {
         let mut stopwatch = crate::time::stopwatch();
         let delay_before_start = test.delay_before_start;
 
@@ -987,22 +1081,24 @@ impl<'a> TestRunnerInner<'a> {
         {
             Ok(run_status) => run_status,
             Err(error) => InternalExecuteStatus {
+                test,
+                slow_after: None,
                 output: ChildExecutionOutput::StartError(error),
                 result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.snapshot(),
-                is_slow: false,
                 delay_before_start,
             },
         }
     }
 
-    async fn run_test_inner(
+    #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
+    async fn run_test_inner<'test>(
         &self,
-        test: TestPacket<'a, '_>,
+        test: TestPacket<'a, 'test>,
         stopwatch: &mut StopwatchStart,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
-        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
-    ) -> Result<InternalExecuteStatus, ChildStartError> {
+        req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
+    ) -> Result<InternalExecuteStatus<'a, 'test>, ChildStartError> {
         let ctx = TestExecuteContext {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
@@ -1032,6 +1128,14 @@ impl<'a> TestRunnerInner<'a> {
             .spawn(self.capture_strategy)
             .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
 
+        // Note: The PID stored here must be used with care -- it might be
+        // outdated and have been reused by the kernel in case the process
+        // has exited. If using for any real logic (not just reporting) it
+        // might be best to always check child.id().
+        let child_pid = child
+            .id()
+            .expect("child has never been polled so must return a PID");
+
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
         let _ = imp::assign_process_to_job(&child, job.as_ref());
@@ -1041,13 +1145,17 @@ impl<'a> TestRunnerInner<'a> {
         let mut status: Option<ExecutionResult> = None;
         let slow_timeout = test.settings.slow_timeout();
         let leak_timeout = test.settings.leak_timeout();
-        let mut is_slow = false;
 
-        // Use a pausable_sleep rather than an interval here because it's much harder to pause and
-        // resume an interval.
+        // Use a pausable_sleep rather than an interval here because it's much
+        // harder to pause and resume an interval.
         let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
 
         let mut timeout_hit = 0;
+
+        let mut cx = UnitContext {
+            packet: UnitPacket::Test(test),
+            slow_after: None,
+        };
 
         let (res, leaked) = {
             let res = loop {
@@ -1058,7 +1166,9 @@ impl<'a> TestRunnerInner<'a> {
                         break res;
                     }
                     _ = &mut interval_sleep, if status.is_none() => {
-                        is_slow = true;
+                        // Mark the test as slow.
+                        cx.slow_after = Some(slow_timeout.period);
+
                         timeout_hit += 1;
                         let will_terminate = if let Some(terminate_after) = slow_timeout.terminate_after {
                             NonZeroUsize::new(timeout_hit as usize)
@@ -1082,6 +1192,7 @@ impl<'a> TestRunnerInner<'a> {
                             // shutting down a slow test and its own completion, we silently ignore
                             // errors to avoid printing false warnings.
                             imp::terminate_child(
+                                &cx,
                                 &mut child,
                                 &mut child_acc,
                                 TerminateMode::Timeout,
@@ -1107,6 +1218,7 @@ impl<'a> TestRunnerInner<'a> {
                         match req {
                             RunUnitRequest::Signal(req) => {
                                 handle_signal_request(
+                                    &cx,
                                     &mut child,
                                     &mut child_acc,
                                     req,
@@ -1114,47 +1226,41 @@ impl<'a> TestRunnerInner<'a> {
                                     interval_sleep.as_mut(),
                                     req_rx,
                                     job.as_ref(),
-                                    slow_timeout.grace_period
+                                    slow_timeout.grace_period,
                                 ).await;
+                            }
+                            RunUnitRequest::Query(RunUnitQuery::GetInfo(tx)) => {
+                                _ = tx.send(test.info_response(
+                                    UnitState::Running {
+                                        pid: child_pid,
+                                        time_taken: stopwatch.snapshot().active,
+                                        slow_after: cx.slow_after,
+                                    },
+                                    child_acc.snapshot_in_progress(UnitKind::WAITING_ON_TEST_MESSAGE),
+                                ));
                             }
                         }
                     }
                 };
             };
 
-            // Once the process is done executing, wait up to leak_timeout for the pipes to shut down.
-            // Previously, this used to hang if spawned grandchildren inherited stdout/stderr but
-            // didn't shut down properly. Now, this detects those cases and marks them as leaked.
-            let leaked = loop {
-                // Ignore stop and continue events here since the leak timeout should be very small.
-                // TODO: we may want to consider them.
-                let sleep = tokio::time::sleep(leak_timeout);
+            // Build a tentative status using status and the exit status.
+            let tentative_status = status.or_else(|| {
+                res.as_ref()
+                    .ok()
+                    .map(|res| create_execution_result(*res, &child_acc.errors, false))
+            });
 
-                tokio::select! {
-                    // All of the branches here need to check for
-                    // `!child_acc.fds.is_done()`, because if child_fds is done we
-                    // want to hit the `else` block right away.
-                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
-                    () = sleep, if !child_acc.fds.is_done() => {
-                        break true;
-                    }
-                    recv = req_rx.recv(), if !child_acc.fds.is_done() => {
-                        // The sender stays open longer than the whole loop, and the buffer is big
-                        // enough for all messages ever sent through this channel, so a RecvError
-                        // should never happen.
-                        let req = recv.expect("a RecvError should never happen here");
-
-                        match req {
-                            RunUnitRequest::Signal(_) => {
-                                // The process is done executing, so signals are moot.
-                            }
-                        }
-                    }
-                    else => {
-                        break false;
-                    }
-                }
-            };
+            let leaked = detect_fd_leaks(
+                &cx,
+                child_pid,
+                &mut child_acc,
+                tentative_status,
+                leak_timeout,
+                stopwatch,
+                req_rx,
+            )
+            .await;
 
             (res, leaked)
         };
@@ -1172,6 +1278,8 @@ impl<'a> TestRunnerInner<'a> {
             .unwrap_or_else(|| create_execution_result(exit_status, &child_acc.errors, leaked));
 
         Ok(InternalExecuteStatus {
+            test,
+            slow_after: cx.slow_after,
             output: ChildExecutionOutput::Output {
                 result: Some(exec_result),
                 output: child_acc.output.freeze(),
@@ -1179,19 +1287,24 @@ impl<'a> TestRunnerInner<'a> {
             },
             result: exec_result,
             stopwatch_end: stopwatch.snapshot(),
-            is_slow,
             delay_before_start: test.delay_before_start,
         })
     }
 }
 
 /// Drains the request receiver of any messages.
-fn drain_req_rx(mut receiver: UnboundedReceiver<RunUnitRequest>) {
+fn drain_req_rx<'a>(
+    mut receiver: UnboundedReceiver<RunUnitRequest<'a>>,
+    status: UnitExecuteStatus<'a, '_>,
+) {
+    // Mark the receiver closed so no further messages are sent.
+    receiver.close();
     loop {
+        // Receive anything that's left in the receiver.
         let message = receiver.try_recv();
         match message {
             Ok(message) => {
-                message.drain();
+                message.drain(status);
             }
             Err(_) => {
                 break;
@@ -1200,14 +1313,18 @@ fn drain_req_rx(mut receiver: UnboundedReceiver<RunUnitRequest>) {
     }
 }
 
-async fn handle_delay_between_attempts(
+async fn handle_delay_between_attempts<'a>(
+    packet: TestPacket<'a, '_>,
+    previous_result: ExecutionResult,
+    previous_slow: bool,
     delay: Duration,
     cancel_receiver: &mut broadcast::Receiver<()>,
-    req_rx: &mut UnboundedReceiver<RunUnitRequest>,
+    req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
 ) {
     let mut sleep = std::pin::pin!(crate::time::pausable_sleep(delay));
+    #[cfg_attr(not(unix), expect(unused_mut))]
+    let mut waiting_stopwatch = crate::time::stopwatch();
 
-    #[cfg_attr(not(unix), expect(clippy::never_loop))]
     loop {
         tokio::select! {
             _ = &mut sleep => {
@@ -1225,12 +1342,14 @@ async fn handle_delay_between_attempts(
                     #[cfg(unix)]
                     RunUnitRequest::Signal(SignalRequest::Stop(tx)) => {
                         sleep.as_mut().pause();
+                        waiting_stopwatch.pause();
                         _ = tx.send(());
                     }
                     #[cfg(unix)]
                     RunUnitRequest::Signal(SignalRequest::Continue) => {
                         if sleep.is_paused() {
                             sleep.as_mut().resume();
+                            waiting_stopwatch.resume();
                         }
                     }
                     RunUnitRequest::Signal(SignalRequest::Shutdown(_)) => {
@@ -1238,7 +1357,103 @@ async fn handle_delay_between_attempts(
                         // shutdown.
                         break;
                     }
+                    RunUnitRequest::Query(RunUnitQuery::GetInfo(tx)) => {
+                        let waiting_snapshot = waiting_stopwatch.snapshot();
+                        _ = tx.send(
+                            packet.info_response(
+                                UnitState::DelayBeforeNextAttempt {
+                                    previous_result,
+                                    previous_slow,
+                                    waiting_duration: waiting_snapshot.active,
+                                    remaining: delay
+                                        .checked_sub(waiting_snapshot.active)
+                                        .unwrap_or_default(),
+                                },
+                                // This field is ignored but our data model
+                                // requires it.
+                                ChildExecutionOutput::Output {
+                                    result: None,
+                                    output: ChildOutput::Split(ChildSplitOutput {
+                                        stdout: None,
+                                        stderr: None,
+                                    }),
+                                    errors: None,
+                                },
+                            ),
+                        );
+                    }
                 }
+            }
+        }
+    }
+}
+
+/// After a child process has exited, detect if it leaked file handles by
+/// leaving long-running grandchildren open.
+///
+/// This is done by waiting for a short period of time after the child has
+/// exited, and checking if stdout and stderr are still open. In the future, we
+/// could do more sophisticated checks around e.g. if any processes with the
+/// same PGID are around.
+async fn detect_fd_leaks<'a>(
+    cx: &UnitContext<'a, '_>,
+    child_pid: u32,
+    child_acc: &mut ChildAccumulator,
+    tentative_result: Option<ExecutionResult>,
+    leak_timeout: Duration,
+    stopwatch: &mut StopwatchStart,
+    req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
+) -> bool {
+    loop {
+        // Ignore stop and continue events here since the leak timeout should be very small.
+        // TODO: we may want to consider them.
+        let mut sleep = std::pin::pin!(tokio::time::sleep(leak_timeout));
+        let waiting_stopwatch = crate::time::stopwatch();
+
+        tokio::select! {
+            // All of the branches here need to check for
+            // `!child_acc.fds.is_done()`, because if child_fds is done we want
+            // to hit the `else` block right away.
+            () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
+            () = &mut sleep, if !child_acc.fds.is_done() => {
+                break true;
+            }
+            recv = req_rx.recv(), if !child_acc.fds.is_done() => {
+                // The sender stays open longer than the whole loop, and the
+                // buffer is big enough for all messages ever sent through this
+                // channel, so a RecvError should never happen.
+                let req = recv.expect("a RecvError should never happen here");
+
+                match req {
+                    RunUnitRequest::Signal(_) => {
+                        // The process is done executing, so signals are moot.
+                    }
+                    RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
+                        let snapshot = waiting_stopwatch.snapshot();
+                        let resp = cx.info_response(
+                            UnitState::Exiting {
+                                // Because we've polled that the child is done,
+                                // child.id() will likely return None at this
+                                // point. Use the cached PID since this is just
+                                // for reporting.
+                                pid: child_pid,
+                                time_taken: stopwatch.snapshot().active,
+                                slow_after: cx.slow_after,
+                                tentative_result,
+                                waiting_duration: snapshot.active,
+                                remaining: leak_timeout
+                                    .checked_sub(snapshot.active)
+                                    .unwrap_or_default(),
+                            },
+                            child_acc.snapshot_in_progress(cx.packet.kind().waiting_on_message()),
+                        );
+
+                        _ = sender.send(resp);
+                    }
+                }
+            }
+            else => {
+                break false;
             }
         }
     }
@@ -1248,7 +1463,8 @@ async fn handle_delay_between_attempts(
 // code is actively being refactored right now and imposing too much structure
 // can cause more harm than good.
 #[expect(clippy::too_many_arguments)]
-async fn handle_signal_request(
+async fn handle_signal_request<'a>(
+    cx: &UnitContext<'a, '_>,
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
     req: SignalRequest,
@@ -1262,7 +1478,7 @@ async fn handle_signal_request(
     #[cfg_attr(not(unix), allow(unused_mut, unused_variables))] mut interval_sleep: Pin<
         &mut PausableSleep,
     >,
-    req_rx: &mut UnboundedReceiver<RunUnitRequest>,
+    req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     job: Option<&imp::Job>,
     grace_period: Duration,
 ) {
@@ -1290,6 +1506,7 @@ async fn handle_signal_request(
         }
         SignalRequest::Shutdown(event) => {
             imp::terminate_child(
+                cx,
                 child,
                 child_acc,
                 TerminateMode::Signal(event),
@@ -1519,23 +1736,24 @@ pub struct ExecuteStatus {
     pub delay_before_start: Duration,
 }
 
-struct InternalExecuteStatus {
+struct InternalExecuteStatus<'a, 'test> {
+    test: TestPacket<'a, 'test>,
+    slow_after: Option<Duration>,
     output: ChildExecutionOutput,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
-    is_slow: bool,
     delay_before_start: Duration,
 }
 
-impl InternalExecuteStatus {
-    fn into_external(self, retry_data: RetryData) -> ExecuteStatus {
+impl InternalExecuteStatus<'_, '_> {
+    fn into_external(self) -> ExecuteStatus {
         ExecuteStatus {
-            retry_data,
+            retry_data: self.test.retry_data,
             output: self.output,
             result: self.result,
             start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.active,
-            is_slow: self.is_slow,
+            is_slow: self.slow_after.is_some(),
             delay_before_start: self.delay_before_start,
         }
     }
@@ -1561,15 +1779,16 @@ pub struct SetupScriptExecuteStatus {
     pub env_count: Option<usize>,
 }
 
-struct InternalSetupScriptExecuteStatus {
+struct InternalSetupScriptExecuteStatus<'a> {
+    script: SetupScriptPacket<'a>,
+    slow_after: Option<Duration>,
     output: ChildExecutionOutput,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
-    is_slow: bool,
     env_map: Option<SetupScriptEnvMap>,
 }
 
-impl InternalSetupScriptExecuteStatus {
+impl InternalSetupScriptExecuteStatus<'_> {
     fn into_external(self) -> (SetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
         let env_count = self.env_map.as_ref().map(|map| map.len());
         (
@@ -1578,7 +1797,7 @@ impl InternalSetupScriptExecuteStatus {
                 result: self.result,
                 start_time: self.stopwatch_end.start_time.fixed_offset(),
                 time_taken: self.stopwatch_end.active,
-                is_slow: self.is_slow,
+                is_slow: self.slow_after.is_some(),
                 env_count,
             },
             self.env_map,
@@ -1798,12 +2017,13 @@ impl SignalCount {
 
 /// Events sent from the test runner to individual test (or setup script) execution tasks.
 #[derive(Clone, Debug)]
-enum RunUnitRequest {
+enum RunUnitRequest<'a> {
     Signal(SignalRequest),
+    Query(RunUnitQuery<'a>),
 }
 
-impl RunUnitRequest {
-    fn drain(self) {
+impl<'a> RunUnitRequest<'a> {
+    fn drain(self, status: UnitExecuteStatus<'a, '_>) {
         match self {
             #[cfg(unix)]
             Self::Signal(SignalRequest::Stop(sender)) => {
@@ -1813,6 +2033,39 @@ impl RunUnitRequest {
             #[cfg(unix)]
             Self::Signal(SignalRequest::Continue) => {}
             Self::Signal(SignalRequest::Shutdown(_)) => {}
+            Self::Query(RunUnitQuery::GetInfo(tx)) => {
+                // The receiver being dead isn't really important.
+                _ = tx.send(status.info_response());
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum UnitExecuteStatus<'a, 'test> {
+    Test(&'test InternalExecuteStatus<'a, 'test>),
+    SetupScript(&'test InternalSetupScriptExecuteStatus<'a>),
+}
+
+impl<'a> UnitExecuteStatus<'a, '_> {
+    fn info_response(&self) -> InfoResponse<'a> {
+        match self {
+            Self::Test(status) => status.test.info_response(
+                UnitState::Exited {
+                    result: status.result,
+                    time_taken: status.stopwatch_end.active,
+                    slow_after: status.slow_after,
+                },
+                status.output.clone(),
+            ),
+            Self::SetupScript(status) => status.script.info_response(
+                UnitState::Exited {
+                    result: status.result,
+                    time_taken: status.stopwatch_end.active,
+                    slow_after: status.slow_after,
+                },
+                status.output.clone(),
+            ),
         }
     }
 }
@@ -1831,6 +2084,40 @@ enum SignalRequest {
 enum ShutdownRequest {
     Once(ShutdownEvent),
     Twice,
+}
+
+/// Either a test or a setup script, along with information about how long the
+/// test took.
+struct UnitContext<'a, 'test> {
+    packet: UnitPacket<'a, 'test>,
+    // TODO: This is a bit of a mess. It isn't clear where this kind of state
+    // should live -- many parts of the request-response system need various
+    // pieces of this code.
+    slow_after: Option<Duration>,
+}
+
+impl<'a> UnitContext<'a, '_> {
+    fn info_response(&self, state: UnitState, output: ChildExecutionOutput) -> InfoResponse<'a> {
+        match &self.packet {
+            UnitPacket::SetupScript(packet) => packet.info_response(state, output),
+            UnitPacket::Test(packet) => packet.info_response(state, output),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum UnitPacket<'a, 'test> {
+    SetupScript(SetupScriptPacket<'a>),
+    Test(TestPacket<'a, 'test>),
+}
+
+impl UnitPacket<'_, '_> {
+    fn kind(&self) -> UnitKind {
+        match self {
+            Self::SetupScript(_) => UnitKind::Script,
+            Self::Test(_) => UnitKind::Test,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1854,6 +2141,15 @@ impl<'a> TestPacket<'a, '_> {
             elapsed,
             will_terminate,
         }
+    }
+
+    fn info_response(&self, state: UnitState, output: ChildExecutionOutput) -> InfoResponse<'a> {
+        InfoResponse::Test(TestInfoResponse {
+            test_instance: self.test_instance.id(),
+            state,
+            retry_data: self.retry_data,
+            output,
+        })
     }
 }
 
@@ -1885,6 +2181,21 @@ impl<'a> SetupScriptPacket<'a> {
             will_terminate,
         }
     }
+
+    fn info_response(&self, state: UnitState, output: ChildExecutionOutput) -> InfoResponse<'a> {
+        InfoResponse::SetupScript(SetupScriptInfoResponse {
+            script_id: self.script_id.clone(),
+            command: self.config.program(),
+            args: self.config.args(),
+            state,
+            output,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+enum RunUnitQuery<'a> {
+    GetInfo(UnboundedSender<InfoResponse<'a>>),
 }
 
 /// The return result of `handle_event`.
@@ -1892,6 +2203,13 @@ impl<'a> SetupScriptPacket<'a> {
 enum HandleEventResponse {
     #[cfg_attr(not(unix), expect(dead_code))]
     JobControl(JobControlEvent),
+    Info(InfoEvent),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InfoEvent {
+    Signal(SignalInfoEvent),
+    // TODO: interactive events
 }
 
 struct CallbackContext<'a, F> {
@@ -2158,7 +2476,7 @@ where
         config: &'a ScriptConfig,
         index: usize,
         total: usize,
-        req_tx: UnboundedSender<RunUnitRequest>,
+        req_tx: UnboundedSender<RunUnitRequest<'a>>,
     ) {
         let prev = self.running_setup_script.replace(ContextSetupScript {
             id,
@@ -2181,7 +2499,11 @@ where
         );
     }
 
-    fn new_test(&mut self, instance: TestInstance<'a>, req_tx: UnboundedSender<RunUnitRequest>) {
+    fn new_test(
+        &mut self,
+        instance: TestInstance<'a>,
+        req_tx: UnboundedSender<RunUnitRequest<'a>>,
+    ) {
         let prev = self.running_tests.insert(
             instance.id(),
             ContextTestInstance {
@@ -2229,21 +2551,25 @@ where
         self.running_tests.len()
     }
 
-    fn broadcast_request(&self, req: RunUnitRequest) {
+    fn broadcast_request(&self, req: RunUnitRequest<'a>) {
         if let Some(setup_script) = &self.running_setup_script {
-            if let Err(error) = setup_script.req_tx.send(req.clone()) {
-                // The most likely reason for this error is that the setup script
-                // has exited but we haven't processed the exit event yet.
-                debug!(?setup_script.id, ?error, "failed to send request to setup script");
+            if setup_script.req_tx.send(req.clone()).is_err() {
+                // The most likely reason for this error is that the setup
+                // script has been marked as closed but we haven't processed the
+                // exit event yet.
+                debug!(?setup_script.id, "failed to send request to setup script (likely closed)");
             }
         }
 
         for (key, instance) in &self.running_tests {
-            if let Err(error) = instance.req_tx.send(req.clone()) {
+            if instance.req_tx.send(req.clone()).is_err() {
                 // The most likely reason for this error is that the test
-                // instance has exited but we haven't processed the exit event
-                // yet.
-                debug!(?key, ?error, "failed to send request to test instance");
+                // instance has been marked as closed but we haven't processed
+                // the exit event yet.
+                debug!(
+                    ?key,
+                    "failed to send request to test instance (likely closed)"
+                );
             }
         }
     }
@@ -2298,7 +2624,33 @@ where
                     Ok(None)
                 }
             }
+            SignalEvent::Info(event) => {
+                Ok(Some(HandleEventResponse::Info(InfoEvent::Signal(event))))
+            }
         }
+    }
+
+    fn info_started(&mut self, total: usize) {
+        self.basic_callback(TestEventKind::InfoStarted {
+            // Due to a race between units exiting and the info request being
+            // broadcast, we rely on the info event's receiver count to
+            // determine how many responses we're expecting. We expect every
+            // unit that gets a request to return a response.
+            total,
+            run_stats: self.run_stats,
+        });
+    }
+
+    fn info_response(&mut self, index: usize, total: usize, response: InfoResponse<'a>) {
+        self.basic_callback(TestEventKind::InfoResponse {
+            index,
+            total,
+            response,
+        });
+    }
+
+    fn info_finished(&mut self, missing: usize) {
+        self.basic_callback(TestEventKind::InfoFinished { missing });
     }
 
     fn increment_signal_count(&mut self) -> SignalCount {
@@ -2348,7 +2700,7 @@ struct ContextSetupScript<'a> {
     index: usize,
     #[expect(dead_code)]
     total: usize,
-    req_tx: UnboundedSender<RunUnitRequest>,
+    req_tx: UnboundedSender<RunUnitRequest<'a>>,
 }
 
 #[derive(Debug)]
@@ -2357,7 +2709,7 @@ struct ContextTestInstance<'a> {
     #[expect(dead_code)]
     instance: TestInstance<'a>,
     past_attempts: Vec<ExecuteStatus>,
-    req_tx: UnboundedSender<RunUnitRequest>,
+    req_tx: UnboundedSender<RunUnitRequest<'a>>,
 }
 
 impl ContextTestInstance<'_> {
@@ -2387,7 +2739,7 @@ enum InternalTestEvent<'a> {
         index: usize,
         total: usize,
         // See the note in the `Started` variant.
-        req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest>>,
+        req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest<'a>>>,
     },
     SetupScriptSlow {
         script_id: ScriptId,
@@ -2414,7 +2766,7 @@ enum InternalTestEvent<'a> {
         //
         // Why do we use unbounded channels? Mostly to make life simpler --
         // these are low-traffic channels that we don't expect to be backed up.
-        req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest>>,
+        req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest<'a>>>,
     },
     Slow {
         test_instance: TestInstance<'a>,
@@ -2590,12 +2942,14 @@ mod imp {
         Ok(())
     }
 
+    #[expect(clippy::too_many_arguments)]
     pub(super) async fn terminate_child(
+        _cx: &UnitContext<'_, '_>,
         child: &mut Child,
         _child_acc: &mut ChildAccumulator,
         mode: TerminateMode,
         _stopwatch: &mut StopwatchStart,
-        _req_rx: &mut UnboundedReceiver<RunUnitRequest>,
+        _req_rx: &mut UnboundedReceiver<RunUnitRequest<'_>>,
         job: Option<&Job>,
         _grace_period: Duration,
     ) {
@@ -2620,6 +2974,9 @@ mod imp {
 #[cfg(unix)]
 mod imp {
     use super::*;
+    use crate::reporter::{
+        UnitTerminateMethod, UnitTerminateReason, UnitTerminateSignal, UnitTerminatingState,
+    };
     use libc::{SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGSTOP, SIGTERM, SIGTSTP};
     use std::os::unix::process::CommandExt;
 
@@ -2679,38 +3036,47 @@ mod imp {
 
     // TODO: should this indicate whether the process exited immediately? Could
     // do this with a non-async fn that optionally returns a future to await on.
-    pub(super) async fn terminate_child(
+    //
+    // TODO: it would be nice to find a way to gather data like job (only on
+    // Windows) or grace_period (only relevant on Unix) together.
+    #[expect(clippy::too_many_arguments)]
+    pub(super) async fn terminate_child<'a>(
+        cx: &UnitContext<'a, '_>,
         child: &mut Child,
         child_acc: &mut ChildAccumulator,
         mode: TerminateMode,
         stopwatch: &mut StopwatchStart,
-        req_rx: &mut UnboundedReceiver<RunUnitRequest>,
+        req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
         _job: Option<&Job>,
         grace_period: Duration,
     ) {
         if let Some(pid) = child.id() {
-            let pid = pid as i32;
-            let term_signal = match mode {
-                _ if grace_period.is_zero() => SIGKILL,
-                TerminateMode::Timeout => SIGTERM,
-                TerminateMode::Signal(ShutdownRequest::Once(ShutdownEvent::Hangup)) => SIGHUP,
-                TerminateMode::Signal(ShutdownRequest::Once(ShutdownEvent::Term)) => SIGTERM,
-                TerminateMode::Signal(ShutdownRequest::Once(ShutdownEvent::Quit)) => SIGQUIT,
-                TerminateMode::Signal(ShutdownRequest::Once(ShutdownEvent::Interrupt)) => SIGINT,
-                TerminateMode::Signal(ShutdownRequest::Twice) => SIGKILL,
+            let pid_i32 = pid as i32;
+            let (term_reason, term_method) = to_terminate_reason_and_method(&mode, grace_period);
+
+            // This is infallible in regular mode and fallible with cfg(test).
+            #[allow(clippy::infallible_destructuring_match)]
+            let term_signal = match term_method {
+                UnitTerminateMethod::Signal(term_signal) => term_signal,
+                #[cfg(test)]
+                UnitTerminateMethod::Fake => {
+                    unreachable!("fake method is only used for reporter tests")
+                }
             };
+
             unsafe {
                 // We set up a process group while starting the test -- now send a signal to that
                 // group.
-                libc::kill(-pid, term_signal)
+                libc::kill(-pid_i32, term_signal.signal())
             };
 
-            if term_signal == SIGKILL {
+            if term_signal == UnitTerminateSignal::Kill {
                 // SIGKILL guarantees the process group is dead.
                 return;
             }
 
             let mut sleep = std::pin::pin!(crate::time::pausable_sleep(grace_period));
+            let mut waiting_stopwatch = crate::time::stopwatch();
 
             loop {
                 tokio::select! {
@@ -2729,6 +3095,8 @@ mod imp {
                             RunUnitRequest::Signal(SignalRequest::Stop(sender)) => {
                                 stopwatch.pause();
                                 sleep.as_mut().pause();
+                                waiting_stopwatch.pause();
+
                                 imp::job_control_child(child, JobControlEvent::Stop);
                                 let _ = sender.send(());
                             }
@@ -2737,6 +3105,7 @@ mod imp {
                                 if !sleep.is_paused() {
                                     stopwatch.resume();
                                     sleep.as_mut().resume();
+                                    waiting_stopwatch.resume();
                                 }
                                 imp::job_control_child(child, JobControlEvent::Continue);
                             }
@@ -2745,9 +3114,27 @@ mod imp {
                                 // immediately.
                                 unsafe {
                                     // Send SIGKILL to the entire process group.
-                                    libc::kill(-pid, SIGKILL);
+                                    libc::kill(-pid_i32, SIGKILL);
                                 }
                                 break;
+                            }
+                            RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
+                                let waiting_snapshot = waiting_stopwatch.snapshot();
+                                _ = sender.send(
+                                    cx.info_response(
+                                        UnitState::Terminating(UnitTerminatingState {
+                                            pid,
+                                            time_taken: stopwatch.snapshot().active,
+                                            reason: term_reason,
+                                            method: term_method,
+                                            waiting_duration: waiting_snapshot.active,
+                                            remaining: grace_period
+                                                .checked_sub(waiting_snapshot.active)
+                                                .unwrap_or_default(),
+                                        }),
+                                        child_acc.snapshot_in_progress(cx.packet.kind().waiting_on_message()),
+                                    )
+                                );
                             }
                         }
                     }
@@ -2755,11 +3142,71 @@ mod imp {
                         // The process didn't exit -- need to do a hard shutdown.
                         unsafe {
                             // Send SIGKILL to the entire process group.
-                            libc::kill(-pid, SIGKILL);
+                            libc::kill(-pid_i32, SIGKILL);
                         }
                         break;
                     }
                 }
+            }
+        }
+    }
+
+    fn to_terminate_reason_and_method(
+        mode: &TerminateMode,
+        grace_period: Duration,
+    ) -> (UnitTerminateReason, UnitTerminateMethod) {
+        match mode {
+            TerminateMode::Timeout => (
+                UnitTerminateReason::Timeout,
+                imp::timeout_terminate_method(grace_period),
+            ),
+            TerminateMode::Signal(req) => (
+                UnitTerminateReason::Signal,
+                req.to_terminate_method(grace_period),
+            ),
+        }
+    }
+
+    impl ShutdownRequest {
+        fn to_terminate_method(self, grace_period: Duration) -> UnitTerminateMethod {
+            if grace_period.is_zero() {
+                return UnitTerminateMethod::Signal(UnitTerminateSignal::Kill);
+            }
+
+            match self {
+                ShutdownRequest::Once(ShutdownEvent::Hangup) => {
+                    UnitTerminateMethod::Signal(UnitTerminateSignal::Hangup)
+                }
+                ShutdownRequest::Once(ShutdownEvent::Term) => {
+                    UnitTerminateMethod::Signal(UnitTerminateSignal::Term)
+                }
+                ShutdownRequest::Once(ShutdownEvent::Quit) => {
+                    UnitTerminateMethod::Signal(UnitTerminateSignal::Quit)
+                }
+                ShutdownRequest::Once(ShutdownEvent::Interrupt) => {
+                    UnitTerminateMethod::Signal(UnitTerminateSignal::Interrupt)
+                }
+                ShutdownRequest::Twice => UnitTerminateMethod::Signal(UnitTerminateSignal::Kill),
+            }
+        }
+    }
+
+    fn timeout_terminate_method(grace_period: Duration) -> UnitTerminateMethod {
+        if grace_period.is_zero() {
+            UnitTerminateMethod::Signal(UnitTerminateSignal::Kill)
+        } else {
+            UnitTerminateMethod::Signal(UnitTerminateSignal::Term)
+        }
+    }
+
+    impl UnitTerminateSignal {
+        fn signal(self) -> libc::c_int {
+            match self {
+                UnitTerminateSignal::Interrupt => SIGINT,
+                UnitTerminateSignal::Term => SIGTERM,
+                UnitTerminateSignal::Hangup => SIGHUP,
+                UnitTerminateSignal::Quit => SIGQUIT,
+                UnitTerminateSignal::Kill => SIGKILL,
             }
         }
     }
