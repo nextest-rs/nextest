@@ -27,7 +27,7 @@ use crate::{
     time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
 };
 use async_scoped::TokioScope;
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Local};
 use display_error_chain::DisplayErrorChain;
 use future_queue::StreamExt;
 use futures::prelude::*;
@@ -1491,7 +1491,7 @@ impl InternalExecuteStatus {
             output: self.output,
             result: self.result,
             start_time: self.stopwatch_end.start_time.fixed_offset(),
-            time_taken: self.stopwatch_end.duration,
+            time_taken: self.stopwatch_end.active,
             is_slow: self.is_slow,
             delay_before_start: self.delay_before_start,
         }
@@ -1529,7 +1529,7 @@ impl InternalSetupScriptExecuteStatus {
             output: self.output,
             result: self.result,
             start_time: self.stopwatch_end.start_time.fixed_offset(),
-            time_taken: self.stopwatch_end.duration,
+            time_taken: self.stopwatch_end.active,
             is_slow: self.is_slow,
             env_count: self.env_count,
         }
@@ -1899,8 +1899,12 @@ where
     fn basic_callback(&mut self, kind: TestEventKind<'a>) {
         let snapshot = self.stopwatch.snapshot();
         let event = TestEvent {
-            timestamp: snapshot.end_time().fixed_offset(),
-            elapsed: snapshot.duration,
+            // We'd previously add up snapshot.start_time + snapshot.active +
+            // paused, but that isn't resilient to clock changes. Instead, use
+            // `Local::now()` time (which isn't necessarily monotonic) along
+            // with snapshot.active (which is almost always monotonic).
+            timestamp: Local::now().fixed_offset(),
+            elapsed: snapshot.active,
             kind,
         };
         (self.callback)(event)
@@ -2274,7 +2278,7 @@ where
         self.basic_callback(TestEventKind::RunFinished {
             start_time: stopwatch_end.start_time.fixed_offset(),
             run_id: self.run_id,
-            elapsed: stopwatch_end.duration,
+            elapsed: stopwatch_end.active,
             run_stats: self.run_stats,
         })
     }

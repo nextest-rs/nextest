@@ -67,21 +67,26 @@ impl StopwatchStart {
     pub(crate) fn snapshot(&self) -> StopwatchSnapshot {
         StopwatchSnapshot {
             start_time: self.start_time,
-            duration: self.instant.elapsed() - self.paused_time,
+            // self.instant is supposed to be monotonic but might not be so on
+            // some weird systems. If the duration underflows, just return 0.
+            active: self.instant.elapsed().saturating_sub(self.paused_time),
+            paused: self.paused_time,
         }
     }
 }
 
+/// A snapshot of the state of the stopwatch.
 #[derive(Clone, Debug)]
 pub(crate) struct StopwatchSnapshot {
+    /// The time at which the stopwatch was started.
     pub(crate) start_time: DateTime<Local>,
-    pub(crate) duration: Duration,
-}
 
-impl StopwatchSnapshot {
-    pub(crate) fn end_time(&self) -> DateTime<Local> {
-        self.start_time + self.duration
-    }
+    /// The amount of time spent while the stopwatch was active.
+    pub(crate) active: Duration,
+
+    /// The amount of time spent while the stopwatch was paused.
+    #[allow(dead_code)]
+    pub(crate) paused: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -115,10 +120,10 @@ mod tests {
         //
         // (Previously, this used to cap the difference at 650ms, but empirically, the test would
         // sometimes fail on GitHub CI. Just setting a minimum bound is enough.)
-        let difference = unpaused_end.duration - end.duration;
+        let difference = unpaused_end.active - end.active;
         assert!(
             difference > Duration::from_millis(450),
             "difference between unpaused_end and end ({difference:?}) is at least 450ms"
-        )
+        );
     }
 }
