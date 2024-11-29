@@ -276,7 +276,7 @@ impl TestReporterBuilder {
             }
 
             ReporterStderr::Terminal => {
-                let progress_bar = ProgressBar::new(test_list.test_count() as u64);
+                let bar = ProgressBar::new(test_list.test_count() as u64);
                 // Emulate Cargo's style.
                 let test_count_width = format!("{}", test_list.test_count()).len();
                 // Create the template using the width as input. This is a little confusing -- {{foo}}
@@ -289,7 +289,7 @@ impl TestReporterBuilder {
                     "{{prefix:>12}} [{{elapsed_precise:>9}}] [{{wide_bar}}] \
                     {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}     "
                 );
-                progress_bar.set_style(
+                bar.set_style(
                     ProgressStyle::default_bar()
                         .progress_chars("=> ")
                         .template(&template)
@@ -300,10 +300,13 @@ impl TestReporterBuilder {
                 //
                 // This used to be unbuffered, but that option went away from indicatif 0.17.0. The
                 // refresh rate is now 20hz so that it's double the steady tick rate.
-                progress_bar.set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
+                bar.set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
                 // Enable a steady tick 10 times a second.
-                progress_bar.enable_steady_tick(Duration::from_millis(100));
-                ReporterStderrImpl::TerminalWithBar(progress_bar)
+                bar.enable_steady_tick(Duration::from_millis(100));
+                ReporterStderrImpl::TerminalWithBar {
+                    bar,
+                    state: ProgressBarState::new(),
+                }
             }
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
         };
@@ -337,7 +340,11 @@ impl TestReporterBuilder {
 }
 
 enum ReporterStderrImpl<'a> {
-    TerminalWithBar(ProgressBar),
+    TerminalWithBar {
+        bar: ProgressBar,
+        // Reporter-specific progress bar state.
+        state: ProgressBarState,
+    },
     TerminalWithoutBar,
     Buffer(&'a mut Vec<u8>),
 }
@@ -345,10 +352,99 @@ enum ReporterStderrImpl<'a> {
 impl ReporterStderrImpl<'_> {
     fn finish_and_clear_bar(&self) {
         match self {
-            ReporterStderrImpl::TerminalWithBar(bar) => {
+            ReporterStderrImpl::TerminalWithBar { bar, .. } => {
                 bar.finish_and_clear();
             }
             ReporterStderrImpl::TerminalWithoutBar | ReporterStderrImpl::Buffer(_) => {}
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ProgressBarState {
+    // Reasons for hiding the progress bar. We show the progress bar if none of
+    // these are set and hide it if any of them are set.
+    //
+    // indicatif cannot handle this kind of "stacked" state management so it
+    // falls on us to do so.
+    hidden_no_capture: bool,
+    hidden_run_paused: bool,
+}
+
+impl ProgressBarState {
+    fn new() -> Self {
+        Self {
+            hidden_no_capture: false,
+            hidden_run_paused: false,
+        }
+    }
+
+    fn should_hide(&self) -> bool {
+        self.hidden_no_capture || self.hidden_run_paused
+    }
+
+    fn update_progress_bar(
+        &mut self,
+        event: &TestEvent<'_>,
+        styles: &Styles,
+        progress_bar: &ProgressBar,
+    ) {
+        let before_should_hide = self.should_hide();
+
+        match &event.kind {
+            TestEventKind::SetupScriptStarted { no_capture, .. } => {
+                // Hide the progress bar if either stderr or stdout are being passed through.
+                if *no_capture {
+                    self.hidden_no_capture = true;
+                }
+            }
+            TestEventKind::SetupScriptFinished { no_capture, .. } => {
+                // Restore the progress bar if it was hidden.
+                if *no_capture {
+                    self.hidden_no_capture = false;
+                }
+            }
+            TestEventKind::TestStarted {
+                current_stats,
+                running,
+                cancel_state,
+                ..
+            }
+            | TestEventKind::TestFinished {
+                current_stats,
+                running,
+                cancel_state,
+                ..
+            } => {
+                progress_bar.set_prefix(progress_bar_prefix(current_stats, *cancel_state, styles));
+                progress_bar.set_message(progress_bar_msg(current_stats, *running, styles));
+                // If there are skipped tests, the initial run count will be lower than when constructed
+                // in ProgressBar::new.
+                progress_bar.set_length(current_stats.initial_run_count as u64);
+                progress_bar.set_position(current_stats.finished_count as u64);
+            }
+            TestEventKind::RunPaused { .. } => {
+                // Pausing the run should hide the progress bar since we'll exit
+                // to the terminal immediately after.
+                self.hidden_run_paused = true;
+            }
+            TestEventKind::RunContinued { .. } => {
+                // Continuing the run should show the progress bar since we'll
+                // continue to output to it.
+                self.hidden_run_paused = false;
+            }
+            TestEventKind::RunBeginCancel { .. } => {
+                progress_bar.set_prefix(progress_bar_cancel_prefix(styles));
+            }
+            _ => {}
+        }
+
+        let after_should_hide = self.should_hide();
+
+        match (before_should_hide, after_should_hide) {
+            (false, true) => progress_bar.set_draw_target(ProgressDrawTarget::hidden()),
+            (true, false) => progress_bar.set_draw_target(ProgressDrawTarget::stderr()),
+            _ => {}
         }
     }
 }
@@ -387,19 +483,19 @@ impl<'a> TestReporter<'a> {
     /// Report this test event to the given writer.
     fn write_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
         match &mut self.stderr {
-            ReporterStderrImpl::TerminalWithBar(progress_bar) => {
+            ReporterStderrImpl::TerminalWithBar { bar, state } => {
                 // Write to a string that will be printed as a log line.
                 let mut buf: Vec<u8> = Vec::new();
                 self.inner
                     .write_event_impl(&event, &mut buf)
                     .map_err(WriteEventError::Io)?;
-                // ProgressBar::println doesn't print status lines if the bar is hidden. The suspend
-                // method prints it in both cases.
-                progress_bar.suspend(|| {
+
+                state.update_progress_bar(&event, &self.inner.styles, bar);
+                // ProgressBar::println doesn't print status lines if the bar is
+                // hidden. The suspend method prints it in all cases.
+                bar.suspend(|| {
                     _ = std::io::stderr().write_all(&buf);
                 });
-
-                update_progress_bar(&event, &self.inner.styles, progress_bar);
             }
             ReporterStderrImpl::TerminalWithoutBar => {
                 // Write to a buffered stderr.
@@ -419,46 +515,6 @@ impl<'a> TestReporter<'a> {
         self.structured_reporter.write_event(&event)?;
         self.metadata_reporter.write_event(event)?;
         Ok(())
-    }
-}
-
-fn update_progress_bar(event: &TestEvent<'_>, styles: &Styles, progress_bar: &ProgressBar) {
-    match &event.kind {
-        TestEventKind::SetupScriptStarted { no_capture, .. } => {
-            // Hide the progress bar if either stderr or stdout are being passed through.
-            if *no_capture {
-                progress_bar.set_draw_target(ProgressDrawTarget::hidden());
-            }
-        }
-        TestEventKind::SetupScriptFinished { no_capture, .. } => {
-            // Restore the progress bar if it was hidden.
-            if *no_capture {
-                progress_bar.set_draw_target(ProgressDrawTarget::stderr());
-            }
-        }
-        TestEventKind::TestStarted {
-            current_stats,
-            running,
-            cancel_state,
-            ..
-        }
-        | TestEventKind::TestFinished {
-            current_stats,
-            running,
-            cancel_state,
-            ..
-        } => {
-            progress_bar.set_prefix(progress_bar_prefix(current_stats, *cancel_state, styles));
-            progress_bar.set_message(progress_bar_msg(current_stats, *running, styles));
-            // If there are skipped tests, the initial run count will be lower than when constructed
-            // in ProgressBar::new.
-            progress_bar.set_length(current_stats.initial_run_count as u64);
-            progress_bar.set_position(current_stats.finished_count as u64);
-        }
-        TestEventKind::RunBeginCancel { .. } => {
-            progress_bar.set_prefix(progress_bar_cancel_prefix(styles));
-        }
-        _ => {}
     }
 }
 
