@@ -20,7 +20,7 @@ use crate::write_str::WriteStr;
 use std::io;
 
 /// The set of supported formats for indentation
-#[allow(missing_debug_implementations)]
+#[expect(missing_debug_implementations)]
 pub enum Format<'a> {
     /// Insert uniform indentation before every line
     ///
@@ -55,7 +55,7 @@ pub enum Format<'a> {
 /// lets it intercept each piece of output as its being written to the output buffer. It then
 /// splits on newlines giving slices into the original string. Finally we alternate writing these
 /// lines and the specified indentation to the output buffer.
-#[allow(missing_debug_implementations)]
+#[expect(missing_debug_implementations)]
 pub struct Indented<'a, D: ?Sized> {
     inner: &'a mut D,
     needs_indent: bool,

@@ -48,7 +48,7 @@ impl CargoNextestCli {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn arg(&mut self, arg: impl Into<String>) -> &mut Self {
         self.args.push(arg.into());
         self
@@ -64,7 +64,7 @@ impl CargoNextestCli {
         self
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn envs(
         &mut self,
         envs: impl IntoIterator<Item = (impl Into<OsString>, impl Into<OsString>)>,

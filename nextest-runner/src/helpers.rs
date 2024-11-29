@@ -373,7 +373,7 @@ extern "C" {
 }
 
 #[inline]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn statically_unreachable() -> ! {
     unsafe {
         __nextest_external_symbol_that_does_not_exist();

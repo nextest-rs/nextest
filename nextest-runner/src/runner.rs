@@ -1233,14 +1233,21 @@ fn drain_req_rx(mut receiver: UnboundedReceiver<RunUnitRequest>) {
 // It would be nice to fix this function to not have so many arguments, but this
 // code is actively being refactored right now and imposing too much structure
 // can cause more harm than good.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn handle_signal_request(
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
     req: SignalRequest,
-    // These annotations are needed to silence lints on non-Unix platforms.
     stopwatch: &mut StopwatchStart,
-    #[allow(unused_mut, unused_variables)] mut interval_sleep: Pin<&mut PausableSleep>,
+    // These annotations are needed to silence lints on non-Unix platforms.
+    //
+    // It would be nice to use an expect lint here, but Rust 1.81 appears to
+    // have a bug where it complains about expectations not being fulfilled on
+    // Windows, even though they are in reality. The bug is fixed in Rust 1.83,
+    // so we should switch to expect after the MSRV is bumped to 1.83+.
+    #[cfg_attr(not(unix), allow(unused_mut, unused_variables))] mut interval_sleep: Pin<
+        &mut PausableSleep,
+    >,
     req_rx: &mut UnboundedReceiver<RunUnitRequest>,
     job: Option<&imp::Job>,
     grace_period: Duration,
@@ -1334,7 +1341,7 @@ pub struct ExecutionStatuses {
     statuses: Vec<ExecuteStatus>,
 }
 
-#[allow(clippy::len_without_is_empty)] // RunStatuses is never empty
+#[expect(clippy::len_without_is_empty)] // RunStatuses is never empty
 impl ExecutionStatuses {
     fn new(statuses: Vec<ExecuteStatus>) -> Self {
         Self { statuses }
@@ -1852,7 +1859,7 @@ impl<'a> SetupScriptPacket<'a> {
 /// The return result of `handle_event`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum HandleEventResponse {
-    #[cfg_attr(not(unix), allow(dead_code))]
+    #[cfg_attr(not(unix), expect(dead_code))]
     JobControl(JobControlEvent),
 }
 
@@ -2302,11 +2309,11 @@ where
 struct ContextSetupScript<'a> {
     id: ScriptId,
     // Store these details primarily for debugging.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     config: &'a ScriptConfig,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     index: usize,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     total: usize,
     req_tx: UnboundedSender<RunUnitRequest>,
 }
@@ -2314,7 +2321,7 @@ struct ContextSetupScript<'a> {
 #[derive(Debug)]
 struct ContextTestInstance<'a> {
     // Store the instance primarily for debugging.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     instance: TestInstance<'a>,
     past_attempts: Vec<ExecuteStatus>,
     req_tx: UnboundedSender<RunUnitRequest>,
@@ -2332,7 +2339,6 @@ impl ContextTestInstance<'_> {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum InternalEvent<'a> {
     Test(InternalTestEvent<'a>),

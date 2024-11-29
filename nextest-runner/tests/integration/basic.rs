@@ -160,7 +160,7 @@ fn test_run() -> Result<()> {
                         false
                     } else {
                         // Extracting descriptions works for segfaults on Unix but not on Windows.
-                        #[allow(unused_mut)]
+                        #[cfg_attr(not(unix), expect(unused_mut))]
                         let mut can_extract_description = fixture.status
                             == TestCaseFixtureStatus::Fail
                             || fixture.status == TestCaseFixtureStatus::IgnoredFail;

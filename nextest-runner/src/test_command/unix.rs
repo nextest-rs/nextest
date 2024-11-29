@@ -9,7 +9,7 @@ use std::{
 
 pub(super) struct State {
     pub(super) ours: OwnedFd,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     theirs: OwnedFd,
 }
 

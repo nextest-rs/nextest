@@ -336,7 +336,7 @@ impl ExpectedError {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn experimental_feature_error(name: &'static str, var_name: &'static str) -> Self {
         Self::ExperimentalFeatureNotEnabled { name, var_name }
     }

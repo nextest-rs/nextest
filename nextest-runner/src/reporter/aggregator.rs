@@ -20,7 +20,7 @@ use quick_junit::{
 use std::{borrow::Cow, collections::HashMap, fs::File};
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct EventAggregator<'cfg> {
     store_dir: Utf8PathBuf,
     // TODO: log information in a JSONable report (converting that to XML later) instead of directly

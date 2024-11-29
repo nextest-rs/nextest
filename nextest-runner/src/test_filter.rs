@@ -5,10 +5,6 @@
 //!
 //! The main structure in this module is [`TestFilter`], which is created by a [`TestFilterBuilder`].
 
-#![allow(clippy::nonminimal_bool)]
-// nonminimal_bool fires on one of the conditions below and appears to suggest an incorrect
-// result
-
 use crate::{
     errors::TestFilterBuilderError,
     list::RustTestArtifact,
@@ -780,7 +776,7 @@ mod tests {
     // Test that dropping a character from a string doesn't match.
     #[proptest(cases = 50)]
     fn proptest_no_match(substring: String, prefix: String, suffix: String) {
-        prop_assume!(!substring.is_empty() && !(prefix.is_empty() && suffix.is_empty()));
+        prop_assume!(!substring.is_empty() && !prefix.is_empty() && !suffix.is_empty());
         let pattern = prefix + &substring + &suffix;
         let patterns = TestFilterPatterns::new(vec![pattern]);
         let test_filter =

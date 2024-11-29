@@ -271,7 +271,7 @@ fn test_run_with_target_runner() -> Result<()> {
                     );
                     let run_status = run_statuses.last_status();
 
-                    #[allow(unused_mut)]
+                    #[cfg_attr(not(unix), expect(unused_mut))]
                     let mut expected_status = make_execution_result(fixture.status, 1);
                     // On Unix, segfaults aren't passed through by the passthrough runner.
                     cfg_if::cfg_if! {

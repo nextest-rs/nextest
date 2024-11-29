@@ -1,9 +1,6 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// test_case causes clippy warnings with Rust 1.71.
-#![allow(clippy::items_after_test_module)]
-
 use guppy::{
     graph::{cargo::BuildPlatform, PackageGraph},
     PackageId,

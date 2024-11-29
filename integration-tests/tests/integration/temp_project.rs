@@ -79,14 +79,13 @@ impl TempProject {
         })
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn persist(&mut self) {
         if let Some(dir) = self.temp_dir.take() {
             _ = dir.into_path();
         }
     }
 
-    #[allow(dead_code)]
     pub fn temp_root(&self) -> &Utf8Path {
         &self.temp_root
     }
@@ -168,7 +167,7 @@ pub(crate) use windows::*;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[must_use]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) enum UdsStatus {
     Created,
     NotCreated,

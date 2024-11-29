@@ -64,8 +64,8 @@ jobs:
           # macos-14 for M1 runners
           - macos-14
           - windows-latest
-        # 1.75 is the MSRV
-        rust-version: ["1.75", stable]
+        # 1.81 is the MSRV
+        rust-version: ["1.81", stable]
       fail-fast: false
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

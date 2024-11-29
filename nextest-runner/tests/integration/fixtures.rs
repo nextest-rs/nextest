@@ -276,7 +276,7 @@ impl FixtureTargets {
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct InstanceValue<'a> {
     pub(crate) binary_id: &'a str,
     pub(crate) cwd: &'a Utf8Path,

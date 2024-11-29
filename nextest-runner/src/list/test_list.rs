@@ -220,7 +220,7 @@ pub struct TestList<'g> {
 
 impl<'g> TestList<'g> {
     /// Creates a new test list by running the given command and applying the specified filter.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new<I>(
         ctx: &TestExecuteContext<'_>,
         test_artifacts: I,

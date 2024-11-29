@@ -118,7 +118,7 @@ impl TestSettings {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 impl<Source: Copy> TestSettings<Source> {
     pub(super) fn new<'p>(profile: &'p EvaluatableProfile<'_>, query: &TestQuery<'_>) -> Self
     where
@@ -932,7 +932,7 @@ mod tests {
         assert_eq!(overrides.success_output(), TestOutputDisplay::Never);
         assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
         // For clarity.
-        #[allow(clippy::bool_assert_comparison)]
+        #[expect(clippy::bool_assert_comparison)]
         {
             assert_eq!(overrides.junit_store_success_output(), false);
             assert_eq!(overrides.junit_store_failure_output(), false);
@@ -978,7 +978,7 @@ mod tests {
         );
         assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
         // For clarity.
-        #[allow(clippy::bool_assert_comparison)]
+        #[expect(clippy::bool_assert_comparison)]
         {
             assert_eq!(overrides.junit_store_success_output(), true);
             assert_eq!(overrides.junit_store_failure_output(), false);
