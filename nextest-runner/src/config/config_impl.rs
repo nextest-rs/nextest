@@ -278,7 +278,7 @@ impl NextestConfig {
         Ok((config.into_config_impl(), compiled))
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn deserialize_individual_config(
         graph: &PackageGraph,
         workspace_root: &Utf8Path,
@@ -814,7 +814,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
         })
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(super) fn custom_profile(&self) -> Option<&'cfg CustomProfileImpl> {
         self.custom_profile
     }
@@ -899,10 +899,10 @@ struct NextestConfigDeserialize {
 
     // These are parsed as part of NextestConfigVersionOnly. They're re-parsed here to avoid
     // printing an "unknown key" message.
-    #[allow(unused)]
+    #[expect(unused)]
     #[serde(default)]
     nextest_version: Option<NextestVersionDeserialize>,
-    #[allow(unused)]
+    #[expect(unused)]
     #[serde(default)]
     experimental: BTreeSet<String>,
 
@@ -1067,8 +1067,8 @@ pub(super) struct CustomProfileImpl {
     archive: Option<ArchiveConfig>,
 }
 
-#[allow(dead_code)]
 impl CustomProfileImpl {
+    #[cfg(test)]
     pub(super) fn test_threads(&self) -> Option<TestThreads> {
         self.test_threads
     }

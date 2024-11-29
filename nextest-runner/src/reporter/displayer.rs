@@ -562,7 +562,7 @@ fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) {
 
 #[derive(Debug)]
 enum FinalOutput {
-    Skipped(#[allow(dead_code)] MismatchReason),
+    Skipped(#[expect(dead_code)] MismatchReason),
     Executed {
         run_statuses: ExecutionStatuses,
         display_output: bool,
@@ -1068,7 +1068,7 @@ impl<'a> TestReporterImpl<'a> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn write_setup_script_status_line(
         &self,
         script_id: &ScriptId,

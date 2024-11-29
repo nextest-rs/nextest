@@ -40,8 +40,7 @@ impl EnvironmentMap {
         let mut map = BTreeMap::<imp::EnvKey, CargoEnvironmentVariable>::new();
 
         for (source, name, value) in env_configs {
-            #[allow(clippy::useless_conversion)]
-            match map.entry(OsString::from(name.clone()).into()) {
+            match map.entry(imp::EnvKey::from(name.clone())) {
                 Entry::Occupied(mut entry) => {
                     // Ignore the value lower in precedence, but do look at force and relative if
                     // they haven't been set already.
@@ -79,7 +78,7 @@ impl EnvironmentMap {
     }
 
     pub(crate) fn apply_env(&self, command: &mut Command) {
-        #[allow(clippy::useless_conversion)]
+        #[cfg_attr(not(windows), expect(clippy::useless_conversion))]
         let existing_keys: BTreeSet<imp::EnvKey> =
             std::env::vars_os().map(|(k, _v)| k.into()).collect();
 
@@ -247,6 +246,12 @@ mod imp {
                 utf16: k.encode_wide().collect(),
                 os_string: k,
             }
+        }
+    }
+
+    impl From<String> for EnvKey {
+        fn from(k: String) -> Self {
+            OsString::from(k).into()
         }
     }
 

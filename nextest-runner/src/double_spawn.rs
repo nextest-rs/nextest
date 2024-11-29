@@ -77,7 +77,7 @@ impl DoubleSpawnInfo {
 #[derive(Debug)]
 pub struct DoubleSpawnContext {
     // Only used for the Drop impl.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     inner: imp::DoubleSpawnContext,
 }
 

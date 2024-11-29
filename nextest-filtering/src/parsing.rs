@@ -61,6 +61,7 @@ pub enum SetDef<S = SourceSpan> {
 }
 
 impl SetDef {
+    #[cfg(test)]
     fn drop_source_span(self) -> SetDef<()> {
         match self {
             Self::Package(matcher, _) => SetDef::Package(matcher, ()),
@@ -154,7 +155,7 @@ impl ParsedExpr {
         ParsedExpr::Set(SetDef::None)
     }
 
-    #[allow(unused)]
+    #[cfg(test)]
     fn drop_source_span(self) -> ParsedExpr<()> {
         match self {
             Self::Not(op, expr) => ParsedExpr::Not(op, Box::new(expr.drop_source_span())),

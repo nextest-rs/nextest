@@ -602,7 +602,7 @@ struct TestBuildFilter {
 }
 
 impl TestBuildFilter {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn compute_test_list<'g>(
         &self,
         ctx: &TestExecuteContext<'_>,
@@ -2000,7 +2000,7 @@ enum SetupSource {
 }
 
 impl SelfCommand {
-    #[allow(unused_variables)]
+    #[cfg_attr(not(feature = "self-update"), expect(unused_variables))]
     fn exec(self, output: OutputOpts) -> Result<i32> {
         let output = output.init();
 

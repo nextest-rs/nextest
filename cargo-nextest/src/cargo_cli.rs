@@ -228,7 +228,6 @@ impl<'a> CargoCli<'a> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn add_arg(&mut self, arg: &'a str) -> &mut Self {
         self.args.push(Cow::Borrowed(arg));
         self

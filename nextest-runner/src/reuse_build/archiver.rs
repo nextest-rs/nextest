@@ -56,7 +56,7 @@ impl ArchiveFormat {
 /// Archives test binaries along with metadata to the given file.
 ///
 /// The output file is a Zstandard-compressed tarball (`.tar.zst`).
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub fn archive_to_file<'a, F>(
     profile: EvaluatableProfile<'a>,
     binary_list: &'a BinaryList,
@@ -195,7 +195,7 @@ struct Archiver<'a, W: Write> {
 }
 
 impl<'a, W: Write> Archiver<'a, W> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         config: &'a ArchiveConfig,
         binary_list: &'a BinaryList,
