@@ -576,7 +576,7 @@ fn strip_human_stdout_or_combined(
 /// <https://github.com/rust-lang/rust/blob/f440b5f0ea042cb2087a36631b20878f9847ee28/library/test/src/formatters/json.rs#L222-L285>
 struct EscapedString<'s>(&'s str);
 
-impl<'s> std::fmt::Display for EscapedString<'s> {
+impl std::fmt::Display for EscapedString<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         let mut start = 0;
         let s = self.0;

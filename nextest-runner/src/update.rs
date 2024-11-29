@@ -297,7 +297,7 @@ pub struct MuktiUpdateContext<'a> {
     pub perform_setup: bool,
 }
 
-impl<'a> MuktiUpdateContext<'a> {
+impl MuktiUpdateContext<'_> {
     /// Performs the update.
     pub fn do_update(&self) -> Result<(), UpdateError> {
         // This method is adapted from self_update's update_extended.

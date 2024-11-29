@@ -1534,7 +1534,7 @@ impl<'a> TestReporterImpl<'a> {
     }
 }
 
-impl<'a> fmt::Debug for TestReporter<'a> {
+impl fmt::Debug for TestReporter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("TestReporter")
             .field("stdout", &"BufferWriter { .. }")

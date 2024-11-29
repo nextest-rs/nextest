@@ -145,7 +145,7 @@ pub(crate) struct SetupScript<'profile> {
     pub(crate) compiled: Vec<&'profile CompiledProfileScripts<FinalConfig>>,
 }
 
-impl<'profile> SetupScript<'profile> {
+impl SetupScript<'_> {
     pub(crate) fn is_enabled(&self, test: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         self.compiled
             .iter()

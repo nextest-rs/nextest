@@ -296,7 +296,7 @@ pub(crate) fn display_nt_status(nt_status: windows_sys::Win32::Foundation::NTSTA
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct QuotedDisplay<'a, T: ?Sized>(pub(crate) &'a T);
 
-impl<'a, T: ?Sized> fmt::Display for QuotedDisplay<'a, T>
+impl<T: ?Sized> fmt::Display for QuotedDisplay<'_, T>
 where
     T: fmt::Display,
 {

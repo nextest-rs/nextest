@@ -72,7 +72,7 @@ impl<'a> RustcCli<'a> {
     }
 }
 
-impl<'a> Default for RustcCli<'a> {
+impl Default for RustcCli<'_> {
     fn default() -> Self {
         Self {
             rustc_path: rustc_path(),

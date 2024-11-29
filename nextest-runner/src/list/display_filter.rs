@@ -39,7 +39,7 @@ pub(crate) enum DisplayFilterMatcher<'list, 'filter> {
     Some(&'filter HashSet<&'list str>),
 }
 
-impl<'list, 'filter> DisplayFilterMatcher<'list, 'filter> {
+impl DisplayFilterMatcher<'_, '_> {
     pub(crate) fn is_match(&self, test_name: &str) -> bool {
         match self {
             Self::All => true,

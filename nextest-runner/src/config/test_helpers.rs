@@ -52,7 +52,7 @@ pub(super) struct BinaryQueryCreator<'a> {
     platform: BuildPlatform,
 }
 
-impl<'a> BinaryQueryCreator<'a> {
+impl BinaryQueryCreator<'_> {
     pub(super) fn to_query(&self) -> BinaryQuery<'_> {
         BinaryQuery {
             package_id: self.package_id,

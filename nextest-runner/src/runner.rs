@@ -2306,7 +2306,7 @@ struct ContextTestInstance<'a> {
     req_tx: UnboundedSender<RunUnitRequest>,
 }
 
-impl<'a> ContextTestInstance<'a> {
+impl ContextTestInstance<'_> {
     fn attempt_failed_will_retry(&mut self, run_status: ExecuteStatus) {
         self.past_attempts.push(run_status);
     }

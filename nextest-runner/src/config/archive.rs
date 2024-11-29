@@ -88,7 +88,7 @@ impl<'de> Deserialize<'de> for ArchiveIncludeOnMissing {
     {
         struct ArchiveIncludeOnMissingVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for ArchiveIncludeOnMissingVisitor {
+        impl serde::de::Visitor<'_> for ArchiveIncludeOnMissingVisitor {
             type Value = ArchiveIncludeOnMissing;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -174,7 +174,7 @@ impl<'de> Deserialize<'de> for RecursionDepth {
     {
         struct RecursionDepthVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for RecursionDepthVisitor {
+        impl serde::de::Visitor<'_> for RecursionDepthVisitor {
             type Value = RecursionDepth;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

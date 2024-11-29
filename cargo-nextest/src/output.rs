@@ -188,7 +188,7 @@ struct MessageVisitor<'writer, 'a> {
     error: Option<fmt::Error>,
 }
 
-impl<'writer, 'a> Visit for MessageVisitor<'writer, 'a> {
+impl Visit for MessageVisitor<'_, '_> {
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         if field.name() == MESSAGE_FIELD {
             if let Err(error) = write!(self.writer, "{:?}", value) {
@@ -385,7 +385,7 @@ pub(crate) enum StdoutWriter<'a> {
     Test { buf: &'a mut Vec<u8> },
 }
 
-impl<'a> Write for StdoutWriter<'a> {
+impl Write for StdoutWriter<'_> {
     fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
         match self {
             Self::Normal { buf, .. } => buf.write(data),
@@ -403,7 +403,7 @@ impl<'a> Write for StdoutWriter<'a> {
     }
 }
 
-impl<'a> WriteStr for StdoutWriter<'a> {
+impl WriteStr for StdoutWriter<'_> {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
         match self {
             Self::Normal { buf, .. } => buf.write_all(s.as_bytes()),
@@ -430,7 +430,7 @@ pub(crate) enum StderrWriter<'a> {
     Test { buf: &'a mut Vec<u8> },
 }
 
-impl<'a> Write for StderrWriter<'a> {
+impl Write for StderrWriter<'_> {
     fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
         match self {
             Self::Normal { buf, .. } => buf.write(data),

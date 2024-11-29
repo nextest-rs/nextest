@@ -36,7 +36,7 @@ impl<'de> Deserialize<'de> for ThreadsRequired {
     {
         struct V;
 
-        impl<'de2> serde::de::Visitor<'de2> for V {
+        impl serde::de::Visitor<'_> for V {
             type Value = ThreadsRequired;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

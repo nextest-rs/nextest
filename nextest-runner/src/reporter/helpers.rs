@@ -497,7 +497,7 @@ some more text at the end, followed by some newlines"#,
     #[derive(Eq, PartialEq)]
     struct DisplayWrapper<'a>(&'a [u8]);
 
-    impl<'a> fmt::Debug for DisplayWrapper<'a> {
+    impl fmt::Debug for DisplayWrapper<'_> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(f, "{}", String::from_utf8_lossy(self.0))
         }

@@ -561,7 +561,7 @@ pub struct TestFilter<'builder> {
     partitioner: Option<Box<dyn Partitioner>>,
 }
 
-impl<'filter> TestFilter<'filter> {
+impl TestFilter<'_> {
     /// Returns an enum describing the match status of this filter.
     pub fn filter_match(
         &mut self,
