@@ -132,7 +132,7 @@ impl Iterator for BackoffIter {
 pub struct TestRunnerBuilder {
     capture_strategy: CaptureStrategy,
     retries: Option<RetryPolicy>,
-    fail_fast: Option<bool>,
+    max_fail: Option<usize>,
     test_threads: Option<TestThreads>,
 }
 
@@ -158,9 +158,9 @@ impl TestRunnerBuilder {
         self
     }
 
-    /// Sets the fail-fast value for this test runner.
-    pub fn set_fail_fast(&mut self, fail_fast: bool) -> &mut Self {
-        self.fail_fast = Some(fail_fast);
+    /// Sets the max-fail value for this test runner.
+    pub fn set_max_fail(&mut self, max_fail: usize) -> &mut Self {
+        self.max_fail = Some(max_fail);
         self
     }
 
@@ -187,7 +187,7 @@ impl TestRunnerBuilder {
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
         };
-        let fail_fast = self.fail_fast.unwrap_or_else(|| profile.fail_fast());
+        let max_fail = self.max_fail.or_else(|| profile.fail_fast().then_some(1));
 
         let runtime = Runtime::new().map_err(TestRunnerBuildError::TokioRuntimeCreate)?;
         let _guard = runtime.enter();
@@ -202,7 +202,7 @@ impl TestRunnerBuilder {
                 cli_args,
                 test_threads,
                 force_retries: self.retries,
-                fail_fast,
+                max_fail,
                 test_list,
                 double_spawn,
                 target_runner,
@@ -308,7 +308,7 @@ struct TestRunnerInner<'a> {
     test_threads: usize,
     // This is Some if the user specifies a retry policy over the command-line.
     force_retries: Option<RetryPolicy>,
-    fail_fast: bool,
+    max_fail: Option<usize>,
     test_list: &'a TestList<'a>,
     double_spawn: DoubleSpawnInfo,
     target_runner: TargetRunner,
@@ -337,7 +337,7 @@ impl<'a> TestRunnerInner<'a> {
             self.profile.name(),
             self.cli_args.clone(),
             self.test_list.run_count(),
-            self.fail_fast,
+            self.max_fail,
         );
 
         // Send the initial event.
@@ -1618,26 +1618,28 @@ pub struct RunStats {
 impl RunStats {
     /// Returns true if there are any failures recorded in the stats.
     pub fn has_failures(&self) -> bool {
-        self.setup_scripts_failed > 0
-            || self.setup_scripts_exec_failed > 0
-            || self.setup_scripts_timed_out > 0
-            || self.failed > 0
-            || self.exec_failed > 0
-            || self.timed_out > 0
+        self.failed_setup_script_count() > 0 || self.failed_count() > 0
+    }
+
+    /// Returns count of setup scripts that did not pass.
+    pub fn failed_setup_script_count(&self) -> usize {
+        self.setup_scripts_failed + self.setup_scripts_exec_failed + self.setup_scripts_timed_out
+    }
+
+    /// Returns count of tests that did not pass.
+    pub fn failed_count(&self) -> usize {
+        self.failed + self.exec_failed + self.timed_out
     }
 
     /// Summarizes the stats as an enum at the end of a test run.
     pub fn summarize_final(&self) -> FinalRunStats {
         // Check for failures first. The order of setup scripts vs tests should not be important,
         // though we don't assert that here.
-        if self.setup_scripts_failed > 0
-            || self.setup_scripts_exec_failed > 0
-            || self.setup_scripts_timed_out > 0
-        {
+        if self.failed_setup_script_count() > 0 {
             FinalRunStats::Failed(RunStatsFailureKind::SetupScript)
         } else if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
             FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
-        } else if self.failed > 0 || self.exec_failed > 0 || self.timed_out > 0 {
+        } else if self.failed_count() > 0 {
             FinalRunStats::Failed(RunStatsFailureKind::Test {
                 initial_run_count: self.initial_run_count,
                 not_run: self.initial_run_count.saturating_sub(self.finished_count),
@@ -1869,7 +1871,7 @@ struct CallbackContext<'a, F> {
     cli_args: Vec<String>,
     stopwatch: StopwatchStart,
     run_stats: RunStats,
-    fail_fast: bool,
+    max_fail: Option<usize>,
     running_setup_script: Option<ContextSetupScript<'a>>,
     running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
     cancel_state: Option<CancelReason>,
@@ -1886,7 +1888,7 @@ where
         profile_name: &str,
         cli_args: Vec<String>,
         initial_run_count: usize,
-        fail_fast: bool,
+        max_fail: Option<usize>,
     ) -> Self {
         Self {
             callback,
@@ -1898,7 +1900,7 @@ where
                 initial_run_count,
                 ..RunStats::default()
             },
-            fail_fast,
+            max_fail,
             running_setup_script: None,
             running_tests: BTreeMap::new(),
             cancel_state: None,
@@ -2078,7 +2080,9 @@ where
                 self.run_stats.on_test_finished(&run_statuses);
 
                 // should this run be cancelled because of a failure?
-                let fail_cancel = self.fail_fast && !run_statuses.last_status().result.is_success();
+                let fail_cancel = self
+                    .max_fail
+                    .map_or(false, |mf| self.run_stats.failed_count() >= mf);
 
                 self.callback(TestEventKind::TestFinished {
                     test_instance,

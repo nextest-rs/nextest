@@ -554,6 +554,22 @@ pub enum ToolConfigFileParseError {
     },
 }
 
+/// Error returned while parsing a [`MaxFail`](crate::config::MaxFail) input.
+#[derive(Clone, Debug, Error)]
+#[error("unrecognized value for max-fail: {input}\n(hint: expected either a positive integer or \"all\")")]
+pub struct MaxFailParseError {
+    /// The input that failed to parse.
+    pub input: String,
+}
+
+impl MaxFailParseError {
+    pub(crate) fn new(input: impl Into<String>) -> Self {
+        Self {
+            input: input.into(),
+        }
+    }
+}
+
 /// Error returned while parsing a [`TestThreads`](crate::config::TestThreads) value.
 #[derive(Clone, Debug, Error)]
 #[error(

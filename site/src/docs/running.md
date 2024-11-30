@@ -184,8 +184,11 @@ cargo nextest run -E 'platform(host)'
 
 ## Other runner options
 
+`--max-fail=N` <!-- md:version 0.9.86 -->
+: Number of tests that can fail before aborting the test run. Useful for uncovering multiple issues without having to run the whole test suite.
+
 `--no-fail-fast`
-: Do not exit the test run on the first failure. Most useful for CI scenarios.
+: Do not exit the test run on the first failure. Most useful for CI scenarios. Equivalent to `--max-fail=all`
 
 `-j`, `--test-threads`
 : Number of tests to run simultaneously. Note that this is separate from the number of build jobs to run simultaneously, which is specified by `--build-jobs`.

@@ -1982,7 +1982,7 @@ fn write_final_warnings(
             if cancel_status == Some(CancelReason::TestFailure) {
                 writeln!(
                     writer,
-                    "{}: {}/{} {} {} not run due to {} (run with {} to run all tests)",
+                    "{}: {}/{} {} {} not run due to {} (run with {} to run all tests, or run with {})",
                     "warning".style(styles.skip),
                     not_run.style(styles.count),
                     initial_run_count.style(styles.count),
@@ -1990,6 +1990,7 @@ fn write_final_warnings(
                     plural::were_plural_if(initial_run_count != 1 || not_run != 1),
                     CancelReason::TestFailure.to_static_str().style(styles.skip),
                     "--no-fail-fast".style(styles.count),
+                    "--max-fail".style(styles.count),
                 )?;
             } else {
                 let due_to_reason = match cancel_status {
@@ -2650,7 +2651,7 @@ mod tests {
         assert_eq!(
             warnings,
             "warning: 1/3 tests were not run due to test failure \
-             (run with --no-fail-fast to run all tests)\n"
+             (run with --no-fail-fast to run all tests, or run with --max-fail)\n"
         );
 
         let warnings = final_warnings_for(
