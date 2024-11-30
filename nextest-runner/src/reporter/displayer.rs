@@ -254,6 +254,19 @@ impl TestReporterBuilder {
             false => self.failure_output,
         };
 
+        let mut theme_characters = ThemeCharacters::default();
+        match output {
+            ReporterStderr::Terminal => {
+                if supports_unicode::on(supports_unicode::Stream::Stderr) {
+                    theme_characters.use_unicode();
+                }
+            }
+            ReporterStderr::Buffer(_) => {
+                // Always use Unicode for internal buffers.
+                theme_characters.use_unicode();
+            }
+        }
+
         let stderr = match output {
             ReporterStderr::Terminal if self.no_capture => {
                 // Do not use a progress bar if --no-capture is passed in. This is required since we
@@ -286,12 +299,12 @@ impl TestReporterBuilder {
                 // but that isn't possible due to https://github.com/console-rs/indicatif/issues/440. Use
                 // {{elapsed_precise}} as an OK tradeoff here.
                 let template = format!(
-                    "{{prefix:>12}} [{{elapsed_precise:>9}}] [{{wide_bar}}] \
+                    "{{prefix:>12}} [{{elapsed_precise:>9}}] {{wide_bar}} \
                     {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}     "
                 );
                 bar.set_style(
                     ProgressStyle::default_bar()
-                        .progress_chars("=> ")
+                        .progress_chars(theme_characters.progress_chars)
                         .template(&template)
                         .expect("template is known to be valid"),
                 );
@@ -328,6 +341,7 @@ impl TestReporterBuilder {
                 force_failure_output,
                 no_capture: self.no_capture,
                 styles,
+                theme_characters,
                 cancel_status: None,
                 final_outputs: DebugIgnore(vec![]),
                 display_empty_outputs,
@@ -641,6 +655,7 @@ struct TestReporterImpl<'a> {
     force_failure_output: Option<TestOutputDisplay>,
     no_capture: bool,
     styles: Box<Styles>,
+    theme_characters: ThemeCharacters,
     cancel_status: Option<CancelReason>,
     final_outputs: DebugIgnore<Vec<(TestInstance<'a>, FinalOutput)>>,
     display_empty_outputs: bool,
@@ -659,7 +674,7 @@ impl<'a> TestReporterImpl<'a> {
                 profile_name,
                 cli_args: _,
             } => {
-                writeln!(writer, "------------")?;
+                writeln!(writer, "{}", self.theme_characters.hbar(12))?;
                 write!(writer, "{:>12} ", "Nextest run".style(self.styles.pass))?;
                 writeln!(
                     writer,
@@ -1025,7 +1040,8 @@ impl<'a> TestReporterImpl<'a> {
                 };
                 write!(
                     writer,
-                    "------------\n{:>12} ",
+                    "{}\n{:>12} ",
+                    self.theme_characters.hbar(12),
                     "Summary".style(summary_style)
                 )?;
 
@@ -1363,10 +1379,12 @@ impl<'a> TestReporterImpl<'a> {
             (self.styles.fail, self.styles.fail_output)
         };
 
+        let hbar = self.theme_characters.hbar(4);
+
         let stdout_header = {
             format!(
                 "{} {:19} {}",
-                "---- ".style(header_style),
+                hbar.style(header_style),
                 "STDOUT:".style(header_style),
                 self.display_script_instance(script_id.clone(), command, args),
             )
@@ -1375,7 +1393,7 @@ impl<'a> TestReporterImpl<'a> {
         let stderr_header = {
             format!(
                 "{} {:19} {}",
-                "---- ".style(header_style),
+                hbar.style(header_style),
                 "STDERR:".style(header_style),
                 self.display_script_instance(script_id.clone(), command, args),
             )
@@ -1425,6 +1443,8 @@ impl<'a> TestReporterImpl<'a> {
             (self.styles.fail, self.styles.fail_output)
         };
 
+        let hbar = self.theme_characters.hbar(4);
+
         match &run_status.output {
             TestExecutionOutput::Output(output) => {
                 let description = if self.styles.is_colorized {
@@ -1435,7 +1455,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 let stdout_header = {
                     let mut header = String::new();
-                    swrite!(header, "{}", "---- ".style(header_style));
+                    swrite!(header, "{} ", hbar.style(header_style));
                     let out_len = self.write_attempt(run_status, header_style, &mut header);
                     // The width is to align test instances.
                     swrite!(
@@ -1450,7 +1470,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 let stderr_header = {
                     let mut header = String::new();
-                    swrite!(header, "{}", "---- ".style(header_style));
+                    swrite!(header, "{} ", hbar.style(header_style));
                     let out_len = self.write_attempt(run_status, header_style, &mut header);
                     // The width is to align test instances.
                     swrite!(
@@ -1465,7 +1485,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 let combined_header = {
                     let mut header = String::new();
-                    swrite!(header, "{}", "---- ".style(header_style));
+                    swrite!(header, "{} ", hbar.style(header_style));
                     let out_len = self.write_attempt(run_status, header_style, &mut header);
                     // The width is to align test instances.
                     swrite!(
@@ -1491,7 +1511,7 @@ impl<'a> TestReporterImpl<'a> {
             TestExecutionOutput::ExecFail { description, .. } => {
                 let exec_fail_header = {
                     let mut header = String::new();
-                    swrite!(header, "{}", "---- ".style(header_style));
+                    swrite!(header, "{} ", hbar.style(header_style));
                     let out_len = self.write_attempt(run_status, header_style, &mut header);
                     // The width is to align test instances.
                     swrite!(
@@ -2024,6 +2044,33 @@ impl Styles {
         self.skip = Style::new().yellow().bold();
         self.script_id = Style::new().blue().bold();
         self.list_styles.colorize();
+    }
+}
+
+#[derive(Debug)]
+struct ThemeCharacters {
+    hbar: char,
+    progress_chars: &'static str,
+}
+
+impl Default for ThemeCharacters {
+    fn default() -> Self {
+        Self {
+            hbar: '-',
+            progress_chars: "=> ",
+        }
+    }
+}
+
+impl ThemeCharacters {
+    fn use_unicode(&mut self) {
+        self.hbar = '─';
+        // https://mike42.me/blog/2018-06-make-better-cli-progress-bars-with-unicode-block-characters
+        self.progress_chars = "█▉▊▋▌▍▎▏ ";
+    }
+
+    fn hbar(&self, width: usize) -> String {
+        std::iter::repeat(self.hbar).take(width).collect()
     }
 }
 

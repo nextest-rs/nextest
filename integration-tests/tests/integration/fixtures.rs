@@ -322,11 +322,11 @@ impl CheckResult {
                 vec![
                     (
                         "stdout",
-                        Regex::new(&format!("---- STDOUT: +{name}")).unwrap(),
+                        Regex::new(&format!("──── STDOUT: +{name}")).unwrap(),
                     ),
                     (
                         "stderr",
-                        Regex::new(&format!("---- STDERR: +{name}")).unwrap(),
+                        Regex::new(&format!("──── STDERR: +{name}")).unwrap(),
                     ),
                 ]
             }

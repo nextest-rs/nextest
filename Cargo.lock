@@ -1773,6 +1773,7 @@ dependencies = [
  "smallvec",
  "smol_str",
  "strip-ansi-escapes",
+ "supports-unicode",
  "swrite",
  "tar",
  "target-spec",
