@@ -1365,7 +1365,7 @@ impl<'a> TestReporterImpl<'a> {
 
         let stdout_header = {
             format!(
-                "\n{} {:19} {}",
+                "{} {:19} {}",
                 "---- ".style(header_style),
                 "STDOUT:".style(header_style),
                 self.display_script_instance(script_id.clone(), command, args),
@@ -1374,7 +1374,7 @@ impl<'a> TestReporterImpl<'a> {
 
         let stderr_header = {
             format!(
-                "\n{} {:19} {}",
+                "{} {:19} {}",
                 "---- ".style(header_style),
                 "STDERR:".style(header_style),
                 self.display_script_instance(script_id.clone(), command, args),
@@ -1435,7 +1435,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 let stdout_header = {
                     let mut header = String::new();
-                    swrite!(header, "\n{}", "---- ".style(header_style));
+                    swrite!(header, "{}", "---- ".style(header_style));
                     let out_len = self.write_attempt(run_status, header_style, &mut header);
                     // The width is to align test instances.
                     swrite!(
@@ -1450,7 +1450,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 let stderr_header = {
                     let mut header = String::new();
-                    swrite!(header, "\n{}", "---- ".style(header_style));
+                    swrite!(header, "{}", "---- ".style(header_style));
                     let out_len = self.write_attempt(run_status, header_style, &mut header);
                     // The width is to align test instances.
                     swrite!(
@@ -1465,7 +1465,7 @@ impl<'a> TestReporterImpl<'a> {
 
                 let combined_header = {
                     let mut header = String::new();
-                    swrite!(header, "\n{}", "---- ".style(header_style));
+                    swrite!(header, "{}", "---- ".style(header_style));
                     let out_len = self.write_attempt(run_status, header_style, &mut header);
                     // The width is to align test instances.
                     swrite!(
@@ -1585,13 +1585,12 @@ impl<'a> TestReporterImpl<'a> {
             } else {
                 // Output the text without stripping ANSI escapes, then reset the color afterwards
                 // in case the output is malformed.
-                writer.write_all(&output.buf)?;
-                writer.write_all(RESET_COLOR)?;
+                write_output_with_trailing_newline(&output.buf, RESET_COLOR, writer)?;
             }
         } else {
             // Strip ANSI escapes from the output if nextest itself isn't colorized.
             let mut no_color = strip_ansi_escapes::Writer::new(writer);
-            no_color.write_all(&output.buf)?;
+            write_output_with_trailing_newline(&output.buf, b"", &mut no_color)?;
         }
 
         Ok(())
@@ -1665,10 +1664,29 @@ fn write_output_with_highlight(
     // `end` is guaranteed to be within the bounds of `output.buf`. (It is actually safe
     // for it to be equal to `output.buf.len()` -- it gets treated as an empty list in
     // that case.)
-    writer.write_all(&output[end..])?;
-    writer.write_all(RESET_COLOR)?;
+    write_output_with_trailing_newline(&output[end..], RESET_COLOR, writer)?;
 
     Ok(())
+}
+
+/// Write output, always ensuring there's a trailing newline. (If there's no
+/// newline, one will be inserted.)
+///
+/// `trailer` is written immediately before the trailing newline if any.
+fn write_output_with_trailing_newline(
+    mut output: &[u8],
+    trailer: &[u8],
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    // If there's a trailing newline in the output, insert the trailer right
+    // before it.
+    if output.last() == Some(&b'\n') {
+        output = &output[..output.len() - 1];
+    }
+
+    writer.write_all(output)?;
+    writer.write_all(trailer)?;
+    writer.write_all(b"\n")
 }
 
 struct FmtPrefix<'a>(&'a Style);
@@ -2411,20 +2429,20 @@ mod tests {
 
         assert_eq!(
             write_output_with_highlight_buf("output", 0, Some(6)),
-            format!("{RESET_COLOR}{BOLD_RED}output{RESET_COLOR}{RESET_COLOR}")
+            format!("{RESET_COLOR}{BOLD_RED}output{RESET_COLOR}{RESET_COLOR}\n")
         );
 
         assert_eq!(
             write_output_with_highlight_buf("output", 1, Some(5)),
-            format!("o{RESET_COLOR}{BOLD_RED}utpu{RESET_COLOR}t{RESET_COLOR}")
+            format!("o{RESET_COLOR}{BOLD_RED}utpu{RESET_COLOR}t{RESET_COLOR}\n")
         );
 
         assert_eq!(
-            write_output_with_highlight_buf("output\nhighlight 1\nhighlight 2", 7, None),
+            write_output_with_highlight_buf("output\nhighlight 1\nhighlight 2\n", 7, None),
             format!(
                 "output\n{RESET_COLOR}\
                 {BOLD_RED}highlight 1{RESET_COLOR}\n\
-                {BOLD_RED}highlight 2{RESET_COLOR}{RESET_COLOR}"
+                {BOLD_RED}highlight 2{RESET_COLOR}{RESET_COLOR}\n"
             )
         );
 
@@ -2438,7 +2456,7 @@ mod tests {
                 "output\n{RESET_COLOR}\
                 {BOLD_RED}highlight 1{RESET_COLOR}\n\
                 {BOLD_RED}highlight 2{RESET_COLOR}\n\
-                not highlighted{RESET_COLOR}"
+                not highlighted{RESET_COLOR}\n"
             )
         );
     }
