@@ -121,7 +121,7 @@ tokio-stream = "0.1.16"
 toml = "0.8.19"
 toml_edit = "0.22.22"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.18", default-features = false, features = ["std", "tracing-log", "fmt"] }
+tracing-subscriber = { version = "0.3.19", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.14"
 unicode-normalization = "0.1.24"
 win32job = "2.0.0"
