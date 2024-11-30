@@ -23,6 +23,7 @@ use crate::{
 };
 use bstr::ByteSlice;
 use debug_ignore::DebugIgnore;
+use indent_write::io::IndentWriter;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
@@ -1373,55 +1374,37 @@ impl<'a> TestReporterImpl<'a> {
         run_status: &SetupScriptExecuteStatus,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
-        let (header_style, _output_style) = if run_status.result.is_success() {
-            (self.styles.pass, self.styles.pass_output)
-        } else {
-            (self.styles.fail, self.styles.fail_output)
-        };
+        let spec = self.output_spec_for_script(script_id, command, args, run_status);
 
-        let hbar = self.theme_characters.hbar(4);
-
-        let stdout_header = {
-            format!(
-                "{} {:19} {}",
-                hbar.style(header_style),
-                "STDOUT:".style(header_style),
-                self.display_script_instance(script_id.clone(), command, args),
-            )
-        };
-
-        let stderr_header = {
-            format!(
-                "{} {:19} {}",
-                hbar.style(header_style),
-                "STDERR:".style(header_style),
-                self.display_script_instance(script_id.clone(), command, args),
-            )
-        };
-
-        self.write_setup_script_output(&stdout_header, &stderr_header, &run_status.output, writer)?;
+        self.write_script_output(&spec, &run_status.output, writer)?;
 
         writeln!(writer)
     }
 
-    fn write_setup_script_output(
+    fn write_script_output(
         &self,
-        stdout_header: &str,
-        stderr_header: &str,
+        spec: &ChildOutputSpec,
         output: &ChildSplitOutput,
-        writer: &mut dyn Write,
+        mut writer: &mut dyn Write,
     ) -> io::Result<()> {
         if let Some(stdout) = &output.stdout {
             if self.display_empty_outputs || !stdout.is_empty() {
-                writeln!(writer, "{}", stdout_header)?;
-                self.write_test_single_output(stdout, writer)?;
+                writeln!(writer, "{}", spec.stdout_header)?;
+
+                let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                self.write_test_single_output(stdout, &mut indent_writer)?;
+                indent_writer.flush()?;
+                writer = indent_writer.into_inner();
             }
         }
 
         if let Some(stderr) = &output.stderr {
             if self.display_empty_outputs || !stderr.is_empty() {
-                writeln!(writer, "{}", stderr_header)?;
-                self.write_test_single_output(stderr, writer)?;
+                writeln!(writer, "{}", spec.stderr_header)?;
+
+                let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                self.write_test_single_output(stderr, &mut indent_writer)?;
+                indent_writer.flush()?;
             }
         }
 
@@ -1435,15 +1418,7 @@ impl<'a> TestReporterImpl<'a> {
         is_retry: bool,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
-        let (header_style, _output_style) = if is_retry {
-            (self.styles.retry, self.styles.retry_output)
-        } else if run_status.result.is_success() {
-            (self.styles.pass, self.styles.pass_output)
-        } else {
-            (self.styles.fail, self.styles.fail_output)
-        };
-
-        let hbar = self.theme_characters.hbar(4);
+        let spec = self.output_spec_for_test(test_instance, run_status, is_retry);
 
         match &run_status.output {
             TestExecutionOutput::Output(output) => {
@@ -1452,79 +1427,17 @@ impl<'a> TestReporterImpl<'a> {
                 } else {
                     None
                 };
-
-                let stdout_header = {
-                    let mut header = String::new();
-                    swrite!(header, "{} ", hbar.style(header_style));
-                    let out_len = self.write_attempt(run_status, header_style, &mut header);
-                    // The width is to align test instances.
-                    swrite!(
-                        header,
-                        "{:width$} {}",
-                        "STDOUT:".style(header_style),
-                        self.display_test_instance(*test_instance),
-                        width = (19 - out_len),
-                    );
-                    header
-                };
-
-                let stderr_header = {
-                    let mut header = String::new();
-                    swrite!(header, "{} ", hbar.style(header_style));
-                    let out_len = self.write_attempt(run_status, header_style, &mut header);
-                    // The width is to align test instances.
-                    swrite!(
-                        header,
-                        "{:width$} {}",
-                        "STDERR:".style(header_style),
-                        self.display_test_instance(*test_instance),
-                        width = (19 - out_len),
-                    );
-                    header
-                };
-
-                let combined_header = {
-                    let mut header = String::new();
-                    swrite!(header, "{} ", hbar.style(header_style));
-                    let out_len = self.write_attempt(run_status, header_style, &mut header);
-                    // The width is to align test instances.
-                    swrite!(
-                        header,
-                        "{:width$} {}",
-                        "OUTPUT:".style(header_style),
-                        self.display_test_instance(*test_instance),
-                        width = (19 - out_len),
-                    );
-                    header
-                };
-
-                self.write_test_output(
-                    &stdout_header,
-                    &stderr_header,
-                    &combined_header,
-                    output,
-                    description,
-                    writer,
-                )?;
+                let spec = self.output_spec_for_test(test_instance, run_status, is_retry);
+                self.write_test_output(&spec, output, description, writer)?;
             }
 
             TestExecutionOutput::ExecFail { description, .. } => {
-                let exec_fail_header = {
-                    let mut header = String::new();
-                    swrite!(header, "{} ", hbar.style(header_style));
-                    let out_len = self.write_attempt(run_status, header_style, &mut header);
-                    // The width is to align test instances.
-                    swrite!(
-                        header,
-                        "{:width$} {}",
-                        "EXECFAIL:".style(header_style),
-                        self.display_test_instance(*test_instance),
-                        width = (19 - out_len)
-                    );
-                    header
-                };
-
-                writeln!(writer, "\n{exec_fail_header}\n{description}")?;
+                writeln!(
+                    writer,
+                    "{}\n{description}",
+                    spec.exec_fail_header
+                        .expect("test output should have exec-fail header")
+                )?;
             }
         }
 
@@ -1533,45 +1446,63 @@ impl<'a> TestReporterImpl<'a> {
 
     fn write_test_output(
         &self,
-        stdout_header: &str,
-        stderr_header: &str,
-        combined_header: &str,
+        spec: &ChildOutputSpec,
         output: &TestOutput,
         description: Option<DescriptionKind<'_>>,
-        writer: &mut dyn Write,
+        mut writer: &mut dyn Write,
     ) -> io::Result<()> {
         match output {
             TestOutput::Split(split) => {
                 if let Some(stdout) = &split.stdout {
                     if self.display_empty_outputs || !stdout.is_empty() {
-                        writeln!(writer, "{}", stdout_header)?;
+                        writeln!(writer, "{}", spec.stdout_header)?;
+
+                        // If there's no output indent, this is a no-op, though
+                        // it will bear the perf cost of a vtable indirection +
+                        // whatever internal state IndentWriter tracks. Doubt
+                        // this will be an issue in practice though!
+                        let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
                         self.write_test_single_output_with_description(
                             stdout,
                             description.and_then(|d| d.stdout_subslice()),
-                            writer,
+                            &mut indent_writer,
                         )?;
+                        indent_writer.flush()?;
+                        writer = indent_writer.into_inner();
                     }
                 }
 
                 if let Some(stderr) = &split.stderr {
                     if self.display_empty_outputs || !stderr.is_empty() {
-                        writeln!(writer, "{}", stderr_header)?;
+                        writeln!(writer, "{}", spec.stderr_header)?;
+
+                        let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
                         self.write_test_single_output_with_description(
                             stderr,
                             description.and_then(|d| d.stderr_subslice()),
-                            writer,
+                            &mut indent_writer,
                         )?;
+                        indent_writer.flush()?;
                     }
                 }
             }
             TestOutput::Combined { output } => {
                 if self.display_empty_outputs || !output.is_empty() {
-                    writeln!(writer, "{}", combined_header)?;
+                    writeln!(
+                        writer,
+                        "{}",
+                        spec.combined_header
+                            .as_ref()
+                            .expect("for TestOutput, combined header should be present")
+                    )?;
+
+                    let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
                     self.write_test_single_output_with_description(
                         output,
                         description.and_then(|d| d.combined_subslice()),
-                        writer,
+                        &mut indent_writer,
                     )?;
+                    indent_writer.flush()?;
                 }
             }
         }
@@ -1636,6 +1567,135 @@ impl<'a> TestReporterImpl<'a> {
     fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
         self.force_failure_output.unwrap_or(test_setting)
     }
+
+    fn output_spec_for_test(
+        &self,
+        test_instance: &TestInstance<'a>,
+        run_status: &ExecuteStatus,
+        is_retry: bool,
+    ) -> ChildOutputSpec {
+        let header_style = if is_retry {
+            self.styles.retry
+        } else if run_status.result.is_success() {
+            self.styles.pass
+        } else {
+            self.styles.fail
+        };
+
+        let hbar = self.theme_characters.hbar(4);
+
+        let stdout_header = {
+            let mut header = String::new();
+            swrite!(header, "{} ", hbar.style(header_style));
+            let out_len = self.write_attempt(run_status, header_style, &mut header);
+            swrite!(
+                header,
+                "{:width$} {}",
+                "STDOUT:".style(header_style),
+                self.display_test_instance(*test_instance),
+                // The width is to align test instances.
+                width = (19 - out_len),
+            );
+            header
+        };
+
+        let stderr_header = {
+            let mut header = String::new();
+            swrite!(header, "{} ", hbar.style(header_style));
+            let out_len = self.write_attempt(run_status, header_style, &mut header);
+            swrite!(
+                header,
+                "{:width$} {}",
+                "STDERR:".style(header_style),
+                self.display_test_instance(*test_instance),
+                // The width is to align test instances.
+                width = (19 - out_len),
+            );
+            header
+        };
+
+        let combined_header = {
+            let mut header = String::new();
+            swrite!(header, "{} ", hbar.style(header_style));
+            let out_len = self.write_attempt(run_status, header_style, &mut header);
+            swrite!(
+                header,
+                "{:width$} {}",
+                "OUTPUT:".style(header_style),
+                self.display_test_instance(*test_instance),
+                // The width is to align test instances.
+                width = (19 - out_len),
+            );
+            header
+        };
+
+        let exec_fail_header = {
+            let mut header = String::new();
+            swrite!(header, "{} ", hbar.style(header_style));
+            let out_len = self.write_attempt(run_status, header_style, &mut header);
+            swrite!(
+                header,
+                "{:width$} {}",
+                "EXECFAIL:".style(header_style),
+                self.display_test_instance(*test_instance),
+                // The width is to align test instances.
+                width = (19 - out_len)
+            );
+            header
+        };
+
+        ChildOutputSpec {
+            stdout_header,
+            stderr_header,
+            combined_header: Some(combined_header),
+            exec_fail_header: Some(exec_fail_header),
+            // No output indent for now -- maybe this should be supported?
+            // Definitely worth trying out.
+            output_indent: "",
+        }
+    }
+
+    fn output_spec_for_script(
+        &self,
+        script_id: &ScriptId,
+        command: &str,
+        args: &[String],
+        run_status: &SetupScriptExecuteStatus,
+    ) -> ChildOutputSpec {
+        let header_style = if run_status.result.is_success() {
+            self.styles.pass
+        } else {
+            self.styles.fail
+        };
+
+        let hbar = self.theme_characters.hbar(4);
+
+        let stdout_header = {
+            format!(
+                "{} {:19} {}",
+                hbar.style(header_style),
+                "STDOUT:".style(header_style),
+                self.display_script_instance(script_id.clone(), command, args),
+            )
+        };
+
+        let stderr_header = {
+            format!(
+                "{} {:19} {}",
+                hbar.style(header_style),
+                "STDERR:".style(header_style),
+                self.display_script_instance(script_id.clone(), command, args),
+            )
+        };
+
+        ChildOutputSpec {
+            stdout_header,
+            stderr_header,
+            combined_header: None,
+            exec_fail_header: None,
+            output_indent: "",
+        }
+    }
 }
 
 impl fmt::Debug for TestReporter<'_> {
@@ -1648,6 +1708,27 @@ impl fmt::Debug for TestReporter<'_> {
 }
 
 const RESET_COLOR: &[u8] = b"\x1b[0m";
+
+/// Formatting options for writing out child process output.
+///
+/// TODO: should these be lazily generated? Can't imagine this ever being
+/// measurably slow.
+#[derive(Debug)]
+struct ChildOutputSpec {
+    stdout_header: String,
+    stderr_header: String,
+    // None if this spec does not write out combined output.
+    //
+    // XXX should this be represented differently? Maybe scripts should support
+    // combined output?
+    combined_header: Option<String>,
+    // None if this spec does not write out exec-fail output.
+    //
+    // XXX script exec fail needs to be handled better -- we should treat it the
+    // same as tests.
+    exec_fail_header: Option<String>,
+    output_indent: &'static str,
+}
 
 fn write_output_with_highlight(
     output: &[u8],
@@ -2023,9 +2104,6 @@ struct Styles {
     pass: Style,
     retry: Style,
     fail: Style,
-    pass_output: Style,
-    retry_output: Style,
-    fail_output: Style,
     skip: Style,
     script_id: Style,
     list_styles: crate::list::Styles,
@@ -2038,9 +2116,6 @@ impl Styles {
         self.pass = Style::new().green().bold();
         self.retry = Style::new().magenta().bold();
         self.fail = Style::new().red().bold();
-        self.pass_output = Style::new().green();
-        self.retry_output = Style::new().magenta();
-        self.fail_output = Style::new().magenta();
         self.skip = Style::new().yellow().bold();
         self.script_id = Style::new().blue().bold();
         self.list_styles.colorize();
