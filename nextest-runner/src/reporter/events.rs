@@ -289,3 +289,36 @@ impl CancelReason {
         }
     }
 }
+
+/// The kind of unit of work that nextest is executing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnitKind {
+    /// A test.
+    Test,
+
+    /// A script (e.g. a setup script).
+    Script,
+}
+
+impl UnitKind {
+    pub(crate) const WAITING_ON_TEST_MESSAGE: &str = "waiting on test process";
+    pub(crate) const WAITING_ON_SCRIPT_MESSAGE: &str = "waiting on script process";
+
+    pub(crate) const EXECUTING_TEST_MESSAGE: &str = "executing test";
+    pub(crate) const EXECUTING_SCRIPT_MESSAGE: &str = "executing script";
+
+    #[expect(dead_code)]
+    pub(crate) fn waiting_on_message(&self) -> &'static str {
+        match self {
+            UnitKind::Test => Self::WAITING_ON_TEST_MESSAGE,
+            UnitKind::Script => Self::WAITING_ON_SCRIPT_MESSAGE,
+        }
+    }
+
+    pub(crate) fn executing_message(&self) -> &'static str {
+        match self {
+            UnitKind::Test => Self::EXECUTING_TEST_MESSAGE,
+            UnitKind::Script => Self::EXECUTING_SCRIPT_MESSAGE,
+        }
+    }
+}

@@ -3,14 +3,14 @@
 
 //! Metadata management.
 
-use super::TestEvent;
+use super::{TestEvent, UnitErrorDescription, UnitKind};
 use crate::{
     config::{EvaluatableProfile, NextestJunitConfig},
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstance,
     reporter::TestEventKind,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
-    test_output::{ChildExecutionResult, ChildOutput},
+    test_output::{ChildExecutionOutput, ChildOutput},
 };
 use camino::Utf8PathBuf;
 use debug_ignore::DebugIgnore;
@@ -150,7 +150,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                         .set_type(ty);
 
                     set_execute_status_props(
-                        rerun,
+                        &rerun.output,
                         // Reruns are always failures.
                         false,
                         junit_store_failure_output,
@@ -176,7 +176,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     || (junit_store_failure_output && !is_success);
 
                 set_execute_status_props(
-                    main_status,
+                    &main_status.output,
                     is_success,
                     store_stdout_stderr,
                     TestcaseOrRerun::Testcase(&mut testcase),
@@ -297,45 +297,34 @@ impl TestcaseOrRerun<'_> {
 }
 
 fn set_execute_status_props(
-    execute_status: &ExecuteStatus,
+    exec_output: &ChildExecutionOutput,
     is_success: bool,
     store_stdout_stderr: bool,
     mut out: TestcaseOrRerun<'_>,
 ) {
-    match &execute_status.output {
-        ChildExecutionResult::Output { output, errors } => {
-            if !is_success {
-                if let Some(errors) = errors {
-                    // Use the child errors as the message and description.
-                    out.set_message(errors.as_one_line_summary());
-                    out.set_description(DisplayErrorChain::new(errors).to_string());
-                };
-                let description = output.heuristic_extract_description(execute_status.result);
-                if let Some(description) = description {
-                    out.set_description(description.display_human().to_string());
-                }
-            }
+    // Currently we only aggregate test results, so always specify UnitKind::Test.
+    let description = UnitErrorDescription::new(UnitKind::Test, exec_output);
+    if let Some(errors) = description.all_error_list() {
+        out.set_message(errors.short_message());
+        out.set_description(DisplayErrorChain::new(errors).to_string());
+    }
 
-            if store_stdout_stderr {
-                match output {
-                    ChildOutput::Split(split) => {
-                        if let Some(stdout) = &split.stdout {
-                            out.set_system_out(stdout.as_str_lossy());
-                        }
-                        if let Some(stderr) = &split.stderr {
-                            out.set_system_err(stderr.as_str_lossy());
-                        }
+    if !is_success && store_stdout_stderr {
+        if let ChildExecutionOutput::Output { output, .. } = exec_output {
+            match output {
+                ChildOutput::Split(split) => {
+                    if let Some(stdout) = &split.stdout {
+                        out.set_system_out(stdout.as_str_lossy());
                     }
-                    ChildOutput::Combined { output } => {
-                        out.set_system_out(output.as_str_lossy())
-                            .set_system_err("(stdout and stderr are combined)");
+                    if let Some(stderr) = &split.stderr {
+                        out.set_system_err(stderr.as_str_lossy());
                     }
                 }
+                ChildOutput::Combined { output } => {
+                    out.set_system_out(output.as_str_lossy())
+                        .set_system_err("(stdout and stderr are combined)");
+                }
             }
-        }
-        ChildExecutionResult::StartError(error) => {
-            out.set_message(format!("Test execution failed: {error}"));
-            out.set_description(DisplayErrorChain::new(error).to_string());
         }
     }
 }

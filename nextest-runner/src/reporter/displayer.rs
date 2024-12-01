@@ -6,20 +6,20 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    helpers::ByteSubslice, structured::StructuredReporter, CancelReason, DescriptionKind,
-    TestEvent, TestEventKind,
+    structured::StructuredReporter, ByteSubslice, CancelReason, TestEvent, TestEventKind,
+    TestOutputErrorSlice, UnitKind,
 };
 use crate::{
     config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
     errors::{DisplayErrorChain, WriteEventError},
     helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
     list::{SkipCounts, TestInstance, TestList},
-    reporter::{aggregator::EventAggregator, helpers::highlight_end},
+    reporter::{aggregator::EventAggregator, helpers::highlight_end, UnitErrorDescription},
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
         FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
     },
-    test_output::{ChildExecutionResult, ChildOutput, ChildSingleOutput},
+    test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;
 use debug_ignore::DebugIgnore;
@@ -1375,26 +1375,7 @@ impl<'a> TestReporterImpl<'a> {
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let spec = self.output_spec_for_script(script_id, command, args, run_status);
-
-        match &run_status.output {
-            ChildExecutionResult::Output { output, errors } => {
-                // Show execution failures first so that they show up
-                // immediately after the failure notification.
-                if let Some(errors) = errors {
-                    let error_chain = DisplayErrorChain::new(errors);
-                    writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
-                }
-
-                self.write_child_output(&spec, output, None, writer)?;
-            }
-
-            ChildExecutionResult::StartError(error) => {
-                let error_chain = DisplayErrorChain::new(error);
-                writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
-            }
-        }
-
-        writeln!(writer)
+        self.write_child_execution_output(&spec, &run_status.output, writer)
     }
 
     fn write_test_execute_status(
@@ -1405,26 +1386,40 @@ impl<'a> TestReporterImpl<'a> {
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let spec = self.output_spec_for_test(test_instance, run_status, is_retry);
+        self.write_child_execution_output(&spec, &run_status.output, writer)
+    }
 
-        match &run_status.output {
-            ChildExecutionResult::Output { output, errors } => {
+    fn write_child_execution_output(
+        &self,
+        spec: &ChildOutputSpec,
+        exec_output: &ChildExecutionOutput,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        match exec_output {
+            ChildExecutionOutput::Output {
+                output,
+                // result and errors are captured by desc.
+                result: _,
+                errors: _,
+            } => {
+                let desc = UnitErrorDescription::new(spec.kind, exec_output);
+
                 // Show execution failures first so that they show up
                 // immediately after the failure notification.
-                if let Some(errors) = errors {
+                if let Some(errors) = desc.exec_fail_error_list() {
                     let error_chain = DisplayErrorChain::new(errors);
                     writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
                 }
 
-                let description = if self.styles.is_colorized {
-                    output.heuristic_extract_description(run_status.result)
+                let highlight_slice = if self.styles.is_colorized {
+                    desc.output_slice()
                 } else {
                     None
                 };
-                let spec = self.output_spec_for_test(test_instance, run_status, is_retry);
-                self.write_child_output(&spec, output, description, writer)?;
+                self.write_child_output(spec, output, highlight_slice, writer)?;
             }
 
-            ChildExecutionResult::StartError(error) => {
+            ChildExecutionOutput::StartError(error) => {
                 let error_chain = DisplayErrorChain::new(error);
                 writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
             }
@@ -1437,7 +1432,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         spec: &ChildOutputSpec,
         output: &ChildOutput,
-        description: Option<DescriptionKind<'_>>,
+        highlight_slice: Option<TestOutputErrorSlice<'_>>,
         mut writer: &mut dyn Write,
     ) -> io::Result<()> {
         match output {
@@ -1453,7 +1448,7 @@ impl<'a> TestReporterImpl<'a> {
                         let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
                         self.write_test_single_output_with_description(
                             stdout,
-                            description.and_then(|d| d.stdout_subslice()),
+                            highlight_slice.and_then(|d| d.stdout_subslice()),
                             &mut indent_writer,
                         )?;
                         indent_writer.flush()?;
@@ -1468,7 +1463,7 @@ impl<'a> TestReporterImpl<'a> {
                         let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
                         self.write_test_single_output_with_description(
                             stderr,
-                            description.and_then(|d| d.stderr_subslice()),
+                            highlight_slice.and_then(|d| d.stderr_subslice()),
                             &mut indent_writer,
                         )?;
                         indent_writer.flush()?;
@@ -1482,7 +1477,7 @@ impl<'a> TestReporterImpl<'a> {
                     let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
                     self.write_test_single_output_with_description(
                         output,
-                        description.and_then(|d| d.combined_subslice()),
+                        highlight_slice.and_then(|d| d.combined_subslice()),
                         &mut indent_writer,
                     )?;
                     indent_writer.flush()?;
@@ -1618,6 +1613,7 @@ impl<'a> TestReporterImpl<'a> {
         };
 
         ChildOutputSpec {
+            kind: UnitKind::Test,
             stdout_header,
             stderr_header,
             combined_header,
@@ -1680,6 +1676,7 @@ impl<'a> TestReporterImpl<'a> {
         };
 
         ChildOutputSpec {
+            kind: UnitKind::Script,
             stdout_header,
             stderr_header,
             combined_header,
@@ -1706,6 +1703,7 @@ const RESET_COLOR: &[u8] = b"\x1b[0m";
 /// measurably slow.
 #[derive(Debug)]
 struct ChildOutputSpec {
+    kind: UnitKind,
     stdout_header: String,
     stderr_header: String,
     combined_header: String,

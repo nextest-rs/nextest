@@ -355,13 +355,23 @@ impl<T: std::error::Error> ErrorList<T> {
         }
     }
 
-    /// Returns a 1 line summary of the error list.
-    pub(crate) fn as_one_line_summary(&self) -> String {
+    /// Returns a short summary of the error list.
+    pub(crate) fn short_message(&self) -> String {
         if self.inner.len() == 1 {
+            // This assumes that the error's `std::error::Error` implementation
+            // provides a short message as its `Display` implementation. That
+            // isn't always true -- in fact, `ErrorList`'s own `Display`
+            // implementation is multi-line -- but it is true in practice for
+            // all the errors we have in place right now. We may want to make
+            // this better in the future.
             format!("{}", self.inner[0])
         } else {
             format!("{} errors occurred {}", self.inner.len(), self.description)
         }
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
+        self.inner.iter()
     }
 }
 

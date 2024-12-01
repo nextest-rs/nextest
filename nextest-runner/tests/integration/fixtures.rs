@@ -25,7 +25,7 @@ use nextest_runner::{
     },
     target_runner::TargetRunner,
     test_filter::{FilterBound, TestFilterBuilder},
-    test_output::{ChildExecutionResult, ChildOutput},
+    test_output::{ChildExecutionOutput, ChildOutput},
 };
 use once_cell::sync::Lazy;
 use std::{
@@ -295,7 +295,7 @@ impl fmt::Debug for InstanceStatus {
             InstanceStatus::Skipped(reason) => write!(f, "skipped: {reason}"),
             InstanceStatus::Finished(run_statuses) => {
                 for run_status in run_statuses.iter() {
-                    let ChildExecutionResult::Output {
+                    let ChildExecutionOutput::Output {
                         output: ChildOutput::Split(split),
                         ..
                     } = &run_status.output

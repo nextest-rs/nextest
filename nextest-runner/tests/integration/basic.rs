@@ -15,7 +15,7 @@ use nextest_runner::{
     double_spawn::DoubleSpawnInfo,
     list::BinaryList,
     platform::BuildPlatforms,
-    reporter::heuristic_extract_description,
+    reporter::{UnitErrorDescription, UnitKind},
     runner::{
         ExecutionDescription, ExecutionResult, FinalRunStats, RunStatsFailureKind,
         TestRunnerBuilder,
@@ -23,7 +23,7 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns},
-    test_output::{ChildExecutionResult, ChildOutput},
+    test_output::{ChildExecutionOutput, ChildOutput},
 };
 use pretty_assertions::assert_eq;
 use std::{io::Cursor, time::Duration};
@@ -172,7 +172,7 @@ fn test_run() -> Result<()> {
 
                         if can_extract_description {
                             // Check that stderr can be parsed heuristically.
-                            let ChildExecutionResult::Output {
+                            let ChildExecutionOutput::Output {
                                 output: ChildOutput::Split(split),
                                 ..
                             } = &run_status.output
@@ -183,13 +183,10 @@ fn test_run() -> Result<()> {
                             let stderr = split.stderr.as_ref().expect("stderr should be captured");
 
                             println!("stderr: {}", stderr.as_str_lossy());
-                            let description = heuristic_extract_description(
-                                run_status.result,
-                                Some(&stdout.buf),
-                                Some(&stderr.buf),
-                            );
+                            let desc =
+                                UnitErrorDescription::new(UnitKind::Test, &run_status.output);
                             assert!(
-                                description.is_some(),
+                                desc.child_process_error_list().is_some(),
                                 "failed to extract description from {}\n*** stdout:\n{}\n*** stderr:\n{}\n",
                                 fixture.name,
                                 stdout.as_str_lossy(),
