@@ -1,6 +1,7 @@
 //! Utilities for capture output from tests run in a child process
 
 use crate::{
+    errors::{ChildError, ChildStartError, ErrorList},
     reporter::{heuristic_extract_description, DescriptionKind},
     runner::ExecutionResult,
 };
@@ -88,27 +89,35 @@ impl ChildSingleOutput {
     }
 }
 
-/// The complete captured output of a child process.
+/// The result of executing a child process: either that the process was run and
+/// at least some output was captured, or that the process could not be started
+/// at all.
 #[derive(Clone, Debug)]
-pub enum TestExecutionOutput {
+pub enum ChildExecutionResult {
     /// The process was run and the output was captured.
-    Output(TestOutput),
+    Output {
+        /// The captured output.
+        output: ChildOutput,
 
-    /// There was an execution failure.
-    ExecFail {
-        /// A single-line message.
-        message: String,
-
-        /// The full description, including other errors, to print out.
-        description: String,
+        /// Errors that occurred while waiting on the child process or parsing
+        /// its output.
+        errors: Option<ErrorList<ChildError>>,
     },
+
+    /// There was a failure to start the process.
+    StartError(ChildStartError),
 }
 
-/// The output of a test.
+impl ChildExecutionResult {
+    pub(crate) const WAITING_ON_TEST_MESSAGE: &str = "waiting on test process";
+    pub(crate) const WAITING_ON_SETUP_SCRIPT_MESSAGE: &str = "waiting on setup script process";
+}
+
+/// The output of a child process: stdout and/or stderr.
 ///
-/// Part of [`TestExecutionOutput`].
+/// Part of [`ChildExecutionResult`], and can be used independently as well.
 #[derive(Clone, Debug)]
-pub enum TestOutput {
+pub enum ChildOutput {
     /// The output was split into stdout and stderr.
     Split(ChildSplitOutput),
 
@@ -121,7 +130,7 @@ pub enum TestOutput {
 
 /// The output of a child process (test or setup script) with split stdout and stderr.
 ///
-/// Part of [`TestOutput`], and can be used independently as well.
+/// One of the variants of [`ChildOutput`].
 #[derive(Clone, Debug)]
 pub struct ChildSplitOutput {
     /// The captured stdout, or `None` if the output was not captured.
@@ -131,7 +140,7 @@ pub struct ChildSplitOutput {
     pub stderr: Option<ChildSingleOutput>,
 }
 
-impl TestOutput {
+impl ChildOutput {
     /// Attempts to extract a description of a test failure from the output of the test.
     pub fn heuristic_extract_description(
         &self,

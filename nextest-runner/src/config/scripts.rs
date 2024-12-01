@@ -10,8 +10,8 @@ use super::{
 use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     errors::{
-        ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection, InvalidConfigScriptName,
-        SetupScriptError,
+        ChildStartError, ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection,
+        InvalidConfigScriptName, SetupScriptOutputError,
     },
     list::TestList,
     platform::BuildPlatforms,
@@ -28,6 +28,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
     process::Command,
+    sync::Arc,
     time::Duration,
 };
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -169,7 +170,7 @@ impl SetupScriptCommand {
         config: &ScriptConfig,
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
-    ) -> Result<Self, SetupScriptError> {
+    ) -> Result<Self, ChildStartError> {
         let mut cmd = create_command(config.program().to_owned(), config.args(), double_spawn);
 
         // NB: we will always override user-provided environment variables with the
@@ -179,7 +180,7 @@ impl SetupScriptCommand {
         let env_path = camino_tempfile::Builder::new()
             .prefix("nextest-env")
             .tempfile()
-            .map_err(SetupScriptError::TempPath)?
+            .map_err(|error| ChildStartError::TempPath(Arc::new(error)))?
             .into_temp_path();
 
         cmd.current_dir(test_list.workspace_root())
@@ -249,31 +250,32 @@ pub(crate) struct SetupScriptEnvMap {
 }
 
 impl SetupScriptEnvMap {
-    pub(crate) async fn new(env_path: &Utf8Path) -> Result<Self, SetupScriptError> {
+    pub(crate) async fn new(env_path: &Utf8Path) -> Result<Self, SetupScriptOutputError> {
         let mut env_map = BTreeMap::new();
         let f = tokio::fs::File::open(env_path).await.map_err(|error| {
-            SetupScriptError::EnvFileOpen {
+            SetupScriptOutputError::EnvFileOpen {
                 path: env_path.to_owned(),
-                error,
+                error: Arc::new(error),
             }
         })?;
         let reader = BufReader::new(f);
         let mut lines = reader.lines();
         loop {
-            let line = lines
-                .next_line()
-                .await
-                .map_err(|error| SetupScriptError::EnvFileRead {
-                    path: env_path.to_owned(),
-                    error,
-                })?;
+            let line =
+                lines
+                    .next_line()
+                    .await
+                    .map_err(|error| SetupScriptOutputError::EnvFileRead {
+                        path: env_path.to_owned(),
+                        error: Arc::new(error),
+                    })?;
             let Some(line) = line else { break };
 
             // Split this line into key and value.
             let (key, value) = match line.split_once('=') {
                 Some((key, value)) => (key, value),
                 None => {
-                    return Err(SetupScriptError::EnvFileParse {
+                    return Err(SetupScriptOutputError::EnvFileParse {
                         path: env_path.to_owned(),
                         line: line.to_owned(),
                     })
@@ -282,7 +284,7 @@ impl SetupScriptEnvMap {
 
             // Ban keys starting with `NEXTEST`.
             if key.starts_with("NEXTEST") {
-                return Err(SetupScriptError::EnvFileReservedKey {
+                return Err(SetupScriptOutputError::EnvFileReservedKey {
                     key: key.to_owned(),
                 });
             }

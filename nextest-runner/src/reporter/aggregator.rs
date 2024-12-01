@@ -6,11 +6,11 @@
 use super::TestEvent;
 use crate::{
     config::{EvaluatableProfile, NextestJunitConfig},
-    errors::WriteEventError,
+    errors::{DisplayErrorChain, WriteEventError},
     list::TestInstance,
     reporter::TestEventKind,
     runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
-    test_output::{TestExecutionOutput, TestOutput},
+    test_output::{ChildExecutionResult, ChildOutput},
 };
 use camino::Utf8PathBuf;
 use debug_ignore::DebugIgnore;
@@ -303,8 +303,13 @@ fn set_execute_status_props(
     mut out: TestcaseOrRerun<'_>,
 ) {
     match &execute_status.output {
-        TestExecutionOutput::Output(output) => {
+        ChildExecutionResult::Output { output, errors } => {
             if !is_success {
+                if let Some(errors) = errors {
+                    // Use the child errors as the message and description.
+                    out.set_message(errors.as_one_line_summary());
+                    out.set_description(DisplayErrorChain::new(errors).to_string());
+                };
                 let description = output.heuristic_extract_description(execute_status.result);
                 if let Some(description) = description {
                     out.set_description(description.display_human().to_string());
@@ -313,7 +318,7 @@ fn set_execute_status_props(
 
             if store_stdout_stderr {
                 match output {
-                    TestOutput::Split(split) => {
+                    ChildOutput::Split(split) => {
                         if let Some(stdout) = &split.stdout {
                             out.set_system_out(stdout.as_str_lossy());
                         }
@@ -321,19 +326,16 @@ fn set_execute_status_props(
                             out.set_system_err(stderr.as_str_lossy());
                         }
                     }
-                    TestOutput::Combined { output } => {
+                    ChildOutput::Combined { output } => {
                         out.set_system_out(output.as_str_lossy())
                             .set_system_err("(stdout and stderr are combined)");
                     }
                 }
             }
         }
-        TestExecutionOutput::ExecFail {
-            message,
-            description,
-        } => {
-            out.set_message(format!("Test execution failed: {message}"));
-            out.set_description(description);
+        ChildExecutionResult::StartError(error) => {
+            out.set_message(format!("Test execution failed: {error}"));
+            out.set_description(DisplayErrorChain::new(error).to_string());
         }
     }
 }

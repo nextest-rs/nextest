@@ -274,40 +274,21 @@ impl ConfigCompileErrorKind {
     }
 }
 
-/// An execution error was returned while running a test.
-///
-/// Internal error type.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub(crate) enum RunTestError {
-    #[error("error spawning test process")]
-    Spawn(#[source] std::io::Error),
+/// An execution error occurred while attempting to start a test.
+#[derive(Clone, Debug, Error)]
+pub enum ChildStartError {
+    /// An error occurred while creating a temporary path for a setup script.
+    #[error("error creating temporary path for setup script")]
+    TempPath(#[source] Arc<std::io::Error>),
 
-    #[error("errors while managing test process")]
-    Child {
-        /// The errors that occurred; guaranteed to be non-empty.
-        errors: ErrorList<ChildError>,
-    },
+    /// An error occurred while spawning the child process.
+    #[error("error spawning child process")]
+    Spawn(#[source] Arc<std::io::Error>),
 }
 
-/// An error that occurred while setting up or running a setup script.
-#[derive(Debug, Error)]
-pub(crate) enum SetupScriptError {
-    /// An error occurred while creating a temporary path for the setup script.
-    #[error("error creating temporary path for setup script")]
-    TempPath(#[source] std::io::Error),
-
-    /// An error occurred while executing the setup script.
-    #[error("error executing setup script")]
-    ExecFail(#[source] std::io::Error),
-
-    /// One or more errors occurred while managing the child process.
-    #[error("errors while managing setup script process")]
-    Child {
-        /// The errors that occurred; guaranteed to be non-empty.
-        errors: ErrorList<ChildError>,
-    },
-
+/// An error that occurred while reading the output of a setup script.
+#[derive(Clone, Debug, Error)]
+pub enum SetupScriptOutputError {
     /// An error occurred while opening the setup script environment file.
     #[error("error opening environment file `{path}`")]
     EnvFileOpen {
@@ -316,7 +297,7 @@ pub(crate) enum SetupScriptError {
 
         /// The underlying error.
         #[source]
-        error: std::io::Error,
+        error: Arc<std::io::Error>,
     },
 
     /// An error occurred while reading the setup script environment file.
@@ -327,16 +308,24 @@ pub(crate) enum SetupScriptError {
 
         /// The underlying error.
         #[source]
-        error: std::io::Error,
+        error: Arc<std::io::Error>,
     },
 
     /// An error occurred while parsing the setup script environment file.
     #[error("line `{line}` in environment file `{path}` not in KEY=VALUE format")]
-    EnvFileParse { path: Utf8PathBuf, line: String },
+    EnvFileParse {
+        /// The path to the environment file.
+        path: Utf8PathBuf,
+        /// The line at issue.
+        line: String,
+    },
 
     /// An environment variable key was reserved.
     #[error("key `{key}` begins with `NEXTEST`, which is reserved for internal use")]
-    EnvFileReservedKey { key: String },
+    EnvFileReservedKey {
+        /// The environment variable name.
+        key: String,
+    },
 }
 
 /// A list of errors that implements `Error`.
@@ -344,25 +333,53 @@ pub(crate) enum SetupScriptError {
 /// In the future, we'll likely want to replace this with a `miette::Diagnostic`-based error, since
 /// that supports multiple causes via "related".
 #[derive(Clone, Debug)]
-pub struct ErrorList<T>(pub Vec<T>);
+pub struct ErrorList<T> {
+    // A description of what the errors are.
+    description: &'static str,
+    // Invariant: this list is non-empty.
+    inner: Vec<T>,
+}
 
-impl<T> ErrorList<T> {
-    /// Returns true if the error list is empty.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+impl<T: std::error::Error> ErrorList<T> {
+    pub(crate) fn new<U>(description: &'static str, errors: Vec<U>) -> Option<Self>
+    where
+        T: From<U>,
+    {
+        if errors.is_empty() {
+            None
+        } else {
+            Some(Self {
+                description,
+                inner: errors.into_iter().map(T::from).collect(),
+            })
+        }
+    }
+
+    /// Returns a 1 line summary of the error list.
+    pub(crate) fn as_one_line_summary(&self) -> String {
+        if self.inner.len() == 1 {
+            format!("{}", self.inner[0])
+        } else {
+            format!("{} errors occurred {}", self.inner.len(), self.description)
+        }
     }
 }
 
 impl<T: std::error::Error> fmt::Display for ErrorList<T> {
     fn fmt(&self, mut f: &mut fmt::Formatter) -> fmt::Result {
         // If a single error occurred, pretend that this is just that.
-        if self.0.len() == 1 {
-            return write!(f, "{}", self.0[0]);
+        if self.inner.len() == 1 {
+            return write!(f, "{}", self.inner[0]);
         }
 
         // Otherwise, list all errors.
-        writeln!(f, "{} errors occurred:", self.0.len())?;
-        for error in &self.0 {
+        writeln!(
+            f,
+            "{} errors occurred {}:",
+            self.inner.len(),
+            self.description,
+        )?;
+        for error in &self.inner {
             let mut indent = IndentWriter::new_skip_initial("  ", f);
             writeln!(indent, "* {}", DisplayErrorChain(error))?;
             f = indent.into_inner();
@@ -373,8 +390,8 @@ impl<T: std::error::Error> fmt::Display for ErrorList<T> {
 
 impl<T: std::error::Error> std::error::Error for ErrorList<T> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        if self.0.len() == 1 {
-            self.0[0].source()
+        if self.inner.len() == 1 {
+            self.inner[0].source()
         } else {
             // More than one error occurred, so we can't return a single error here. Instead, we
             // return `None` and display the chain of causes in `fmt::Display`.
@@ -421,10 +438,21 @@ where
     }
 }
 
-/// An error was returned during the process of managing a child process.
+/// An error was returned while managing a child process or reading its output.
 #[derive(Clone, Debug, Error)]
-#[non_exhaustive]
 pub enum ChildError {
+    /// An error occurred while reading from a child file descriptor.
+    #[error(transparent)]
+    Fd(#[from] ChildFdError),
+
+    /// An error occurred while reading the output of a setup script.
+    #[error(transparent)]
+    SetupScriptOutput(#[from] SetupScriptOutputError),
+}
+
+/// An error was returned while reading from child a file descriptor.
+#[derive(Clone, Debug, Error)]
+pub enum ChildFdError {
     /// An error occurred while reading standard output.
     #[error("error reading standard output")]
     ReadStdout(#[source] Arc<std::io::Error>),
@@ -1822,14 +1850,18 @@ mod tests {
     fn display_error_list() {
         let err1 = StringError::new("err1", None);
 
-        let error_list = ErrorList(vec![err1.clone()]);
+        let error_list =
+            ErrorList::<StringError>::new("waiting on the water to boil", vec![err1.clone()])
+                .expect(">= 1 error");
         insta::assert_snapshot!(format!("{}", error_list), @"err1");
         insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @"err1");
 
         let err2 = StringError::new("err2", Some(err1));
         let err3 = StringError::new("err3", Some(err2));
 
-        let error_list = ErrorList(vec![err3.clone()]);
+        let error_list =
+            ErrorList::<StringError>::new("waiting on flowers to bloom", vec![err3.clone()])
+                .expect(">= 1 error");
         insta::assert_snapshot!(format!("{}", error_list), @"err3");
         insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @r"
         err3
@@ -1842,10 +1874,14 @@ mod tests {
         let err5 = StringError::new("err5", Some(err4));
         let err6 = StringError::new("err6\nerr6 line 2", Some(err5));
 
-        let error_list = ErrorList(vec![err3, err6]);
+        let error_list = ErrorList::<StringError>::new(
+            "waiting for the heat death of the universe",
+            vec![err3, err6],
+        )
+        .expect(">= 1 error");
 
         insta::assert_snapshot!(format!("{}", error_list), @r"
-        2 errors occurred:
+        2 errors occurred waiting for the heat death of the universe:
         * err3
             caused by:
             - err2
@@ -1857,7 +1893,7 @@ mod tests {
             - err4
         ");
         insta::assert_snapshot!(format!("{}", DisplayErrorChain::new(&error_list)), @r"
-        2 errors occurred:
+        2 errors occurred waiting for the heat death of the universe:
         * err3
             caused by:
             - err2
