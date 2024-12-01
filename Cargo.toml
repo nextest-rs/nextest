@@ -63,7 +63,7 @@ http = "1.1.0"
 humantime-serde = "1.1.1"
 indenter = "0.3.3"
 indent_write = "2.2.0"
-indexmap = "2.6.0"
+indexmap = "2.7.0"
 indicatif = "0.17.9"
 indoc = "2.0.5"
 insta = { version = "1.41.1", default-features = false }
