@@ -547,10 +547,10 @@ impl<'a> TestRunnerInner<'a> {
                             config,
                         };
 
-                        let (status, env_map) = self
+                        let status = self
                             .run_setup_script(packet, &this_resp_tx, &mut req_rx)
                             .await;
-                        let status = status.into_external();
+                        let (status, env_map) = status.into_external();
 
                         let _ = this_resp_tx.send(InternalTestEvent::SetupScriptFinished {
                             script_id,
@@ -762,24 +762,21 @@ impl<'a> TestRunnerInner<'a> {
         script: SetupScriptPacket<'a>,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest>,
-    ) -> (InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
+    ) -> InternalSetupScriptExecuteStatus {
         let mut stopwatch = crate::time::stopwatch();
 
         match self
             .run_setup_script_inner(script, &mut stopwatch, resp_tx, req_rx)
             .await
         {
-            Ok((status, env_map)) => (status, env_map),
-            Err(error) => (
-                InternalSetupScriptExecuteStatus {
-                    output: ChildExecutionResult::StartError(error),
-                    result: ExecutionResult::ExecFail,
-                    stopwatch_end: stopwatch.snapshot(),
-                    is_slow: false,
-                    env_count: 0,
-                },
-                None,
-            ),
+            Ok(status) => status,
+            Err(error) => InternalSetupScriptExecuteStatus {
+                output: ChildExecutionResult::StartError(error),
+                result: ExecutionResult::ExecFail,
+                stopwatch_end: stopwatch.snapshot(),
+                is_slow: false,
+                env_map: None,
+            },
         }
     }
 
@@ -789,8 +786,7 @@ impl<'a> TestRunnerInner<'a> {
         stopwatch: &mut StopwatchStart,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest>,
-    ) -> Result<(InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>), ChildStartError>
-    {
+    ) -> Result<InternalSetupScriptExecuteStatus, ChildStartError> {
         let mut cmd = script.make_command(&self.double_spawn, self.test_list)?;
         let command_mut = cmd.command_mut();
 
@@ -964,22 +960,19 @@ impl<'a> TestRunnerInner<'a> {
             None
         };
 
-        Ok((
-            InternalSetupScriptExecuteStatus {
-                output: ChildExecutionResult::Output {
-                    output: child_acc.output.freeze(),
-                    errors: ErrorList::new(
-                        ChildExecutionResult::WAITING_ON_SETUP_SCRIPT_MESSAGE,
-                        errors,
-                    ),
-                },
-                result: status,
-                stopwatch_end: stopwatch.snapshot(),
-                is_slow,
-                env_count: env_map.as_ref().map(|map| map.len()).unwrap_or(0),
+        Ok(InternalSetupScriptExecuteStatus {
+            output: ChildExecutionResult::Output {
+                output: child_acc.output.freeze(),
+                errors: ErrorList::new(
+                    ChildExecutionResult::WAITING_ON_SETUP_SCRIPT_MESSAGE,
+                    errors,
+                ),
             },
+            result: status,
+            stopwatch_end: stopwatch.snapshot(),
+            is_slow,
             env_map,
-        ))
+        })
     }
 
     /// Run an individual test in its own process.
@@ -1524,7 +1517,10 @@ pub struct SetupScriptExecuteStatus {
     /// Whether this script counts as slow.
     pub is_slow: bool,
     /// The number of environment variables that were set by this script.
-    pub env_count: usize,
+    ///
+    /// `None` if an error occurred while running the script or reading the
+    /// environment map.
+    pub env_count: Option<usize>,
 }
 
 struct InternalSetupScriptExecuteStatus {
@@ -1532,19 +1528,23 @@ struct InternalSetupScriptExecuteStatus {
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
     is_slow: bool,
-    env_count: usize,
+    env_map: Option<SetupScriptEnvMap>,
 }
 
 impl InternalSetupScriptExecuteStatus {
-    fn into_external(self) -> SetupScriptExecuteStatus {
-        SetupScriptExecuteStatus {
-            output: self.output,
-            result: self.result,
-            start_time: self.stopwatch_end.start_time.fixed_offset(),
-            time_taken: self.stopwatch_end.active,
-            is_slow: self.is_slow,
-            env_count: self.env_count,
-        }
+    fn into_external(self) -> (SetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
+        let env_count = self.env_map.as_ref().map(|map| map.len());
+        (
+            SetupScriptExecuteStatus {
+                output: self.output,
+                result: self.result,
+                start_time: self.stopwatch_end.start_time.fixed_offset(),
+                time_taken: self.stopwatch_end.active,
+                is_slow: self.is_slow,
+                env_count,
+            },
+            self.env_map,
+        )
     }
 }
 
