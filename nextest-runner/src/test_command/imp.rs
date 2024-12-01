@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    errors::ChildError,
-    test_output::{CaptureStrategy, ChildSplitOutput, TestOutput},
+    errors::ChildFdError,
+    test_output::{CaptureStrategy, ChildOutput, ChildSplitOutput},
 };
 use bytes::BytesMut;
 use std::{io, process::Stdio, sync::Arc};
@@ -142,7 +142,7 @@ pub(crate) struct ChildAccumulator {
     // for `fill_buf` to select over it.
     pub(crate) fds: ChildFds,
     pub(crate) output: ChildOutputMut,
-    pub(crate) errors: Vec<ChildError>,
+    pub(crate) errors: Vec<ChildFdError>,
 }
 
 impl ChildAccumulator {
@@ -218,17 +218,17 @@ impl ChildFds {
     /// We follow this "externalized progress" pattern rather than having the collect output futures
     /// own the data they're collecting, to enable future improvements where we can dump
     /// currently-captured output to the terminal.
-    pub(crate) async fn fill_buf(&mut self, acc: &mut ChildOutputMut) -> Result<(), ChildError> {
+    pub(crate) async fn fill_buf(&mut self, acc: &mut ChildOutputMut) -> Result<(), ChildFdError> {
         match self {
             Self::Split { stdout, stderr } => {
                 let (stdout_acc, stderr_acc) = acc.as_split_mut();
                 // Wait until either of these make progress.
                 tokio::select! {
                     res = fill_buf_opt(stdout.as_mut(), stdout_acc), if !is_done_opt(stdout) => {
-                        res.map_err(|error| ChildError::ReadStdout(Arc::new(error)))
+                        res.map_err(|error| ChildFdError::ReadStdout(Arc::new(error)))
                     }
                     res = fill_buf_opt(stderr.as_mut(), stderr_acc), if !is_done_opt(stderr) => {
-                        res.map_err(|error| ChildError::ReadStderr(Arc::new(error)))
+                        res.map_err(|error| ChildFdError::ReadStderr(Arc::new(error)))
                     }
                     // If both are done, do nothing.
                     else => {
@@ -241,7 +241,7 @@ impl ChildFds {
                     combined
                         .fill_buf(acc.as_combined_mut())
                         .await
-                        .map_err(|error| ChildError::ReadCombined(Arc::new(error)))
+                        .map_err(|error| ChildFdError::ReadCombined(Arc::new(error)))
                 } else {
                     Ok(())
                 }
@@ -277,13 +277,13 @@ impl ChildOutputMut {
     }
 
     /// Marks the collection as done, returning a `TestOutput`.
-    pub(crate) fn freeze(self) -> TestOutput {
+    pub(crate) fn freeze(self) -> ChildOutput {
         match self {
-            Self::Split { stdout, stderr } => TestOutput::Split(ChildSplitOutput {
+            Self::Split { stdout, stderr } => ChildOutput::Split(ChildSplitOutput {
                 stdout: stdout.map(|x| x.freeze().into()),
                 stderr: stderr.map(|x| x.freeze().into()),
             }),
-            Self::Combined(combined) => TestOutput::Combined {
+            Self::Combined(combined) => ChildOutput::Combined {
                 output: combined.freeze().into(),
             },
         }

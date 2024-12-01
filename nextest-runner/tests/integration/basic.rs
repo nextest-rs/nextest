@@ -23,7 +23,7 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns},
-    test_output::{TestExecutionOutput, TestOutput},
+    test_output::{ChildExecutionResult, ChildOutput},
 };
 use pretty_assertions::assert_eq;
 use std::{io::Cursor, time::Duration};
@@ -172,8 +172,10 @@ fn test_run() -> Result<()> {
 
                         if can_extract_description {
                             // Check that stderr can be parsed heuristically.
-                            let TestExecutionOutput::Output(TestOutput::Split(split)) =
-                                &run_status.output
+                            let ChildExecutionResult::Output {
+                                output: ChildOutput::Split(split),
+                                ..
+                            } = &run_status.output
                             else {
                                 panic!("this test should always use split output")
                             };

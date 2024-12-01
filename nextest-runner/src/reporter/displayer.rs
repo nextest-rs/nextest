@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
     config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
-    errors::WriteEventError,
+    errors::{DisplayErrorChain, WriteEventError},
     helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
     list::{SkipCounts, TestInstance, TestList},
     reporter::{aggregator::EventAggregator, helpers::highlight_end},
@@ -19,7 +19,7 @@ use crate::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
         FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
     },
-    test_output::{ChildSingleOutput, ChildSplitOutput, TestExecutionOutput, TestOutput},
+    test_output::{ChildExecutionResult, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;
 use debug_ignore::DebugIgnore;
@@ -1376,39 +1376,25 @@ impl<'a> TestReporterImpl<'a> {
     ) -> io::Result<()> {
         let spec = self.output_spec_for_script(script_id, command, args, run_status);
 
-        self.write_script_output(&spec, &run_status.output, writer)?;
+        match &run_status.output {
+            ChildExecutionResult::Output { output, errors } => {
+                // Show execution failures first so that they show up
+                // immediately after the failure notification.
+                if let Some(errors) = errors {
+                    let error_chain = DisplayErrorChain::new(errors);
+                    writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
+                }
+
+                self.write_child_output(&spec, output, None, writer)?;
+            }
+
+            ChildExecutionResult::StartError(error) => {
+                let error_chain = DisplayErrorChain::new(error);
+                writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
+            }
+        }
 
         writeln!(writer)
-    }
-
-    fn write_script_output(
-        &self,
-        spec: &ChildOutputSpec,
-        output: &ChildSplitOutput,
-        mut writer: &mut dyn Write,
-    ) -> io::Result<()> {
-        if let Some(stdout) = &output.stdout {
-            if self.display_empty_outputs || !stdout.is_empty() {
-                writeln!(writer, "{}", spec.stdout_header)?;
-
-                let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
-                self.write_test_single_output(stdout, &mut indent_writer)?;
-                indent_writer.flush()?;
-                writer = indent_writer.into_inner();
-            }
-        }
-
-        if let Some(stderr) = &output.stderr {
-            if self.display_empty_outputs || !stderr.is_empty() {
-                writeln!(writer, "{}", spec.stderr_header)?;
-
-                let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
-                self.write_test_single_output(stderr, &mut indent_writer)?;
-                indent_writer.flush()?;
-            }
-        }
-
-        Ok(())
     }
 
     fn write_test_execute_status(
@@ -1421,38 +1407,41 @@ impl<'a> TestReporterImpl<'a> {
         let spec = self.output_spec_for_test(test_instance, run_status, is_retry);
 
         match &run_status.output {
-            TestExecutionOutput::Output(output) => {
+            ChildExecutionResult::Output { output, errors } => {
+                // Show execution failures first so that they show up
+                // immediately after the failure notification.
+                if let Some(errors) = errors {
+                    let error_chain = DisplayErrorChain::new(errors);
+                    writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
+                }
+
                 let description = if self.styles.is_colorized {
                     output.heuristic_extract_description(run_status.result)
                 } else {
                     None
                 };
                 let spec = self.output_spec_for_test(test_instance, run_status, is_retry);
-                self.write_test_output(&spec, output, description, writer)?;
+                self.write_child_output(&spec, output, description, writer)?;
             }
 
-            TestExecutionOutput::ExecFail { description, .. } => {
-                writeln!(
-                    writer,
-                    "{}\n{description}",
-                    spec.exec_fail_header
-                        .expect("test output should have exec-fail header")
-                )?;
+            ChildExecutionResult::StartError(error) => {
+                let error_chain = DisplayErrorChain::new(error);
+                writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
             }
         }
 
         writeln!(writer)
     }
 
-    fn write_test_output(
+    fn write_child_output(
         &self,
         spec: &ChildOutputSpec,
-        output: &TestOutput,
+        output: &ChildOutput,
         description: Option<DescriptionKind<'_>>,
         mut writer: &mut dyn Write,
     ) -> io::Result<()> {
         match output {
-            TestOutput::Split(split) => {
+            ChildOutput::Split(split) => {
                 if let Some(stdout) = &split.stdout {
                     if self.display_empty_outputs || !stdout.is_empty() {
                         writeln!(writer, "{}", spec.stdout_header)?;
@@ -1486,15 +1475,9 @@ impl<'a> TestReporterImpl<'a> {
                     }
                 }
             }
-            TestOutput::Combined { output } => {
+            ChildOutput::Combined { output } => {
                 if self.display_empty_outputs || !output.is_empty() {
-                    writeln!(
-                        writer,
-                        "{}",
-                        spec.combined_header
-                            .as_ref()
-                            .expect("for TestOutput, combined header should be present")
-                    )?;
+                    writeln!(writer, "{}", spec.combined_header)?;
 
                     let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
                     self.write_test_single_output_with_description(
@@ -1508,16 +1491,6 @@ impl<'a> TestReporterImpl<'a> {
         }
 
         Ok(())
-    }
-
-    /// Writes a test output to the writer.
-    fn write_test_single_output(
-        &self,
-        output: &ChildSingleOutput,
-        writer: &mut dyn Write,
-    ) -> io::Result<()> {
-        // SAFETY: The description is not provided.
-        self.write_test_single_output_with_description(output, None, writer)
     }
 
     /// Writes a test output to the writer, along with optionally a subslice of the output to
@@ -1647,8 +1620,8 @@ impl<'a> TestReporterImpl<'a> {
         ChildOutputSpec {
             stdout_header,
             stderr_header,
-            combined_header: Some(combined_header),
-            exec_fail_header: Some(exec_fail_header),
+            combined_header,
+            exec_fail_header,
             // No output indent for now -- maybe this should be supported?
             // Definitely worth trying out.
             output_indent: "",
@@ -1688,11 +1661,29 @@ impl<'a> TestReporterImpl<'a> {
             )
         };
 
+        let combined_header = {
+            format!(
+                "{} {:19} {}",
+                hbar.style(header_style),
+                "OUTPUT:".style(header_style),
+                self.display_script_instance(script_id.clone(), command, args),
+            )
+        };
+
+        let exec_fail_header = {
+            format!(
+                "{} {:19} {}",
+                hbar.style(header_style),
+                "EXECFAIL:".style(header_style),
+                self.display_script_instance(script_id.clone(), command, args),
+            )
+        };
+
         ChildOutputSpec {
             stdout_header,
             stderr_header,
-            combined_header: None,
-            exec_fail_header: None,
+            combined_header,
+            exec_fail_header,
             output_indent: "",
         }
     }
@@ -1717,16 +1708,8 @@ const RESET_COLOR: &[u8] = b"\x1b[0m";
 struct ChildOutputSpec {
     stdout_header: String,
     stderr_header: String,
-    // None if this spec does not write out combined output.
-    //
-    // XXX should this be represented differently? Maybe scripts should support
-    // combined output?
-    combined_header: Option<String>,
-    // None if this spec does not write out exec-fail output.
-    //
-    // XXX script exec fail needs to be handled better -- we should treat it the
-    // same as tests.
-    exec_fail_header: Option<String>,
+    combined_header: String,
+    exec_fail_header: String,
     output_indent: &'static str,
 }
 

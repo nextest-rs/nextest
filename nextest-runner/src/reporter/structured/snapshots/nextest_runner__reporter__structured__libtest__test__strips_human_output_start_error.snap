@@ -1,0 +1,6 @@
+---
+source: nextest-runner/src/reporter/structured/libtest.rs
+expression: "std::str::from_utf8(&actual).unwrap()"
+snapshot_kind: text
+---
+--- EXECUTION ERROR ---\nerror spawning child process\n  caused by:\n  - inner error

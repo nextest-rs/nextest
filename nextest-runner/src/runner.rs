@@ -13,8 +13,8 @@ use crate::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::{
-        ChildError, ConfigureHandleInheritanceError, DisplayErrorChain, ErrorList, RunTestError,
-        SetupScriptError, TestRunnerBuildError, TestRunnerExecuteErrors,
+        ChildError, ChildFdError, ChildStartError, ConfigureHandleInheritanceError, ErrorList,
+        TestRunnerBuildError, TestRunnerExecuteErrors,
     },
     list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
     reporter::{
@@ -22,8 +22,8 @@ use crate::{
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
-    test_command::{ChildAccumulator, ChildFds, ChildOutputMut},
-    test_output::{CaptureStrategy, ChildSplitOutput, TestExecutionOutput},
+    test_command::{ChildAccumulator, ChildFds},
+    test_output::{CaptureStrategy, ChildExecutionResult},
     time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
 };
 use async_scoped::TokioScope;
@@ -36,7 +36,6 @@ use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
     collections::BTreeMap,
     convert::Infallible,
-    fmt::Write,
     num::NonZeroUsize,
     pin::Pin,
     process::{ExitStatus, Stdio},
@@ -771,26 +770,16 @@ impl<'a> TestRunnerInner<'a> {
             .await
         {
             Ok((status, env_map)) => (status, env_map),
-            Err(error) => {
-                // Put the error chain inside stderr. (This is not a great solution, but it's fine
-                // for now.)
-                let mut stderr = bytes::BytesMut::new();
-                writeln!(&mut stderr, "{}", DisplayErrorChain::new(error)).unwrap();
-
-                (
-                    InternalSetupScriptExecuteStatus {
-                        output: ChildSplitOutput {
-                            stdout: None,
-                            stderr: Some(stderr.freeze().into()),
-                        },
-                        result: ExecutionResult::ExecFail,
-                        stopwatch_end: stopwatch.snapshot(),
-                        is_slow: false,
-                        env_count: 0,
-                    },
-                    None,
-                )
-            }
+            Err(error) => (
+                InternalSetupScriptExecuteStatus {
+                    output: ChildExecutionResult::StartError(error),
+                    result: ExecutionResult::ExecFail,
+                    stopwatch_end: stopwatch.snapshot(),
+                    is_slow: false,
+                    env_count: 0,
+                },
+                None,
+            ),
         }
     }
 
@@ -800,7 +789,7 @@ impl<'a> TestRunnerInner<'a> {
         stopwatch: &mut StopwatchStart,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest>,
-    ) -> Result<(InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>), SetupScriptError>
+    ) -> Result<(InternalSetupScriptExecuteStatus, Option<SetupScriptEnvMap>), ChildStartError>
     {
         let mut cmd = script.make_command(&self.double_spawn, self.test_list)?;
         let command_mut = cmd.command_mut();
@@ -823,7 +812,9 @@ impl<'a> TestRunnerInner<'a> {
             }
         }
 
-        let (mut child, env_path) = cmd.spawn().map_err(SetupScriptError::ExecFail)?;
+        let (mut child, env_path) = cmd
+            .spawn()
+            .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
@@ -949,39 +940,39 @@ impl<'a> TestRunnerInner<'a> {
         let exit_status = match res {
             Ok(exit_status) => Some(exit_status),
             Err(err) => {
-                child_acc.errors.push(ChildError::Wait(Arc::new(err)));
+                child_acc.errors.push(ChildFdError::Wait(Arc::new(err)));
                 None
             }
         };
 
-        if !child_acc.errors.is_empty() {
-            // TODO: we may wish to return whatever parts of the output we did collect here.
-            return Err(SetupScriptError::Child {
-                errors: ErrorList(child_acc.errors),
-            });
-        }
-
         let exit_status = exit_status.expect("None always results in early return");
 
-        let status = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
+        let status = status
+            .unwrap_or_else(|| create_execution_result(exit_status, &child_acc.errors, leaked));
 
+        // Read from the environment map. If there's an error here, add it to the list of child errors.
+        let mut errors: Vec<_> = child_acc.errors.into_iter().map(ChildError::from).collect();
         let env_map = if status.is_success() {
-            Some(SetupScriptEnvMap::new(&env_path).await?)
+            match SetupScriptEnvMap::new(&env_path).await {
+                Ok(env_map) => Some(env_map),
+                Err(error) => {
+                    errors.push(ChildError::SetupScriptOutput(error));
+                    None
+                }
+            }
         } else {
             None
         };
 
-        let (stdout, stderr) = match child_acc.output {
-            ChildOutputMut::Split { stdout, stderr } => (
-                stdout.map(|x| x.freeze().into()),
-                stderr.map(|x| x.freeze().into()),
-            ),
-            ChildOutputMut::Combined(_) => unreachable!("setup scripts are always split"),
-        };
-
         Ok((
             InternalSetupScriptExecuteStatus {
-                output: ChildSplitOutput { stdout, stderr },
+                output: ChildExecutionResult::Output {
+                    output: child_acc.output.freeze(),
+                    errors: ErrorList::new(
+                        ChildExecutionResult::WAITING_ON_SETUP_SCRIPT_MESSAGE,
+                        errors,
+                    ),
+                },
                 result: status,
                 stopwatch_end: stopwatch.snapshot(),
                 is_slow,
@@ -1006,20 +997,13 @@ impl<'a> TestRunnerInner<'a> {
             .await
         {
             Ok(run_status) => run_status,
-            Err(error) => {
-                let message = error.to_string();
-                let description = DisplayErrorChain::new(error).to_string();
-                InternalExecuteStatus {
-                    output: TestExecutionOutput::ExecFail {
-                        message,
-                        description,
-                    },
-                    result: ExecutionResult::ExecFail,
-                    stopwatch_end: stopwatch.snapshot(),
-                    is_slow: false,
-                    delay_before_start,
-                }
-            }
+            Err(error) => InternalExecuteStatus {
+                output: ChildExecutionResult::StartError(error),
+                result: ExecutionResult::ExecFail,
+                stopwatch_end: stopwatch.snapshot(),
+                is_slow: false,
+                delay_before_start,
+            },
         }
     }
 
@@ -1029,7 +1013,7 @@ impl<'a> TestRunnerInner<'a> {
         stopwatch: &mut StopwatchStart,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest>,
-    ) -> Result<InternalExecuteStatus, RunTestError> {
+    ) -> Result<InternalExecuteStatus, ChildStartError> {
         let ctx = TestExecuteContext {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
@@ -1057,7 +1041,7 @@ impl<'a> TestRunnerInner<'a> {
             child_fds,
         } = cmd
             .spawn(self.capture_strategy)
-            .map_err(RunTestError::Spawn)?;
+            .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
@@ -1189,23 +1173,23 @@ impl<'a> TestRunnerInner<'a> {
         let exit_status = match res {
             Ok(exit_status) => Some(exit_status),
             Err(err) => {
-                child_acc.errors.push(ChildError::Wait(Arc::new(err)));
+                child_acc.errors.push(ChildFdError::Wait(Arc::new(err)));
                 None
             }
         };
 
-        if !child_acc.errors.is_empty() {
-            // TODO: we may wish to return whatever parts of the output we did collect here.
-            return Err(RunTestError::Child {
-                errors: ErrorList(child_acc.errors),
-            });
-        }
-
         let exit_status = exit_status.expect("None always results in early return");
-        let result = status.unwrap_or_else(|| create_execution_result(exit_status, leaked));
+        let result = status
+            .unwrap_or_else(|| create_execution_result(exit_status, &child_acc.errors, leaked));
 
         Ok(InternalExecuteStatus {
-            output: TestExecutionOutput::Output(child_acc.output.freeze()),
+            output: ChildExecutionResult::Output {
+                output: child_acc.output.freeze(),
+                errors: ErrorList::new(
+                    ChildExecutionResult::WAITING_ON_TEST_MESSAGE,
+                    child_acc.errors,
+                ),
+            },
             result,
             stopwatch_end: stopwatch.snapshot(),
             is_slow,
@@ -1288,8 +1272,16 @@ async fn handle_signal_request(
     }
 }
 
-fn create_execution_result(exit_status: ExitStatus, leaked: bool) -> ExecutionResult {
-    if exit_status.success() {
+fn create_execution_result(
+    exit_status: ExitStatus,
+    child_errors: &[ChildFdError],
+    leaked: bool,
+) -> ExecutionResult {
+    if !child_errors.is_empty() {
+        // If an error occurred while waiting on the child handles, treat it as
+        // an execution failure.
+        ExecutionResult::ExecFail
+    } else if exit_status.success() {
         if leaked {
             ExecutionResult::Leak
         } else {
@@ -1483,7 +1475,7 @@ pub struct ExecuteStatus {
     /// Retry-related data.
     pub retry_data: RetryData,
     /// The stdout and stderr output for this test.
-    pub output: TestExecutionOutput,
+    pub output: ChildExecutionResult,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
@@ -1497,7 +1489,7 @@ pub struct ExecuteStatus {
 }
 
 struct InternalExecuteStatus {
-    output: TestExecutionOutput,
+    output: ChildExecutionResult,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
     is_slow: bool,
@@ -1522,7 +1514,7 @@ impl InternalExecuteStatus {
 #[derive(Clone, Debug)]
 pub struct SetupScriptExecuteStatus {
     /// Output for this setup script.
-    pub output: ChildSplitOutput,
+    pub output: ChildExecutionResult,
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the script started.
@@ -1536,7 +1528,7 @@ pub struct SetupScriptExecuteStatus {
 }
 
 struct InternalSetupScriptExecuteStatus {
-    output: ChildSplitOutput,
+    output: ChildExecutionResult,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
     is_slow: bool,
@@ -1837,7 +1829,7 @@ impl<'a> SetupScriptPacket<'a> {
         &self,
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
-    ) -> Result<SetupScriptCommand, SetupScriptError> {
+    ) -> Result<SetupScriptCommand, ChildStartError> {
         SetupScriptCommand::new(self.config, double_spawn, test_list)
     }
 
