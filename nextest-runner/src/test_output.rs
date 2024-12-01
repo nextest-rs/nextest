@@ -2,7 +2,6 @@
 
 use crate::{
     errors::{ChildError, ChildStartError, ErrorList},
-    reporter::{heuristic_extract_description, DescriptionKind},
     runner::ExecutionResult,
 };
 use bstr::{ByteSlice, Lines};
@@ -93,9 +92,14 @@ impl ChildSingleOutput {
 /// at least some output was captured, or that the process could not be started
 /// at all.
 #[derive(Clone, Debug)]
-pub enum ChildExecutionResult {
+pub enum ChildExecutionOutput {
     /// The process was run and the output was captured.
     Output {
+        /// If the process has finished executing, the final state it is in.
+        ///
+        /// `None` means execution is currently in progress.
+        result: Option<ExecutionResult>,
+
         /// The captured output.
         output: ChildOutput,
 
@@ -108,14 +112,9 @@ pub enum ChildExecutionResult {
     StartError(ChildStartError),
 }
 
-impl ChildExecutionResult {
-    pub(crate) const WAITING_ON_TEST_MESSAGE: &str = "waiting on test process";
-    pub(crate) const WAITING_ON_SETUP_SCRIPT_MESSAGE: &str = "waiting on setup script process";
-}
-
 /// The output of a child process: stdout and/or stderr.
 ///
-/// Part of [`ChildExecutionResult`], and can be used independently as well.
+/// Part of [`ChildExecutionOutput`], and can be used independently as well.
 #[derive(Clone, Debug)]
 pub enum ChildOutput {
     /// The output was split into stdout and stderr.
@@ -138,34 +137,4 @@ pub struct ChildSplitOutput {
 
     /// The captured stderr, or `None` if the output was not captured.
     pub stderr: Option<ChildSingleOutput>,
-}
-
-impl ChildOutput {
-    /// Attempts to extract a description of a test failure from the output of the test.
-    pub fn heuristic_extract_description(
-        &self,
-        exec_result: ExecutionResult,
-    ) -> Option<DescriptionKind<'_>> {
-        match self {
-            Self::Split(split) => {
-                if let Some(kind) = heuristic_extract_description(
-                    exec_result,
-                    split.stdout.as_ref().map(|x| x.buf.as_ref()),
-                    split.stderr.as_ref().map(|x| x.buf.as_ref()),
-                ) {
-                    return Some(kind);
-                }
-            }
-            Self::Combined { output } => {
-                // Pass in the same buffer for both stdout and stderr.
-                if let Some(kind) =
-                    heuristic_extract_description(exec_result, Some(&output.buf), Some(&output.buf))
-                {
-                    return Some(kind);
-                }
-            }
-        }
-
-        None
-    }
 }

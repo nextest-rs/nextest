@@ -7,10 +7,12 @@
 
 mod aggregator;
 mod displayer;
+mod error_description;
 mod events;
 mod helpers;
 pub mod structured;
 
 pub use displayer::*;
+pub use error_description::*;
 pub use events::*;
-pub use helpers::{heuristic_extract_description, highlight_end, DescriptionKind};
+pub use helpers::highlight_end;

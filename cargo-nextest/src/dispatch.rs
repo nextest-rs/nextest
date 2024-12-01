@@ -29,14 +29,11 @@ use nextest_runner::{
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     redact::Redactor,
     reporter::{
-        heuristic_extract_description, highlight_end, structured, DescriptionKind,
-        FinalStatusLevel, StatusLevel, TestOutputDisplay, TestReporterBuilder,
+        highlight_end, structured, FinalStatusLevel, StatusLevel, TestOutputDisplay,
+        TestOutputErrorSlice, TestReporterBuilder,
     },
     reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
-    runner::{
-        configure_handle_inheritance, ExecutionResult, FinalRunStats, RunStatsFailureKind,
-        TestRunnerBuilder,
-    },
+    runner::{configure_handle_inheritance, FinalRunStats, RunStatsFailureKind, TestRunnerBuilder},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -2083,8 +2080,8 @@ impl DebugCommand {
                         }
                     })?;
 
-                    let description_kind = extract_description(&combined, &combined);
-                    display_description_kind(description_kind, output_format)?;
+                    let description_kind = extract_slice_from_output(&combined, &combined);
+                    display_output_slice(description_kind, output_format)?;
                 } else {
                     let stdout = stdout
                         .map(|path| {
@@ -2111,8 +2108,8 @@ impl DebugCommand {
                         .transpose()?
                         .unwrap_or_default();
 
-                    let description_kind = extract_description(&stdout, &stderr);
-                    display_description_kind(description_kind, output_format)?;
+                    let output_slice = extract_slice_from_output(&stdout, &stderr);
+                    display_output_slice(output_slice, output_format)?;
                 }
             }
         }
@@ -2121,25 +2118,20 @@ impl DebugCommand {
     }
 }
 
-fn extract_description<'a>(stdout: &'a [u8], stderr: &'a [u8]) -> Option<DescriptionKind<'a>> {
-    // The execution result is a generic one.
-    heuristic_extract_description(
-        ExecutionResult::Fail {
-            abort_status: None,
-            leaked: false,
-        },
-        Some(stdout),
-        Some(stderr),
-    )
+fn extract_slice_from_output<'a>(
+    stdout: &'a [u8],
+    stderr: &'a [u8],
+) -> Option<TestOutputErrorSlice<'a>> {
+    TestOutputErrorSlice::heuristic_extract(Some(stdout), Some(stderr))
 }
 
-fn display_description_kind(
-    kind: Option<DescriptionKind<'_>>,
+fn display_output_slice(
+    output_slice: Option<TestOutputErrorSlice<'_>>,
     output_format: ExtractOutputFormat,
 ) -> Result<()> {
     match output_format {
         ExtractOutputFormat::Raw => {
-            if let Some(kind) = kind {
+            if let Some(kind) = output_slice {
                 if let Some(out) = kind.combined_subslice() {
                     return std::io::stdout().write_all(out.slice).map_err(|err| {
                         ExpectedError::DebugExtractWriteError {
@@ -2151,15 +2143,12 @@ fn display_description_kind(
             }
         }
         ExtractOutputFormat::JunitDescription => {
-            if let Some(kind) = kind {
-                println!(
-                    "{}",
-                    XmlString::new(kind.display_human().to_string()).as_str()
-                );
+            if let Some(kind) = output_slice {
+                println!("{}", XmlString::new(kind.to_string()).as_str());
             }
         }
         ExtractOutputFormat::Highlight => {
-            if let Some(kind) = kind {
+            if let Some(kind) = output_slice {
                 if let Some(out) = kind.combined_subslice() {
                     let end = highlight_end(out.slice);
                     return std::io::stdout()

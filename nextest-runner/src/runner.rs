@@ -19,11 +19,12 @@ use crate::{
     list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
     reporter::{
         CancelReason, FinalStatusLevel, StatusLevel, TestEvent, TestEventKind, TestOutputDisplay,
+        UnitKind,
     },
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
     test_command::{ChildAccumulator, ChildFds},
-    test_output::{CaptureStrategy, ChildExecutionResult},
+    test_output::{CaptureStrategy, ChildExecutionOutput},
     time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
 };
 use async_scoped::TokioScope;
@@ -771,7 +772,7 @@ impl<'a> TestRunnerInner<'a> {
         {
             Ok(status) => status,
             Err(error) => InternalSetupScriptExecuteStatus {
-                output: ChildExecutionResult::StartError(error),
+                output: ChildExecutionOutput::StartError(error),
                 result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.snapshot(),
                 is_slow: false,
@@ -943,12 +944,12 @@ impl<'a> TestRunnerInner<'a> {
 
         let exit_status = exit_status.expect("None always results in early return");
 
-        let status = status
+        let exec_result = status
             .unwrap_or_else(|| create_execution_result(exit_status, &child_acc.errors, leaked));
 
         // Read from the environment map. If there's an error here, add it to the list of child errors.
         let mut errors: Vec<_> = child_acc.errors.into_iter().map(ChildError::from).collect();
-        let env_map = if status.is_success() {
+        let env_map = if exec_result.is_success() {
             match SetupScriptEnvMap::new(&env_path).await {
                 Ok(env_map) => Some(env_map),
                 Err(error) => {
@@ -961,14 +962,12 @@ impl<'a> TestRunnerInner<'a> {
         };
 
         Ok(InternalSetupScriptExecuteStatus {
-            output: ChildExecutionResult::Output {
+            output: ChildExecutionOutput::Output {
+                result: Some(exec_result),
                 output: child_acc.output.freeze(),
-                errors: ErrorList::new(
-                    ChildExecutionResult::WAITING_ON_SETUP_SCRIPT_MESSAGE,
-                    errors,
-                ),
+                errors: ErrorList::new(UnitKind::WAITING_ON_SCRIPT_MESSAGE, errors),
             },
-            result: status,
+            result: exec_result,
             stopwatch_end: stopwatch.snapshot(),
             is_slow,
             env_map,
@@ -991,7 +990,7 @@ impl<'a> TestRunnerInner<'a> {
         {
             Ok(run_status) => run_status,
             Err(error) => InternalExecuteStatus {
-                output: ChildExecutionResult::StartError(error),
+                output: ChildExecutionOutput::StartError(error),
                 result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.snapshot(),
                 is_slow: false,
@@ -1172,18 +1171,16 @@ impl<'a> TestRunnerInner<'a> {
         };
 
         let exit_status = exit_status.expect("None always results in early return");
-        let result = status
+        let exec_result = status
             .unwrap_or_else(|| create_execution_result(exit_status, &child_acc.errors, leaked));
 
         Ok(InternalExecuteStatus {
-            output: ChildExecutionResult::Output {
+            output: ChildExecutionOutput::Output {
+                result: Some(exec_result),
                 output: child_acc.output.freeze(),
-                errors: ErrorList::new(
-                    ChildExecutionResult::WAITING_ON_TEST_MESSAGE,
-                    child_acc.errors,
-                ),
+                errors: ErrorList::new(UnitKind::WAITING_ON_TEST_MESSAGE, child_acc.errors),
             },
-            result,
+            result: exec_result,
             stopwatch_end: stopwatch.snapshot(),
             is_slow,
             delay_before_start: test.delay_before_start,
@@ -1468,7 +1465,7 @@ pub struct ExecuteStatus {
     /// Retry-related data.
     pub retry_data: RetryData,
     /// The stdout and stderr output for this test.
-    pub output: ChildExecutionResult,
+    pub output: ChildExecutionOutput,
     /// The execution result for this test: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the test started.
@@ -1482,7 +1479,7 @@ pub struct ExecuteStatus {
 }
 
 struct InternalExecuteStatus {
-    output: ChildExecutionResult,
+    output: ChildExecutionOutput,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
     is_slow: bool,
@@ -1507,7 +1504,7 @@ impl InternalExecuteStatus {
 #[derive(Clone, Debug)]
 pub struct SetupScriptExecuteStatus {
     /// Output for this setup script.
-    pub output: ChildExecutionResult,
+    pub output: ChildExecutionOutput,
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResult,
     /// The time at which the script started.
@@ -1524,7 +1521,7 @@ pub struct SetupScriptExecuteStatus {
 }
 
 struct InternalSetupScriptExecuteStatus {
-    output: ChildExecutionResult,
+    output: ChildExecutionOutput,
     result: ExecutionResult,
     stopwatch_end: StopwatchSnapshot,
     is_slow: bool,

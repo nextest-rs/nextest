@@ -28,7 +28,7 @@ use crate::{
     list::RustTestSuite,
     reporter::TestEventKind,
     runner::ExecutionResult,
-    test_output::{ChildExecutionResult, ChildOutput, ChildSingleOutput},
+    test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;
 use nextest_metadata::MismatchReason;
@@ -491,12 +491,16 @@ impl<'cfg> LibtestReporter<'cfg> {
 /// This function relies on the fact that nextest runs every individual test in
 /// isolation.
 fn strip_human_output_from_failed_test(
-    output: &ChildExecutionResult,
+    output: &ChildExecutionOutput,
     out: &mut bytes::BytesMut,
     test_name: &str,
 ) -> Result<(), WriteEventError> {
     match output {
-        ChildExecutionResult::Output { output, errors } => {
+        ChildExecutionOutput::Output {
+            result: _,
+            output,
+            errors,
+        } => {
             match output {
                 ChildOutput::Combined { output } => {
                     strip_human_stdout_or_combined(output, out, test_name)?;
@@ -540,7 +544,7 @@ fn strip_human_output_from_failed_test(
                 .map_err(fmt_err)?;
             }
         }
-        ChildExecutionResult::StartError(error) => {
+        ChildExecutionOutput::StartError(error) => {
             write!(out, "--- EXECUTION ERROR ---\\n").map_err(fmt_err)?;
             write!(
                 out,
@@ -665,7 +669,7 @@ mod test {
     use crate::{
         errors::ChildStartError,
         reporter::structured::libtest::strip_human_output_from_failed_test,
-        test_output::{ChildExecutionResult, ChildOutput, ChildSplitOutput},
+        test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::BytesMut;
     use color_eyre::eyre::eyre;
@@ -717,7 +721,8 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
 
         let mut actual = bytes::BytesMut::new();
         strip_human_output_from_failed_test(
-            &ChildExecutionResult::Output {
+            &ChildExecutionOutput::Output {
+                result: None,
                 output,
                 errors: None,
             },
@@ -747,7 +752,8 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
 
         let mut actual = bytes::BytesMut::new();
         strip_human_output_from_failed_test(
-            &ChildExecutionResult::Output {
+            &ChildExecutionOutput::Output {
+                result: None,
                 output,
                 errors: None,
             },
@@ -764,7 +770,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
         let inner_error = eyre!("inner error");
         let error = io::Error::new(io::ErrorKind::Other, inner_error);
 
-        let output = ChildExecutionResult::StartError(ChildStartError::Spawn(Arc::new(error)));
+        let output = ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(error)));
 
         let mut actual = bytes::BytesMut::new();
         strip_human_output_from_failed_test(&output, &mut actual, "non-existent").unwrap();
@@ -776,7 +782,8 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
     fn strips_human_output_none() {
         let mut actual = bytes::BytesMut::new();
         strip_human_output_from_failed_test(
-            &ChildExecutionResult::Output {
+            &ChildExecutionOutput::Output {
+                result: None,
                 output: ChildOutput::Split(ChildSplitOutput {
                     stdout: None,
                     stderr: None,
