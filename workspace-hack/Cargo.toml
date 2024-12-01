@@ -22,7 +22,7 @@ clap_builder = { version = "4.5.21", default-features = false, features = ["colo
 console = { version = "0.15.8" }
 either = { version = "1.13.0" }
 getrandom = { version = "0.2.15", default-features = false, features = ["std"] }
-indexmap = { version = "2.6.0", features = ["serde"] }
+indexmap = { version = "2.7.0", features = ["serde"] }
 log = { version = "0.4.22", default-features = false, features = ["std"] }
 memchr = { version = "2.7.4" }
 miette = { version = "7.4.0", features = ["fancy"] }
