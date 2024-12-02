@@ -30,6 +30,7 @@ num-traits = { version = "0.2.19", default-features = false, features = ["libm",
 rand = { version = "0.8.5" }
 serde = { version = "1.0.215", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.133", features = ["unbounded_depth"] }
+smallvec = { version = "1.13.2", default-features = false, features = ["const_generics"] }
 tokio = { version = "1.41.1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.33" }
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt", "tracing-log"] }
@@ -38,11 +39,11 @@ zerocopy = { version = "0.7.35", features = ["derive", "simd"] }
 
 [build-dependencies]
 camino = { version = "1.1.9", default-features = false, features = ["serde1"] }
-cc = { version = "1.1.31", default-features = false, features = ["parallel"] }
+cc = { version = "1.2.2", default-features = false, features = ["parallel"] }
 proc-macro2 = { version = "1.0.92" }
 quote = { version = "1.0.37" }
 serde = { version = "1.0.215", features = ["alloc", "derive"] }
-syn = { version = "2.0.89", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.90", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
@@ -50,7 +51,7 @@ futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31", default-features = false, features = ["std"] }
 libc = { version = "0.2.167", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.4.14", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
-rustix = { version = "0.38.37", features = ["fs", "termios"] }
+rustix = { version = "0.38.41", features = ["fs", "termios"] }
 smallvec = { version = "1.13.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.41.1", default-features = false, features = ["net"] }
 
@@ -62,7 +63,7 @@ futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31", default-features = false, features = ["std"] }
 libc = { version = "0.2.167", features = ["extra_traits"] }
-rustix = { version = "0.38.37", features = ["fs", "termios"] }
+rustix = { version = "0.38.41", features = ["fs", "termios"] }
 smallvec = { version = "1.13.2", default-features = false, features = ["const_new"] }
 tokio = { version = "1.41.1", default-features = false, features = ["net"] }
 
