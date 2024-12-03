@@ -9,7 +9,7 @@ use crate::{
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use cargo_metadata::{Artifact, BuildScript, Message, PackageId};
+use cargo_metadata::{Artifact, BuildScript, Message, PackageId, TargetKind};
 use guppy::graph::PackageGraph;
 use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustBinaryId, RustNonTestBinaryKind,
@@ -217,19 +217,26 @@ impl<'g> BinaryListBuildState<'g> {
 
                 let (computed_kind, platform) = if kind.iter().any(|k| {
                     // https://doc.rust-lang.org/nightly/cargo/reference/cargo-targets.html#the-crate-type-field
-                    k == "lib" || k == "rlib" || k == "dylib" || k == "cdylib" || k == "staticlib"
+                    matches!(
+                        k,
+                        TargetKind::Lib
+                            | TargetKind::RLib
+                            | TargetKind::DyLib
+                            | TargetKind::CDyLib
+                            | TargetKind::StaticLib
+                    )
                 }) {
                     (RustTestBinaryKind::LIB, BuildPlatform::Target)
-                } else if kind.first().map(String::as_str) == Some("proc-macro") {
+                } else if let Some(TargetKind::ProcMacro) = kind.first() {
                     (RustTestBinaryKind::PROC_MACRO, BuildPlatform::Host)
                 } else {
                     // Non-lib kinds should always have just one element. Grab the first one.
                     (
-                        RustTestBinaryKind::new(
+                        RustTestBinaryKind::new(target_kind_to_string(
                             kind.into_iter()
                                 .next()
                                 .expect("already checked that kind is non-empty"),
-                        ),
+                        )),
                         BuildPlatform::Target,
                     )
                 };
@@ -245,7 +252,12 @@ impl<'g> BinaryListBuildState<'g> {
                     id,
                     build_platform: platform,
                 });
-            } else if artifact.target.kind.iter().any(|x| x == "bin") {
+            } else if artifact
+                .target
+                .kind
+                .iter()
+                .any(|x| matches!(x, TargetKind::Bin))
+            {
                 // This is a non-test binary -- add it to the map.
                 // Error case here implies that the returned path wasn't in the target directory -- ignore it
                 // since it shouldn't happen in normal use.
@@ -263,7 +275,12 @@ impl<'g> BinaryListBuildState<'g> {
                         .insert(non_test_binary);
                 };
             }
-        } else if artifact.target.kind.iter().any(|x| x.contains("dylib")) {
+        } else if artifact
+            .target
+            .kind
+            .iter()
+            .any(|x| matches!(x, TargetKind::DyLib | TargetKind::CDyLib))
+        {
             // Also look for and grab dynamic libraries to store in archives.
             for filename in artifact.filenames {
                 if let Ok(rel_path) = filename.strip_prefix(&self.rust_build_meta.target_directory)
@@ -386,6 +403,27 @@ impl<'g> BinaryListBuildState<'g> {
             rust_build_meta: self.rust_build_meta,
             rust_binaries: self.rust_binaries,
         }
+    }
+}
+
+fn target_kind_to_string(tk: TargetKind) -> String {
+    match tk {
+        TargetKind::Lib => "lib".to_string(),
+        TargetKind::Bin => "bin".to_string(),
+        TargetKind::Example => "example".to_string(),
+        TargetKind::Test => "test".to_string(),
+        TargetKind::Bench => "bench".to_string(),
+        TargetKind::CustomBuild => "custom build".to_string(),
+        TargetKind::ProcMacro => "proc-macro".to_string(),
+        TargetKind::CDyLib => "cdylib".to_string(),
+        TargetKind::DyLib => "dylib".to_string(),
+        TargetKind::RLib => "rlib".to_string(),
+        TargetKind::StaticLib => "staticlib".to_string(),
+        TargetKind::Unknown(s) => s,
+        _ => panic!(
+            "unknown target kind -- this code should have been removed \
+             after https://github.com/oli-obk/cargo_metadata/pull/275 landed"
+        ),
     }
 }
 
