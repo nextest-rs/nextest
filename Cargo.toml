@@ -23,7 +23,7 @@ bstr = { version = "1.11.0", default-features = false, features = ["std"] }
 bytes = "1.9.0"
 camino = "1.1.9"
 camino-tempfile = "1.1.1"
-cargo_metadata = "0.19.0"
+cargo_metadata = "0.19.1"
 # We specify default-no-update here because if users just run:
 #
 # cargo build --no-default-features --features default-no-update
