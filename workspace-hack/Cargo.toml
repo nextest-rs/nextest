@@ -30,7 +30,7 @@ num-traits = { version = "0.2.19", default-features = false, features = ["libm",
 rand = { version = "0.8.5" }
 serde = { version = "1.0.215", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.133", features = ["unbounded_depth"] }
-tokio = { version = "1.41.1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
+tokio = { version = "1.42.0", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.33" }
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt", "tracing-log"] }
 xxhash-rust = { version = "0.8.12", default-features = false, features = ["xxh3", "xxh64"] }
@@ -52,7 +52,7 @@ libc = { version = "0.2.167", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.4.14", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 rustix = { version = "0.38.37", features = ["fs", "termios"] }
 smallvec = { version = "1.13.2", default-features = false, features = ["const_new"] }
-tokio = { version = "1.41.1", default-features = false, features = ["net"] }
+tokio = { version = "1.42.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 libc = { version = "0.2.167", features = ["extra_traits"] }
@@ -64,7 +64,7 @@ futures-sink = { version = "0.3.31", default-features = false, features = ["std"
 libc = { version = "0.2.167", features = ["extra_traits"] }
 rustix = { version = "0.38.37", features = ["fs", "termios"] }
 smallvec = { version = "1.13.2", default-features = false, features = ["const_new"] }
-tokio = { version = "1.41.1", default-features = false, features = ["net"] }
+tokio = { version = "1.42.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 libc = { version = "0.2.167", features = ["extra_traits"] }
@@ -74,7 +74,7 @@ futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31", default-features = false, features = ["std"] }
 smallvec = { version = "1.13.2", default-features = false, features = ["const_new"] }
-tokio = { version = "1.41.1", default-features = false, features = ["net"] }
+tokio = { version = "1.42.0", default-features = false, features = ["net"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_Threading"] }
 windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Environment", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
 
