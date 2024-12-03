@@ -698,15 +698,12 @@ impl<'a> TestRunnerInner<'a> {
                                         },
                                     );
 
-                                    tokio::select! {
-                                        _ = tokio::time::sleep(delay) => {}
-                                        // Cancel the sleep if the run is cancelled.
-                                        _ = cancel_receiver.recv() => {
-                                            // Don't need to do anything special for this because
-                                            // cancel_receiver gets a message after
-                                            // cancelled_ref is set.
-                                        }
-                                    }
+                                    handle_delay_between_attempts(
+                                        delay,
+                                        &mut cancel_receiver,
+                                        &mut req_rx,
+                                    )
+                                    .await;
                                 } else {
                                     // This test failed and is out of retries.
                                     break run_status;
@@ -1198,6 +1195,50 @@ fn drain_req_rx(mut receiver: UnboundedReceiver<RunUnitRequest>) {
             }
             Err(_) => {
                 break;
+            }
+        }
+    }
+}
+
+async fn handle_delay_between_attempts(
+    delay: Duration,
+    cancel_receiver: &mut broadcast::Receiver<()>,
+    req_rx: &mut UnboundedReceiver<RunUnitRequest>,
+) {
+    let mut sleep = std::pin::pin!(crate::time::pausable_sleep(delay));
+
+    #[cfg_attr(not(unix), expect(clippy::never_loop))]
+    loop {
+        tokio::select! {
+            _ = &mut sleep => {
+                // The timer has expired.
+                break;
+            }
+            _ = cancel_receiver.recv() => {
+                // The cancel signal was received.
+                break;
+            }
+            recv = req_rx.recv() => {
+                let req = recv.expect("req_rx sender is open");
+
+                match req {
+                    #[cfg(unix)]
+                    RunUnitRequest::Signal(SignalRequest::Stop(tx)) => {
+                        sleep.as_mut().pause();
+                        _ = tx.send(());
+                    }
+                    #[cfg(unix)]
+                    RunUnitRequest::Signal(SignalRequest::Continue) => {
+                        if sleep.is_paused() {
+                            sleep.as_mut().resume();
+                        }
+                    }
+                    RunUnitRequest::Signal(SignalRequest::Shutdown(_)) => {
+                        // The run was cancelled, so go ahead and perform a
+                        // shutdown.
+                        break;
+                    }
+                }
             }
         }
     }
