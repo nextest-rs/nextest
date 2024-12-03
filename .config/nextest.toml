@@ -31,6 +31,9 @@ slow-timeout = "1s"
 slow-timeout = { period = "1s", terminate-after = 2 }
 retries = 2
 
+[profile.test-retries]
+retries = { backoff = "exponential", count = 3, delay = "5s" }
+
 [profile.with-junit]
 junit = { path = "report.xml" }
 
