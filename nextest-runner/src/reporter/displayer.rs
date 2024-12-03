@@ -13,7 +13,7 @@ use crate::{
     config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
     errors::{DisplayErrorChain, WriteEventError},
     helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
-    list::{SkipCounts, TestInstance, TestList},
+    list::{SkipCounts, TestInstance, TestInstanceId, TestList},
     reporter::{aggregator::EventAggregator, helpers::highlight_end, UnitErrorDescription},
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
@@ -772,7 +772,7 @@ impl<'a> TestReporterImpl<'a> {
                         writer,
                         "{:>12}             {}",
                         "START".style(self.styles.pass),
-                        self.display_test_instance(*test_instance),
+                        self.display_test_instance(test_instance.id()),
                     )?;
                 }
             }
@@ -812,7 +812,7 @@ impl<'a> TestReporterImpl<'a> {
                 }
 
                 self.write_slow_duration(*elapsed, writer)?;
-                writeln!(writer, "{}", self.display_test_instance(*test_instance))?;
+                writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
             }
 
             TestEventKind::TestAttemptFailedWillRetry {
@@ -837,7 +837,7 @@ impl<'a> TestReporterImpl<'a> {
                     self.write_duration(run_status.time_taken, writer)?;
 
                     // Print the name of the test.
-                    writeln!(writer, "{}", self.display_test_instance(*test_instance))?;
+                    writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
 
                     // This test is guaranteed to have failed.
                     assert!(
@@ -863,7 +863,7 @@ impl<'a> TestReporterImpl<'a> {
                         self.write_duration_by(*delay_before_next_attempt, writer)?;
 
                         // Print the name of the test.
-                        writeln!(writer, "{}", self.display_test_instance(*test_instance))?;
+                        writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
                     }
                 }
             }
@@ -883,7 +883,7 @@ impl<'a> TestReporterImpl<'a> {
                     writer,
                     "[{:<9}] {}",
                     "",
-                    self.display_test_instance(*test_instance)
+                    self.display_test_instance(test_instance.id())
                 )?;
             }
             TestEventKind::TestFinished {
@@ -930,7 +930,7 @@ impl<'a> TestReporterImpl<'a> {
                 reason,
             } => {
                 if self.status_levels.status_level >= StatusLevel::Skip {
-                    self.write_skip_line(*test_instance, writer)?;
+                    self.write_skip_line(test_instance.id(), writer)?;
                 }
                 if self.status_levels.final_status_level >= FinalStatusLevel::Skip {
                     self.final_outputs
@@ -1091,7 +1091,7 @@ impl<'a> TestReporterImpl<'a> {
                     for (test_instance, final_output) in &*self.final_outputs {
                         match final_output {
                             FinalOutput::Skipped(_) => {
-                                self.write_skip_line(*test_instance, writer)?;
+                                self.write_skip_line(test_instance.id(), writer)?;
                             }
                             FinalOutput::Executed {
                                 run_statuses,
@@ -1127,7 +1127,7 @@ impl<'a> TestReporterImpl<'a> {
 
     fn write_skip_line(
         &self,
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         write!(writer, "{:>12} ", "SKIP".style(self.styles.skip))?;
@@ -1225,7 +1225,7 @@ impl<'a> TestReporterImpl<'a> {
         self.write_duration(last_status.time_taken, writer)?;
 
         // Print the name of the test.
-        writeln!(writer, "{}", self.display_test_instance(test_instance))?;
+        writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
 
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
@@ -1299,7 +1299,7 @@ impl<'a> TestReporterImpl<'a> {
         self.write_duration(last_status.time_taken, writer)?;
 
         // Print the name of the test.
-        writeln!(writer, "{}", self.display_test_instance(test_instance))?;
+        writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
 
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
@@ -1314,8 +1314,8 @@ impl<'a> TestReporterImpl<'a> {
         Ok(())
     }
 
-    fn display_test_instance(&self, instance: TestInstance<'a>) -> DisplayTestInstance<'_> {
-        DisplayTestInstance::new(instance.id(), &self.styles.list_styles)
+    fn display_test_instance(&self, instance: TestInstanceId<'a>) -> DisplayTestInstance<'_> {
+        DisplayTestInstance::new(instance, &self.styles.list_styles)
     }
 
     fn display_script_instance(
@@ -1385,7 +1385,7 @@ impl<'a> TestReporterImpl<'a> {
         is_retry: bool,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
-        let spec = self.output_spec_for_test(test_instance, run_status, is_retry);
+        let spec = self.output_spec_for_test(test_instance.id(), run_status, is_retry);
         self.write_child_execution_output(&spec, &run_status.output, writer)
     }
 
@@ -1538,7 +1538,7 @@ impl<'a> TestReporterImpl<'a> {
 
     fn output_spec_for_test(
         &self,
-        test_instance: &TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
         run_status: &ExecuteStatus,
         is_retry: bool,
     ) -> ChildOutputSpec {
@@ -1560,7 +1560,7 @@ impl<'a> TestReporterImpl<'a> {
                 header,
                 "{:width$} {}",
                 "STDOUT:".style(header_style),
-                self.display_test_instance(*test_instance),
+                self.display_test_instance(test_instance),
                 // The width is to align test instances.
                 width = (19 - out_len),
             );
@@ -1575,7 +1575,7 @@ impl<'a> TestReporterImpl<'a> {
                 header,
                 "{:width$} {}",
                 "STDERR:".style(header_style),
-                self.display_test_instance(*test_instance),
+                self.display_test_instance(test_instance),
                 // The width is to align test instances.
                 width = (19 - out_len),
             );
@@ -1590,7 +1590,7 @@ impl<'a> TestReporterImpl<'a> {
                 header,
                 "{:width$} {}",
                 "OUTPUT:".style(header_style),
-                self.display_test_instance(*test_instance),
+                self.display_test_instance(test_instance),
                 // The width is to align test instances.
                 width = (19 - out_len),
             );
@@ -1605,7 +1605,7 @@ impl<'a> TestReporterImpl<'a> {
                 header,
                 "{:width$} {}",
                 "EXECFAIL:".style(header_style),
-                self.display_test_instance(*test_instance),
+                self.display_test_instance(test_instance),
                 // The width is to align test instances.
                 width = (19 - out_len)
             );
