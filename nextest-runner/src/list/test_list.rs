@@ -990,7 +990,7 @@ impl<'a> TestInstance<'a> {
     /// Return an identifier for test instances, including being able to sort
     /// them.
     #[inline]
-    pub(crate) fn id(&self) -> TestInstanceId<'a> {
+    pub fn id(&self) -> TestInstanceId<'a> {
         TestInstanceId {
             binary_id: &self.suite_info.binary_id,
             test_name: self.name,
@@ -1060,7 +1060,7 @@ impl<'a> TestInstance<'a> {
 ///
 /// Returned by [`TestInstance::id`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub(crate) struct TestInstanceId<'a> {
+pub struct TestInstanceId<'a> {
     /// The binary ID.
     pub binary_id: &'a RustBinaryId,
 

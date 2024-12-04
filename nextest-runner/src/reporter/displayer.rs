@@ -6,15 +6,19 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    structured::StructuredReporter, ByteSubslice, CancelReason, TestEvent, TestEventKind,
-    TestOutputErrorSlice, UnitKind,
+    structured::StructuredReporter, ByteSubslice, CancelReason, InfoResponse,
+    SetupScriptInfoResponse, TestEvent, TestEventKind, TestInfoResponse, TestOutputErrorSlice,
+    UnitKind, UnitState, UnitTerminatingState,
 };
 use crate::{
     config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
     errors::{DisplayErrorChain, WriteEventError},
     helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
     list::{SkipCounts, TestInstance, TestInstanceId, TestList},
-    reporter::{aggregator::EventAggregator, helpers::highlight_end, UnitErrorDescription},
+    reporter::{
+        aggregator::EventAggregator, helpers::highlight_end, UnitErrorDescription,
+        UnitTerminateMethod,
+    },
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
         FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
@@ -384,6 +388,7 @@ struct ProgressBarState {
     // falls on us to do so.
     hidden_no_capture: bool,
     hidden_run_paused: bool,
+    hidden_info_response: bool,
 }
 
 impl ProgressBarState {
@@ -391,11 +396,12 @@ impl ProgressBarState {
         Self {
             hidden_no_capture: false,
             hidden_run_paused: false,
+            hidden_info_response: false,
         }
     }
 
     fn should_hide(&self) -> bool {
-        self.hidden_no_capture || self.hidden_run_paused
+        self.hidden_no_capture || self.hidden_run_paused || self.hidden_info_response
     }
 
     fn update_progress_bar(
@@ -437,6 +443,15 @@ impl ProgressBarState {
                 // in ProgressBar::new.
                 progress_bar.set_length(current_stats.initial_run_count as u64);
                 progress_bar.set_position(current_stats.finished_count as u64);
+            }
+            TestEventKind::InfoStarted { .. } => {
+                // While info is being displayed, hide the progress bar to avoid
+                // it interrupting the info display.
+                self.hidden_info_response = true;
+            }
+            TestEventKind::InfoFinished { .. } => {
+                // Restore the progress bar if it was hidden.
+                self.hidden_info_response = false;
             }
             TestEventKind::RunPaused { .. } => {
                 // Pausing the run should hide the progress bar since we'll exit
@@ -1027,6 +1042,53 @@ impl<'a> TestReporterImpl<'a> {
                 }
                 writeln!(writer)?;
             }
+            TestEventKind::InfoStarted { total, run_stats } => {
+                let info_style = if run_stats.has_failures() {
+                    self.styles.fail
+                } else {
+                    self.styles.pass
+                };
+
+                let hbar = self.theme_characters.hbar(12);
+
+                write!(writer, "{hbar}\n{}: ", "info".style(info_style))?;
+
+                // TODO: display setup_scripts_running as well
+                writeln!(
+                    writer,
+                    "{} in {:.3?}s",
+                    // Using "total" here for the number of running units is a
+                    // slight fudge, but it prevents situations where (due to
+                    // races with unit tasks exiting) the numbers don't exactly
+                    // match up. It's also not dishonest -- there really are
+                    // these many units currently running.
+                    progress_bar_msg(run_stats, *total, &self.styles),
+                    event.elapsed.as_secs_f64(),
+                )?;
+            }
+            TestEventKind::InfoResponse {
+                index,
+                total,
+                response,
+            } => {
+                self.write_info_response(*index, *total, response, writer)?;
+            }
+            TestEventKind::InfoFinished { missing } => {
+                let hbar = self.theme_characters.hbar(12);
+
+                if *missing > 0 {
+                    // This should ordinarily not happen, but it's possible if
+                    // some of the unit futures are slow to respond.
+                    writeln!(
+                        writer,
+                        "{}: missing {} responses",
+                        "info".style(self.styles.skip),
+                        missing.style(self.styles.count)
+                    )?;
+                }
+
+                writeln!(writer, "{hbar}")?;
+            }
             TestEventKind::RunFinished {
                 start_time: _start_time,
                 elapsed,
@@ -1327,6 +1389,372 @@ impl<'a> TestReporterImpl<'a> {
         DisplayScriptInstance::new(script_id, command, args, self.styles.script_id)
     }
 
+    fn write_info_response(
+        &self,
+        index: usize,
+        total: usize,
+        response: &InfoResponse<'_>,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        if index > 0 {
+            // Show a shorter hbar than the hbar surrounding the info started
+            // and finished lines.
+            writeln!(writer, "{}", self.theme_characters.hbar(8))?;
+        }
+
+        // "status: " is 8 characters. Pad "{}/{}:" such that it also gets to
+        // the 8 characters.
+        //
+        // The width to be printed out is index width + total width + 1 for '/'
+        // + 1 for ':' + 1 for the space after that.
+        let count_width = decimal_char_width(index + 1) + decimal_char_width(total) + 3;
+        let padding = usize::try_from(8_u32.saturating_sub(count_width)).unwrap();
+
+        write!(
+            writer,
+            "\n* {}/{}: {:padding$}",
+            // index is 0-based, so add 1 to make it 1-based.
+            (index + 1).style(self.styles.count),
+            total.style(self.styles.count),
+            "",
+        )?;
+
+        // Indent everything a bit to make it clear that this is a
+        // response.
+        let mut writer = IndentWriter::new_skip_initial("  ", writer);
+
+        match response {
+            InfoResponse::SetupScript(SetupScriptInfoResponse {
+                script_id,
+                command,
+                args,
+                state,
+                output,
+            }) => {
+                // Write the setup script name.
+                writeln!(
+                    writer,
+                    "{}",
+                    self.display_script_instance(script_id.clone(), command, args)
+                )?;
+
+                // Write the state of the script.
+                self.write_unit_state(
+                    UnitKind::Script,
+                    "",
+                    state,
+                    output.has_errors(),
+                    &mut writer,
+                )?;
+
+                // Write the output of the script.
+                if state.has_valid_output() {
+                    self.write_child_execution_output(
+                        &self.output_spec_for_info(UnitKind::Script),
+                        output,
+                        &mut writer,
+                    )?;
+                }
+            }
+            InfoResponse::Test(TestInfoResponse {
+                test_instance,
+                retry_data,
+                state,
+                output,
+            }) => {
+                // Write the test name.
+                writeln!(writer, "{}", self.display_test_instance(*test_instance))?;
+
+                // We want to show an attached attempt string either if this is
+                // a DelayBeforeNextAttempt message or if this is a retry. (This
+                // is a bit abstraction-breaking, but what good UI isn't?)
+                let show_attempt_str = (retry_data.attempt > 1 && retry_data.total_attempts > 1)
+                    || matches!(state, UnitState::DelayBeforeNextAttempt { .. });
+                let attempt_str = if show_attempt_str {
+                    format!(
+                        "(attempt {}/{}) ",
+                        retry_data.attempt, retry_data.total_attempts
+                    )
+                } else {
+                    String::new()
+                };
+
+                // Write the state of the test.
+                self.write_unit_state(
+                    UnitKind::Test,
+                    &attempt_str,
+                    state,
+                    output.has_errors(),
+                    &mut writer,
+                )?;
+
+                // Write the output of the test.
+                if state.has_valid_output() {
+                    self.write_child_execution_output(
+                        &self.output_spec_for_info(UnitKind::Test),
+                        output,
+                        &mut writer,
+                    )?;
+                }
+            }
+        }
+
+        writer.flush()?;
+        let inner_writer = writer.into_inner();
+
+        // Add a newline at the end to visually separate the responses.
+        writeln!(inner_writer)?;
+
+        Ok(())
+    }
+
+    fn write_unit_state(
+        &self,
+        kind: UnitKind,
+        attempt_str: &str,
+        state: &UnitState,
+        output_has_errors: bool,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        let status_str = "status".style(self.styles.count);
+        match state {
+            UnitState::Running {
+                pid,
+                time_taken,
+                slow_after,
+            } => {
+                let running_style = if output_has_errors {
+                    self.styles.fail
+                } else if slow_after.is_some() {
+                    self.styles.skip
+                } else {
+                    self.styles.pass
+                };
+                write!(
+                    writer,
+                    "{status_str}: {attempt_str}{kind} {} for {:.3?}s as PID {}",
+                    "running".style(running_style),
+                    time_taken.as_secs_f64(),
+                    pid.style(self.styles.count),
+                )?;
+                if let Some(slow_after) = slow_after {
+                    write!(
+                        writer,
+                        " (marked slow after {:.3?}s)",
+                        slow_after.as_secs_f64()
+                    )?;
+                }
+                writeln!(writer)?;
+            }
+            UnitState::Exiting {
+                pid,
+                time_taken,
+                slow_after,
+                tentative_result,
+                waiting_duration,
+                remaining,
+            } => {
+                write!(writer, "{status_str}: {attempt_str}{kind} ")?;
+
+                self.write_info_execution_result(*tentative_result, slow_after.is_some(), writer)?;
+                write!(writer, " after {:.3?}s", time_taken.as_secs_f64())?;
+                if let Some(slow_after) = slow_after {
+                    write!(
+                        writer,
+                        " (marked slow after {:.3?}s)",
+                        slow_after.as_secs_f64()
+                    )?;
+                }
+                writeln!(writer)?;
+
+                // Don't need to print the waiting duration for leak detection
+                // if it's relatively small.
+                if *waiting_duration >= Duration::from_secs(1) {
+                    writeln!(
+                        writer,
+                        "{}:   spent {:.3?}s waiting for {kind} PID {} to shut down, \
+                         will mark as leaky after another {:.3?}s",
+                        "note".style(self.styles.count),
+                        waiting_duration.as_secs_f64(),
+                        pid.style(self.styles.count),
+                        remaining.as_secs_f64(),
+                    )?;
+                }
+            }
+            UnitState::Terminating(state) => {
+                self.write_terminating_state(kind, attempt_str, state, writer)?;
+            }
+            UnitState::Exited {
+                result,
+                time_taken,
+                slow_after,
+            } => {
+                write!(writer, "{status_str}: {attempt_str}{kind} ")?;
+                self.write_info_execution_result(Some(*result), slow_after.is_some(), writer)?;
+                write!(writer, " after {:.3?}s", time_taken.as_secs_f64())?;
+                if let Some(slow_after) = slow_after {
+                    write!(
+                        writer,
+                        " (marked slow after {:.3?}s)",
+                        slow_after.as_secs_f64()
+                    )?;
+                }
+                writeln!(writer)?;
+            }
+            UnitState::DelayBeforeNextAttempt {
+                previous_result,
+                previous_slow,
+                waiting_duration,
+                remaining,
+            } => {
+                write!(writer, "{status_str}: {attempt_str}{kind} ")?;
+                self.write_info_execution_result(Some(*previous_result), *previous_slow, writer)?;
+                writeln!(
+                    writer,
+                    ", currently {} before next attempt",
+                    "waiting".style(self.styles.count)
+                )?;
+                writeln!(
+                    writer,
+                    "{}:   waited {:.3?}s so far, will wait another {:.3?}s before retrying {kind}",
+                    "note".style(self.styles.count),
+                    waiting_duration.as_secs_f64(),
+                    remaining.as_secs_f64(),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_terminating_state(
+        &self,
+        kind: UnitKind,
+        attempt_str: &str,
+        state: &UnitTerminatingState,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        #[cfg_attr(not(any(unix, test)), expect(unused_variables))]
+        let UnitTerminatingState {
+            pid,
+            time_taken,
+            reason,
+            method,
+            waiting_duration,
+            remaining,
+        } = state;
+
+        writeln!(
+            writer,
+            "{}: {attempt_str}{} {kind} PID {} due to {} ({} ran for {:.3?}s)",
+            "status".style(self.styles.count),
+            "terminating".style(self.styles.fail),
+            pid.style(self.styles.count),
+            reason.style(self.styles.count),
+            kind,
+            time_taken.as_secs_f64(),
+        )?;
+
+        match method {
+            #[cfg(unix)]
+            UnitTerminateMethod::Signal(signal) => {
+                writeln!(
+                    writer,
+                    "{}:   sent {} to process group; spent {:.3?}s waiting for {} to exit, \
+                     will SIGKILL after another {:.3?}s",
+                    "note".style(self.styles.count),
+                    signal,
+                    waiting_duration.as_secs_f64(),
+                    kind,
+                    remaining.as_secs_f64(),
+                )?;
+            }
+            #[cfg(windows)]
+            UnitTerminateMethod::JobObject => {
+                writeln!(
+                    writer,
+                    // Job objects are like SIGKILL -- they terminate
+                    // immediately. No need to show the waiting duration or
+                    // remaining time.
+                    "{}:   instructed job object to terminate",
+                    "note".style(self.styles.count),
+                )?;
+            }
+            #[cfg(test)]
+            UnitTerminateMethod::Fake => {
+                // This is only used in tests.
+                writeln!(
+                    writer,
+                    "{}:   fake termination method; spent {:.3?}s waiting for {} to exit, \
+                     will kill after another {:.3?}s",
+                    "note".style(self.styles.count),
+                    waiting_duration.as_secs_f64(),
+                    kind,
+                    remaining.as_secs_f64(),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    // TODO: this should be unified with write_exit_status above -- we need a
+    // general, short description of what's happened to both an in-progress and
+    // a final unit.
+    fn write_info_execution_result(
+        &self,
+        result: Option<ExecutionResult>,
+        is_slow: bool,
+        writer: &mut dyn Write,
+    ) -> io::Result<()> {
+        match result {
+            Some(ExecutionResult::Pass) => {
+                let style = if is_slow {
+                    self.styles.skip
+                } else {
+                    self.styles.pass
+                };
+
+                write!(writer, "{}", "passed".style(style))
+            }
+            Some(ExecutionResult::Leak) => write!(
+                writer,
+                "{}",
+                "passed with leaked handles".style(self.styles.skip)
+            ),
+            Some(ExecutionResult::Timeout) => {
+                write!(writer, "{}", "timed out".style(self.styles.fail))
+            }
+            Some(ExecutionResult::Fail {
+                abort_status,
+                leaked,
+            }) => {
+                if abort_status.is_some() {
+                    write!(writer, "{}", "aborted".style(self.styles.fail))
+                    // The errors are shown in the output.
+                } else if leaked {
+                    write!(
+                        writer,
+                        "{} with leaked handles",
+                        "failed".style(self.styles.fail)
+                    )
+                } else {
+                    write!(writer, "{}", "failed".style(self.styles.fail))
+                }
+            }
+            Some(ExecutionResult::ExecFail) => {
+                write!(writer, "{}", "failed to execute".style(self.styles.fail))
+            }
+            None => {
+                write!(
+                    writer,
+                    "{} with unknown status",
+                    "failed".style(self.styles.fail)
+                )
+            }
+        }
+    }
+
     fn write_duration(&self, duration: Duration, writer: &mut dyn Write) -> io::Result<()> {
         // * > means right-align.
         // * 8 is the number of characters to pad to.
@@ -1393,7 +1821,7 @@ impl<'a> TestReporterImpl<'a> {
         &self,
         spec: &ChildOutputSpec,
         exec_output: &ChildExecutionOutput,
-        writer: &mut dyn Write,
+        mut writer: &mut dyn Write,
     ) -> io::Result<()> {
         match exec_output {
             ChildExecutionOutput::Output {
@@ -1407,8 +1835,14 @@ impl<'a> TestReporterImpl<'a> {
                 // Show execution failures first so that they show up
                 // immediately after the failure notification.
                 if let Some(errors) = desc.exec_fail_error_list() {
+                    writeln!(writer, "{}", spec.exec_fail_header)?;
+
+                    // Indent the displayed error chain.
                     let error_chain = DisplayErrorChain::new(errors);
-                    writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
+                    let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                    writeln!(indent_writer, "{error_chain}")?;
+                    indent_writer.flush()?;
+                    writer = indent_writer.into_inner();
                 }
 
                 let highlight_slice = if self.styles.is_colorized {
@@ -1420,8 +1854,14 @@ impl<'a> TestReporterImpl<'a> {
             }
 
             ChildExecutionOutput::StartError(error) => {
+                writeln!(writer, "{}", spec.exec_fail_header)?;
+
+                // Indent the displayed error chain.
                 let error_chain = DisplayErrorChain::new(error);
-                writeln!(writer, "{}\n{error_chain}", spec.exec_fail_header)?;
+                let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
+                writeln!(indent_writer, "{error_chain}")?;
+                indent_writer.flush()?;
+                writer = indent_writer.into_inner();
             }
         }
 
@@ -1621,6 +2061,25 @@ impl<'a> TestReporterImpl<'a> {
             // No output indent for now -- maybe this should be supported?
             // Definitely worth trying out.
             output_indent: "",
+        }
+    }
+
+    // Info response queries are more compact and so have a somewhat different
+    // output format. But at some point we should consider using the same format
+    // for both regular test output and info responses.
+    fn output_spec_for_info(&self, kind: UnitKind) -> ChildOutputSpec {
+        let stdout_header = format!("{}:", "stdout".style(self.styles.count));
+        let stderr_header = format!("{}:", "stderr".style(self.styles.count));
+        let combined_header = format!("{}:", "output".style(self.styles.count));
+        let exec_fail_header = format!("{}:", "errors".style(self.styles.count));
+
+        ChildOutputSpec {
+            kind,
+            stdout_header,
+            stderr_header,
+            combined_header,
+            exec_fail_header,
+            output_indent: "  ",
         }
     }
 
@@ -2131,16 +2590,58 @@ impl ThemeCharacters {
     }
 }
 
+fn decimal_char_width(n: usize) -> u32 {
+    // checked_ilog10 returns 0 for 1-9, 1 for 10-99, 2 for 100-999, etc. (And
+    // None for 0 which we unwrap to the same as 1). Add 1 to it to get the
+    // actual number of digits.
+    n.checked_ilog10().unwrap_or(0) + 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         config::{CompiledDefaultFilterSection, NextestConfig},
+        errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
         platform::BuildPlatforms,
-        reporter::structured::StructuredReporter,
+        reporter::{structured::StructuredReporter, UnitTerminateReason},
+        test_output::ChildSplitOutput,
     };
+    use bytes::Bytes;
+    use chrono::Local;
     use nextest_filtering::CompiledExpr;
+    use nextest_metadata::RustBinaryId;
+    use smol_str::SmolStr;
+    use std::sync::Arc;
     use test_strategy::proptest;
+
+    /// Creates a test reporter with default settings and calls the given function with it.
+    ///
+    /// Returns the output written to the reporter.
+    fn with_reporter<'a, F>(config: &'a NextestConfig, f: F, out: &'a mut Vec<u8>)
+    where
+        F: FnOnce(TestReporter<'a>),
+    {
+        let mut builder = TestReporterBuilder::default();
+        builder
+            .set_no_capture(true)
+            .set_failure_output(TestOutputDisplay::Immediate)
+            .set_success_output(TestOutputDisplay::Immediate)
+            .set_status_level(StatusLevel::Fail);
+        let test_list = TestList::empty();
+        let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
+        let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
+
+        let output = ReporterStderr::Buffer(out);
+        let reporter = builder.build(
+            &test_list,
+            &profile.apply_build_platforms(&build_platforms),
+            output,
+            StructuredReporter::new(),
+        );
+
+        f(reporter);
+    }
 
     // ---
     // The proptests here are probabilistically exhaustive, and it's just easier to express them
@@ -2565,6 +3066,435 @@ mod tests {
         );
     }
 
+    /// Send an information response to the reporter and return the output.
+    #[test]
+    fn test_info_response() {
+        let args = vec!["arg1".to_string(), "arg2".to_string()];
+        let binary_id = RustBinaryId::new("my-binary-id");
+
+        let config = NextestConfig::default_config("/fake/dir");
+        let mut out = Vec::new();
+
+        with_reporter(
+            &config,
+            |mut reporter| {
+                // Info started event.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoStarted {
+                            total: 30,
+                            run_stats: RunStats {
+                                initial_run_count: 40,
+                                finished_count: 20,
+                                setup_scripts_initial_count: 1,
+                                setup_scripts_finished_count: 1,
+                                setup_scripts_passed: 1,
+                                setup_scripts_failed: 0,
+                                setup_scripts_exec_failed: 0,
+                                setup_scripts_timed_out: 0,
+                                passed: 17,
+                                passed_slow: 4,
+                                flaky: 2,
+                                failed: 2,
+                                failed_slow: 1,
+                                timed_out: 1,
+                                leaky: 1,
+                                exec_failed: 1,
+                                skipped: 5,
+                            },
+                        },
+                    })
+                    .unwrap();
+
+                // A basic setup script.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 0,
+                            total: 20,
+                            // Technically, you won't get setup script and test responses in the
+                            // same response, but it's easiest to test in this manner.
+                            response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                script_id: ScriptId::new(SmolStr::new("setup")).unwrap(),
+                                command: "setup",
+                                args: &args,
+                                state: UnitState::Running {
+                                    pid: 4567,
+                                    time_taken: Duration::from_millis(1234),
+                                    slow_after: None,
+                                },
+                                output: make_split_output(
+                                    None,
+                                    "script stdout 1",
+                                    "script stderr 1",
+                                ),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A setup script with a slow warning, combined output, and an
+                // execution failure.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 1,
+                            total: 20,
+                            response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                script_id: ScriptId::new(SmolStr::new("setup-slow")).unwrap(),
+                                command: "setup-slow",
+                                args: &args,
+                                state: UnitState::Running {
+                                    pid: 4568,
+                                    time_taken: Duration::from_millis(1234),
+                                    slow_after: Some(Duration::from_millis(1000)),
+                                },
+                                output: make_combined_output_with_errors(
+                                    None,
+                                    "script output 2\n",
+                                    vec![ChildError::Fd(ChildFdError::ReadStdout(Arc::new(
+                                        std::io::Error::other("read stdout error"),
+                                    )))],
+                                ),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A setup script that's terminating and has multiple errors.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 2,
+                            total: 20,
+                            response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                script_id: ScriptId::new(SmolStr::new("setup-terminating"))
+                                    .unwrap(),
+                                command: "setup-terminating",
+                                args: &args,
+                                state: UnitState::Terminating(UnitTerminatingState {
+                                    pid: 5094,
+                                    time_taken: Duration::from_millis(1234),
+                                    reason: UnitTerminateReason::Signal,
+                                    method: UnitTerminateMethod::Fake,
+                                    waiting_duration: Duration::from_millis(6789),
+                                    remaining: Duration::from_millis(9786),
+                                }),
+                                output: make_split_output_with_errors(
+                                    None,
+                                    "script output 3\n",
+                                    "script stderr 3\n",
+                                    vec![
+                                        ChildError::Fd(ChildFdError::ReadStdout(Arc::new(
+                                            std::io::Error::other("read stdout error"),
+                                        ))),
+                                        ChildError::Fd(ChildFdError::ReadStderr(Arc::new(
+                                            std::io::Error::other("read stderr error"),
+                                        ))),
+                                    ],
+                                ),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A setup script that's about to exit along with a start error
+                // (this is not a real situation but we're just testing out
+                // various cases).
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 3,
+                            total: 20,
+                            response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                script_id: ScriptId::new(SmolStr::new("setup-exiting")).unwrap(),
+                                command: "setup-exiting",
+                                args: &args,
+                                state: UnitState::Exiting {
+                                    pid: 9987,
+                                    time_taken: Duration::from_millis(1234),
+                                    slow_after: Some(Duration::from_millis(1000)),
+                                    // Even if exit_status is 0, the presence of
+                                    // exec-fail errors should be considered
+                                    // part of the output.
+                                    tentative_result: Some(ExecutionResult::ExecFail),
+                                    waiting_duration: Duration::from_millis(10467),
+                                    remaining: Duration::from_millis(335),
+                                },
+                                output: ChildExecutionOutput::StartError(ChildStartError::Spawn(
+                                    Arc::new(std::io::Error::other("exec error")),
+                                )),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A setup script that has exited.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 4,
+                            total: 20,
+                            response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                script_id: ScriptId::new(SmolStr::new("setup-exited")).unwrap(),
+                                command: "setup-exited",
+                                args: &args,
+                                state: UnitState::Exited {
+                                    result: ExecutionResult::Fail {
+                                        abort_status: None,
+                                        leaked: true,
+                                    },
+                                    time_taken: Duration::from_millis(9999),
+                                    slow_after: Some(Duration::from_millis(3000)),
+                                },
+                                output: ChildExecutionOutput::StartError(ChildStartError::Spawn(
+                                    Arc::new(std::io::Error::other("exec error")),
+                                )),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A test is running.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 5,
+                            total: 20,
+                            response: InfoResponse::Test(TestInfoResponse {
+                                test_instance: TestInstanceId {
+                                    binary_id: &binary_id,
+                                    test_name: "test1",
+                                },
+                                retry_data: RetryData {
+                                    attempt: 1,
+                                    total_attempts: 1,
+                                },
+                                state: UnitState::Running {
+                                    pid: 12345,
+                                    time_taken: Duration::from_millis(400),
+                                    slow_after: None,
+                                },
+                                output: make_split_output(None, "abc", "def"),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A test is being terminated due to a timeout.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 6,
+                            total: 20,
+                            response: InfoResponse::Test(TestInfoResponse {
+                                test_instance: TestInstanceId {
+                                    binary_id: &binary_id,
+                                    test_name: "test2",
+                                },
+                                retry_data: RetryData {
+                                    attempt: 2,
+                                    total_attempts: 3,
+                                },
+                                state: UnitState::Terminating(UnitTerminatingState {
+                                    pid: 12346,
+                                    time_taken: Duration::from_millis(99999),
+                                    reason: UnitTerminateReason::Timeout,
+                                    method: UnitTerminateMethod::Fake,
+                                    waiting_duration: Duration::from_millis(6789),
+                                    remaining: Duration::from_millis(9786),
+                                }),
+                                output: make_split_output(None, "abc", "def"),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A test is exiting.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 7,
+                            total: 20,
+                            response: InfoResponse::Test(TestInfoResponse {
+                                test_instance: TestInstanceId {
+                                    binary_id: &binary_id,
+                                    test_name: "test3",
+                                },
+                                retry_data: RetryData {
+                                    attempt: 2,
+                                    total_attempts: 3,
+                                },
+                                state: UnitState::Exiting {
+                                    pid: 99999,
+                                    time_taken: Duration::from_millis(99999),
+                                    slow_after: Some(Duration::from_millis(33333)),
+                                    tentative_result: None,
+                                    waiting_duration: Duration::from_millis(1),
+                                    remaining: Duration::from_millis(999),
+                                },
+                                output: make_split_output(None, "abc", "def"),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // A test has exited.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 8,
+                            total: 20,
+                            response: InfoResponse::Test(TestInfoResponse {
+                                test_instance: TestInstanceId {
+                                    binary_id: &binary_id,
+                                    test_name: "test4",
+                                },
+                                retry_data: RetryData {
+                                    attempt: 1,
+                                    total_attempts: 5,
+                                },
+                                state: UnitState::Exited {
+                                    result: ExecutionResult::Pass,
+                                    time_taken: Duration::from_millis(99999),
+                                    slow_after: Some(Duration::from_millis(33333)),
+                                },
+                                output: make_combined_output_with_errors(
+                                    Some(ExecutionResult::Pass),
+                                    "abc\ndef\nghi\n",
+                                    vec![ChildError::Fd(ChildFdError::Wait(Arc::new(
+                                        std::io::Error::other("error waiting"),
+                                    )))],
+                                ),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                // Delay before next attempt.
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoResponse {
+                            index: 9,
+                            total: 20,
+                            response: InfoResponse::Test(TestInfoResponse {
+                                test_instance: TestInstanceId {
+                                    binary_id: &binary_id,
+                                    test_name: "test4",
+                                },
+                                retry_data: RetryData {
+                                    // Note that even though attempt is 1, we
+                                    // still show it in the UI in this special
+                                    // case.
+                                    attempt: 1,
+                                    total_attempts: 5,
+                                },
+                                state: UnitState::DelayBeforeNextAttempt {
+                                    previous_result: ExecutionResult::ExecFail,
+                                    previous_slow: true,
+                                    waiting_duration: Duration::from_millis(1234),
+                                    remaining: Duration::from_millis(5678),
+                                },
+                                // In reality, the output isn't available at this point,
+                                // and it shouldn't be shown.
+                                output: make_combined_output_with_errors(
+                                    Some(ExecutionResult::Pass),
+                                    "*** THIS OUTPUT SHOULD BE IGNORED",
+                                    vec![ChildError::Fd(ChildFdError::Wait(Arc::new(
+                                        std::io::Error::other(
+                                            "*** THIS ERROR SHOULD ALSO BE IGNORED",
+                                        ),
+                                    )))],
+                                ),
+                            }),
+                        },
+                    })
+                    .unwrap();
+
+                reporter
+                    .write_event(TestEvent {
+                        timestamp: Local::now().into(),
+                        elapsed: Duration::ZERO,
+                        kind: TestEventKind::InfoFinished { missing: 2 },
+                    })
+                    .unwrap();
+            },
+            &mut out,
+        );
+
+        insta::assert_snapshot!(
+            "info_response_output",
+            String::from_utf8(out).expect("output only consists of UTF-8"),
+        );
+    }
+
+    fn make_split_output(
+        result: Option<ExecutionResult>,
+        stdout: &str,
+        stderr: &str,
+    ) -> ChildExecutionOutput {
+        ChildExecutionOutput::Output {
+            result,
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: Some(Bytes::from(stdout.to_owned()).into()),
+                stderr: Some(Bytes::from(stderr.to_owned()).into()),
+            }),
+            errors: None,
+        }
+    }
+
+    fn make_split_output_with_errors(
+        result: Option<ExecutionResult>,
+        stdout: &str,
+        stderr: &str,
+        errors: Vec<ChildError>,
+    ) -> ChildExecutionOutput {
+        ChildExecutionOutput::Output {
+            result,
+            output: ChildOutput::Split(ChildSplitOutput {
+                stdout: Some(Bytes::from(stdout.to_owned()).into()),
+                stderr: Some(Bytes::from(stderr.to_owned()).into()),
+            }),
+            errors: ErrorList::new("testing split output", errors),
+        }
+    }
+
+    fn make_combined_output_with_errors(
+        result: Option<ExecutionResult>,
+        output: &str,
+        errors: Vec<ChildError>,
+    ) -> ChildExecutionOutput {
+        ChildExecutionOutput::Output {
+            result,
+            output: ChildOutput::Combined {
+                output: Bytes::from(output.to_owned()).into(),
+            },
+            errors: ErrorList::new("testing split output", errors),
+        }
+    }
+
     fn write_output_with_highlight_buf(output: &str, start: usize, end: Option<usize>) -> String {
         // We're not really testing non-UTF-8 output here, and using strings results in much more
         // readable error messages.
@@ -2588,40 +3518,31 @@ mod tests {
     #[test]
     fn no_capture_settings() {
         // Ensure that output settings are ignored with no-capture.
-        let mut builder = TestReporterBuilder::default();
-        builder
-            .set_no_capture(true)
-            .set_failure_output(TestOutputDisplay::Immediate)
-            .set_success_output(TestOutputDisplay::Immediate)
-            .set_status_level(StatusLevel::Fail);
-        let test_list = TestList::empty();
-        let config = NextestConfig::default_config("/fake/dir");
-        let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
-        let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
 
-        let mut buf: Vec<u8> = Vec::new();
-        let output = ReporterStderr::Buffer(&mut buf);
-        let reporter = builder.build(
-            &test_list,
-            &profile.apply_build_platforms(&build_platforms),
-            output,
-            StructuredReporter::new(),
-        );
-        assert!(reporter.inner.no_capture, "no_capture is true");
-        assert_eq!(
-            reporter.inner.force_failure_output,
-            Some(TestOutputDisplay::Never),
-            "failure output is never, overriding other settings"
-        );
-        assert_eq!(
-            reporter.inner.force_success_output,
-            Some(TestOutputDisplay::Never),
-            "success output is never, overriding other settings"
-        );
-        assert_eq!(
-            reporter.inner.status_levels.status_level,
-            StatusLevel::Pass,
-            "status level is pass, overriding other settings"
+        let config = NextestConfig::default_config("/fake/dir");
+        let mut out = Vec::new();
+
+        with_reporter(
+            &config,
+            |reporter| {
+                assert!(reporter.inner.no_capture, "no_capture is true");
+                assert_eq!(
+                    reporter.inner.force_failure_output,
+                    Some(TestOutputDisplay::Never),
+                    "failure output is never, overriding other settings"
+                );
+                assert_eq!(
+                    reporter.inner.force_success_output,
+                    Some(TestOutputDisplay::Never),
+                    "success output is never, overriding other settings"
+                );
+                assert_eq!(
+                    reporter.inner.status_levels.status_level,
+                    StatusLevel::Pass,
+                    "status level is pass, overriding other settings"
+                );
+            },
+            &mut out,
         );
     }
 

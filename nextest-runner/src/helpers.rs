@@ -313,6 +313,35 @@ pub(crate) fn extract_abort_status(exit_status: ExitStatus) -> Option<AbortStatu
     }
 }
 
+pub(crate) fn display_exit_status(exit_status: ExitStatus) -> String {
+    match extract_abort_status(exit_status) {
+        Some(abort_status) => display_abort_status(abort_status),
+        None => match exit_status.code() {
+            Some(code) => format!("exit code {}", code),
+            None => "an unknown error".to_owned(),
+        },
+    }
+}
+
+/// Display the abort status.
+pub(crate) fn display_abort_status(abort_status: AbortStatus) -> String {
+    match abort_status {
+        #[cfg(unix)]
+        AbortStatus::UnixSignal(sig) => match crate::helpers::signal_str(sig) {
+            Some(s) => {
+                format!("signal {sig} (SIG{s})")
+            }
+            None => {
+                format!("signal {sig}")
+            }
+        },
+        #[cfg(windows)]
+        AbortStatus::WindowsNtStatus(nt_status) => {
+            format!("code {}", crate::helpers::display_nt_status(nt_status))
+        }
+    }
+}
+
 #[cfg(unix)]
 pub(crate) fn signal_str(signal: i32) -> Option<&'static str> {
     // These signal numbers are the same on at least Linux, macOS, FreeBSD and illumos.

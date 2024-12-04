@@ -4,13 +4,17 @@
 use super::TestOutputDisplay;
 use crate::{
     config::ScriptId,
-    list::{TestInstance, TestList},
-    runner::{ExecuteStatus, ExecutionStatuses, RetryData, RunStats, SetupScriptExecuteStatus},
+    list::{TestInstance, TestInstanceId, TestList},
+    runner::{
+        ExecuteStatus, ExecutionResult, ExecutionStatuses, RetryData, RunStats,
+        SetupScriptExecuteStatus,
+    },
+    test_output::ChildExecutionOutput,
 };
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 /// A test event.
 ///
@@ -211,6 +215,35 @@ pub enum TestEventKind<'a> {
         reason: MismatchReason,
     },
 
+    /// An information request was received.
+    InfoStarted {
+        /// The number of tasks currently running. This is the same as the
+        /// number of expected responses.
+        total: usize,
+
+        /// Statistics for the run.
+        run_stats: RunStats,
+    },
+
+    /// Information about a script or test was received.
+    InfoResponse {
+        /// The index of the response, starting from 0.
+        index: usize,
+
+        /// The total number of responses expected.
+        total: usize,
+
+        /// The response itself.
+        response: InfoResponse<'a>,
+    },
+
+    /// An information request was completed.
+    InfoFinished {
+        /// The number of responses that were not received. In most cases, this
+        /// is 0.
+        missing: usize,
+    },
+
     /// A cancellation notice was received.
     RunBeginCancel {
         /// The number of setup scripts still running.
@@ -289,7 +322,6 @@ impl CancelReason {
         }
     }
 }
-
 /// The kind of unit of work that nextest is executing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnitKind {
@@ -307,7 +339,6 @@ impl UnitKind {
     pub(crate) const EXECUTING_TEST_MESSAGE: &str = "executing test";
     pub(crate) const EXECUTING_SCRIPT_MESSAGE: &str = "executing script";
 
-    #[expect(dead_code)]
     pub(crate) fn waiting_on_message(&self) -> &'static str {
         match self {
             UnitKind::Test => Self::WAITING_ON_TEST_MESSAGE,
@@ -319,6 +350,249 @@ impl UnitKind {
         match self {
             UnitKind::Test => Self::EXECUTING_TEST_MESSAGE,
             UnitKind::Script => Self::EXECUTING_SCRIPT_MESSAGE,
+        }
+    }
+}
+
+impl fmt::Display for UnitKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnitKind::Script => write!(f, "script"),
+            UnitKind::Test => write!(f, "test"),
+        }
+    }
+}
+
+/// A response to an information request.
+#[derive(Clone, Debug)]
+pub enum InfoResponse<'a> {
+    /// A setup script's response.
+    SetupScript(SetupScriptInfoResponse<'a>),
+
+    /// A test's response.
+    Test(TestInfoResponse<'a>),
+}
+
+/// A setup script's response to an information request.
+#[derive(Clone, Debug)]
+pub struct SetupScriptInfoResponse<'a> {
+    /// The identifier of the setup script instance.
+    pub script_id: ScriptId,
+
+    /// The command to run.
+    pub command: &'a str,
+
+    /// The list of arguments to the command.
+    pub args: &'a [String],
+
+    /// The state of the setup script.
+    pub state: UnitState,
+
+    /// Output obtained from the setup script.
+    pub output: ChildExecutionOutput,
+}
+
+/// A test's response to an information request.
+#[derive(Clone, Debug)]
+pub struct TestInfoResponse<'a> {
+    /// The test instance that the information is about.
+    pub test_instance: TestInstanceId<'a>,
+
+    /// Information about retries.
+    pub retry_data: RetryData,
+
+    /// The state of the test.
+    pub state: UnitState,
+
+    /// Output obtained from the test.
+    pub output: ChildExecutionOutput,
+}
+
+/// The current state of a test or script process: running, exiting, or
+/// terminating.
+///
+/// Part of information response requests.
+#[derive(Clone, Debug)]
+pub enum UnitState {
+    /// The unit is currently running.
+    Running {
+        /// The process ID.
+        pid: u32,
+
+        /// The amount of time the unit has been running.
+        time_taken: Duration,
+
+        /// `Some` if the test is marked as slow, along with the duration after
+        /// which it was marked as slow.
+        slow_after: Option<Duration>,
+    },
+
+    /// The test has finished running, and is currently in the process of
+    /// exiting.
+    Exiting {
+        /// The process ID.
+        pid: u32,
+
+        /// The amount of time the unit ran for.
+        time_taken: Duration,
+
+        /// `Some` if the unit is marked as slow, along with the duration after
+        /// which it was marked as slow.
+        slow_after: Option<Duration>,
+
+        /// The tentative execution result before leaked status is determined.
+        ///
+        /// None means that the exit status could not be read, and should be
+        /// treated as a failure.
+        tentative_result: Option<ExecutionResult>,
+
+        /// How long has been spent waiting for the process to exit.
+        waiting_duration: Duration,
+
+        /// How much longer nextest will wait until the test is marked leaky.
+        remaining: Duration,
+    },
+
+    /// The child process is being terminated by nextest.
+    Terminating(UnitTerminatingState),
+
+    /// The unit has finished running and the process has exited.
+    Exited {
+        /// The result of executing the unit.
+        result: ExecutionResult,
+
+        /// The amount of time the unit ran for.
+        time_taken: Duration,
+
+        /// `Some` if the unit is marked as slow, along with the duration after
+        /// which it was marked as slow.
+        slow_after: Option<Duration>,
+    },
+
+    /// A delay is being waited out before the next attempt of the test is
+    /// started. (Only relevant for tests.)
+    DelayBeforeNextAttempt {
+        /// The previous execution result.
+        previous_result: ExecutionResult,
+
+        /// Whether the previous attempt was marked as slow.
+        previous_slow: bool,
+
+        /// How long has been spent waiting so far.
+        waiting_duration: Duration,
+
+        /// How much longer nextest will wait until retrying the test.
+        remaining: Duration,
+    },
+}
+
+impl UnitState {
+    /// Returns true if the state has a valid output attached to it.
+    pub fn has_valid_output(&self) -> bool {
+        match self {
+            UnitState::Running { .. }
+            | UnitState::Exiting { .. }
+            | UnitState::Terminating(_)
+            | UnitState::Exited { .. } => true,
+            UnitState::DelayBeforeNextAttempt { .. } => false,
+        }
+    }
+}
+
+/// The current terminating state of a test or script process.
+///
+/// Part of [`UnitState::Terminating`].
+#[derive(Clone, Debug)]
+pub struct UnitTerminatingState {
+    /// The process ID.
+    pub pid: u32,
+
+    /// The amount of time the unit ran for.
+    pub time_taken: Duration,
+
+    /// The reason for the termination.
+    pub reason: UnitTerminateReason,
+
+    /// The method by which the process is being terminated.
+    pub method: UnitTerminateMethod,
+
+    /// How long has been spent waiting for the process to exit.
+    pub waiting_duration: Duration,
+
+    /// How much longer nextest will wait until a kill command is sent to the process.
+    pub remaining: Duration,
+}
+
+/// The reason for a script or test being forcibly terminated by nextest.
+///
+/// Part of information response requests.
+#[derive(Clone, Copy, Debug)]
+pub enum UnitTerminateReason {
+    /// The unit is being terminated due to a test timeout being hit.
+    Timeout,
+
+    /// The unit is being terminated due to nextest receiving a signal.
+    Signal,
+
+    /// The unit is being terminated due to an interrupt (i.e. Ctrl-C).
+    Interrupt,
+}
+
+impl fmt::Display for UnitTerminateReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnitTerminateReason::Timeout => write!(f, "timeout"),
+            UnitTerminateReason::Signal => write!(f, "signal"),
+            UnitTerminateReason::Interrupt => write!(f, "interrupt"),
+        }
+    }
+}
+
+/// The way in which a script or test is being forcibly terminated by nextest.
+#[derive(Clone, Copy, Debug)]
+pub enum UnitTerminateMethod {
+    /// The unit is being terminated by sending a signal.
+    #[cfg(unix)]
+    Signal(UnitTerminateSignal),
+
+    /// The unit is being terminated by terminating the Windows job object.
+    #[cfg(windows)]
+    JobObject,
+
+    /// A fake method used for testing.
+    #[cfg(test)]
+    Fake,
+}
+
+#[cfg(unix)]
+/// The signal that is or was sent to terminate a script or test.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnitTerminateSignal {
+    /// The unit is being terminated by sending a SIGINT.
+    Interrupt,
+
+    /// The unit is being terminated by sending a SIGTERM signal.
+    Term,
+
+    /// The unit is being terminated by sending a SIGHUP signal.
+    Hangup,
+
+    /// The unit is being terminated by sending a SIGQUIT signal.
+    Quit,
+
+    /// The unit is being terminated by sending a SIGKILL signal.
+    Kill,
+}
+
+#[cfg(unix)]
+impl fmt::Display for UnitTerminateSignal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnitTerminateSignal::Interrupt => write!(f, "SIGINT"),
+            UnitTerminateSignal::Term => write!(f, "SIGTERM"),
+            UnitTerminateSignal::Hangup => write!(f, "SIGHUP"),
+            UnitTerminateSignal::Quit => write!(f, "SIGQUIT"),
+            UnitTerminateSignal::Kill => write!(f, "SIGKILL"),
         }
     }
 }

@@ -6,10 +6,9 @@
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{ConfigExperimental, CustomTestGroup, ScriptId, TestGroup},
-    helpers::{dylib_path_envvar, extract_abort_status},
+    helpers::{display_exit_status, dylib_path_envvar},
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
-    runner::AbortStatus,
     target_runner::PlatformRunnerSource,
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
@@ -971,30 +970,6 @@ impl CreateTestListError {
 
     pub(crate) fn dylib_join_paths(new_paths: Vec<Utf8PathBuf>, error: JoinPathsError) -> Self {
         Self::DylibJoinPaths { new_paths, error }
-    }
-}
-
-fn display_exit_status(exit_status: ExitStatus) -> String {
-    match extract_abort_status(exit_status) {
-        #[cfg(unix)]
-        Some(AbortStatus::UnixSignal(sig)) => match crate::helpers::signal_str(sig) {
-            Some(s) => {
-                format!("signal {sig} (SIG{s})")
-            }
-            None => {
-                format!("signal {sig}")
-            }
-        },
-        #[cfg(windows)]
-        Some(AbortStatus::WindowsNtStatus(nt_status)) => {
-            format!("code {}", crate::helpers::display_nt_status(nt_status))
-        }
-        None => match exit_status.code() {
-            Some(code) => {
-                format!("code {code}")
-            }
-            None => "an unknown error".to_owned(),
-        },
     }
 }
 

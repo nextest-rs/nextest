@@ -72,6 +72,8 @@ mod imp {
         Quit,
         Tstp,
         Cont,
+        Info,
+        Usr1,
     }
 
     /// Signals for SIGINT, SIGTERM and SIGHUP on Unix.
@@ -80,6 +82,7 @@ mod imp {
         // The number of streams is quite small, so a StreamMap (backed by a
         // Vec) is a good option to store the list of streams to poll.
         map: StreamMap<SignalId, SignalStream>,
+        sigquit_as_info: bool,
     }
 
     impl Signals {
@@ -94,9 +97,23 @@ mod imp {
                 (SignalId::Quit, signal_stream(SignalKind::quit())?),
                 (SignalId::Tstp, signal_stream(tstp_kind())?),
                 (SignalId::Cont, signal_stream(cont_kind())?),
+                (SignalId::Usr1, signal_stream(SignalKind::user_defined1())?),
             ]);
 
-            Ok(Self { map })
+            if let Some(info_kind) = info_kind() {
+                map.insert(SignalId::Info, signal_stream(info_kind)?);
+            }
+
+            // This is a debug-only environment variable to let ctrl-\ (SIGQUIT)
+            // behave like SIGINFO. Useful for testing signal-based info queries
+            // on Linux.
+            let sigquit_as_info =
+                std::env::var("__NEXTEST_SIGQUIT_AS_INFO").map_or(false, |v| v == "1");
+
+            Ok(Self {
+                map,
+                sigquit_as_info,
+            })
         }
 
         pub(super) async fn recv(&mut self) -> Option<SignalEvent> {
@@ -104,9 +121,17 @@ mod imp {
                 SignalId::Int => SignalEvent::Shutdown(ShutdownEvent::Interrupt),
                 SignalId::Hup => SignalEvent::Shutdown(ShutdownEvent::Hangup),
                 SignalId::Term => SignalEvent::Shutdown(ShutdownEvent::Term),
-                SignalId::Quit => SignalEvent::Shutdown(ShutdownEvent::Quit),
+                SignalId::Quit => {
+                    if self.sigquit_as_info {
+                        SignalEvent::Info(SignalInfoEvent::Info)
+                    } else {
+                        SignalEvent::Shutdown(ShutdownEvent::Quit)
+                    }
+                }
                 SignalId::Tstp => SignalEvent::JobControl(JobControlEvent::Stop),
                 SignalId::Cont => SignalEvent::JobControl(JobControlEvent::Continue),
+                SignalId::Info => SignalEvent::Info(SignalInfoEvent::Info),
+                SignalId::Usr1 => SignalEvent::Info(SignalInfoEvent::Usr1),
             })
         }
     }
@@ -121,6 +146,29 @@ mod imp {
 
     fn cont_kind() -> SignalKind {
         SignalKind::from_raw(libc::SIGCONT)
+    }
+
+    // The SIGINFO signal is available on many Unix platforms, but not all of
+    // them.
+    cfg_if::cfg_if! {
+        if #[cfg(any(
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "macos",
+            target_os = "netbsd",
+            target_os = "openbsd",
+            // TODO: add illumos once
+            // https://github.com/tokio-rs/tokio/pull/6995 is in a released
+            // version of Tokio.
+        ))] {
+            fn info_kind() -> Option<SignalKind> {
+                Some(SignalKind::info())
+            }
+        } else {
+            fn info_kind() -> Option<SignalKind> {
+                None
+            }
+        }
     }
 }
 
@@ -165,6 +213,8 @@ pub(crate) enum SignalEvent {
     #[cfg(unix)]
     JobControl(JobControlEvent),
     Shutdown(ShutdownEvent),
+    #[cfg_attr(not(unix), expect(dead_code))]
+    Info(SignalInfoEvent),
 }
 
 // A job-control related signal event.
@@ -186,4 +236,16 @@ pub(crate) enum ShutdownEvent {
     #[cfg(unix)]
     Quit,
     Interrupt,
+}
+
+// A signal event to query information about tests.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum SignalInfoEvent {
+    /// SIGUSR1
+    #[cfg(unix)]
+    Usr1,
+
+    /// SIGINFO
+    #[cfg(unix)]
+    Info,
 }
