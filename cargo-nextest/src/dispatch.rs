@@ -16,8 +16,9 @@ use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        get_num_cpus, ConfigExperimental, EarlyProfile, NextestConfig, NextestVersionConfig,
-        NextestVersionEval, RetryPolicy, TestGroup, TestThreads, ToolConfigFile, VersionOnlyConfig,
+        get_num_cpus, ConfigExperimental, EarlyProfile, MaxFail, NextestConfig,
+        NextestVersionConfig, NextestVersionEval, RetryPolicy, TestGroup, TestThreads,
+        ToolConfigFile, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
     errors::WriteTestListError,
@@ -842,8 +843,23 @@ pub struct TestRunnerOpts {
     fail_fast: bool,
 
     /// Run all tests regardless of failure
-    #[arg(long, conflicts_with = "no-run", overrides_with = "fail-fast")]
+    #[arg(
+        long,
+        name = "no-fail-fast",
+        conflicts_with = "no-run",
+        overrides_with = "fail-fast"
+    )]
     no_fail_fast: bool,
+
+    /// Number of tests that can fail before exiting test run [possible values: integer or "all"]
+    #[arg(
+        long,
+        name = "max-fail",
+        value_name = "N",
+        conflicts_with_all = &["no-run", "fail-fast", "no-fail-fast"],
+        require_equals = true,
+    )]
+    max_fail: Option<MaxFail>,
 
     /// Behavior if there are no tests to run [default: fail]
     #[arg(
@@ -884,10 +900,17 @@ impl TestRunnerOpts {
         if let Some(retries) = self.retries {
             builder.set_retries(RetryPolicy::new_without_delay(retries));
         }
-        if self.no_fail_fast {
-            builder.set_fail_fast(false);
+        if let Some(max_fail) = self.max_fail {
+            match max_fail {
+                MaxFail::Count(n) => {
+                    builder.set_max_fail(n);
+                }
+                MaxFail::All => {}
+            }
+        } else if self.no_fail_fast {
+            // Ignore --fail-fast
         } else if self.fail_fast {
-            builder.set_fail_fast(true);
+            builder.set_max_fail(1);
         }
         if let Some(test_threads) = self.test_threads {
             builder.set_test_threads(test_threads);
@@ -2409,6 +2432,7 @@ mod tests {
                 "cargo nextest run --no-run --no-fail-fast",
                 ArgumentConflict,
             ),
+            ("cargo nextest run --no-run --max-fail=3", ArgumentConflict),
             (
                 "cargo nextest run --no-run --failure-output immediate",
                 ArgumentConflict,
@@ -2423,6 +2447,13 @@ mod tests {
             ),
             (
                 "cargo nextest run --no-run --final-status-level skip",
+                ArgumentConflict,
+            ),
+            // ---
+            // --max-fail and these options conflict
+            // ---
+            (
+                "cargo nextest run --max-fail=3 --no-fail-fast",
                 ArgumentConflict,
             ),
             // ---
