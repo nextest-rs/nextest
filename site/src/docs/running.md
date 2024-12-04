@@ -185,18 +185,21 @@ cargo nextest run -E 'platform(host)'
 ## Other runner options
 
 `--max-fail=N` <!-- md:version 0.9.86 -->
-: Number of tests that can fail before aborting the test run. Useful for uncovering multiple issues without having to run the whole test suite.
+: Number of tests that can fail before aborting the test run, or `all` to run all tests regardless of the number of failures. Useful for uncovering multiple issues without having to run the whole test suite.
 
 `--no-fail-fast`
-: Do not exit the test run on the first failure. Most useful for CI scenarios. Equivalent to `--max-fail=all`
+: Do not exit the test run in case a test fails. Most useful for CI scenarios. Equivalent to `--max-fail=all`.
 
-`-j`, `--test-threads`
+`--fail-fast`
+: Exit the test run on the first failure. This is the default behavior. Equivalent to `--max-fail=1`.
+
+`-jN`, `--test-threads=N`
 : Number of tests to run simultaneously. Note that this is separate from the number of build jobs to run simultaneously, which is specified by `--build-jobs`.
 
-`--run-ignored only` <!-- md:version 0.9.76 -->
+`--run-ignored=only` <!-- md:version 0.9.76 -->
 : Run only ignored tests. (With prior nextest versions, use `--run-ignored ignored-only`.)
 
-`--run-ignored all`
+`--run-ignored=all`
 : Run both ignored and non-ignored tests.
 
 ## Controlling nextest's output
