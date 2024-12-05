@@ -1,13 +1,11 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::TestOutputDisplay;
+use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::{
     config::ScriptId,
     list::{TestInstance, TestInstanceId, TestList},
-    runner::{
-        ExecuteStatus, ExecutionResult, ExecutionStatuses, RetryData, SetupScriptExecuteStatus,
-    },
+    runner::{ExecutionResult, RetryData},
     test_output::ChildExecutionOutput,
 };
 use chrono::{DateTime, FixedOffset};
@@ -482,6 +480,189 @@ pub enum RunStatsFailureKind {
         /// run.
         not_run: usize,
     },
+}
+
+/// Information about executions of a test, including retries.
+#[derive(Clone, Debug)]
+pub struct ExecutionStatuses {
+    /// This is guaranteed to be non-empty.
+    statuses: Vec<ExecuteStatus>,
+}
+
+#[expect(clippy::len_without_is_empty)] // RunStatuses is never empty
+impl ExecutionStatuses {
+    pub(crate) fn new(statuses: Vec<ExecuteStatus>) -> Self {
+        Self { statuses }
+    }
+
+    /// Returns the last execution status.
+    ///
+    /// This status is typically used as the final result.
+    pub fn last_status(&self) -> &ExecuteStatus {
+        self.statuses
+            .last()
+            .expect("execution statuses is non-empty")
+    }
+
+    /// Iterates over all the statuses.
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &'_ ExecuteStatus> + '_ {
+        self.statuses.iter()
+    }
+
+    /// Returns the number of times the test was executed.
+    pub fn len(&self) -> usize {
+        self.statuses.len()
+    }
+
+    /// Returns a description of self.
+    pub fn describe(&self) -> ExecutionDescription<'_> {
+        let last_status = self.last_status();
+        if last_status.result.is_success() {
+            if self.statuses.len() > 1 {
+                ExecutionDescription::Flaky {
+                    last_status,
+                    prior_statuses: &self.statuses[..self.statuses.len() - 1],
+                }
+            } else {
+                ExecutionDescription::Success {
+                    single_status: last_status,
+                }
+            }
+        } else {
+            let first_status = self
+                .statuses
+                .first()
+                .expect("execution statuses is non-empty");
+            let retries = &self.statuses[1..];
+            ExecutionDescription::Failure {
+                first_status,
+                last_status,
+                retries,
+            }
+        }
+    }
+}
+
+/// A description of test executions obtained from `ExecuteStatuses`.
+///
+/// This can be used to quickly determine whether a test passed, failed or was flaky.
+#[derive(Copy, Clone, Debug)]
+pub enum ExecutionDescription<'a> {
+    /// The test was run once and was successful.
+    Success {
+        /// The status of the test.
+        single_status: &'a ExecuteStatus,
+    },
+
+    /// The test was run more than once. The final result was successful.
+    Flaky {
+        /// The last, successful status.
+        last_status: &'a ExecuteStatus,
+
+        /// Previous statuses, none of which are successes.
+        prior_statuses: &'a [ExecuteStatus],
+    },
+
+    /// The test was run once, or possibly multiple times. All runs failed.
+    Failure {
+        /// The first, failing status.
+        first_status: &'a ExecuteStatus,
+
+        /// The last, failing status. Same as the first status if no retries were performed.
+        last_status: &'a ExecuteStatus,
+
+        /// Any retries that were performed. All of these runs failed.
+        ///
+        /// May be empty.
+        retries: &'a [ExecuteStatus],
+    },
+}
+
+impl<'a> ExecutionDescription<'a> {
+    /// Returns the status level for this `ExecutionDescription`.
+    pub fn status_level(&self) -> StatusLevel {
+        match self {
+            ExecutionDescription::Success { single_status } => {
+                if single_status.result == ExecutionResult::Leak {
+                    StatusLevel::Leak
+                } else {
+                    StatusLevel::Pass
+                }
+            }
+            // A flaky test implies that we print out retry information for it.
+            ExecutionDescription::Flaky { .. } => StatusLevel::Retry,
+            ExecutionDescription::Failure { .. } => StatusLevel::Fail,
+        }
+    }
+
+    /// Returns the final status level for this `ExecutionDescription`.
+    pub fn final_status_level(&self) -> FinalStatusLevel {
+        match self {
+            ExecutionDescription::Success { single_status, .. } => {
+                // Slow is higher priority than leaky, so return slow first here.
+                if single_status.is_slow {
+                    FinalStatusLevel::Slow
+                } else if single_status.result == ExecutionResult::Leak {
+                    FinalStatusLevel::Leak
+                } else {
+                    FinalStatusLevel::Pass
+                }
+            }
+            // A flaky test implies that we print out retry information for it.
+            ExecutionDescription::Flaky { .. } => FinalStatusLevel::Flaky,
+            ExecutionDescription::Failure { .. } => FinalStatusLevel::Fail,
+        }
+    }
+
+    /// Returns the last run status.
+    pub fn last_status(&self) -> &'a ExecuteStatus {
+        match self {
+            ExecutionDescription::Success {
+                single_status: last_status,
+            }
+            | ExecutionDescription::Flaky { last_status, .. }
+            | ExecutionDescription::Failure { last_status, .. } => last_status,
+        }
+    }
+}
+
+/// Information about a single execution of a test.
+#[derive(Clone, Debug)]
+pub struct ExecuteStatus {
+    /// Retry-related data.
+    pub retry_data: RetryData,
+    /// The stdout and stderr output for this test.
+    pub output: ChildExecutionOutput,
+    /// The execution result for this test: pass, fail or execution error.
+    pub result: ExecutionResult,
+    /// The time at which the test started.
+    pub start_time: DateTime<FixedOffset>,
+    /// The time it took for the test to run.
+    pub time_taken: Duration,
+    /// Whether this test counts as slow.
+    pub is_slow: bool,
+    /// The delay will be non-zero if this is a retry and delay was specified.
+    pub delay_before_start: Duration,
+}
+
+/// Information about the execution of a setup script.
+#[derive(Clone, Debug)]
+pub struct SetupScriptExecuteStatus {
+    /// Output for this setup script.
+    pub output: ChildExecutionOutput,
+    /// The execution result for this setup script: pass, fail or execution error.
+    pub result: ExecutionResult,
+    /// The time at which the script started.
+    pub start_time: DateTime<FixedOffset>,
+    /// The time it took for the script to run.
+    pub time_taken: Duration,
+    /// Whether this script counts as slow.
+    pub is_slow: bool,
+    /// The number of environment variables that were set by this script.
+    ///
+    /// `None` if an error occurred while running the script or reading the
+    /// environment map.
+    pub env_count: Option<usize>,
 }
 
 // Note: the order here matters -- it indicates severity of cancellation

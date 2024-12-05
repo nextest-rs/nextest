@@ -16,8 +16,10 @@ use nextest_runner::{
     input::InputHandlerKind,
     list::BinaryList,
     platform::BuildPlatforms,
-    reporter::{FinalRunStats, RunStatsFailureKind, UnitErrorDescription, UnitKind},
-    runner::{ExecutionDescription, ExecutionResult, TestRunnerBuilder},
+    reporter::{
+        ExecutionDescription, FinalRunStats, RunStatsFailureKind, UnitErrorDescription, UnitKind,
+    },
+    runner::{ExecutionResult, TestRunnerBuilder},
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns},
