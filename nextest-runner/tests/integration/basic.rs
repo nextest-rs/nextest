@@ -17,10 +17,12 @@ use nextest_runner::{
     list::BinaryList,
     platform::BuildPlatforms,
     reporter::{
-        events::{ExecutionDescription, FinalRunStats, RunStatsFailureKind, UnitKind},
+        events::{
+            ExecutionDescription, ExecutionResult, FinalRunStats, RunStatsFailureKind, UnitKind,
+        },
         UnitErrorDescription,
     },
-    runner::{ExecutionResult, TestRunnerBuilder},
+    runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
     test_filter::{RunIgnored, TestFilterBuilder, TestFilterPatterns},

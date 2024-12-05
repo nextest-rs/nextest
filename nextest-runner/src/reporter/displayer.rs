@@ -12,7 +12,7 @@ use crate::{
     helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
     list::{SkipCounts, TestInstance, TestInstanceId, TestList},
     reporter::{aggregator::EventAggregator, helpers::highlight_end, UnitErrorDescription},
-    runner::{AbortStatus, ExecutionResult, RetryData},
+    runner::RetryData,
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;

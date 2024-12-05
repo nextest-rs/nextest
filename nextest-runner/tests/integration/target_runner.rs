@@ -280,7 +280,7 @@ fn test_run_with_target_runner() -> Result<()> {
                     cfg_if::cfg_if! {
                         if #[cfg(unix)] {
                             if fixture.status == fixture_data::models::TestCaseFixtureStatus::Segfault {
-                                expected_status = nextest_runner::runner::ExecutionResult::Fail {
+                                expected_status = nextest_runner::reporter::events::ExecutionResult::Fail {
                                     abort_status: None,
                                     leaked: false,
                                 };

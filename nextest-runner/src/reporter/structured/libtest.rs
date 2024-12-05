@@ -26,8 +26,7 @@ use super::WriteEventError;
 use crate::{
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner},
     list::RustTestSuite,
-    reporter::events::{TestEvent, TestEventKind},
-    runner::ExecutionResult,
+    reporter::events::{ExecutionResult, TestEvent, TestEventKind},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;
