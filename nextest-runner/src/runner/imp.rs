@@ -14,13 +14,14 @@ use crate::{
     },
     input::{InputEvent, InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
-    reporter::{
-        events::{
-            AbortStatus, CancelReason, ExecuteStatus, ExecutionResult, ExecutionStatuses,
-            InfoResponse, RunStats, SetupScriptExecuteStatus, SetupScriptInfoResponse, TestEvent,
-            TestEventKind, TestInfoResponse, UnitKind, UnitState,
-        },
-        TestOutputDisplay,
+    reporter::events::{
+        AbortStatus, CancelReason, ExecuteStatus, ExecutionResult, ExecutionStatuses, InfoResponse,
+        RunStats, SetupScriptInfoResponse, TestEvent, TestEventKind, TestInfoResponse, UnitKind,
+        UnitState,
+    },
+    runner::{
+        InternalCancel, InternalEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
+        InternalTestEvent, UnitExecuteStatus,
     },
     signal::{
         JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind,
@@ -29,13 +30,13 @@ use crate::{
     target_runner::TargetRunner,
     test_command::{ChildAccumulator, ChildFds},
     test_output::{CaptureStrategy, ChildExecutionOutput, ChildOutput, ChildSplitOutput},
-    time::{PausableSleep, StopwatchSnapshot, StopwatchStart},
+    time::{PausableSleep, StopwatchStart},
 };
 use async_scoped::TokioScope;
 use chrono::Local;
 use future_queue::StreamExt;
 use futures::prelude::*;
-use nextest_metadata::{FilterMatch, MismatchReason};
+use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
 use rand::{distributions::OpenClosed01, thread_rng, Rng};
 use std::{
@@ -1597,55 +1598,6 @@ impl RetryData {
     }
 }
 
-struct InternalExecuteStatus<'a, 'test> {
-    test: TestPacket<'a, 'test>,
-    slow_after: Option<Duration>,
-    output: ChildExecutionOutput,
-    result: ExecutionResult,
-    stopwatch_end: StopwatchSnapshot,
-    delay_before_start: Duration,
-}
-
-impl InternalExecuteStatus<'_, '_> {
-    fn into_external(self) -> ExecuteStatus {
-        ExecuteStatus {
-            retry_data: self.test.retry_data,
-            output: self.output,
-            result: self.result,
-            start_time: self.stopwatch_end.start_time.fixed_offset(),
-            time_taken: self.stopwatch_end.active,
-            is_slow: self.slow_after.is_some(),
-            delay_before_start: self.delay_before_start,
-        }
-    }
-}
-
-struct InternalSetupScriptExecuteStatus<'a> {
-    script: SetupScriptPacket<'a>,
-    slow_after: Option<Duration>,
-    output: ChildExecutionOutput,
-    result: ExecutionResult,
-    stopwatch_end: StopwatchSnapshot,
-    env_map: Option<SetupScriptEnvMap>,
-}
-
-impl InternalSetupScriptExecuteStatus<'_> {
-    fn into_external(self) -> (SetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
-        let env_count = self.env_map.as_ref().map(|map| map.len());
-        (
-            SetupScriptExecuteStatus {
-                output: self.output,
-                result: self.result,
-                start_time: self.stopwatch_end.start_time.fixed_offset(),
-                time_taken: self.stopwatch_end.active,
-                is_slow: self.slow_after.is_some(),
-                env_count,
-            },
-            self.env_map,
-        )
-    }
-}
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum SignalCount {
     Once,
@@ -1683,35 +1635,6 @@ impl<'a> RunUnitRequest<'a> {
                 // The receiver being dead isn't really important.
                 _ = tx.send(status.info_response());
             }
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum UnitExecuteStatus<'a, 'test> {
-    Test(&'test InternalExecuteStatus<'a, 'test>),
-    SetupScript(&'test InternalSetupScriptExecuteStatus<'a>),
-}
-
-impl<'a> UnitExecuteStatus<'a, '_> {
-    fn info_response(&self) -> InfoResponse<'a> {
-        match self {
-            Self::Test(status) => status.test.info_response(
-                UnitState::Exited {
-                    result: status.result,
-                    time_taken: status.stopwatch_end.active,
-                    slow_after: status.slow_after,
-                },
-                status.output.clone(),
-            ),
-            Self::SetupScript(status) => status.script.info_response(
-                UnitState::Exited {
-                    result: status.result,
-                    time_taken: status.stopwatch_end.active,
-                    slow_after: status.slow_after,
-                },
-                status.output.clone(),
-            ),
         }
     }
 }
@@ -1798,7 +1721,15 @@ impl<'a> TestPacket<'a, '_> {
         }
     }
 
-    fn info_response(&self, state: UnitState, output: ChildExecutionOutput) -> InfoResponse<'a> {
+    pub(super) fn retry_data(&self) -> RetryData {
+        self.retry_data
+    }
+
+    pub(super) fn info_response(
+        &self,
+        state: UnitState,
+        output: ChildExecutionOutput,
+    ) -> InfoResponse<'a> {
         InfoResponse::Test(TestInfoResponse {
             test_instance: self.test_instance.id(),
             state,
@@ -1837,7 +1768,11 @@ impl<'a> SetupScriptPacket<'a> {
         }
     }
 
-    fn info_response(&self, state: UnitState, output: ChildExecutionOutput) -> InfoResponse<'a> {
+    pub(super) fn info_response(
+        &self,
+        state: UnitState,
+        output: ChildExecutionOutput,
+    ) -> InfoResponse<'a> {
         InfoResponse::SetupScript(SetupScriptInfoResponse {
             script_id: self.script_id.clone(),
             command: self.config.program(),
@@ -2390,88 +2325,6 @@ impl ContextTestInstance<'_> {
         attempts.push(last_run_status);
         ExecutionStatuses::new(attempts)
     }
-}
-
-#[derive(Debug)]
-enum InternalEvent<'a> {
-    Test(InternalTestEvent<'a>),
-    Signal(SignalEvent),
-    Input(InputEvent),
-    ReportCancel,
-}
-
-#[derive(Debug)]
-enum InternalTestEvent<'a> {
-    SetupScriptStarted {
-        script_id: ScriptId,
-        config: &'a ScriptConfig,
-        index: usize,
-        total: usize,
-        // See the note in the `Started` variant.
-        req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest<'a>>>,
-    },
-    SetupScriptSlow {
-        script_id: ScriptId,
-        config: &'a ScriptConfig,
-        elapsed: Duration,
-        will_terminate: Option<Duration>,
-    },
-    SetupScriptFinished {
-        script_id: ScriptId,
-        config: &'a ScriptConfig,
-        index: usize,
-        total: usize,
-        status: SetupScriptExecuteStatus,
-    },
-    Started {
-        test_instance: TestInstance<'a>,
-        // The channel over which to return the unit request.
-        //
-        // The callback context is solely responsible for coordinating the
-        // creation of all channels, such that it acts as the source of truth
-        // for which units to broadcast messages out to. This oneshot channel is
-        // used to let each test instance know to go ahead and start running
-        // tests.
-        //
-        // Why do we use unbounded channels? Mostly to make life simpler --
-        // these are low-traffic channels that we don't expect to be backed up.
-        req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest<'a>>>,
-    },
-    Slow {
-        test_instance: TestInstance<'a>,
-        retry_data: RetryData,
-        elapsed: Duration,
-        will_terminate: Option<Duration>,
-    },
-    AttemptFailedWillRetry {
-        test_instance: TestInstance<'a>,
-        failure_output: TestOutputDisplay,
-        run_status: ExecuteStatus,
-        delay_before_next_attempt: Duration,
-    },
-    RetryStarted {
-        test_instance: TestInstance<'a>,
-        retry_data: RetryData,
-    },
-    Finished {
-        test_instance: TestInstance<'a>,
-        success_output: TestOutputDisplay,
-        failure_output: TestOutputDisplay,
-        junit_store_success_output: bool,
-        junit_store_failure_output: bool,
-        last_run_status: ExecuteStatus,
-    },
-    Skipped {
-        test_instance: TestInstance<'a>,
-        reason: MismatchReason,
-    },
-}
-
-#[derive(Debug)]
-enum InternalCancel {
-    Report,
-    TestFailure,
-    Signal(ShutdownRequest),
 }
 
 /// Configures stdout, stdin and stderr inheritance by test processes on Windows.
