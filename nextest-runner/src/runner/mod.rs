@@ -6,6 +6,7 @@
 //! The main structure in this module is [`TestRunner`].
 
 mod imp;
+mod internal_events;
 
 #[cfg(unix)]
 #[path = "unix.rs"]
@@ -16,3 +17,4 @@ mod os;
 mod os;
 
 pub use imp::*;
+use internal_events::*;
