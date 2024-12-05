@@ -296,25 +296,8 @@ impl fmt::Display for FormattedDuration {
     }
 }
 
-/// Extract the abort status from an exit status.
-pub(crate) fn extract_abort_status(exit_status: ExitStatus) -> Option<AbortStatus> {
-    cfg_if::cfg_if! {
-        if #[cfg(unix)] {
-            // On Unix, extract the signal if it's found.
-            use std::os::unix::process::ExitStatusExt;
-            exit_status.signal().map(AbortStatus::UnixSignal)
-        } else if #[cfg(windows)] {
-            exit_status.code().and_then(|code| {
-                (code < 0).then_some(AbortStatus::WindowsNtStatus(code))
-            })
-        } else {
-            None
-        }
-    }
-}
-
 pub(crate) fn display_exit_status(exit_status: ExitStatus) -> String {
-    match extract_abort_status(exit_status) {
+    match AbortStatus::extract(exit_status) {
         Some(abort_status) => display_abort_status(abort_status),
         None => match exit_status.code() {
             Some(code) => format!("exit code {}", code),

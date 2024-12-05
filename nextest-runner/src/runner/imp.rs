@@ -1573,21 +1573,8 @@ fn create_execution_result(
             ExecutionResult::Pass
         }
     } else {
-        cfg_if::cfg_if! {
-            if #[cfg(unix)] {
-                // On Unix, extract the signal if it's found.
-                use std::os::unix::process::ExitStatusExt;
-                let abort_status = exit_status.signal().map(AbortStatus::UnixSignal);
-            } else if #[cfg(windows)] {
-                let abort_status = exit_status.code().and_then(|code| {
-                    (code < 0).then_some(AbortStatus::WindowsNtStatus(code))
-                });
-            } else {
-                let abort_status = None;
-            }
-        }
         ExecutionResult::Fail {
-            abort_status,
+            abort_status: AbortStatus::extract(exit_status),
             leaked,
         }
     }
