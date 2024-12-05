@@ -17,7 +17,7 @@ use nextest_runner::{
         BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
     },
     platform::BuildPlatforms,
-    reporter::{ExecutionStatuses, RunStats, TestEventKind},
+    reporter::events::{ExecutionStatuses, RunStats, TestEventKind},
     reuse_build::PathMapper,
     runner::{configure_handle_inheritance, AbortStatus, ExecutionResult, TestRunner},
     target_runner::TargetRunner,

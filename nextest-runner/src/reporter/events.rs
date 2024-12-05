@@ -1,6 +1,11 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Events for the reporter.
+//!
+//! These types form the interface between the test runner and the test
+//! reporter. The root structure for all events is [`TestEvent`].
+
 use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::{
     config::ScriptId,

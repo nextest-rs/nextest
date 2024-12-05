@@ -5,22 +5,13 @@
 //!
 //! The main structure in this module is [`TestReporter`].
 
-use super::{
-    structured::StructuredReporter, ByteSubslice, CancelReason, ExecuteStatus,
-    ExecutionDescription, ExecutionStatuses, FinalRunStats, InfoResponse, RunStats,
-    RunStatsFailureKind, SetupScriptExecuteStatus, SetupScriptInfoResponse, TestEvent,
-    TestEventKind, TestInfoResponse, TestOutputErrorSlice, UnitKind, UnitState,
-    UnitTerminatingState,
-};
+use super::{events::*, structured::StructuredReporter, ByteSubslice, TestOutputErrorSlice};
 use crate::{
     config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
     errors::{DisplayErrorChain, WriteEventError},
     helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
     list::{SkipCounts, TestInstance, TestInstanceId, TestList},
-    reporter::{
-        aggregator::EventAggregator, helpers::highlight_end, UnitErrorDescription,
-        UnitTerminateMethod,
-    },
+    reporter::{aggregator::EventAggregator, helpers::highlight_end, UnitErrorDescription},
     runner::{AbortStatus, ExecutionResult, RetryData},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
@@ -2606,7 +2597,7 @@ mod tests {
         config::{CompiledDefaultFilterSection, NextestConfig},
         errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
         platform::BuildPlatforms,
-        reporter::{structured::StructuredReporter, UnitTerminateReason},
+        reporter::{events::UnitTerminateReason, structured::StructuredReporter},
         test_output::ChildSplitOutput,
     };
     use bytes::Bytes;

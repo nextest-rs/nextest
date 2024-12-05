@@ -17,7 +17,8 @@ use nextest_runner::{
     list::BinaryList,
     platform::BuildPlatforms,
     reporter::{
-        ExecutionDescription, FinalRunStats, RunStatsFailureKind, UnitErrorDescription, UnitKind,
+        events::{ExecutionDescription, FinalRunStats, RunStatsFailureKind, UnitKind},
+        UnitErrorDescription,
     },
     runner::{ExecutionResult, TestRunnerBuilder},
     signal::SignalHandlerKind,

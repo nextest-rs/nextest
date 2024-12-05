@@ -31,8 +31,9 @@ use nextest_runner::{
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     redact::Redactor,
     reporter::{
-        highlight_end, structured, FinalRunStats, FinalStatusLevel, RunStatsFailureKind,
-        StatusLevel, TestOutputDisplay, TestOutputErrorSlice, TestReporterBuilder,
+        events::{FinalRunStats, RunStatsFailureKind},
+        highlight_end, structured, FinalStatusLevel, StatusLevel, TestOutputDisplay,
+        TestOutputErrorSlice, TestReporterBuilder,
     },
     reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, TestRunnerBuilder},

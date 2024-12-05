@@ -15,9 +15,12 @@ use crate::{
     input::{InputEvent, InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
     reporter::{
-        CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats,
-        SetupScriptExecuteStatus, SetupScriptInfoResponse, TestEvent, TestEventKind,
-        TestInfoResponse, TestOutputDisplay, UnitKind, UnitState,
+        events::{
+            CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats,
+            SetupScriptExecuteStatus, SetupScriptInfoResponse, TestEvent, TestEventKind,
+            TestInfoResponse, UnitKind, UnitState,
+        },
+        TestOutputDisplay,
     },
     signal::{
         JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalHandlerKind,
@@ -2644,7 +2647,7 @@ mod imp {
 #[cfg(unix)]
 mod imp {
     use super::*;
-    use crate::reporter::{
+    use crate::reporter::events::{
         UnitTerminateMethod, UnitTerminateReason, UnitTerminateSignal, UnitTerminatingState,
     };
     use libc::{SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGSTOP, SIGTERM, SIGTSTP};

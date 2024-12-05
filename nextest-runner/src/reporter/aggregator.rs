@@ -3,12 +3,14 @@
 
 //! Metadata management.
 
-use super::{TestEvent, UnitErrorDescription, UnitKind};
+use super::{
+    events::{ExecuteStatus, ExecutionDescription, TestEvent, TestEventKind, UnitKind},
+    UnitErrorDescription,
+};
 use crate::{
     config::{EvaluatableProfile, NextestJunitConfig},
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstance,
-    reporter::{ExecuteStatus, ExecutionDescription, TestEventKind},
     runner::ExecutionResult,
     test_output::{ChildExecutionOutput, ChildOutput},
 };
