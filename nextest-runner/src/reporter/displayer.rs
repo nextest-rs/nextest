@@ -6,9 +6,11 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    structured::StructuredReporter, ByteSubslice, CancelReason, FinalRunStats, InfoResponse,
-    RunStats, RunStatsFailureKind, SetupScriptInfoResponse, TestEvent, TestEventKind,
-    TestInfoResponse, TestOutputErrorSlice, UnitKind, UnitState, UnitTerminatingState,
+    structured::StructuredReporter, ByteSubslice, CancelReason, ExecuteStatus,
+    ExecutionDescription, ExecutionStatuses, FinalRunStats, InfoResponse, RunStats,
+    RunStatsFailureKind, SetupScriptExecuteStatus, SetupScriptInfoResponse, TestEvent,
+    TestEventKind, TestInfoResponse, TestOutputErrorSlice, UnitKind, UnitState,
+    UnitTerminatingState,
 };
 use crate::{
     config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
@@ -19,10 +21,7 @@ use crate::{
         aggregator::EventAggregator, helpers::highlight_end, UnitErrorDescription,
         UnitTerminateMethod,
     },
-    runner::{
-        AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
-        RetryData, SetupScriptExecuteStatus,
-    },
+    runner::{AbortStatus, ExecutionResult, RetryData},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;

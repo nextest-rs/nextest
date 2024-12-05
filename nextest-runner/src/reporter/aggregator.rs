@@ -8,8 +8,8 @@ use crate::{
     config::{EvaluatableProfile, NextestJunitConfig},
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstance,
-    reporter::TestEventKind,
-    runner::{ExecuteStatus, ExecutionDescription, ExecutionResult},
+    reporter::{ExecuteStatus, ExecutionDescription, TestEventKind},
+    runner::ExecutionResult,
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use camino::Utf8PathBuf;
