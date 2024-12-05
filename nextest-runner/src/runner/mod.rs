@@ -6,6 +6,7 @@
 //! The main structure in this module is [`TestRunner`].
 
 mod dispatcher;
+mod executor;
 mod imp;
 mod internal_events;
 
@@ -18,5 +19,6 @@ mod os;
 mod os;
 
 use dispatcher::*;
+use executor::*;
 pub use imp::*;
 use internal_events::*;
