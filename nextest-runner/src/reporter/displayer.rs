@@ -168,6 +168,7 @@ pub enum ReporterStderr<'a> {
 #[derive(Debug, Default)]
 pub struct TestReporterBuilder {
     no_capture: bool,
+    should_colorize: bool,
     failure_output: Option<TestOutputDisplay>,
     success_output: Option<TestOutputDisplay>,
     status_level: Option<StatusLevel>,
@@ -184,6 +185,12 @@ impl TestReporterBuilder {
     /// will be at least [`StatusLevel::Pass`].
     pub fn set_no_capture(&mut self, no_capture: bool) -> &mut Self {
         self.no_capture = no_capture;
+        self
+    }
+
+    /// Set to true if the reporter should colorize output.
+    pub fn set_colorize(&mut self, should_colorize: bool) -> &mut Self {
+        self.should_colorize = should_colorize;
         self
     }
 
@@ -234,7 +241,10 @@ impl TestReporterBuilder {
         output: ReporterStderr<'a>,
         structured_reporter: StructuredReporter<'a>,
     ) -> TestReporter<'a> {
-        let styles = Box::default();
+        let mut styles: Box<Styles> = Box::default();
+        if self.should_colorize {
+            styles.colorize();
+        }
 
         let aggregator = EventAggregator::new(profile);
 
@@ -491,11 +501,6 @@ pub struct TestReporter<'a> {
 }
 
 impl<'a> TestReporter<'a> {
-    /// Colorizes output.
-    pub fn colorize(&mut self) {
-        self.inner.styles.colorize();
-    }
-
     /// Report a test event.
     pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
         self.write_event(event)

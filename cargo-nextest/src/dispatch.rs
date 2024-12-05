@@ -1013,9 +1013,11 @@ struct TestReporterOpts {
 }
 
 impl TestReporterOpts {
-    fn to_builder(&self, no_capture: bool) -> TestReporterBuilder {
+    fn to_builder(&self, no_capture: bool, should_colorize: bool) -> TestReporterBuilder {
         let mut builder = TestReporterBuilder::default();
         builder.set_no_capture(no_capture);
+        builder.set_colorize(should_colorize);
+
         if let Some(failure_output) = self.failure_output {
             builder.set_failure_output(failure_output.into());
         }
@@ -1772,19 +1774,16 @@ impl App {
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
 
         let output = output_writer.reporter_output();
-
-        let mut reporter = reporter_opts
-            .to_builder(no_capture)
-            .set_verbose(self.base.output.verbose)
-            .build(&test_list, &profile, output, structured_reporter);
-        if self
+        let should_colorize = self
             .base
             .output
             .color
-            .should_colorize(supports_color::Stream::Stderr)
-        {
-            reporter.colorize();
-        }
+            .should_colorize(supports_color::Stream::Stderr);
+
+        let mut reporter = reporter_opts
+            .to_builder(no_capture, should_colorize)
+            .set_verbose(self.base.output.verbose)
+            .build(&test_list, &profile, output, structured_reporter);
 
         let handler = SignalHandlerKind::Standard;
         let runner_builder = match runner_opts.to_builder(cap_strat) {
