@@ -1,10 +1,9 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::events::UnitKind;
+use super::events::{AbortStatus, ExecutionResult, UnitKind};
 use crate::{
     errors::{ChildError, ChildStartError, ErrorList},
-    runner::{AbortStatus, ExecutionResult},
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use bstr::ByteSlice;

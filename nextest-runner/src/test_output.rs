@@ -2,7 +2,7 @@
 
 use crate::{
     errors::{ChildError, ChildStartError, ErrorList},
-    runner::ExecutionResult,
+    reporter::events::ExecutionResult,
 };
 use bstr::{ByteSlice, Lines};
 use bytes::Bytes;

@@ -4,7 +4,7 @@
 use crate::{
     config::ScriptId,
     list::{Styles, TestInstanceId},
-    runner::AbortStatus,
+    reporter::events::AbortStatus,
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};

@@ -16,9 +16,9 @@ use crate::{
     list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
     reporter::{
         events::{
-            CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats,
-            SetupScriptExecuteStatus, SetupScriptInfoResponse, TestEvent, TestEventKind,
-            TestInfoResponse, UnitKind, UnitState,
+            AbortStatus, CancelReason, ExecuteStatus, ExecutionResult, ExecutionStatuses,
+            InfoResponse, RunStats, SetupScriptExecuteStatus, SetupScriptInfoResponse, TestEvent,
+            TestEventKind, TestInfoResponse, UnitKind, UnitState,
         },
         TestOutputDisplay,
     },
@@ -2485,59 +2485,6 @@ enum InternalCancel {
     Report,
     TestFailure,
     Signal(ShutdownRequest),
-}
-
-/// Whether a test passed, failed or an error occurred while executing the test.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ExecutionResult {
-    /// The test passed.
-    Pass,
-    /// The test passed but leaked handles. This usually indicates that
-    /// a subprocess that inherit standard IO was created, but it didn't shut down when
-    /// the test failed.
-    ///
-    /// This is treated as a pass.
-    Leak,
-    /// The test failed.
-    Fail {
-        /// The abort status of the test, if any (for example, the signal on Unix).
-        abort_status: Option<AbortStatus>,
-
-        /// Whether a test leaked handles. If set to true, this usually indicates that
-        /// a subprocess that inherit standard IO was created, but it didn't shut down when
-        /// the test failed.
-        leaked: bool,
-    },
-    /// An error occurred while executing the test.
-    ExecFail,
-    /// The test was terminated due to timeout.
-    Timeout,
-}
-
-impl ExecutionResult {
-    /// Returns true if the test was successful.
-    pub fn is_success(self) -> bool {
-        match self {
-            ExecutionResult::Pass | ExecutionResult::Leak => true,
-            ExecutionResult::Fail { .. } | ExecutionResult::ExecFail | ExecutionResult::Timeout => {
-                false
-            }
-        }
-    }
-}
-
-/// A regular exit code or Windows NT abort status for a test.
-///
-/// Returned as part of the [`ExecutionResult::Fail`] variant.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum AbortStatus {
-    /// The test was aborted due to a signal on Unix.
-    #[cfg(unix)]
-    UnixSignal(i32),
-
-    /// The test was determined to have aborted because the high bit was set on Windows.
-    #[cfg(windows)]
-    WindowsNtStatus(windows_sys::Win32::Foundation::NTSTATUS),
 }
 
 /// Configures stdout, stdin and stderr inheritance by test processes on Windows.

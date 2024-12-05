@@ -4,14 +4,15 @@
 //! Metadata management.
 
 use super::{
-    events::{ExecuteStatus, ExecutionDescription, TestEvent, TestEventKind, UnitKind},
+    events::{
+        ExecuteStatus, ExecutionDescription, ExecutionResult, TestEvent, TestEventKind, UnitKind,
+    },
     UnitErrorDescription,
 };
 use crate::{
     config::{EvaluatableProfile, NextestJunitConfig},
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstance,
-    runner::ExecutionResult,
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use camino::Utf8PathBuf;
