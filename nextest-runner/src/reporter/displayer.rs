@@ -307,12 +307,10 @@ impl TestReporterBuilder {
                 let bar = ProgressBar::new(test_list.test_count() as u64);
                 // Emulate Cargo's style.
                 let test_count_width = format!("{}", test_list.test_count()).len();
-                // Create the template using the width as input. This is a little confusing -- {{foo}}
-                // is what's passed into the ProgressBar, while {bar} is inserted by the format!() statement.
-                //
-                // Note: ideally we'd use the same format as our other duration displays for the elapsed time,
-                // but that isn't possible due to https://github.com/console-rs/indicatif/issues/440. Use
-                // {{elapsed_precise}} as an OK tradeoff here.
+                // Create the template using the width as input. This is a
+                // little confusing -- {{foo}} is what's passed into the
+                // ProgressBar, while {bar} is inserted by the format!()
+                // statement.
                 let template = format!(
                     "{{prefix:>12}} [{{elapsed_precise:>9}}] {{wide_bar}} \
                     {{pos:>{test_count_width}}}/{{len:{test_count_width}}}: {{msg}}     "

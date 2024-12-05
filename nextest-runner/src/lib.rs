@@ -17,6 +17,7 @@ pub mod double_spawn;
 pub mod errors;
 mod helpers;
 pub mod indenter;
+pub mod input;
 pub mod list;
 pub mod partition;
 pub mod platform;

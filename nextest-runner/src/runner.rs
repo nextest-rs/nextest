@@ -16,6 +16,7 @@ use crate::{
         ChildError, ChildFdError, ChildStartError, ConfigureHandleInheritanceError, ErrorList,
         TestRunnerBuildError, TestRunnerExecuteErrors,
     },
+    input::{InputEvent, InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestExecuteContext, TestInstance, TestInstanceId, TestList},
     reporter::{
         CancelReason, FinalStatusLevel, InfoResponse, SetupScriptInfoResponse, StatusLevel,
@@ -175,12 +176,14 @@ impl TestRunnerBuilder {
     }
 
     /// Creates a new test runner.
+    #[expect(clippy::too_many_arguments)]
     pub fn build<'a>(
         self,
         test_list: &'a TestList,
         profile: &'a EvaluatableProfile<'a>,
         cli_args: Vec<String>,
-        handler_kind: SignalHandlerKind,
+        signal_handler: SignalHandlerKind,
+        input_handler: InputHandlerKind,
         double_spawn: DoubleSpawnInfo,
         target_runner: TargetRunner,
     ) -> Result<TestRunner<'a>, TestRunnerBuildError> {
@@ -193,11 +196,17 @@ impl TestRunnerBuilder {
         };
         let max_fail = self.max_fail.or_else(|| profile.fail_fast().then_some(1));
 
-        let runtime = Runtime::new().map_err(TestRunnerBuildError::TokioRuntimeCreate)?;
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("nextest-runner-worker")
+            .build()
+            .map_err(TestRunnerBuildError::TokioRuntimeCreate)?;
         let _guard = runtime.enter();
 
-        // This must be called from within the guard.
-        let handler = handler_kind.build()?;
+        // signal_handler.build() must be called from within the guard.
+        let signal_handler = signal_handler.build()?;
+
+        let input_handler = input_handler.build();
 
         Ok(TestRunner {
             inner: TestRunnerInner {
@@ -213,7 +222,8 @@ impl TestRunnerBuilder {
                 runtime,
                 run_id: ReportUuid::new_v4(),
             },
-            handler,
+            signal_handler,
+            input_handler,
         })
     }
 }
@@ -224,10 +234,16 @@ impl TestRunnerBuilder {
 #[derive(Debug)]
 pub struct TestRunner<'a> {
     inner: TestRunnerInner<'a>,
-    handler: SignalHandler,
+    signal_handler: SignalHandler,
+    input_handler: InputHandler,
 }
 
 impl<'a> TestRunner<'a> {
+    /// Returns the status of the input handler.
+    pub fn input_handler_status(&self) -> InputHandlerStatus {
+        self.input_handler.status()
+    }
+
     /// Executes the listed tests, each one in its own process.
     ///
     /// The callback is called with the results of each test.
@@ -268,9 +284,11 @@ impl<'a> TestRunner<'a> {
         let mut report_cancel_tx = Some(report_cancel_tx);
         let mut first_error = None;
 
-        let res = self
-            .inner
-            .execute(&mut self.handler, report_cancel_rx, |event| {
+        let res = self.inner.execute(
+            &mut self.signal_handler,
+            &mut self.input_handler,
+            report_cancel_rx,
+            |event| {
                 match callback(event) {
                     Ok(()) => {}
                     Err(error) => {
@@ -283,7 +301,8 @@ impl<'a> TestRunner<'a> {
                         }
                     }
                 }
-            });
+            },
+        );
 
         // On Windows, the stdout and stderr futures might spawn processes that keep the runner
         // stuck indefinitely if it's dropped the normal way. Shut it down aggressively, being OK
@@ -324,6 +343,7 @@ impl<'a> TestRunnerInner<'a> {
     fn execute<F>(
         &self,
         signal_handler: &mut SignalHandler,
+        input_handler: &mut InputHandler,
         report_cancel_rx: oneshot::Receiver<()>,
         callback: F,
     ) -> Result<RunStats, Vec<JoinError>>
@@ -360,8 +380,10 @@ impl<'a> TestRunnerInner<'a> {
             let (cancellation_sender, _cancel_receiver) = broadcast::channel(1);
 
             let exec_cancellation_sender = cancellation_sender.clone();
+
             let exec_fut = async move {
                 let mut signals_done = false;
+                let mut inputs_done = false;
                 let mut report_cancel_rx_done = false;
 
                 loop {
@@ -384,6 +406,15 @@ impl<'a> TestRunnerInner<'a> {
                                 }
                             }
                         },
+                        internal_event = input_handler.recv(), if !inputs_done => {
+                            match internal_event {
+                                Some(event) => InternalEvent::Input(event),
+                                None => {
+                                    inputs_done = true;
+                                    continue;
+                                }
+                            }
+                        }
                         res = &mut report_cancel_rx, if !report_cancel_rx_done => {
                             report_cancel_rx_done = true;
                             match res {
@@ -653,6 +684,7 @@ impl<'a> TestRunnerInner<'a> {
                     .map(move |test_instance| {
                         let this_resp_tx = resp_tx.clone();
                         let mut cancel_receiver = cancellation_sender.subscribe();
+                        debug!(test_name = test_instance.name, "running test");
 
                         let query = test_instance.to_test_query();
                         let settings = self.profile.settings_for(&query);
@@ -794,6 +826,7 @@ impl<'a> TestRunnerInner<'a> {
                                 last_run_status,
                             });
                         };
+
                         (threads_required, test_group, fut)
                     })
                     // future_queue_grouped means tests are spawned in order but returned in
@@ -941,7 +974,7 @@ impl<'a> TestRunnerInner<'a> {
                                 // Pass in the slow timeout period times timeout_hit, since
                                 // stopwatch.elapsed() tends to be slightly longer.
                                 timeout_hit * slow_timeout.period,
-                                will_terminate.then_some(slow_timeout.grace_period)
+                                will_terminate.then_some(slow_timeout.grace_period),
                             ));
                         }
 
@@ -969,9 +1002,10 @@ impl<'a> TestRunnerInner<'a> {
                         }
                     }
                     recv = req_rx.recv() => {
-                        // The sender stays open longer than the whole loop so a
-                        // RecvError should never happen.
-                        let req = recv.expect("req_rx sender is open");
+                        // The sender stays open longer than the whole loop, and the buffer is big
+                        // enough for all messages ever sent through this channel, so a RecvError
+                        // should never happen.
+                        let req = recv.expect("a RecvError should never happen here");
 
                         match req {
                             RunUnitRequest::Signal(req) => {
@@ -2209,7 +2243,7 @@ enum HandleEventResponse {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InfoEvent {
     Signal(SignalInfoEvent),
-    // TODO: interactive events
+    Input,
 }
 
 struct CallbackContext<'a, F> {
@@ -2463,6 +2497,10 @@ where
                 })
             }
             InternalEvent::Signal(event) => self.handle_signal_event(event),
+            InternalEvent::Input(InputEvent::Info) => {
+                // Print current statistics.
+                Ok(Some(HandleEventResponse::Info(InfoEvent::Input)))
+            }
             InternalEvent::ReportCancel => {
                 self.begin_cancel(CancelReason::ReportError);
                 Err(InternalCancel::Report)
@@ -2728,6 +2766,7 @@ impl ContextTestInstance<'_> {
 enum InternalEvent<'a> {
     Test(InternalTestEvent<'a>),
     Signal(SignalEvent),
+    Input(InputEvent),
     ReportCancel,
 }
 
@@ -3234,14 +3273,16 @@ mod tests {
         let config = NextestConfig::default_config("/fake/dir");
         let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
         let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
-        let handler_kind = SignalHandlerKind::Noop;
+        let signal_handler = SignalHandlerKind::Noop;
+        let input_handler = InputHandlerKind::Noop;
         let profile = profile.apply_build_platforms(&build_platforms);
         let runner = builder
             .build(
                 &test_list,
                 &profile,
                 vec![],
-                handler_kind,
+                signal_handler,
+                input_handler,
                 DoubleSpawnInfo::disabled(),
                 TargetRunner::empty(),
             )
