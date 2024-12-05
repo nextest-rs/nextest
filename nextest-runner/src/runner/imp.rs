@@ -484,7 +484,7 @@ impl<'a> TestRunnerInner<'a> {
                             }
 
                             // Now stop nextest itself.
-                            imp::raise_stop();
+                            super::os::raise_stop();
                         }
                         #[cfg(unix)]
                         Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Continue))) => {
@@ -898,11 +898,11 @@ impl<'a> TestRunnerInner<'a> {
 
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
         command_mut.stdin(Stdio::null());
-        imp::set_process_group(command_mut);
+        super::os::set_process_group(command_mut);
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
         // best-effort thing.
-        let job = imp::Job::create().ok();
+        let job = super::os::Job::create().ok();
 
         // The --no-capture CLI argument overrides the config.
         if self.capture_strategy != CaptureStrategy::None {
@@ -923,7 +923,7 @@ impl<'a> TestRunnerInner<'a> {
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
-        let _ = imp::assign_process_to_job(&child, job.as_ref());
+        let _ = super::os::assign_process_to_job(&child, job.as_ref());
 
         let mut status: Option<ExecutionResult> = None;
         // Unlike with tests, we don't automatically assume setup scripts are slow if they take a
@@ -985,7 +985,7 @@ impl<'a> TestRunnerInner<'a> {
                             // attempt to terminate the slow test.
                             // as there is a race between shutting down a slow test and its own completion
                             // we silently ignore errors to avoid printing false warnings.
-                            imp::terminate_child(
+                            super::os::terminate_child(
                                 &cx,
                                 &mut child,
                                 &mut child_acc,
@@ -1152,11 +1152,11 @@ impl<'a> TestRunnerInner<'a> {
             &self.profile.filterset_ecx(),
             command_mut,
         );
-        imp::set_process_group(command_mut);
+        super::os::set_process_group(command_mut);
 
         // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
         // best-effort thing.
-        let job = imp::Job::create().ok();
+        let job = super::os::Job::create().ok();
 
         let crate::test_command::Child {
             mut child,
@@ -1175,7 +1175,7 @@ impl<'a> TestRunnerInner<'a> {
 
         // If assigning the child to the job fails, ignore this. This can happen if the process has
         // exited.
-        let _ = imp::assign_process_to_job(&child, job.as_ref());
+        let _ = super::os::assign_process_to_job(&child, job.as_ref());
 
         let mut child_acc = ChildAccumulator::new(child_fds);
 
@@ -1228,7 +1228,7 @@ impl<'a> TestRunnerInner<'a> {
                             // Attempt to terminate the slow test. As there is a race between
                             // shutting down a slow test and its own completion, we silently ignore
                             // errors to avoid printing false warnings.
-                            imp::terminate_child(
+                            super::os::terminate_child(
                                 &cx,
                                 &mut child,
                                 &mut child_acc,
@@ -1516,7 +1516,7 @@ async fn handle_signal_request<'a>(
         &mut PausableSleep,
     >,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
-    job: Option<&imp::Job>,
+    job: Option<&super::os::Job>,
     grace_period: Duration,
 ) {
     match req {
@@ -1526,7 +1526,7 @@ async fn handle_signal_request<'a>(
             // debounced in the main signal handler.
             stopwatch.pause();
             interval_sleep.as_mut().pause();
-            imp::job_control_child(child, JobControlEvent::Stop);
+            super::os::job_control_child(child, JobControlEvent::Stop);
             // The receiver being dead probably means the main thread panicked
             // or similar.
             let _ = sender.send(());
@@ -1538,11 +1538,11 @@ async fn handle_signal_request<'a>(
             if stopwatch.is_paused() {
                 stopwatch.resume();
                 interval_sleep.as_mut().resume();
-                imp::job_control_child(child, JobControlEvent::Continue);
+                super::os::job_control_child(child, JobControlEvent::Continue);
             }
         }
         SignalRequest::Shutdown(event) => {
-            imp::terminate_child(
+            super::os::terminate_child(
                 cx,
                 child,
                 child_acc,
@@ -1676,7 +1676,7 @@ impl SignalCount {
 
 /// Events sent from the test runner to individual test (or setup script) execution tasks.
 #[derive(Clone, Debug)]
-enum RunUnitRequest<'a> {
+pub(super) enum RunUnitRequest<'a> {
     Signal(SignalRequest),
     Query(RunUnitQuery<'a>),
 }
@@ -1730,7 +1730,7 @@ impl<'a> UnitExecuteStatus<'a, '_> {
 }
 
 #[derive(Clone, Debug)]
-enum SignalRequest {
+pub(super) enum SignalRequest {
     // The mpsc sender is used by each test to indicate that the stop signal has been sent.
     #[cfg(unix)]
     Stop(UnboundedSender<()>),
@@ -1740,14 +1740,14 @@ enum SignalRequest {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum ShutdownRequest {
+pub(super) enum ShutdownRequest {
     Once(ShutdownEvent),
     Twice,
 }
 
 /// Either a test or a setup script, along with information about how long the
 /// test took.
-struct UnitContext<'a, 'test> {
+pub(super) struct UnitContext<'a, 'test> {
     packet: UnitPacket<'a, 'test>,
     // TODO: This is a bit of a mess. It isn't clear where this kind of state
     // should live -- many parts of the request-response system need various
@@ -1755,8 +1755,17 @@ struct UnitContext<'a, 'test> {
     slow_after: Option<Duration>,
 }
 
-impl<'a> UnitContext<'a, '_> {
-    fn info_response(&self, state: UnitState, output: ChildExecutionOutput) -> InfoResponse<'a> {
+impl<'a, 'test> UnitContext<'a, 'test> {
+    #[cfg_attr(not(unix), expect(dead_code))]
+    pub(super) fn packet(&self) -> &UnitPacket<'a, 'test> {
+        &self.packet
+    }
+
+    pub(super) fn info_response(
+        &self,
+        state: UnitState,
+        output: ChildExecutionOutput,
+    ) -> InfoResponse<'a> {
         match &self.packet {
             UnitPacket::SetupScript(packet) => packet.info_response(state, output),
             UnitPacket::Test(packet) => packet.info_response(state, output),
@@ -1765,13 +1774,13 @@ impl<'a> UnitContext<'a, '_> {
 }
 
 #[derive(Clone, Debug)]
-enum UnitPacket<'a, 'test> {
+pub(super) enum UnitPacket<'a, 'test> {
     SetupScript(SetupScriptPacket<'a>),
     Test(TestPacket<'a, 'test>),
 }
 
 impl UnitPacket<'_, '_> {
-    fn kind(&self) -> UnitKind {
+    pub(super) fn kind(&self) -> UnitKind {
         match self {
             Self::SetupScript(_) => UnitKind::Script,
             Self::Test(_) => UnitKind::Test,
@@ -1780,7 +1789,7 @@ impl UnitPacket<'_, '_> {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct TestPacket<'a, 'test> {
+pub(super) struct TestPacket<'a, 'test> {
     test_instance: TestInstance<'a>,
     retry_data: RetryData,
     settings: &'test TestSettings,
@@ -1813,7 +1822,7 @@ impl<'a> TestPacket<'a, '_> {
 }
 
 #[derive(Clone, Debug)]
-struct SetupScriptPacket<'a> {
+pub(super) struct SetupScriptPacket<'a> {
     script_id: ScriptId,
     config: &'a ScriptConfig,
 }
@@ -1853,7 +1862,7 @@ impl<'a> SetupScriptPacket<'a> {
 }
 
 #[derive(Clone, Debug)]
-enum RunUnitQuery<'a> {
+pub(super) enum RunUnitQuery<'a> {
     GetInfo(UnboundedSender<InfoResponse<'a>>),
 }
 
@@ -2546,347 +2555,11 @@ pub enum AbortStatus {
 pub fn configure_handle_inheritance(
     no_capture: bool,
 ) -> Result<(), ConfigureHandleInheritanceError> {
-    imp::configure_handle_inheritance_impl(no_capture)
-}
-
-#[cfg(windows)]
-mod imp {
-    use super::*;
-    pub(super) use win32job::Job;
-    use win32job::JobError;
-    use windows_sys::Win32::{
-        Foundation::{SetHandleInformation, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE},
-        System::{
-            Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
-            JobObjects::TerminateJobObject,
-        },
-    };
-
-    pub(super) fn configure_handle_inheritance_impl(
-        no_capture: bool,
-    ) -> Result<(), ConfigureHandleInheritanceError> {
-        unsafe fn set_handle_inherit(handle: u32, inherit: bool) -> std::io::Result<()> {
-            let handle = GetStdHandle(handle);
-            if handle == INVALID_HANDLE_VALUE {
-                return Err(std::io::Error::last_os_error());
-            }
-            let flags = if inherit { HANDLE_FLAG_INHERIT } else { 0 };
-            if SetHandleInformation(handle, HANDLE_FLAG_INHERIT, flags) == 0 {
-                Err(std::io::Error::last_os_error())
-            } else {
-                Ok(())
-            }
-        }
-
-        unsafe {
-            // Never inherit stdin.
-            set_handle_inherit(STD_INPUT_HANDLE, false)?;
-
-            // Inherit stdout and stderr if and only if no_capture is true.
-            set_handle_inherit(STD_OUTPUT_HANDLE, no_capture)?;
-            set_handle_inherit(STD_ERROR_HANDLE, no_capture)?;
-        }
-
-        Ok(())
-    }
-
-    pub(super) fn set_process_group(_cmd: &mut std::process::Command) {
-        // TODO: set process group on Windows for better ctrl-C handling.
-    }
-
-    pub(super) fn assign_process_to_job(
-        child: &tokio::process::Child,
-        job: Option<&Job>,
-    ) -> Result<(), JobError> {
-        // NOTE: Ideally we'd suspend the process before using ResumeThread for this, but that's currently
-        // not possible due to https://github.com/rust-lang/rust/issues/96723 not being stable.
-        if let Some(job) = job {
-            let handle = match child.raw_handle() {
-                Some(handle) => handle,
-                None => {
-                    // If the handle is missing, the child has exited. Ignore this.
-                    return Ok(());
-                }
-            };
-
-            job.assign_process(handle as isize)?;
-        }
-
-        Ok(())
-    }
-
-    #[expect(clippy::too_many_arguments)]
-    pub(super) async fn terminate_child(
-        _cx: &UnitContext<'_, '_>,
-        child: &mut Child,
-        _child_acc: &mut ChildAccumulator,
-        mode: TerminateMode,
-        _stopwatch: &mut StopwatchStart,
-        _req_rx: &mut UnboundedReceiver<RunUnitRequest<'_>>,
-        job: Option<&Job>,
-        _grace_period: Duration,
-    ) {
-        // Ignore signal events since Windows propagates them to child processes (this may change if
-        // we start assigning processes to groups on Windows).
-        if !matches!(mode, TerminateMode::Timeout) {
-            return;
-        }
-        if let Some(job) = job {
-            let handle = job.handle();
-            unsafe {
-                // Ignore the error here -- it's likely due to the process exiting.
-                // Note: 1 is the exit code returned by Windows.
-                _ = TerminateJobObject(handle as _, 1);
-            }
-        }
-        // Start killing the process directly for good measure.
-        let _ = child.start_kill();
-    }
-}
-
-#[cfg(unix)]
-mod imp {
-    use super::*;
-    use crate::reporter::events::{
-        UnitTerminateMethod, UnitTerminateReason, UnitTerminateSignal, UnitTerminatingState,
-    };
-    use libc::{SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGSTOP, SIGTERM, SIGTSTP};
-    use std::os::unix::process::CommandExt;
-
-    // This is a no-op on non-windows platforms.
-    pub(super) fn configure_handle_inheritance_impl(
-        _no_capture: bool,
-    ) -> Result<(), ConfigureHandleInheritanceError> {
-        Ok(())
-    }
-
-    /// Pre-execution configuration on Unix.
-    ///
-    /// This sets up just the process group ID.
-    pub(super) fn set_process_group(cmd: &mut std::process::Command) {
-        cmd.process_group(0);
-    }
-
-    #[derive(Debug)]
-    pub(super) struct Job(());
-
-    impl Job {
-        pub(super) fn create() -> Result<Self, Infallible> {
-            Ok(Self(()))
-        }
-    }
-
-    pub(super) fn assign_process_to_job(
-        _child: &tokio::process::Child,
-        _job: Option<&Job>,
-    ) -> Result<(), Infallible> {
-        Ok(())
-    }
-
-    pub(super) fn job_control_child(child: &Child, event: JobControlEvent) {
-        if let Some(pid) = child.id() {
-            let pid = pid as i32;
-            // Send the signal to the process group.
-            let signal = match event {
-                JobControlEvent::Stop => SIGTSTP,
-                JobControlEvent::Continue => SIGCONT,
-            };
-            unsafe {
-                // We set up a process group while starting the test -- now send a signal to that
-                // group.
-                libc::kill(-pid, signal);
-            }
-        } else {
-            // The child exited already -- don't send a signal.
-        }
-    }
-
-    // Note this is SIGSTOP rather than SIGTSTP to avoid triggering our signal handler.
-    pub(super) fn raise_stop() {
-        // This can never error out because SIGSTOP is a valid signal.
-        unsafe { libc::raise(SIGSTOP) };
-    }
-
-    // TODO: should this indicate whether the process exited immediately? Could
-    // do this with a non-async fn that optionally returns a future to await on.
-    //
-    // TODO: it would be nice to find a way to gather data like job (only on
-    // Windows) or grace_period (only relevant on Unix) together.
-    #[expect(clippy::too_many_arguments)]
-    pub(super) async fn terminate_child<'a>(
-        cx: &UnitContext<'a, '_>,
-        child: &mut Child,
-        child_acc: &mut ChildAccumulator,
-        mode: TerminateMode,
-        stopwatch: &mut StopwatchStart,
-        req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
-        _job: Option<&Job>,
-        grace_period: Duration,
-    ) {
-        if let Some(pid) = child.id() {
-            let pid_i32 = pid as i32;
-            let (term_reason, term_method) = to_terminate_reason_and_method(&mode, grace_period);
-
-            // This is infallible in regular mode and fallible with cfg(test).
-            #[allow(clippy::infallible_destructuring_match)]
-            let term_signal = match term_method {
-                UnitTerminateMethod::Signal(term_signal) => term_signal,
-                #[cfg(test)]
-                UnitTerminateMethod::Fake => {
-                    unreachable!("fake method is only used for reporter tests")
-                }
-            };
-
-            unsafe {
-                // We set up a process group while starting the test -- now send a signal to that
-                // group.
-                libc::kill(-pid_i32, term_signal.signal())
-            };
-
-            if term_signal == UnitTerminateSignal::Kill {
-                // SIGKILL guarantees the process group is dead.
-                return;
-            }
-
-            let mut sleep = std::pin::pin!(crate::time::pausable_sleep(grace_period));
-            let mut waiting_stopwatch = crate::time::stopwatch();
-
-            loop {
-                tokio::select! {
-                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
-                    _ = child.wait() => {
-                        // The process exited.
-                        break;
-                    }
-                    recv = req_rx.recv() => {
-                        // The sender stays open longer than the whole loop, and the buffer is big
-                        // enough for all messages ever sent through this channel, so a RecvError
-                        // should never happen.
-                        let req = recv.expect("a RecvError should never happen here");
-
-                        match req {
-                            RunUnitRequest::Signal(SignalRequest::Stop(sender)) => {
-                                stopwatch.pause();
-                                sleep.as_mut().pause();
-                                waiting_stopwatch.pause();
-
-                                imp::job_control_child(child, JobControlEvent::Stop);
-                                let _ = sender.send(());
-                            }
-                            RunUnitRequest::Signal(SignalRequest::Continue) => {
-                                // Possible to receive a Continue at the beginning of execution.
-                                if !sleep.is_paused() {
-                                    stopwatch.resume();
-                                    sleep.as_mut().resume();
-                                    waiting_stopwatch.resume();
-                                }
-                                imp::job_control_child(child, JobControlEvent::Continue);
-                            }
-                            RunUnitRequest::Signal(SignalRequest::Shutdown(_)) => {
-                                // Receiving a shutdown signal while in this state always means kill
-                                // immediately.
-                                unsafe {
-                                    // Send SIGKILL to the entire process group.
-                                    libc::kill(-pid_i32, SIGKILL);
-                                }
-                                break;
-                            }
-                            RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
-                                let waiting_snapshot = waiting_stopwatch.snapshot();
-                                _ = sender.send(
-                                    cx.info_response(
-                                        UnitState::Terminating(UnitTerminatingState {
-                                            pid,
-                                            time_taken: stopwatch.snapshot().active,
-                                            reason: term_reason,
-                                            method: term_method,
-                                            waiting_duration: waiting_snapshot.active,
-                                            remaining: grace_period
-                                                .checked_sub(waiting_snapshot.active)
-                                                .unwrap_or_default(),
-                                        }),
-                                        child_acc.snapshot_in_progress(cx.packet.kind().waiting_on_message()),
-                                    )
-                                );
-                            }
-                        }
-                    }
-                    _ = &mut sleep => {
-                        // The process didn't exit -- need to do a hard shutdown.
-                        unsafe {
-                            // Send SIGKILL to the entire process group.
-                            libc::kill(-pid_i32, SIGKILL);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    fn to_terminate_reason_and_method(
-        mode: &TerminateMode,
-        grace_period: Duration,
-    ) -> (UnitTerminateReason, UnitTerminateMethod) {
-        match mode {
-            TerminateMode::Timeout => (
-                UnitTerminateReason::Timeout,
-                imp::timeout_terminate_method(grace_period),
-            ),
-            TerminateMode::Signal(req) => (
-                UnitTerminateReason::Signal,
-                req.to_terminate_method(grace_period),
-            ),
-        }
-    }
-
-    impl ShutdownRequest {
-        fn to_terminate_method(self, grace_period: Duration) -> UnitTerminateMethod {
-            if grace_period.is_zero() {
-                return UnitTerminateMethod::Signal(UnitTerminateSignal::Kill);
-            }
-
-            match self {
-                ShutdownRequest::Once(ShutdownEvent::Hangup) => {
-                    UnitTerminateMethod::Signal(UnitTerminateSignal::Hangup)
-                }
-                ShutdownRequest::Once(ShutdownEvent::Term) => {
-                    UnitTerminateMethod::Signal(UnitTerminateSignal::Term)
-                }
-                ShutdownRequest::Once(ShutdownEvent::Quit) => {
-                    UnitTerminateMethod::Signal(UnitTerminateSignal::Quit)
-                }
-                ShutdownRequest::Once(ShutdownEvent::Interrupt) => {
-                    UnitTerminateMethod::Signal(UnitTerminateSignal::Interrupt)
-                }
-                ShutdownRequest::Twice => UnitTerminateMethod::Signal(UnitTerminateSignal::Kill),
-            }
-        }
-    }
-
-    fn timeout_terminate_method(grace_period: Duration) -> UnitTerminateMethod {
-        if grace_period.is_zero() {
-            UnitTerminateMethod::Signal(UnitTerminateSignal::Kill)
-        } else {
-            UnitTerminateMethod::Signal(UnitTerminateSignal::Term)
-        }
-    }
-
-    impl UnitTerminateSignal {
-        fn signal(self) -> libc::c_int {
-            match self {
-                UnitTerminateSignal::Interrupt => SIGINT,
-                UnitTerminateSignal::Term => SIGTERM,
-                UnitTerminateSignal::Hangup => SIGHUP,
-                UnitTerminateSignal::Quit => SIGQUIT,
-                UnitTerminateSignal::Kill => SIGKILL,
-            }
-        }
-    }
+    super::os::configure_handle_inheritance_impl(no_capture)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TerminateMode {
+pub(super) enum TerminateMode {
     Timeout,
     Signal(ShutdownRequest),
 }
