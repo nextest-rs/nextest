@@ -362,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-nextest"
-version = "0.9.85"
+version = "0.9.86-b.1"
 dependencies = [
  "camino",
  "camino-tempfile",
