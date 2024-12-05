@@ -8,6 +8,62 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.86-b.1] - 2024-12-04
+
+This release of nextest has a number of internal and external improvements. Please try it out
+and [report issues](https://github.com/nextest-rs/nextest/issues/new?assignees=&labels=bug&projects=&template=bug-report.yml&title=Bug%3A+) you find!
+
+### Added
+
+#### Interactive test state querying
+
+Test state can now be queried interactively, via any of the following means:
+
+- Typing in `t` in an interactive terminal.
+- Pressing `Ctrl-T`, on macOS and other BSD-based platforms where the `SIGINFO` signal
+is available and recognized by the terminal driver. (`SIGINFO` will be supported on
+illumos once an upstream Tokio issue is fixed.)
+- On Unix platforms, sending the nextest process the `SIGUSR1` signal.
+
+This command shows a list of all tests currently running, along with their
+status, how long they've been running, and currently-captured standard output
+and standard error.
+
+Processing the `t` key requires alterations to the terminal, which may lead to
+issues in rare circumstances. To disable input key handling, pass in
+`--no-input-handler`.
+
+#### `--max-fail` runner option
+
+The new `--max-fail` option allows you to specify the maximum number of test
+failures before nextest stops running tests. This is an extension of the
+existing `--fail-fast` and `--no-fail-fast` options, and is meant to allow users
+to strike a balance between running all tests and stopping early.
+
+- `--fail-fast` is equivalent to `--max-fail=1`.
+- `--no-fail-fast` is equivalent to `--max-fail=all`.
+
+Configuration for `--max-fail` will be added in a future release ([#1944]).
+
+Thanks to [AJamesyD](https://github.com/AJamesyD) for your first contribution!
+
+[#1944]: https://github.com/nextest-rs/nextest/issues/1944
+
+### Fixed
+
+Nextest now supports being run in Cargo setups where the `Cargo.toml` that
+defines the workspace is not hierarchically above the workspace members. This is
+an uncommon setup, but it is supported by Cargo--and now by nextest as well.
+
+Thanks to [PegasusPlusUS](https://github.com/PegasusPlusUS) for your first
+contribution!
+
+### Changed
+
+- The progress bar and other UI elements use Unicode characters if available.
+- Some more minor improvements that should lead to a more cohesive user experience.
+- MSRV for compiling nextest is now Rust 1.81.
+
 ## [0.9.85] - 2024-11-26
 
 ### Changed
@@ -1192,6 +1248,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.86-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.1
 [0.9.85]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.85
 [0.9.84]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.84
 [0.9.83]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.83
