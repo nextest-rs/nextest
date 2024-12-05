@@ -7,4 +7,12 @@
 
 mod imp;
 
+#[cfg(unix)]
+#[path = "unix.rs"]
+mod os;
+
+#[cfg(windows)]
+#[path = "windows.rs"]
+mod os;
+
 pub use imp::*;
