@@ -3,7 +3,7 @@
 
 mod libtest;
 
-use super::TestEvent;
+use super::events::TestEvent;
 use crate::errors::WriteEventError;
 pub use libtest::{EmitNextestObject, LibtestReporter};
 

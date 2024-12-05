@@ -11,7 +11,7 @@ use nextest_runner::{
     double_spawn::DoubleSpawnInfo,
     input::InputHandlerKind,
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
-    reporter::{FinalRunStats, RunStatsFailureKind},
+    reporter::events::{FinalRunStats, RunStatsFailureKind},
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},

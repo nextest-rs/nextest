@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::UnitKind;
+use super::events::UnitKind;
 use crate::{
     errors::{ChildError, ChildStartError, ErrorList},
     runner::{AbortStatus, ExecutionResult},

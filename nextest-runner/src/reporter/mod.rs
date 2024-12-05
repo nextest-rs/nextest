@@ -8,11 +8,10 @@
 mod aggregator;
 mod displayer;
 mod error_description;
-mod events;
+pub mod events;
 mod helpers;
 pub mod structured;
 
 pub use displayer::*;
 pub use error_description::*;
-pub use events::*;
 pub use helpers::highlight_end;
