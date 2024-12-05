@@ -496,29 +496,30 @@ impl<'a> TestRunnerInner<'a> {
                             // In reality, this is bounded by the number of
                             // tests running at the same time.
                             let (sender, mut receiver) = unbounded_channel();
-                            ctx_mut.broadcast_request(RunUnitRequest::Query(
+                            let total = ctx_mut.broadcast_request(RunUnitRequest::Query(
                                 RunUnitQuery::GetInfo(sender),
                             ));
 
                             let mut index = 0;
-                            let total = receiver.sender_strong_count();
 
                             ctx_mut.info_started(total);
                             debug!(expected = total, "waiting for info responses");
 
                             loop {
                                 // Don't wait too long for tasks to respond, to
-                                // avoid a hung displayer.
+                                // avoid a hung unit task.
                                 let sleep = tokio::time::sleep(Duration::from_millis(100));
                                 tokio::select! {
                                     res = receiver.recv() => {
-                                        debug!(
-                                            expected = total,
-                                            remaining = receiver.sender_strong_count(),
-                                            "received info response",
-                                        );
-
                                         if let Some(info) = res {
+                                            debug!(
+                                                index,
+                                                expected = total,
+                                                remaining = total.saturating_sub(index + 1),
+                                                sender_strong_count = receiver.sender_strong_count(),
+                                                "received info response",
+                                            );
+
                                             // TODO: ideally we would always get
                                             // the expected number of messages.
                                             // We should handle the case where
@@ -532,12 +533,14 @@ impl<'a> TestRunnerInner<'a> {
                                             );
                                             index += 1;
                                         } else {
+                                            // All senders have been dropped.
                                             break;
                                         }
                                     }
                                     _ = sleep => {
                                         debug!(
-                                            remaining = receiver.sender_strong_count(),
+                                            remaining = total.saturating_sub(index + 1),
+                                            sender_strong_count = receiver.sender_strong_count(),
                                             "timeout waiting for tests to stop, ignoring",
                                         );
                                         break;
@@ -545,7 +548,7 @@ impl<'a> TestRunnerInner<'a> {
                                 };
                             }
 
-                            ctx_mut.info_finished(receiver.sender_strong_count());
+                            ctx_mut.info_finished(total.saturating_sub(index + 1));
                         }
                         #[cfg(not(unix))]
                         Ok(Some(HandleEventResponse::JobControl(e))) => {
@@ -2589,13 +2592,18 @@ where
         self.running_tests.len()
     }
 
-    fn broadcast_request(&self, req: RunUnitRequest<'a>) {
+    /// Returns the number of units the request was broadcast to.
+    fn broadcast_request(&self, req: RunUnitRequest<'a>) -> usize {
+        let mut count = 0;
+
         if let Some(setup_script) = &self.running_setup_script {
             if setup_script.req_tx.send(req.clone()).is_err() {
                 // The most likely reason for this error is that the setup
                 // script has been marked as closed but we haven't processed the
                 // exit event yet.
                 debug!(?setup_script.id, "failed to send request to setup script (likely closed)");
+            } else {
+                count += 1;
             }
         }
 
@@ -2608,8 +2616,12 @@ where
                     ?key,
                     "failed to send request to test instance (likely closed)"
                 );
+            } else {
+                count += 1;
             }
         }
+
+        count
     }
 
     fn handle_signal_event(
