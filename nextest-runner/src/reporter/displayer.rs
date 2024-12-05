@@ -6,9 +6,9 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    structured::StructuredReporter, ByteSubslice, CancelReason, InfoResponse,
-    SetupScriptInfoResponse, TestEvent, TestEventKind, TestInfoResponse, TestOutputErrorSlice,
-    UnitKind, UnitState, UnitTerminatingState,
+    structured::StructuredReporter, ByteSubslice, CancelReason, FinalRunStats, InfoResponse,
+    RunStats, RunStatsFailureKind, SetupScriptInfoResponse, TestEvent, TestEventKind,
+    TestInfoResponse, TestOutputErrorSlice, UnitKind, UnitState, UnitTerminatingState,
 };
 use crate::{
     config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
@@ -21,7 +21,7 @@ use crate::{
     },
     runner::{
         AbortStatus, ExecuteStatus, ExecutionDescription, ExecutionResult, ExecutionStatuses,
-        FinalRunStats, RetryData, RunStats, RunStatsFailureKind, SetupScriptExecuteStatus,
+        RetryData, SetupScriptExecuteStatus,
     },
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };

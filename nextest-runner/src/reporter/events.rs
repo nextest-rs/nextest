@@ -6,8 +6,7 @@ use crate::{
     config::ScriptId,
     list::{TestInstance, TestInstanceId, TestList},
     runner::{
-        ExecuteStatus, ExecutionResult, ExecutionStatuses, RetryData, RunStats,
-        SetupScriptExecuteStatus,
+        ExecuteStatus, ExecutionResult, ExecutionStatuses, RetryData, SetupScriptExecuteStatus,
     },
     test_output::ChildExecutionOutput,
 };
@@ -287,6 +286,201 @@ pub enum TestEventKind<'a> {
 
         /// Statistics for the run.
         run_stats: RunStats,
+    },
+}
+
+/// Statistics for a test run.
+#[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
+pub struct RunStats {
+    /// The total number of tests that were expected to be run at the beginning.
+    ///
+    /// If the test run is cancelled, this will be more than `finished_count` at the end.
+    pub initial_run_count: usize,
+
+    /// The total number of tests that finished running.
+    pub finished_count: usize,
+
+    /// The total number of setup scripts that were expected to be run at the beginning.
+    ///
+    /// If the test run is cancelled, this will be more than `finished_count` at the end.
+    pub setup_scripts_initial_count: usize,
+
+    /// The total number of setup scripts that finished running.
+    pub setup_scripts_finished_count: usize,
+
+    /// The number of setup scripts that passed.
+    pub setup_scripts_passed: usize,
+
+    /// The number of setup scripts that failed.
+    pub setup_scripts_failed: usize,
+
+    /// The number of setup scripts that encountered an execution failure.
+    pub setup_scripts_exec_failed: usize,
+
+    /// The number of setup scripts that timed out.
+    pub setup_scripts_timed_out: usize,
+
+    /// The number of tests that passed. Includes `passed_slow`, `flaky` and `leaky`.
+    pub passed: usize,
+
+    /// The number of slow tests that passed.
+    pub passed_slow: usize,
+
+    /// The number of tests that passed on retry.
+    pub flaky: usize,
+
+    /// The number of tests that failed.
+    pub failed: usize,
+
+    /// The number of failed tests that were slow.
+    pub failed_slow: usize,
+
+    /// The number of tests that timed out.
+    pub timed_out: usize,
+
+    /// The number of tests that passed but leaked handles.
+    pub leaky: usize,
+
+    /// The number of tests that encountered an execution failure.
+    pub exec_failed: usize,
+
+    /// The number of tests that were skipped.
+    pub skipped: usize,
+}
+
+impl RunStats {
+    /// Returns true if there are any failures recorded in the stats.
+    pub fn has_failures(&self) -> bool {
+        self.failed_setup_script_count() > 0 || self.failed_count() > 0
+    }
+
+    /// Returns count of setup scripts that did not pass.
+    pub fn failed_setup_script_count(&self) -> usize {
+        self.setup_scripts_failed + self.setup_scripts_exec_failed + self.setup_scripts_timed_out
+    }
+
+    /// Returns count of tests that did not pass.
+    pub fn failed_count(&self) -> usize {
+        self.failed + self.exec_failed + self.timed_out
+    }
+
+    /// Summarizes the stats as an enum at the end of a test run.
+    pub fn summarize_final(&self) -> FinalRunStats {
+        // Check for failures first. The order of setup scripts vs tests should not be important,
+        // though we don't assert that here.
+        if self.failed_setup_script_count() > 0 {
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript)
+        } else if self.setup_scripts_initial_count > self.setup_scripts_finished_count {
+            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
+        } else if self.failed_count() > 0 {
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: self.initial_run_count,
+                not_run: self.initial_run_count.saturating_sub(self.finished_count),
+            })
+        } else if self.initial_run_count > self.finished_count {
+            FinalRunStats::Cancelled(RunStatsFailureKind::Test {
+                initial_run_count: self.initial_run_count,
+                not_run: self.initial_run_count.saturating_sub(self.finished_count),
+            })
+        } else if self.finished_count == 0 {
+            FinalRunStats::NoTestsRun
+        } else {
+            FinalRunStats::Success
+        }
+    }
+
+    pub(crate) fn on_setup_script_finished(&mut self, status: &SetupScriptExecuteStatus) {
+        self.setup_scripts_finished_count += 1;
+
+        match status.result {
+            ExecutionResult::Pass | ExecutionResult::Leak => {
+                self.setup_scripts_passed += 1;
+            }
+            ExecutionResult::Fail { .. } => {
+                self.setup_scripts_failed += 1;
+            }
+            ExecutionResult::ExecFail => {
+                self.setup_scripts_exec_failed += 1;
+            }
+            ExecutionResult::Timeout => {
+                self.setup_scripts_timed_out += 1;
+            }
+        }
+    }
+
+    pub(crate) fn on_test_finished(&mut self, run_statuses: &ExecutionStatuses) {
+        self.finished_count += 1;
+        // run_statuses is guaranteed to have at least one element.
+        // * If the last element is success, treat it as success (and possibly flaky).
+        // * If the last element is a failure, use it to determine fail/exec fail.
+        // Note that this is different from what Maven Surefire does (use the first failure):
+        // https://maven.apache.org/surefire/maven-surefire-plugin/examples/rerun-failing-tests.html
+        //
+        // This is not likely to matter much in practice since failures are likely to be of the
+        // same type.
+        let last_status = run_statuses.last_status();
+        match last_status.result {
+            ExecutionResult::Pass => {
+                self.passed += 1;
+                if last_status.is_slow {
+                    self.passed_slow += 1;
+                }
+                if run_statuses.len() > 1 {
+                    self.flaky += 1;
+                }
+            }
+            ExecutionResult::Leak => {
+                self.passed += 1;
+                self.leaky += 1;
+                if last_status.is_slow {
+                    self.passed_slow += 1;
+                }
+                if run_statuses.len() > 1 {
+                    self.flaky += 1;
+                }
+            }
+            ExecutionResult::Fail { .. } => {
+                self.failed += 1;
+                if last_status.is_slow {
+                    self.failed_slow += 1;
+                }
+            }
+            ExecutionResult::Timeout => self.timed_out += 1,
+            ExecutionResult::ExecFail => self.exec_failed += 1,
+        }
+    }
+}
+
+/// A type summarizing the possible outcomes of a test run.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FinalRunStats {
+    /// The test run was successful, or is successful so far.
+    Success,
+
+    /// The test run was successful, or is successful so far, but no tests were selected to run.
+    NoTestsRun,
+
+    /// The test run was cancelled.
+    Cancelled(RunStatsFailureKind),
+
+    /// At least one test failed.
+    Failed(RunStatsFailureKind),
+}
+
+/// A type summarizing the step at which a test run failed.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum RunStatsFailureKind {
+    /// The run was interrupted during setup script execution.
+    SetupScript,
+
+    /// The run was interrupted during test execution.
+    Test {
+        /// The total number of tests scheduled.
+        initial_run_count: usize,
+
+        /// The number of tests not run, or for a currently-executing test the number queued up to
+        /// run.
+        not_run: usize,
     },
 }
 
@@ -594,5 +788,151 @@ impl fmt::Display for UnitTerminateSignal {
             UnitTerminateSignal::Quit => write!(f, "SIGQUIT"),
             UnitTerminateSignal::Kill => write!(f, "SIGKILL"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_success() {
+        assert_eq!(
+            RunStats::default().summarize_final(),
+            FinalRunStats::NoTestsRun,
+            "empty run => no tests run"
+        );
+        assert_eq!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Success,
+            "initial run count = final run count => success"
+        );
+        assert_eq!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 41,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Cancelled(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 1
+            }),
+            "initial run count > final run count => cancelled"
+        );
+        assert_eq!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                failed: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 0
+            }),
+            "failed => failure"
+        );
+        assert_eq!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                exec_failed: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 0
+            }),
+            "exec failed => failure"
+        );
+        assert_eq!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                timed_out: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::Test {
+                initial_run_count: 42,
+                not_run: 0
+            }),
+            "timed out => failure"
+        );
+        assert_eq!(
+            RunStats {
+                initial_run_count: 42,
+                finished_count: 42,
+                skipped: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Success,
+            "skipped => not considered a failure"
+        );
+
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript),
+            "setup script failed => failure"
+        );
+
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_failed: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
+            "setup script failed => failure"
+        );
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_exec_failed: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
+            "setup script exec failed => failure"
+        );
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_timed_out: 1,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::Failed(RunStatsFailureKind::SetupScript),
+            "setup script timed out => failure"
+        );
+        assert_eq!(
+            RunStats {
+                setup_scripts_initial_count: 2,
+                setup_scripts_finished_count: 2,
+                setup_scripts_passed: 2,
+                ..RunStats::default()
+            }
+            .summarize_final(),
+            FinalRunStats::NoTestsRun,
+            "setup scripts passed => success, but no tests run"
+        );
     }
 }
