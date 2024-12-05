@@ -232,11 +232,12 @@ impl<'g> BinaryListBuildState<'g> {
                 } else {
                     // Non-lib kinds should always have just one element. Grab the first one.
                     (
-                        RustTestBinaryKind::new(target_kind_to_string(
+                        RustTestBinaryKind::new(
                             kind.into_iter()
                                 .next()
-                                .expect("already checked that kind is non-empty"),
-                        )),
+                                .expect("already checked that kind is non-empty")
+                                .to_string(),
+                        ),
                         BuildPlatform::Target,
                     )
                 };
@@ -403,27 +404,6 @@ impl<'g> BinaryListBuildState<'g> {
             rust_build_meta: self.rust_build_meta,
             rust_binaries: self.rust_binaries,
         }
-    }
-}
-
-fn target_kind_to_string(tk: TargetKind) -> String {
-    match tk {
-        TargetKind::Lib => "lib".to_string(),
-        TargetKind::Bin => "bin".to_string(),
-        TargetKind::Example => "example".to_string(),
-        TargetKind::Test => "test".to_string(),
-        TargetKind::Bench => "bench".to_string(),
-        TargetKind::CustomBuild => "custom build".to_string(),
-        TargetKind::ProcMacro => "proc-macro".to_string(),
-        TargetKind::CDyLib => "cdylib".to_string(),
-        TargetKind::DyLib => "dylib".to_string(),
-        TargetKind::RLib => "rlib".to_string(),
-        TargetKind::StaticLib => "staticlib".to_string(),
-        TargetKind::Unknown(s) => s,
-        _ => panic!(
-            "unknown target kind -- this code should have been removed \
-             after https://github.com/oli-obk/cargo_metadata/pull/275 landed"
-        ),
     }
 }
 
