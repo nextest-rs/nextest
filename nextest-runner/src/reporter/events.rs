@@ -16,7 +16,7 @@ use crate::{
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
-use std::{fmt, time::Duration};
+use std::{fmt, process::ExitStatus, time::Duration};
 
 /// A test event.
 ///
@@ -721,6 +721,25 @@ pub enum AbortStatus {
     /// The test was determined to have aborted because the high bit was set on Windows.
     #[cfg(windows)]
     WindowsNtStatus(windows_sys::Win32::Foundation::NTSTATUS),
+}
+
+impl AbortStatus {
+    /// Extract the abort status from an [`ExitStatus`].
+    pub fn extract(exit_status: ExitStatus) -> Option<Self> {
+        cfg_if::cfg_if! {
+            if #[cfg(unix)] {
+                // On Unix, extract the signal if it's found.
+                use std::os::unix::process::ExitStatusExt;
+                exit_status.signal().map(AbortStatus::UnixSignal)
+            } else if #[cfg(windows)] {
+                exit_status.code().and_then(|code| {
+                    (code < 0).then_some(AbortStatus::WindowsNtStatus(code))
+                })
+            } else {
+                None
+            }
+        }
+    }
 }
 
 // Note: the order here matters -- it indicates severity of cancellation
