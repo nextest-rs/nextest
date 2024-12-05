@@ -29,8 +29,8 @@ use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 /// An internal event.
 ///
 /// These events are sent by the executor (the part that actually runs
-/// executables) to the controller (the part that manages communication with the
-/// external world).
+/// executables) to the dispatcher (the part of the runner that coordinates with
+/// the external world).
 #[derive(Debug)]
 pub(super) enum InternalEvent<'a> {
     Test(InternalTestEvent<'a>),

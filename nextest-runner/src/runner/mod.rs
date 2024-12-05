@@ -5,6 +5,7 @@
 //!
 //! The main structure in this module is [`TestRunner`].
 
+mod dispatcher;
 mod imp;
 mod internal_events;
 
@@ -16,5 +17,6 @@ mod os;
 #[path = "windows.rs"]
 mod os;
 
+use dispatcher::*;
 pub use imp::*;
 use internal_events::*;
