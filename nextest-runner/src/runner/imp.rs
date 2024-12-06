@@ -367,23 +367,6 @@ impl<'a> TestRunnerInner<'a> {
     }
 }
 
-/// Data related to retries.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub struct RetryData {
-    /// The current attempt. In the range `[1, total_attempts]`.
-    pub attempt: usize,
-
-    /// The total number of times this test can be run. Equal to `1 + retries`.
-    pub total_attempts: usize,
-}
-
-impl RetryData {
-    /// Returns true if there are no more attempts after this.
-    pub fn is_last_attempt(&self) -> bool {
-        self.attempt >= self.total_attempts
-    }
-}
-
 /// Configures stdout, stdin and stderr inheritance by test processes on Windows.
 ///
 /// With Rust on Windows, these handles can be held open by tests (and therefore by grandchild processes)

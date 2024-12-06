@@ -10,7 +10,6 @@ use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::{
     config::ScriptId,
     list::{TestInstance, TestInstanceId, TestList},
-    runner::RetryData,
     test_output::ChildExecutionOutput,
 };
 use chrono::{DateTime, FixedOffset};
@@ -668,6 +667,23 @@ pub struct SetupScriptExecuteStatus {
     /// `None` if an error occurred while running the script or reading the
     /// environment map.
     pub env_count: Option<usize>,
+}
+
+/// Data related to retries for a test.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct RetryData {
+    /// The current attempt. In the range `[1, total_attempts]`.
+    pub attempt: usize,
+
+    /// The total number of times this test can be run. Equal to `1 + retries`.
+    pub total_attempts: usize,
+}
+
+impl RetryData {
+    /// Returns true if there are no more attempts after this.
+    pub fn is_last_attempt(&self) -> bool {
+        self.attempt >= self.total_attempts
+    }
 }
 
 /// Whether a test passed, failed or an error occurred while executing the test.
