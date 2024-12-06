@@ -3,7 +3,12 @@
 
 //! The test runner.
 //!
+//! For more information about the design of the runner loop, see the design
+//! document: [_The runner loop_].
+//!
 //! The main structure in this module is [`TestRunner`].
+//!
+//! [_The runner loop_]: https://nexte.st/docs/design/architecture/runner-loop/
 
 mod dispatcher;
 mod executor;
