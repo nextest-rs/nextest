@@ -239,11 +239,11 @@ struct TestRunnerInner<'a> {
 }
 
 impl<'a> TestRunnerInner<'a> {
-    fn execute<'this, F>(
-        &'this self,
+    fn execute<F>(
+        &self,
         signal_handler: &mut SignalHandler,
         input_handler: &mut InputHandler,
-        cancelled_ref: &'this AtomicBool,
+        cancelled_ref: &AtomicBool,
         report_cancel_rx: oneshot::Receiver<()>,
         callback: F,
     ) -> Result<RunStats, Vec<JoinError>>

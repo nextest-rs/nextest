@@ -90,10 +90,10 @@ impl<'a> ExecutorContext<'a> {
     }
 
     /// Run scripts, returning data about each successfully executed script.
-    pub(super) async fn run_setup_scripts<'this>(
-        &'this self,
+    pub(super) async fn run_setup_scripts(
+        &self,
         resp_tx: UnboundedSender<InternalTestEvent<'a>>,
-        cancelled_ref: &'this AtomicBool,
+        cancelled_ref: &AtomicBool,
     ) -> SetupScriptExecuteData<'a> {
         let setup_scripts = self.profile.setup_scripts(self.test_list);
         let total = setup_scripts.len();
@@ -167,12 +167,12 @@ impl<'a> ExecutorContext<'a> {
     }
 
     /// Returns a future that runs all attempts of a single test instance.
-    pub(super) async fn run_test_instance<'this>(
-        &'this self,
+    pub(super) async fn run_test_instance(
+        &self,
         test_instance: TestInstance<'a>,
         settings: TestSettings,
         resp_tx: UnboundedSender<InternalTestEvent<'a>>,
-        cancelled_ref: &'this AtomicBool,
+        cancelled_ref: &AtomicBool,
         mut cancel_receiver: broadcast::Receiver<()>,
         setup_script_data: Arc<SetupScriptExecuteData<'a>>,
     ) {
