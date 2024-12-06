@@ -90,7 +90,7 @@ Each iteration of the dispatcher loop has three phases:
 
 The dispatcher's design focuses on *linearizing* events, with judicious use of
 synchronization points between the dispatcher and the executor. For example, if
-a new unit if work is started, the executor waits for the dispatcher to
+a new unit of work is started, the executor waits for the dispatcher to
 acknowledge and register the new unit before proceeding.
 
 The general goal of this kind of linearization is to ensure a good user
@@ -183,7 +183,7 @@ For simplicity, this state diagram omits some details.
 The executor has specific logic for handling the various ways units can fail:
 
 - The executable failing to start. (This is more common than you'd think! The most
-  common reason is that the binary to execute has a different archiecture.)
+  common reason is that the binary to execute has a different architecture.)
 - Exiting with a non-zero code, or aborts with a Unix signal or Windows abort code.
 - The unit timing out.
 - Reading from standard output or standard error returning an error.
