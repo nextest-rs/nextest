@@ -43,6 +43,7 @@ the _executor_. These components do not share state directly—instead, both
 components are event-driven and use message passing to communicate with each
 other.
 
+[](){#dispatcher}
 ## The dispatcher
 
 The _dispatcher_ is the part of the runner that interacts with the outside world.
@@ -50,7 +51,7 @@ The dispatcher's job is to accept events from the following sources and respond
 to them appropriately:
 
 - The executor.
-- Signal and input handlers.
+- [Signal](signal-handling.md) and input handlers.
 - A handler that fires if the reporter produces an error.
 
 Each iteration of the dispatcher loop has three phases:

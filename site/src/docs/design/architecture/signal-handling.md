@@ -7,11 +7,12 @@ description: Design document describing how nextest performs signal handling
 
 Nextest's signal handling uses Tokio's [native support for signals]. Signals are
 received by a [multiplexer] called `SignalHandler`, which generates a stream of
-events. The dispatcher then selects over this stream. On receiving a signal, the
+events. The [runner loop's dispatcher] then selects over this stream. On receiving a signal, the
 dispatcher is responsible for broadcasting a message to all units.
 
 [native support for signals]: https://docs.rs/tokio/latest/tokio/signal/index.html
 [multiplexer]: https://docs.rs/nextest-runner/latest/nextest_runner/signal/index.html
+[runner loop's dispatcher]: runner-loop.md#dispatcher
 
 Here's a simple sequence diagram of how signals are handled:
 
