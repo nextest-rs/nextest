@@ -25,7 +25,7 @@ use crate::{
         TestInfoResponse, UnitKind, UnitState,
     },
     runner::{
-        InternalExecuteStatus, InternalSetupScriptExecuteStatus, InternalTestEvent, RunUnitQuery,
+        ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus, RunUnitQuery,
         SignalRequest, UnitExecuteStatus,
     },
     target_runner::TargetRunner,
@@ -92,7 +92,7 @@ impl<'a> ExecutorContext<'a> {
     /// Run scripts, returning data about each successfully executed script.
     pub(super) async fn run_setup_scripts(
         &self,
-        resp_tx: UnboundedSender<InternalTestEvent<'a>>,
+        resp_tx: UnboundedSender<ExecutorEvent<'a>>,
         cancelled_ref: &AtomicBool,
     ) -> SetupScriptExecuteData<'a> {
         let setup_scripts = self.profile.setup_scripts(self.test_list);
@@ -115,7 +115,7 @@ impl<'a> ExecutorContext<'a> {
                 }
 
                 let (req_rx_tx, req_rx_rx) = oneshot::channel();
-                let _ = this_resp_tx.send(InternalTestEvent::SetupScriptStarted {
+                let _ = this_resp_tx.send(ExecutorEvent::SetupScriptStarted {
                     script_id: script_id.clone(),
                     config,
                     index,
@@ -146,7 +146,7 @@ impl<'a> ExecutorContext<'a> {
 
                 let (status, env_map) = status.into_external();
 
-                let _ = this_resp_tx.send(InternalTestEvent::SetupScriptFinished {
+                let _ = this_resp_tx.send(ExecutorEvent::SetupScriptFinished {
                     script_id,
                     config,
                     index,
@@ -171,7 +171,7 @@ impl<'a> ExecutorContext<'a> {
         &self,
         test_instance: TestInstance<'a>,
         settings: TestSettings,
-        resp_tx: UnboundedSender<InternalTestEvent<'a>>,
+        resp_tx: UnboundedSender<ExecutorEvent<'a>>,
         cancelled_ref: &AtomicBool,
         mut cancel_receiver: broadcast::Receiver<()>,
         setup_script_data: Arc<SetupScriptExecuteData<'a>>,
@@ -191,7 +191,7 @@ impl<'a> ExecutorContext<'a> {
 
         if let FilterMatch::Mismatch { reason } = test_instance.test_info.filter_match {
             // Failure to send means the receiver was dropped.
-            let _ = resp_tx.send(InternalTestEvent::Skipped {
+            let _ = resp_tx.send(ExecutorEvent::Skipped {
                 test_instance,
                 reason,
             });
@@ -202,7 +202,7 @@ impl<'a> ExecutorContext<'a> {
 
         // Wait for the Started event to be processed by the
         // execution future.
-        _ = resp_tx.send(InternalTestEvent::Started {
+        _ = resp_tx.send(ExecutorEvent::Started {
             test_instance,
             req_rx_tx,
         });
@@ -230,7 +230,7 @@ impl<'a> ExecutorContext<'a> {
             // is empty.
 
             if retry_data.attempt > 1 {
-                _ = resp_tx.send(InternalTestEvent::RetryStarted {
+                _ = resp_tx.send(ExecutorEvent::RetryStarted {
                     test_instance,
                     retry_data,
                 });
@@ -265,7 +265,7 @@ impl<'a> ExecutorContext<'a> {
                 let previous_result = run_status.result;
                 let previous_slow = run_status.is_slow;
 
-                let _ = resp_tx.send(InternalTestEvent::AttemptFailedWillRetry {
+                let _ = resp_tx.send(ExecutorEvent::AttemptFailedWillRetry {
                     test_instance,
                     failure_output: settings.failure_output(),
                     run_status,
@@ -294,7 +294,7 @@ impl<'a> ExecutorContext<'a> {
         // * the test has failed and we've run out of retries.
         // In either case, the test is finished.
         let last_run_status = last_run_status.into_external();
-        let _ = resp_tx.send(InternalTestEvent::Finished {
+        let _ = resp_tx.send(ExecutorEvent::Finished {
             test_instance,
             success_output: settings.success_output(),
             failure_output: settings.failure_output(),
@@ -313,7 +313,7 @@ impl<'a> ExecutorContext<'a> {
     async fn run_setup_script(
         &self,
         script: SetupScriptPacket<'a>,
-        resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
+        resp_tx: &UnboundedSender<ExecutorEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> InternalSetupScriptExecuteStatus<'a> {
         let mut stopwatch = crate::time::stopwatch();
@@ -339,7 +339,7 @@ impl<'a> ExecutorContext<'a> {
         &self,
         script: SetupScriptPacket<'a>,
         stopwatch: &mut StopwatchStart,
-        resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
+        resp_tx: &UnboundedSender<ExecutorEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> Result<InternalSetupScriptExecuteStatus<'a>, ChildStartError> {
         let mut cmd = script.make_command(&self.double_spawn, self.test_list)?;
@@ -555,7 +555,7 @@ impl<'a> ExecutorContext<'a> {
     async fn run_test(
         &self,
         test: TestPacket<'a>,
-        resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
+        resp_tx: &UnboundedSender<ExecutorEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> InternalExecuteStatus<'a> {
         let mut stopwatch = crate::time::stopwatch();
@@ -580,7 +580,7 @@ impl<'a> ExecutorContext<'a> {
         &self,
         test: TestPacket<'a>,
         stopwatch: &mut StopwatchStart,
-        resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
+        resp_tx: &UnboundedSender<ExecutorEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> Result<InternalExecuteStatus<'a>, ChildStartError> {
         let ctx = TestExecuteContext {
@@ -897,12 +897,8 @@ pub(super) struct TestPacket<'a> {
 }
 
 impl<'a> TestPacket<'a> {
-    fn slow_event(
-        &self,
-        elapsed: Duration,
-        will_terminate: Option<Duration>,
-    ) -> InternalTestEvent<'a> {
-        InternalTestEvent::Slow {
+    fn slow_event(&self, elapsed: Duration, will_terminate: Option<Duration>) -> ExecutorEvent<'a> {
+        ExecutorEvent::Slow {
             test_instance: self.test_instance,
             retry_data: self.retry_data,
             elapsed,
@@ -948,12 +944,8 @@ impl<'a> SetupScriptPacket<'a> {
         SetupScriptCommand::new(self.config, double_spawn, test_list)
     }
 
-    fn slow_event(
-        &self,
-        elapsed: Duration,
-        will_terminate: Option<Duration>,
-    ) -> InternalTestEvent<'a> {
-        InternalTestEvent::SetupScriptSlow {
+    fn slow_event(&self, elapsed: Duration, will_terminate: Option<Duration>) -> ExecutorEvent<'a> {
+        ExecutorEvent::SetupScriptSlow {
             script_id: self.script_id.clone(),
             config: self.config,
             elapsed,

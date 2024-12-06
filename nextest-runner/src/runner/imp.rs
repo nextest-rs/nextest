@@ -9,7 +9,7 @@ use crate::{
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestInstance, TestList},
     reporter::events::{RunStats, TestEvent},
-    runner::InternalTestEvent,
+    runner::ExecutorEvent,
     signal::{SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
     test_output::CaptureStrategy,
@@ -282,7 +282,7 @@ impl<'a> TestRunnerInner<'a> {
         let _guard = self.runtime.enter();
 
         let ((), results) = TokioScope::scope_and_block(move |scope| {
-            let (resp_tx, resp_rx) = unbounded_channel::<InternalTestEvent<'a>>();
+            let (resp_tx, resp_rx) = unbounded_channel::<ExecutorEvent<'a>>();
             let (cancellation_sender, _cancel_receiver) = broadcast::channel(1);
 
             // Run the dispatcher to completion in a task.

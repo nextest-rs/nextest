@@ -35,7 +35,7 @@ use tokio::sync::{
 /// executables) to the dispatcher (the part of the runner that coordinates with
 /// the external world).
 #[derive(Debug)]
-pub(super) enum InternalTestEvent<'a> {
+pub(super) enum ExecutorEvent<'a> {
     SetupScriptStarted {
         script_id: ScriptId,
         config: &'a ScriptConfig,
