@@ -16,7 +16,7 @@ use crate::{
         CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats, TestEvent,
         TestEventKind,
     },
-    runner::{InternalTestEvent, RunUnitQuery, SignalRequest},
+    runner::{ExecutorEvent, RunUnitQuery, SignalRequest},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
     time::StopwatchStart,
 };
@@ -91,7 +91,7 @@ where
     /// This is expected to be spawned as a task via [`async_scoped`].
     pub(super) async fn run(
         &mut self,
-        mut resp_rx: UnboundedReceiver<InternalTestEvent<'a>>,
+        mut executor_rx: UnboundedReceiver<ExecutorEvent<'a>>,
         signal_handler: &mut SignalHandler,
         input_handler: &mut InputHandler,
         report_cancel_rx: oneshot::Receiver<()>,
@@ -106,9 +106,9 @@ where
 
         loop {
             let internal_event = tokio::select! {
-                internal_event = resp_rx.recv() => {
+                internal_event = executor_rx.recv() => {
                     match internal_event {
-                        Some(event) => InternalEvent::Test(event),
+                        Some(event) => InternalEvent::Executor(event),
                         None => {
                             // All runs have been completed.
                             break;
@@ -335,7 +335,7 @@ where
 
     fn handle_event(&mut self, event: InternalEvent<'a>) -> Option<HandleEventResponse> {
         match event {
-            InternalEvent::Test(InternalTestEvent::SetupScriptStarted {
+            InternalEvent::Executor(ExecutorEvent::SetupScriptStarted {
                 script_id,
                 config,
                 index,
@@ -361,7 +361,7 @@ where
                     no_capture: config.no_capture(),
                 })
             }
-            InternalEvent::Test(InternalTestEvent::SetupScriptSlow {
+            InternalEvent::Executor(ExecutorEvent::SetupScriptSlow {
                 script_id,
                 config,
                 elapsed,
@@ -373,7 +373,7 @@ where
                 elapsed,
                 will_terminate: will_terminate.is_some(),
             }),
-            InternalEvent::Test(InternalTestEvent::SetupScriptFinished {
+            InternalEvent::Executor(ExecutorEvent::SetupScriptFinished {
                 script_id,
                 config,
                 index,
@@ -403,7 +403,7 @@ where
                     None
                 }
             }
-            InternalEvent::Test(InternalTestEvent::Started {
+            InternalEvent::Executor(ExecutorEvent::Started {
                 test_instance,
                 req_rx_tx,
             }) => {
@@ -424,7 +424,7 @@ where
                     cancel_state: self.cancel_state,
                 })
             }
-            InternalEvent::Test(InternalTestEvent::Slow {
+            InternalEvent::Executor(ExecutorEvent::Slow {
                 test_instance,
                 retry_data,
                 elapsed,
@@ -435,7 +435,7 @@ where
                 elapsed,
                 will_terminate: will_terminate.is_some(),
             }),
-            InternalEvent::Test(InternalTestEvent::AttemptFailedWillRetry {
+            InternalEvent::Executor(ExecutorEvent::AttemptFailedWillRetry {
                 test_instance,
                 failure_output,
                 run_status,
@@ -450,14 +450,14 @@ where
                     delay_before_next_attempt,
                 })
             }
-            InternalEvent::Test(InternalTestEvent::RetryStarted {
+            InternalEvent::Executor(ExecutorEvent::RetryStarted {
                 test_instance,
                 retry_data,
             }) => self.callback(TestEventKind::TestRetryStarted {
                 test_instance,
                 retry_data,
             }),
-            InternalEvent::Test(InternalTestEvent::Finished {
+            InternalEvent::Executor(ExecutorEvent::Finished {
                 test_instance,
                 success_output,
                 failure_output,
@@ -493,7 +493,7 @@ where
                     None
                 }
             }
-            InternalEvent::Test(InternalTestEvent::Skipped {
+            InternalEvent::Executor(ExecutorEvent::Skipped {
                 test_instance,
                 reason,
             }) => {
@@ -777,7 +777,7 @@ impl ContextTestInstance<'_> {
 
 #[derive(Debug)]
 enum InternalEvent<'a> {
-    Test(InternalTestEvent<'a>),
+    Executor(ExecutorEvent<'a>),
     Signal(SignalEvent),
     Input(InputEvent),
     ReportCancel,
