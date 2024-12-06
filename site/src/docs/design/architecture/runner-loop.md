@@ -17,7 +17,7 @@ Nextest's runner loop is one of the oldest parts of the codebase, and has
 evolved over time:
 
 * from being synchronous Rust to using Tokio's asynchronous
-support
+support, and
 * from being one big loop to being split into two main event-driven
 components.
 
