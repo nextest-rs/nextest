@@ -16,7 +16,7 @@ use crate::{
         CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats, TestEvent,
         TestEventKind,
     },
-    runner::{InternalCancel, InternalEvent, InternalTestEvent, RunUnitQuery, SignalRequest},
+    runner::{InternalEvent, InternalTestEvent, RunUnitQuery, SignalRequest},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
     time::StopwatchStart,
 };
@@ -158,7 +158,7 @@ where
 
             match self.handle_event(internal_event) {
                 #[cfg(unix)]
-                Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Stop))) => {
+                Some(HandleEventResponse::JobControl(JobControlEvent::Stop)) => {
                     // This is in reality bounded by the number of tests
                     // currently running.
                     let (status_tx, mut status_rx) = unbounded_channel();
@@ -202,11 +202,11 @@ where
                     super::os::raise_stop();
                 }
                 #[cfg(unix)]
-                Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Continue))) => {
+                Some(HandleEventResponse::JobControl(JobControlEvent::Continue)) => {
                     // Nextest has been resumed. Resume all the tests as well.
                     self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                 }
-                Ok(Some(HandleEventResponse::Info(_))) => {
+                Some(HandleEventResponse::Info(_)) => {
                     // In reality, this is bounded by the number of
                     // tests running at the same time.
                     let (sender, mut receiver) = unbounded_channel();
@@ -258,7 +258,7 @@ where
                     self.info_finished(total.saturating_sub(index + 1));
                 }
                 #[cfg(not(unix))]
-                Ok(Some(HandleEventResponse::JobControl(e))) => {
+                Some(HandleEventResponse::JobControl(e)) => {
                     // On platforms other than Unix this enum is expected to be
                     // empty; we can check this assumption at compile time like
                     // so.
@@ -267,8 +267,7 @@ where
                     // required after we bump the MSRV to that.
                     match e {}
                 }
-                Ok(None) => {}
-                Err(cancel) => {
+                Some(HandleEventResponse::Cancel(cancel)) => {
                     // A cancellation notice was received. Note the ordering here:
                     // cancelled_ref is set *before* notifications are broadcast. This
                     // prevents race conditions.
@@ -277,15 +276,15 @@ where
                     match cancel {
                         // Some of the branches here don't do anything, but are specified
                         // for readability.
-                        InternalCancel::Report => {
+                        CancelEvent::Report => {
                             // An error was produced by the reporter, and cancellation has
                             // begun.
                         }
-                        InternalCancel::TestFailure => {
+                        CancelEvent::TestFailure => {
                             // A test failure has caused cancellation to begin. Nothing to
                             // do here.
                         }
-                        InternalCancel::Signal(req) => {
+                        CancelEvent::Signal(req) => {
                             // A signal has caused cancellation to begin. Let all the child
                             // processes know about the signal, and continue to handle
                             // events.
@@ -299,6 +298,7 @@ where
                         }
                     }
                 }
+                None => {}
             }
         }
     }
@@ -328,18 +328,12 @@ where
     }
 
     #[inline]
-    fn callback(
-        &mut self,
-        kind: TestEventKind<'a>,
-    ) -> Result<Option<HandleEventResponse>, InternalCancel> {
+    fn callback(&mut self, kind: TestEventKind<'a>) -> Option<HandleEventResponse> {
         self.basic_callback(kind);
-        Ok(None)
+        None
     }
 
-    fn handle_event(
-        &mut self,
-        event: InternalEvent<'a>,
-    ) -> Result<Option<HandleEventResponse>, InternalCancel> {
+    fn handle_event(&mut self, event: InternalEvent<'a>) -> Option<HandleEventResponse> {
         match event {
             InternalEvent::Test(InternalTestEvent::SetupScriptStarted {
                 script_id,
@@ -354,7 +348,7 @@ where
                     Err(_) => {
                         // The test task died?
                         debug!(?script_id, "test task died, ignoring");
-                        return Ok(None);
+                        return None;
                     }
                 }
                 self.new_setup_script(script_id.clone(), config, index, total, req_tx);
@@ -404,9 +398,9 @@ where
 
                 if fail_cancel {
                     self.begin_cancel(CancelReason::SetupScriptFailure);
-                    Err(InternalCancel::TestFailure)
+                    Some(HandleEventResponse::Cancel(CancelEvent::TestFailure))
                 } else {
-                    Ok(None)
+                    None
                 }
             }
             InternalEvent::Test(InternalTestEvent::Started {
@@ -419,7 +413,7 @@ where
                     Err(_) => {
                         // The test task died?
                         debug!(test = ?test_instance.id(), "test task died, ignoring");
-                        return Ok(None);
+                        return None;
                     }
                 }
                 self.new_test(test_instance, req_tx);
@@ -494,9 +488,9 @@ where
                 if fail_cancel {
                     // A test failed: start cancellation.
                     self.begin_cancel(CancelReason::TestFailure);
-                    Err(InternalCancel::TestFailure)
+                    Some(HandleEventResponse::Cancel(CancelEvent::TestFailure))
                 } else {
-                    Ok(None)
+                    None
                 }
             }
             InternalEvent::Test(InternalTestEvent::Skipped {
@@ -512,11 +506,11 @@ where
             InternalEvent::Signal(event) => self.handle_signal_event(event),
             InternalEvent::Input(InputEvent::Info) => {
                 // Print current statistics.
-                Ok(Some(HandleEventResponse::Info(InfoEvent::Input)))
+                Some(HandleEventResponse::Info(InfoEvent::Input))
             }
             InternalEvent::ReportCancel => {
                 self.begin_cancel(CancelReason::ReportError);
-                Err(InternalCancel::Report)
+                Some(HandleEventResponse::Cancel(CancelEvent::Report))
             }
         }
     }
@@ -634,10 +628,7 @@ where
         count
     }
 
-    fn handle_signal_event(
-        &mut self,
-        event: SignalEvent,
-    ) -> Result<Option<HandleEventResponse>, InternalCancel> {
+    fn handle_signal_event(&mut self, event: SignalEvent) -> Option<HandleEventResponse> {
         match event {
             SignalEvent::Shutdown(event) => {
                 let signal_count = self.increment_signal_count();
@@ -652,7 +643,7 @@ where
                 };
 
                 self.begin_cancel(cancel_reason);
-                Err(InternalCancel::Signal(req))
+                Some(HandleEventResponse::Cancel(CancelEvent::Signal(req)))
             }
             #[cfg(unix)]
             SignalEvent::JobControl(JobControlEvent::Stop) => {
@@ -663,9 +654,9 @@ where
                         running: self.running(),
                     })?;
                     self.stopwatch.pause();
-                    Ok(Some(HandleEventResponse::JobControl(JobControlEvent::Stop)))
+                    Some(HandleEventResponse::JobControl(JobControlEvent::Stop))
                 } else {
-                    Ok(None)
+                    None
                 }
             }
             #[cfg(unix)]
@@ -677,16 +668,12 @@ where
                         setup_scripts_running: self.setup_scripts_running(),
                         running: self.running(),
                     })?;
-                    Ok(Some(HandleEventResponse::JobControl(
-                        JobControlEvent::Continue,
-                    )))
+                    Some(HandleEventResponse::JobControl(JobControlEvent::Continue))
                 } else {
-                    Ok(None)
+                    None
                 }
             }
-            SignalEvent::Info(event) => {
-                Ok(Some(HandleEventResponse::Info(InfoEvent::Signal(event))))
-            }
+            SignalEvent::Info(event) => Some(HandleEventResponse::Info(InfoEvent::Signal(event))),
         }
     }
 
@@ -791,15 +778,28 @@ impl ContextTestInstance<'_> {
 /// The return result of `handle_event`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum HandleEventResponse {
+    /// Stop or continue the run.
     #[cfg_attr(not(unix), expect(dead_code))]
     JobControl(JobControlEvent),
+
+    /// Request information from running units.
     Info(InfoEvent),
+
+    /// Cancel the run.
+    Cancel(CancelEvent),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InfoEvent {
     Signal(SignalInfoEvent),
     Input,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CancelEvent {
+    Report,
+    TestFailure,
+    Signal(ShutdownRequest),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]

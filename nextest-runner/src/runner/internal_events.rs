@@ -111,13 +111,6 @@ pub(super) enum InternalTestEvent<'a> {
     },
 }
 
-#[derive(Debug)]
-pub(super) enum InternalCancel {
-    Report,
-    TestFailure,
-    Signal(ShutdownRequest),
-}
-
 #[derive(Clone, Copy)]
 pub(super) enum UnitExecuteStatus<'a, 'status> {
     Test(&'status InternalExecuteStatus<'a>),
