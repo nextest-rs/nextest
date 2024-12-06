@@ -14,8 +14,11 @@ attempt of a test, but can also be a setup (and in the future, teardown) script.
 ## Background
 
 Nextest's runner loop is one of the oldest parts of the codebase, and has
-evolved over time from being synchronous Rust to using Tokio's asynchronous
-support, and from being one big loop to being split into two main event-driven
+evolved over time:
+
+* from being synchronous Rust to using Tokio's asynchronous
+support
+* from being one big loop to being split into two main event-driven
 components.
 
 The design is by no means ideal, and refactoring it is an ongoing process. We've
