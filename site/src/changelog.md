@@ -8,6 +8,13 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.86-b.2] - 2024-12-06
+
+Since beta 1:
+
+* Fixed `--no-fail-fast` and `--fail-fast` not being honored properly.
+* Internal refactoring work, with no expected functional changes.
+
 ## [0.9.86-b.1] - 2024-12-04
 
 This release of nextest has a number of internal and external improvements. Please try it out
@@ -1248,6 +1255,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.86-b.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.2
 [0.9.86-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.1
 [0.9.85]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.85
 [0.9.84]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.84
