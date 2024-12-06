@@ -21,12 +21,12 @@ use crate::{
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
     list::{TestExecuteContext, TestInstance, TestList},
     reporter::events::{
-        AbortStatus, ExecutionResult, InfoResponse, SetupScriptInfoResponse, TestInfoResponse,
-        UnitKind, UnitState,
+        AbortStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptInfoResponse,
+        TestInfoResponse, UnitKind, UnitState,
     },
     runner::{
-        InternalExecuteStatus, InternalSetupScriptExecuteStatus, InternalTestEvent, RetryData,
-        RunUnitQuery, SignalRequest, UnitExecuteStatus,
+        InternalExecuteStatus, InternalSetupScriptExecuteStatus, InternalTestEvent, RunUnitQuery,
+        SignalRequest, UnitExecuteStatus,
     },
     target_runner::TargetRunner,
     test_command::{ChildAccumulator, ChildFds},

@@ -7,14 +7,15 @@
 //! within the runner. They'll often carry additional information that the
 //! reporter doesn't need to know about.
 
-use super::{RetryData, SetupScriptPacket, TestPacket};
+use super::{SetupScriptPacket, TestPacket};
 use crate::{
     config::{ScriptConfig, ScriptId, SetupScriptEnvMap},
     input::InputEvent,
     list::TestInstance,
     reporter::{
         events::{
-            ExecuteStatus, ExecutionResult, InfoResponse, SetupScriptExecuteStatus, UnitState,
+            ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptExecuteStatus,
+            UnitState,
         },
         TestOutputDisplay,
     },
