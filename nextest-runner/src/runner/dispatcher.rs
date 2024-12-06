@@ -50,6 +50,8 @@ pub(super) struct DispatcherContext<'a, F> {
     running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
     cancel_state: Option<CancelReason>,
     signal_count: Option<SignalCount>,
+    #[cfg(test)]
+    disable_signal_3_times_panic: bool,
 }
 
 impl<'a, F> DispatcherContext<'a, F>
@@ -79,6 +81,8 @@ where
             running_tests: BTreeMap::new(),
             cancel_state: None,
             signal_count: None,
+            #[cfg(test)]
+            disable_signal_3_times_panic: false,
         }
     }
 
@@ -158,7 +162,7 @@ where
 
             match self.handle_event(internal_event) {
                 #[cfg(unix)]
-                Some(HandleEventResponse::JobControl(JobControlEvent::Stop)) => {
+                HandleEventResponse::JobControl(JobControlEvent::Stop) => {
                     // This is in reality bounded by the number of tests
                     // currently running.
                     let (status_tx, mut status_rx) = unbounded_channel();
@@ -202,12 +206,12 @@ where
                     super::os::raise_stop();
                 }
                 #[cfg(unix)]
-                Some(HandleEventResponse::JobControl(JobControlEvent::Continue)) => {
+                HandleEventResponse::JobControl(JobControlEvent::Continue) => {
                     // Nextest has been resumed. Resume all the tests as well.
                     self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                 }
                 #[cfg(not(unix))]
-                Some(HandleEventResponse::JobControl(e)) => {
+                HandleEventResponse::JobControl(e) => {
                     // On platforms other than Unix this enum is expected to be
                     // empty; we can check this assumption at compile time like
                     // so.
@@ -216,7 +220,7 @@ where
                     // required after we bump the MSRV to that.
                     match e {}
                 }
-                Some(HandleEventResponse::Info(_)) => {
+                HandleEventResponse::Info(_) => {
                     // In reality, this is bounded by the number of
                     // tests running at the same time.
                     let (sender, mut receiver) = unbounded_channel();
@@ -267,7 +271,7 @@ where
 
                     self.info_finished(total.saturating_sub(index + 1));
                 }
-                Some(HandleEventResponse::Cancel(cancel)) => {
+                HandleEventResponse::Cancel(cancel) => {
                     // A cancellation notice was received. Note the ordering here:
                     // cancelled_ref is set *before* notifications are broadcast. This
                     // prevents race conditions.
@@ -298,7 +302,7 @@ where
                         }
                     }
                 }
-                None => {}
+                HandleEventResponse::None => {}
             }
         }
     }
@@ -328,12 +332,12 @@ where
     }
 
     #[inline]
-    fn callback(&mut self, kind: TestEventKind<'a>) -> Option<HandleEventResponse> {
+    fn callback_none_response(&mut self, kind: TestEventKind<'a>) -> HandleEventResponse {
         self.basic_callback(kind);
-        None
+        HandleEventResponse::None
     }
 
-    fn handle_event(&mut self, event: InternalEvent<'a>) -> Option<HandleEventResponse> {
+    fn handle_event(&mut self, event: InternalEvent<'a>) -> HandleEventResponse {
         match event {
             InternalEvent::Executor(ExecutorEvent::SetupScriptStarted {
                 script_id,
@@ -348,11 +352,11 @@ where
                     Err(_) => {
                         // The test task died?
                         debug!(?script_id, "test task died, ignoring");
-                        return None;
+                        return HandleEventResponse::None;
                     }
                 }
                 self.new_setup_script(script_id.clone(), config, index, total, req_tx);
-                self.callback(TestEventKind::SetupScriptStarted {
+                self.callback_none_response(TestEventKind::SetupScriptStarted {
                     index,
                     total,
                     script_id,
@@ -366,7 +370,7 @@ where
                 config,
                 elapsed,
                 will_terminate,
-            }) => self.callback(TestEventKind::SetupScriptSlow {
+            }) => self.callback_none_response(TestEventKind::SetupScriptSlow {
                 script_id,
                 command: config.program(),
                 args: config.args(),
@@ -386,7 +390,7 @@ where
                 // (--no-fail-fast is ignored).
                 let fail_cancel = !status.result.is_success();
 
-                self.callback(TestEventKind::SetupScriptFinished {
+                self.basic_callback(TestEventKind::SetupScriptFinished {
                     index,
                     total,
                     script_id,
@@ -394,13 +398,12 @@ where
                     args: config.args(),
                     no_capture: config.no_capture(),
                     run_status: status,
-                })?;
+                });
 
                 if fail_cancel {
-                    self.begin_cancel(CancelReason::SetupScriptFailure);
-                    Some(HandleEventResponse::Cancel(CancelEvent::TestFailure))
+                    self.begin_cancel(CancelReason::SetupScriptFailure, CancelEvent::TestFailure)
                 } else {
-                    None
+                    HandleEventResponse::None
                 }
             }
             InternalEvent::Executor(ExecutorEvent::Started {
@@ -413,11 +416,11 @@ where
                     Err(_) => {
                         // The test task died?
                         debug!(test = ?test_instance.id(), "test task died, ignoring");
-                        return None;
+                        return HandleEventResponse::None;
                     }
                 }
                 self.new_test(test_instance, req_tx);
-                self.callback(TestEventKind::TestStarted {
+                self.callback_none_response(TestEventKind::TestStarted {
                     test_instance,
                     current_stats: self.run_stats,
                     running: self.running_tests.len(),
@@ -429,7 +432,7 @@ where
                 retry_data,
                 elapsed,
                 will_terminate,
-            }) => self.callback(TestEventKind::TestSlow {
+            }) => self.callback_none_response(TestEventKind::TestSlow {
                 test_instance,
                 retry_data,
                 elapsed,
@@ -443,7 +446,7 @@ where
             }) => {
                 let instance = self.existing_test(test_instance.id());
                 instance.attempt_failed_will_retry(run_status.clone());
-                self.callback(TestEventKind::TestAttemptFailedWillRetry {
+                self.callback_none_response(TestEventKind::TestAttemptFailedWillRetry {
                     test_instance,
                     failure_output,
                     run_status,
@@ -453,7 +456,7 @@ where
             InternalEvent::Executor(ExecutorEvent::RetryStarted {
                 test_instance,
                 retry_data,
-            }) => self.callback(TestEventKind::TestRetryStarted {
+            }) => self.callback_none_response(TestEventKind::TestRetryStarted {
                 test_instance,
                 retry_data,
             }),
@@ -473,7 +476,7 @@ where
                     .max_fail
                     .map_or(false, |mf| self.run_stats.failed_count() >= mf);
 
-                self.callback(TestEventKind::TestFinished {
+                self.basic_callback(TestEventKind::TestFinished {
                     test_instance,
                     success_output,
                     failure_output,
@@ -483,14 +486,13 @@ where
                     current_stats: self.run_stats,
                     running: self.running(),
                     cancel_state: self.cancel_state,
-                })?;
+                });
 
                 if fail_cancel {
-                    // A test failed: start cancellation.
-                    self.begin_cancel(CancelReason::TestFailure);
-                    Some(HandleEventResponse::Cancel(CancelEvent::TestFailure))
+                    // A test failed: start cancellation if required.
+                    self.begin_cancel(CancelReason::TestFailure, CancelEvent::TestFailure)
                 } else {
-                    None
+                    HandleEventResponse::None
                 }
             }
             InternalEvent::Executor(ExecutorEvent::Skipped {
@@ -498,7 +500,7 @@ where
                 reason,
             }) => {
                 self.run_stats.skipped += 1;
-                self.callback(TestEventKind::TestSkipped {
+                self.callback_none_response(TestEventKind::TestSkipped {
                     test_instance,
                     reason,
                 })
@@ -506,11 +508,10 @@ where
             InternalEvent::Signal(event) => self.handle_signal_event(event),
             InternalEvent::Input(InputEvent::Info) => {
                 // Print current statistics.
-                Some(HandleEventResponse::Info(InfoEvent::Input))
+                HandleEventResponse::Info(InfoEvent::Input)
             }
             InternalEvent::ReportCancel => {
-                self.begin_cancel(CancelReason::ReportError);
-                Some(HandleEventResponse::Cancel(CancelEvent::Report))
+                self.begin_cancel(CancelReason::ReportError, CancelEvent::Report)
             }
         }
     }
@@ -628,7 +629,7 @@ where
         count
     }
 
-    fn handle_signal_event(&mut self, event: SignalEvent) -> Option<HandleEventResponse> {
+    fn handle_signal_event(&mut self, event: SignalEvent) -> HandleEventResponse {
         match event {
             SignalEvent::Shutdown(event) => {
                 let signal_count = self.increment_signal_count();
@@ -642,21 +643,20 @@ where
                     ShutdownEvent::Interrupt => CancelReason::Interrupt,
                 };
 
-                self.begin_cancel(cancel_reason);
-                Some(HandleEventResponse::Cancel(CancelEvent::Signal(req)))
+                self.begin_cancel(cancel_reason, CancelEvent::Signal(req))
             }
             #[cfg(unix)]
             SignalEvent::JobControl(JobControlEvent::Stop) => {
                 // Debounce stop signals.
                 if !self.stopwatch.is_paused() {
-                    self.callback(TestEventKind::RunPaused {
+                    self.basic_callback(TestEventKind::RunPaused {
                         setup_scripts_running: self.setup_scripts_running(),
                         running: self.running(),
-                    })?;
+                    });
                     self.stopwatch.pause();
-                    Some(HandleEventResponse::JobControl(JobControlEvent::Stop))
+                    HandleEventResponse::JobControl(JobControlEvent::Stop)
                 } else {
-                    None
+                    HandleEventResponse::None
                 }
             }
             #[cfg(unix)]
@@ -664,16 +664,16 @@ where
                 // Debounce continue signals.
                 if self.stopwatch.is_paused() {
                     self.stopwatch.resume();
-                    self.callback(TestEventKind::RunContinued {
+                    self.basic_callback(TestEventKind::RunContinued {
                         setup_scripts_running: self.setup_scripts_running(),
                         running: self.running(),
-                    })?;
-                    Some(HandleEventResponse::JobControl(JobControlEvent::Continue))
+                    });
+                    HandleEventResponse::JobControl(JobControlEvent::Continue)
                 } else {
-                    None
+                    HandleEventResponse::None
                 }
             }
-            SignalEvent::Info(event) => Some(HandleEventResponse::Info(InfoEvent::Signal(event))),
+            SignalEvent::Info(event) => HandleEventResponse::Info(InfoEvent::Signal(event)),
         }
     }
 
@@ -706,6 +706,15 @@ where
             Some(SignalCount::Once) => SignalCount::Twice,
             Some(SignalCount::Twice) => {
                 // The process was signaled 3 times. Time to panic.
+                #[cfg(test)]
+                {
+                    if self.disable_signal_3_times_panic {
+                        SignalCount::Twice
+                    } else {
+                        panic!("Signaled 3 times, exiting immediately");
+                    }
+                }
+                #[cfg(not(test))]
                 panic!("Signaled 3 times, exiting immediately");
             }
         };
@@ -713,9 +722,12 @@ where
         new_count
     }
 
-    /// Begin cancellation of a test run. Report it if the current cancel state is less than
-    /// the required one.
-    fn begin_cancel(&mut self, reason: CancelReason) {
+    /// Begin cancellation of a test run. Report it if the current cancel state
+    /// is less than the required one.
+    ///
+    /// Returns the corresponding `HandleEventResponse`.
+    fn begin_cancel(&mut self, reason: CancelReason, event: CancelEvent) -> HandleEventResponse {
+        // TODO: combine reason and event?
         if self.cancel_state < Some(reason) {
             self.cancel_state = Some(reason);
             self.basic_callback(TestEventKind::RunBeginCancel {
@@ -723,6 +735,9 @@ where
                 running: self.running(),
                 reason,
             });
+            HandleEventResponse::Cancel(event)
+        } else {
+            HandleEventResponse::None
         }
     }
 
@@ -785,6 +800,7 @@ enum InternalEvent<'a> {
 
 /// The return result of `handle_event`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[must_use = "this enum should not be dropped on the floor"]
 enum HandleEventResponse {
     /// Stop or continue the run.
     #[cfg_attr(not(unix), expect(dead_code))]
@@ -795,6 +811,12 @@ enum HandleEventResponse {
 
     /// Cancel the run.
     Cancel(CancelEvent),
+
+    /// No response.
+    ///
+    /// We use `None` here rather than `Option` because we've found that
+    /// `Option` enables using `?`, which can lead to incorrect results.
+    None,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -822,5 +844,155 @@ impl SignalCount {
             Self::Once => ShutdownRequest::Once(event),
             Self::Twice => ShutdownRequest::Twice,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    #[test]
+    fn begin_cancel_report_signal_interrupt() {
+        // TODO: also test TestFinished and SetupScriptFinished events.
+        let events = Mutex::new(Vec::new());
+        let mut cx = DispatcherContext::new(
+            |event| {
+                events.lock().unwrap().push(event);
+            },
+            ReportUuid::new_v4(),
+            "default",
+            vec![],
+            0,
+            None,
+        );
+        cx.disable_signal_3_times_panic = true;
+
+        // Begin cancellation with a report error.
+        let response = cx.handle_event(InternalEvent::ReportCancel);
+        assert_eq!(
+            response,
+            HandleEventResponse::Cancel(CancelEvent::Report),
+            "expected report"
+        );
+        {
+            let events = events.lock().unwrap();
+            assert_eq!(events.len(), 1, "expected 1 event");
+            let TestEventKind::RunBeginCancel {
+                setup_scripts_running,
+                running,
+                reason,
+            } = &events[0].kind
+            else {
+                panic!("expected RunBeginCancel event, found {:?}", events[0].kind);
+            };
+            assert_eq!(
+                *setup_scripts_running, 0,
+                "expected 0 setup scripts running"
+            );
+            assert_eq!(*running, 0, "expected 0 tests running");
+            assert_eq!(*reason, CancelReason::ReportError, "expected report error");
+        }
+
+        // Send another report error, ensuring it's ignored.
+        let response = cx.handle_event(InternalEvent::ReportCancel);
+        assert_noop(response, &events, 1);
+
+        // Cancel with a signal.
+        #[cfg(unix)]
+        let signal_event_count = {
+            let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                ShutdownEvent::Hangup,
+            )));
+            assert_eq!(
+                response,
+                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
+                    ShutdownEvent::Hangup
+                ))),
+                "expected cancellation"
+            );
+            {
+                let events = events.lock().unwrap();
+                assert_eq!(events.len(), 2, "expected 2 events");
+                let TestEventKind::RunBeginCancel {
+                    setup_scripts_running,
+                    running,
+                    reason,
+                } = &events[1].kind
+                else {
+                    panic!("expected RunBeginCancel event, found {:?}", events[1].kind);
+                };
+                assert_eq!(
+                    *setup_scripts_running, 0,
+                    "expected 0 setup scripts running"
+                );
+                assert_eq!(*running, 0, "expected 0 tests running");
+                assert_eq!(*reason, CancelReason::Signal, "expected signal");
+            }
+
+            // Send another signal, ensuring it's ignored.
+            let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+                ShutdownEvent::Hangup,
+            )));
+            assert_noop(response, &events, 2);
+
+            // Send a report error, ensuring it's ignored.
+            let response = cx.handle_event(InternalEvent::ReportCancel);
+            assert_noop(response, &events, 2);
+
+            1
+        };
+        #[cfg(not(unix))]
+        let signal_event_count = 0;
+
+        // Cancel with an interrupt.
+        let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
+            ShutdownEvent::Interrupt,
+        )));
+        assert_eq!(
+            response,
+            if signal_event_count == 0 {
+                // On Windows, this is the first signal.
+                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
+                    ShutdownEvent::Interrupt,
+                )))
+            } else {
+                // On Unix, this is the second signal.
+                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Twice))
+            },
+            "expected cancellation"
+        );
+        {
+            let events = events.lock().unwrap();
+            assert_eq!(events.len(), 2 + signal_event_count, "expected event count");
+            let TestEventKind::RunBeginCancel {
+                setup_scripts_running,
+                running,
+                reason,
+            } = &events[1 + signal_event_count].kind
+            else {
+                panic!(
+                    "expected RunBeginCancel event, found {:?}",
+                    events[1 + signal_event_count].kind
+                );
+            };
+            assert_eq!(
+                *setup_scripts_running, 0,
+                "expected 0 setup scripts running"
+            );
+            assert_eq!(*running, 0, "expected 0 tests running");
+            assert_eq!(*reason, CancelReason::Interrupt, "expected interrupt");
+        }
+    }
+
+    #[track_caller]
+    fn assert_noop(
+        response: HandleEventResponse,
+        events: &Mutex<Vec<TestEvent<'_>>>,
+        event_count: usize,
+    ) {
+        assert_eq!(response, HandleEventResponse::None, "expected no response");
+        let events = events.lock().unwrap();
+        assert_eq!(events.len(), event_count, "expected no new events");
     }
 }
