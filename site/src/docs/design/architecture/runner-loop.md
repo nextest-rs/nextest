@@ -265,10 +265,12 @@ exit cleanly before being killed.
 
 Currently, nextest sends `SIGINT` on receiving `SIGINT`, `SIGTERM` on receiving
 `SIGTERM`, and so on. There is no _inherent_ reason the two have to be the same,
-other than a general expectation of "abstraction coherence": if you set up
-process groups, you should behave similarly to the world in which you don't set
-up process groups. This is a good principle to follow, but it's not a hard
-requirement.
+other than a general expectation of "abstraction coherence" (a kind of [least
+astonishment]): if you set up process groups, you should behave similarly to the
+world in which you don't set up process groups. This is a good principle to
+follow, but it's not a hard requirement.
+
+[least astonishment]: https://en.wikipedia.org/wiki/Principle_of_least_astonishment
 
 ### Job control
 
