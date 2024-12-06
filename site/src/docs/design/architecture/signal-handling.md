@@ -140,7 +140,7 @@ process using `exec`.
 
 This double-spawn approach works around a gnarly race with `SIGTSTP` handling.
 If a child process receives `SIGTSTP` at exactly the wrong time (a window of
-around 5-10 milliseconds on modern hardware), it can get stuck in a "half-born"
+around 5ms on 2022-era hardware under load), it can get stuck in a "half-born"
 paused state, and the parent process can get stuck in an uninterruptible sleep
 state waiting for the child to finish spawning.
 
@@ -157,8 +157,8 @@ state waiting for the child to finish spawning.
 [posix_spawn]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/posix_spawn.html
 
 You can reproduce the issue yourself by setting `NEXTEST_DOUBLE_SPAWN=0`, then
-running `cargo nextest run -j64` against a repository; [nextest's own
-repository] is a good candidate. Now try hitting `Ctrl-Z` a few times, running
+running `cargo nextest run -j64` against a repository; [the clap
+repository] is a good candidate because it has many small tests. Now try hitting `Ctrl-Z` a few times, running
 `fg` to resume nextest after each pause. You'll likely see one run in ten or so
 where nextest gets stuck.
 
@@ -176,7 +176,7 @@ spawning.
 The double-spawn approach completely addresses this race, and no instances of a
 stuck runner have been observed since it was implemented.
 
-[nextest's own repository]: https://github.com/nextest-rs/nextest
+[the clap repository]: https://github.com/clap-rs/clap
 [signal mask]: https://www.gnu.org/software/libc/manual/html_node/Process-Signal-Mask.html
 
 ## Signal handling on Windows
