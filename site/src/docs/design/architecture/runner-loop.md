@@ -253,8 +253,16 @@ is equivalent to a Unix `SIGKILL`.
 ### Shutdown signal handling
 
 On receiving a signal like `SIGINT` or `SIGTERM`, or a Ctrl-C on Windows, the
-dispatcher sends a message to all units to terminate. Units then follow the same
-flow as with timeouts.
+dispatcher sends a message to all units to terminate with the same signal.
+Units then follow a flow similar to timeouts, where they have a grace period to
+exit cleanly before being killed.
+
+Currently, nextest sends `SIGINT` on receiving `SIGINT`, `SIGTERM` on receiving
+`SIGTERM`, and so on. There is no _inherent_ reason the two have to be the same,
+other than a general expectation of "abstraction coherence": if you set up
+process groups, you should behave similarly to the world in which you don't set
+up process groups. This is a good principle to follow, but it's not a hard
+requirement.
 
 ### Job control
 
@@ -309,5 +317,52 @@ Both of these types are useful in general, and could be extracted into a library
 if there's interest.
 
 [Tokio sleep]: https://docs.rs/tokio/latest/tokio/time/fn.sleep.html
+
+### Double-spawning processes
+
+On Unix platforms, when spawning a child process, nextest does not directly
+spawn the child. Instead, it spawns a copy of itself, which then spawns the
+process using `exec`.
+
+This double-spawn approach works around a gnarly race with `SIGTSTP` handling.
+If a child process receives `SIGTSTP` at exactly the wrong time (a window of
+around 5-10 milliseconds on modern hardware), it can get stuck in a "half-born"
+paused state, and the parent process can get stuck in an uninterruptible sleep
+state waiting for the child to finish spawning.
+
+!!! info "This bug is universal"
+
+    This race exists with _all_ [`posix_spawn`][posix_spawn] invocations on
+    Linux, and likely on most other Unix platforms. It appears to be a flaw with
+    the `posix_spawn` specification, and any implementations that don't
+    specifically account for this issue are likely to have this bug.
+
+    With nextest, users just hit it more often because nextest spawns a lot of
+    processes very quickly.
+
+[posix_spawn]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/posix_spawn.html
+
+You can reproduce the issue yourself by setting `NEXTEST_DOUBLE_SPAWN=0`, then
+running `cargo nextest run -j64` against a repository; [nextest's own
+repository] is a good candidate. Now try hitting `Ctrl-Z` a few times, running
+`fg` to resume nextest after each pause. You'll likely see one run in ten or so
+where nextest gets stuck.
+
+With the double-spawn approach:
+
+* Nextest first uses a [signal mask] to temporarily block `SIGTSTP`.
+* It then spawns a copy of itself, which inherits the signal mask.
+* At this point, the spawn is complete, and the parent process can carry on.
+* The child nextest then unblocks `SIGTSTP`.
+
+If a `SIGTSTP` is received at this point, the process is paused. But,
+importantly, the parent does not get stuck waiting for the child to finish
+spawning.
+
+The double-spawn approach completely addresses this race, and no instances of a
+stuck runner have been observed since it was implemented.
+
+[nextest's own repository]: https://github.com/nextest-rs/nextest
+[signal mask]: https://www.gnu.org/software/libc/manual/html_node/Process-Signal-Mask.html
 
 _Last major revision: 2024-12-06_
