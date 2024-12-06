@@ -179,8 +179,6 @@ stuck runner have been observed since it was implemented.
 [nextest's own repository]: https://github.com/nextest-rs/nextest
 [signal mask]: https://www.gnu.org/software/libc/manual/html_node/Process-Signal-Mask.html
 
-_Last major revision: 2024-12-06_
-
 ## Signal handling on Windows
 
 Windows has a much simpler signal model than Unix.
@@ -219,3 +217,5 @@ its child processes are terminated.
 
 [job objects]: https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
 [terminate-job-object]: https://docs.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-terminatejobobject
+
+_Last major revision: 2024-12-06_
