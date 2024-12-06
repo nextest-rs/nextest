@@ -31,7 +31,12 @@ sequenceDiagram
   deactivate dispatcher
 ```
 
-## Unix process groups
+## Signal handling on Unix
+
+Unix platforms have a rich set of signals, and nextest interacts with them in a
+few different ways.
+
+### Process groups
 
 On Unix platforms, nextest creates a new [_process group_] for each unit of
 work. Process groups do not form a tree; this directly impacts signal handling
@@ -54,26 +59,11 @@ primary author and maintainer.)
 [rustconf-talk]: https://www.youtube.com/watch?v=zhbkp_Fzqoo
 [_process group_]: https://en.wikipedia.org/wiki/Process_group
 
-## Windows job objects
+### Shutdown signal handling
 
-On Windows, nextest uses [job objects] to manage the lifetime of all child
-processes. Job objects don't support graceful termination like Unix signals do.
-The only method available is [`TerminateJobObject`][terminate-job-object], which
-is equivalent to a Unix `SIGKILL`.
-
-Job objects do form a tree, however, so if something else runs nextest within a job
-object and then calls `TerminateJobObject`, both nextest and all its child processes
-will be terminated.
-
-[job objects]: https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
-[terminate-job-object]: https://docs.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-terminatejobobject
-
-## Shutdown signal handling
-
-On receiving a signal like `SIGINT` or `SIGTERM`, or a Ctrl-C on Windows, the
-dispatcher sends a message to all units to terminate with the same signal.
-Units then follow a flow similar to timeouts, where they have a grace period to
-exit cleanly before being killed.
+On receiving a signal like `SIGINT` or `SIGTERM`, the dispatcher sends a message
+to all units to terminate with the same signal. Units then follow a flow similar
+to timeouts, where they have a grace period to exit cleanly before being killed.
 
 Currently, nextest sends `SIGINT` on receiving `SIGINT`, `SIGTERM` on receiving
 `SIGTERM`, and so on. There is no _inherent_ reason the two have to be the same,
@@ -84,7 +74,7 @@ follow, but it's not a hard requirement.
 
 [least astonishment]: https://en.wikipedia.org/wiki/Principle_of_least_astonishment
 
-## Job control
+### Job control
 
 On Unix platforms, nextest supports [job control] via the `SIGTSTP` and `SIGCONT`
 signals.
@@ -140,7 +130,7 @@ if there's interest.
 
 [Tokio sleep]: https://docs.rs/tokio/latest/tokio/time/fn.sleep.html
 
-## Double-spawning processes
+### Double-spawning processes
 
 On Unix platforms, when spawning a child process, nextest does not directly
 spawn the child. Instead, it [spawns a copy of itself], which then spawns the
@@ -190,3 +180,42 @@ stuck runner have been observed since it was implemented.
 [signal mask]: https://www.gnu.org/software/libc/manual/html_node/Process-Signal-Mask.html
 
 _Last major revision: 2024-12-06_
+
+## Signal handling on Windows
+
+Windows has a much simpler signal model than Unix.
+
+* For console applications, Windows supports pressing Ctrl-C, which resembles `SIGINT`.
+* Windows also has the notion of [console process groups]. However, the way in which
+  they work is quite different from Unix process groups. For example, Ctrl-C events
+  [cannot be limited] to a single process group.
+* For graphical applications, Windows supports [the `WM_CLOSE` message](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-close).
+
+In many ways, the `WM_CLOSE` message is more reasonable than Unix signals,
+because it's a message that can be handled or ignored, and ties nicely into an
+event-driven model such as that of nextest. It is geared towards GUI
+applications, but can be used in console applications as well by creating a
+hidden window. See [this StackOverflow
+post](https://stackoverflow.com/questions/8698881/intercept-wm-close-for-cleanup-operations)
+for more.
+
+Currently, nextest does not put tests into separate process groups on Windows,
+nor does it send `WM_CLOSE` messages. This is an area where nextest could
+benefit from Windows expertise.
+
+[console process groups]: https://docs.microsoft.com/en-us/windows/console/console-process-groups
+[cannot be limited]: https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent
+
+### Job objects
+
+On Windows, nextest uses [job objects] to manage the lifetime of all child
+processes. Job objects don't support graceful termination like Unix signals do.
+The only method available is [`TerminateJobObject`][terminate-job-object], which
+is equivalent to a Unix `SIGKILL`.
+
+Unlike process groups, job objects form a tree. If something else runs nextest
+within a job object and then calls `TerminateJobObject`, both nextest and all
+its child processes are terminated.
+
+[job objects]: https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
+[terminate-job-object]: https://docs.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-terminatejobobject
