@@ -11,6 +11,25 @@ pub enum MaxFail {
     All,
 }
 
+impl MaxFail {
+    /// Returns the max-fail corresponding to the fail-fast.
+    pub fn from_fail_fast(fail_fast: bool) -> Self {
+        if fail_fast {
+            Self::Count(1)
+        } else {
+            Self::All
+        }
+    }
+
+    /// Returns true if the max-fail has been exceeded.
+    pub fn is_exceeded(&self, failed: usize) -> bool {
+        match self {
+            Self::Count(n) => failed >= *n,
+            Self::All => false,
+        }
+    }
+}
+
 impl FromStr for MaxFail {
     type Err = MaxFailParseError;
 
