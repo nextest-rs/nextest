@@ -226,7 +226,7 @@ pub(super) enum RunUnitQuery<'a> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum TerminateMode {
+pub(super) enum InternalTerminateReason {
     Timeout,
     Signal(ShutdownRequest),
 }

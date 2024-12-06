@@ -3,7 +3,7 @@
 
 use crate::{
     errors::ConfigureHandleInheritanceError,
-    runner::{RunUnitRequest, TerminateMode, UnitContext},
+    runner::{InternalTerminateReason, RunUnitRequest, UnitContext},
     test_command::ChildAccumulator,
     time::StopwatchStart,
 };
@@ -77,7 +77,7 @@ pub(super) async fn terminate_child(
     _cx: &UnitContext<'_>,
     child: &mut Child,
     _child_acc: &mut ChildAccumulator,
-    mode: TerminateMode,
+    reason: InternalTerminateReason,
     _stopwatch: &mut StopwatchStart,
     _req_rx: &mut UnboundedReceiver<RunUnitRequest<'_>>,
     job: Option<&Job>,
@@ -85,7 +85,7 @@ pub(super) async fn terminate_child(
 ) {
     // Ignore signal events since Windows propagates them to child processes (this may change if
     // we start assigning processes to groups on Windows).
-    if !matches!(mode, TerminateMode::Timeout) {
+    if !matches!(reason, InternalTerminateReason::Timeout) {
         return;
     }
     if let Some(job) = job {
