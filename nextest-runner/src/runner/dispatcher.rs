@@ -16,7 +16,7 @@ use crate::{
         CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats, TestEvent,
         TestEventKind,
     },
-    runner::{InternalEvent, InternalTestEvent, RunUnitQuery, SignalRequest},
+    runner::{InternalTestEvent, RunUnitQuery, SignalRequest},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
     time::StopwatchStart,
 };
@@ -206,6 +206,16 @@ where
                     // Nextest has been resumed. Resume all the tests as well.
                     self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                 }
+                #[cfg(not(unix))]
+                Some(HandleEventResponse::JobControl(e)) => {
+                    // On platforms other than Unix this enum is expected to be
+                    // empty; we can check this assumption at compile time like
+                    // so.
+                    //
+                    // Rust 1.82 handles empty enums better, and this won't be
+                    // required after we bump the MSRV to that.
+                    match e {}
+                }
                 Some(HandleEventResponse::Info(_)) => {
                     // In reality, this is bounded by the number of
                     // tests running at the same time.
@@ -256,16 +266,6 @@ where
                     }
 
                     self.info_finished(total.saturating_sub(index + 1));
-                }
-                #[cfg(not(unix))]
-                Some(HandleEventResponse::JobControl(e)) => {
-                    // On platforms other than Unix this enum is expected to be
-                    // empty; we can check this assumption at compile time like
-                    // so.
-                    //
-                    // Rust 1.82 handles empty enums better, and this won't be
-                    // required after we bump the MSRV to that.
-                    match e {}
                 }
                 Some(HandleEventResponse::Cancel(cancel)) => {
                     // A cancellation notice was received. Note the ordering here:
@@ -773,6 +773,14 @@ impl ContextTestInstance<'_> {
         attempts.push(last_run_status);
         ExecutionStatuses::new(attempts)
     }
+}
+
+#[derive(Debug)]
+enum InternalEvent<'a> {
+    Test(InternalTestEvent<'a>),
+    Signal(SignalEvent),
+    Input(InputEvent),
+    ReportCancel,
 }
 
 /// The return result of `handle_event`.
