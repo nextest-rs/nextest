@@ -10,7 +10,6 @@
 use super::{SetupScriptPacket, TestPacket};
 use crate::{
     config::{ScriptConfig, ScriptId, SetupScriptEnvMap},
-    input::InputEvent,
     list::TestInstance,
     reporter::{
         events::{
@@ -19,7 +18,7 @@ use crate::{
         },
         TestOutputDisplay,
     },
-    signal::{ShutdownEvent, SignalEvent},
+    signal::ShutdownEvent,
     test_output::ChildExecutionOutput,
     time::StopwatchSnapshot,
 };
@@ -35,15 +34,6 @@ use tokio::sync::{
 /// These events are sent by the executor (the part that actually runs
 /// executables) to the dispatcher (the part of the runner that coordinates with
 /// the external world).
-#[derive(Debug)]
-pub(super) enum InternalEvent<'a> {
-    Test(InternalTestEvent<'a>),
-    Signal(SignalEvent),
-    Input(InputEvent),
-    ReportCancel,
-}
-
-/// An internal version of `TestEvent`.
 #[derive(Debug)]
 pub(super) enum InternalTestEvent<'a> {
     SetupScriptStarted {
