@@ -55,7 +55,7 @@ to them appropriately:
 
 Each iteration of the dispatcher loop has three phases:
 
-1. **Select over sources.** Select over the event sources, generating an `InternalEvent`.
+1. **Select over sources.** Run a [`tokio::select`][tokio-select] over the event sources, generating an `InternalEvent`.
 
 2. **Handle the event.** Based on the `InternalEvent`, do one or more of the following, in `handle_event`:
 
@@ -82,6 +82,8 @@ Each iteration of the dispatcher loop has three phases:
   units of work. (This broadcast doesn't use a Tokio broadcast channel.
   Instead, each unit has a dedicated channel associated with it. This
   enables future improvements where only a subset of units are notified.)
+
+[tokio-select]: https://docs.rs/tokio/latest/tokio/macro.select.html
 
 ### Linearizing events
 
@@ -325,8 +327,10 @@ if there's interest.
 ### Double-spawning processes
 
 On Unix platforms, when spawning a child process, nextest does not directly
-spawn the child. Instead, it spawns a copy of itself, which then spawns the
+spawn the child. Instead, it [spawns a copy of itself], which then spawns the
 process using `exec`.
+
+[spawns a copy of itself]: https://docs.rs/nextest-runner/latest/nextest_runner/double_spawn/index.html
 
 This double-spawn approach works around a gnarly race with `SIGTSTP` handling.
 If a child process receives `SIGTSTP` at exactly the wrong time (a window of
