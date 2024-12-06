@@ -118,6 +118,7 @@ nav:
           - docs/design/custom-test-harnesses.md
           - "Architecture":
                 - "The runner loop": docs/design/architecture/runner-loop.md
+                - "Signal handling": docs/design/architecture/signal-handling.md
     - "Benchmarks": docs/benchmarks/index.md
     - changelog.md
 
