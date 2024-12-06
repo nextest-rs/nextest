@@ -11,7 +11,7 @@
 //! just a better abstraction, it also provides a better user experience (less
 //! inconsistent state).
 
-use super::{RunUnitRequest, TerminateMode};
+use super::{InternalTerminateReason, RunUnitRequest};
 use crate::{
     config::{
         EvaluatableProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScriptCommand,
@@ -438,7 +438,7 @@ impl<'a> ExecutorContext<'a> {
                                 &cx,
                                 &mut child,
                                 &mut child_acc,
-                                TerminateMode::Timeout,
+                                InternalTerminateReason::Timeout,
                                 stopwatch,
                                 req_rx,
                                 job.as_ref(),
@@ -679,7 +679,7 @@ impl<'a> ExecutorContext<'a> {
                                 &cx,
                                 &mut child,
                                 &mut child_acc,
-                                TerminateMode::Timeout,
+                                InternalTerminateReason::Timeout,
                                 stopwatch,
                                 req_rx,
                                 job.as_ref(),
@@ -1185,7 +1185,7 @@ async fn handle_signal_request<'a>(
                 cx,
                 child,
                 child_acc,
-                TerminateMode::Signal(event),
+                InternalTerminateReason::Signal(event),
                 stopwatch,
                 req_rx,
                 job,

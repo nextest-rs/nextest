@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{ShutdownRequest, TerminateMode, UnitContext};
+use super::{InternalTerminateReason, ShutdownRequest, UnitContext};
 use crate::{
     errors::ConfigureHandleInheritanceError,
     reporter::events::{
@@ -81,7 +81,7 @@ pub(super) async fn terminate_child<'a>(
     cx: &UnitContext<'a>,
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
-    mode: TerminateMode,
+    reason: InternalTerminateReason,
     stopwatch: &mut StopwatchStart,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     _job: Option<&Job>,
@@ -89,7 +89,7 @@ pub(super) async fn terminate_child<'a>(
 ) {
     if let Some(pid) = child.id() {
         let pid_i32 = pid as i32;
-        let (term_reason, term_method) = to_terminate_reason_and_method(&mode, grace_period);
+        let (term_reason, term_method) = to_terminate_reason_and_method(&reason, grace_period);
 
         // This is infallible in regular mode and fallible with cfg(test).
         #[allow(clippy::infallible_destructuring_match)]
@@ -189,15 +189,15 @@ pub(super) async fn terminate_child<'a>(
 }
 
 fn to_terminate_reason_and_method(
-    mode: &TerminateMode,
+    reason: &InternalTerminateReason,
     grace_period: Duration,
 ) -> (UnitTerminateReason, UnitTerminateMethod) {
-    match mode {
-        TerminateMode::Timeout => (
+    match reason {
+        InternalTerminateReason::Timeout => (
             UnitTerminateReason::Timeout,
             timeout_terminate_method(grace_period),
         ),
-        TerminateMode::Signal(req) => (
+        InternalTerminateReason::Signal(req) => (
             UnitTerminateReason::Signal,
             shutdown_terminate_method(*req, grace_period),
         ),
