@@ -119,9 +119,9 @@ pub(super) enum InternalCancel {
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum UnitExecuteStatus<'a, 'test> {
-    Test(&'test InternalExecuteStatus<'a, 'test>),
-    SetupScript(&'test InternalSetupScriptExecuteStatus<'a>),
+pub(super) enum UnitExecuteStatus<'a, 'status> {
+    Test(&'status InternalExecuteStatus<'a>),
+    SetupScript(&'status InternalSetupScriptExecuteStatus<'a>),
 }
 
 impl<'a> UnitExecuteStatus<'a, '_> {
@@ -147,16 +147,15 @@ impl<'a> UnitExecuteStatus<'a, '_> {
     }
 }
 
-pub(super) struct InternalExecuteStatus<'a, 'test> {
-    pub(super) test: TestPacket<'a, 'test>,
+pub(super) struct InternalExecuteStatus<'a> {
+    pub(super) test: TestPacket<'a>,
     pub(super) slow_after: Option<Duration>,
     pub(super) output: ChildExecutionOutput,
     pub(super) result: ExecutionResult,
     pub(super) stopwatch_end: StopwatchSnapshot,
-    pub(super) delay_before_start: Duration,
 }
 
-impl InternalExecuteStatus<'_, '_> {
+impl InternalExecuteStatus<'_> {
     pub(super) fn into_external(self) -> ExecuteStatus {
         ExecuteStatus {
             retry_data: self.test.retry_data(),
@@ -165,7 +164,7 @@ impl InternalExecuteStatus<'_, '_> {
             start_time: self.stopwatch_end.start_time.fixed_offset(),
             time_taken: self.stopwatch_end.active,
             is_slow: self.slow_after.is_some(),
-            delay_before_start: self.delay_before_start,
+            delay_before_start: self.test.delay_before_start(),
         }
     }
 }

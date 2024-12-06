@@ -74,7 +74,7 @@ pub(super) fn assign_process_to_job(
 
 #[expect(clippy::too_many_arguments)]
 pub(super) async fn terminate_child(
-    _cx: &UnitContext<'_, '_>,
+    _cx: &UnitContext<'_>,
     child: &mut Child,
     _child_acc: &mut ChildAccumulator,
     mode: TerminateMode,
