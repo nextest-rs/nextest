@@ -1,5 +1,6 @@
 site_name: cargo-nextest
 site_url: https://nexte.st
+site_description: "A next-generation test runner for Rust."
 
 repo_url: https://github.com/nextest-rs/nextest
 repo_name: nextest-rs/nextest

@@ -1,5 +1,6 @@
 ---
 icon: material/run-fast
+description: Nextest's runner loop is responsible for executing units of work, and coordinating scheduling and responses.
 ---
 
 # The runner loop
