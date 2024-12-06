@@ -183,6 +183,8 @@ impl<'a> ExecutorContext<'a> {
 
         debug!(test_name = test_instance.name, "running test");
 
+        let settings = Arc::new(settings);
+
         let retry_policy = self.force_retries.unwrap_or_else(|| settings.retries());
         let total_attempts = retry_policy.count() + 1;
         let mut backoff_iter = BackoffIter::new(retry_policy);
@@ -240,12 +242,12 @@ impl<'a> ExecutorContext<'a> {
             let packet = TestPacket {
                 test_instance,
                 retry_data,
-                settings: &settings,
-                setup_script_data: &setup_script_data,
+                settings: settings.clone(),
+                setup_script_data: setup_script_data.clone(),
                 delay_before_start: delay,
             };
 
-            let run_status = self.run_test(packet, &resp_tx, &mut req_rx).await;
+            let run_status = self.run_test(packet.clone(), &resp_tx, &mut req_rx).await;
 
             if run_status.result.is_success() {
                 // The test succeeded.
@@ -271,7 +273,7 @@ impl<'a> ExecutorContext<'a> {
                 });
 
                 handle_delay_between_attempts(
-                    packet,
+                    &packet,
                     previous_result,
                     previous_slow,
                     delay,
@@ -550,17 +552,16 @@ impl<'a> ExecutorContext<'a> {
 
     /// Run an individual test in its own process.
     #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
-    async fn run_test<'test>(
+    async fn run_test(
         &self,
-        test: TestPacket<'a, 'test>,
+        test: TestPacket<'a>,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
-    ) -> InternalExecuteStatus<'a, 'test> {
+    ) -> InternalExecuteStatus<'a> {
         let mut stopwatch = crate::time::stopwatch();
-        let delay_before_start = test.delay_before_start;
 
         match self
-            .run_test_inner(test, &mut stopwatch, resp_tx, req_rx)
+            .run_test_inner(test.clone(), &mut stopwatch, resp_tx, req_rx)
             .await
         {
             Ok(run_status) => run_status,
@@ -570,7 +571,6 @@ impl<'a> ExecutorContext<'a> {
                 output: ChildExecutionOutput::StartError(error),
                 result: ExecutionResult::ExecFail,
                 stopwatch_end: stopwatch.snapshot(),
-                delay_before_start,
             },
         }
     }
@@ -578,11 +578,11 @@ impl<'a> ExecutorContext<'a> {
     #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
     async fn run_test_inner<'test>(
         &self,
-        test: TestPacket<'a, 'test>,
+        test: TestPacket<'a>,
         stopwatch: &mut StopwatchStart,
         resp_tx: &UnboundedSender<InternalTestEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
-    ) -> Result<InternalExecuteStatus<'a, 'test>, ChildStartError> {
+    ) -> Result<InternalExecuteStatus<'a>, ChildStartError> {
         let ctx = TestExecuteContext {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
@@ -637,7 +637,7 @@ impl<'a> ExecutorContext<'a> {
         let mut timeout_hit = 0;
 
         let mut cx = UnitContext {
-            packet: UnitPacket::Test(test),
+            packet: UnitPacket::Test(test.clone()),
             slow_after: None,
         };
 
@@ -771,7 +771,6 @@ impl<'a> ExecutorContext<'a> {
             },
             result: exec_result,
             stopwatch_end: stopwatch.snapshot(),
-            delay_before_start: test.delay_before_start,
         })
     }
 }
@@ -847,17 +846,17 @@ impl Iterator for BackoffIter {
 
 /// Either a test or a setup script, along with information about how long the
 /// test took.
-pub(super) struct UnitContext<'a, 'test> {
-    packet: UnitPacket<'a, 'test>,
+pub(super) struct UnitContext<'a> {
+    packet: UnitPacket<'a>,
     // TODO: This is a bit of a mess. It isn't clear where this kind of state
     // should live -- many parts of the request-response system need various
     // pieces of this code.
     slow_after: Option<Duration>,
 }
 
-impl<'a, 'test> UnitContext<'a, 'test> {
+impl<'a> UnitContext<'a> {
     #[cfg_attr(not(unix), expect(dead_code))]
-    pub(super) fn packet(&self) -> &UnitPacket<'a, 'test> {
+    pub(super) fn packet(&self) -> &UnitPacket<'a> {
         &self.packet
     }
 
@@ -874,12 +873,12 @@ impl<'a, 'test> UnitContext<'a, 'test> {
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum UnitPacket<'a, 'test> {
+pub(super) enum UnitPacket<'a> {
     SetupScript(SetupScriptPacket<'a>),
-    Test(TestPacket<'a, 'test>),
+    Test(TestPacket<'a>),
 }
 
-impl UnitPacket<'_, '_> {
+impl UnitPacket<'_> {
     pub(super) fn kind(&self) -> UnitKind {
         match self {
             Self::SetupScript(_) => UnitKind::Script,
@@ -888,16 +887,16 @@ impl UnitPacket<'_, '_> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(super) struct TestPacket<'a, 'test> {
+#[derive(Clone, Debug)]
+pub(super) struct TestPacket<'a> {
     test_instance: TestInstance<'a>,
     retry_data: RetryData,
-    settings: &'test TestSettings,
-    setup_script_data: &'test SetupScriptExecuteData<'a>,
+    settings: Arc<TestSettings>,
+    setup_script_data: Arc<SetupScriptExecuteData<'a>>,
     delay_before_start: Duration,
 }
 
-impl<'a> TestPacket<'a, '_> {
+impl<'a> TestPacket<'a> {
     fn slow_event(
         &self,
         elapsed: Duration,
@@ -913,6 +912,10 @@ impl<'a> TestPacket<'a, '_> {
 
     pub(super) fn retry_data(&self) -> RetryData {
         self.retry_data
+    }
+
+    pub(super) fn delay_before_start(&self) -> Duration {
+        self.delay_before_start
     }
 
     pub(super) fn info_response(
@@ -995,7 +998,7 @@ fn drain_req_rx<'a>(
 }
 
 async fn handle_delay_between_attempts<'a>(
-    packet: TestPacket<'a, '_>,
+    packet: &TestPacket<'a>,
     previous_result: ExecutionResult,
     previous_slow: bool,
     delay: Duration,
@@ -1077,7 +1080,7 @@ async fn handle_delay_between_attempts<'a>(
 /// could do more sophisticated checks around e.g. if any processes with the
 /// same PGID are around.
 async fn detect_fd_leaks<'a>(
-    cx: &UnitContext<'a, '_>,
+    cx: &UnitContext<'a>,
     child_pid: u32,
     child_acc: &mut ChildAccumulator,
     tentative_result: Option<ExecutionResult>,
@@ -1145,7 +1148,7 @@ async fn detect_fd_leaks<'a>(
 // can cause more harm than good.
 #[expect(clippy::too_many_arguments)]
 async fn handle_signal_request<'a>(
-    cx: &UnitContext<'a, '_>,
+    cx: &UnitContext<'a>,
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
     req: SignalRequest,
