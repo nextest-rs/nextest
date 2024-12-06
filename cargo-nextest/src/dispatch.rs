@@ -902,18 +902,18 @@ impl TestRunnerOpts {
         if let Some(retries) = self.retries {
             builder.set_retries(RetryPolicy::new_without_delay(retries));
         }
+
         if let Some(max_fail) = self.max_fail {
-            match max_fail {
-                MaxFail::Count(n) => {
-                    builder.set_max_fail(n);
-                }
-                MaxFail::All => {}
-            }
+            builder.set_max_fail(max_fail);
+            debug!(max_fail = ?max_fail, "set max fail");
         } else if self.no_fail_fast {
-            // Ignore --fail-fast
+            builder.set_max_fail(MaxFail::from_fail_fast(false));
+            debug!("set max fail via from_fail_fast(false)");
         } else if self.fail_fast {
-            builder.set_max_fail(1);
+            builder.set_max_fail(MaxFail::from_fail_fast(true));
+            debug!("set max fail via from_fail_fast(true)");
         }
+
         if let Some(test_threads) = self.test_threads {
             builder.set_test_threads(test_threads);
         }

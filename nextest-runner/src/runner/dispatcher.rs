@@ -9,7 +9,7 @@
 
 use super::{RunUnitRequest, ShutdownRequest};
 use crate::{
-    config::{ScriptConfig, ScriptId},
+    config::{MaxFail, ScriptConfig, ScriptId},
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{
@@ -45,7 +45,7 @@ pub(super) struct DispatcherContext<'a, F> {
     cli_args: Vec<String>,
     stopwatch: StopwatchStart,
     run_stats: RunStats,
-    max_fail: Option<usize>,
+    max_fail: MaxFail,
     running_setup_script: Option<ContextSetupScript<'a>>,
     running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
     cancel_state: Option<CancelReason>,
@@ -64,7 +64,7 @@ where
         profile_name: &str,
         cli_args: Vec<String>,
         initial_run_count: usize,
-        max_fail: Option<usize>,
+        max_fail: MaxFail,
     ) -> Self {
         Self {
             callback,
@@ -472,9 +472,7 @@ where
                 self.run_stats.on_test_finished(&run_statuses);
 
                 // should this run be cancelled because of a failure?
-                let fail_cancel = self
-                    .max_fail
-                    .map_or(false, |mf| self.run_stats.failed_count() >= mf);
+                let fail_cancel = self.max_fail.is_exceeded(self.run_stats.failed_count());
 
                 self.basic_callback(TestEventKind::TestFinished {
                     test_instance,
@@ -864,7 +862,7 @@ mod tests {
             "default",
             vec![],
             0,
-            None,
+            MaxFail::All,
         );
         cx.disable_signal_3_times_panic = true;
 

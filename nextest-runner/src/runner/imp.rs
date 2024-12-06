@@ -3,7 +3,9 @@
 
 use super::{DispatcherContext, ExecutorContext};
 use crate::{
-    config::{EvaluatableProfile, RetryPolicy, SetupScriptExecuteData, TestGroup, TestThreads},
+    config::{
+        EvaluatableProfile, MaxFail, RetryPolicy, SetupScriptExecuteData, TestGroup, TestThreads,
+    },
     double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError, TestRunnerExecuteErrors},
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
@@ -35,7 +37,7 @@ use tracing::debug;
 pub struct TestRunnerBuilder {
     capture_strategy: CaptureStrategy,
     retries: Option<RetryPolicy>,
-    max_fail: Option<usize>,
+    max_fail: Option<MaxFail>,
     test_threads: Option<TestThreads>,
 }
 
@@ -62,7 +64,7 @@ impl TestRunnerBuilder {
     }
 
     /// Sets the max-fail value for this test runner.
-    pub fn set_max_fail(&mut self, max_fail: usize) -> &mut Self {
+    pub fn set_max_fail(&mut self, max_fail: MaxFail) -> &mut Self {
         self.max_fail = Some(max_fail);
         self
     }
@@ -92,7 +94,9 @@ impl TestRunnerBuilder {
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
         };
-        let max_fail = self.max_fail.or_else(|| profile.fail_fast().then_some(1));
+        let max_fail = self
+            .max_fail
+            .unwrap_or_else(|| MaxFail::from_fail_fast(profile.fail_fast()));
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -234,7 +238,7 @@ struct TestRunnerInner<'a> {
     capture_strategy: CaptureStrategy,
     force_retries: Option<RetryPolicy>,
     cli_args: Vec<String>,
-    max_fail: Option<usize>,
+    max_fail: MaxFail,
     runtime: Runtime,
 }
 
