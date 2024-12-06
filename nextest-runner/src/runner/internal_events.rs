@@ -7,7 +7,7 @@
 //! within the runner. They'll often carry additional information that the
 //! reporter doesn't need to know about.
 
-use super::{RetryData, RunUnitRequest, SetupScriptPacket, ShutdownRequest, TestPacket};
+use super::{RetryData, SetupScriptPacket, TestPacket};
 use crate::{
     config::{ScriptConfig, ScriptId, SetupScriptEnvMap},
     input::InputEvent,
@@ -18,13 +18,16 @@ use crate::{
         },
         TestOutputDisplay,
     },
-    signal::SignalEvent,
+    signal::{ShutdownEvent, SignalEvent},
     test_output::ChildExecutionOutput,
     time::StopwatchSnapshot,
 };
 use nextest_metadata::MismatchReason;
 use std::time::Duration;
-use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    oneshot,
+};
 
 /// An internal event.
 ///
@@ -190,4 +193,57 @@ impl InternalSetupScriptExecuteStatus<'_> {
             self.env_map,
         )
     }
+}
+
+/// Events sent from the dispatcher to individual unit execution tasks.
+#[derive(Clone, Debug)]
+pub(super) enum RunUnitRequest<'a> {
+    Signal(SignalRequest),
+    Query(RunUnitQuery<'a>),
+}
+
+impl<'a> RunUnitRequest<'a> {
+    pub(super) fn drain(self, status: UnitExecuteStatus<'a, '_>) {
+        match self {
+            #[cfg(unix)]
+            Self::Signal(SignalRequest::Stop(sender)) => {
+                // The receiver being dead isn't really important.
+                let _ = sender.send(());
+            }
+            #[cfg(unix)]
+            Self::Signal(SignalRequest::Continue) => {}
+            Self::Signal(SignalRequest::Shutdown(_)) => {}
+            Self::Query(RunUnitQuery::GetInfo(tx)) => {
+                // The receiver being dead isn't really important.
+                _ = tx.send(status.info_response());
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum SignalRequest {
+    // The mpsc sender is used by each test to indicate that the stop signal has been sent.
+    #[cfg(unix)]
+    Stop(UnboundedSender<()>),
+    #[cfg(unix)]
+    Continue,
+    Shutdown(ShutdownRequest),
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(super) enum ShutdownRequest {
+    Once(ShutdownEvent),
+    Twice,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum RunUnitQuery<'a> {
+    GetInfo(UnboundedSender<InfoResponse<'a>>),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum TerminateMode {
+    Timeout,
+    Signal(ShutdownRequest),
 }

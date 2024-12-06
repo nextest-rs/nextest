@@ -8,9 +8,9 @@ use crate::{
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError, TestRunnerExecuteErrors},
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestInstance, TestList},
-    reporter::events::{InfoResponse, RunStats, TestEvent},
-    runner::{InternalTestEvent, UnitExecuteStatus},
-    signal::{ShutdownEvent, SignalHandler, SignalHandlerKind},
+    reporter::events::{RunStats, TestEvent},
+    runner::InternalTestEvent,
+    signal::{SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
     test_output::CaptureStrategy,
 };
@@ -25,11 +25,7 @@ use std::{
 };
 use tokio::{
     runtime::Runtime,
-    sync::{
-        broadcast,
-        mpsc::{unbounded_channel, UnboundedSender},
-        oneshot,
-    },
+    sync::{broadcast, mpsc::unbounded_channel, oneshot},
     task::JoinError,
 };
 use tracing::debug;
@@ -388,53 +384,6 @@ impl RetryData {
     }
 }
 
-/// Events sent from the test runner to individual test (or setup script) execution tasks.
-#[derive(Clone, Debug)]
-pub(super) enum RunUnitRequest<'a> {
-    Signal(SignalRequest),
-    Query(RunUnitQuery<'a>),
-}
-
-impl<'a> RunUnitRequest<'a> {
-    pub(super) fn drain(self, status: UnitExecuteStatus<'a, '_>) {
-        match self {
-            #[cfg(unix)]
-            Self::Signal(SignalRequest::Stop(sender)) => {
-                // The receiver being dead isn't really important.
-                let _ = sender.send(());
-            }
-            #[cfg(unix)]
-            Self::Signal(SignalRequest::Continue) => {}
-            Self::Signal(SignalRequest::Shutdown(_)) => {}
-            Self::Query(RunUnitQuery::GetInfo(tx)) => {
-                // The receiver being dead isn't really important.
-                _ = tx.send(status.info_response());
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(super) enum SignalRequest {
-    // The mpsc sender is used by each test to indicate that the stop signal has been sent.
-    #[cfg(unix)]
-    Stop(UnboundedSender<()>),
-    #[cfg(unix)]
-    Continue,
-    Shutdown(ShutdownRequest),
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(super) enum ShutdownRequest {
-    Once(ShutdownEvent),
-    Twice,
-}
-
-#[derive(Clone, Debug)]
-pub(super) enum RunUnitQuery<'a> {
-    GetInfo(UnboundedSender<InfoResponse<'a>>),
-}
-
 /// Configures stdout, stdin and stderr inheritance by test processes on Windows.
 ///
 /// With Rust on Windows, these handles can be held open by tests (and therefore by grandchild processes)
@@ -451,12 +400,6 @@ pub fn configure_handle_inheritance(
     no_capture: bool,
 ) -> Result<(), ConfigureHandleInheritanceError> {
     super::os::configure_handle_inheritance_impl(no_capture)
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum TerminateMode {
-    Timeout,
-    Signal(ShutdownRequest),
 }
 
 #[cfg(test)]
