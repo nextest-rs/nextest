@@ -138,6 +138,13 @@ process using `exec`.
 
 [spawns a copy of itself]: https://docs.rs/nextest-runner/latest/nextest_runner/double_spawn/index.html
 
+(Note: This is done by calling [`posix_spawn`][posix_spawn] on the current
+`cargo-nextest` executable with a hidden `__double-spawn` command, _not_
+via the [`fork` system call][fork-syscall]. `fork` is quite messy at best
+and actively dangerous at worst, and is best to be avoided.)
+
+[fork-syscall]: https://en.wikipedia.org/wiki/Fork_(system_call)
+
 This double-spawn approach works around a gnarly race with `SIGTSTP` handling.
 If a child process receives `SIGTSTP` at exactly the wrong time (a window of
 around 5ms on 2022-era hardware under load), it can get stuck in a "half-born"
@@ -167,11 +174,12 @@ With the double-spawn approach:
 * Nextest first uses a [signal mask] to temporarily block `SIGTSTP`.
 * It then spawns a copy of itself, which inherits the signal mask.
 * At this point, the spawn is complete, and the parent process can carry on.
-* The child nextest then unblocks `SIGTSTP`.
+* The child copy then unblocks `SIGTSTP`.
 
-If a `SIGTSTP` is received at this point, the process is paused. But,
-importantly, the parent does not get stuck waiting for the child to finish
-spawning.
+  A queued up `SIGTSTP` may be received at this point. If that is so, the process
+  is paused. But, importantly, the parent does not get stuck waiting for the child to finish spawning.
+* Finally, the spawned child uses [`Command::exec`](https://doc.rust-lang.org/std/os/unix/process/trait.CommandExt.html#tymethod.exec)
+  to replace itself with the test or script process.
 
 The double-spawn approach completely addresses this race, and no instances of a
 stuck runner have been observed since it was implemented.
