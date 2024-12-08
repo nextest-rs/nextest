@@ -1191,7 +1191,6 @@ impl<'a> TestReporterImpl<'a> {
         Ok(())
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn write_setup_script_status_line(
         &self,
         script_id: &ScriptId,
