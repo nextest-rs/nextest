@@ -1,3 +1,5 @@
+experimental = ["setup-scripts"]
+
 [profile.default]
 final-status-level = "slow"
 
@@ -9,6 +11,10 @@ filter = 'package(integration-tests)'
 slow-timeout = { period = "60s", terminate-after = 3 }
 test-group = "my-group"
 junit.store-success-output = true
+
+[[profile.default.scripts]]
+filter = 'package(integration-tests) or binary_id(nextest-runner::integration)'
+setup = "cargo-fetch-fixture"
 
 [profile.ci]
 # Don't fail fast in CI to run the full test suite.
@@ -50,3 +56,8 @@ max-threads = 8
 
 [test-groups.unused-group]
 max-threads = 8
+
+[script.cargo-fetch-fixture]
+command = "cargo fetch --manifest-path fixtures/nextest-tests/Cargo.toml"
+capture-stdout = true
+capture-stderr = true

@@ -7,12 +7,6 @@ runner = "android-runner -x"
 [target.'cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "musl"))']
 runner = ["passthrough", "--ensure-this-arg-is-sent"]
 
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor"
-
 [env]
 CONFIG_WORKSPACE_DIR = { value = "", relative = true }
 
