@@ -29,6 +29,10 @@ test-threads = "num-cpus"
 # mark certain tests as heavier than others. However, it can also be set as a global parameter.
 threads-required = 1
 
+# Extra arguments to pass in to the test binary at runtime. Intended primarily for
+# communication with custom test harnesses -- use with caution!
+phase.run.extra-args = []
+
 # Show these test statuses in the output.
 #
 # The possible values this can take are:

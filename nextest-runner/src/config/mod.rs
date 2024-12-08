@@ -18,6 +18,7 @@
 //! Multi-pass parsing allows for profile parsing errors to be returned as early
 //! as possible -- before the host and target platforms are known. Returning
 //! errors early leads to a better user experience.
+
 mod archive;
 mod config_impl;
 mod helpers;
@@ -25,6 +26,7 @@ mod identifier;
 mod max_fail;
 mod nextest_version;
 mod overrides;
+mod phase;
 mod retry_policy;
 mod scripts;
 mod slow_timeout;

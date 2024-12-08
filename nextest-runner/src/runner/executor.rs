@@ -170,7 +170,7 @@ impl<'a> ExecutorContext<'a> {
     pub(super) async fn run_test_instance(
         &self,
         test_instance: TestInstance<'a>,
-        settings: TestSettings,
+        settings: TestSettings<'a>,
         resp_tx: UnboundedSender<ExecutorEvent<'a>>,
         cancelled_ref: &AtomicBool,
         mut cancel_receiver: broadcast::Receiver<()>,
@@ -587,7 +587,9 @@ impl<'a> ExecutorContext<'a> {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
         };
-        let mut cmd = test.test_instance.make_command(&ctx, self.test_list);
+        let mut cmd =
+            test.test_instance
+                .make_command(&ctx, self.test_list, test.settings.run_extra_args());
         let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.
@@ -891,7 +893,7 @@ impl UnitPacket<'_> {
 pub(super) struct TestPacket<'a> {
     test_instance: TestInstance<'a>,
     retry_data: RetryData,
-    settings: Arc<TestSettings>,
+    settings: Arc<TestSettings<'a>>,
     setup_script_data: Arc<SetupScriptExecuteData<'a>>,
     delay_before_start: Duration,
 }

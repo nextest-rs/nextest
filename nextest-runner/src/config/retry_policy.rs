@@ -631,11 +631,11 @@ mod tests {
             binary_query: binary_query.to_query(),
             test_name: "my_test",
         };
-        let settings_for = config
+        let profile = config
             .profile("ci")
             .expect("ci profile is defined")
-            .apply_build_platforms(&build_platforms())
-            .settings_for(&query);
+            .apply_build_platforms(&build_platforms());
+        let settings_for = profile.settings_for(&query);
         assert_eq!(
             settings_for.retries(),
             retries,

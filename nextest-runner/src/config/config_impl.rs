@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
-    CustomTestGroup, DeserializedOverride, DeserializedProfileScriptConfig,
-    NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId, SettingSource, SetupScripts,
-    SlowTimeout, TestGroup, TestGroupConfig, TestSettings, TestThreads, ThreadsRequired,
-    ToolConfigFile,
+    phase::DeserializedPhase, ArchiveConfig, CompiledByProfile, CompiledData,
+    CompiledDefaultFilter, ConfigExperimental, CustomTestGroup, DeserializedOverride,
+    DeserializedProfileScriptConfig, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
+    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
+    TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
     errors::{
@@ -708,6 +708,13 @@ impl<'cfg> EvaluatableProfile<'cfg> {
             .unwrap_or(self.default_profile.threads_required)
     }
 
+    /// Returns extra arguments to be passed to the test binary at runtime.
+    pub fn run_extra_args(&self) -> &'cfg [String] {
+        self.custom_profile
+            .and_then(|profile| profile.phase.run.extra_args.as_deref())
+            .unwrap_or(&self.default_profile.run_extra_args)
+    }
+
     /// Returns the time after which tests are treated as slow for this profile.
     pub fn slow_timeout(&self) -> SlowTimeout {
         self.custom_profile
@@ -943,6 +950,7 @@ pub(super) struct DefaultProfileImpl {
     default_filter: String,
     test_threads: TestThreads,
     threads_required: ThreadsRequired,
+    run_extra_args: Vec<String>,
     retries: RetryPolicy,
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
@@ -969,6 +977,11 @@ impl DefaultProfileImpl {
             threads_required: p
                 .threads_required
                 .expect("threads-required present in default profile"),
+            run_extra_args: p
+                .phase
+                .run
+                .extra_args
+                .expect("phase.run.extra-args present in default profile"),
             retries: p.retries.expect("retries present in default profile"),
             status_level: p
                 .status_level
@@ -1043,6 +1056,8 @@ pub(super) struct CustomProfileImpl {
     test_threads: Option<TestThreads>,
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
+    #[serde(default)]
+    phase: DeserializedPhase,
     #[serde(default)]
     status_level: Option<StatusLevel>,
     #[serde(default)]

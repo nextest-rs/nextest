@@ -1016,6 +1016,7 @@ impl<'a> TestInstance<'a> {
         &self,
         ctx: &TestExecuteContext<'_>,
         test_list: &TestList<'_>,
+        extra_args: &[String],
     ) -> TestCommand {
         let platform_runner = ctx
             .target_runner
@@ -1037,6 +1038,7 @@ impl<'a> TestInstance<'a> {
         if self.test_info.ignored {
             args.push("--ignored");
         }
+        args.extend(extra_args.iter().map(String::as_str));
 
         let lctx = LocalExecuteContext {
             rust_build_meta: &test_list.rust_build_meta,
