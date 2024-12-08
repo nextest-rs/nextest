@@ -753,16 +753,12 @@ impl<'a> TestReporterImpl<'a> {
             }
             TestEventKind::SetupScriptFinished {
                 script_id,
-                index,
-                total,
                 command,
                 args,
                 run_status,
                 ..
             } => {
-                self.write_setup_script_status_line(
-                    script_id, *index, *total, command, args, run_status, writer,
-                )?;
+                self.write_setup_script_status_line(script_id, command, args, run_status, writer)?;
                 // Always display failing setup script output if it exists. We may change this in
                 // the future.
                 if !run_status.result.is_success() {
@@ -1199,8 +1195,6 @@ impl<'a> TestReporterImpl<'a> {
     fn write_setup_script_status_line(
         &self,
         script_id: &ScriptId,
-        index: usize,
-        total: usize,
         command: &str,
         args: &[String],
         status: &SetupScriptExecuteStatus,
@@ -1223,10 +1217,11 @@ impl<'a> TestReporterImpl<'a> {
             }
         }
 
+        self.write_duration(status.time_taken, writer)?;
+
         writeln!(
             writer,
-            "[{:>9}] {}",
-            format!("{}/{}", index + 1, total),
+            "{}",
             self.display_script_instance(script_id.clone(), command, args)
         )?;
 
