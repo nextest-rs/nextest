@@ -389,7 +389,7 @@ dependencies = [
  "supports-color",
  "supports-unicode",
  "swrite",
- "thiserror 2.0.4",
+ "thiserror 2.0.5",
  "tracing",
  "tracing-subscriber",
 ]
@@ -414,7 +414,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "thiserror 2.0.4",
+ "thiserror 2.0.5",
 ]
 
 [[package]]
@@ -1721,7 +1721,7 @@ dependencies = [
  "regex-syntax 0.8.5",
  "test-case",
  "test-strategy",
- "thiserror 2.0.4",
+ "thiserror 2.0.5",
  "winnow",
  "xxhash-rust",
 ]
@@ -1811,7 +1811,7 @@ dependencies = [
  "target-spec-miette",
  "test-case",
  "test-strategy",
- "thiserror 2.0.4",
+ "thiserror 2.0.5",
  "tokio",
  "tokio-stream",
  "toml",
@@ -2184,7 +2184,7 @@ dependencies = [
  "newtype-uuid",
  "quick-xml 0.37.1",
  "strip-ansi-escapes",
- "thiserror 2.0.4",
+ "thiserror 2.0.5",
  "uuid",
 ]
 
@@ -3060,11 +3060,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.4"
+version = "2.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f49a1853cf82743e3b7950f77e0f4d622ca36cf4317cba00c767838bac8d490"
+checksum = "643caef17e3128658ff44d85923ef2d28af81bb71e0d67bbfe1d76f19a73e053"
 dependencies = [
- "thiserror-impl 2.0.4",
+ "thiserror-impl 2.0.5",
 ]
 
 [[package]]
@@ -3080,9 +3080,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.4"
+version = "2.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8381894bb3efe0c4acac3ded651301ceee58a15d47c2e34885ed1908ad667061"
+checksum = "995d0bbc9995d1f19d28b7215a9352b0fc3cd3a2d2ec95c2cadc485cdedbcdde"
 dependencies = [
  "proc-macro2",
  "quote",
