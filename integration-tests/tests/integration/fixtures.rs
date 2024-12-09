@@ -185,7 +185,7 @@ pub fn save_cargo_metadata(p: &TempProject) {
 }
 
 #[track_caller]
-pub fn build_tests(p: &TempProject) {
+pub fn save_binaries_metadata(p: &TempProject) {
     let output = CargoNextestCli::new()
         .args([
             "--manifest-path",
