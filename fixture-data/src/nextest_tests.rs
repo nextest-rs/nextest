@@ -24,8 +24,7 @@ pub static EXPECTED_TEST_SUITES: Lazy<BTreeMap<RustBinaryId, TestSuiteFixture>> 
             vec![
                 TestCaseFixture::new("test_cargo_env_vars", TestCaseFixtureStatus::Pass)
                     .with_property(TestCaseFixtureProperty::NotInDefaultSetUnix),
-                TestCaseFixture::new("test_cwd", TestCaseFixtureStatus::Pass)
-                    .with_property(TestCaseFixtureProperty::NeedsSameCwd),
+                TestCaseFixture::new("test_cwd", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_execute_bin", TestCaseFixtureStatus::Pass),
                 TestCaseFixture::new("test_failure_assert", TestCaseFixtureStatus::Fail),
                 TestCaseFixture::new("test_failure_error", TestCaseFixtureStatus::Fail),
