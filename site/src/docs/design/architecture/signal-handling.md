@@ -178,6 +178,7 @@ With the double-spawn approach:
 
   A queued up `SIGTSTP` may be received at this point. If that is so, the process
   is paused. But, importantly, the parent does not get stuck waiting for the child to finish spawning.
+
 * Finally, the spawned child uses [`Command::exec`](https://doc.rust-lang.org/std/os/unix/process/trait.CommandExt.html#tymethod.exec)
   to replace itself with the test or script process.
 
