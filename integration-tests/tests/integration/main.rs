@@ -222,7 +222,7 @@ fn test_list_full_after_build() {
     set_env_vars();
 
     let p = TempProject::new().unwrap();
-    build_tests(&p);
+    save_binaries_metadata(&p);
 
     let output = CargoNextestCli::new()
         .args([
@@ -244,7 +244,7 @@ fn test_list_host_after_build() {
     set_env_vars();
 
     let p = TempProject::new().unwrap();
-    build_tests(&p);
+    save_binaries_metadata(&p);
 
     let output = CargoNextestCli::new()
         .args([
@@ -268,7 +268,7 @@ fn test_list_target_after_build() {
     set_env_vars();
 
     let p = TempProject::new().unwrap();
-    build_tests(&p);
+    save_binaries_metadata(&p);
 
     let output = CargoNextestCli::new()
         .args([
@@ -292,7 +292,7 @@ fn test_run_no_tests() {
     set_env_vars();
 
     let p = TempProject::new().unwrap();
-    build_tests(&p);
+    save_binaries_metadata(&p);
 
     let output = CargoNextestCli::new()
         .args([
@@ -597,7 +597,7 @@ fn test_run_after_build() {
     set_env_vars();
 
     let p = TempProject::new().unwrap();
-    build_tests(&p);
+    save_binaries_metadata(&p);
 
     let output = CargoNextestCli::new()
         .args([
@@ -626,7 +626,7 @@ fn test_relocated_run() {
     let custom_target_path = custom_target_dir.path();
     let p = TempProject::new_custom_target_dir(custom_target_path).unwrap();
 
-    build_tests(&p);
+    save_binaries_metadata(&p);
     save_cargo_metadata(&p);
 
     let mut p2 = TempProject::new().unwrap();
