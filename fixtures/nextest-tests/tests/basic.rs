@@ -1,9 +1,5 @@
 // Copyright (c) The nextest Contributors
-use std::{
-    env,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::{env, io::Read, path::PathBuf};
 
 #[test]
 fn test_success() {
@@ -66,10 +62,33 @@ fn test_failure_should_panic() {}
 
 #[test]
 fn test_cwd() {
-    // Ensure that the cwd is correct.
+    // Ensure that the cwd is correct. It's a bit tricky to do this in the face
+    // of a relative path, but just ensure that the cwd looks like what it
+    // should be (has a `Cargo.toml` with `name = "nextest-tests"` within it).
     let runtime_cwd = env::current_dir().expect("should be able to read current dir");
-    let compile_time_cwd = Path::new(env!("CARGO_MANIFEST_DIR"));
-    assert_eq!(runtime_cwd, compile_time_cwd, "current dir matches");
+    let cargo_toml_path = runtime_cwd.join("Cargo.toml");
+    let cargo_toml =
+        std::fs::read_to_string(runtime_cwd.join("Cargo.toml")).unwrap_or_else(|error| {
+            panic!(
+                "should be able to read Cargo.toml: {}",
+                cargo_toml_path.display()
+            )
+        });
+    assert!(
+        cargo_toml.contains("name = \"nextest-tests\""),
+        "{} contains name = \"nextest-tests\"",
+        cargo_toml_path.display()
+    );
+
+    // Also ensure that the runtime cwd and the runtime CARGO_MANIFEST_DIR are
+    // the same.
+    let runtime_cargo_manifest_dir =
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set");
+    assert_eq!(
+        runtime_cwd,
+        PathBuf::from(runtime_cargo_manifest_dir),
+        "runtime cwd and CARGO_MANIFEST_DIR are the same"
+    );
 }
 
 #[test]
@@ -149,10 +168,8 @@ fn test_cargo_env_vars() {
 
     // Note: we do not test CARGO here because nextest does not set it -- it's set by Cargo when
     // invoked as `cargo nextest`.
-    assert_env!(
-        "CARGO_MANIFEST_DIR",
-        "__NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR"
-    );
+    // Also, CARGO_MANIFEST_DIR is tested separately by test_cwd.
+
     assert_env!("CARGO_PKG_VERSION");
     assert_env!("CARGO_PKG_VERSION_MAJOR");
     assert_env!("CARGO_PKG_VERSION_MINOR");

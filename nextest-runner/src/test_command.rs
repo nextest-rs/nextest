@@ -149,53 +149,47 @@ where
 }
 
 fn apply_package_env(cmd: &mut std::process::Command, package: &PackageMetadata<'_>) {
-    cmd.env(
-        "__NEXTEST_ORIGINAL_CARGO_MANIFEST_DIR",
-        // This is a test-only environment variable set to the *old* cwd. Not part of the
-        // public API.
-        package.manifest_path().parent().unwrap(),
-    )
     // These environment variables are set at runtime by cargo test:
     // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates
-    .env("CARGO_PKG_VERSION", format!("{}", package.version()))
-    .env(
-        "CARGO_PKG_VERSION_MAJOR",
-        format!("{}", package.version().major),
-    )
-    .env(
-        "CARGO_PKG_VERSION_MINOR",
-        format!("{}", package.version().minor),
-    )
-    .env(
-        "CARGO_PKG_VERSION_PATCH",
-        format!("{}", package.version().patch),
-    )
-    .env(
-        "CARGO_PKG_VERSION_PRE",
-        format!("{}", package.version().pre),
-    )
-    .env("CARGO_PKG_AUTHORS", package.authors().join(":"))
-    .env("CARGO_PKG_NAME", package.name())
-    .env(
-        "CARGO_PKG_DESCRIPTION",
-        package.description().unwrap_or_default(),
-    )
-    .env("CARGO_PKG_HOMEPAGE", package.homepage().unwrap_or_default())
-    .env("CARGO_PKG_LICENSE", package.license().unwrap_or_default())
-    .env(
-        "CARGO_PKG_LICENSE_FILE",
-        package.license_file().unwrap_or_else(|| "".as_ref()),
-    )
-    .env(
-        "CARGO_PKG_REPOSITORY",
-        package.repository().unwrap_or_default(),
-    )
-    .env(
-        "CARGO_PKG_RUST_VERSION",
-        package
-            .minimum_rust_version()
-            .map_or(String::new(), |v| v.to_string()),
-    );
+    cmd.env("CARGO_PKG_VERSION", format!("{}", package.version()))
+        .env(
+            "CARGO_PKG_VERSION_MAJOR",
+            format!("{}", package.version().major),
+        )
+        .env(
+            "CARGO_PKG_VERSION_MINOR",
+            format!("{}", package.version().minor),
+        )
+        .env(
+            "CARGO_PKG_VERSION_PATCH",
+            format!("{}", package.version().patch),
+        )
+        .env(
+            "CARGO_PKG_VERSION_PRE",
+            format!("{}", package.version().pre),
+        )
+        .env("CARGO_PKG_AUTHORS", package.authors().join(":"))
+        .env("CARGO_PKG_NAME", package.name())
+        .env(
+            "CARGO_PKG_DESCRIPTION",
+            package.description().unwrap_or_default(),
+        )
+        .env("CARGO_PKG_HOMEPAGE", package.homepage().unwrap_or_default())
+        .env("CARGO_PKG_LICENSE", package.license().unwrap_or_default())
+        .env(
+            "CARGO_PKG_LICENSE_FILE",
+            package.license_file().unwrap_or_else(|| "".as_ref()),
+        )
+        .env(
+            "CARGO_PKG_REPOSITORY",
+            package.repository().unwrap_or_default(),
+        )
+        .env(
+            "CARGO_PKG_RUST_VERSION",
+            package
+                .minimum_rust_version()
+                .map_or(String::new(), |v| v.to_string()),
+        );
 }
 
 /// Applies environment variables spcified by the build script via `cargo::rustc-env`
