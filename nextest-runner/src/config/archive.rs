@@ -3,7 +3,7 @@
 
 use super::TrackDefault;
 use crate::config::helpers::deserialize_relative_path;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::{de::Unexpected, Deserialize};
 use std::fmt;
 
@@ -49,7 +49,7 @@ impl ArchiveInclude {
     /// Join the path with the given target dir.
     pub fn join_path(&self, target_dir: &Utf8Path) -> Utf8PathBuf {
         match self.relative_to {
-            ArchiveRelativeTo::Target => target_dir.join(&self.path),
+            ArchiveRelativeTo::Target => join_rel_path(target_dir, &self.path),
         }
     }
 
@@ -66,6 +66,27 @@ fn default_depth() -> TrackDefault<RecursionDepth> {
 
 fn default_on_missing() -> ArchiveIncludeOnMissing {
     ArchiveIncludeOnMissing::Warn
+}
+
+fn join_rel_path(a: &Utf8Path, rel: &Utf8Path) -> Utf8PathBuf {
+    // This joins the subset of components that deserialize_relative_path
+    // allows. We also always use "/" to ensure consistency across platforms.
+    let mut out = String::from(a.to_owned());
+
+    for component in rel.components() {
+        match component {
+            Utf8Component::CurDir => {}
+            Utf8Component::Normal(p) => {
+                out.push('/');
+                out.push_str(p);
+            }
+            other => unreachable!(
+                "found invalid component {other:?}, deserialize_relative_path should have errored"
+            ),
+        }
+    }
+
+    out.into()
 }
 
 /// What to do when an archive-include path is missing.
@@ -430,5 +451,23 @@ mod tests {
             message.contains(expected_message),
             "expected message: {expected_message}\nactual message: {message}"
         );
+    }
+
+    #[test]
+    fn test_join_rel_path() {
+        let inputs = [
+            ("a", "b", "a/b"),
+            ("a", "b/c", "a/b/c"),
+            ("a", "", "a"),
+            ("a", ".", "a"),
+        ];
+
+        for (base, rel, expected) in inputs {
+            assert_eq!(
+                join_rel_path(Utf8Path::new(base), Utf8Path::new(rel)),
+                Utf8Path::new(expected),
+                "actual matches expected -- base: {base}, rel: {rel}"
+            );
+        }
     }
 }
