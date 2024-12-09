@@ -70,7 +70,7 @@ fn test_cwd() {
     let cargo_toml =
         std::fs::read_to_string(runtime_cwd.join("Cargo.toml")).unwrap_or_else(|error| {
             panic!(
-                "should be able to read Cargo.toml: {}",
+                "error reading Cargo.toml at `{}`: {error}",
                 cargo_toml_path.display()
             )
         });

@@ -45,6 +45,7 @@ config = { version = "0.14.1", default-features = false, features = [
 chrono = "0.4.39"
 clap = { version = "4.5.23", features = ["derive"] }
 console-subscriber = "0.4.1"
+cp_r = "0.5.2"
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
@@ -54,6 +55,7 @@ enable-ansi-support = "0.2.1"
 # we don't use the default formatter so we don't need default features
 env_logger = { version = "0.11.5", default-features = false }
 fixture-data = { path = "fixture-data" }
+fs-err = "3.0.0"
 future-queue = "0.3.0"
 futures = "0.3.31"
 globset = "0.4.15"
@@ -124,6 +126,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.14"
 unicode-normalization = "0.1.24"
+whoami = "1.5.2"
 win32job = "2.0.0"
 windows-sys = "0.59.0"
 winnow = "0.6.20"

@@ -32,6 +32,11 @@ pub enum ReuseBuildKind {
 pub enum ExpectedError {
     #[error("could not change to requested directory")]
     SetCurrentDirFailed { error: std::io::Error },
+    #[error("failed to get current executable")]
+    GetCurrentExeFailed {
+        #[source]
+        err: std::io::Error,
+    },
     #[error("cargo metadata exec failed")]
     CargoMetadataExecFailed {
         command: String,
@@ -387,6 +392,7 @@ impl ExpectedError {
             Self::WorkspaceRootInvalidUtf8 { .. }
             | Self::WorkspaceRootInvalid { .. }
             | Self::SetCurrentDirFailed { .. }
+            | Self::GetCurrentExeFailed { .. }
             | Self::ProfileNotFound { .. }
             | Self::StoreDirCreateError { .. }
             | Self::RootManifestNotFound { .. }
@@ -454,6 +460,10 @@ impl ExpectedError {
             Self::SetCurrentDirFailed { error } => {
                 error!("could not change to requested directory");
                 Some(error as &dyn Error)
+            }
+            Self::GetCurrentExeFailed { err } => {
+                error!("failed to get current executable");
+                Some(err as &dyn Error)
             }
             Self::CargoMetadataExecFailed { command, err } => {
                 error!("failed to execute `{}`", command.style(styles.bold));
