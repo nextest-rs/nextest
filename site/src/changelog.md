@@ -22,9 +22,12 @@ Since beta 2:
 - When [adding extra files to an archive], nextest now ignores empty and `.`
   path components in the specification while joining the specified `path`. This
   means that archives won't accidentally get duplicated entries.
+- Update `idna` to address [RUSTSEC-2024-0421]. Since nextest only accesses
+  domains that do not use punycode, we disable that support entirely.
 
 [*Passing in extra arguments*]: https://nexte.st/docs/configuration/extra-args/
 [adding extra files to an archive]: https://nexte.st/docs/ci-features/archiving/#adding-extra-files-to-an-archive
+[RUSTSEC-2024-0421]: https://rustsec.org/advisories/RUSTSEC-2024-0421.html
 
 ## [0.9.86-b.2] - 2024-12-06
 

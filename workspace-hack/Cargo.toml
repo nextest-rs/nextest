@@ -30,6 +30,7 @@ num-traits = { version = "0.2.19", default-features = false, features = ["libm",
 rand = { version = "0.8.5" }
 serde = { version = "1.0.215", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.133", features = ["unbounded_depth"] }
+smallvec = { version = "1.13.2", default-features = false, features = ["const_generics"] }
 tokio = { version = "1.42.0", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 tracing-core = { version = "0.1.33" }
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt", "tracing-log"] }
