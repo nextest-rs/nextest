@@ -63,17 +63,21 @@ harnesses*](../design/custom-test-harnesses.md).
 Extra arguments are typically defined via [per-test
 settings](per-test-overrides.md).
 
-
-To run all tests in the `gui-tests` package with the `--test-threads=1`
-argument:
+To run all tests in the `gui` package's `tests/custom-tests.rs` target
+with the `--test-threads=1` argument:
 
 ```toml title="Extra arguments in <code>.config/nextest.toml</code>"
 [[profile.default.overrides]]
-filter = "package(gui-tests)"
+filter = "binary_id(gui::custom-tests)"
 run-extra-args = ["--test-threads=1"]
 ```
 
-You can also define extra arguments that apply globally to all tests:
+The `binary_id` predicate accepts names shown during `cargo nextest run`; see
+[*Binary IDs*] for more.
+
+[*Binary IDs*]: https://nexte.st/docs/running/#binary-ids
+
+You can also define extra arguments that apply to all tests:
 
 ```toml
 [profile.default]
