@@ -26,7 +26,6 @@ mod identifier;
 mod max_fail;
 mod nextest_version;
 mod overrides;
-mod phase;
 mod retry_policy;
 mod scripts;
 mod slow_timeout;
