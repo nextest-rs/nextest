@@ -46,6 +46,9 @@ for more information.
 `default-filter` <!-- md:version 0.9.84 -->
 : The [default filter](../running.md#running-a-subset-of-tests-by-default) on this platform. Only supported for overrides that specify `platform` and not `filter`.
 
+`run-extra-args` <!-- md:version 0.9.86 -->
+: [Extra arguments](extra-args.md) to pass to the test binary.
+
 ## Example
 
 ```toml title="Basic example for per-test settings in <code>.config/nextest.toml</code>"
