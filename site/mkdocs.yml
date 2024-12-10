@@ -101,10 +101,11 @@ nav:
           - docs/configuration/per-test-overrides.md
           - "More configuration":
                 - "Specifying platforms": docs/configuration/specifying-platforms.md
-                - "Environment variables": docs/configuration/env-vars.md
                 - "Minimum versions": docs/configuration/minimum-versions.md
                 - "Heavy tests": docs/configuration/threads-required.md
                 - "Mutual exclusion and rate-limiting": docs/configuration/test-groups.md
+                - "Environment variables": docs/configuration/env-vars.md
+                - "Extra arguments": docs/configuration/extra-args.md
                 - docs/configuration/setup-scripts.md
     - Machine-readable output:
           - "About output formats": docs/machine-readable/index.md

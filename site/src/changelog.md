@@ -8,6 +8,24 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.86-b.3] - 2024-12-09
+
+Since beta 2:
+
+### Added
+
+- Added a way to pass in extra arguments to the test binary at runtime, via
+  `run-extra-args`. See [*Passing in extra arguments*].
+
+### Fixed
+
+- When [adding extra files to an archive], nextest now ignores empty and `.`
+  path components in the specification while joining the specified `path`. This
+  means that archives won't accidentally get duplicated entries.
+
+[*Passing in extra arguments*]: https://nexte.st/docs/configuration/extra-args/
+[adding extra files to an archive]: https://nexte.st/docs/ci-features/archiving/#adding-extra-files-to-an-archive
+
 ## [0.9.86-b.2] - 2024-12-06
 
 Since beta 1:
@@ -1255,6 +1273,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.86-b.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.3
 [0.9.86-b.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.2
 [0.9.86-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.1
 [0.9.85]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.85
