@@ -53,7 +53,7 @@ plugins:
     - search
     - social:
           cards_layout_options:
-              font_family: Inter
+              font_family: Inter Tight
               background_color: "#045"
 
 extra:

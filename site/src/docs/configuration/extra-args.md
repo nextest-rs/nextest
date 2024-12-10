@@ -1,6 +1,6 @@
 ---
 icon: material/pencil
-description: Passing in extra arguments to test binaries at runtime: running tests on the main thread of a process.
+description: "Passing in extra arguments to test binaries at runtime: running tests on the main thread of a process."
 ---
 
 # Passing in extra arguments
