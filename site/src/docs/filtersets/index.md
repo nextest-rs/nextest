@@ -4,7 +4,8 @@ icon: material/account-filter
 
 # Filterset DSL
 
-Nextest supports a domain-specific language (DSL) for choosing sets of tests called **filtersets** (formerly **filter expressions**). The DSL is inspired by, and is similar to, [Bazel query](https://bazel.build/docs/query-how-to) and [Mercurial revsets](https://www.mercurial-scm.org/repo/hg/help/revsets).
+Nextest supports a domain-specific language (DSL) for choosing sets of tests called **filtersets** (formerly **filter expressions**). The DSL is inspired by [Bazel's query language](https://bazel.build/query/quickstart), and
+is most similar to _revsets_ as implemented in the [Jujutsu](https://martinvonz.github.io/jj/latest/revsets/) and [Mercurial](https://www.mercurial-scm.org/repo/hg/help/revsets) source control systems.
 
 Filtersets are specified on the command line with `-E`, or `--filterset` <!-- md:version 0.9.76 -->. (In prior versions of nextest, use `--filter-expr`.)
 
