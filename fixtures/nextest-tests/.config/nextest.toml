@@ -82,6 +82,9 @@ default-filter = "not (test(test_flaky) | package(cdylib-example))"
 platform = 'cfg(unix)'
 default-filter = "not (test(test_flaky) | package(cdylib-example) | test(test_cargo_env_vars))"
 
+[profile.archive-all]
+archive.include = [{ path = "", relative-to = "target" }]
+
 [test-groups.flaky]
 max-threads = 4
 

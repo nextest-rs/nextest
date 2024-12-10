@@ -162,16 +162,22 @@ struct BinaryListBuildState<'g> {
     graph: &'g PackageGraph,
     rust_binaries: Vec<RustTestBinary>,
     rust_build_meta: RustBuildMeta<BinaryListState>,
+    alt_target_dir: Option<Utf8PathBuf>,
 }
 
 impl<'g> BinaryListBuildState<'g> {
     fn new(graph: &'g PackageGraph, build_platforms: BuildPlatforms) -> Self {
         let rust_target_dir = graph.workspace().target_directory().to_path_buf();
+        // For testing only, not part of the public API.
+        let alt_target_dir = std::env::var("__NEXTEST_ALT_TARGET_DIR")
+            .ok()
+            .map(Utf8PathBuf::from);
 
         Self {
             graph,
             rust_binaries: vec![],
             rust_build_meta: RustBuildMeta::new(rust_target_dir, build_platforms),
+            alt_target_dir,
         }
     }
 
@@ -373,9 +379,28 @@ impl<'g> BinaryListBuildState<'g> {
             Some((_, p)) => p.into(),
             None => path,
         };
-        let rel_path = actual_path
-            .strip_prefix(&self.rust_build_meta.target_directory)
-            .ok()?;
+
+        let rel_path = match actual_path.strip_prefix(&self.rust_build_meta.target_directory) {
+            Ok(rel) => rel,
+            Err(_) => {
+                // For a seeded build (like in our test suite), Cargo will
+                // return:
+                //
+                // * the new path if the linked path exists
+                // * the original path if the linked path does not exist
+                //
+                // Linked paths not existing is not an ordinary condition, but
+                // we want to test it within nextest. We filter out paths if
+                // they're not a subdirectory of the target directory. With
+                // __NEXTEST_ALT_TARGET_DIR, we can simulate that for an
+                // alternate target directory.
+                if let Some(alt_target_dir) = &self.alt_target_dir {
+                    actual_path.strip_prefix(alt_target_dir).ok()?
+                } else {
+                    return None;
+                }
+            }
+        };
 
         self.rust_build_meta
             .linked_paths

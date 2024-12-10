@@ -8,5 +8,4 @@ extern "C" {
 #[test]
 fn test_multiply_two() {
     assert_eq!(unsafe { multiply_two(3, 3) }, 9);
-
 }

@@ -3,7 +3,12 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
-use std::{fs, io, path::Path};
+use color_eyre::eyre::{bail, Context};
+use cp_r::CopyOptions;
+use fs_err as fs;
+use integration_tests::{nextest_cli::CargoNextestCli, seed::nextest_tests_dir};
+use nextest_metadata::BinaryListSummary;
+use std::path::Path;
 
 // This isn't general purpose -- it specifically excludes certain directories at the root and is
 // generally not race-free.
@@ -11,23 +16,21 @@ pub(super) fn copy_dir_all(
     src: impl AsRef<Path>,
     dst: impl AsRef<Path>,
     root: bool,
-) -> io::Result<()> {
+) -> color_eyre::Result<()> {
     let src = src.as_ref();
     let dst = dst.as_ref();
 
     fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            if root && entry.path().file_name() == Some(std::ffi::OsStr::new("target")) {
-                continue;
+    // Do a copy with `cp_r`, which preserves mtimes -- this ensures that Cargo
+    // will use the seed and won't spuriously rebuild the workspace.
+    CopyOptions::new()
+        .filter(|path, _| {
+            if !root {
+                return Ok(true);
             }
-            copy_dir_all(entry.path(), dst.join(entry.file_name()), false)?;
-        } else {
-            fs::copy(entry.path(), dst.join(entry.file_name()))?;
-        }
-    }
+            Ok(path.as_os_str() != "target")
+        })
+        .copy_tree(src, dst)?;
     Ok(())
 }
 
@@ -40,6 +43,7 @@ pub struct TempProject {
     temp_root: Utf8PathBuf,
     workspace_root: Utf8PathBuf,
     target_dir: Utf8PathBuf,
+    orig_target_dir: Utf8PathBuf,
 }
 
 impl TempProject {
@@ -52,17 +56,21 @@ impl TempProject {
     }
 
     fn new_impl(custom_target_dir: Option<Utf8PathBuf>) -> color_eyre::Result<Self> {
+        // Ensure that a custom target dir, if specified, ends with "target".
+        if let Some(dir) = &custom_target_dir {
+            if !dir.ends_with("target") {
+                bail!("custom target directory must end with 'target'");
+            }
+        }
+
         let temp_dir = camino_tempfile::Builder::new()
-            .prefix("nextest-fixture")
+            .prefix("nextest-fixture-")
             .tempdir()?;
         // Note: can't use canonicalize here because it ends up creating a UNC path on Windows,
         // which doesn't match compile time.
         let temp_root: Utf8PathBuf = fixup_macos_path(temp_dir.path());
         let workspace_root = temp_root.join("src");
-        let src_dir = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join("fixtures/nextest-tests");
+        let src_dir = nextest_tests_dir();
 
         copy_dir_all(src_dir, &workspace_root, true)?;
 
@@ -71,12 +79,45 @@ impl TempProject {
             None => workspace_root.join("target"),
         };
 
-        Ok(Self {
+        let mut ret = Self {
             temp_dir: Some(temp_dir),
             temp_root,
             workspace_root,
             target_dir,
-        })
+            // orig_target_dir is filled out below. This is hacky, it's never
+            // great to make partially-created structs -- but it's fine, this is
+            // test code.
+            orig_target_dir: Utf8PathBuf::new(),
+        };
+
+        // Extract the seed into the target directory.
+        let seed_archive = std::env::var("SEED_ARCHIVE")
+            .wrap_err("SEED_ARCHIVE not set -- the setup script should have set it")?;
+        // A small bootstrapping problem -- we don't have the original target
+        // dir, but we need to pass it in here. So use the new target dir
+        // (knowing that the original one won't be used in this invocation,
+        // because it's only used for creating new archives).
+        _ = CargoNextestCli::for_test()
+            .args([
+                "run",
+                "--no-run",
+                "--manifest-path",
+                ret.manifest_path().as_str(),
+                "--archive-file",
+                seed_archive.as_str(),
+                "--extract-to",
+                ret.target_dir().parent().unwrap().as_str(),
+            ])
+            .output();
+
+        // Also get the target dir from the archive to set in the environment.
+        let orig_binary_path = ret.target_dir().join("nextest/binaries-metadata.json");
+        let binary_list_json = fs::read_to_string(&orig_binary_path)?;
+        let binary_list: BinaryListSummary =
+            serde_json::from_str(&binary_list_json).wrap_err("failed to read binary list")?;
+        ret.orig_target_dir = binary_list.rust_build_meta.target_directory;
+
+        Ok(ret)
     }
 
     #[expect(dead_code)]
@@ -99,7 +140,15 @@ impl TempProject {
     }
 
     pub fn set_target_dir(&mut self, target_dir: impl Into<Utf8PathBuf>) {
-        self.target_dir = target_dir.into();
+        let target_dir = target_dir.into();
+        if !target_dir.ends_with("target") {
+            panic!("custom target directory `{target_dir}` must end with 'target'");
+        }
+        self.target_dir = target_dir;
+    }
+
+    pub fn orig_target_dir(&self) -> &Utf8Path {
+        &self.orig_target_dir
     }
 
     pub fn binaries_metadata_path(&self) -> Utf8PathBuf {

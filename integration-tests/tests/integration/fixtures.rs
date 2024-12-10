@@ -2,170 +2,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::temp_project::TempProject;
-use camino::Utf8PathBuf;
-use color_eyre::Result;
 use fixture_data::{
     models::{TestCaseFixtureProperty, TestCaseFixtureStatus, TestSuiteFixtureProperty},
     nextest_tests::EXPECTED_TEST_SUITES,
 };
+use integration_tests::nextest_cli::{cargo_bin, CargoNextestCli};
 use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustTestSuiteStatusSummary, TestListSummary,
 };
 use regex::Regex;
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    ffi::OsString,
-    fmt,
-    process::{Command, ExitStatus},
-};
-
-pub fn cargo_bin() -> String {
-    match std::env::var("CARGO") {
-        Ok(v) => v,
-        Err(std::env::VarError::NotPresent) => "cargo".to_owned(),
-        Err(err) => panic!("error obtaining CARGO env var: {err}"),
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct CargoNextestCli {
-    bin: Utf8PathBuf,
-    args: Vec<String>,
-    envs: HashMap<OsString, OsString>,
-    unchecked: bool,
-}
-
-impl CargoNextestCli {
-    pub fn new() -> Self {
-        let bin = std::env::var("NEXTEST_BIN_EXE_cargo-nextest-dup")
-            .expect("unable to find cargo-nextest-dup");
-        Self {
-            bin: bin.into(),
-            args: Vec::new(),
-            envs: HashMap::new(),
-            unchecked: false,
-        }
-    }
-
-    #[expect(dead_code)]
-    pub fn arg(&mut self, arg: impl Into<String>) -> &mut Self {
-        self.args.push(arg.into());
-        self
-    }
-
-    pub fn args(&mut self, arg: impl IntoIterator<Item = impl Into<String>>) -> &mut Self {
-        self.args.extend(arg.into_iter().map(Into::into));
-        self
-    }
-
-    pub fn env(&mut self, k: impl Into<OsString>, v: impl Into<OsString>) -> &mut Self {
-        self.envs.insert(k.into(), v.into());
-        self
-    }
-
-    #[expect(dead_code)]
-    pub fn envs(
-        &mut self,
-        envs: impl IntoIterator<Item = (impl Into<OsString>, impl Into<OsString>)>,
-    ) -> &mut Self {
-        self.envs
-            .extend(envs.into_iter().map(|(k, v)| (k.into(), v.into())));
-        self
-    }
-
-    pub fn unchecked(&mut self, unchecked: bool) -> &mut Self {
-        self.unchecked = unchecked;
-        self
-    }
-
-    pub fn output(&self) -> CargoNextestOutput {
-        let mut command = std::process::Command::new(&self.bin);
-        command.arg("nextest").args(&self.args);
-        command.envs(&self.envs);
-        let output = command.output().expect("failed to execute");
-
-        let ret = CargoNextestOutput {
-            command,
-            exit_status: output.status,
-            stdout: output.stdout,
-            stderr: output.stderr,
-        };
-
-        if !self.unchecked && !output.status.success() {
-            panic!("command failed:\n\n{ret}");
-        }
-
-        ret
-    }
-}
-
-pub struct CargoNextestOutput {
-    pub command: Command,
-    pub exit_status: ExitStatus,
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
-}
-
-impl CargoNextestOutput {
-    pub fn stdout_as_str(&self) -> Cow<'_, str> {
-        String::from_utf8_lossy(&self.stdout)
-    }
-
-    pub fn stderr_as_str(&self) -> Cow<'_, str> {
-        String::from_utf8_lossy(&self.stderr)
-    }
-
-    pub fn decode_test_list_json(&self) -> Result<TestListSummary> {
-        Ok(serde_json::from_slice(&self.stdout)?)
-    }
-}
-
-impl fmt::Display for CargoNextestOutput {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "command: {:?}\nexit code: {:?}\n\
-                   --- stdout ---\n{}\n\n--- stderr ---\n{}\n\n",
-            self.command,
-            self.exit_status.code(),
-            String::from_utf8_lossy(&self.stdout),
-            String::from_utf8_lossy(&self.stderr)
-        )
-    }
-}
-
-// Make Debug output the same as Display output, so `.unwrap()` and `.expect()` are nicer.
-impl fmt::Debug for CargoNextestOutput {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, f)
-    }
-}
-
-#[track_caller]
-pub(super) fn set_env_vars() {
-    // The dynamic library tests require this flag.
-    std::env::set_var("RUSTFLAGS", "-C prefer-dynamic");
-    // Set CARGO_TERM_COLOR to never to ensure that ANSI color codes don't interfere with the
-    // output.
-    // TODO: remove this once programmatic run statuses are supported.
-    std::env::set_var("CARGO_TERM_COLOR", "never");
-    // This environment variable is required to test the #[bench] fixture. Note that THIS IS FOR
-    // TEST CODE ONLY. NEVER USE THIS IN PRODUCTION.
-    std::env::set_var("RUSTC_BOOTSTRAP", "1");
-
-    // Disable the tests which check for environment variables being set in `config.toml`, as they
-    // won't be in the search path when running integration tests.
-    std::env::set_var("__NEXTEST_NO_CHECK_CARGO_ENV_VARS", "1");
-
-    // Display empty STDOUT and STDERR lines in the output of failed tests. This
-    // allows tests which make sure outputs are being displayed to work.
-    std::env::set_var("__NEXTEST_DISPLAY_EMPTY_OUTPUTS", "1");
-
-    // Remove OUT_DIR from the environment, as it interferes with tests (some of them expect that
-    // OUT_DIR isn't set.)
-    std::env::remove_var("OUT_DIR");
-}
+use std::process::Command;
 
 #[track_caller]
 pub fn save_cargo_metadata(p: &TempProject) {
@@ -186,7 +32,7 @@ pub fn save_cargo_metadata(p: &TempProject) {
 
 #[track_caller]
 pub fn save_binaries_metadata(p: &TempProject) {
-    let output = CargoNextestCli::new()
+    let output = CargoNextestCli::for_test()
         .args([
             "--manifest-path",
             p.manifest_path().as_str(),

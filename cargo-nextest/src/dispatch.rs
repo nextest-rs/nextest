@@ -2099,6 +2099,9 @@ enum DebugCommand {
         #[arg(value_enum)]
         output_format: ExtractOutputFormat,
     },
+
+    /// Print the current executable path.
+    CurrentExe,
 }
 
 impl DebugCommand {
@@ -2153,6 +2156,11 @@ impl DebugCommand {
                     let output_slice = extract_slice_from_output(&stdout, &stderr);
                     display_output_slice(output_slice, output_format)?;
                 }
+            }
+            DebugCommand::CurrentExe => {
+                let exe = std::env::current_exe()
+                    .map_err(|err| ExpectedError::GetCurrentExeFailed { err })?;
+                println!("{}", exe.display());
             }
         }
 
