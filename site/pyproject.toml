@@ -6,7 +6,7 @@ authors = [
     { name = "Rain", email = "rain@sunshowers.io" }
 ]
 dependencies = [
-    "mkdocs-material[imaging]>=9.5.25",
+    "mkdocs-material[imaging]>=9.5.48",
     "ansi2html>=1.9.1",
     "markdown-exec[ansi]>=1.8.3",
     "mdx-truly-sane-lists>=1.3",

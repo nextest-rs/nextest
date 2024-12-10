@@ -51,7 +51,10 @@ plugins:
           enable_creation_date: true
     - markdown-exec
     - search
-    - social
+    - social:
+          cards_layout_options:
+              font_family: Inter
+              background_color: "#045"
 
 extra:
     status:
