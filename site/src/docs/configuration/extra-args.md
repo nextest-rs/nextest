@@ -79,8 +79,8 @@ You can also define extra arguments that apply globally to all tests:
 run-extra-args = ["--test-threads=1"]
 ```
 
-Nextest's CI ensures that with libtest-mimic, the above configuration will run
-tests on the main thread.
+If libtest-mimic is in use, the above configuration will run tests on the main
+thread. (Nextest's CI validates this.)
 
 ### Notes
 
