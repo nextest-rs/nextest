@@ -14,7 +14,7 @@ junit.store-success-output = true
 
 [[profile.default.overrides]]
 filter = 'test(test_single_threaded)'
-phase.run.extra-args = ["--test-threads", "1"]
+run-extra-args = ["--test-threads", "1"]
 
 [[profile.default.scripts]]
 filter = 'package(integration-tests) or binary_id(nextest-runner::integration)'

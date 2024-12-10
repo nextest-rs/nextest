@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    phase::DeserializedPhase, CompiledProfileScripts, DeserializedProfileScriptConfig,
-    EvaluatableProfile, NextestConfig, NextestConfigImpl,
+    CompiledProfileScripts, DeserializedProfileScriptConfig, EvaluatableProfile, NextestConfig,
+    NextestConfigImpl,
 };
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
@@ -168,7 +168,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
                 }
             }
             if run_extra_args.is_none() {
-                if let Some(r) = override_.data.phase.run.extra_args.as_deref() {
+                if let Some(r) = override_.data.run_extra_args.as_deref() {
                     run_extra_args = Some(Source::track_override(r, override_));
                 }
             }
@@ -544,7 +544,7 @@ pub(super) struct ProfileOverrideData {
     target_spec: MaybeTargetSpec,
     filter: Option<FilterOrDefaultFilter>,
     threads_required: Option<ThreadsRequired>,
-    phase: DeserializedPhase,
+    run_extra_args: Option<Vec<String>>,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<Duration>,
@@ -626,7 +626,7 @@ impl CompiledOverride<PreBuildPlatform> {
                         target_spec,
                         filter,
                         threads_required: source.threads_required,
-                        phase: source.phase.clone(),
+                        run_extra_args: source.run_extra_args.clone(),
                         retries: source.retries,
                         slow_timeout: source.slow_timeout,
                         leak_timeout: source.leak_timeout,
@@ -770,7 +770,7 @@ pub(super) struct DeserializedOverride {
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
     #[serde(default)]
-    phase: DeserializedPhase,
+    run_extra_args: Option<Vec<String>>,
     #[serde(default, deserialize_with = "super::deserialize_retry_policy")]
     retries: Option<RetryPolicy>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]

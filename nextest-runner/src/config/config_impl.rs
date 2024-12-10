@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    phase::DeserializedPhase, ArchiveConfig, CompiledByProfile, CompiledData,
-    CompiledDefaultFilter, ConfigExperimental, CustomTestGroup, DeserializedOverride,
-    DeserializedProfileScriptConfig, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
-    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
-    TestThreads, ThreadsRequired, ToolConfigFile,
+    ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
+    CustomTestGroup, DeserializedOverride, DeserializedProfileScriptConfig,
+    NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId, SettingSource, SetupScripts,
+    SlowTimeout, TestGroup, TestGroupConfig, TestSettings, TestThreads, ThreadsRequired,
+    ToolConfigFile,
 };
 use crate::{
     errors::{
@@ -711,7 +711,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     /// Returns extra arguments to be passed to the test binary at runtime.
     pub fn run_extra_args(&self) -> &'cfg [String] {
         self.custom_profile
-            .and_then(|profile| profile.phase.run.extra_args.as_deref())
+            .and_then(|profile| profile.run_extra_args.as_deref())
             .unwrap_or(&self.default_profile.run_extra_args)
     }
 
@@ -978,10 +978,8 @@ impl DefaultProfileImpl {
                 .threads_required
                 .expect("threads-required present in default profile"),
             run_extra_args: p
-                .phase
-                .run
-                .extra_args
-                .expect("phase.run.extra-args present in default profile"),
+                .run_extra_args
+                .expect("run-extra-args present in default profile"),
             retries: p.retries.expect("retries present in default profile"),
             status_level: p
                 .status_level
@@ -1057,7 +1055,7 @@ pub(super) struct CustomProfileImpl {
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
     #[serde(default)]
-    phase: DeserializedPhase,
+    run_extra_args: Option<Vec<String>>,
     #[serde(default)]
     status_level: Option<StatusLevel>,
     #[serde(default)]

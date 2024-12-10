@@ -31,7 +31,7 @@ threads-required = 1
 
 # Extra arguments to pass in to the test binary at runtime. Intended primarily for
 # communication with custom test harnesses -- use with caution!
-phase.run.extra-args = []
+run-extra-args = []
 
 # Show these test statuses in the output.
 #
