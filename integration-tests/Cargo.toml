@@ -13,6 +13,10 @@ path = "test-helpers/cargo-nextest-dup.rs"
 name = "build-seed-archive"
 path = "test-helpers/build-seed-archive.rs"
 
+[[test]]
+name = "custom-harness"
+harness = false
+
 [dependencies]
 camino.workspace = true
 camino-tempfile.workspace = true
@@ -43,7 +47,13 @@ cp_r.workspace = true
 fixture-data.workspace = true
 insta.workspace = true
 itertools.workspace = true
+libtest-mimic.workspace = true
 nextest-metadata.workspace = true
 pathdiff.workspace = true
 regex.workspace = true
 target-spec.workspace = true
+
+# These platforms are supported by num_threads.
+# https://docs.rs/num_threads/0.1.7/src/num_threads/lib.rs.html#5-8
+[target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "macos", target_os = "ios", target_os = "aix"))'.dev-dependencies]
+num_threads.workspace = true

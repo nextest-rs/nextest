@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    CompiledProfileScripts, DeserializedProfileScriptConfig, EvaluatableProfile, NextestConfig,
-    NextestConfigImpl,
+    phase::DeserializedPhase, CompiledProfileScripts, DeserializedProfileScriptConfig,
+    EvaluatableProfile, NextestConfig, NextestConfigImpl,
 };
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
@@ -28,8 +28,9 @@ use target_spec::{Platform, TargetSpec};
 /// The `Source` parameter tracks an optional source; this isn't used by any public APIs at the
 /// moment.
 #[derive(Clone, Debug)]
-pub struct TestSettings<Source = ()> {
+pub struct TestSettings<'p, Source = ()> {
     threads_required: (ThreadsRequired, Source),
+    run_extra_args: (&'p [String], Source),
     retries: (RetryPolicy, Source),
     slow_timeout: (SlowTimeout, Source),
     leak_timeout: (Duration, Source),
@@ -71,10 +72,15 @@ impl<'p> TrackSource<'p> for SettingSource<'p> {
     }
 }
 
-impl TestSettings {
+impl<'p> TestSettings<'p> {
     /// Returns the number of threads required for this test.
     pub fn threads_required(&self) -> ThreadsRequired {
         self.threads_required.0
+    }
+
+    /// Returns extra arguments to pass at runtime for this test.
+    pub fn run_extra_args(&self) -> &'p [String] {
+        self.run_extra_args.0
     }
 
     /// Returns the number of retries for this test.
@@ -119,14 +125,15 @@ impl TestSettings {
 }
 
 #[expect(dead_code)]
-impl<Source: Copy> TestSettings<Source> {
-    pub(super) fn new<'p>(profile: &'p EvaluatableProfile<'_>, query: &TestQuery<'_>) -> Self
+impl<'p, Source: Copy> TestSettings<'p, Source> {
+    pub(super) fn new(profile: &'p EvaluatableProfile<'_>, query: &TestQuery<'_>) -> Self
     where
         Source: TrackSource<'p>,
     {
         let ecx = profile.filterset_ecx();
 
         let mut threads_required = None;
+        let mut run_extra_args = None;
         let mut retries = None;
         let mut slow_timeout = None;
         let mut leak_timeout = None;
@@ -158,6 +165,11 @@ impl<Source: Copy> TestSettings<Source> {
             if threads_required.is_none() {
                 if let Some(t) = override_.data.threads_required {
                     threads_required = Some(Source::track_override(t, override_));
+                }
+            }
+            if run_extra_args.is_none() {
+                if let Some(r) = override_.data.phase.run.extra_args.as_deref() {
+                    run_extra_args = Some(Source::track_override(r, override_));
                 }
             }
             if retries.is_none() {
@@ -205,6 +217,8 @@ impl<Source: Copy> TestSettings<Source> {
         // If no overrides were found, use the profile defaults.
         let threads_required =
             threads_required.unwrap_or_else(|| Source::track_profile(profile.threads_required()));
+        let run_extra_args =
+            run_extra_args.unwrap_or_else(|| Source::track_profile(profile.run_extra_args()));
         let retries = retries.unwrap_or_else(|| Source::track_profile(profile.retries()));
         let slow_timeout =
             slow_timeout.unwrap_or_else(|| Source::track_profile(profile.slow_timeout()));
@@ -226,6 +240,7 @@ impl<Source: Copy> TestSettings<Source> {
 
         TestSettings {
             threads_required,
+            run_extra_args,
             retries,
             slow_timeout,
             leak_timeout,
@@ -529,6 +544,7 @@ pub(super) struct ProfileOverrideData {
     target_spec: MaybeTargetSpec,
     filter: Option<FilterOrDefaultFilter>,
     threads_required: Option<ThreadsRequired>,
+    phase: DeserializedPhase,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<Duration>,
@@ -610,6 +626,7 @@ impl CompiledOverride<PreBuildPlatform> {
                         target_spec,
                         filter,
                         threads_required: source.threads_required,
+                        phase: source.phase.clone(),
                         retries: source.retries,
                         slow_timeout: source.slow_timeout,
                         leak_timeout: source.leak_timeout,
@@ -752,6 +769,8 @@ pub(super) struct DeserializedOverride {
     default_filter: Option<String>,
     #[serde(default)]
     threads_required: Option<ThreadsRequired>,
+    #[serde(default)]
+    phase: DeserializedPhase,
     #[serde(default, deserialize_with = "super::deserialize_retry_policy")]
     retries: Option<RetryPolicy>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
