@@ -1,5 +1,6 @@
 ---
 icon: material/pencil
+description: Passing in extra arguments to test binaries at runtime, enabling advanced use cases like running tests on the main thread.
 ---
 
 # Passing in extra arguments
