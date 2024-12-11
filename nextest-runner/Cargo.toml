@@ -27,6 +27,7 @@ cfg-if.workspace = true
 chrono.workspace = true
 crossterm.workspace = true
 debug-ignore.workspace = true
+derive-where.workspace = true
 duct.workspace = true
 future-queue.workspace = true
 futures.workspace = true
