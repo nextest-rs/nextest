@@ -24,9 +24,12 @@ use crate::{
 };
 use nextest_metadata::MismatchReason;
 use std::time::Duration;
-use tokio::sync::{
-    mpsc::{UnboundedReceiver, UnboundedSender},
-    oneshot,
+use tokio::{
+    sync::{
+        mpsc::{UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
+    task::JoinError,
 };
 
 /// An internal event.
@@ -229,4 +232,18 @@ pub(super) enum RunUnitQuery<'a> {
 pub(super) enum InternalTerminateReason {
     Timeout,
     Signal(ShutdownRequest),
+}
+
+pub(super) enum RunnerTaskState {
+    Finished { child_join_errors: Vec<JoinError> },
+    Cancelled,
+}
+
+impl RunnerTaskState {
+    /// Mark a runner task as finished and having not run any children.
+    pub(super) fn finished_no_children() -> Self {
+        Self::Finished {
+            child_join_errors: Vec::new(),
+        }
+    }
 }

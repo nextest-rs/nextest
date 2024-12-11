@@ -31,7 +31,7 @@ use owo_colors::OwoColorize;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
-    io,
+    fmt, io,
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
@@ -1068,6 +1068,12 @@ pub struct TestInstanceId<'a> {
 
     /// The name of the test.
     pub test_name: &'a str,
+}
+
+impl fmt::Display for TestInstanceId<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.binary_id, self.test_name)
+    }
 }
 
 /// Context required for test execution.
