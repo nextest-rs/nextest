@@ -20,6 +20,11 @@ use quick_junit::{
 };
 use std::{collections::HashMap, fmt, fs::File};
 
+static STDOUT_STDERR_COMBINED: &str = "(stdout and stderr are combined)";
+static STDOUT_NOT_CAPTURED: &str = "(stdout not captured)";
+static STDERR_NOT_CAPTURED: &str = "(stderr not captured)";
+static PROCESS_FAILED_TO_START: &str = "(process failed to start)";
+
 #[derive(Clone, Debug)]
 pub(super) struct MetadataJunit<'cfg> {
     config: JunitConfig<'cfg>,
@@ -352,20 +357,32 @@ fn set_execute_status_props(
     }
 
     if store_stdout_stderr {
-        if let ChildExecutionOutput::Output { output, .. } = exec_output {
-            match output {
-                ChildOutput::Split(split) => {
-                    if let Some(stdout) = &split.stdout {
-                        out.set_system_out(stdout.as_str_lossy());
-                    }
-                    if let Some(stderr) = &split.stderr {
-                        out.set_system_err(stderr.as_str_lossy());
-                    }
+        match exec_output {
+            ChildExecutionOutput::Output {
+                output: ChildOutput::Split(split),
+                ..
+            } => {
+                if let Some(stdout) = &split.stdout {
+                    out.set_system_out(stdout.as_str_lossy());
+                } else {
+                    out.set_system_out(STDOUT_NOT_CAPTURED);
                 }
-                ChildOutput::Combined { output } => {
-                    out.set_system_out(output.as_str_lossy())
-                        .set_system_err("(stdout and stderr are combined)");
+                if let Some(stderr) = &split.stderr {
+                    out.set_system_err(stderr.as_str_lossy());
+                } else {
+                    out.set_system_err(STDERR_NOT_CAPTURED);
                 }
+            }
+            ChildExecutionOutput::Output {
+                output: ChildOutput::Combined { output },
+                ..
+            } => {
+                out.set_system_out(output.as_str_lossy())
+                    .set_system_err(STDOUT_STDERR_COMBINED);
+            }
+            ChildExecutionOutput::StartError(_) => {
+                out.set_system_out(PROCESS_FAILED_TO_START)
+                    .set_system_err(PROCESS_FAILED_TO_START);
             }
         }
     }
@@ -400,7 +417,7 @@ mod tests {
                 message: None,
                 description: None,
                 system_out: Some("stdout\nstderr"),
-                system_err: Some("(stdout and stderr are combined)"),
+                system_err: Some(STDOUT_STDERR_COMBINED),
             },
             ExecuteStatusPropsCase {
                 comment: "success + combined + no store",
@@ -461,7 +478,7 @@ mod tests {
                     "stdout\nstderr\nthread 'foo' panicked at xyz.rs:40:\nstrange\n\
                      extra\nextra2",
                 ),
-                system_err: Some("(stdout and stderr are combined)"),
+                system_err: Some(STDOUT_STDERR_COMBINED),
             },
             ExecuteStatusPropsCase {
                 comment: "failure + split + no store",
@@ -511,7 +528,7 @@ mod tests {
                 message: Some("process aborted with signal SIGTERM"),
                 description: Some("process aborted with signal SIGTERM"),
                 system_out: Some("stdout\nstdout 2\n"),
-                system_err: None,
+                system_err: Some(STDERR_NOT_CAPTURED),
             },
             #[cfg(unix)]
             ExecuteStatusPropsCase {
@@ -594,8 +611,8 @@ mod tests {
                       caused by:
                       - start error"
                 }),
-                system_out: None,
-                system_err: None,
+                system_out: Some(PROCESS_FAILED_TO_START),
+                system_err: Some(PROCESS_FAILED_TO_START),
             },
         ];
 
