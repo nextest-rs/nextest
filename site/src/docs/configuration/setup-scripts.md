@@ -125,3 +125,51 @@ fn my_env_test() {
     assert_eq!(std::env::var("MY_ENV_VAR"), Ok("Hello, world!".to_string()));
 }
 ```
+
+## Setup scripts in JUnit output
+
+<!-- md:version 0.9.86 -->
+
+If nextest's [JUnit support](../machine-readable/junit.md) is enabled, information
+about setup scripts is included in the JUnit output.
+
+JUnit doesn't have native support for setup scripts, so nextest represents them as
+individual tests:
+
+- Each setup script is represented as a separate `<testsuite>` element, with the
+`name` property set to `@setup-script:[script-name]`. Each test suite has a single
+`<testcase>` element, with the `name` property set to the script's name.
+- As a result, setup script adds 1 to the number of tests in the root `<testsuites>`
+  element.
+- A failure or timeout in the script is represented as a `<failure>` element.
+- An execution error to start the script is represented as an `<error>` element.
+- In the `<testsuite>` element's `<properties>` section, the following properties
+  are added:
+  - `command`: The command that was executed.
+  - `args`: The arguments that were passed to the command, concatenated via Unix shell rules.
+  - For each environment variable set by the script, a property is added with the
+    name `output-env:[env-name]`, and the value the environment variable's value.
+
+### Standard output and standard error
+
+If captured, the script's standard output and standard error are included as
+`<system-out>` and `<system-err>` elements, respectively. Unlike with tests,
+where by default output is only included if the test failed, with scripts they
+are always included by default. To alter this behavior, use the
+`junit.store-success-output` and/or `junit.store-failure-output` configuration
+settings:
+
+```toml title="Configuration to control JUnit output for setup scripts"
+[script.my-script]
+command = 'my-script.sh'
+junit.store-success-output = false
+junit.store-failure-output = true
+```
+
+### Example: JUnit output
+
+Here's an example of a `testsuite` element corresponding to a setup script:
+
+```bash exec="true" result="xml"
+cat ../fixtures/setup-script-junit.xml
+```

@@ -8,6 +8,33 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.86-b.4] - 2024-12-11
+
+Since beta 3:
+
+### Added
+
+- Setup scripts are now represented in the JUnit output. For more information,
+  see [*Setup scripts in JUnit output*].
+
+### Changed
+
+- Each test now has a separate Tokio task associated with it. This leads to
+  greater reliability (each test's task can now panic independently), and is
+  faster in repos with many small tests.
+
+  For example, in one test done against
+  [`clap-rs/clap`](https://github.com/clap-rs/clap) on Linux, `cargo nextest
+  run` goes down from 0.36 seconds to 0.23 seconds.
+
+### Fixed
+
+- Fixed a bug where pressing two Ctrl-Cs in succession would not `SIGKILL` any running tests.
+- `junit.store-success-output` now works correctly -- previously, storage of output is disabled unconditionally.
+- In JUnit output, the `testsuite` elements are now stored in the order they are first seen (`IndexMap`), rather than in random order (`HashMap`).
+
+[*Setup scripts in JUnit output*]: https://nexte.st/docs/configuration/setup-scripts/#setup-scripts-in-junit-output
+
 ## [0.9.86-b.3] - 2024-12-09
 
 Since beta 2:
@@ -1276,6 +1303,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.86-b.4]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.4
 [0.9.86-b.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.3
 [0.9.86-b.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.2
 [0.9.86-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.1

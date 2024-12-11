@@ -1,0 +1,11 @@
+<testsuite name="@setup-script:build-seed-archive" tests="1" disabled="0" errors="0" failures="0">
+    <properties>
+        <property name="command" value="cargo"/>
+        <property name="args" value="run --bin build-seed-archive"/>
+        <property name="output-env:SEED_ARCHIVE" value="/tmp/nextest-tests-seed-runner/seed-4a73a58.tar.zst"/>
+    </properties>
+    <testcase name="build-seed-archive" classname="@setup-script:build-seed-archive" timestamp="2024-12-11T22:59:50.824+00:00" time="2.265">
+        <system-out>using existing seed: /tmp/nextest-tests-seed-runner/seed-4a73a58.tar.zst</system-out>
+        <system-err>(stderr not captured)</system-err>
+    </testcase>
+</testsuite>
