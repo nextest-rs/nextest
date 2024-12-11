@@ -15,7 +15,7 @@ use crate::{
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
-use std::{fmt, process::ExitStatus, time::Duration};
+use std::{collections::BTreeMap, fmt, process::ExitStatus, time::Duration};
 
 /// A test event.
 ///
@@ -672,19 +672,33 @@ pub struct ExecuteStatus {
 pub struct SetupScriptExecuteStatus {
     /// Output for this setup script.
     pub output: ChildExecutionOutput,
+
     /// The execution result for this setup script: pass, fail or execution error.
     pub result: ExecutionResult,
+
     /// The time at which the script started.
     pub start_time: DateTime<FixedOffset>,
+
     /// The time it took for the script to run.
     pub time_taken: Duration,
+
     /// Whether this script counts as slow.
     pub is_slow: bool,
-    /// The number of environment variables that were set by this script.
+
+    /// The map of environment variables that were set by this script.
     ///
     /// `None` if an error occurred while running the script or reading the
     /// environment map.
-    pub env_count: Option<usize>,
+    pub env_map: Option<SetupScriptEnvMap>,
+}
+
+/// A map of environment variables set by a setup script.
+///
+/// Part of [`SetupScriptExecuteStatus`].
+#[derive(Clone, Debug)]
+pub struct SetupScriptEnvMap {
+    /// The map of environment variables set by the script.
+    pub env_map: BTreeMap<String, String>,
 }
 
 /// Data related to retries for a test.

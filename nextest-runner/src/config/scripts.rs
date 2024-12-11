@@ -11,13 +11,13 @@ use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     errors::{
         ChildStartError, ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection,
-        InvalidConfigScriptName, SetupScriptOutputError,
+        InvalidConfigScriptName,
     },
     list::TestList,
     platform::BuildPlatforms,
+    reporter::events::SetupScriptEnvMap,
     test_command::{apply_ld_dyld_env, create_command},
 };
-use camino::Utf8Path;
 use camino_tempfile::Utf8TempPath;
 use guppy::graph::{cargo::BuildPlatform, PackageGraph};
 use indexmap::IndexMap;
@@ -25,13 +25,12 @@ use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext, Tes
 use serde::{de::Error, Deserialize};
 use smol_str::SmolStr;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt,
     process::Command,
     sync::Arc,
     time::Duration,
 };
-use tokio::io::{AsyncBufReadExt, BufReader};
 
 /// Data about setup scripts, returned by an [`EvaluatableProfile`].
 pub struct SetupScripts<'profile> {
@@ -241,63 +240,6 @@ impl<'profile> SetupScriptExecuteData<'profile> {
                 }
             }
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct SetupScriptEnvMap {
-    env_map: BTreeMap<String, String>,
-}
-
-impl SetupScriptEnvMap {
-    pub(crate) async fn new(env_path: &Utf8Path) -> Result<Self, SetupScriptOutputError> {
-        let mut env_map = BTreeMap::new();
-        let f = tokio::fs::File::open(env_path).await.map_err(|error| {
-            SetupScriptOutputError::EnvFileOpen {
-                path: env_path.to_owned(),
-                error: Arc::new(error),
-            }
-        })?;
-        let reader = BufReader::new(f);
-        let mut lines = reader.lines();
-        loop {
-            let line =
-                lines
-                    .next_line()
-                    .await
-                    .map_err(|error| SetupScriptOutputError::EnvFileRead {
-                        path: env_path.to_owned(),
-                        error: Arc::new(error),
-                    })?;
-            let Some(line) = line else { break };
-
-            // Split this line into key and value.
-            let (key, value) = match line.split_once('=') {
-                Some((key, value)) => (key, value),
-                None => {
-                    return Err(SetupScriptOutputError::EnvFileParse {
-                        path: env_path.to_owned(),
-                        line: line.to_owned(),
-                    })
-                }
-            };
-
-            // Ban keys starting with `NEXTEST`.
-            if key.starts_with("NEXTEST") {
-                return Err(SetupScriptOutputError::EnvFileReservedKey {
-                    key: key.to_owned(),
-                });
-            }
-
-            env_map.insert(key.to_owned(), value.to_owned());
-        }
-
-        Ok(Self { env_map })
-    }
-
-    #[inline]
-    pub(crate) fn len(&self) -> usize {
-        self.env_map.len()
     }
 }
 
