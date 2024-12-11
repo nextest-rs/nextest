@@ -4,7 +4,7 @@
 //! Code to generate JUnit XML reports from test events.
 
 use crate::{
-    config::NextestJunitConfig,
+    config::JunitConfig,
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstance,
     reporter::{
@@ -24,12 +24,12 @@ use std::{borrow::Cow, collections::HashMap, fs::File};
 
 #[derive(Clone, Debug)]
 pub(super) struct MetadataJunit<'cfg> {
-    config: NextestJunitConfig<'cfg>,
+    config: JunitConfig<'cfg>,
     test_suites: DebugIgnore<HashMap<&'cfg str, TestSuite>>,
 }
 
 impl<'cfg> MetadataJunit<'cfg> {
-    pub(super) fn new(config: NextestJunitConfig<'cfg>) -> Self {
+    pub(super) fn new(config: JunitConfig<'cfg>) -> Self {
         Self {
             config,
             test_suites: DebugIgnore(HashMap::new()),
