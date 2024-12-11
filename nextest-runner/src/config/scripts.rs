@@ -539,8 +539,8 @@ impl ScriptConfig {
 pub struct ScriptJunitConfig {
     /// Whether to store successful output.
     ///
-    /// Defaults to false.
-    #[serde(default)]
+    /// Defaults to true.
+    #[serde(default = "default_true")]
     pub store_success_output: bool,
 
     /// Whether to store failing output.
@@ -553,7 +553,7 @@ pub struct ScriptJunitConfig {
 impl Default for ScriptJunitConfig {
     fn default() -> Self {
         Self {
-            store_success_output: false,
+            store_success_output: true,
             store_failure_output: true,
         }
     }
