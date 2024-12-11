@@ -6,7 +6,7 @@
 use crate::{
     config::JunitConfig,
     errors::{DisplayErrorChain, WriteEventError},
-    list::TestInstance,
+    list::TestInstanceId,
     reporter::{
         events::{
             ExecuteStatus, ExecutionDescription, ExecutionResult, TestEvent, TestEventKind,
@@ -17,15 +17,16 @@ use crate::{
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use debug_ignore::DebugIgnore;
+use nextest_metadata::RustBinaryId;
 use quick_junit::{
     NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite, XmlString,
 };
-use std::{borrow::Cow, collections::HashMap, fs::File};
+use std::{borrow::Cow, collections::HashMap, fmt, fs::File};
 
 #[derive(Clone, Debug)]
 pub(super) struct MetadataJunit<'cfg> {
     config: JunitConfig<'cfg>,
-    test_suites: DebugIgnore<HashMap<&'cfg str, TestSuite>>,
+    test_suites: DebugIgnore<HashMap<SuiteKey<'cfg>, TestSuite>>,
 }
 
 impl<'cfg> MetadataJunit<'cfg> {
@@ -100,7 +101,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     }
                 }
 
-                let testsuite = self.testsuite_for(test_instance);
+                let testsuite = self.testsuite_for(test_instance.id());
 
                 let (mut testcase_status, main_status, reruns) = match run_statuses.describe() {
                     ExecutionDescription::Success { single_status } => {
@@ -215,10 +216,24 @@ impl<'cfg> MetadataJunit<'cfg> {
         Ok(())
     }
 
-    fn testsuite_for(&mut self, test_instance: TestInstance<'cfg>) -> &mut TestSuite {
+    fn testsuite_for(&mut self, test_instance: TestInstanceId<'cfg>) -> &mut TestSuite {
+        let key = SuiteKey::TestBinary(test_instance.binary_id);
         self.test_suites
-            .entry(test_instance.suite_info.binary_id.as_str())
-            .or_insert_with(|| TestSuite::new(test_instance.suite_info.binary_id.as_str()))
+            .entry(key)
+            .or_insert_with(|| TestSuite::new(key.to_string()))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+enum SuiteKey<'cfg> {
+    TestBinary(&'cfg RustBinaryId),
+}
+
+impl fmt::Display for SuiteKey<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SuiteKey::TestBinary(binary_id) => write!(f, "{}", binary_id),
+        }
     }
 }
 
