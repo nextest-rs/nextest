@@ -3,10 +3,10 @@
 
 use super::{
     ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
-    CustomTestGroup, DeserializedOverride, DeserializedProfileScriptConfig,
-    NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId, SettingSource, SetupScripts,
-    SlowTimeout, TestGroup, TestGroupConfig, TestSettings, TestThreads, ThreadsRequired,
-    ToolConfigFile,
+    CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
+    JunitConfig, JunitImpl, NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId,
+    SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
+    TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
     errors::{
@@ -791,70 +791,17 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns the JUnit configuration for this profile.
-    pub fn junit(&self) -> Option<NextestJunitConfig<'cfg>> {
-        let path = self
-            .custom_profile
-            .map(|profile| &profile.junit.path)
-            .unwrap_or(&self.default_profile.junit.path)
-            .as_deref();
-
-        path.map(|path| {
-            let path = self.store_dir.join(path);
-            let report_name = self
-                .custom_profile
-                .and_then(|profile| profile.junit.report_name.as_deref())
-                .unwrap_or(&self.default_profile.junit.report_name);
-            let store_success_output = self
-                .custom_profile
-                .and_then(|profile| profile.junit.store_success_output)
-                .unwrap_or(self.default_profile.junit.store_success_output);
-            let store_failure_output = self
-                .custom_profile
-                .and_then(|profile| profile.junit.store_failure_output)
-                .unwrap_or(self.default_profile.junit.store_failure_output);
-            NextestJunitConfig {
-                path,
-                report_name,
-                store_success_output,
-                store_failure_output,
-            }
-        })
+    pub fn junit(&self) -> Option<JunitConfig<'cfg>> {
+        JunitConfig::new(
+            self.store_dir(),
+            self.custom_profile.map(|p| &p.junit),
+            &self.default_profile.junit,
+        )
     }
 
     #[cfg(test)]
     pub(super) fn custom_profile(&self) -> Option<&'cfg CustomProfileImpl> {
         self.custom_profile
-    }
-}
-
-/// JUnit configuration for nextest, returned by an [`EvaluatableProfile`].
-#[derive(Clone, Debug)]
-pub struct NextestJunitConfig<'cfg> {
-    path: Utf8PathBuf,
-    report_name: &'cfg str,
-    store_success_output: bool,
-    store_failure_output: bool,
-}
-
-impl<'cfg> NextestJunitConfig<'cfg> {
-    /// Returns the absolute path to the JUnit report.
-    pub fn path(&self) -> &Utf8Path {
-        &self.path
-    }
-
-    /// Returns the name of the JUnit report.
-    pub fn report_name(&self) -> &'cfg str {
-        self.report_name
-    }
-
-    /// Returns true if success output should be stored.
-    pub fn store_success_output(&self) -> bool {
-        self.store_success_output
-    }
-
-    /// Returns true if failure output should be stored.
-    pub fn store_failure_output(&self) -> bool {
-        self.store_failure_output
     }
 }
 
@@ -1002,21 +949,7 @@ impl DefaultProfileImpl {
                 .expect("leak-timeout present in default profile"),
             overrides: p.overrides,
             scripts: p.scripts,
-            junit: DefaultJunitImpl {
-                path: p.junit.path,
-                report_name: p
-                    .junit
-                    .report_name
-                    .expect("junit.report present in default profile"),
-                store_success_output: p
-                    .junit
-                    .store_success_output
-                    .expect("junit.store-success-output present in default profile"),
-                store_failure_output: p
-                    .junit
-                    .store_failure_output
-                    .expect("junit.store-failure-output present in default profile"),
-            },
+            junit: DefaultJunitImpl::for_default_profile(p.junit),
             archive: p.archive.expect("archive present in default profile"),
         }
     }
@@ -1032,14 +965,6 @@ impl DefaultProfileImpl {
     pub(super) fn setup_scripts(&self) -> &[DeserializedProfileScriptConfig] {
         &self.scripts
     }
-}
-
-#[derive(Clone, Debug)]
-struct DefaultJunitImpl {
-    path: Option<Utf8PathBuf>,
-    report_name: String,
-    store_success_output: bool,
-    store_failure_output: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1097,19 +1022,6 @@ impl CustomProfileImpl {
     pub(super) fn scripts(&self) -> &[DeserializedProfileScriptConfig] {
         &self.scripts
     }
-}
-
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct JunitImpl {
-    #[serde(default)]
-    path: Option<Utf8PathBuf>,
-    #[serde(default)]
-    report_name: Option<String>,
-    #[serde(default)]
-    store_success_output: Option<bool>,
-    #[serde(default)]
-    store_failure_output: Option<bool>,
 }
 
 #[cfg(test)]
