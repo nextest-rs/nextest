@@ -11,11 +11,10 @@
 //! just a better abstraction, it also provides a better user experience (less
 //! inconsistent state).
 
-use super::{InternalTerminateReason, RunUnitRequest};
 use crate::{
     config::{
         EvaluatableProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScriptCommand,
-        SetupScriptEnvMap, SetupScriptExecuteData, SlowTimeout, TestSettings,
+        SetupScriptExecuteData, SlowTimeout, TestSettings,
     },
     double_spawn::DoubleSpawnInfo,
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -25,8 +24,8 @@ use crate::{
         TestInfoResponse, UnitKind, UnitState,
     },
     runner::{
-        ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus, RunUnitQuery,
-        SignalRequest, UnitExecuteStatus,
+        parse_env_file, ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
+        InternalTerminateReason, RunUnitQuery, RunUnitRequest, SignalRequest, UnitExecuteStatus,
     },
     target_runner::TargetRunner,
     test_command::{ChildAccumulator, ChildFds},
@@ -144,7 +143,8 @@ impl<'a> ExecutorContext<'a> {
                 // that may have been sent.
                 drain_req_rx(req_rx, UnitExecuteStatus::SetupScript(&status));
 
-                let (status, env_map) = status.into_external();
+                let status = status.into_external();
+                let env_map = status.env_map.clone();
 
                 let _ = this_resp_tx.send(ExecutorEvent::SetupScriptFinished {
                     script_id,
@@ -525,7 +525,7 @@ impl<'a> ExecutorContext<'a> {
         // Read from the environment map. If there's an error here, add it to the list of child errors.
         let mut errors: Vec<_> = child_acc.errors.into_iter().map(ChildError::from).collect();
         let env_map = if exec_result.is_success() {
-            match SetupScriptEnvMap::new(&env_path).await {
+            match parse_env_file(&env_path).await {
                 Ok(env_map) => Some(env_map),
                 Err(error) => {
                     errors.push(ChildError::SetupScriptOutput(error));

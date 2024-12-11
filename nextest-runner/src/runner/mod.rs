@@ -14,6 +14,7 @@ mod dispatcher;
 mod executor;
 mod imp;
 mod internal_events;
+mod script_helpers;
 
 #[cfg(unix)]
 #[path = "unix.rs"]
@@ -27,3 +28,4 @@ use dispatcher::*;
 use executor::*;
 pub use imp::*;
 use internal_events::*;
+use script_helpers::*;

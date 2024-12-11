@@ -9,12 +9,12 @@
 
 use super::{SetupScriptPacket, TestPacket};
 use crate::{
-    config::{ScriptConfig, ScriptId, SetupScriptEnvMap},
+    config::{ScriptConfig, ScriptId},
     list::TestInstance,
     reporter::{
         events::{
-            ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptExecuteStatus,
-            UnitState,
+            ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptEnvMap,
+            SetupScriptExecuteStatus, UnitState,
         },
         TestOutputDisplay,
     },
@@ -165,19 +165,15 @@ pub(super) struct InternalSetupScriptExecuteStatus<'a> {
 }
 
 impl InternalSetupScriptExecuteStatus<'_> {
-    pub(super) fn into_external(self) -> (SetupScriptExecuteStatus, Option<SetupScriptEnvMap>) {
-        let env_count = self.env_map.as_ref().map(|map| map.len());
-        (
-            SetupScriptExecuteStatus {
-                output: self.output,
-                result: self.result,
-                start_time: self.stopwatch_end.start_time.fixed_offset(),
-                time_taken: self.stopwatch_end.active,
-                is_slow: self.slow_after.is_some(),
-                env_count,
-            },
-            self.env_map,
-        )
+    pub(super) fn into_external(self) -> SetupScriptExecuteStatus {
+        SetupScriptExecuteStatus {
+            output: self.output,
+            result: self.result,
+            start_time: self.stopwatch_end.start_time.fixed_offset(),
+            time_taken: self.stopwatch_end.active,
+            is_slow: self.slow_after.is_some(),
+            env_map: self.env_map,
+        }
     }
 }
 

@@ -92,6 +92,12 @@ impl<'cfg> MetadataJunit<'cfg> {
                 // Add properties corresponding to the setup script.
                 test_suite.add_property(("command", command));
                 test_suite.add_property(("args".to_owned(), shell_words::join(args)));
+                // Also add environment variables set by the script.
+                if let Some(env_map) = run_status.env_map {
+                    for (key, value) in env_map.env_map {
+                        test_suite.add_property((format!("output-env:{key}"), value));
+                    }
+                }
             }
             TestEventKind::InfoStarted { .. }
             | TestEventKind::InfoResponse { .. }
