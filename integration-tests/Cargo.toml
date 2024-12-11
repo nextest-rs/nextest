@@ -52,6 +52,7 @@ nextest-metadata.workspace = true
 pathdiff.workspace = true
 regex.workspace = true
 target-spec.workspace = true
+tokio.workspace = true
 
 # These platforms are supported by num_threads.
 # https://docs.rs/num_threads/0.1.7/src/num_threads/lib.rs.html#5-8
