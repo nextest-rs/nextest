@@ -1,11 +1,11 @@
+// Copyright (c) The nextest Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Functionality for emitting structured, machine readable output in different
 //! formats
 
-mod libtest;
-
-use super::events::TestEvent;
-use crate::errors::WriteEventError;
-pub use libtest::{EmitNextestObject, LibtestReporter};
+use super::LibtestReporter;
+use crate::{errors::WriteEventError, reporter::events::TestEvent};
 
 /// A reporter for structured, machine-readable formats.
 #[derive(Default)]
@@ -29,7 +29,7 @@ impl<'a> StructuredReporter<'a> {
     }
 
     #[inline]
-    pub(super) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
+    pub(crate) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
         if let Some(libtest) = &mut self.libtest {
             libtest.write_event(event)?;
         }

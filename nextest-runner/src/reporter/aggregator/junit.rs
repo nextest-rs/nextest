@@ -1,21 +1,21 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Metadata management.
+//! Code to generate JUnit XML reports from test events.
 
-use super::{
-    events::{
-        ExecuteStatus, ExecutionDescription, ExecutionResult, TestEvent, TestEventKind, UnitKind,
-    },
-    UnitErrorDescription,
-};
 use crate::{
-    config::{EvaluatableProfile, NextestJunitConfig},
+    config::NextestJunitConfig,
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstance,
+    reporter::{
+        events::{
+            ExecuteStatus, ExecutionDescription, ExecutionResult, TestEvent, TestEventKind,
+            UnitKind,
+        },
+        UnitErrorDescription,
+    },
     test_output::{ChildExecutionOutput, ChildOutput},
 };
-use camino::Utf8PathBuf;
 use debug_ignore::DebugIgnore;
 use quick_junit::{
     NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite, XmlString,
@@ -23,45 +23,20 @@ use quick_junit::{
 use std::{borrow::Cow, collections::HashMap, fs::File};
 
 #[derive(Clone, Debug)]
-#[expect(dead_code)]
-pub(crate) struct EventAggregator<'cfg> {
-    store_dir: Utf8PathBuf,
-    // TODO: log information in a JSONable report (converting that to XML later) instead of directly
-    // writing it to XML
-    junit: Option<MetadataJunit<'cfg>>,
-}
-
-impl<'cfg> EventAggregator<'cfg> {
-    pub(crate) fn new(profile: &EvaluatableProfile<'cfg>) -> Self {
-        Self {
-            store_dir: profile.store_dir().to_owned(),
-            junit: profile.junit().map(MetadataJunit::new),
-        }
-    }
-
-    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
-        if let Some(junit) = &mut self.junit {
-            junit.write_event(event)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug)]
-struct MetadataJunit<'cfg> {
+pub(super) struct MetadataJunit<'cfg> {
     config: NextestJunitConfig<'cfg>,
     test_suites: DebugIgnore<HashMap<&'cfg str, TestSuite>>,
 }
 
 impl<'cfg> MetadataJunit<'cfg> {
-    fn new(config: NextestJunitConfig<'cfg>) -> Self {
+    pub(super) fn new(config: NextestJunitConfig<'cfg>) -> Self {
         Self {
             config,
             test_suites: DebugIgnore(HashMap::new()),
         }
     }
 
-    pub(crate) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
+    pub(super) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
         match event.kind {
             TestEventKind::RunStarted { .. }
             | TestEventKind::RunPaused { .. }
