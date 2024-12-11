@@ -635,14 +635,7 @@ where
             SignalEvent::Shutdown(event) => {
                 let signal_count = self.increment_signal_count();
                 let req = signal_count.to_request(event);
-
-                let cancel_reason = match event {
-                    #[cfg(unix)]
-                    ShutdownEvent::Hangup | ShutdownEvent::Term | ShutdownEvent::Quit => {
-                        CancelReason::Signal
-                    }
-                    ShutdownEvent::Interrupt => CancelReason::Interrupt,
-                };
+                let cancel_reason = event_to_cancel_reason(event);
 
                 self.begin_cancel(cancel_reason, CancelEvent::Signal(req))
             }
@@ -728,8 +721,19 @@ where
     ///
     /// Returns the corresponding `HandleEventResponse`.
     fn begin_cancel(&mut self, reason: CancelReason, event: CancelEvent) -> HandleEventResponse {
-        // TODO: combine reason and event?
-        if self.cancel_state < Some(reason) {
+        // TODO: combine reason and event? The Twice block ignoring the event
+        // seems to indicate a data modeling issue.
+        if event == CancelEvent::Signal(ShutdownRequest::Twice) {
+            // Forcibly kill child processes in the case of a second shutdown
+            // signal.
+            self.basic_callback(TestEventKind::RunBeginKill {
+                setup_scripts_running: self.setup_scripts_running(),
+                running: self.running(),
+                // This is always a second signal.
+                reason: CancelReason::SecondSignal,
+            });
+            HandleEventResponse::Cancel(event)
+        } else if self.cancel_state < Some(reason) {
             self.cancel_state = Some(reason);
             self.basic_callback(TestEventKind::RunBeginCancel {
                 setup_scripts_running: self.setup_scripts_running(),
@@ -754,6 +758,14 @@ where
 
     pub(super) fn run_stats(&self) -> RunStats {
         self.run_stats
+    }
+}
+
+fn event_to_cancel_reason(event: ShutdownEvent) -> CancelReason {
+    match event {
+        #[cfg(unix)]
+        ShutdownEvent::Hangup | ShutdownEvent::Term | ShutdownEvent::Quit => CancelReason::Signal,
+        ShutdownEvent::Interrupt => CancelReason::Interrupt,
     }
 }
 
@@ -877,123 +889,104 @@ mod tests {
             "expected report"
         );
         {
-            let events = events.lock().unwrap();
+            let mut events = events.lock().unwrap();
             assert_eq!(events.len(), 1, "expected 1 event");
+            let event = events.pop().unwrap();
             let TestEventKind::RunBeginCancel {
                 setup_scripts_running,
                 running,
                 reason,
-            } = &events[0].kind
+            } = event.kind
             else {
-                panic!("expected RunBeginCancel event, found {:?}", events[0].kind);
+                panic!("expected RunBeginCancel event, found {:?}", event.kind);
             };
-            assert_eq!(
-                *setup_scripts_running, 0,
-                "expected 0 setup scripts running"
-            );
-            assert_eq!(*running, 0, "expected 0 tests running");
-            assert_eq!(*reason, CancelReason::ReportError, "expected report error");
+            assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
+            assert_eq!(running, 0, "expected 0 tests running");
+            assert_eq!(reason, CancelReason::ReportError, "expected report error");
         }
 
         // Send another report error, ensuring it's ignored.
         let response = cx.handle_event(InternalEvent::ReportCancel);
-        assert_noop(response, &events, 1);
+        assert_noop(response, &events);
 
-        // Cancel with a signal.
-        #[cfg(unix)]
-        let signal_event_count = {
-            let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
-                ShutdownEvent::Hangup,
-            )));
-            assert_eq!(
-                response,
-                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
-                    ShutdownEvent::Hangup
-                ))),
-                "expected cancellation"
-            );
-            {
-                let events = events.lock().unwrap();
-                assert_eq!(events.len(), 2, "expected 2 events");
-                let TestEventKind::RunBeginCancel {
-                    setup_scripts_running,
-                    running,
-                    reason,
-                } = &events[1].kind
-                else {
-                    panic!("expected RunBeginCancel event, found {:?}", events[1].kind);
-                };
+        // The rules:
+        // * Any one signal will cause that signal.
+        // * Any two signals received will cause a SIGKILL.
+        // * After a signal is received, any less-important cancel-worthy events
+        //   are ignored.
+        //
+        // Interestingly, this state machine appears to function on Windows too
+        // (though of course the only variant is an Interrupt so this only runs
+        // one iteration.) Should it be different? No compelling reason to be
+        // yet.
+        for sig1 in ShutdownEvent::ALL_VARIANTS {
+            for sig2 in ShutdownEvent::ALL_VARIANTS {
+                eprintln!("** testing {:?} -> {:?}", sig1, sig2);
+                // Separate test for each signal to avoid mixing up state.
+                let mut cx = cx.clone();
+
+                // First signal.
+                let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(*sig1)));
                 assert_eq!(
-                    *setup_scripts_running, 0,
-                    "expected 0 setup scripts running"
+                    response,
+                    HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(*sig1))),
+                    "expected Once"
                 );
-                assert_eq!(*running, 0, "expected 0 tests running");
-                assert_eq!(*reason, CancelReason::Signal, "expected signal");
+                {
+                    let mut events = events.lock().unwrap();
+                    assert_eq!(events.len(), 1, "expected 1 event");
+                    let event = events.pop().unwrap();
+                    let TestEventKind::RunBeginCancel {
+                        setup_scripts_running,
+                        running,
+                        reason,
+                    } = event.kind
+                    else {
+                        panic!("expected RunBeginCancel event, found {:?}", event.kind);
+                    };
+                    assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
+                    assert_eq!(running, 0, "expected 0 tests running");
+                    assert_eq!(reason, event_to_cancel_reason(*sig1), "expected signal");
+                }
+
+                // Another report error, ensuring it's ignored.
+                let response = cx.handle_event(InternalEvent::ReportCancel);
+                assert_noop(response, &events);
+
+                // Second signal.
+                let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(*sig2)));
+                assert_eq!(
+                    response,
+                    HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Twice)),
+                    "expected kill"
+                );
+                {
+                    let mut events = events.lock().unwrap();
+                    assert_eq!(events.len(), 1, "expected 1 events");
+                    let event = events.pop().unwrap();
+                    let TestEventKind::RunBeginKill {
+                        setup_scripts_running,
+                        running,
+                        reason,
+                    } = event.kind
+                    else {
+                        panic!("expected RunBeginKill event, found {:?}", event.kind);
+                    };
+                    assert_eq!(setup_scripts_running, 0, "expected 0 setup scripts running");
+                    assert_eq!(running, 0, "expected 0 tests running");
+                    assert_eq!(reason, CancelReason::SecondSignal, "expected second signal");
+                }
+
+                // Another report error, ensuring it's ignored.
+                let response = cx.handle_event(InternalEvent::ReportCancel);
+                assert_noop(response, &events);
             }
-
-            // Send another signal, ensuring it's ignored.
-            let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
-                ShutdownEvent::Hangup,
-            )));
-            assert_noop(response, &events, 2);
-
-            // Send a report error, ensuring it's ignored.
-            let response = cx.handle_event(InternalEvent::ReportCancel);
-            assert_noop(response, &events, 2);
-
-            1
-        };
-        #[cfg(not(unix))]
-        let signal_event_count = 0;
-
-        // Cancel with an interrupt.
-        let response = cx.handle_event(InternalEvent::Signal(SignalEvent::Shutdown(
-            ShutdownEvent::Interrupt,
-        )));
-        assert_eq!(
-            response,
-            if signal_event_count == 0 {
-                // On Windows, this is the first signal.
-                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Once(
-                    ShutdownEvent::Interrupt,
-                )))
-            } else {
-                // On Unix, this is the second signal.
-                HandleEventResponse::Cancel(CancelEvent::Signal(ShutdownRequest::Twice))
-            },
-            "expected cancellation"
-        );
-        {
-            let events = events.lock().unwrap();
-            assert_eq!(events.len(), 2 + signal_event_count, "expected event count");
-            let TestEventKind::RunBeginCancel {
-                setup_scripts_running,
-                running,
-                reason,
-            } = &events[1 + signal_event_count].kind
-            else {
-                panic!(
-                    "expected RunBeginCancel event, found {:?}",
-                    events[1 + signal_event_count].kind
-                );
-            };
-            assert_eq!(
-                *setup_scripts_running, 0,
-                "expected 0 setup scripts running"
-            );
-            assert_eq!(*running, 0, "expected 0 tests running");
-            assert_eq!(*reason, CancelReason::Interrupt, "expected interrupt");
         }
     }
 
     #[track_caller]
-    fn assert_noop(
-        response: HandleEventResponse,
-        events: &Mutex<Vec<TestEvent<'_>>>,
-        event_count: usize,
-    ) {
+    fn assert_noop(response: HandleEventResponse, events: &Mutex<Vec<TestEvent<'_>>>) {
         assert_eq!(response, HandleEventResponse::None, "expected no response");
-        let events = events.lock().unwrap();
-        assert_eq!(events.len(), event_count, "expected no new events");
+        assert_eq!(events.lock().unwrap().len(), 0, "expected no new events");
     }
 }

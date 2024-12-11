@@ -238,6 +238,19 @@ pub(crate) enum ShutdownEvent {
     Interrupt,
 }
 
+impl ShutdownEvent {
+    #[cfg(test)]
+    pub(crate) const ALL_VARIANTS: &'static [Self] = &[
+        #[cfg(unix)]
+        Self::Hangup,
+        #[cfg(unix)]
+        Self::Term,
+        #[cfg(unix)]
+        Self::Quit,
+        Self::Interrupt,
+    ];
+}
+
 // A signal event to query information about tests.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SignalInfoEvent {

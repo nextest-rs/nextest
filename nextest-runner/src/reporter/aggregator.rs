@@ -202,7 +202,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 //
                 // testsuite.add_testcase(testcase);
             }
-            TestEventKind::RunBeginCancel { .. } => {}
+            TestEventKind::RunBeginCancel { .. } | TestEventKind::RunBeginKill { .. } => {}
             TestEventKind::RunFinished {
                 run_id,
                 start_time,
