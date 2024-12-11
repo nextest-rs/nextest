@@ -507,6 +507,10 @@ pub struct ScriptConfig {
     /// Whether to capture standard error for this command.
     #[serde(default)]
     pub capture_stderr: bool,
+
+    /// JUnit configuration for this script.
+    #[serde(default)]
+    pub junit: ScriptJunitConfig,
 }
 
 impl ScriptConfig {
@@ -527,6 +531,36 @@ impl ScriptConfig {
     pub fn no_capture(&self) -> bool {
         !(self.capture_stdout && self.capture_stderr)
     }
+}
+
+/// A JUnit override configuration.
+#[derive(Copy, Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ScriptJunitConfig {
+    /// Whether to store successful output.
+    ///
+    /// Defaults to false.
+    #[serde(default)]
+    pub store_success_output: bool,
+
+    /// Whether to store failing output.
+    ///
+    /// Defaults to true.
+    #[serde(default = "default_true")]
+    pub store_failure_output: bool,
+}
+
+impl Default for ScriptJunitConfig {
+    fn default() -> Self {
+        Self {
+            store_success_output: false,
+            store_failure_output: true,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn deserialize_script_ids<'de, D>(deserializer: D) -> Result<Vec<ScriptId>, D::Error>

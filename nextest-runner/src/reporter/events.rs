@@ -111,6 +111,12 @@ pub enum TestEventKind<'a> {
         /// The arguments to the command.
         args: &'a [String],
 
+        /// Whether the JUnit report should store success output for this script.
+        junit_store_success_output: bool,
+
+        /// Whether the JUnit report should store failure output for this script.
+        junit_store_failure_output: bool,
+
         /// True if some output from the setup script was passed through.
         no_capture: bool,
 

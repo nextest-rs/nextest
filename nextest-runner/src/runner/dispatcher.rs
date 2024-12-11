@@ -400,6 +400,8 @@ where
                     command: config.program(),
                     args: config.args(),
                     no_capture: config.no_capture(),
+                    junit_store_success_output: config.junit.store_success_output,
+                    junit_store_failure_output: config.junit.store_failure_output,
                     run_status: status,
                 });
 
