@@ -4,14 +4,11 @@
 //! Code to generate JUnit XML reports from test events.
 
 use crate::{
-    config::JunitConfig,
+    config::{JunitConfig, ScriptId},
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstanceId,
     reporter::{
-        events::{
-            ExecuteStatus, ExecutionDescription, ExecutionResult, TestEvent, TestEventKind,
-            UnitKind,
-        },
+        events::{ExecutionDescription, ExecutionResult, TestEvent, TestEventKind, UnitKind},
         UnitErrorDescription,
     },
     test_output::{ChildExecutionOutput, ChildOutput},
@@ -21,7 +18,7 @@ use nextest_metadata::RustBinaryId;
 use quick_junit::{
     NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite, XmlString,
 };
-use std::{borrow::Cow, collections::HashMap, fmt, fs::File};
+use std::{collections::HashMap, fmt, fs::File};
 
 #[derive(Clone, Debug)]
 pub(super) struct MetadataJunit<'cfg> {
@@ -42,10 +39,56 @@ impl<'cfg> MetadataJunit<'cfg> {
             TestEventKind::RunStarted { .. }
             | TestEventKind::RunPaused { .. }
             | TestEventKind::RunContinued { .. } => {}
-            TestEventKind::SetupScriptStarted { .. }
-            | TestEventKind::SetupScriptSlow { .. }
-            | TestEventKind::SetupScriptFinished { .. }
-            | TestEventKind::InfoStarted { .. }
+            TestEventKind::SetupScriptStarted { .. } | TestEventKind::SetupScriptSlow { .. } => {}
+            TestEventKind::SetupScriptFinished {
+                index: _,
+                total: _,
+                script_id,
+                command,
+                args,
+                junit_store_success_output,
+                junit_store_failure_output,
+                no_capture: _,
+                run_status,
+            } => {
+                let is_success = run_status.result.is_success();
+
+                let test_suite = self.testsuite_for_setup_script(script_id.clone());
+                let testcase_status = if is_success {
+                    TestCaseStatus::success()
+                } else {
+                    let (kind, ty) = non_success_kind_and_type(UnitKind::Script, run_status.result);
+                    let mut testcase_status = TestCaseStatus::non_success(kind);
+                    testcase_status.set_type(ty);
+                    testcase_status
+                };
+
+                let mut testcase =
+                    TestCase::new(script_id.as_identifier().as_str(), testcase_status);
+                // classname doesn't quite make sense for setup scripts, but it
+                // is required by the spec at https://llg.cubic.org/docs/junit/.
+                // We use the same name as the test suite.
+                testcase
+                    .set_classname(test_suite.name.clone())
+                    .set_timestamp(run_status.start_time)
+                    .set_time(run_status.time_taken);
+
+                let store_stdout_stderr = (junit_store_success_output && is_success)
+                    || (junit_store_failure_output && !is_success);
+
+                set_execute_status_props(
+                    &run_status.output,
+                    store_stdout_stderr,
+                    TestcaseOrRerun::Testcase(&mut testcase),
+                );
+
+                test_suite.add_test_case(testcase);
+
+                // Add properties corresponding to the setup script.
+                test_suite.add_property(("command", command));
+                test_suite.add_property(("args".to_owned(), shell_words::join(args)));
+            }
+            TestEventKind::InfoStarted { .. }
             | TestEventKind::InfoResponse { .. }
             | TestEventKind::InfoFinished { .. } => {}
             TestEventKind::TestStarted { .. } => {}
@@ -61,47 +104,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 junit_store_failure_output,
                 ..
             } => {
-                fn kind_ty(run_status: &ExecuteStatus) -> (NonSuccessKind, Cow<'static, str>) {
-                    match run_status.result {
-                        ExecutionResult::Fail {
-                            abort_status: Some(_),
-                            leaked: true,
-                        } => (
-                            NonSuccessKind::Failure,
-                            "test abort with leaked handles".into(),
-                        ),
-                        ExecutionResult::Fail {
-                            abort_status: Some(_),
-                            leaked: false,
-                        } => (NonSuccessKind::Failure, "test abort".into()),
-                        ExecutionResult::Fail {
-                            abort_status: None,
-                            leaked: true,
-                        } => (
-                            NonSuccessKind::Failure,
-                            "test failure with leaked handles".into(),
-                        ),
-                        ExecutionResult::Fail {
-                            abort_status: None,
-                            leaked: false,
-                        } => (NonSuccessKind::Failure, "test failure".into()),
-                        ExecutionResult::Timeout => {
-                            (NonSuccessKind::Failure, "test timeout".into())
-                        }
-                        ExecutionResult::ExecFail => {
-                            (NonSuccessKind::Error, "execution failure".into())
-                        }
-                        ExecutionResult::Leak => (
-                            NonSuccessKind::Error,
-                            "test passed but leaked handles".into(),
-                        ),
-                        ExecutionResult::Pass => {
-                            unreachable!("this is a failure status")
-                        }
-                    }
-                }
-
-                let testsuite = self.testsuite_for(test_instance.id());
+                let testsuite = self.testsuite_for_test(test_instance.id());
 
                 let (mut testcase_status, main_status, reruns) = match run_statuses.describe() {
                     ExecutionDescription::Success { single_status } => {
@@ -116,7 +119,8 @@ impl<'cfg> MetadataJunit<'cfg> {
                         retries,
                         ..
                     } => {
-                        let (kind, ty) = kind_ty(first_status);
+                        let (kind, ty) =
+                            non_success_kind_and_type(UnitKind::Test, first_status.result);
                         let mut testcase_status = TestCaseStatus::non_success(kind);
                         testcase_status.set_type(ty);
                         (testcase_status, first_status, retries)
@@ -124,7 +128,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 };
 
                 for rerun in reruns {
-                    let (kind, ty) = kind_ty(rerun);
+                    let (kind, ty) = non_success_kind_and_type(UnitKind::Test, rerun.result);
                     let mut test_rerun = TestRerun::new(kind);
                     test_rerun
                         .set_timestamp(rerun.start_time)
@@ -213,23 +217,69 @@ impl<'cfg> MetadataJunit<'cfg> {
         Ok(())
     }
 
-    fn testsuite_for(&mut self, test_instance: TestInstanceId<'cfg>) -> &mut TestSuite {
+    fn testsuite_for_setup_script(&mut self, script_id: ScriptId) -> &mut TestSuite {
+        let key = SuiteKey::SetupScript(script_id.clone());
+        self.test_suites
+            .entry(key.clone())
+            .or_insert_with(|| TestSuite::new(key.to_string()))
+    }
+
+    fn testsuite_for_test(&mut self, test_instance: TestInstanceId<'cfg>) -> &mut TestSuite {
         let key = SuiteKey::TestBinary(test_instance.binary_id);
         self.test_suites
-            .entry(key)
+            .entry(key.clone())
             .or_insert_with(|| TestSuite::new(key.to_string()))
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 enum SuiteKey<'cfg> {
+    // Each script gets a separate suite, because in the future we'll likely want to set u
+    SetupScript(ScriptId),
     TestBinary(&'cfg RustBinaryId),
 }
 
 impl fmt::Display for SuiteKey<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            SuiteKey::SetupScript(script_id) => write!(f, "@setup-script:{}", script_id),
             SuiteKey::TestBinary(binary_id) => write!(f, "{}", binary_id),
+        }
+    }
+}
+
+fn non_success_kind_and_type(kind: UnitKind, result: ExecutionResult) -> (NonSuccessKind, String) {
+    match result {
+        ExecutionResult::Fail {
+            abort_status: Some(_),
+            leaked: true,
+        } => (
+            NonSuccessKind::Failure,
+            format!("{kind} abort with leaked handles"),
+        ),
+        ExecutionResult::Fail {
+            abort_status: Some(_),
+            leaked: false,
+        } => (NonSuccessKind::Failure, format!("{kind} abort")),
+        ExecutionResult::Fail {
+            abort_status: None,
+            leaked: true,
+        } => (
+            NonSuccessKind::Failure,
+            format!("{kind} failure with leaked handles"),
+        ),
+        ExecutionResult::Fail {
+            abort_status: None,
+            leaked: false,
+        } => (NonSuccessKind::Failure, format!("{kind} failure")),
+        ExecutionResult::Timeout => (NonSuccessKind::Failure, format!("{kind} timeout")),
+        ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure".to_owned()),
+        ExecutionResult::Leak => (
+            NonSuccessKind::Error,
+            format!("{kind} passed but leaked handles"),
+        ),
+        ExecutionResult::Pass => {
+            unreachable!("this is a failure status")
         }
     }
 }
