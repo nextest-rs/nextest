@@ -32,6 +32,7 @@ use std::{borrow::Cow, fs::File, io::Write};
 use target_spec::Platform;
 
 mod fixtures;
+mod stuck_signal;
 mod temp_project;
 
 use crate::temp_project::{create_uds, UdsStatus};
