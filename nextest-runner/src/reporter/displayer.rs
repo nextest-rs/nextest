@@ -460,8 +460,9 @@ impl ProgressBarState {
                 // continue to output to it.
                 self.hidden_run_paused = false;
             }
-            TestEventKind::RunBeginCancel { .. } => {
-                progress_bar.set_prefix(progress_bar_cancel_prefix(styles));
+            TestEventKind::RunBeginCancel { reason, .. }
+            | TestEventKind::RunBeginKill { reason, .. } => {
+                progress_bar.set_prefix(progress_bar_cancel_prefix(*reason, styles));
             }
             _ => {}
         }
@@ -540,8 +541,16 @@ impl<'a> TestReporter<'a> {
     }
 }
 
-fn progress_bar_cancel_prefix(styles: &Styles) -> String {
-    format!("{:>12}", "Cancelling".style(styles.fail))
+fn progress_bar_cancel_prefix(reason: CancelReason, styles: &Styles) -> String {
+    let status = match reason {
+        CancelReason::SetupScriptFailure
+        | CancelReason::TestFailure
+        | CancelReason::ReportError
+        | CancelReason::Signal
+        | CancelReason::Interrupt => "Cancelling",
+        CancelReason::SecondSignal => "Killing",
+    };
+    format!("{:>12}", status.style(styles.fail))
 }
 
 fn progress_bar_prefix(
@@ -549,8 +558,8 @@ fn progress_bar_prefix(
     cancel_reason: Option<CancelReason>,
     styles: &Styles,
 ) -> String {
-    if cancel_reason.is_some() {
-        return progress_bar_cancel_prefix(styles);
+    if let Some(reason) = cancel_reason {
+        return progress_bar_cancel_prefix(reason, styles);
     }
 
     let style = if run_stats.has_failures() {
@@ -951,6 +960,38 @@ impl<'a> TestReporterImpl<'a> {
                     writer,
                     "{:>12} due to {}",
                     "Cancelling".style(self.styles.fail),
+                    reason.to_static_str().style(self.styles.fail)
+                )?;
+
+                // At the moment, we can have either setup scripts or tests running, but not both.
+                if *setup_scripts_running > 0 {
+                    let s = plural::setup_scripts_str(*setup_scripts_running);
+                    write!(
+                        writer,
+                        ": {} {s} still running",
+                        setup_scripts_running.style(self.styles.count),
+                    )?;
+                } else if *running > 0 {
+                    let tests_str = plural::tests_str(*running);
+                    write!(
+                        writer,
+                        ": {} {tests_str} still running",
+                        running.style(self.styles.count),
+                    )?;
+                }
+                writeln!(writer)?;
+            }
+            TestEventKind::RunBeginKill {
+                setup_scripts_running,
+                running,
+                reason,
+            } => {
+                self.cancel_status = self.cancel_status.max(Some(*reason));
+
+                write!(
+                    writer,
+                    "{:>12} due to {}",
+                    "Killing".style(self.styles.fail),
                     reason.to_static_str().style(self.styles.fail)
                 )?;
 

@@ -257,6 +257,18 @@ pub enum TestEventKind<'a> {
         reason: CancelReason,
     },
 
+    /// A forcible kill was requested due to receiving a signal.
+    RunBeginKill {
+        /// The number of setup scripts still running.
+        setup_scripts_running: usize,
+
+        /// The number of tests still running.
+        running: usize,
+
+        /// The reason this run was killed.
+        reason: CancelReason,
+    },
+
     /// A SIGTSTP event was received and the run was paused.
     RunPaused {
         /// The number of setup scripts running.
@@ -777,6 +789,9 @@ pub enum CancelReason {
 
     /// An interrupt (on Unix, Ctrl-C) was received.
     Interrupt,
+
+    /// A second signal was received, and the run is being forcibly killed.
+    SecondSignal,
 }
 
 impl CancelReason {
@@ -787,6 +802,7 @@ impl CancelReason {
             CancelReason::ReportError => "reporting error",
             CancelReason::Signal => "signal",
             CancelReason::Interrupt => "interrupt",
+            CancelReason::SecondSignal => "second signal",
         }
     }
 }
