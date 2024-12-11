@@ -21,6 +21,7 @@ use crate::{
     time::StopwatchStart,
 };
 use chrono::Local;
+use debug_ignore::DebugIgnore;
 use quick_junit::ReportUuid;
 use std::{
     collections::BTreeMap,
@@ -38,8 +39,10 @@ use tracing::debug;
 ///
 /// This struct is responsible for coordinating events from the outside world
 /// and communicating with the executor.
+#[derive(Clone)]
+#[derive_where::derive_where(Debug)]
 pub(super) struct DispatcherContext<'a, F> {
-    callback: F,
+    callback: DebugIgnore<F>,
     run_id: ReportUuid,
     profile_name: String,
     cli_args: Vec<String>,
@@ -67,7 +70,7 @@ where
         max_fail: MaxFail,
     ) -> Self {
         Self {
-            callback,
+            callback: DebugIgnore(callback),
             run_id,
             stopwatch: crate::time::stopwatch(),
             profile_name: profile_name.to_owned(),
@@ -754,7 +757,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ContextSetupScript<'a> {
     id: ScriptId,
     // Store these details primarily for debugging.
@@ -767,7 +770,7 @@ struct ContextSetupScript<'a> {
     req_tx: UnboundedSender<RunUnitRequest<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ContextTestInstance<'a> {
     // Store the instance primarily for debugging.
     #[expect(dead_code)]

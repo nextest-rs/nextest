@@ -49,6 +49,7 @@ cp_r = "0.5.2"
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
+derive-where = "1.2.7"
 duct = "0.13.7"
 dunce = "1.0.5"
 enable-ansi-support = "0.2.1"
