@@ -133,8 +133,6 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                     set_execute_status_props(
                         &rerun.output,
-                        // Reruns are always failures.
-                        false,
                         junit_store_failure_output,
                         TestcaseOrRerun::Rerun(&mut test_rerun),
                     );
@@ -159,7 +157,6 @@ impl<'cfg> MetadataJunit<'cfg> {
 
                 set_execute_status_props(
                     &main_status.output,
-                    is_success,
                     store_stdout_stderr,
                     TestcaseOrRerun::Testcase(&mut testcase),
                 );
@@ -294,7 +291,6 @@ impl TestcaseOrRerun<'_> {
 
 fn set_execute_status_props(
     exec_output: &ChildExecutionOutput,
-    is_success: bool,
     store_stdout_stderr: bool,
     mut out: TestcaseOrRerun<'_>,
 ) {
@@ -305,7 +301,7 @@ fn set_execute_status_props(
         out.set_description(DisplayErrorChain::new(errors).to_string());
     }
 
-    if !is_success && store_stdout_stderr {
+    if store_stdout_stderr {
         if let ChildExecutionOutput::Output { output, .. } = exec_output {
             match output {
                 ChildOutput::Split(split) => {
@@ -321,6 +317,295 @@ fn set_execute_status_props(
                         .set_system_err("(stdout and stderr are combined)");
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[cfg(unix)]
+    use crate::reporter::events::AbortStatus;
+    use crate::{
+        errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
+        test_output::ChildSplitOutput,
+    };
+    use bytes::Bytes;
+    use std::{io, sync::Arc};
+
+    #[test]
+    fn test_set_execute_status_props() {
+        let cases = [
+            ExecuteStatusPropsCase {
+                comment: "success + combined + store",
+                status: TestCaseStatus::success(),
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Pass),
+                    output: ChildOutput::Combined {
+                        output: Bytes::from("stdout\nstderr").into(),
+                    },
+                    errors: None,
+                },
+                store_stdout_stderr: true,
+                message: None,
+                description: None,
+                system_out: Some("stdout\nstderr"),
+                system_err: Some("(stdout and stderr are combined)"),
+            },
+            ExecuteStatusPropsCase {
+                comment: "success + combined + no store",
+                status: TestCaseStatus::success(),
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Pass),
+                    output: ChildOutput::Combined {
+                        output: Bytes::from("stdout\nstderr").into(),
+                    },
+                    errors: None,
+                },
+                store_stdout_stderr: false,
+                message: None,
+                description: None,
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "success + split + store",
+                status: TestCaseStatus::success(),
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Pass),
+                    output: ChildOutput::Split(ChildSplitOutput {
+                        stdout: Some(Bytes::from("stdout").into()),
+                        stderr: Some(Bytes::from("stderr").into()),
+                    }),
+                    errors: None,
+                },
+                store_stdout_stderr: true,
+                message: None,
+                description: None,
+                system_out: Some("stdout"),
+                system_err: Some("stderr"),
+            },
+            // success + split + no store is not hugely important to test --
+            // it's just another combination of the above.
+            ExecuteStatusPropsCase {
+                comment: "failure + combined + store",
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Fail {
+                        abort_status: None,
+                        leaked: true,
+                    }),
+                    output: ChildOutput::Combined {
+                        output: Bytes::from(
+                            "stdout\nstderr\nthread 'foo' panicked at xyz.rs:40:\nstrange\n\
+                             extra\nextra2",
+                        )
+                        .into(),
+                    },
+                    errors: None,
+                },
+                store_stdout_stderr: true,
+                message: Some("thread 'foo' panicked at xyz.rs:40"),
+                description: Some("thread 'foo' panicked at xyz.rs:40:\nstrange\nextra\nextra2"),
+                system_out: Some(
+                    "stdout\nstderr\nthread 'foo' panicked at xyz.rs:40:\nstrange\n\
+                     extra\nextra2",
+                ),
+                system_err: Some("(stdout and stderr are combined)"),
+            },
+            ExecuteStatusPropsCase {
+                comment: "failure + split + no store",
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Fail {
+                        abort_status: None,
+                        leaked: false,
+                    }),
+                    output: ChildOutput::Split(ChildSplitOutput {
+                        stdout: None,
+                        stderr: Some(
+                            Bytes::from(
+                                "stdout\nstderr\nthread 'foo' panicked at xyz.rs:40:\n\
+                                 strange\nextra\nextra2",
+                            )
+                            .into(),
+                        ),
+                    }),
+                    errors: None,
+                },
+                store_stdout_stderr: false,
+                message: Some("thread 'foo' panicked at xyz.rs:40"),
+                description: Some(
+                    "thread 'foo' panicked at xyz.rs:40:\n\
+                     strange\nextra\nextra2",
+                ),
+                system_out: None,
+                system_err: None,
+            },
+            #[cfg(unix)]
+            ExecuteStatusPropsCase {
+                comment: "abort + split + store (unix)",
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Fail {
+                        abort_status: Some(AbortStatus::UnixSignal(libc::SIGTERM)),
+                        leaked: false,
+                    }),
+                    output: ChildOutput::Split(ChildSplitOutput {
+                        stdout: Some(Bytes::from("stdout\nstdout 2\n").into()),
+                        stderr: None,
+                    }),
+                    errors: None,
+                },
+                store_stdout_stderr: true,
+                message: Some("process aborted with signal SIGTERM"),
+                description: Some("process aborted with signal SIGTERM"),
+                system_out: Some("stdout\nstdout 2\n"),
+                system_err: None,
+            },
+            #[cfg(unix)]
+            ExecuteStatusPropsCase {
+                comment: "abort + multiple errors + no store (unix)",
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Fail {
+                        abort_status: Some(AbortStatus::UnixSignal(libc::SIGTERM)),
+                        leaked: true,
+                    }),
+                    output: ChildOutput::Split(ChildSplitOutput {
+                        stdout: None,
+                        stderr: Some(
+                            Bytes::from("stdout\nthread 'foo' panicked at xyz.rs:40").into(),
+                        ),
+                    }),
+                    errors: ErrorList::new(
+                        "collecting child output",
+                        vec![ChildError::Fd(ChildFdError::Wait(Arc::new(
+                            io::Error::new(io::ErrorKind::Other, "huh"),
+                        )))],
+                    ),
+                },
+                store_stdout_stderr: false,
+                message: Some("3 errors occurred executing test"),
+                description: Some(indoc::indoc! {"
+                    3 errors occurred executing test:
+                    * error waiting for child process to exit
+                        caused by:
+                        - huh
+                    * process aborted with signal SIGTERM, and also leaked handles
+                    * thread 'foo' panicked at xyz.rs:40
+                "}),
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "multiple errors + store",
+                status: TestCaseStatus::non_success(NonSuccessKind::Failure),
+                output: ChildExecutionOutput::Output {
+                    result: Some(ExecutionResult::Fail {
+                        abort_status: None,
+                        leaked: false,
+                    }),
+                    output: ChildOutput::Split(ChildSplitOutput {
+                        stdout: None,
+                        stderr: Some(
+                            Bytes::from("stdout\nthread 'foo' panicked at xyz.rs:40").into(),
+                        ),
+                    }),
+                    errors: ErrorList::new(
+                        "collecting child output",
+                        vec![ChildError::Fd(ChildFdError::ReadStdout(Arc::new(
+                            io::Error::new(io::ErrorKind::Other, "stdout error"),
+                        )))],
+                    ),
+                },
+                store_stdout_stderr: false,
+                message: Some("2 errors occurred executing test"),
+                description: Some(indoc::indoc! {"
+                    2 errors occurred executing test:
+                    * error reading standard output
+                        caused by:
+                        - stdout error
+                    * thread 'foo' panicked at xyz.rs:40
+                "}),
+                system_out: None,
+                system_err: None,
+            },
+            ExecuteStatusPropsCase {
+                comment: "exec fail + combined + store (exec fail means nothing to store)",
+                status: TestCaseStatus::non_success(NonSuccessKind::Error),
+                output: ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(
+                    io::Error::new(io::ErrorKind::Other, "start error"),
+                ))),
+                store_stdout_stderr: true,
+                message: Some("error spawning child process"),
+                description: Some(indoc::indoc! {"
+                    error spawning child process
+                      caused by:
+                      - start error"
+                }),
+                system_out: None,
+                system_err: None,
+            },
+        ];
+
+        for case in cases {
+            eprintln!("** testing: {}", case.comment);
+
+            let mut testcase = TestCase::new("test", case.status);
+            set_execute_status_props(
+                &case.output,
+                case.store_stdout_stderr,
+                TestcaseOrRerun::Testcase(&mut testcase),
+            );
+            assert_eq!(
+                get_message(&testcase.status),
+                case.message,
+                "message matches"
+            );
+            assert_eq!(
+                get_description(&testcase.status),
+                case.description,
+                "description matches"
+            );
+            assert_eq!(
+                testcase.system_out.as_ref().map(|s| s.as_str()),
+                case.system_out,
+                "system_out matches"
+            );
+            assert_eq!(
+                testcase.system_err.as_ref().map(|s| s.as_str()),
+                case.system_err,
+                "system_err matches"
+            );
+        }
+    }
+
+    #[derive(Debug)]
+    struct ExecuteStatusPropsCase<'a> {
+        comment: &'a str,
+        status: TestCaseStatus,
+        output: ChildExecutionOutput,
+        store_stdout_stderr: bool,
+        message: Option<&'a str>,
+        description: Option<&'a str>,
+        system_out: Option<&'a str>,
+        system_err: Option<&'a str>,
+    }
+
+    fn get_message(status: &TestCaseStatus) -> Option<&str> {
+        match status {
+            TestCaseStatus::Success { .. } => None,
+            TestCaseStatus::NonSuccess { message, .. } => message.as_deref(),
+            TestCaseStatus::Skipped { message, .. } => message.as_deref(),
+        }
+    }
+
+    fn get_description(status: &TestCaseStatus) -> Option<&str> {
+        match status {
+            TestCaseStatus::Success { .. } => None,
+            TestCaseStatus::NonSuccess { description, .. } => description.as_deref(),
+            TestCaseStatus::Skipped { description, .. } => description.as_deref(),
         }
     }
 }
