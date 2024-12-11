@@ -14,11 +14,12 @@ use crate::{
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use debug_ignore::DebugIgnore;
+use indexmap::IndexMap;
 use nextest_metadata::RustBinaryId;
 use quick_junit::{
     NonSuccessKind, Report, TestCase, TestCaseStatus, TestRerun, TestSuite, XmlString,
 };
-use std::{collections::HashMap, fmt, fs::File};
+use std::{fmt, fs::File};
 
 static STDOUT_STDERR_COMBINED: &str = "(stdout and stderr are combined)";
 static STDOUT_NOT_CAPTURED: &str = "(stdout not captured)";
@@ -28,14 +29,14 @@ static PROCESS_FAILED_TO_START: &str = "(process failed to start)";
 #[derive(Clone, Debug)]
 pub(super) struct MetadataJunit<'cfg> {
     config: JunitConfig<'cfg>,
-    test_suites: DebugIgnore<HashMap<SuiteKey<'cfg>, TestSuite>>,
+    test_suites: DebugIgnore<IndexMap<SuiteKey<'cfg>, TestSuite>>,
 }
 
 impl<'cfg> MetadataJunit<'cfg> {
     pub(super) fn new(config: JunitConfig<'cfg>) -> Self {
         Self {
             config,
-            test_suites: DebugIgnore(HashMap::new()),
+            test_suites: DebugIgnore(IndexMap::new()),
         }
     }
 
@@ -203,7 +204,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                     .set_report_uuid(run_id)
                     .set_timestamp(start_time)
                     .set_time(elapsed)
-                    .add_test_suites(self.test_suites.drain().map(|(_, testsuite)| testsuite));
+                    .add_test_suites(self.test_suites.drain(..).map(|(_, testsuite)| testsuite));
 
                 let junit_path = self.config.path();
                 let junit_dir = junit_path.parent().expect("junit path must have a parent");
