@@ -7,7 +7,7 @@
 //! receives events from the executor and from other inputs (e.g. signal and
 //! input handling), and sends events to the reporter.
 
-use super::{RunUnitRequest, ShutdownRequest};
+use super::{RunUnitRequest, RunnerTaskState, ShutdownRequest};
 use crate::{
     config::{MaxFail, ScriptConfig, ScriptId},
     input::{InputEvent, InputHandler},
@@ -104,7 +104,7 @@ where
         report_cancel_rx: oneshot::Receiver<()>,
         cancelled_ref: &AtomicBool,
         cancellation_sender: broadcast::Sender<()>,
-    ) {
+    ) -> RunnerTaskState {
         let mut report_cancel_rx = std::pin::pin!(report_cancel_rx);
 
         let mut signals_done = false;
@@ -118,7 +118,7 @@ where
                         Some(event) => InternalEvent::Executor(event),
                         None => {
                             // All runs have been completed.
-                            break;
+                            break RunnerTaskState::finished_no_children();
                         }
                     }
                 },
@@ -705,6 +705,8 @@ where
                     if self.disable_signal_3_times_panic {
                         SignalCount::Twice
                     } else {
+                        // TODO: a panic here won't currently lead to other
+                        // tasks being cancelled. This should be fixed.
                         panic!("Signaled 3 times, exiting immediately");
                     }
                 }
