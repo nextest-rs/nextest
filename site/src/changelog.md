@@ -8,65 +8,10 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.86-b.4] - 2024-12-11
+## [0.9.86] - 2024-12-12
 
-Since beta 3:
-
-### Added
-
-- Setup scripts are now represented in the JUnit output. For more information,
-  see [*Setup scripts in JUnit output*].
-
-### Changed
-
-- Each test now has a separate Tokio task associated with it. This leads to
-  greater reliability (each test's task can now panic independently), and is
-  faster in repos with many small tests.
-
-  For example, in one test done against
-  [`clap-rs/clap`](https://github.com/clap-rs/clap) on Linux, `cargo nextest
-  run` goes down from 0.36 seconds to 0.23 seconds.
-
-### Fixed
-
-- Fixed a bug where pressing two Ctrl-Cs in succession would not `SIGKILL` any running tests.
-- `junit.store-success-output` now works correctly -- previously, storage of output is disabled unconditionally.
-- In JUnit output, the `testsuite` elements are now stored in the order they are first seen (`IndexMap`), rather than in random order (`HashMap`).
-
-[*Setup scripts in JUnit output*]: https://nexte.st/docs/configuration/setup-scripts/#setup-scripts-in-junit-output
-
-## [0.9.86-b.3] - 2024-12-09
-
-Since beta 2:
-
-### Added
-
-- Added a way to pass in extra arguments to the test binary at runtime, via
-  `run-extra-args`. See [*Passing in extra arguments*].
-
-### Fixed
-
-- When [adding extra files to an archive], nextest now ignores empty and `.`
-  path components in the specification while joining the specified `path`. This
-  means that archives won't accidentally get duplicated entries.
-- Update `idna` to address [RUSTSEC-2024-0421]. Since nextest only accesses
-  domains that do not use punycode, we disable that support entirely.
-
-[*Passing in extra arguments*]: https://nexte.st/docs/configuration/extra-args/
-[adding extra files to an archive]: https://nexte.st/docs/ci-features/archiving/#adding-extra-files-to-an-archive
-[RUSTSEC-2024-0421]: https://rustsec.org/advisories/RUSTSEC-2024-0421.html
-
-## [0.9.86-b.2] - 2024-12-06
-
-Since beta 1:
-
-* Fixed `--no-fail-fast` and `--fail-fast` not being honored properly.
-* Internal refactoring work, with no expected functional changes.
-
-## [0.9.86-b.1] - 2024-12-04
-
-This release of nextest has a number of internal and external improvements. Please try it out
-and [report issues](https://github.com/nextest-rs/nextest/issues/new?assignees=&labels=bug&projects=&template=bug-report.yml&title=Bug%3A+) you find!
+This is a substantial release with several new features. It's gone through a
+period of beta testing, but if you run into issues please [file a bug]!
 
 ### Added
 
@@ -102,22 +47,76 @@ Configuration for `--max-fail` will be added in a future release ([#1944]).
 
 Thanks to [AJamesyD](https://github.com/AJamesyD) for your first contribution!
 
-[#1944]: https://github.com/nextest-rs/nextest/issues/1944
+#### Extra arguments to the test binary
 
-### Fixed
+You can now pass in extra arguments to the test binary at runtime, via the
+`run-extra-args` configuration option. In combination with a custom test harness
+like `libtest-mimic`, this can be used to run tests on the main thread of the
+process.
 
-Nextest now supports being run in Cargo setups where the `Cargo.toml` that
-defines the workspace is not hierarchically above the workspace members. This is
-an uncommon setup, but it is supported by Cargo--and now by nextest as well.
+For more information, see [*Passing in extra arguments*].
 
-Thanks to [PegasusPlusUS](https://github.com/PegasusPlusUS) for your first
-contribution!
+#### Setup scripts in JUnit output
+
+Setup scripts are now represented in the JUnit output. For more information, see
+[*Setup scripts in JUnit output*].
 
 ### Changed
 
+#### Tokio task per test
+
+Each test now has a separate Tokio task associated with it. This leads to
+greater reliability (each test's task can now panic independently), and is
+faster in repos with many small tests.
+
+For example, in one test done against
+[`clap-rs/clap`](https://github.com/clap-rs/clap) on Linux, the time reported by
+`cargo nextest run` goes down from 0.36 seconds to 0.23 seconds.
+
+#### UI refresh
+
+Several minor improvements to the user interface:
+
 - The progress bar and other UI elements use Unicode characters if available.
+- Pressing `Ctrl-C` twice now prints out a "Killing" message.
 - Some more minor improvements that should lead to a more cohesive user experience.
-- MSRV for compiling nextest is now Rust 1.81.
+
+#### MSRV update
+
+The MSRV for compiling nextest is now Rust 1.81. (The MSRV for running tests
+remains unchanged.)
+
+### Fixed
+
+- Fixed a bug where pressing two Ctrl-Cs in succession would not `SIGKILL` any running tests.
+
+- `junit.store-success-output` now works correctly—previously, storage of output is disabled unconditionally.
+
+- In JUnit output, the `testsuite` elements are now listed in the order they are first seen (`IndexMap`), rather than in random order (`HashMap`).
+
+- When [adding extra files to an archive], nextest now ignores empty and `.`
+  path components in the specification while joining the specified `path`. This
+  normalizes paths, meaning that archives won't accidentally get duplicated entries.
+
+- Update `idna` to address [RUSTSEC-2024-0421]. Since nextest only accesses
+  domains that do not use punycode, we disable that support entirely.
+
+- Nextest now supports being run in Cargo setups where the `Cargo.toml` that
+  defines the workspace is not hierarchically above the workspace members. This is
+  an uncommon setup, but it is supported by Cargo—and now by nextest as well.
+
+  Thanks to [PegasusPlusUS](https://github.com/PegasusPlusUS) for your first
+  contribution!
+
+- If an I/O error occurs waiting for a test process to finish, standard output
+  and standard error are now displayed correctly.
+
+[file a bug]: https://github.com/nextest-rs/nextest/issues/new?assignees=&labels=bug&projects=&template=bug-report.yml&title=Bug%3A+
+[#1944]: https://github.com/nextest-rs/nextest/issues/1944
+[*Passing in extra arguments*]: https://nexte.st/docs/configuration/extra-args/
+[*Setup scripts in JUnit output*]: https://nexte.st/docs/configuration/setup-scripts/#setup-scripts-in-junit-output
+[adding extra files to an archive]: https://nexte.st/docs/ci-features/archiving/#adding-extra-files-to-an-archive
+[RUSTSEC-2024-0421]: https://rustsec.org/advisories/RUSTSEC-2024-0421.html
 
 ## [0.9.85] - 2024-11-26
 
@@ -1303,10 +1302,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.86-b.4]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.4
-[0.9.86-b.3]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.3
-[0.9.86-b.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.2
-[0.9.86-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86-b.1
+[0.9.86]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86
 [0.9.85]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.85
 [0.9.84]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.84
 [0.9.83]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.83
