@@ -685,7 +685,7 @@ mod test {
             "this is stdout\n",
             "this i stderr\nok?\n",
             "thread 'index::test::download_url_crates_io'",
-            r#" panicked at src/index.rs:206:9:
+            r" panicked at src/index.rs:206:9:
 oh no
 stack backtrace:
     0: rust_begin_unwind
@@ -701,7 +701,7 @@ stack backtrace:
     5: core::ops::function::FnOnce::call_once
                 at /rustc/a28077b28a02b92985b3a3faecf92813155f1ea1/library/core/src/ops/function.rs:250:5
 note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
-"#,
+",
             "test index::test::download_url_crates_io ... FAILED\n",
             "\n\nfailures:\n\nfailures:\n    index::test::download_url_crates_io\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.01s\n",
         ];

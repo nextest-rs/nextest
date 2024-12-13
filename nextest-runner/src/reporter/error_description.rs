@@ -440,17 +440,17 @@ more text at the end, followed by some newlines"#,
             ),
             // Multiple panics: only the last one should be extracted.
             (
-                r#"
+                r"
 thread 'main' panicked at src/lib.rs:1:
 foo
 thread 'main' panicked at src/lib.rs:2:
 bar
-"#,
-                r#"thread 'main' panicked at src/lib.rs:2:
-bar"#,
+",
+                r"thread 'main' panicked at src/lib.rs:2:
+bar",
             ), // With RUST_BACKTRACE=1
             (
-                r#"
+                r"
 some initial text
 line 2
 line 3
@@ -473,8 +473,8 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
 more text at the end, followed by some newlines
 
 
-"#,
-                r#"thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
+",
+                r"thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
 test
 stack backtrace:
    0: rust_begin_unwind
@@ -490,11 +490,11 @@ stack backtrace:
    5: core::ops::function::FnOnce::call_once
              at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/ops/function.rs:250:5
 note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
-more text at the end, followed by some newlines"#,
+more text at the end, followed by some newlines",
             ),
             // RUST_BACKTRACE=full
             (
-                r#"
+                r"
 some initial text
 thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
 test
@@ -514,8 +514,8 @@ stack backtrace:
 some more text at the end, followed by some newlines
 
 
-"#,
-                r#"thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
+",
+                r"thread 'reporter::helpers::tests::test_heuristic_stack_trace' panicked at nextest-runner/src/reporter/helpers.rs:237:9:
 test
 stack backtrace:
    0:     0x61e6da135fe5 - std::backtrace_rs::backtrace::libunwind::trace::h23054e327d0d4b55
@@ -530,7 +530,7 @@ stack backtrace:
                                at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/fmt/rt.rs:165:63
    5:     0x61e6da16433b - core::fmt::write::hc6043626647b98ea
                                at /rustc/3f5fd8dd41153bc5fdca9427e9e05be2c767ba23/library/core/src/fmt/mod.rs:1168:21
-some more text at the end, followed by some newlines"#,
+some more text at the end, followed by some newlines",
             ),
         ];
 

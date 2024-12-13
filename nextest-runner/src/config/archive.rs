@@ -353,7 +353,7 @@ mod tests {
             [profile.default]
             archive.include = { path = "foo", relative-to = "target" }
         "#},
-        r#"invalid type: map, expected a sequence"#
+        r"invalid type: map, expected a sequence"
         ; "missing list")]
     #[test_case(
         indoc!{r#"
@@ -362,7 +362,7 @@ mod tests {
                 { path = "foo" }
             ]
         "#},
-        r#"missing field `relative-to`"#
+        r"missing field `relative-to`"
         ; "missing relative-to")]
     #[test_case(
         indoc!{r#"
@@ -371,7 +371,7 @@ mod tests {
                 { path = "bar", relative-to = "unknown" }
             ]
         "#},
-        r#"enum ArchiveRelativeTo does not have variant constructor unknown"#
+        r"enum ArchiveRelativeTo does not have variant constructor unknown"
         ; "invalid relative-to")]
     #[test_case(
         indoc!{r#"
