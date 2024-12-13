@@ -21,12 +21,7 @@ fn main() -> ExitCode {
         Trial::test(
             "thread_count::test_single_threaded",
             thread_count::test_single_threaded,
-        )
-        // Because nextest's CI runs tests against the latest stable version of
-        // nextest, which doesn't have support for run-extra-args yet, we have
-        // to use the `with_ignored_flag` method to ignore the test. This is
-        // temporary until run-extra-args is in stable nextest.
-        .with_ignored_flag(true),
+        ),
         Trial::test(
             "thread_count::test_multi_threaded",
             thread_count::test_multi_threaded,
