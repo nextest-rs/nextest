@@ -520,14 +520,14 @@ mod tests {
         fake-package::bin/fake-binary
         fake-macro::proc-macro/fake-macro
         "};
-        static EXPECTED_HUMAN_VERBOSE: &str = indoc! {r#"
+        static EXPECTED_HUMAN_VERBOSE: &str = indoc! {r"
         fake-package::bin/fake-binary:
           bin: /fake/binary
           build platform: target
         fake-macro::proc-macro/fake-macro:
           bin: /fake/macro
           build platform: host
-        "#};
+        "};
         static EXPECTED_JSON_PRETTY: &str = indoc! {r#"
         {
           "rust-build-meta": {

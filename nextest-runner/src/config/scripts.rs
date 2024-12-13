@@ -793,7 +793,7 @@ mod tests {
             [script.'#foo']
             command = "my-command"
         "#},
-        r#"invalid configuration script name: invalid identifier `#foo`"#
+        r"invalid configuration script name: invalid identifier `#foo`"
 
         ; "invalid script name"
     )]
