@@ -166,7 +166,9 @@ impl fmt::Display for UnitAbortDescription {
                 write!(
                     f,
                     " with code {}",
-                    crate::helpers::display_nt_status(exception)
+                    // TODO: pass in bold style (probably need to not use
+                    // fmt::Display)
+                    crate::helpers::display_nt_status(exception, owo_colors::Style::new())
                 )?;
             }
         }
