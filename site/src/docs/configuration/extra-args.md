@@ -87,6 +87,13 @@ run-extra-args = ["--test-threads=1"]
 If libtest-mimic is in use, the above configuration will run tests on the main
 thread. (Nextest's CI validates this.)
 
+Nextest provides an advantage compared to `cargo test` here: with `cargo test --
+--test-threads=1`, tests will run serially. Because nextest runs each test in
+its own process, setting `run-extra-args = ["--test-threads=1"]` will cause
+tests to be run _in parallel_, with each test executing in the main thread of
+its process. As a result, test runs with nextest can be many times faster than
+with `cargo test`.
+
 ### Notes
 
 Extra arguments are not passed in at list time, only at runtime. List-time extra
