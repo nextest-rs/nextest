@@ -42,7 +42,7 @@ output.
 ## Displaying captured test output
 
 When `--no-capture` isn't used, nextest will capture standard output and
-standard error and buffer it internally.
+standard error, and buffer it internally.
 
 ### …while tests are running
 
@@ -83,9 +83,7 @@ On being queried, nextest will display, for all running tests:
 
 ### …after tests have finished
 
-When `--no-capture` isn't used, nextest will capture standard output and standard error. There are
-two options that control the situations in which test output (standard output and standard error) is
-displayed:
+Two options control the situations in which test output is displayed:
 
 `--success-output`
 : When to display standard output and standard error for passing tests. The default is `never`.
@@ -93,7 +91,7 @@ displayed:
 `--failure-output`
 : When to display standard output and standard error for failing tests. The default is `immediate`.
 
-The possible values for these two are:
+The possible values are:
 
 <div class="compact" markdown>
 
@@ -104,7 +102,7 @@ The possible values for these two are:
 : Display output at the end of the test run.
 
 `immediate-final`
-: Display output as soon as the test fails, and at the end of the run. This is most useful for CI jobs.
+: Display output as soon as the test fails, and at the end of the run.
 
 `never`
 : Never display output. Default for `--success-output`.
