@@ -857,7 +857,6 @@ pub(super) struct UnitContext<'a> {
 }
 
 impl<'a> UnitContext<'a> {
-    #[cfg_attr(not(unix), expect(dead_code))]
     pub(super) fn packet(&self) -> &UnitPacket<'a> {
         &self.packet
     }

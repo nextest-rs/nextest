@@ -1661,7 +1661,6 @@ impl<'a> TestReporterImpl<'a> {
         state: &UnitTerminatingState,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
-        #[cfg_attr(not(any(unix, test)), expect(unused_variables))]
         let UnitTerminatingState {
             pid,
             time_taken,
@@ -1705,6 +1704,18 @@ impl<'a> TestReporterImpl<'a> {
                     // remaining time.
                     "{}:   instructed job object to terminate",
                     "note".style(self.styles.count),
+                )?;
+            }
+            #[cfg(windows)]
+            UnitTerminateMethod::Wait => {
+                writeln!(
+                    writer,
+                    "{}:   waiting for {} to exit on its own; spent {:.3?}s, will terminate \
+                     job object after another {:.3?}s",
+                    "note".style(self.styles.count),
+                    kind,
+                    waiting_duration.as_secs_f64(),
+                    remaining.as_secs_f64(),
                 )?;
             }
             #[cfg(test)]
