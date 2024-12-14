@@ -1323,7 +1323,7 @@ impl<'a> TestReporterImpl<'a> {
             leaked: _,
         } = last_status.result
         {
-            self.write_windows_message_line(nt_status, writer)?;
+            write_windows_message_line(nt_status, &self.styles, writer)?;
         }
 
         Ok(())
@@ -1397,7 +1397,7 @@ impl<'a> TestReporterImpl<'a> {
             leaked: _,
         } = last_status.result
         {
-            self.write_windows_message_line(nt_status, writer)?;
+            write_windows_message_line(nt_status, &self.styles, writer)?;
         }
 
         Ok(())
@@ -1813,23 +1813,6 @@ impl<'a> TestReporterImpl<'a> {
         // * 7 is the number of characters to pad to.
         // * .3 means print three digits after the decimal point.
         write!(writer, "[>{:>7.3?}s] ", duration.as_secs_f64())
-    }
-
-    #[cfg(windows)]
-    fn write_windows_message_line(
-        &self,
-        nt_status: windows_sys::Win32::Foundation::NTSTATUS,
-        writer: &mut dyn Write,
-    ) -> io::Result<()> {
-        write!(writer, "{:>12} ", "Message".style(self.styles.fail))?;
-        write!(writer, "[         ] ")?;
-        writeln!(
-            writer,
-            "code {}",
-            crate::helpers::display_nt_status(nt_status)
-        )?;
-
-        Ok(())
     }
 
     fn write_setup_script_execute_status(
@@ -2521,6 +2504,25 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         ExecutionResult::Leak => "LEAK".into(),
         ExecutionResult::Timeout => "TMT".into(),
     }
+}
+
+#[cfg(windows)]
+fn write_windows_message_line(
+    nt_status: windows_sys::Win32::Foundation::NTSTATUS,
+    styles: &Styles,
+    writer: &mut dyn Write,
+) -> io::Result<()> {
+    // Note that display_nt_status ensures that codes are aligned properly. For subsequent lines,
+    // use an indented displayer with 25 spaces (ensuring that message lines are aligned).
+    const INDENT: &str = "                       - ";
+    let mut indented = IndentWriter::new_skip_initial(INDENT, writer);
+    writeln!(
+        indented,
+        "{:>12} {}",
+        "with code".style(styles.fail),
+        crate::helpers::display_nt_status(nt_status, styles.count)
+    )?;
+    indented.flush()
 }
 
 fn write_final_warnings(
@@ -3716,6 +3718,36 @@ mod tests {
         let mut buf: Vec<u8> = Vec::new();
         let styles = Styles::default();
         write_final_warnings(stats, cancel_status, &styles, &mut buf).unwrap();
+        String::from_utf8(buf).unwrap()
+    }
+}
+
+#[cfg(all(windows, test))]
+mod windows_tests {
+    use super::*;
+    use windows_sys::Win32::{
+        Foundation::{NTSTATUS, STATUS_CONTROL_C_EXIT, STATUS_CONTROL_STACK_VIOLATION},
+        Globalization::SetThreadUILanguage,
+    };
+
+    #[test]
+    fn test_write_windows_message_line() {
+        unsafe {
+            // Set the thread UI language to US English for consistent output.
+            SetThreadUILanguage(0x0409);
+        }
+
+        insta::assert_snapshot!("ctrl_c_code", to_message_line(STATUS_CONTROL_C_EXIT));
+        insta::assert_snapshot!(
+            "stack_violation_code",
+            to_message_line(STATUS_CONTROL_STACK_VIOLATION),
+        );
+    }
+
+    #[track_caller]
+    fn to_message_line(status: NTSTATUS) -> String {
+        let mut buf = Vec::new();
+        write_windows_message_line(status, &Styles::default(), &mut buf).unwrap();
         String::from_utf8(buf).unwrap()
     }
 }

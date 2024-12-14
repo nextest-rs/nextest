@@ -1,0 +1,7 @@
+---
+source: nextest-runner/src/reporter/displayer.rs
+expression: buf
+snapshot_kind: text
+---
+   with code 0xc000013a: {Application Exit by CTRL+C}
+                       - The application terminated as a result of a CTRL+C. (os error 572)

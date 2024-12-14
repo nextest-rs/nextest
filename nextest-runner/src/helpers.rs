@@ -320,7 +320,11 @@ pub(crate) fn display_abort_status(abort_status: AbortStatus) -> String {
         },
         #[cfg(windows)]
         AbortStatus::WindowsNtStatus(nt_status) => {
-            format!("code {}", crate::helpers::display_nt_status(nt_status))
+            format!(
+                "code {}",
+                // TODO: pass down a style here
+                crate::helpers::display_nt_status(nt_status, Style::new())
+            )
         }
     }
 }
@@ -351,18 +355,23 @@ pub(crate) fn signal_str(signal: i32) -> Option<&'static str> {
 }
 
 #[cfg(windows)]
-pub(crate) fn display_nt_status(nt_status: windows_sys::Win32::Foundation::NTSTATUS) -> String {
+pub(crate) fn display_nt_status(
+    nt_status: windows_sys::Win32::Foundation::NTSTATUS,
+    bold_style: Style,
+) -> String {
+    // 10 characters ("0x" + 8 hex digits) is how an NTSTATUS with the high bit set is going to be
+    // displayed anyway. It also ensures alignment for the displayer.
+    let bolded_status = format!("{:#010x}", nt_status.style(bold_style));
     // Convert the NTSTATUS to a Win32 error code.
     let win32_code = unsafe { windows_sys::Win32::Foundation::RtlNtStatusToDosError(nt_status) };
 
     if win32_code == windows_sys::Win32::Foundation::ERROR_MR_MID_NOT_FOUND {
         // The Win32 code was not found.
-        return format!("{nt_status:#x} ({nt_status})");
+        return bolded_status;
     }
 
     format!(
-        "{:#x}: {}",
-        nt_status,
+        "{bolded_status}: {}",
         io::Error::from_raw_os_error(win32_code as i32)
     )
 }
