@@ -1063,6 +1063,16 @@ pub enum UnitTerminateMethod {
     #[cfg(windows)]
     JobObject,
 
+    /// The unit is being waited on to exit. A termination signal will be sent
+    /// if it doesn't exit within the grace period.
+    ///
+    /// On Windows, this occurs when nextest receives Ctrl-C. In that case, it
+    /// is assumed that tests will also receive Ctrl-C and exit on their own. If
+    /// tests do not exit within the grace period configured for them, their
+    /// corresponding job objects will be terminated.
+    #[cfg(windows)]
+    Wait,
+
     /// A fake method used for testing.
     #[cfg(test)]
     Fake,

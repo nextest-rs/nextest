@@ -224,6 +224,10 @@ Unlike process groups, job objects form a tree. If something else runs nextest
 within a job object and then calls `TerminateJobObject`, both nextest and all
 its child processes are terminated.
 
+When a test times out, nextest calls `TerminateJobObject` on the job object
+associated with the test immediately. In the future, it would be interesting
+to send a Ctrl-C (or maybe a `WM_CLOSE`?) to the test process first.
+
 [job objects]: https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
 [terminate-job-object]: https://docs.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-terminatejobobject
 

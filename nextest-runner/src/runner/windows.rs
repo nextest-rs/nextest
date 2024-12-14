@@ -3,7 +3,12 @@
 
 use crate::{
     errors::ConfigureHandleInheritanceError,
-    runner::{InternalTerminateReason, RunUnitRequest, UnitContext},
+    reporter::events::{UnitState, UnitTerminateMethod, UnitTerminateReason, UnitTerminatingState},
+    runner::{
+        InternalTerminateReason, RunUnitQuery, RunUnitRequest, ShutdownRequest, SignalRequest,
+        UnitContext,
+    },
+    signal::ShutdownEvent,
     test_command::ChildAccumulator,
     time::StopwatchStart,
 };
@@ -73,21 +78,85 @@ pub(super) fn assign_process_to_job(
 }
 
 #[expect(clippy::too_many_arguments)]
-pub(super) async fn terminate_child(
-    _cx: &UnitContext<'_>,
+pub(super) async fn terminate_child<'a>(
+    cx: &UnitContext<'a>,
     child: &mut Child,
-    _child_acc: &mut ChildAccumulator,
+    child_acc: &mut ChildAccumulator,
     reason: InternalTerminateReason,
-    _stopwatch: &mut StopwatchStart,
-    _req_rx: &mut UnboundedReceiver<RunUnitRequest<'_>>,
+    stopwatch: &mut StopwatchStart,
+    req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     job: Option<&Job>,
-    _grace_period: Duration,
+    grace_period: Duration,
 ) {
-    // Ignore signal events since Windows propagates them to child processes (this may change if
-    // we start assigning processes to groups on Windows).
-    if !matches!(reason, InternalTerminateReason::Timeout) {
-        return;
-    }
+    let Some(pid) = child.id() else { return };
+    let (term_reason, term_method) = to_terminate_reason_and_method(&reason, grace_period);
+
+    let child_exited = match term_method {
+        UnitTerminateMethod::Wait => {
+            // Unlike Unix, this doesn't need to be a pausable sleep -- we don't
+            // have a notion of pausing nextest on Windows at the moment.
+            let mut sleep = std::pin::pin!(tokio::time::sleep(grace_period));
+            let waiting_stopwatch = crate::time::stopwatch();
+
+            loop {
+                tokio::select! {
+                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
+                    _ = child.wait() => {
+                        // The process exited.
+                        break true;
+                    }
+                    recv = req_rx.recv() => {
+                        // The sender stays open longer than the whole loop, and
+                        // the buffer is big enough for all messages ever sent
+                        // through this channel, so a RecvError should never
+                        // happen.
+                        let req = recv.expect("a RecvError should never happen here");
+
+                        match req {
+                            RunUnitRequest::Signal(SignalRequest::Shutdown(_)) => {
+                                // Receiving a shutdown signal while waiting for
+                                // the process to exit always means kill
+                                // immediately -- go to the next step.
+                                break false;
+                            }
+                            RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
+                                let waiting_snapshot = waiting_stopwatch.snapshot();
+                                _ = sender.send(
+                                    cx.info_response(
+                                        UnitState::Terminating(UnitTerminatingState {
+                                            pid,
+                                            time_taken: stopwatch.snapshot().active,
+                                            reason: term_reason,
+                                            method: term_method,
+                                            waiting_duration: waiting_snapshot.active,
+                                            remaining: grace_period
+                                                .checked_sub(waiting_snapshot.active)
+                                                .unwrap_or_default(),
+                                        }),
+                                        child_acc.snapshot_in_progress(cx.packet().kind().waiting_on_message()),
+                                    )
+                                );
+                            }
+                        }
+                    }
+                    _ = &mut sleep => {
+                        // The grace period has elapsed.
+                        break false;
+                    }
+                }
+            }
+        }
+        UnitTerminateMethod::JobObject => {
+            // The process is killed by the job object.
+            false
+        }
+        #[cfg(test)]
+        UnitTerminateMethod::Fake => {
+            unreachable!("fake method is only used for reporter tests");
+        }
+    };
+
+    // In any case, always call TerminateJobObject.
     if let Some(job) = job {
         let handle = job.handle();
         unsafe {
@@ -96,6 +165,42 @@ pub(super) async fn terminate_child(
             _ = TerminateJobObject(handle as _, 1);
         }
     }
+
     // Start killing the process directly for good measure.
-    let _ = child.start_kill();
+    if !child_exited {
+        let _ = child.start_kill();
+    }
+}
+
+fn to_terminate_reason_and_method(
+    reason: &InternalTerminateReason,
+    grace_period: Duration,
+) -> (UnitTerminateReason, UnitTerminateMethod) {
+    match reason {
+        InternalTerminateReason::Timeout => (
+            UnitTerminateReason::Timeout,
+            // The grace period is currently ignored for timeouts --
+            // TerminateJobObject is immediately called.
+            UnitTerminateMethod::JobObject,
+        ),
+        InternalTerminateReason::Signal(req) => (
+            // The only signals we support on Windows are interrupts.
+            UnitTerminateReason::Interrupt,
+            shutdown_terminate_method(*req, grace_period),
+        ),
+    }
+}
+
+fn shutdown_terminate_method(req: ShutdownRequest, grace_period: Duration) -> UnitTerminateMethod {
+    if grace_period.is_zero() {
+        return UnitTerminateMethod::JobObject;
+    }
+
+    match req {
+        // In case of interrupt events, wait for the grace period to elapse
+        // before terminating the job. We're assuming that if nextest got an
+        // interrupt, child processes did as well.
+        ShutdownRequest::Once(ShutdownEvent::Interrupt) => UnitTerminateMethod::Wait,
+        ShutdownRequest::Twice => UnitTerminateMethod::JobObject,
+    }
 }
