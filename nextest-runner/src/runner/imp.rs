@@ -20,11 +20,7 @@ use async_scoped::TokioScope;
 use future_queue::StreamExt;
 use futures::prelude::*;
 use quick_junit::ReportUuid;
-use std::{
-    convert::Infallible,
-    fmt,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::{convert::Infallible, fmt, sync::Arc};
 use tokio::{
     runtime::Runtime,
     sync::{broadcast, mpsc::unbounded_channel, oneshot},
@@ -178,7 +174,6 @@ impl<'a> TestRunner<'a> {
         F: FnMut(TestEvent<'a>) -> Result<(), E> + Send,
         E: fmt::Debug + Send,
     {
-        let cancelled = AtomicBool::new(false);
         let (report_cancel_tx, report_cancel_rx) = oneshot::channel();
 
         // If report_cancel_tx is None, at least one error has occurred and the
@@ -190,7 +185,6 @@ impl<'a> TestRunner<'a> {
         let res = self.inner.execute(
             &mut self.signal_handler,
             &mut self.input_handler,
-            &cancelled,
             report_cancel_rx,
             |event| {
                 match callback(event) {
@@ -247,7 +241,6 @@ impl<'a> TestRunnerInner<'a> {
         &self,
         signal_handler: &mut SignalHandler,
         input_handler: &mut InputHandler,
-        cancelled_ref: &AtomicBool,
         report_cancel_rx: oneshot::Receiver<()>,
         callback: F,
     ) -> Result<RunStats, Vec<JoinError>>
@@ -295,7 +288,6 @@ impl<'a> TestRunnerInner<'a> {
                 signal_handler,
                 input_handler,
                 report_cancel_rx,
-                cancelled_ref,
                 cancellation_sender.clone(),
             );
             scope.spawn_cancellable(dispatcher_fut, || RunnerTaskState::Cancelled);
@@ -305,9 +297,7 @@ impl<'a> TestRunnerInner<'a> {
             let run_scripts_fut = async move {
                 // Since script tasks are run serially, we just reuse the one
                 // script task.
-                let script_data = executor_cx_ref
-                    .run_setup_scripts(script_resp_tx, cancelled_ref)
-                    .await;
+                let script_data = executor_cx_ref.run_setup_scripts(script_resp_tx).await;
                 if script_tx.send(script_data).is_err() {
                     // The dispatcher has shut down, so we should too.
                     debug!("script_tx.send failed, shutting down");
@@ -369,7 +359,6 @@ impl<'a> TestRunnerInner<'a> {
                                     test_instance,
                                     settings,
                                     resp_tx.clone(),
-                                    cancelled_ref,
                                     cancel_rx,
                                     setup_script_data,
                                 ))

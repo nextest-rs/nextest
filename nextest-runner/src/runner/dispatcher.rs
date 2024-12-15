@@ -23,11 +23,7 @@ use crate::{
 use chrono::Local;
 use debug_ignore::DebugIgnore;
 use quick_junit::ReportUuid;
-use std::{
-    collections::BTreeMap,
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use std::{collections::BTreeMap, time::Duration};
 use tokio::sync::{
     broadcast,
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
@@ -102,7 +98,6 @@ where
         signal_handler: &mut SignalHandler,
         input_handler: &mut InputHandler,
         report_cancel_rx: oneshot::Receiver<()>,
-        cancelled_ref: &AtomicBool,
         cancellation_sender: broadcast::Sender<()>,
     ) -> RunnerTaskState {
         let mut report_cancel_rx = std::pin::pin!(report_cancel_rx);
@@ -275,10 +270,7 @@ where
                     self.info_finished(total.saturating_sub(index + 1));
                 }
                 HandleEventResponse::Cancel(cancel) => {
-                    // A cancellation notice was received. Note the ordering here:
-                    // cancelled_ref is set *before* notifications are broadcast. This
-                    // prevents race conditions.
-                    cancelled_ref.store(true, Ordering::Release);
+                    // A cancellation notice was received.
                     let _ = cancellation_sender.send(());
                     match cancel {
                         // Some of the branches here don't do anything, but are specified

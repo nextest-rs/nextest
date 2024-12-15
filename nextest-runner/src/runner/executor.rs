@@ -39,10 +39,7 @@ use std::{
     num::NonZeroUsize,
     pin::Pin,
     process::{ExitStatus, Stdio},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::Duration,
 };
 use tokio::{
@@ -92,7 +89,6 @@ impl<'a> ExecutorContext<'a> {
     pub(super) async fn run_setup_scripts(
         &self,
         resp_tx: UnboundedSender<ExecutorEvent<'a>>,
-        cancelled_ref: &AtomicBool,
     ) -> SetupScriptExecuteData<'a> {
         let setup_scripts = self.profile.setup_scripts(self.test_list);
         let total = setup_scripts.len();
@@ -108,11 +104,6 @@ impl<'a> ExecutorContext<'a> {
             let config = script.config;
 
             let script_fut = async move {
-                if cancelled_ref.load(Ordering::Acquire) {
-                    // Check for test cancellation.
-                    return None;
-                }
-
                 let (req_rx_tx, req_rx_rx) = oneshot::channel();
                 let _ = this_resp_tx.send(ExecutorEvent::SetupScriptStarted {
                     script_id: script_id.clone(),
@@ -172,15 +163,9 @@ impl<'a> ExecutorContext<'a> {
         test_instance: TestInstance<'a>,
         settings: TestSettings<'a>,
         resp_tx: UnboundedSender<ExecutorEvent<'a>>,
-        cancelled_ref: &AtomicBool,
         mut cancel_receiver: broadcast::Receiver<()>,
         setup_script_data: Arc<SetupScriptExecuteData<'a>>,
     ) {
-        if cancelled_ref.load(Ordering::Acquire) {
-            // Check for test cancellation.
-            return;
-        }
-
         debug!(test_name = test_instance.name, "running test");
 
         let settings = Arc::new(settings);
@@ -224,14 +209,10 @@ impl<'a> ExecutorContext<'a> {
                 total_attempts,
             };
 
-            // Note: do not check for cancellation here.
-            // Only check for cancellation after the first
-            // run, to avoid a situation where run_statuses
-            // is empty.
-
             if retry_data.attempt > 1 {
-                // Ensure that the dispatcher believes the run is still ongoing. If the run is
-                // cancelled, the dispatcher will let us know.
+                // Ensure that the dispatcher believes the run is still ongoing.
+                // If the run is cancelled, the dispatcher will let us know by
+                // dropping the receiver.
                 let (tx, rx) = oneshot::channel();
                 _ = resp_tx.send(ExecutorEvent::RetryStarted {
                     test_instance,
@@ -242,8 +223,8 @@ impl<'a> ExecutorContext<'a> {
                 match rx.await {
                     Ok(()) => {}
                     Err(_) => {
-                        // The receiver was dropped -- the dispatcher has signaled that this unit
-                        // should exit.
+                        // The receiver was dropped -- the dispatcher has
+                        // signaled that this unit should exit.
                         return;
                     }
                 }
@@ -264,9 +245,6 @@ impl<'a> ExecutorContext<'a> {
 
             if run_status.result.is_success() {
                 // The test succeeded.
-                break run_status;
-            } else if cancelled_ref.load(Ordering::Acquire) {
-                // The test was cancelled.
                 break run_status;
             } else if retry_data.attempt < retry_data.total_attempts {
                 // Retry this test: send a retry event, then retry the loop.
