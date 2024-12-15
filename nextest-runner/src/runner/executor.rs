@@ -124,8 +124,8 @@ impl<'a> ExecutorContext<'a> {
                 let mut req_rx = match req_rx_rx.await {
                     Ok(req_rx) => req_rx,
                     Err(_) => {
-                        // The receiver was dropped -- most likely the test
-                        // exited.
+                        // The receiver was dropped -- the dispatcher has
+                        // signaled that this unit should exit.
                         return None;
                     }
                 };
@@ -209,8 +209,8 @@ impl<'a> ExecutorContext<'a> {
         let mut req_rx = match req_rx_rx.await {
             Ok(rx) => rx,
             Err(_) => {
-                // The receiver was dropped, which means the
-                // test was cancelled.
+                // The receiver was dropped -- the dispatcher has signaled that this unit should
+                // exit.
                 return;
             }
         };
