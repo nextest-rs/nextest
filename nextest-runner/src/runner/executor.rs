@@ -230,10 +230,23 @@ impl<'a> ExecutorContext<'a> {
             // is empty.
 
             if retry_data.attempt > 1 {
+                // Ensure that the dispatcher believes the run is still ongoing. If the run is
+                // cancelled, the dispatcher will let us know.
+                let (tx, rx) = oneshot::channel();
                 _ = resp_tx.send(ExecutorEvent::RetryStarted {
                     test_instance,
                     retry_data,
+                    tx,
                 });
+
+                match rx.await {
+                    Ok(()) => {}
+                    Err(_) => {
+                        // The receiver was dropped -- the dispatcher has signaled that this unit
+                        // should exit.
+                        return;
+                    }
+                }
             }
 
             // Some of this information is only useful for event reporting, but

@@ -471,10 +471,28 @@ where
             InternalEvent::Executor(ExecutorEvent::RetryStarted {
                 test_instance,
                 retry_data,
-            }) => self.callback_none_response(TestEventKind::TestRetryStarted {
-                test_instance,
-                retry_data,
-            }),
+                tx,
+            }) => {
+                if self.cancel_state.is_some() {
+                    // The run has been cancelled: don't send a message over the tx and don't start
+                    // any new units.
+                    return HandleEventResponse::None;
+                }
+
+                match tx.send(()) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        // The test task died?
+                        debug!(test = ?test_instance.id(), "test task died, ignoring");
+                        return HandleEventResponse::None;
+                    }
+                }
+
+                self.callback_none_response(TestEventKind::TestRetryStarted {
+                    test_instance,
+                    retry_data,
+                })
+            }
             InternalEvent::Executor(ExecutorEvent::Finished {
                 test_instance,
                 success_output,

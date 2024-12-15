@@ -89,6 +89,8 @@ pub(super) enum ExecutorEvent<'a> {
     RetryStarted {
         test_instance: TestInstance<'a>,
         retry_data: RetryData,
+        // This is used to indicate that the dispatcher still wants to run the test.
+        tx: oneshot::Sender<()>,
     },
     Finished {
         test_instance: TestInstance<'a>,
