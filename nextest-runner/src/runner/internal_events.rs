@@ -183,6 +183,9 @@ impl InternalSetupScriptExecuteStatus<'_> {
 #[derive(Clone, Debug)]
 pub(super) enum RunUnitRequest<'a> {
     Signal(SignalRequest),
+    /// Non-signal cancellation requests (e.g. test failures) which should cause
+    /// tests to exit in some states.
+    OtherCancel,
     Query(RunUnitQuery<'a>),
 }
 
@@ -197,6 +200,7 @@ impl<'a> RunUnitRequest<'a> {
             #[cfg(unix)]
             Self::Signal(SignalRequest::Continue) => {}
             Self::Signal(SignalRequest::Shutdown(_)) => {}
+            Self::OtherCancel => {}
             Self::Query(RunUnitQuery::GetInfo(tx)) => {
                 // The receiver being dead isn't really important.
                 _ = tx.send(status.info_response());

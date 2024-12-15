@@ -119,6 +119,10 @@ pub(super) async fn terminate_child<'a>(
                                 // immediately -- go to the next step.
                                 break false;
                             }
+                            RunUnitRequest::OtherCancel => {
+                                // Ignore non-signal cancellation requests (most
+                                // likely another test failed). Let the unit finish.
+                            }
                             RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
                                 let waiting_snapshot = waiting_stopwatch.snapshot();
                                 _ = sender.send(

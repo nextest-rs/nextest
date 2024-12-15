@@ -45,7 +45,6 @@ use std::{
 use tokio::{
     process::Child,
     sync::{
-        broadcast,
         mpsc::{UnboundedReceiver, UnboundedSender},
         oneshot,
     },
@@ -163,7 +162,6 @@ impl<'a> ExecutorContext<'a> {
         test_instance: TestInstance<'a>,
         settings: TestSettings<'a>,
         resp_tx: UnboundedSender<ExecutorEvent<'a>>,
-        mut cancel_receiver: broadcast::Receiver<()>,
         setup_script_data: Arc<SetupScriptExecuteData<'a>>,
     ) {
         debug!(test_name = test_instance.name, "running test");
@@ -268,7 +266,6 @@ impl<'a> ExecutorContext<'a> {
                     previous_result,
                     previous_slow,
                     delay,
-                    &mut cancel_receiver,
                     &mut req_rx,
                 )
                 .await;
@@ -463,6 +460,10 @@ impl<'a> ExecutorContext<'a> {
                                     job.as_ref(),
                                     slow_timeout.grace_period
                                 ).await;
+                            }
+                            RunUnitRequest::OtherCancel => {
+                                // Ignore non-signal cancellation requests --
+                                // let the script finish.
                             }
                             RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
                                 _ = sender.send(script.info_response(
@@ -705,6 +706,10 @@ impl<'a> ExecutorContext<'a> {
                                     job.as_ref(),
                                     slow_timeout.grace_period,
                                 ).await;
+                            }
+                            RunUnitRequest::OtherCancel => {
+                                // Ignore non-signal cancellation requests --
+                                // let the test finish.
                             }
                             RunUnitRequest::Query(RunUnitQuery::GetInfo(tx)) => {
                                 _ = tx.send(test.info_response(
@@ -986,7 +991,6 @@ async fn handle_delay_between_attempts<'a>(
     previous_result: ExecutionResult,
     previous_slow: bool,
     delay: Duration,
-    cancel_receiver: &mut broadcast::Receiver<()>,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
 ) {
     let mut sleep = std::pin::pin!(crate::time::pausable_sleep(delay));
@@ -997,10 +1001,6 @@ async fn handle_delay_between_attempts<'a>(
         tokio::select! {
             _ = &mut sleep => {
                 // The timer has expired.
-                break;
-            }
-            _ = cancel_receiver.recv() => {
-                // The cancel signal was received.
                 break;
             }
             recv = req_rx.recv() => {
@@ -1023,6 +1023,11 @@ async fn handle_delay_between_attempts<'a>(
                     RunUnitRequest::Signal(SignalRequest::Shutdown(_)) => {
                         // The run was cancelled, so go ahead and perform a
                         // shutdown.
+                        break;
+                    }
+                    RunUnitRequest::OtherCancel => {
+                        // If a cancellation was requested, break out of the
+                        // loop.
                         break;
                     }
                     RunUnitRequest::Query(RunUnitQuery::GetInfo(tx)) => {
@@ -1095,6 +1100,10 @@ async fn detect_fd_leaks<'a>(
                 match req {
                     RunUnitRequest::Signal(_) => {
                         // The process is done executing, so signals are moot.
+                    }
+                    RunUnitRequest::OtherCancel => {
+                        // Ignore non-signal cancellation requests -- let the
+                        // unit finish.
                     }
                     RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
                         let snapshot = waiting_stopwatch.snapshot();

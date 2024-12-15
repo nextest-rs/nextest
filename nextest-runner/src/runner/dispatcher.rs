@@ -25,7 +25,6 @@ use debug_ignore::DebugIgnore;
 use quick_junit::ReportUuid;
 use std::{collections::BTreeMap, time::Duration};
 use tokio::sync::{
-    broadcast,
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot,
 };
@@ -98,7 +97,6 @@ where
         signal_handler: &mut SignalHandler,
         input_handler: &mut InputHandler,
         report_cancel_rx: oneshot::Receiver<()>,
-        cancellation_sender: broadcast::Sender<()>,
     ) -> RunnerTaskState {
         let mut report_cancel_rx = std::pin::pin!(report_cancel_rx);
 
@@ -271,17 +269,17 @@ where
                 }
                 HandleEventResponse::Cancel(cancel) => {
                     // A cancellation notice was received.
-                    let _ = cancellation_sender.send(());
                     match cancel {
                         // Some of the branches here don't do anything, but are specified
                         // for readability.
                         CancelEvent::Report => {
                             // An error was produced by the reporter, and cancellation has
                             // begun.
+                            self.broadcast_request(RunUnitRequest::OtherCancel);
                         }
                         CancelEvent::TestFailure => {
-                            // A test failure has caused cancellation to begin. Nothing to
-                            // do here.
+                            // A test failure has caused cancellation to begin.
+                            self.broadcast_request(RunUnitRequest::OtherCancel);
                         }
                         CancelEvent::Signal(req) => {
                             // A signal has caused cancellation to begin. Let all the child
