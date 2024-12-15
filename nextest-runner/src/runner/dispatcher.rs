@@ -349,6 +349,11 @@ where
                 total,
                 req_rx_tx,
             }) => {
+                if self.cancel_state.is_some() {
+                    // The run has been cancelled: don't start any new units.
+                    return HandleEventResponse::None;
+                }
+
                 let (req_tx, req_rx) = unbounded_channel();
                 match req_rx_tx.send(req_rx) {
                     Ok(_) => {}
@@ -415,6 +420,11 @@ where
                 test_instance,
                 req_rx_tx,
             }) => {
+                if self.cancel_state.is_some() {
+                    // The run has been cancelled: don't start any new units.
+                    return HandleEventResponse::None;
+                }
+
                 let (req_tx, req_rx) = unbounded_channel();
                 match req_rx_tx.send(req_rx) {
                     Ok(_) => {}
