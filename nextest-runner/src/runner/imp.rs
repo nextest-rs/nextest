@@ -23,7 +23,7 @@ use quick_junit::ReportUuid;
 use std::{convert::Infallible, fmt, sync::Arc};
 use tokio::{
     runtime::Runtime,
-    sync::{broadcast, mpsc::unbounded_channel, oneshot},
+    sync::{mpsc::unbounded_channel, oneshot},
     task::JoinError,
 };
 use tracing::{debug, warn};
@@ -280,16 +280,10 @@ impl<'a> TestRunnerInner<'a> {
 
         let ((), results) = TokioScope::scope_and_block(move |scope| {
             let (resp_tx, resp_rx) = unbounded_channel::<ExecutorEvent<'a>>();
-            let (cancellation_sender, _cancel_receiver) = broadcast::channel(1);
 
             // Run the dispatcher to completion in a task.
-            let dispatcher_fut = dispatcher_cx_mut.run(
-                resp_rx,
-                signal_handler,
-                input_handler,
-                report_cancel_rx,
-                cancellation_sender.clone(),
-            );
+            let dispatcher_fut =
+                dispatcher_cx_mut.run(resp_rx, signal_handler, input_handler, report_cancel_rx);
             scope.spawn_cancellable(dispatcher_fut, || RunnerTaskState::Cancelled);
 
             let (script_tx, mut script_rx) = unbounded_channel::<SetupScriptExecuteData<'a>>();
@@ -330,7 +324,6 @@ impl<'a> TestRunnerInner<'a> {
                         TestGroup::Global => None,
                         TestGroup::Custom(name) => Some(name.clone()),
                     };
-                    let cancel_rx = cancellation_sender.subscribe();
                     let resp_tx = resp_tx.clone();
                     let setup_script_data = setup_script_data.clone();
 
@@ -359,7 +352,6 @@ impl<'a> TestRunnerInner<'a> {
                                     test_instance,
                                     settings,
                                     resp_tx.clone(),
-                                    cancel_rx,
                                     setup_script_data,
                                 ))
                             })
