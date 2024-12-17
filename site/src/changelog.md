@@ -8,6 +8,22 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.87] - 2024-12-17
+
+### Changed
+
+- On Windows, if a Ctrl-C is received and running tests don't terminate within the
+  grace period (default 10 seconds), they're now forcibly terminated via a job
+  object. Previously, nextest would wait indefinitely for tests to exit, unlike
+  the behavior on Unix platforms where tests are SIGKILLed after the grace period.
+- The UI has also been updated to make it clearer when tests are forcibly
+  terminated on Windows.
+
+### Fixed
+
+- Fixed a race condition between test cancellation and new tests being started.
+  Now, once cancellation has begun, no new tests (or retries) will be started.
+
 ## [0.9.86] - 2024-12-12
 
 This is a substantial release with several new features. It's gone through a
@@ -1302,6 +1318,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.87]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.87
 [0.9.86]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86
 [0.9.85]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.85
 [0.9.84]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.84
