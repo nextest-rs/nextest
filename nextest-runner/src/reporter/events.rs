@@ -741,7 +741,7 @@ pub enum ExecutionResult {
     },
     /// An error occurred while executing the test.
     ExecFail,
-    /// The test was terminated due to timeout.
+    /// The test was terminated due to a timeout.
     Timeout,
 }
 
@@ -769,6 +769,10 @@ pub enum AbortStatus {
     /// The test was determined to have aborted because the high bit was set on Windows.
     #[cfg(windows)]
     WindowsNtStatus(windows_sys::Win32::Foundation::NTSTATUS),
+
+    /// The test was terminated via job object on Windows.
+    #[cfg(windows)]
+    JobObject,
 }
 
 impl AbortStatus {

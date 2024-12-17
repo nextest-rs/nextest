@@ -1,6 +1,6 @@
 ---
 source: nextest-runner/src/reporter/displayer.rs
-expression: to_message_line(STATUS_CONTROL_STACK_VIOLATION)
+expression: "to_message_line(AbortStatus::WindowsNtStatus(STATUS_CONTROL_STACK_VIOLATION))"
 snapshot_kind: text
 ---
-   with code 0xc00001b2: Invalid access to memory location. (os error 998)
+           - with code 0xc00001b2: Invalid access to memory location. (os error 998)

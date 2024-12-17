@@ -532,8 +532,8 @@ mod tests {
                     errors: None,
                 },
                 store_stdout_stderr: true,
-                message: Some("process aborted with signal SIGTERM"),
-                description: Some("process aborted with signal SIGTERM"),
+                message: Some("process aborted with signal 15 (SIGTERM)"),
+                description: Some("process aborted with signal 15 (SIGTERM)"),
                 system_out: Some("stdout\nstdout 2\n"),
                 system_err: Some(STDERR_NOT_CAPTURED),
             },
@@ -566,7 +566,7 @@ mod tests {
                     * error waiting for child process to exit
                         caused by:
                         - huh
-                    * process aborted with signal SIGTERM, and also leaked handles
+                    * process aborted with signal 15 (SIGTERM), and also leaked handles
                     * thread 'foo' panicked at xyz.rs:40
                 "}),
                 system_out: None,

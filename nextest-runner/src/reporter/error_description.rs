@@ -4,6 +4,7 @@
 use super::events::{AbortStatus, ExecutionResult, UnitKind};
 use crate::{
     errors::{ChildError, ChildStartError, ErrorList},
+    helpers::display_abort_status,
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use bstr::ByteSlice;
@@ -152,26 +153,7 @@ struct UnitAbortDescription {
 
 impl fmt::Display for UnitAbortDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "process aborted")?;
-        match self.status {
-            #[cfg(unix)]
-            AbortStatus::UnixSignal(sig) => {
-                let signal_str = crate::helpers::signal_str(sig)
-                    .map(|signal_str| format!("SIG{signal_str}"))
-                    .unwrap_or_else(|| sig.to_string());
-                write!(f, " with signal {signal_str}")?;
-            }
-            #[cfg(windows)]
-            AbortStatus::WindowsNtStatus(exception) => {
-                write!(
-                    f,
-                    " with code {}",
-                    // TODO: pass in bold style (probably need to not use
-                    // fmt::Display)
-                    crate::helpers::display_nt_status(exception, owo_colors::Style::new())
-                )?;
-            }
-        }
+        write!(f, "process {}", display_abort_status(self.status))?;
         if self.leaked {
             write!(f, ", and also leaked handles")?;
         }
