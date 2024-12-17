@@ -1,7 +1,7 @@
 ---
 source: nextest-runner/src/reporter/displayer.rs
-expression: buf
+expression: "to_message_line(AbortStatus::WindowsNtStatus(STATUS_CONTROL_C_EXIT))"
 snapshot_kind: text
 ---
-   with code 0xc000013a: {Application Exit by CTRL+C}
-                       - The application terminated as a result of a CTRL+C. (os error 572)
+           - with code 0xc000013a: {Application Exit by CTRL+C}
+           - The application terminated as a result of a CTRL+C. (os error 572)

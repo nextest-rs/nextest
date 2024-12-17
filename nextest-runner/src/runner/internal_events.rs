@@ -249,3 +249,25 @@ impl RunnerTaskState {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+#[must_use]
+pub(super) enum HandleSignalResult {
+    /// A job control signal was delivered.
+    #[cfg(unix)]
+    JobControl,
+
+    /// The child was terminated.
+    #[cfg_attr(not(windows), expect(dead_code))]
+    Terminated(TerminateChildResult),
+}
+
+#[derive(Clone, Copy, Debug)]
+#[must_use]
+pub(super) enum TerminateChildResult {
+    /// The child process exited without being forcibly killed.
+    Exited,
+
+    /// The child process was forcibly killed.
+    Killed,
+}

@@ -1319,11 +1319,11 @@ impl<'a> TestReporterImpl<'a> {
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
         if let ExecutionResult::Fail {
-            abort_status: Some(AbortStatus::WindowsNtStatus(nt_status)),
+            abort_status: Some(abort_status),
             leaked: _,
         } = last_status.result
         {
-            write_windows_message_line(nt_status, &self.styles, writer)?;
+            write_windows_message_line(abort_status, &self.styles, writer)?;
         }
 
         Ok(())
@@ -1393,11 +1393,11 @@ impl<'a> TestReporterImpl<'a> {
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
         if let ExecutionResult::Fail {
-            abort_status: Some(AbortStatus::WindowsNtStatus(nt_status)),
+            abort_status: Some(abort_status),
             leaked: _,
         } = last_status.result
         {
-            write_windows_message_line(nt_status, &self.styles, writer)?;
+            write_windows_message_line(abort_status, &self.styles, writer)?;
         }
 
         Ok(())
@@ -2453,7 +2453,7 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
         },
         #[cfg(windows)]
         ExecutionResult::Fail {
-            abort_status: Some(AbortStatus::WindowsNtStatus(_)),
+            abort_status: Some(AbortStatus::WindowsNtStatus(_)) | Some(AbortStatus::JobObject),
             leaked: _,
         } => {
             // Going to print out the full error message on the following line -- just "ABORT" will
@@ -2488,7 +2488,7 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         },
         #[cfg(windows)]
         ExecutionResult::Fail {
-            abort_status: Some(AbortStatus::WindowsNtStatus(_)),
+            abort_status: Some(AbortStatus::WindowsNtStatus(_)) | Some(AbortStatus::JobObject),
             leaked: _,
         } => {
             // Going to print out the full error message on the following line -- just "ABORT" will
@@ -2508,21 +2508,35 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
 
 #[cfg(windows)]
 fn write_windows_message_line(
-    nt_status: windows_sys::Win32::Foundation::NTSTATUS,
+    status: AbortStatus,
     styles: &Styles,
     writer: &mut dyn Write,
 ) -> io::Result<()> {
-    // Note that display_nt_status ensures that codes are aligned properly. For subsequent lines,
-    // use an indented displayer with 25 spaces (ensuring that message lines are aligned).
-    const INDENT: &str = "                       - ";
-    let mut indented = IndentWriter::new_skip_initial(INDENT, writer);
-    writeln!(
-        indented,
-        "{:>12} {}",
-        "with code".style(styles.fail),
-        crate::helpers::display_nt_status(nt_status, styles.count)
-    )?;
-    indented.flush()
+    match status {
+        AbortStatus::WindowsNtStatus(nt_status) => {
+            // For subsequent lines, use an indented displayer with {:>12}
+            // (ensuring that message lines are aligned).
+            const INDENT: &str = "           - ";
+            let mut indented = IndentWriter::new_skip_initial(INDENT, writer);
+            writeln!(
+                indented,
+                "{:>12} {} {}",
+                "-",
+                "with code".style(styles.fail),
+                crate::helpers::display_nt_status(nt_status, styles.count)
+            )?;
+            indented.flush()
+        }
+        AbortStatus::JobObject => {
+            writeln!(
+                writer,
+                "{:>12} {} via {}",
+                "-",
+                "terminated".style(styles.fail),
+                "job object".style(styles.count),
+            )
+        }
+    }
 }
 
 fn write_final_warnings(
@@ -3726,7 +3740,7 @@ mod tests {
 mod windows_tests {
     use super::*;
     use windows_sys::Win32::{
-        Foundation::{NTSTATUS, STATUS_CONTROL_C_EXIT, STATUS_CONTROL_STACK_VIOLATION},
+        Foundation::{STATUS_CONTROL_C_EXIT, STATUS_CONTROL_STACK_VIOLATION},
         Globalization::SetThreadUILanguage,
     };
 
@@ -3737,15 +3751,19 @@ mod windows_tests {
             SetThreadUILanguage(0x0409);
         }
 
-        insta::assert_snapshot!("ctrl_c_code", to_message_line(STATUS_CONTROL_C_EXIT));
+        insta::assert_snapshot!(
+            "ctrl_c_code",
+            to_message_line(AbortStatus::WindowsNtStatus(STATUS_CONTROL_C_EXIT))
+        );
         insta::assert_snapshot!(
             "stack_violation_code",
-            to_message_line(STATUS_CONTROL_STACK_VIOLATION),
+            to_message_line(AbortStatus::WindowsNtStatus(STATUS_CONTROL_STACK_VIOLATION)),
         );
+        insta::assert_snapshot!("job_object", to_message_line(AbortStatus::JobObject));
     }
 
     #[track_caller]
-    fn to_message_line(status: NTSTATUS) -> String {
+    fn to_message_line(status: AbortStatus) -> String {
         let mut buf = Vec::new();
         write_windows_message_line(status, &Styles::default(), &mut buf).unwrap();
         String::from_utf8(buf).unwrap()

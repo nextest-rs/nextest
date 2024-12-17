@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{InternalTerminateReason, ShutdownRequest, UnitContext};
+use super::{InternalTerminateReason, ShutdownRequest, TerminateChildResult, UnitContext};
 use crate::{
     errors::ConfigureHandleInheritanceError,
     reporter::events::{
@@ -86,107 +86,109 @@ pub(super) async fn terminate_child<'a>(
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     _job: Option<&Job>,
     grace_period: Duration,
-) {
-    if let Some(pid) = child.id() {
-        let pid_i32 = pid as i32;
-        let (term_reason, term_method) = to_terminate_reason_and_method(&reason, grace_period);
+) -> TerminateChildResult {
+    let Some(pid) = child.id() else {
+        return TerminateChildResult::Exited;
+    };
 
-        // This is infallible in regular mode and fallible with cfg(test).
-        #[allow(clippy::infallible_destructuring_match)]
-        let term_signal = match term_method {
-            UnitTerminateMethod::Signal(term_signal) => term_signal,
-            #[cfg(test)]
-            UnitTerminateMethod::Fake => {
-                unreachable!("fake method is only used for reporter tests")
-            }
-        };
+    let pid_i32 = pid as i32;
+    let (term_reason, term_method) = to_terminate_reason_and_method(&reason, grace_period);
 
-        unsafe {
-            // We set up a process group while starting the test -- now send a signal to that
-            // group.
-            libc::kill(-pid_i32, term_signal.signal())
-        };
-
-        if term_signal == UnitTerminateSignal::Kill {
-            // SIGKILL guarantees the process group is dead.
-            return;
+    // This is infallible in regular mode and fallible with cfg(test).
+    #[allow(clippy::infallible_destructuring_match)]
+    let term_signal = match term_method {
+        UnitTerminateMethod::Signal(term_signal) => term_signal,
+        #[cfg(test)]
+        UnitTerminateMethod::Fake => {
+            unreachable!("fake method is only used for reporter tests")
         }
+    };
 
-        let mut sleep = std::pin::pin!(crate::time::pausable_sleep(grace_period));
-        let mut waiting_stopwatch = crate::time::stopwatch();
+    unsafe {
+        // We set up a process group while starting the test -- now send a signal to that
+        // group.
+        libc::kill(-pid_i32, term_signal.signal())
+    };
 
-        loop {
-            tokio::select! {
-                () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
-                _ = child.wait() => {
-                    // The process exited.
-                    break;
-                }
-                recv = req_rx.recv() => {
-                    // The sender stays open longer than the whole loop, and the buffer is big
-                    // enough for all messages ever sent through this channel, so a RecvError
-                    // should never happen.
-                    let req = recv.expect("a RecvError should never happen here");
+    if term_signal == UnitTerminateSignal::Kill {
+        // SIGKILL guarantees the process group is dead.
+        return TerminateChildResult::Killed;
+    }
 
-                    match req {
-                        RunUnitRequest::Signal(SignalRequest::Stop(sender)) => {
-                            stopwatch.pause();
-                            sleep.as_mut().pause();
-                            waiting_stopwatch.pause();
+    let mut sleep = std::pin::pin!(crate::time::pausable_sleep(grace_period));
+    let mut waiting_stopwatch = crate::time::stopwatch();
 
-                            job_control_child(child, JobControlEvent::Stop);
-                            let _ = sender.send(());
+    loop {
+        tokio::select! {
+            () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
+            _ = child.wait() => {
+                // The process exited.
+                break TerminateChildResult::Exited;
+            }
+            recv = req_rx.recv() => {
+                // The sender stays open longer than the whole loop, and the buffer is big
+                // enough for all messages ever sent through this channel, so a RecvError
+                // should never happen.
+                let req = recv.expect("a RecvError should never happen here");
+
+                match req {
+                    RunUnitRequest::Signal(SignalRequest::Stop(sender)) => {
+                        stopwatch.pause();
+                        sleep.as_mut().pause();
+                        waiting_stopwatch.pause();
+
+                        job_control_child(child, JobControlEvent::Stop);
+                        let _ = sender.send(());
+                    }
+                    RunUnitRequest::Signal(SignalRequest::Continue) => {
+                        // Possible to receive a Continue at the beginning of execution.
+                        if !sleep.is_paused() {
+                            stopwatch.resume();
+                            sleep.as_mut().resume();
+                            waiting_stopwatch.resume();
                         }
-                        RunUnitRequest::Signal(SignalRequest::Continue) => {
-                            // Possible to receive a Continue at the beginning of execution.
-                            if !sleep.is_paused() {
-                                stopwatch.resume();
-                                sleep.as_mut().resume();
-                                waiting_stopwatch.resume();
-                            }
-                            job_control_child(child, JobControlEvent::Continue);
+                        job_control_child(child, JobControlEvent::Continue);
+                    }
+                    RunUnitRequest::Signal(SignalRequest::Shutdown(_)) => {
+                        // Receiving a shutdown signal while in this state always means kill
+                        // immediately.
+                        unsafe {
+                            // Send SIGKILL to the entire process group.
+                            libc::kill(-pid_i32, SIGKILL);
                         }
-                        RunUnitRequest::Signal(SignalRequest::Shutdown(_)) => {
-                            // Receiving a shutdown signal while in this state always means kill
-                            // immediately.
-                            unsafe {
-                                // Send SIGKILL to the entire process group.
-                                libc::kill(-pid_i32, SIGKILL);
-                            }
-                            break;
-                        }
-                        RunUnitRequest::OtherCancel => {
-                            // Ignore non-signal cancellation requests (most
-                            // likely another test failed). Let the unit finish.
-                        }
-                        RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
-                            let waiting_snapshot = waiting_stopwatch.snapshot();
-                            _ = sender.send(
-                                cx.info_response(
-                                    UnitState::Terminating(UnitTerminatingState {
-                                        pid,
-                                        time_taken: stopwatch.snapshot().active,
-                                        reason: term_reason,
-                                        method: term_method,
-                                        waiting_duration: waiting_snapshot.active,
-                                        remaining: grace_period
-                                            .checked_sub(waiting_snapshot.active)
-                                            .unwrap_or_default(),
-                                    }),
-                                    child_acc.snapshot_in_progress(cx.packet().kind().waiting_on_message()),
-                                )
-                            );
-                        }
+                        break TerminateChildResult::Killed;
+                    }
+                    RunUnitRequest::OtherCancel => {
+                        // Ignore non-signal cancellation requests (most
+                        // likely another test failed). Let the unit finish.
+                    }
+                    RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
+                        let waiting_snapshot = waiting_stopwatch.snapshot();
+                        _ = sender.send(
+                            cx.info_response(
+                                UnitState::Terminating(UnitTerminatingState {
+                                    pid,
+                                    time_taken: stopwatch.snapshot().active,
+                                    reason: term_reason,
+                                    method: term_method,
+                                    waiting_duration: waiting_snapshot.active,
+                                    remaining: grace_period
+                                        .checked_sub(waiting_snapshot.active)
+                                        .unwrap_or_default(),
+                                }),
+                                child_acc.snapshot_in_progress(cx.packet().kind().waiting_on_message()),
+                            )
+                        );
                     }
                 }
-                _ = &mut sleep => {
-                    // The process didn't exit -- need to do a hard shutdown.
-                    unsafe {
-                        // Send SIGKILL to the entire process group.
-                        libc::kill(-pid_i32, SIGKILL);
-                    }
-                    break;
+            }
+            _ = &mut sleep => {
+                // The process didn't exit -- need to do a hard shutdown.
+                unsafe {
+                    // Send SIGKILL to the entire process group.
+                    libc::kill(-pid_i32, SIGKILL);
                 }
+                break TerminateChildResult::Killed;
             }
         }
     }

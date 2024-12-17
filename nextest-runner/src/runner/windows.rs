@@ -6,7 +6,7 @@ use crate::{
     reporter::events::{UnitState, UnitTerminateMethod, UnitTerminateReason, UnitTerminatingState},
     runner::{
         InternalTerminateReason, RunUnitQuery, RunUnitRequest, ShutdownRequest, SignalRequest,
-        UnitContext,
+        TerminateChildResult, UnitContext,
     },
     signal::ShutdownEvent,
     test_command::ChildAccumulator,
@@ -87,8 +87,10 @@ pub(super) async fn terminate_child<'a>(
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     job: Option<&Job>,
     grace_period: Duration,
-) {
-    let Some(pid) = child.id() else { return };
+) -> TerminateChildResult {
+    let Some(pid) = child.id() else {
+        return TerminateChildResult::Exited;
+    };
     let (term_reason, term_method) = to_terminate_reason_and_method(&reason, grace_period);
 
     let child_exited = match term_method {
@@ -160,7 +162,8 @@ pub(super) async fn terminate_child<'a>(
         }
     };
 
-    // In any case, always call TerminateJobObject.
+    // In any case, always call TerminateJobObject to ensure other processes
+    // spawned by the child are killed.
     if let Some(job) = job {
         let handle = job.handle();
         unsafe {
@@ -171,8 +174,11 @@ pub(super) async fn terminate_child<'a>(
     }
 
     // Start killing the process directly for good measure.
-    if !child_exited {
+    if child_exited {
+        TerminateChildResult::Exited
+    } else {
         let _ = child.start_kill();
+        TerminateChildResult::Killed
     }
 }
 

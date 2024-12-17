@@ -6,7 +6,7 @@
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{ConfigExperimental, CustomTestGroup, ScriptId, TestGroup},
-    helpers::{display_exit_status, dylib_path_envvar},
+    helpers::{display_exited_with, dylib_path_envvar},
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
     target_runner::PlatformRunnerSource,
@@ -873,9 +873,9 @@ pub enum CreateTestListError {
 
     /// Running a command to gather the list of tests failed failed with a non-zero exit code.
     #[error(
-        "for `{binary_id}`, command `{}` exited with {}\n--- stdout:\n{}\n--- stderr:\n{}\n---",
+        "for `{binary_id}`, command `{}` {}\n--- stdout:\n{}\n--- stderr:\n{}\n---",
         shell_words::join(command),
-        display_exit_status(*exit_status),
+        display_exited_with(*exit_status),
         String::from_utf8_lossy(stdout),
         String::from_utf8_lossy(stderr),
     )]

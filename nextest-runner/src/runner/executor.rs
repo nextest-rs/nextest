@@ -11,6 +11,7 @@
 //! just a better abstraction, it also provides a better user experience (less
 //! inconsistent state).
 
+use super::HandleSignalResult;
 use crate::{
     config::{
         EvaluatableProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScriptCommand,
@@ -419,10 +420,14 @@ impl<'a> ExecutorContext<'a> {
                         }
 
                         if will_terminate {
-                            // attempt to terminate the slow test.
-                            // as there is a race between shutting down a slow test and its own completion
-                            // we silently ignore errors to avoid printing false warnings.
-                            super::os::terminate_child(
+                            // Attempt to terminate the slow script. As there is
+                            // a race between shutting down a slow test and its
+                            // own completion, we silently ignore errors to
+                            // avoid printing false warnings.
+                            //
+                            // The return result of terminate_child is not used
+                            // here, since it is always marked as a timeout.
+                            _ = super::os::terminate_child(
                                 &cx,
                                 &mut child,
                                 &mut child_acc,
@@ -449,7 +454,8 @@ impl<'a> ExecutorContext<'a> {
 
                         match req {
                             RunUnitRequest::Signal(req) => {
-                                handle_signal_request(
+                                #[cfg_attr(not(windows), expect(unused_variables))]
+                                let res = handle_signal_request(
                                     &cx,
                                     &mut child,
                                     &mut child_acc,
@@ -460,6 +466,31 @@ impl<'a> ExecutorContext<'a> {
                                     job.as_ref(),
                                     slow_timeout.grace_period
                                 ).await;
+
+                                // On Unix, the signal the process exited with
+                                // will be picked up by child.wait. On Windows,
+                                // termination by job object will show up as
+                                // exit code 1 -- we need to be clearer about
+                                // that in the UI.
+                                //
+                                // TODO: Can we do something useful with res on
+                                // Unix? For example, it's possible that the
+                                // signal we send is not the same as the signal
+                                // the child exits with. This might be a good
+                                // thing to store in whatever test event log we
+                                // end up building.
+                                #[cfg(windows)]
+                                {
+                                    if matches!(
+                                        res,
+                                        HandleSignalResult::Terminated(super::TerminateChildResult::Killed)
+                                    ) {
+                                        status = Some(ExecutionResult::Fail {
+                                            abort_status: Some(AbortStatus::JobObject),
+                                            leaked: false,
+                                        });
+                                    }
+                                }
                             }
                             RunUnitRequest::OtherCancel => {
                                 // Ignore non-signal cancellation requests --
@@ -666,10 +697,14 @@ impl<'a> ExecutorContext<'a> {
                         }
 
                         if will_terminate {
-                            // Attempt to terminate the slow test. As there is a race between
-                            // shutting down a slow test and its own completion, we silently ignore
-                            // errors to avoid printing false warnings.
-                            super::os::terminate_child(
+                            // Attempt to terminate the slow test. As there is a
+                            // race between shutting down a slow test and its
+                            // own completion, we silently ignore errors to
+                            // avoid printing false warnings.
+                            //
+                            // The return result of terminate_child is not used
+                            // here, since it is always marked as a timeout.
+                            _ = super::os::terminate_child(
                                 &cx,
                                 &mut child,
                                 &mut child_acc,
@@ -695,7 +730,8 @@ impl<'a> ExecutorContext<'a> {
 
                         match req {
                             RunUnitRequest::Signal(req) => {
-                                handle_signal_request(
+                                #[cfg_attr(not(windows), expect(unused_variables))]
+                                let res = handle_signal_request(
                                     &cx,
                                     &mut child,
                                     &mut child_acc,
@@ -706,6 +742,31 @@ impl<'a> ExecutorContext<'a> {
                                     job.as_ref(),
                                     slow_timeout.grace_period,
                                 ).await;
+
+                                // On Unix, the signal the process exited with
+                                // will be picked up by child.wait. On Windows,
+                                // termination by job object will show up as
+                                // exit code 1 -- we need to be clearer about
+                                // that in the UI.
+                                //
+                                // TODO: Can we do something useful with res on
+                                // Unix? For example, it's possible that the
+                                // signal we send is not the same as the signal
+                                // the child exits with. This might be a good
+                                // thing to store in whatever test event log we
+                                // end up building.
+                                #[cfg(windows)]
+                                {
+                                    if matches!(
+                                        res,
+                                        HandleSignalResult::Terminated(super::TerminateChildResult::Killed)
+                                    ) {
+                                        status = Some(ExecutionResult::Fail {
+                                            abort_status: Some(AbortStatus::JobObject),
+                                            leaked: false,
+                                        });
+                                    }
+                                }
                             }
                             RunUnitRequest::OtherCancel => {
                                 // Ignore non-signal cancellation requests --
@@ -1158,7 +1219,7 @@ async fn handle_signal_request<'a>(
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     job: Option<&super::os::Job>,
     grace_period: Duration,
-) {
+) -> HandleSignalResult {
     match req {
         #[cfg(unix)]
         SignalRequest::Stop(sender) => {
@@ -1170,6 +1231,7 @@ async fn handle_signal_request<'a>(
             // The receiver being dead probably means the main thread panicked
             // or similar.
             let _ = sender.send(());
+            HandleSignalResult::JobControl
         }
         #[cfg(unix)]
         SignalRequest::Continue => {
@@ -1180,9 +1242,10 @@ async fn handle_signal_request<'a>(
                 interval_sleep.as_mut().resume();
                 super::os::job_control_child(child, crate::signal::JobControlEvent::Continue);
             }
+            HandleSignalResult::JobControl
         }
         SignalRequest::Shutdown(event) => {
-            super::os::terminate_child(
+            let res = super::os::terminate_child(
                 cx,
                 child,
                 child_acc,
@@ -1193,6 +1256,7 @@ async fn handle_signal_request<'a>(
                 grace_period,
             )
             .await;
+            HandleSignalResult::Terminated(res)
         }
     }
 }

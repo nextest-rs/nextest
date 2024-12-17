@@ -296,36 +296,39 @@ impl fmt::Display for FormattedDuration {
     }
 }
 
-pub(crate) fn display_exit_status(exit_status: ExitStatus) -> String {
+// "exited with"/"terminated via"
+pub(crate) fn display_exited_with(exit_status: ExitStatus) -> String {
     match AbortStatus::extract(exit_status) {
         Some(abort_status) => display_abort_status(abort_status),
         None => match exit_status.code() {
-            Some(code) => format!("exit code {}", code),
-            None => "an unknown error".to_owned(),
+            Some(code) => format!("exited with exit code {}", code),
+            None => "exited with an unknown error".to_owned(),
         },
     }
 }
 
-/// Display the abort status.
+/// Displays the abort status.
 pub(crate) fn display_abort_status(abort_status: AbortStatus) -> String {
     match abort_status {
         #[cfg(unix)]
         AbortStatus::UnixSignal(sig) => match crate::helpers::signal_str(sig) {
             Some(s) => {
-                format!("signal {sig} (SIG{s})")
+                format!("aborted with signal {sig} (SIG{s})")
             }
             None => {
-                format!("signal {sig}")
+                format!("aborted with signal {sig}")
             }
         },
         #[cfg(windows)]
         AbortStatus::WindowsNtStatus(nt_status) => {
             format!(
-                "code {}",
+                "aborted with code {}",
                 // TODO: pass down a style here
                 crate::helpers::display_nt_status(nt_status, Style::new())
             )
         }
+        #[cfg(windows)]
+        AbortStatus::JobObject => "terminated via job object".to_string(),
     }
 }
 
@@ -359,8 +362,9 @@ pub(crate) fn display_nt_status(
     nt_status: windows_sys::Win32::Foundation::NTSTATUS,
     bold_style: Style,
 ) -> String {
-    // 10 characters ("0x" + 8 hex digits) is how an NTSTATUS with the high bit set is going to be
-    // displayed anyway. It also ensures alignment for the displayer.
+    // 10 characters ("0x" + 8 hex digits) is how an NTSTATUS with the high bit
+    // set is going to be displayed anyway. This makes all possible displays
+    // uniform.
     let bolded_status = format!("{:#010x}", nt_status.style(bold_style));
     // Convert the NTSTATUS to a Win32 error code.
     let win32_code = unsafe { windows_sys::Win32::Foundation::RtlNtStatusToDosError(nt_status) };

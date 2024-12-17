@@ -1,0 +1,6 @@
+---
+source: nextest-runner/src/reporter/displayer.rs
+expression: "to_message_line(AbortStatus::JobObject)"
+snapshot_kind: text
+---
+           - terminated via job object
