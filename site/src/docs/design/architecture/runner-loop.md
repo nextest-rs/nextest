@@ -198,4 +198,4 @@ sustainably high-quality over time.
 runner is to handle all of the ways tests can fail, just like the primary job of
 a compiler is to handle all the ways users can write incorrect code.
 
-_Last major revision: 2024-12-06_
+_Last substantive revision: 2024-12-06_

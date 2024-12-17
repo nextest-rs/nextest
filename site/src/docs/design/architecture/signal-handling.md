@@ -228,7 +228,12 @@ When a test times out, nextest calls `TerminateJobObject` on the job object
 associated with the test immediately. In the future, it would be interesting
 to send a Ctrl-C (or maybe a `WM_CLOSE`?) to the test process first.
 
+When nextest receives a Ctrl-C, it assumes that child tests will also receive
+the same Ctrl-C and terminate themselves. If tests don't exit within the grace
+period (by default, 10 seconds), nextest will terminate them via their
+corresponding job object.
+
 [job objects]: https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
 [terminate-job-object]: https://docs.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-terminatejobobject
 
-_Last major revision: 2024-12-06_
+_Last substantive revision: 2024-12-17_
