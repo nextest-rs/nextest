@@ -10,7 +10,12 @@ name: Test coverage
 jobs:
   coverage:
     name: Collect test coverage
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
     # nightly rust might break from time to time
     continue-on-error: true
     env:
