@@ -168,7 +168,7 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         run: |
           brew install b2sum
-      - uses: taiki-e/upload-rust-binary-action@4398438f25ce68e99e82e90744c88604b9b218a3 # v1.23.0
+      - uses: taiki-e/upload-rust-binary-action@e7953b6078194a4ae5f5619632e3715db6275561 # v1.24.0
         with:
           bin: cargo-nextest
           # The tag name contains the binary name so just use that.
