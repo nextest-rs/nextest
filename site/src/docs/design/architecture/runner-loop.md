@@ -43,8 +43,7 @@ the _executor_. These components do not share state directly—instead, both
 components are event-driven and use message passing to communicate with each
 other.
 
-[](){#dispatcher}
-## The dispatcher
+## The dispatcher { #dispatcher }
 
 The _dispatcher_ is the part of the runner that interacts with the outside world.
 The dispatcher's job is to accept events from the following sources and respond

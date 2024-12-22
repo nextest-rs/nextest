@@ -4,11 +4,11 @@ icon: material/ship-wheel
 
 # Stability policy
 
-This section contains information on how cargo-nextest will evolve in a backwards-compatible way over time.
+This section contains information on how cargo-nextest will maintain backwards compatibility over time.
 
 ## The cargo-nextest binary
 
-The cargo-nextest binary follows [semantic versioning](https://semver.org/), where the [public API](https://semver.org/#spec-item-1) consists of exactly the following:
+The cargo-nextest binary follows [semantic versioning](https://semver.org/), with its [public API](https://semver.org/#spec-item-1) defined as exactly:
 
 1. command-line arguments, options and flags
 2. [machine-readable output](../machine-readable/index.md)
@@ -18,7 +18,7 @@ The cargo-nextest binary follows [semantic versioning](https://semver.org/), whe
 
     Experimental features are not part of the public API. They may change or be removed in a patch release.
 
-Within a version series, the public API will be append-only. New options or keys may be added, but
+Within a version series (currently 0.9.x), the public API will be append-only. New options or keys may be added, but
 existing keys will continue to be as they were. Existing options may be deprecated but will not be
 removed within a version series, except via the policy listed in [Making behavior changes](#making-behavior-changes).
 
@@ -34,9 +34,9 @@ However, in some cases, we may need to make behavior changes to fix a bug or sec
 sorts of changes will be made based on standard semantic versioning rules: bugs will be fixed in
 patch releases, with due consideration given to existing use cases.
 
-We may also need to make behavior changes to address what we consider to be major user interface
-deficiencies. **This will not be done lightly:** the maintainers of nextest understand the
-importance of stable, dependable CLI interfaces.
+We may also need to make behavior changes to address major user interface
+deficiencies. **This will not be done lightly:** the maintainers of nextest
+understand the importance of stable, dependable CLI interfaces.
 
 In those cases, we will follow the following procedure:
 
@@ -45,9 +45,15 @@ In those cases, we will follow the following procedure:
 3. A timeline to change the behavior will be provided. The timeline will be at least 3 months long to provide ample time for users to adapt to the new behavior.
 4. After that time has elapsed, the behavior will be changed in the following version of nextest.
 
-## Libraries
+### Release notes
 
-The libraries used by cargo-nextest, [nextest-metadata](https://crates.io/crates/nextest-metadata) and [nextest-runner](https://crates.io/crates/nextest-runner), follow the standard Rust library versioning policy.
+Detailed release notes for each version are available in [nextest's changelog](../../changelog.md). These release notes are also published to [GitHub Releases](https://github.com/nextest-rs/nextest/releases?q=%22cargo-nextest%22&expanded=true).
+
+Behavior changes are clearly marked in release notes.
+
+## Libraries used by cargo-nextest
+
+The libraries used by cargo-nextest, [nextest-metadata](https://crates.io/crates/nextest-metadata) and [nextest-runner](https://crates.io/crates/nextest-runner), follow the standard [Rust library versioning policy](https://doc.rust-lang.org/cargo/reference/semver.html).
 
 ### nextest-metadata
 
@@ -63,8 +69,12 @@ A bump to the minimum supported cargo-nextest version is considered a breaking c
 
 ### nextest-runner
 
-nextest-runner is built to serve the needs of cargo-nextest. Every `cargo-nextest` release is likely to correspond to a breaking change to nextest-runner.
+nextest-runner is an internal crate that contains the core runner logic for nextest.
+Every nextest release is likely to correspond to a breaking change to nextest-runner.
 
 ## Minimum supported Rust version (MSRV)
 
-The MSRV of cargo-nextest or dependent crates may be changed in a patch release. At least the last 3 versions of Rust will be supported at any time.
+The MSRV of cargo-nextest and dependent crates is currently **Rust {{ msrv }}**.
+
+The MSRV may be changed in a patch release. At least the last 3 versions of
+stable Rust will be supported at any time.

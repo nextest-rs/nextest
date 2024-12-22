@@ -49,6 +49,7 @@ theme:
 plugins:
     - git-revision-date-localized:
           enable_creation_date: true
+    - macros
     - markdown-exec
     - search
     - social:
@@ -57,6 +58,8 @@ plugins:
               background_color: "#045"
 
 extra:
+    # **Rust MSRV**. Update at release time.
+    msrv: "1.81"
     status:
         experimental: "Experimental: not stable yet"
         new: Recently added
