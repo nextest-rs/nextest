@@ -120,7 +120,7 @@ target-spec = { version = "3.2.2", features = ["custom", "summaries"] }
 target-spec-miette = "0.4.0"
 test-case = "3.3.1"
 test-strategy = "0.4.0"
-thiserror = "2.0.8"
+thiserror = "2.0.9"
 tokio = "1.42.0"
 tokio-stream = "0.1.17"
 toml = "0.8.19"
