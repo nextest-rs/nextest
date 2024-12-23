@@ -1551,6 +1551,26 @@ pub enum TargetTripleError {
     },
 }
 
+impl TargetTripleError {
+    /// Returns a [`miette::Report`] for the source, if available.
+    ///
+    /// This should be preferred over [`std::error::Error::source`] if
+    /// available.
+    pub fn source_report(&self) -> Option<miette::Report> {
+        match self {
+            Self::TargetSpecError { error, .. } => {
+                Some(miette::Report::new_boxed(error.clone().into_diagnostic()))
+            }
+            // The remaining types are covered via the error source path.
+            TargetTripleError::InvalidEnvironmentVar
+            | TargetTripleError::TargetPathReadError { .. }
+            | TargetTripleError::CustomPlatformTempDirError { .. }
+            | TargetTripleError::CustomPlatformWriteError { .. }
+            | TargetTripleError::CustomPlatformCloseError { .. } => None,
+        }
+    }
+}
+
 /// An error occurred determining the target runner
 #[derive(Debug, Error)]
 pub enum TargetRunnerError {

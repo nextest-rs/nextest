@@ -21,7 +21,7 @@ use nextest_runner::{
         ToolConfigFile, VersionOnlyConfig,
     },
     double_spawn::DoubleSpawnInfo,
-    errors::WriteTestListError,
+    errors::{TargetTripleError, WriteTestListError},
     input::InputHandlerKind,
     list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
@@ -1160,18 +1160,16 @@ impl BaseApp {
                 let host = HostPlatform::current(PlatformLibdir::from_rustc_stdout(
                     RustcCli::print_host_libdir().read(),
                 ))?;
-                let target = if let Some(triple) = discover_target_triple(
-                    &cargo_configs,
-                    cargo_opts.target.as_deref(),
-                    &output.stderr_styles(),
-                ) {
+
+                let triple_info =
+                    discover_target_triple(&cargo_configs, cargo_opts.target.as_deref())?;
+                let target = triple_info.map(|triple| {
                     let libdir = PlatformLibdir::from_rustc_stdout(
                         RustcCli::print_target_libdir(&triple).read(),
                     );
-                    Some(TargetPlatform::new(triple, libdir))
-                } else {
-                    None
-                };
+                    TargetPlatform::new(triple, libdir)
+                });
+
                 BuildPlatforms { host, target }
             }
         };
@@ -2102,6 +2100,17 @@ enum DebugCommand {
 
     /// Print the current executable path.
     CurrentExe,
+
+    /// Show the target platform that nextest would use.
+    ShowTarget {
+        /// The target triple to use.
+        #[arg(long)]
+        target: Option<String>,
+
+        /// Override a Cargo configuration value.
+        #[arg(long, value_name = "KEY=VALUE")]
+        config: Vec<String>,
+    },
 }
 
 impl DebugCommand {
@@ -2161,6 +2170,15 @@ impl DebugCommand {
                 let exe = std::env::current_exe()
                     .map_err(|err| ExpectedError::GetCurrentExeFailed { err })?;
                 println!("{}", exe.display());
+            }
+            DebugCommand::ShowTarget { target, config } => {
+                let cargo_configs = CargoConfigs::new(&config).map_err(Box::new)?;
+                let target = discover_target_triple(&cargo_configs, target.as_deref())?;
+                if let Some(target) = target {
+                    println!("{:#?}", target);
+                } else {
+                    println!("no target triple found");
+                }
             }
         }
 
@@ -2286,28 +2304,19 @@ fn acquire_graph_data(
 fn discover_target_triple(
     cargo_configs: &CargoConfigs,
     target_cli_option: Option<&str>,
-    styles: &StderrStyles,
-) -> Option<TargetTriple> {
-    match TargetTriple::find(cargo_configs, target_cli_option) {
-        Ok(Some(triple)) => {
+) -> Result<Option<TargetTriple>, TargetTripleError> {
+    TargetTriple::find(cargo_configs, target_cli_option).inspect(|v| {
+        if let Some(triple) = v {
             debug!(
                 "using target triple `{}` defined by `{}`; {}",
                 triple.platform.triple_str(),
                 triple.source,
                 triple.location,
             );
-            Some(triple)
-        }
-        Ok(None) => {
+        } else {
             debug!("no target triple found, assuming no cross-compilation");
-
-            None
         }
-        Err(err) => {
-            warn_on_err("target triple", &err, styles);
-            None
-        }
-    }
+    })
 }
 
 fn runner_for_target(

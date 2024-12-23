@@ -187,7 +187,7 @@ pub(crate) struct CargoOptions {
 
     // NOTE: this does not conflict with reuse build opts (not part of the cargo-opts group) since
     // we let target.runner be specified this way
-    /// Override a configuration value
+    /// Override a Cargo configuration value
     #[arg(long, value_name = "KEY=VALUE", help_heading = "Other Cargo options")]
     pub(crate) config: Vec<String>,
 

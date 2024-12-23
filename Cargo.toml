@@ -47,6 +47,7 @@ clap = { version = "4.5.23", features = ["derive"] }
 console-subscriber = "0.4.1"
 cp_r = "0.5.2"
 crossterm = { version = "0.28.1", features = ["event-stream"] }
+datatest-stable = { version = "0.3.0", features = ["include-dir"] }
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
 derive-where = "1.2.7"
