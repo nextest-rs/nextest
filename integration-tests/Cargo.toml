@@ -17,6 +17,10 @@ path = "test-helpers/build-seed-archive.rs"
 name = "custom-harness"
 harness = false
 
+[[test]]
+name = "datatest"
+harness = false
+
 [dependencies]
 camino.workspace = true
 camino-tempfile.workspace = true
@@ -44,6 +48,7 @@ whoami.workspace = true
 [dev-dependencies]
 cfg-if.workspace = true
 cp_r.workspace = true
+datatest-stable.workspace = true
 fixture-data.workspace = true
 insta.workspace = true
 itertools.workspace = true
@@ -52,6 +57,7 @@ nextest-metadata.workspace = true
 pathdiff.workspace = true
 regex.workspace = true
 target-spec.workspace = true
+target-spec-miette = { workspace = true, features = ["fixtures"] }
 tokio.workspace = true
 
 # These platforms are supported by num_threads.

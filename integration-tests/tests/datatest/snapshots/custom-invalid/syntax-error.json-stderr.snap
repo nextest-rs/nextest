@@ -1,0 +1,12 @@
+---
+source: integration-tests/tests/datatest/custom_target.rs
+expression: output.stderr_as_str()
+snapshot_kind: text
+---
+  [31;1merror:[0m error deserializing custom target JSON for `syntax-error`
+    ╭─[40:13]
+ [2m39[0m │     "leak",
+ [2m40[0m │     "memory",
+    · [31m            ▲[0m
+    ·             [31m╰── [31mEOF while parsing a value[0m[0m
+    ╰────

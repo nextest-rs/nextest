@@ -657,8 +657,14 @@ impl ExpectedError {
                 Some(err as &dyn Error)
             }
             Self::TargetTripleError { err } => {
-                error!("{err}");
-                err.source()
+                if let Some(report) = err.source_report() {
+                    // Display the miette report if available.
+                    error!(target: "cargo_nextest::no_heading", "{report:?}");
+                    None
+                } else {
+                    error!("{err}");
+                    err.source()
+                }
             }
             Self::MetadataMaterializeError { arg_name, err } => {
                 error!(
