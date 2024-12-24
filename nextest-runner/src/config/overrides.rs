@@ -1202,4 +1202,57 @@ mod tests {
             }
         };
     }
+
+    /// Test that `cfg(unix)` works with a custom platform.
+    ///
+    /// This was broken with older versions of target-spec.
+    #[test]
+    fn cfg_unix_with_custom_platform() {
+        let config_contents = indoc! {r#"
+            [[profile.default.overrides]]
+            platform = { host = "cfg(unix)" }
+            filter = "test(test)"
+            retries = 5
+        "#};
+
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let package_id = graph.workspace().iter().next().unwrap().id();
+
+        let nextest_config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            &[][..],
+            &Default::default(),
+        )
+        .expect("config is valid");
+
+        let build_platforms = custom_build_platforms(workspace_dir.path());
+
+        let profile = nextest_config
+            .profile("default")
+            .expect("valid profile name")
+            .apply_build_platforms(&build_platforms);
+
+        // Check that the override is correctly applied.
+        let target_binary_query = binary_query(
+            &graph,
+            package_id,
+            "lib",
+            "my-binary",
+            BuildPlatform::Target,
+        );
+        let query = TestQuery {
+            binary_query: target_binary_query.to_query(),
+            test_name: "test",
+        };
+        let overrides = profile.settings_for(&query);
+        assert_eq!(
+            overrides.retries(),
+            RetryPolicy::new_without_delay(5),
+            "retries applied to custom platform"
+        );
+    }
 }
