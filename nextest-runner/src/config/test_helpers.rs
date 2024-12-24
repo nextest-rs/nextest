@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
+    cargo_config::{CargoConfigs, TargetDefinitionLocation, TargetTriple, TargetTripleSource},
     config::{CustomTestGroup, TestGroup},
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
 };
@@ -101,6 +101,53 @@ pub(super) fn build_platforms() -> BuildPlatforms {
                 Utf8PathBuf::from("/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-apple-darwin/lib")
             ),
         }),
+    }
+}
+
+// XXX: do we need workspace_dir at all? Seems unnecessary.
+pub(super) fn custom_build_platforms(workspace_dir: &Utf8Path) -> BuildPlatforms {
+    let configs = CargoConfigs::new_with_isolation(
+        Vec::<String>::new(),
+        workspace_dir,
+        workspace_dir,
+        Vec::new(),
+    )
+    .unwrap();
+
+    let mut fixture =
+        Utf8PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("manifest dir is available"));
+    fixture.pop();
+    fixture.push("fixtures/custom-target/my-target.json");
+
+    let triple = TargetTriple::find(&configs, Some(fixture.as_str()))
+        .expect("custom platform parsed")
+        .expect("custom platform found");
+    assert!(
+        triple.platform.is_custom(),
+        "returned triple should be custom (was: {triple:?}"
+    );
+    assert_eq!(
+        triple.platform.triple_str(),
+        "my-target",
+        "triple_str matches"
+    );
+
+    let host = HostPlatform {
+        platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
+        libdir: PlatformLibdir::Available(
+            Utf8PathBuf::from("/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib")
+        ),
+    };
+    let target = TargetPlatform {
+        triple,
+        libdir: PlatformLibdir::Available(Utf8PathBuf::from(
+            "/home/fake/.rustup/toolchains/my-target/lib/rustlib/my-target/lib",
+        )),
+    };
+
+    BuildPlatforms {
+        host,
+        target: Some(target),
     }
 }
 
