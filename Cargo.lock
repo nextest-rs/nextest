@@ -3013,9 +3013,9 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "target-spec"
-version = "3.3.0"
+version = "3.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ade4217d3b77bdc08b5f19ba0e00e5b0c6ef0189f568878921279801771646da"
+checksum = "da00bc76fdc8b7ed7163b7cf728179277b26985c177510b69cc320f30b5a517f"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
@@ -3027,9 +3027,9 @@ dependencies = [
 
 [[package]]
 name = "target-spec-miette"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c84a0be645c1c81a14dff565c2f20e95cd67d8f8db4c67262949ef86c44f7fc"
+checksum = "9c9ea3bc2509341cd1c69b64cfb26ae92549bc3dcd8256e21e04f1970d96b72f"
 dependencies = [
  "guppy-workspace-hack",
  "miette",
