@@ -55,9 +55,9 @@ to them appropriately:
 
 Each iteration of the dispatcher loop has three phases:
 
-1. **Select over sources.** Run a [`tokio::select`][tokio-select] over the event sources, generating an `InternalEvent`.
+1. **Select over sources.** Run a [`tokio::select`][tokio-select] over the event sources, generating an `InternalEvent`. Nextest [benefits tremendously](https://sunshowers.io/posts/nextest-and-tokio/) from async Rust's ability to perform heterogeneous selects; achieving the same level of care would be very difficult in most other languages.
 
-2. **Handle the event.** Based on the `InternalEvent`, do one or more of the following, in `handle_event`:
+3. **Handle the event.** Based on the `InternalEvent`, do one or more of the following, in `handle_event`:
 
   - Update the dispatcher's internal state, such as the current number of tests
     running.
