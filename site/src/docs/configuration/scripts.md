@@ -3,25 +3,34 @@ icon: material/ray-start-arrow
 status: experimental
 ---
 
-# Setup scripts
+# Scripts
 
 <!-- md:version 0.9.59 -->
 
-!!! experimental "Experimental: This feature is not yet stable"
+!!! experimental "Experimental: Setup scripts are not yet stable"
 
     - **Enable with:** Add `experimental = ["setup-scripts"]` to `.config/nextest.toml`
     - **Tracking issue:** [#978](https://github.com/nextest-rs/nextest/issues/978)
 
-Nextest supports running _setup scripts_ before tests are run. Setup scripts can be scoped to
-particular tests via [filtersets](../filtersets/index.md).
+!!! experimental "Experimental: Pre-timeout scripts are not yet stable"
 
-Setup scripts are configured in two parts: _defining scripts_, and _setting up rules_ for when they should be executed.
+    - **Enable with:** Add `experimental = ["pre-timeout-scripts"]` to `.config/nextest.toml`
+    - **Tracking issue:** [#978](https://github.com/nextest-rs/nextest/issues/978)
+
+Nextest supports running _scripts_ when certain events occur during a test run. Scripts can be scoped to particular tests via [filtersets](../filtersets/index.md).
+
+Nextest currently recognizes two types of scripts:
+
+  * _Setup scripts_, which are executed at the start of a test run.
+  * _Pre-timeout scripts_, which are executed before nextest begins terminating a test that has exceeded its timeout. 
+
+Scripts are configured in two parts: _defining scripts_, and _setting up rules_ for when they should be executed.
 
 ## Defining scripts
 
-Setup scripts are defined using the top-level `script` configuration. For example, to define a script named "my-script", which runs `my-script.sh`:
+Scripts are defined using the top-level `script` configuration. For example, to define a script named "my-script", which runs `my-script.sh`:
 
-```toml title="Setup script definition in <code>.config/nextest.toml</code>"
+```toml title="Script definition in <code>.config/nextest.toml</code>"
 [script.my-script]
 command = 'my-script.sh'
 ```
@@ -36,16 +45,16 @@ command = 'script.sh -c "Hello, world!"'
 command = ['script.sh', '-c', 'Hello, world!']
 ```
 
-Setup scripts can have the following configuration options attached to them:
+Scripts can have the following configuration options attached to them:
 
-- **`slow-timeout`**: Mark a setup script [as slow](../features/slow-tests.md) or [terminate it](../features/slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, setup scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
-- **`leak-timeout`**: Mark setup scripts [leaky](../features/leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.
+- **`slow-timeout`**: Mark a script [as slow](../features/slow-tests.md) or [terminate it](../features/slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
+- **`leak-timeout`**: Mark scripts [leaky](../features/leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.
 - **`capture-stdout`**: `true` if the script's standard output should be captured, `false` if not. By default, this is `false`.
 - **`capture-stderr`**: `true` if the script's standard error should be captured, `false` if not. By default, this is `false`.
 
 ### Example
 
-```toml title="Advanced setup script definition"
+```toml title="Advanced script definition"
 [script.db-generate]
 command = 'cargo run -p db-generate'
 slow-timeout = { period = "60s", terminate-after = 2 }
@@ -56,7 +65,7 @@ capture-stderr = false
 
 ## Setting up rules
 
-In configuration, you can create rules for when to use scripts on a per-profile basis. This is done via the `profile.<profile-name>.scripts` array. For example, you can set up a script that generates a database if tests from the `db-tests` package, or any packages that depend on it, are run.
+In configuration, you can create rules for when to use scripts on a per-profile basis. This is done via the `profile.<profile-name>.scripts` array. For example, you can configure a setup script that generates a database if tests from the `db-tests` package, or any packages that depend on it, are run.
 
 ```toml title="Basic rules"
 [[profile.default.scripts]]
@@ -66,7 +75,7 @@ setup = 'db-generate'
 
 (This example uses the `rdeps` [filterset](../filtersets/index.md) predicate.)
 
-Setup scripts can also filter based on platform, using the rules listed in [_Specifying platforms_](../configuration/specifying-platforms.md):
+Scripts can also filter based on platform, using the rules listed in [_Specifying platforms_](../configuration/specifying-platforms.md):
 
 ```toml title="Platform-specific rules"
 [[profile.default.scripts]]
@@ -82,13 +91,32 @@ filter = 'test(/^script_tests::/)'
 setup = ['script1', 'script2']
 ```
 
+Executing pre-timeout scripts follows the same pattern. For example, you can configure a pre-timeout script for every test that contains `slow` in its name.
+
+```toml title="Basic pre-timeout rules"
+[[profile.default.scripts]]
+filter = 'test(slow)'
+pre-timeout = 'capture-backtrace'
+```
+
+A single rule can specify any number of setup scripts and any number of pre-timeout scripts.
+
+```toml title="Combination rules"
+[[profile.default.scripts]]
+filter = 'test(slow)'
+setup = ['setup-1', 'setup-2']
+pre-timeout = ['pre-timeout-1', 'pre-timeout-2']
+```
+
 ## Script execution
+
+### Setup scripts
 
 A given setup script _S_ is only executed if the current profile has at least one rule where the `filter` and `platform` predicates match the current execution environment, and the setup script _S_ is listed in `setup`.
 
 Setup scripts are executed serially, in the order they are defined (_not_ the order they're specified in the rules). If any setup script exits with a non-zero exit code, the entire test run is terminated.
 
-### Environment variables
+#### Environment variables
 
 Setup scripts can define environment variables that will be exposed to tests that match the script. This is done by writing to the `$NEXTEST_ENV` environment variable from within the script.
 
@@ -125,6 +153,18 @@ fn my_env_test() {
     assert_eq!(std::env::var("MY_ENV_VAR"), Ok("Hello, world!".to_string()));
 }
 ```
+
+### Pre-timeout scripts
+
+A given pre-timeout script _S_ is executed when the current profile has at least one rule where the `platform` predicates match the current execution environment, the script _S_ is listed in `pre-timeout`, and a test matching the `filter` has reached its configured timeout.
+
+Pre-timeout scripts are executed serially, in the order they are defined (_not_ the order they're specified in the rules). If any pre-timeout script exits with a non-zero exit code, an error is logged but the test run continues.
+
+Nextest sets the following environment variables when executing a pre-timeout script:
+
+  * **`NEXTEST_PRE_TIMEOUT_TEST_PID`**: the ID of the process running the test.
+  * **`NEXTEST_PRE_TIMEOUT_TEST_NAME`**: the name of the running test.
+  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY`**: the name of the binary running the test.
 
 ## Setup scripts in JUnit output
 
