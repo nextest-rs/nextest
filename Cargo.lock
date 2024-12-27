@@ -736,9 +736,9 @@ dependencies = [
 
 [[package]]
 name = "datatest-stable"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5bb15663f97601af4c8d17237f2f884593bf59b4c013003babcb3cae66711b7"
+checksum = "50c5124f1b5fa26f0f12016bf7505e6a5f3154f391dc6831a72bb0276c301568"
 dependencies = [
  "camino",
  "fancy-regex",
