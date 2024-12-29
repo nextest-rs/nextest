@@ -198,12 +198,16 @@ where
                         };
                     }
 
+                    // Restore the terminal state.
+                    input_handler.suspend();
+
                     // Now stop nextest itself.
                     super::os::raise_stop();
                 }
                 #[cfg(unix)]
                 HandleEventResponse::JobControl(JobControlEvent::Continue) => {
-                    // Nextest has been resumed. Resume all the tests as well.
+                    // Nextest has been resumed. Resume the input handler, as well as all the tests.
+                    input_handler.resume();
                     self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                 }
                 #[cfg(not(unix))]
