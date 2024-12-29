@@ -115,6 +115,45 @@ impl InputHandler {
             }
         }
     }
+
+    /// Suspends the input handler temporarily, restoring the original terminal
+    /// state.
+    ///
+    /// Used by the stop signal handler.
+    #[cfg(unix)]
+    pub(crate) fn suspend(&mut self) {
+        let Some((handler, _)) = self.imp.as_mut() else {
+            return;
+        };
+
+        if let Err(error) = handler.restore() {
+            warn!("failed to suspend terminal non-canonical mode: {}", error);
+            // Don't set imp to None -- we want to try to reinit() on resume.
+        }
+    }
+
+    /// Resumes the input handler after a suspension.
+    ///
+    /// Used by the continue signal handler.
+    #[cfg(unix)]
+    pub(crate) fn resume(&mut self) {
+        let Some((handler, _)) = self.imp.as_mut() else {
+            // None means that the input handler is disabled, so there is
+            // nothing to resume.
+            return;
+        };
+
+        if let Err(error) = handler.reinit() {
+            warn!(
+                "failed to resume terminal non-canonical mode, \
+                 cannot read input events: {}",
+                error
+            );
+            // Do set self.imp to None in this case -- we want to indicate to
+            // callers (e.g. via status()) that the input handler is disabled.
+            self.imp = None;
+        }
+    }
 }
 
 /// The status of the input handler, returned by
@@ -151,7 +190,7 @@ impl InputHandlerImpl {
         let panic_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             // Ignore errors to avoid double-panicking.
-            if let Err(error) = ret2.finish() {
+            if let Err(error) = ret2.restore() {
                 eprintln!(
                     "failed to restore terminal state: {}",
                     DisplayErrorChain::new(error)
@@ -163,14 +202,36 @@ impl InputHandlerImpl {
         Ok(ret)
     }
 
-    fn finish(&self) -> Result<(), InputHandlerFinishError> {
+    #[cfg(unix)]
+    fn reinit(&self) -> Result<(), InputHandlerCreateError> {
+        // Make a new input guard and replace the old one. Don't set a new panic
+        // hook.
+        //
+        // The mutex is shared by the panic hook and self/the drop handler, so
+        // the change below will also be visible to the panic hook. But we
+        // acquire the mutex first to avoid a potential race where multiple
+        // calls to reinit() can happen concurrently.
+        //
+        // Also note that if this fails, the old InputGuard will be visible to
+        // the panic hook, which is fine -- since we called restore() first, the
+        // terminal state is already restored and guard is None.
+        let mut locked = self
+            .guard
+            .lock()
+            .map_err(|_| InputHandlerCreateError::Poisoned)?;
+        let guard = imp::InputGuard::new().map_err(InputHandlerCreateError::EnableNonCanonical)?;
+        *locked = guard;
+        Ok(())
+    }
+
+    fn restore(&self) -> Result<(), InputHandlerFinishError> {
         // Do not panic here, in case a panic happened while the thread was
         // locked. Instead, ignore the error.
         let mut locked = self
             .guard
             .lock()
             .map_err(|_| InputHandlerFinishError::Poisoned)?;
-        locked.finish().map_err(InputHandlerFinishError::Restore)
+        locked.restore().map_err(InputHandlerFinishError::Restore)
     }
 }
 
@@ -178,7 +239,7 @@ impl InputHandlerImpl {
 // panic=unwind) and a panic hook (for panic=abort).
 impl Drop for InputHandlerImpl {
     fn drop(&mut self) {
-        if let Err(error) = self.finish() {
+        if let Err(error) = self.restore() {
             eprintln!(
                 "failed to restore terminal state: {}",
                 DisplayErrorChain::new(error)
@@ -191,6 +252,10 @@ impl Drop for InputHandlerImpl {
 enum InputHandlerCreateError {
     #[error("failed to enable terminal non-canonical mode")]
     EnableNonCanonical(#[source] imp::Error),
+
+    #[cfg(unix)]
+    #[error("mutex was poisoned while reinitializing terminal state")]
+    Poisoned,
 }
 
 #[derive(Debug, Error)]
@@ -228,27 +293,7 @@ mod imp {
 
     impl InputGuard {
         pub(super) fn new() -> io::Result<Self> {
-            let mut termios = mem::MaybeUninit::uninit();
-            let res = unsafe { tcgetattr(std::io::stdin().as_raw_fd(), termios.as_mut_ptr()) };
-            if res == -1 {
-                return Err(io::Error::last_os_error());
-            }
-
-            // SAFETY: if res is 0, then termios has been initialized.
-            let original = unsafe { termios.assume_init() };
-
-            let mut updated = original;
-
-            // Disable echoing inputs and canonical mode. We don't disable things like ISIG -- we
-            // handle that via the signal handler.
-            updated.c_lflag &= !(ECHO | ICANON);
-            // VMIN is 1 and VTIME is 0: this enables blocking reads of 1 byte
-            // at a time with no timeout. See
-            // https://linux.die.net/man/3/tcgetattr's "Canonical and
-            // noncanonical mode" section.
-            updated.c_cc[VMIN] = 1;
-            updated.c_cc[VTIME] = 0;
-
+            let TermiosPair { original, updated } = compute_termios()?;
             stdin_tcsetattr(TCSAFLUSH, &updated)?;
 
             Ok(Self {
@@ -256,13 +301,44 @@ mod imp {
             })
         }
 
-        pub(super) fn finish(&mut self) -> io::Result<()> {
+        pub(super) fn restore(&mut self) -> io::Result<()> {
             if let Some(original) = self.original.take() {
                 stdin_tcsetattr(TCSANOW, &original)
             } else {
                 Ok(())
             }
         }
+    }
+
+    fn compute_termios() -> io::Result<TermiosPair> {
+        let mut termios = mem::MaybeUninit::uninit();
+        let res = unsafe { tcgetattr(std::io::stdin().as_raw_fd(), termios.as_mut_ptr()) };
+        if res == -1 {
+            return Err(io::Error::last_os_error());
+        }
+
+        // SAFETY: if res is 0, then termios has been initialized.
+        let original = unsafe { termios.assume_init() };
+
+        let mut updated = original;
+
+        // Disable echoing inputs and canonical mode. We don't disable things like ISIG -- we
+        // handle that via the signal handler.
+        updated.c_lflag &= !(ECHO | ICANON);
+        // VMIN is 1 and VTIME is 0: this enables blocking reads of 1 byte
+        // at a time with no timeout. See
+        // https://linux.die.net/man/3/tcgetattr's "Canonical and
+        // noncanonical mode" section.
+        updated.c_cc[VMIN] = 1;
+        updated.c_cc[VTIME] = 0;
+
+        Ok(TermiosPair { original, updated })
+    }
+
+    #[derive(Clone, Debug)]
+    struct TermiosPair {
+        original: libc::termios,
+        updated: libc::termios,
     }
 
     fn stdin_tcsetattr(optional_actions: c_int, updated: &libc::termios) -> io::Result<()> {
@@ -321,7 +397,7 @@ mod imp {
             })
         }
 
-        pub(super) fn finish(&mut self) -> io::Result<()> {
+        pub(super) fn restore(&mut self) -> io::Result<()> {
             if let Some(original) = self.original.take() {
                 let handle = std::io::stdin().as_raw_handle();
                 let res = unsafe { SetConsoleMode(handle, original) };
