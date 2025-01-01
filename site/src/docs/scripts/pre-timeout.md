@@ -16,6 +16,8 @@ status: experimental
 Nextest runs *pre-timeout scripts* before terminating a test that has exceeded
 its timeout.
 
+Pre-timeout scripts are useful for automatically collecting backtraces, logs, etc. that can assist in debugging why a test is slow or hung.
+
 ## Defining pre-timeout scripts
 
 Pre-timeout scripts are defined using the top-level `script.pre-timeout` configuration. For example, to define a script named "my-script", which runs `my-script.sh`:
@@ -25,15 +27,19 @@ Pre-timeout scripts are defined using the top-level `script.pre-timeout` configu
 command = 'my-script.sh'
 ```
 
-Pre-timeout scripts can have the following configuration options attached to them:
+See [_Defining scripts_](index.md#defining-scripts) for options that are common to all scripts.
 
-- TODO
+Pre-timeout scripts do not support additional configuration options.
+
+Notably, pre-timeout scripts always capture stdout and stderr. Support for not capturing stdout and stderr may be added in the future in order to support use cases like interactive debugging of a hung test.
 
 ### Example
 
+To invoke GDB to dump backtraces before a hanging test is terminated:
+
 ```toml title="Advanced pre-timeout script definition"
 [script.pre-timeout.gdb-dump]
-command = 'gdb ... TODO'
+command = ['sh', '-c', 'gdb -p $NEXTEST_PRE_TIMEOUT_TEST_PID -batch -ex "thread apply all backtrace"']
 # TODO options
 ```
 
@@ -47,10 +53,17 @@ A given pre-timeout script _S_ is executed when the current profile has at least
 
 Pre-timeout scripts are executed serially, in the order they are defined (_not_ the order they're specified in the rules). If any pre-timeout script exits with a non-zero exit code, an error is logged but the test run continues.
 
-Nextest sets the following environment variables when executing a pre-timeout script:
+Nextest will proceed with graceful termination of the test only once the pre-timeout script terminates. See [_How nextest terminates tests_](#defining-pre-timeout-scripts). If the pre-timeout script itself is slow, nextest will apply the same termination protocol to the pre-timeout script.
+
+The pre-timeout script is not responsible for terminating the test process, but it is permissible for it to do so.
+
+Nextest executes pre-timeout scripts with the same working directory as the test and sets the following variables in the script's environment:
 
   * **`NEXTEST_PRE_TIMEOUT_TEST_PID`**: the ID of the process running the test.
   * **`NEXTEST_PRE_TIMEOUT_TEST_NAME`**: the name of the running test.
-  * **`NEXTEST_PRE_TIMEOUT_TEST_PACKAGE_NAME`**: the name of the package in which the test is located.
-  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_NAME`**: the name of the test binary, if known.
-  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_KIND`**: the kind of the test binary, if known.
+  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID`**: the ID of the binary in which the test is located.
+  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_PACKAGE_NAME`**: the package name component of the binary ID.
+  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_NAME`**: the name component of the binary ID, if known.
+  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_KIND`**: the kind component of the binary ID, if known.
+
+<!-- TODO: a protocol for writing script logs to a file and telling nextest to attach them to JUnit reports? -->

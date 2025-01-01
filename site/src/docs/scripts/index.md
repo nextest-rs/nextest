@@ -51,6 +51,21 @@ command = 'script.sh -c "Hello, world!"'
 command = ['script.sh', '-c', 'Hello, world!']
 ```
 
+### Timeouts
+
+All script types support the following timeout options:
+
+- **`slow-timeout`**: Mark a script [as slow](../features/slow-tests.md) or [terminate it](../features/slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
+- **`leak-timeout`**: Mark scripts [leaky](../features/leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.
+
+
+```toml title="Script definition with timeouts"
+[script.<type>.my-script]
+command = 'script.sh'
+slow-timeout = { period = "60s", terminate-after = 2 }
+leak-timeout = "1s"
+```
+
 ### Namespacing
 
 Script names must be unique across all script types.

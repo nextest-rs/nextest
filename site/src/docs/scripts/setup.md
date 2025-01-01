@@ -23,20 +23,10 @@ Setup scripts are defined using the top-level `script.setup` configuration. For 
 command = 'my-script.sh'
 ```
 
-Commands can either be specified using Unix shell rules, or as a list of arguments. In the following example, `script1` and `script2` are equivalent.
+See [_Defining scripts_](index.md#defining-scripts) for options that are common to all scripts.
 
-```toml
-[script.setup.script1]
-command = 'script.sh -c "Hello, world!"'
+Setup scripts support the following additional configuration options:
 
-[script.setup.script2]
-command = ['script.sh', '-c', 'Hello, world!']
-```
-
-Setup scripts can have the following configuration options attached to them:
-
-- **`slow-timeout`**: Mark a setup script [as slow](../features/slow-tests.md) or [terminate it](../features/slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
-- **`leak-timeout`**: Mark setup scripts [leaky](../features/leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.
 - **`capture-stdout`**: `true` if the script's standard output should be captured, `false` if not. By default, this is `false`.
 - **`capture-stderr`**: `true` if the script's standard error should be captured, `false` if not. By default, this is `false`.
 
@@ -45,8 +35,6 @@ Setup scripts can have the following configuration options attached to them:
 ```toml title="Advanced setup script definition"
 [script.setup.db-generate]
 command = 'cargo run -p db-generate'
-slow-timeout = { period = "60s", terminate-after = 2 }
-leak-timeout = "1s"
 capture-stdout = true
 capture-stderr = false
 ```
