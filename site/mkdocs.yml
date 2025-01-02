@@ -126,6 +126,7 @@ nav:
           - "Architecture":
                 - "The runner loop": docs/design/architecture/runner-loop.md
                 - "Signal handling": docs/design/architecture/signal-handling.md
+                - "Input handling": docs/design/architecture/input-handling.md
     - "Benchmarks": docs/benchmarks/index.md
     - changelog.md
 
