@@ -253,7 +253,16 @@ pub enum TestEventKind<'a> {
 
     /// `Enter` was pressed. Either a newline or a progress bar snapshot needs
     /// to be printed.
-    InputEnter,
+    InputEnter {
+        /// Current statistics for number of tests so far.
+        current_stats: RunStats,
+
+        /// The number of tests running.
+        running: usize,
+
+        /// The cancel status of the run. This is None if the run is still ongoing.
+        cancel_reason: Option<CancelReason>,
+    },
 
     /// A cancellation notice was received.
     RunBeginCancel {

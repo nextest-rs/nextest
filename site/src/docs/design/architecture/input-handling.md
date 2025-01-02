@@ -323,23 +323,39 @@ handling](signal-handling.md#on-windows).
 ## Handling the Enter key { #handling-enter }
 
 As discussed in [*the appendix*](#no-raw-mode) below, echoing characters is
-disabled for a better user experience. However, users sometimes want characters
-to be echoed.
+disabled for a better user experience. However, users sometimes _want_
+characters to be echoed.
 
 For example, a common pattern to mark a spot in some interactive output is to
 press Enter a bunch. (This is safe to do with programs that don't consume
 input, because those lines are treated as no-ops by the shell.)
 
-Nextest supports this pattern by handling the Enter key, and emulating the
-behavior that would happen.
+Nextest supports this pattern by handling the Enter key. On receiving Enter,
+nextest displays the current state as would be visible in the progress bar, but
+not the progress bar itself. This acts as both a report of the current state and
+as a visual marker.
 
-- If the progress bar is visible, pressing Enter takes a snapshot of the
-  progress bar in a new line. This matches observed behavior with
-  `--no-input-handler`. We could do something different here, but a progress bar
-  snapshot seems great: it succinctly captures the state of execution
-  at that moment.
+For example, nextest might display:
 
-- If the progress bar is not visible, pressing Enter prints a blank line.
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/enter-output.ansi
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/enter-output.ansi | ../scripts/strip-ansi.sh
+    ```
+
+Compare this behavior to what happens without input handling:
+
+- If the progress bar is visible, a snapshot of the progress bar is printed.
+- If not, a blank line is printed.
+
+Nextest's behavior with input handling is user-friendly, and consistent
+regardless of whether the progress bar is visible.
 
 ## Translating inputs to events { #translating-inputs }
 
@@ -384,10 +400,9 @@ synchronous APIs is likely possible.
 ## Conclusion
 
 Nextest's approach to input handling prioritizes cross-platform consistency and
-an improved user experience. By processing keyboard inputs, nextest can provide
-cross-platform interactive status functionality. By carefully managing terminal
-settings and input events in a principled manner, nextest ensures a robust and
-extensible foundation for interactive functionality.
+an good user experience. By carefully managing terminal settings and input
+events in a principled manner, nextest ensures a robust and extensible
+foundation for interactive functionality.
 
 ---
 

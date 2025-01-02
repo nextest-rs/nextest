@@ -536,7 +536,11 @@ where
                 HandleEventResponse::Info(InfoEvent::Input)
             }
             InternalEvent::Input(InputEvent::Enter) => {
-                self.callback_none_response(TestEventKind::InputEnter)
+                self.callback_none_response(TestEventKind::InputEnter {
+                    current_stats: self.run_stats,
+                    running: self.running(),
+                    cancel_reason: self.cancel_state,
+                })
             }
             InternalEvent::ReportCancel => {
                 self.begin_cancel(CancelReason::ReportError, CancelEvent::Report)
