@@ -251,6 +251,10 @@ pub enum TestEventKind<'a> {
         missing: usize,
     },
 
+    /// `Enter` was pressed. Either a newline or a progress bar snapshot needs
+    /// to be printed.
+    InputEnter,
+
     /// A cancellation notice was received.
     RunBeginCancel {
         /// The number of setup scripts still running.

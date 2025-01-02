@@ -483,6 +483,15 @@ impl ProgressBarState {
                 self.bar
                     .set_prefix(progress_bar_cancel_prefix(*reason, styles));
             }
+            TestEventKind::InputEnter => {
+                // If the draw target is currently stderr, set it to stderr
+                // again. This disconnect/reconnect causes the progress bar to
+                // be left in place, then redrawn on the next line. This way,
+                // users can mark a place in the output they care about.
+                if !before_should_hide {
+                    self.bar.set_draw_target(Self::stderr_target());
+                }
+            }
             _ => {}
         }
 
@@ -1136,6 +1145,15 @@ impl<'a> TestReporterImpl<'a> {
                 }
 
                 writeln!(writer, "{hbar}")?;
+            }
+            TestEventKind::InputEnter => {
+                // Print a newline.
+                //
+                // If there's a progress bar, indicatif appears to write over
+                // this newline and redraw the progress bar, leaving a progress
+                // bar snapshot in place and no blank newline. This is exactly
+                // the desired behavior.
+                writeln!(writer)?;
             }
             TestEventKind::RunFinished {
                 start_time: _start_time,

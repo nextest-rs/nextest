@@ -100,10 +100,16 @@ impl InputHandler {
         let (_, stream) = self.imp.as_mut()?;
         loop {
             let next = stream.next().await?;
+            // Everything after here must be cancel-safe: ideally no await
+            // points at all, but okay with discarding `next` if there are any
+            // await points.
             match next {
                 Ok(Event::Key(key)) => {
                     if key.code == KeyCode::Char(Self::INFO_CHAR) && key.modifiers.is_empty() {
                         return Some(InputEvent::Info);
+                    }
+                    if key.code == KeyCode::Enter {
+                        return Some(InputEvent::Enter);
                     }
                 }
                 Ok(event) => {
@@ -416,4 +422,5 @@ mod imp {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InputEvent {
     Info,
+    Enter,
 }
