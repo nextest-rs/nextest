@@ -535,6 +535,9 @@ where
                 // Print current statistics.
                 HandleEventResponse::Info(InfoEvent::Input)
             }
+            InternalEvent::Input(InputEvent::Enter) => {
+                self.callback_none_response(TestEventKind::InputEnter)
+            }
             InternalEvent::ReportCancel => {
                 self.begin_cancel(CancelReason::ReportError, CancelEvent::Report)
             }
