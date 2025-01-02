@@ -3,14 +3,14 @@ icon: material/timer-sand-empty
 status: experimental
 ---
 
-<!-- md:version TODO -->
+<!-- md:version 0.9.59 -->
 
 # Pre-timeout scripts
 
 !!! experimental "Experimental: This feature is not yet stable"
 
-    - **Enable with:** Add `experimental = ["setup-scripts"]` to `.config/nextest.toml`
-    - **Tracking issue:** [#978](https://github.com/nextest-rs/nextest/issues/978)
+    - **Enable with:** Add `experimental = ["pre-timeout-scripts"]` to `.config/nextest.toml`
+    - **Tracking issue:** [#TODO](https://github.com/nextest-rs/nextest/issues/TODO)
 
 
 Nextest runs *pre-timeout scripts* before terminating a test that has exceeded
@@ -59,11 +59,11 @@ The pre-timeout script is not responsible for terminating the test process, but 
 
 Nextest executes pre-timeout scripts with the same working directory as the test and sets the following variables in the script's environment:
 
-  * **`NEXTEST_PRE_TIMEOUT_TEST_PID`**: the ID of the process running the test.
-  * **`NEXTEST_PRE_TIMEOUT_TEST_NAME`**: the name of the running test.
-  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID`**: the ID of the binary in which the test is located.
-  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_PACKAGE_NAME`**: the package name component of the binary ID.
-  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_NAME`**: the name component of the binary ID, if known.
-  * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_KIND`**: the kind component of the binary ID, if known.
+* **`NEXTEST_PRE_TIMEOUT_TEST_PID`**: the ID of the process running the test.
+* **`NEXTEST_PRE_TIMEOUT_TEST_NAME`**: the name of the running test.
+* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID`**: the ID of the binary in which the test is located.
+* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_PACKAGE_NAME`**: the package name component of the binary ID.
+* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_NAME`**: the name component of the binary ID, if known.
+* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_KIND`**: the kind component of the binary ID, if known.
 
 <!-- TODO: a protocol for writing script logs to a file and telling nextest to attach them to JUnit reports? -->

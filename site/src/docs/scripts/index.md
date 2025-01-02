@@ -4,8 +4,6 @@ icon: material/script-text
 
 # Scripts
 
-<!-- md:version 0.9.59 -->
-
 Nextest supports running _scripts_ when certain events occur during a test run. Scripts can be scoped to particular tests via [filtersets](../filtersets/index.md).
 
 Nextest currently recognizes two types of scripts:
