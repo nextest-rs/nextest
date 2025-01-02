@@ -319,8 +319,7 @@ impl TestReporterBuilder {
                 // Enable a steady tick 10 times a second.
                 bar.enable_steady_tick(Duration::from_millis(100));
                 ReporterStderrImpl::TerminalWithBar {
-                    bar,
-                    state: ProgressBarState::new(),
+                    state: ProgressBarState::new(bar),
                 }
             }
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
@@ -357,7 +356,6 @@ impl TestReporterBuilder {
 
 enum ReporterStderrImpl<'a> {
     TerminalWithBar {
-        bar: ProgressBar,
         // Reporter-specific progress bar state.
         state: ProgressBarState,
     },
@@ -368,8 +366,8 @@ enum ReporterStderrImpl<'a> {
 impl ReporterStderrImpl<'_> {
     fn finish_and_clear_bar(&self) {
         match self {
-            ReporterStderrImpl::TerminalWithBar { bar, .. } => {
-                bar.finish_and_clear();
+            ReporterStderrImpl::TerminalWithBar { state } => {
+                state.bar.finish_and_clear();
             }
             ReporterStderrImpl::TerminalWithoutBar | ReporterStderrImpl::Buffer(_) => {}
         }
@@ -378,35 +376,53 @@ impl ReporterStderrImpl<'_> {
 
 #[derive(Debug)]
 struct ProgressBarState {
+    bar: ProgressBar,
     // Reasons for hiding the progress bar. We show the progress bar if none of
     // these are set and hide it if any of them are set.
     //
-    // indicatif cannot handle this kind of "stacked" state management so it
+    // indicatif cannot handle this kind of "stacked" state management, so it
     // falls on us to do so.
+    //
+    // The current draw target is a pure function of these three booleans: if
+    // any of them are set, the draw target is hidden, otherwise it's stderr. If
+    // this changes, we'll need to track those other inputs.
     hidden_no_capture: bool,
     hidden_run_paused: bool,
     hidden_info_response: bool,
 }
 
 impl ProgressBarState {
-    fn new() -> Self {
+    fn new(bar: ProgressBar) -> Self {
+        // NOTE: set_draw_target must be called before enable_steady_tick to avoid a
+        // spurious extra line from being printed as the draw target changes.
+        bar.set_draw_target(Self::stderr_target());
+        // Enable a steady tick 10 times a second.
+        bar.enable_steady_tick(Duration::from_millis(100));
+
         Self {
+            bar,
             hidden_no_capture: false,
             hidden_run_paused: false,
             hidden_info_response: false,
         }
     }
 
+    fn stderr_target() -> ProgressDrawTarget {
+        // This used to be unbuffered, but that option went away from indicatif
+        // 0.17.0. The refresh rate is now 20hz so that it's double the steady
+        // tick rate.
+        ProgressDrawTarget::stderr_with_hz(20)
+    }
+
+    fn hidden_target() -> ProgressDrawTarget {
+        ProgressDrawTarget::hidden()
+    }
+
     fn should_hide(&self) -> bool {
         self.hidden_no_capture || self.hidden_run_paused || self.hidden_info_response
     }
 
-    fn update_progress_bar(
-        &mut self,
-        event: &TestEvent<'_>,
-        styles: &Styles,
-        progress_bar: &ProgressBar,
-    ) {
+    fn update_progress_bar(&mut self, event: &TestEvent<'_>, styles: &Styles) {
         let before_should_hide = self.should_hide();
 
         match &event.kind {
@@ -434,12 +450,14 @@ impl ProgressBarState {
                 cancel_state,
                 ..
             } => {
-                progress_bar.set_prefix(progress_bar_prefix(current_stats, *cancel_state, styles));
-                progress_bar.set_message(progress_bar_msg(current_stats, *running, styles));
+                self.bar
+                    .set_prefix(progress_bar_prefix(current_stats, *cancel_state, styles));
+                self.bar
+                    .set_message(progress_bar_msg(current_stats, *running, styles));
                 // If there are skipped tests, the initial run count will be lower than when constructed
                 // in ProgressBar::new.
-                progress_bar.set_length(current_stats.initial_run_count as u64);
-                progress_bar.set_position(current_stats.finished_count as u64);
+                self.bar.set_length(current_stats.initial_run_count as u64);
+                self.bar.set_position(current_stats.finished_count as u64);
             }
             TestEventKind::InfoStarted { .. } => {
                 // While info is being displayed, hide the progress bar to avoid
@@ -462,7 +480,8 @@ impl ProgressBarState {
             }
             TestEventKind::RunBeginCancel { reason, .. }
             | TestEventKind::RunBeginKill { reason, .. } => {
-                progress_bar.set_prefix(progress_bar_cancel_prefix(*reason, styles));
+                self.bar
+                    .set_prefix(progress_bar_cancel_prefix(*reason, styles));
             }
             _ => {}
         }
@@ -470,8 +489,8 @@ impl ProgressBarState {
         let after_should_hide = self.should_hide();
 
         match (before_should_hide, after_should_hide) {
-            (false, true) => progress_bar.set_draw_target(ProgressDrawTarget::hidden()),
-            (true, false) => progress_bar.set_draw_target(ProgressDrawTarget::stderr()),
+            (false, true) => self.bar.set_draw_target(Self::hidden_target()),
+            (true, false) => self.bar.set_draw_target(Self::stderr_target()),
             _ => {}
         }
     }
@@ -506,17 +525,17 @@ impl<'a> TestReporter<'a> {
     /// Report this test event to the given writer.
     fn write_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
         match &mut self.stderr {
-            ReporterStderrImpl::TerminalWithBar { bar, state } => {
+            ReporterStderrImpl::TerminalWithBar { state } => {
                 // Write to a string that will be printed as a log line.
                 let mut buf: Vec<u8> = Vec::new();
                 self.inner
                     .write_event_impl(&event, &mut buf)
                     .map_err(WriteEventError::Io)?;
 
-                state.update_progress_bar(&event, &self.inner.styles, bar);
+                state.update_progress_bar(&event, &self.inner.styles);
                 // ProgressBar::println doesn't print status lines if the bar is
                 // hidden. The suspend method prints it in all cases.
-                bar.suspend(|| {
+                state.bar.suspend(|| {
                     _ = std::io::stderr().write_all(&buf);
                 });
             }
