@@ -1,5 +1,5 @@
 ---
-source: nextest-runner/src/reporter/displayer.rs
+source: nextest-runner/src/reporter/displayer/imp.rs
 expression: "to_message_line(AbortStatus::WindowsNtStatus(STATUS_CONTROL_C_EXIT))"
 snapshot_kind: text
 ---
