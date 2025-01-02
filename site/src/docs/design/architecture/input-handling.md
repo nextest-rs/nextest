@@ -196,8 +196,8 @@ handle everything. As such, raw mode is a great fit for TUI applications.
 
 Unlike vim or Emacs, though, nextest is not a TUI application. `cargo nextest
 run` does not take over the whole screen. The full raw mode doesn't quite work
-for nextest. For details on why raw mode is not suitable for nextest, see [*the
-appendix*](#no-raw-mode).)
+for nextest. For details on why raw mode is not suitable for nextest, see [the
+appendix](#no-raw-mode).)
 
 ### `termios` flags
 
@@ -209,7 +209,7 @@ Luckily, `termios` comes with both the `cfmakeraw` API and individually-adjustab
 : Canonical mode, i.e. line buffering. This is what we set out to disable.
 
 `ECHO`
-: Print characters as they're typed. Not echoing characters results in a nicer user experience as detailed in [*the appendix*](#no-raw-mode), so we disable it.
+: Print characters as they're typed. Not echoing characters results in a nicer user experience as detailed in [the appendix](#no-raw-mode), so we disable it.
 
 </div>
 
@@ -322,7 +322,7 @@ handling](signal-handling.md#on-windows).
 
 ## Handling the Enter key { #handling-enter }
 
-As discussed in [*the appendix*](#no-raw-mode) below, echoing characters is
+As discussed in [the appendix](#no-raw-mode) below, echoing characters is
 disabled for a better user experience. However, users sometimes _want_
 characters to be echoed.
 
