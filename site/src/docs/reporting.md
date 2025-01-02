@@ -44,7 +44,7 @@ output.
 When `--no-capture` isn't used, nextest will capture standard output and
 standard error, and buffer it internally.
 
-### …while tests are running
+### …while tests are running { #live-output }
 
 <!-- md:version 0.9.86 -->
 
@@ -81,7 +81,7 @@ On being queried, nextest will display, for all running tests:
 [press Ctrl-T]: https://blog.danielisz.org/2018/06/21/the-power-of-ctrlt/
 [sigusr1]: https://www.gnu.org/software/libc/manual/html_node/Miscellaneous-Signals.html
 
-### …after tests have finished
+### …after tests have finished { #completed-output }
 
 Two options control the situations in which test output is displayed:
 

@@ -5,6 +5,10 @@ description: Design document describing how nextest performs signal handling
 
 # Signal handling
 
+!!! abstract "Design document"
+
+    This is a design document intended for nextest contributors and curious readers.
+
 Nextest's signal handling uses Tokio's [native support for signals]. Signals are
 received by a [multiplexer] called `SignalHandler`, which generates a stream of
 events. The [runner loop's dispatcher] then selects over this stream. On receiving a signal, the
@@ -74,7 +78,7 @@ follow, but it's not a hard requirement.
 
 [least astonishment]: https://en.wikipedia.org/wiki/Principle_of_least_astonishment
 
-### Job control
+### Job control { #job-control }
 
 On Unix platforms, nextest supports [job control] via the `SIGTSTP` and `SIGCONT`
 signals.
@@ -188,7 +192,7 @@ stuck runner have been observed since it was implemented.
 [the clap repository]: https://github.com/clap-rs/clap
 [signal mask]: https://www.gnu.org/software/libc/manual/html_node/Process-Signal-Mask.html
 
-## Signal handling on Windows
+## Signal handling on Windows { #on-windows }
 
 Windows has a much simpler signal model than Unix.
 

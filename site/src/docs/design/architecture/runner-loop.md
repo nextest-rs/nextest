@@ -5,6 +5,10 @@ description: Design document describing the architecture and evolution of nextes
 
 # The runner loop
 
+!!! abstract "Design document"
+
+    This is a design document intended for nextest contributors and curious readers.
+
 Nextest's [runner loop] is responsible for executing _units_ of work, and
 coordinating scheduling and responses. A unit of work is typically a single
 attempt of a test, but can also be a setup (and in the future, teardown) script.
@@ -50,7 +54,7 @@ The dispatcher's job is to accept events from the following sources and respond
 to them appropriately:
 
 - The executor.
-- [Signal](signal-handling.md) and input handlers.
+- [Signal](signal-handling.md) and [input](input-handling.md) handlers.
 - A handler that fires if the reporter produces an error.
 
 Each iteration of the dispatcher loop has three phases:
