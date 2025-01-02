@@ -483,15 +483,6 @@ impl ProgressBarState {
                 self.bar
                     .set_prefix(progress_bar_cancel_prefix(*reason, styles));
             }
-            TestEventKind::InputEnter => {
-                // If the draw target is currently stderr, set it to stderr
-                // again. This disconnect/reconnect causes the progress bar to
-                // be left in place, then redrawn on the next line. This way,
-                // users can mark a place in the output they care about.
-                if !before_should_hide {
-                    self.bar.set_draw_target(Self::stderr_target());
-                }
-            }
             _ => {}
         }
 
@@ -602,6 +593,30 @@ fn progress_bar_prefix(
 fn progress_bar_msg(current_stats: &RunStats, running: usize, styles: &Styles) -> String {
     let mut s = format!("{} running, ", running.style(styles.count));
     write_summary_str(current_stats, styles, &mut s);
+    s
+}
+
+/// Returns a summary of current progress.
+fn progress_str(
+    elapsed: Duration,
+    current_stats: &RunStats,
+    running: usize,
+    cancel_reason: Option<CancelReason>,
+    styles: &Styles,
+) -> String {
+    // First, show the prefix.
+    let mut s = progress_bar_prefix(current_stats, cancel_reason, styles);
+
+    // Then, the time elapsed, test counts, and message.
+    swrite!(
+        s,
+        " {}{}/{}: {}",
+        DisplayBracketedHhMmSs(elapsed),
+        current_stats.finished_count,
+        current_stats.initial_run_count,
+        progress_bar_msg(current_stats, running, styles)
+    );
+
     s
 }
 
@@ -781,10 +796,10 @@ impl<'a> TestReporterImpl<'a> {
                     write!(writer, "{:>12} ", "TERMINATING".style(self.styles.fail))?;
                 }
 
-                self.write_slow_duration(*elapsed, writer)?;
                 writeln!(
                     writer,
-                    "{}",
+                    "{}{}",
+                    DisplaySlowDuration(*elapsed),
                     self.display_script_instance(script_id.clone(), command, args)
                 )?;
             }
@@ -851,8 +866,12 @@ impl<'a> TestReporterImpl<'a> {
                     };
                 }
 
-                self.write_slow_duration(*elapsed, writer)?;
-                writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
+                writeln!(
+                    writer,
+                    "{}{}",
+                    DisplaySlowDuration(*elapsed),
+                    self.display_test_instance(test_instance.id())
+                )?;
             }
 
             TestEventKind::TestAttemptFailedWillRetry {
@@ -867,14 +886,14 @@ impl<'a> TestReporterImpl<'a> {
                         run_status.retry_data.attempt,
                         short_status_str(run_status.result),
                     );
+
+                    // Print the try status and time taken.
                     write!(
                         writer,
-                        "{:>12} ",
-                        try_status_string.style(self.styles.retry)
+                        "{:>12} {}",
+                        try_status_string.style(self.styles.retry),
+                        DisplayBracketedDuration(run_status.time_taken),
                     )?;
-
-                    // Next, print the time taken.
-                    self.write_duration(run_status.time_taken, writer)?;
 
                     // Print the name of the test.
                     writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
@@ -898,9 +917,12 @@ impl<'a> TestReporterImpl<'a> {
                             run_status.retry_data.attempt + 1,
                             run_status.retry_data.total_attempts,
                         );
-                        write!(writer, "{:>12} ", delay_string.style(self.styles.retry))?;
-
-                        self.write_duration_by(*delay_before_next_attempt, writer)?;
+                        write!(
+                            writer,
+                            "{:>12} {}",
+                            delay_string.style(self.styles.retry),
+                            DisplayDurationBy(*delay_before_next_attempt)
+                        )?;
 
                         // Print the name of the test.
                         writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
@@ -1146,14 +1168,24 @@ impl<'a> TestReporterImpl<'a> {
 
                 writeln!(writer, "{hbar}")?;
             }
-            TestEventKind::InputEnter => {
-                // Print a newline.
-                //
-                // If there's a progress bar, indicatif appears to write over
-                // this newline and redraw the progress bar, leaving a progress
-                // bar snapshot in place and no blank newline. This is exactly
-                // the desired behavior.
-                writeln!(writer)?;
+            TestEventKind::InputEnter {
+                current_stats,
+                running,
+                cancel_reason,
+            } => {
+                // Print everything that would be shown in the progress bar,
+                // except for the bar itself.
+                writeln!(
+                    writer,
+                    "{}",
+                    progress_str(
+                        event.elapsed,
+                        current_stats,
+                        *running,
+                        *cancel_reason,
+                        &self.styles,
+                    )
+                )?;
             }
             TestEventKind::RunFinished {
                 start_time: _start_time,
@@ -1294,11 +1326,10 @@ impl<'a> TestReporterImpl<'a> {
             }
         }
 
-        self.write_duration(status.time_taken, writer)?;
-
         writeln!(
             writer,
-            "{}",
+            "{}{}",
+            DisplayBracketedDuration(status.time_taken),
             self.display_script_instance(script_id.clone(), command, args)
         )?;
 
@@ -1347,11 +1378,13 @@ impl<'a> TestReporterImpl<'a> {
             }
         };
 
-        // Next, print the time taken.
-        self.write_duration(last_status.time_taken, writer)?;
-
-        // Print the name of the test.
-        writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
+        // Print the time taken and the name of the test.
+        writeln!(
+            writer,
+            "{}{}",
+            DisplayBracketedDuration(last_status.time_taken),
+            self.display_test_instance(test_instance.id())
+        )?;
 
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
@@ -1421,11 +1454,13 @@ impl<'a> TestReporterImpl<'a> {
             }
         };
 
-        // Next, print the time taken.
-        self.write_duration(last_status.time_taken, writer)?;
-
-        // Print the name of the test.
-        writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
+        // Next, print the time taken and the name of the test.
+        write!(
+            writer,
+            "{}{}",
+            DisplayBracketedDuration(last_status.time_taken),
+            self.display_test_instance(test_instance.id()),
+        )?;
 
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
@@ -1830,28 +1865,6 @@ impl<'a> TestReporterImpl<'a> {
         }
     }
 
-    fn write_duration(&self, duration: Duration, writer: &mut dyn Write) -> io::Result<()> {
-        // * > means right-align.
-        // * 8 is the number of characters to pad to.
-        // * .3 means print three digits after the decimal point.
-        write!(writer, "[{:>8.3?}s] ", duration.as_secs_f64())
-    }
-
-    fn write_duration_by(&self, duration: Duration, writer: &mut dyn Write) -> io::Result<()> {
-        // * > means right-align.
-        // * 7 is the number of characters to pad to.
-        // * .3 means print three digits after the decimal point.
-        write!(writer, "by {:>7.3?}s ", duration.as_secs_f64())
-    }
-
-    fn write_slow_duration(&self, duration: Duration, writer: &mut dyn Write) -> io::Result<()> {
-        // Inside the curly braces:
-        // * > means right-align.
-        // * 7 is the number of characters to pad to.
-        // * .3 means print three digits after the decimal point.
-        write!(writer, "[>{:>7.3?}s] ", duration.as_secs_f64())
-    }
-
     fn write_setup_script_execute_status(
         &self,
         script_id: &ScriptId,
@@ -2213,6 +2226,59 @@ impl fmt::Debug for TestReporter<'_> {
 }
 
 const RESET_COLOR: &[u8] = b"\x1b[0m";
+
+struct DisplayBracketedHhMmSs(Duration);
+
+impl fmt::Display for DisplayBracketedHhMmSs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // This matches indicatif's elapsed_precise display.
+        let total_secs = self.0.as_secs();
+        let secs = total_secs % 60;
+        let total_mins = total_secs / 60;
+        let mins = total_mins % 60;
+        let hours = total_mins / 60;
+
+        // Buffer the output internally to provide padding.
+        let out = format!("{hours:02}:{mins:02}:{secs:02}");
+        write!(f, "[{:>9}] ", out)
+    }
+}
+
+struct DisplayBracketedDuration(Duration);
+
+impl fmt::Display for DisplayBracketedDuration {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // * > means right-align.
+        // * 8 is the number of characters to pad to.
+        // * .3 means print three digits after the decimal point.
+        write!(f, "[{:>8.3?}s] ", self.0.as_secs_f64())
+    }
+}
+
+struct DisplayDurationBy(Duration);
+
+impl fmt::Display for DisplayDurationBy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // * > means right-align.
+        // * 7 is the number of characters to pad to.
+        // * .3 means print three digits after the decimal point.
+        write!(f, "by {:>7.3?}s ", self.0.as_secs_f64())
+    }
+}
+
+struct DisplaySlowDuration(Duration);
+
+impl fmt::Display for DisplaySlowDuration {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Inside the curly braces:
+        // * > means right-align.
+        // * 7 is the number of characters to pad to.
+        // * .3 means print three digits after the decimal point.
+        //
+        // The > outside the curly braces is printed literally.
+        write!(f, "[>{:>7.3?}s] ", self.0.as_secs_f64())
+    }
+}
 
 /// Formatting options for writing out child process output.
 ///
@@ -3642,14 +3708,22 @@ mod tests {
         let mut styles = Styles::default();
         styles.colorize();
 
-        for stats in run_stats_test_failure_examples() {
+        for (name, stats) in run_stats_test_failure_examples() {
             let prefix = progress_bar_prefix(&stats, Some(CancelReason::TestFailure), &styles);
-            assert_eq!(prefix, "  Cancelling".style(styles.fail).to_string());
+            assert_eq!(
+                prefix,
+                "  Cancelling".style(styles.fail).to_string(),
+                "{name} matches"
+            );
         }
-        for stats in run_stats_setup_script_failure_examples() {
+        for (name, stats) in run_stats_setup_script_failure_examples() {
             let prefix =
                 progress_bar_prefix(&stats, Some(CancelReason::SetupScriptFailure), &styles);
-            assert_eq!(prefix, "  Cancelling".style(styles.fail).to_string());
+            assert_eq!(
+                prefix,
+                "  Cancelling".style(styles.fail).to_string(),
+                "{name} matches"
+            );
         }
 
         let prefix = progress_bar_prefix(&RunStats::default(), Some(CancelReason::Signal), &styles);
@@ -3658,53 +3732,131 @@ mod tests {
         let prefix = progress_bar_prefix(&RunStats::default(), None, &styles);
         assert_eq!(prefix, "     Running".style(styles.pass).to_string());
 
-        for stats in run_stats_test_failure_examples() {
+        for (name, stats) in run_stats_test_failure_examples() {
             let prefix = progress_bar_prefix(&stats, None, &styles);
-            assert_eq!(prefix, "     Running".style(styles.fail).to_string());
+            assert_eq!(
+                prefix,
+                "     Running".style(styles.fail).to_string(),
+                "{name} matches"
+            );
         }
-        for stats in run_stats_setup_script_failure_examples() {
+        for (name, stats) in run_stats_setup_script_failure_examples() {
             let prefix = progress_bar_prefix(&stats, None, &styles);
-            assert_eq!(prefix, "     Running".style(styles.fail).to_string());
+            assert_eq!(
+                prefix,
+                "     Running".style(styles.fail).to_string(),
+                "{name} matches"
+            );
         }
     }
 
-    fn run_stats_test_failure_examples() -> Vec<RunStats> {
+    fn run_stats_test_failure_examples() -> Vec<(&'static str, RunStats)> {
         vec![
-            RunStats {
-                failed: 1,
-                ..RunStats::default()
-            },
-            RunStats {
-                failed: 1,
-                passed: 1,
-                ..RunStats::default()
-            },
-            RunStats {
-                exec_failed: 1,
-                ..RunStats::default()
-            },
-            RunStats {
-                timed_out: 1,
-                ..RunStats::default()
-            },
+            (
+                "one_failed",
+                RunStats {
+                    initial_run_count: 20,
+                    finished_count: 1,
+                    failed: 1,
+                    ..RunStats::default()
+                },
+            ),
+            (
+                "one_failed_one_passed",
+                RunStats {
+                    initial_run_count: 20,
+                    finished_count: 2,
+                    failed: 1,
+                    passed: 1,
+                    ..RunStats::default()
+                },
+            ),
+            (
+                "one_exec_failed",
+                RunStats {
+                    initial_run_count: 20,
+                    finished_count: 10,
+                    exec_failed: 1,
+                    ..RunStats::default()
+                },
+            ),
+            (
+                "one_timed_out",
+                RunStats {
+                    initial_run_count: 20,
+                    finished_count: 10,
+                    timed_out: 1,
+                    ..RunStats::default()
+                },
+            ),
         ]
     }
 
-    fn run_stats_setup_script_failure_examples() -> Vec<RunStats> {
+    fn run_stats_setup_script_failure_examples() -> Vec<(&'static str, RunStats)> {
         vec![
-            RunStats {
-                setup_scripts_failed: 1,
-                ..RunStats::default()
-            },
-            RunStats {
-                setup_scripts_exec_failed: 1,
-                ..RunStats::default()
-            },
-            RunStats {
-                setup_scripts_timed_out: 1,
-                ..RunStats::default()
-            },
+            (
+                "one_setup_script_failed",
+                RunStats {
+                    initial_run_count: 30,
+                    setup_scripts_failed: 1,
+                    ..RunStats::default()
+                },
+            ),
+            (
+                "one_setup_script_exec_failed",
+                RunStats {
+                    initial_run_count: 35,
+                    setup_scripts_exec_failed: 1,
+                    ..RunStats::default()
+                },
+            ),
+            (
+                "one_setup_script_timed_out",
+                RunStats {
+                    initial_run_count: 40,
+                    setup_scripts_timed_out: 1,
+                    ..RunStats::default()
+                },
+            ),
         ]
+    }
+
+    #[test]
+    fn progress_str_snapshots() {
+        let mut styles = Styles::default();
+        styles.colorize();
+
+        // This elapsed time is arbitrary but reasonably large.
+        let elapsed = Duration::from_secs(123456);
+        let running = 10;
+
+        for (name, stats) in run_stats_test_failure_examples() {
+            let s = progress_str(
+                elapsed,
+                &stats,
+                running,
+                Some(CancelReason::TestFailure),
+                &styles,
+            );
+            insta::assert_snapshot!(format!("{name}_with_cancel_reason"), s);
+
+            let s = progress_str(elapsed, &stats, running, None, &styles);
+            insta::assert_snapshot!(format!("{name}_without_cancel_reason"), s);
+        }
+
+        for (name, stats) in run_stats_setup_script_failure_examples() {
+            let s = progress_str(
+                elapsed,
+                &stats,
+                running,
+                Some(CancelReason::SetupScriptFailure),
+                &styles,
+            );
+            insta::assert_snapshot!(format!("{name}_with_cancel_reason"), s);
+
+            let s = progress_str(elapsed, &stats, running, None, &styles);
+            insta::assert_snapshot!(format!("{name}_without_cancel_reason"), s);
+        }
     }
 
     #[test]

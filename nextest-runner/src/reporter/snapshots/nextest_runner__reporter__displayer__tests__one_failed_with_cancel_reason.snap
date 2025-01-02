@@ -1,0 +1,6 @@
+---
+source: nextest-runner/src/reporter/displayer.rs
+expression: s
+snapshot_kind: text
+---
+[31;1m  Cancelling[0m [ 34:17:36] 1/20: [1m10[0m running, [1m0[0m [32;1mpassed[0m, [1m1[0m [31;1mfailed[0m, [1m0[0m [33;1mskipped[0m

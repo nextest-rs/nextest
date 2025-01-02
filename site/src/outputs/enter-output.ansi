@@ -1,0 +1,4 @@
+[32;1m        PASS[0m [   0.749s] [35;1mintegration-tests::integration[0m [34;1mtest_target_arg[0m
+(Enter pressed)
+[32;1m     Running[0m [ 00:00:02] 293/296: [1m3[0m running, [1m293[0m [32;1mpassed[0m, [1m1[0m [33;1mskipped[0m
+[32;1m        PASS[0m [   2.160s] [35;1mnextest-runner::integration[0m [36mbasic[0m[36m::[0m[34;1mtest_termination[0m
