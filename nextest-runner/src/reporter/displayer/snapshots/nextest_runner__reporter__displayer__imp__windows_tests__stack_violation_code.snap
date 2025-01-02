@@ -1,5 +1,5 @@
 ---
-source: nextest-runner/src/reporter/displayer.rs
+source: nextest-runner/src/reporter/displayer/imp.rs
 expression: "to_message_line(AbortStatus::WindowsNtStatus(STATUS_CONTROL_STACK_VIOLATION))"
 snapshot_kind: text
 ---

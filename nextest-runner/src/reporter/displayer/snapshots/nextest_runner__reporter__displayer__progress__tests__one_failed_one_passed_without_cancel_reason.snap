@@ -1,5 +1,5 @@
 ---
-source: nextest-runner/src/reporter/displayer.rs
+source: nextest-runner/src/reporter/displayer/progress.rs
 expression: s
 snapshot_kind: text
 ---
