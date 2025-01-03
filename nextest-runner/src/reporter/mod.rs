@@ -10,8 +10,10 @@ mod displayer;
 mod error_description;
 pub mod events;
 mod helpers;
+mod imp;
 pub mod structured;
 
-pub use displayer::*;
+pub use displayer::TestOutputDisplay;
 pub use error_description::*;
 pub use helpers::highlight_end;
+pub use imp::*;

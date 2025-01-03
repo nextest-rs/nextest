@@ -8,5 +8,5 @@ mod imp;
 mod progress;
 mod unit_output;
 
-pub use imp::*;
+pub(crate) use imp::*;
 pub use unit_output::*;
