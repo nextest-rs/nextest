@@ -7,7 +7,7 @@
 
 use super::{
     displayer::{DisplayReporter, DisplayReporterBuilder, StatusLevels},
-    TestOutputDisplay,
+    FinalStatusLevel, StatusLevel, TestOutputDisplay,
 };
 use crate::{
     config::EvaluatableProfile,
@@ -15,79 +15,6 @@ use crate::{
     list::TestList,
     reporter::{aggregator::EventAggregator, events::*, structured::StructuredReporter},
 };
-use serde::Deserialize;
-
-/// Status level to show in the reporter output.
-///
-/// Status levels are incremental: each level causes all the statuses listed above it to be output. For example,
-/// [`Slow`](Self::Slow) implies [`Retry`](Self::Retry) and [`Fail`](Self::Fail).
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
-#[cfg_attr(test, derive(test_strategy::Arbitrary))]
-#[serde(rename_all = "kebab-case")]
-#[non_exhaustive]
-pub enum StatusLevel {
-    /// No output.
-    None,
-
-    /// Only output test failures.
-    Fail,
-
-    /// Output retries and failures.
-    Retry,
-
-    /// Output information about slow tests, and all variants above.
-    Slow,
-
-    /// Output information about leaky tests, and all variants above.
-    Leak,
-
-    /// Output passing tests in addition to all variants above.
-    Pass,
-
-    /// Output skipped tests in addition to all variants above.
-    Skip,
-
-    /// Currently has the same meaning as [`Skip`](Self::Skip).
-    All,
-}
-
-/// Status level to show at the end of test runs in the reporter output.
-///
-/// Status levels are incremental.
-///
-/// This differs from [`StatusLevel`] in two ways:
-/// * It has a "flaky" test indicator that's different from "retry" (though "retry" works as an alias.)
-/// * It has a different ordering: skipped tests are prioritized over passing ones.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
-#[cfg_attr(test, derive(test_strategy::Arbitrary))]
-#[serde(rename_all = "kebab-case")]
-#[non_exhaustive]
-pub enum FinalStatusLevel {
-    /// No output.
-    None,
-
-    /// Only output test failures.
-    Fail,
-
-    /// Output flaky tests.
-    #[serde(alias = "retry")]
-    Flaky,
-
-    /// Output information about slow tests, and all variants above.
-    Slow,
-
-    /// Output skipped tests in addition to all variants above.
-    Skip,
-
-    /// Output leaky tests in addition to all variants above.
-    Leak,
-
-    /// Output passing tests in addition to all variants above.
-    Pass,
-
-    /// Currently has the same meaning as [`Pass`](Self::Pass).
-    All,
-}
 
 /// Standard error destination for the reporter.
 ///
