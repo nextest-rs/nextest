@@ -3,7 +3,7 @@
 
 //! Report the results of a test run in human and machine-readable formats.
 //!
-//! The main type here is [`TestReporter`], which is constructed via a [`TestReporterBuilder`].
+//! The main type here is [`Reporter`], which is constructed via a [`ReporterBuilder`].
 
 mod aggregator;
 mod displayer;

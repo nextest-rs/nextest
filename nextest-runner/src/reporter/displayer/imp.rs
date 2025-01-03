@@ -111,7 +111,7 @@ impl DisplayReporterBuilder {
         };
 
         DisplayReporter {
-            inner: TestReporterImpl {
+            inner: DisplayReporterImpl {
                 default_filter: self.default_filter,
                 status_levels: StatusLevels {
                     status_level,
@@ -132,7 +132,7 @@ impl DisplayReporterBuilder {
 /// Functionality to report test results to stderr, JUnit, and/or structured,
 /// machine-readable results to stdout
 pub(crate) struct DisplayReporter<'a> {
-    inner: TestReporterImpl<'a>,
+    inner: DisplayReporterImpl<'a>,
     stderr: ReporterStderrImpl<'a>,
 }
 
@@ -207,7 +207,7 @@ impl FinalOutput {
     }
 }
 
-struct TestReporterImpl<'a> {
+struct DisplayReporterImpl<'a> {
     default_filter: CompiledDefaultFilter,
     status_levels: StatusLevels,
     no_capture: bool,
@@ -218,7 +218,7 @@ struct TestReporterImpl<'a> {
     final_outputs: DebugIgnore<Vec<(TestInstance<'a>, FinalOutput)>>,
 }
 
-impl<'a> TestReporterImpl<'a> {
+impl<'a> DisplayReporterImpl<'a> {
     fn write_event_impl(
         &mut self,
         event: &TestEvent<'a>,
