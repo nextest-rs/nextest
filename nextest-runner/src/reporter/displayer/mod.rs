@@ -6,5 +6,7 @@
 mod duration;
 mod imp;
 mod progress;
+mod unit_output;
 
 pub use imp::*;
+pub use unit_output::*;
