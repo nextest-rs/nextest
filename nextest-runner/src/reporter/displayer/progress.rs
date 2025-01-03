@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::reporter::{displayer::duration::DisplayBracketedHhMmSs, events::*, helpers::Styles};
+use crate::reporter::{displayer::formatters::DisplayBracketedHhMmSs, events::*, helpers::Styles};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use owo_colors::OwoColorize;
 use std::{
