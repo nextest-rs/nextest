@@ -395,8 +395,7 @@ impl<'a> TestReporter<'a> {
                     .map_err(WriteEventError::Io)?;
 
                 state.update_progress_bar(&event, &self.inner.styles);
-                // XXX: we should return an error here rather than eating it
-                _ = state.write_buf(&buf);
+                state.write_buf(&buf).map_err(WriteEventError::Io)?;
             }
             ReporterStderrImpl::TerminalWithoutBar => {
                 // Write to a buffered stderr.
