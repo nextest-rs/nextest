@@ -3,7 +3,7 @@
 
 //! The displayer for human-friendly output.
 
-mod duration;
+mod formatters;
 mod imp;
 mod progress;
 mod unit_output;
