@@ -19,8 +19,8 @@ use std::{collections::BTreeMap, fmt, process::ExitStatus, time::Duration};
 
 /// A test event.
 ///
-/// Events are produced by a [`TestRunner`](crate::runner::TestRunner) and consumed by a
-/// [`TestReporter`](crate::reporter::TestReporter).
+/// Events are produced by a [`TestRunner`](crate::runner::TestRunner) and
+/// consumed by a [`Reporter`](crate::reporter::Reporter).
 #[derive(Clone, Debug)]
 pub struct TestEvent<'a> {
     /// The time at which the event was generated, including the offset from UTC.

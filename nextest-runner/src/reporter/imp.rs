@@ -31,7 +31,7 @@ pub enum ReporterStderr<'a> {
 
 /// Test reporter builder.
 #[derive(Debug, Default)]
-pub struct TestReporterBuilder {
+pub struct ReporterBuilder {
     no_capture: bool,
     should_colorize: bool,
     failure_output: Option<TestOutputDisplay>,
@@ -43,7 +43,7 @@ pub struct TestReporterBuilder {
     hide_progress_bar: bool,
 }
 
-impl TestReporterBuilder {
+impl ReporterBuilder {
     /// Sets no-capture mode.
     ///
     /// In this mode, `failure_output` and `success_output` will be ignored, and `status_level`
@@ -97,7 +97,7 @@ impl TestReporterBuilder {
     }
 }
 
-impl TestReporterBuilder {
+impl ReporterBuilder {
     /// Creates a new test reporter.
     pub fn build<'a>(
         &self,
@@ -105,7 +105,7 @@ impl TestReporterBuilder {
         profile: &EvaluatableProfile<'a>,
         output: ReporterStderr<'a>,
         structured_reporter: StructuredReporter<'a>,
-    ) -> TestReporter<'a> {
+    ) -> Reporter<'a> {
         let aggregator = EventAggregator::new(profile);
 
         let status_level = self.status_level.unwrap_or_else(|| profile.status_level());
@@ -128,7 +128,7 @@ impl TestReporterBuilder {
         }
         .build(output);
 
-        TestReporter {
+        Reporter {
             display_reporter,
             structured_reporter,
             metadata_reporter: aggregator,
@@ -137,8 +137,8 @@ impl TestReporterBuilder {
 }
 
 /// Functionality to report test results to stderr, JUnit, and/or structured,
-/// machine-readable results to stdout
-pub struct TestReporter<'a> {
+/// machine-readable results to stdout.
+pub struct Reporter<'a> {
     /// Used to display results to standard error.
     display_reporter: DisplayReporter<'a>,
     /// Used to aggregate events for JUnit reports written to disk
@@ -147,7 +147,7 @@ pub struct TestReporter<'a> {
     structured_reporter: StructuredReporter<'a>,
 }
 
-impl<'a> TestReporter<'a> {
+impl<'a> Reporter<'a> {
     /// Report a test event.
     pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
         self.write_event(event)

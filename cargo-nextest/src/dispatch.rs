@@ -32,8 +32,8 @@ use nextest_runner::{
     redact::Redactor,
     reporter::{
         events::{FinalRunStats, RunStatsFailureKind},
-        highlight_end, structured, FinalStatusLevel, StatusLevel, TestOutputDisplay,
-        TestOutputErrorSlice, TestReporterBuilder,
+        highlight_end, structured, FinalStatusLevel, ReporterBuilder, StatusLevel,
+        TestOutputDisplay, TestOutputErrorSlice,
     },
     reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
     runner::{configure_handle_inheritance, TestRunnerBuilder},
@@ -480,7 +480,7 @@ struct RunOpts {
     no_capture: bool,
 
     #[clap(flatten)]
-    reporter_opts: TestReporterOpts,
+    reporter_opts: ReporterOpts,
 
     #[clap(flatten)]
     reuse_build: ReuseBuildOpts,
@@ -942,7 +942,7 @@ enum MessageFormat {
 
 #[derive(Debug, Default, Args)]
 #[command(next_help_heading = "Reporter options")]
-struct TestReporterOpts {
+struct ReporterOpts {
     /// Output stdout and stderr on failure
     #[arg(
         long,
@@ -1021,9 +1021,9 @@ struct TestReporterOpts {
     message_format_version: Option<String>,
 }
 
-impl TestReporterOpts {
-    fn to_builder(&self, no_capture: bool, should_colorize: bool) -> TestReporterBuilder {
-        let mut builder = TestReporterBuilder::default();
+impl ReporterOpts {
+    fn to_builder(&self, no_capture: bool, should_colorize: bool) -> ReporterBuilder {
+        let mut builder = ReporterBuilder::default();
         builder.set_no_capture(no_capture);
         builder.set_colorize(should_colorize);
 
@@ -1720,7 +1720,7 @@ impl App {
         &self,
         no_capture: bool,
         runner_opts: &TestRunnerOpts,
-        reporter_opts: &TestReporterOpts,
+        reporter_opts: &ReporterOpts,
         cli_args: Vec<String>,
         output_writer: &mut OutputWriter,
     ) -> Result<i32> {
