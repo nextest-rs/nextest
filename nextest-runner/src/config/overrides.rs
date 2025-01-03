@@ -364,7 +364,7 @@ pub struct CompiledDefaultFilter {
 }
 
 impl CompiledDefaultFilter {
-    fn for_default_config() -> Self {
+    pub(crate) fn for_default_config() -> Self {
         Self {
             expr: CompiledExpr::ALL,
             profile: NextestConfig::DEFAULT_PROFILE.to_owned(),

@@ -15,216 +15,50 @@ use super::{
     ChildOutputSpec, UnitOutputReporter,
 };
 use crate::{
-    config::{CompiledDefaultFilter, EvaluatableProfile, ScriptId},
+    config::{CompiledDefaultFilter, ScriptId},
     errors::WriteEventError,
     helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
-    list::{TestInstance, TestInstanceId, TestList},
+    list::{TestInstance, TestInstanceId},
     reporter::{
-        aggregator::EventAggregator, events::*, helpers::Styles, structured::StructuredReporter,
+        events::*,
+        helpers::Styles,
+        imp::{FinalStatusLevel, ReporterStderr, StatusLevel},
     },
 };
 use debug_ignore::DebugIgnore;
 use indent_write::io::IndentWriter;
 use nextest_metadata::MismatchReason;
 use owo_colors::{OwoColorize, Style};
-use serde::Deserialize;
 use std::{
     borrow::Cow,
     cmp::Reverse,
-    fmt,
     io::{self, BufWriter, Write},
     time::Duration,
 };
 use swrite::{swrite, SWrite};
 
-/// Status level to show in the reporter output.
-///
-/// Status levels are incremental: each level causes all the statuses listed above it to be output. For example,
-/// [`Slow`](Self::Slow) implies [`Retry`](Self::Retry) and [`Fail`](Self::Fail).
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
-#[cfg_attr(test, derive(test_strategy::Arbitrary))]
-#[serde(rename_all = "kebab-case")]
-#[non_exhaustive]
-pub enum StatusLevel {
-    /// No output.
-    None,
-
-    /// Only output test failures.
-    Fail,
-
-    /// Output retries and failures.
-    Retry,
-
-    /// Output information about slow tests, and all variants above.
-    Slow,
-
-    /// Output information about leaky tests, and all variants above.
-    Leak,
-
-    /// Output passing tests in addition to all variants above.
-    Pass,
-
-    /// Output skipped tests in addition to all variants above.
-    Skip,
-
-    /// Currently has the same meaning as [`Skip`](Self::Skip).
-    All,
+pub(crate) struct DisplayReporterBuilder {
+    pub(crate) default_filter: CompiledDefaultFilter,
+    pub(crate) status_levels: StatusLevels,
+    pub(crate) test_count: usize,
+    pub(crate) success_output: Option<TestOutputDisplay>,
+    pub(crate) failure_output: Option<TestOutputDisplay>,
+    pub(crate) should_colorize: bool,
+    pub(crate) no_capture: bool,
+    pub(crate) hide_progress_bar: bool,
 }
 
-/// Status level to show at the end of test runs in the reporter output.
-///
-/// Status levels are incremental.
-///
-/// This differs from [`StatusLevel`] in two ways:
-/// * It has a "flaky" test indicator that's different from "retry" (though "retry" works as an alias.)
-/// * It has a different ordering: skipped tests are prioritized over passing ones.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize)]
-#[cfg_attr(test, derive(test_strategy::Arbitrary))]
-#[serde(rename_all = "kebab-case")]
-#[non_exhaustive]
-pub enum FinalStatusLevel {
-    /// No output.
-    None,
-
-    /// Only output test failures.
-    Fail,
-
-    /// Output flaky tests.
-    #[serde(alias = "retry")]
-    Flaky,
-
-    /// Output information about slow tests, and all variants above.
-    Slow,
-
-    /// Output skipped tests in addition to all variants above.
-    Skip,
-
-    /// Output leaky tests in addition to all variants above.
-    Leak,
-
-    /// Output passing tests in addition to all variants above.
-    Pass,
-
-    /// Currently has the same meaning as [`Pass`](Self::Pass).
-    All,
-}
-
-/// Standard error destination for the reporter.
-///
-/// This is usually a terminal, but can be an in-memory buffer for tests.
-pub enum ReporterStderr<'a> {
-    /// Produce output on the (possibly piped) terminal.
-    ///
-    /// If the terminal isn't piped, produce output to a progress bar.
-    Terminal,
-
-    /// Write output to a buffer.
-    Buffer(&'a mut Vec<u8>),
-}
-
-/// Test reporter builder.
-#[derive(Debug, Default)]
-pub struct TestReporterBuilder {
-    no_capture: bool,
-    should_colorize: bool,
-    failure_output: Option<TestOutputDisplay>,
-    success_output: Option<TestOutputDisplay>,
-    status_level: Option<StatusLevel>,
-    final_status_level: Option<FinalStatusLevel>,
-
-    verbose: bool,
-    hide_progress_bar: bool,
-}
-
-impl TestReporterBuilder {
-    /// Sets no-capture mode.
-    ///
-    /// In this mode, `failure_output` and `success_output` will be ignored, and `status_level`
-    /// will be at least [`StatusLevel::Pass`].
-    pub fn set_no_capture(&mut self, no_capture: bool) -> &mut Self {
-        self.no_capture = no_capture;
-        self
-    }
-
-    /// Set to true if the reporter should colorize output.
-    pub fn set_colorize(&mut self, should_colorize: bool) -> &mut Self {
-        self.should_colorize = should_colorize;
-        self
-    }
-
-    /// Sets the conditions under which test failures are output.
-    pub fn set_failure_output(&mut self, failure_output: TestOutputDisplay) -> &mut Self {
-        self.failure_output = Some(failure_output);
-        self
-    }
-
-    /// Sets the conditions under which test successes are output.
-    pub fn set_success_output(&mut self, success_output: TestOutputDisplay) -> &mut Self {
-        self.success_output = Some(success_output);
-        self
-    }
-
-    /// Sets the kinds of statuses to output.
-    pub fn set_status_level(&mut self, status_level: StatusLevel) -> &mut Self {
-        self.status_level = Some(status_level);
-        self
-    }
-
-    /// Sets the kinds of statuses to output at the end of the run.
-    pub fn set_final_status_level(&mut self, final_status_level: FinalStatusLevel) -> &mut Self {
-        self.final_status_level = Some(final_status_level);
-        self
-    }
-
-    /// Sets verbose output.
-    pub fn set_verbose(&mut self, verbose: bool) -> &mut Self {
-        self.verbose = verbose;
-        self
-    }
-
-    /// Sets visibility of the progress bar.
-    /// The progress bar is also hidden if `no_capture` is set.
-    pub fn set_hide_progress_bar(&mut self, hide_progress_bar: bool) -> &mut Self {
-        self.hide_progress_bar = hide_progress_bar;
-        self
-    }
-}
-
-impl TestReporterBuilder {
-    /// Creates a new test reporter.
-    pub fn build<'a>(
-        &self,
-        test_list: &TestList,
-        profile: &EvaluatableProfile<'a>,
-        output: ReporterStderr<'a>,
-        structured_reporter: StructuredReporter<'a>,
-    ) -> TestReporter<'a> {
+impl DisplayReporterBuilder {
+    pub(crate) fn build(self, output: ReporterStderr<'_>) -> DisplayReporter<'_> {
         let mut styles: Box<Styles> = Box::default();
         if self.should_colorize {
             styles.colorize();
         }
 
-        let aggregator = EventAggregator::new(profile);
-
-        let status_level = self.status_level.unwrap_or_else(|| profile.status_level());
         let status_level = match self.no_capture {
             // In no-capture mode, the status level is treated as at least pass.
-            true => status_level.max(StatusLevel::Pass),
-            false => status_level,
-        };
-        let final_status_level = self
-            .final_status_level
-            .unwrap_or_else(|| profile.final_status_level());
-
-        // failure_output and success_output are meaningless if the runner isn't capturing any
-        // output.
-        let force_success_output = match self.no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.success_output,
-        };
-        let force_failure_output = match self.no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.failure_output,
+            true => self.status_levels.status_level.max(StatusLevel::Pass),
+            false => self.status_levels.status_level,
         };
 
         let mut theme_characters = ThemeCharacters::default();
@@ -262,31 +96,79 @@ impl TestReporterBuilder {
             }
 
             ReporterStderr::Terminal => {
-                let state =
-                    ProgressBarState::new(test_list.test_count(), theme_characters.progress_chars);
+                let state = ProgressBarState::new(self.test_count, theme_characters.progress_chars);
                 ReporterStderrImpl::TerminalWithBar { state }
             }
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
         };
 
-        TestReporter {
+        // failure_output and success_output are meaningless if the runner isn't capturing any
+        // output.
+        let force_success_output = match self.no_capture {
+            true => Some(TestOutputDisplay::Never),
+            false => self.success_output,
+        };
+        let force_failure_output = match self.no_capture {
+            true => Some(TestOutputDisplay::Never),
+            false => self.failure_output,
+        };
+
+        DisplayReporter {
             inner: TestReporterImpl {
-                default_filter: profile.default_filter().clone(),
+                default_filter: self.default_filter,
                 status_levels: StatusLevels {
                     status_level,
-                    final_status_level,
+                    final_status_level: self.status_levels.final_status_level,
                 },
                 no_capture: self.no_capture,
                 styles,
                 theme_characters,
                 cancel_status: None,
                 unit_output: UnitOutputReporter::new(force_success_output, force_failure_output),
-                final_outputs: DebugIgnore(vec![]),
+                final_outputs: DebugIgnore(Vec::new()),
             },
             stderr,
-            structured_reporter,
-            metadata_reporter: aggregator,
         }
+    }
+}
+
+/// Functionality to report test results to stderr, JUnit, and/or structured,
+/// machine-readable results to stdout
+pub(crate) struct DisplayReporter<'a> {
+    inner: TestReporterImpl<'a>,
+    stderr: ReporterStderrImpl<'a>,
+}
+
+impl<'a> DisplayReporter<'a> {
+    pub(crate) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
+        match &mut self.stderr {
+            ReporterStderrImpl::TerminalWithBar { state } => {
+                // Write to a string that will be printed as a log line.
+                let mut buf: Vec<u8> = Vec::new();
+                self.inner
+                    .write_event_impl(event, &mut buf)
+                    .map_err(WriteEventError::Io)?;
+
+                state.update_progress_bar(event, &self.inner.styles);
+                state.write_buf(&buf).map_err(WriteEventError::Io)
+            }
+            ReporterStderrImpl::TerminalWithoutBar => {
+                // Write to a buffered stderr.
+                let mut writer = BufWriter::new(std::io::stderr());
+                self.inner
+                    .write_event_impl(event, &mut writer)
+                    .map_err(WriteEventError::Io)?;
+                writer.flush().map_err(WriteEventError::Io)
+            }
+            ReporterStderrImpl::Buffer(buf) => self
+                .inner
+                .write_event_impl(event, *buf)
+                .map_err(WriteEventError::Io),
+        }
+    }
+
+    pub(crate) fn finish(&mut self) {
+        self.stderr.finish_and_clear_bar();
     }
 }
 
@@ -307,66 +189,6 @@ impl ReporterStderrImpl<'_> {
             }
             ReporterStderrImpl::TerminalWithoutBar | ReporterStderrImpl::Buffer(_) => {}
         }
-    }
-}
-
-/// Functionality to report test results to stderr, JUnit, and/or structured,
-/// machine-readable results to stdout
-pub struct TestReporter<'a> {
-    inner: TestReporterImpl<'a>,
-    stderr: ReporterStderrImpl<'a>,
-    /// Used to aggregate events for JUnit reports written to disk
-    metadata_reporter: EventAggregator<'a>,
-    /// Used to emit test events in machine-readable format(s) to stdout
-    structured_reporter: StructuredReporter<'a>,
-}
-
-impl<'a> TestReporter<'a> {
-    /// Report a test event.
-    pub fn report_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
-        self.write_event(event)
-    }
-
-    /// Mark the reporter done.
-    pub fn finish(&mut self) {
-        self.stderr.finish_and_clear_bar();
-    }
-
-    // ---
-    // Helper methods
-    // ---
-
-    /// Report this test event to the given writer.
-    fn write_event(&mut self, event: TestEvent<'a>) -> Result<(), WriteEventError> {
-        match &mut self.stderr {
-            ReporterStderrImpl::TerminalWithBar { state } => {
-                // Write to a string that will be printed as a log line.
-                let mut buf: Vec<u8> = Vec::new();
-                self.inner
-                    .write_event_impl(&event, &mut buf)
-                    .map_err(WriteEventError::Io)?;
-
-                state.update_progress_bar(&event, &self.inner.styles);
-                state.write_buf(&buf).map_err(WriteEventError::Io)?;
-            }
-            ReporterStderrImpl::TerminalWithoutBar => {
-                // Write to a buffered stderr.
-                let mut writer = BufWriter::new(std::io::stderr());
-                self.inner
-                    .write_event_impl(&event, &mut writer)
-                    .map_err(WriteEventError::Io)?;
-                writer.flush().map_err(WriteEventError::Io)?;
-            }
-            ReporterStderrImpl::Buffer(buf) => {
-                self.inner
-                    .write_event_impl(&event, *buf)
-                    .map_err(WriteEventError::Io)?;
-            }
-        }
-
-        self.structured_reporter.write_event(&event)?;
-        self.metadata_reporter.write_event(event)?;
-        Ok(())
     }
 }
 
@@ -1764,18 +1586,9 @@ impl<'a> TestReporterImpl<'a> {
     }
 }
 
-impl fmt::Debug for TestReporter<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("TestReporter")
-            .field("stdout", &"BufferWriter { .. }")
-            .field("stderr", &"BufferWriter { .. }")
-            .finish()
-    }
-}
-
-struct StatusLevels {
-    status_level: StatusLevel,
-    final_status_level: FinalStatusLevel,
+pub(crate) struct StatusLevels {
+    pub(crate) status_level: StatusLevel,
+    pub(crate) final_status_level: FinalStatusLevel,
 }
 
 impl StatusLevels {
@@ -1996,10 +1809,8 @@ fn decimal_char_width(n: usize) -> u32 {
 mod tests {
     use super::*;
     use crate::{
-        config::NextestConfig,
         errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
-        platform::BuildPlatforms,
-        reporter::{events::UnitTerminateReason, structured::StructuredReporter},
+        reporter::events::UnitTerminateReason,
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
@@ -2012,28 +1823,25 @@ mod tests {
     /// Creates a test reporter with default settings and calls the given function with it.
     ///
     /// Returns the output written to the reporter.
-    fn with_reporter<'a, F>(config: &'a NextestConfig, f: F, out: &'a mut Vec<u8>)
+    fn with_reporter<'a, F>(f: F, out: &'a mut Vec<u8>)
     where
-        F: FnOnce(TestReporter<'a>),
+        F: FnOnce(DisplayReporter<'a>),
     {
-        let mut builder = TestReporterBuilder::default();
-        builder
-            .set_no_capture(true)
-            .set_failure_output(TestOutputDisplay::Immediate)
-            .set_success_output(TestOutputDisplay::Immediate)
-            .set_status_level(StatusLevel::Fail);
-        let test_list = TestList::empty();
-        let profile = config.profile(NextestConfig::DEFAULT_PROFILE).unwrap();
-        let build_platforms = BuildPlatforms::new_with_no_target().unwrap();
-
+        let builder = DisplayReporterBuilder {
+            default_filter: CompiledDefaultFilter::for_default_config(),
+            status_levels: StatusLevels {
+                status_level: StatusLevel::Fail,
+                final_status_level: FinalStatusLevel::Fail,
+            },
+            test_count: 0,
+            success_output: Some(TestOutputDisplay::Immediate),
+            failure_output: Some(TestOutputDisplay::Immediate),
+            should_colorize: false,
+            no_capture: true,
+            hide_progress_bar: false,
+        };
         let output = ReporterStderr::Buffer(out);
-        let reporter = builder.build(
-            &test_list,
-            &profile.apply_build_platforms(&build_platforms),
-            output,
-            StructuredReporter::new(),
-        );
-
+        let reporter = builder.build(output);
         f(reporter);
     }
 
@@ -2299,15 +2107,13 @@ mod tests {
         let args = vec!["arg1".to_string(), "arg2".to_string()];
         let binary_id = RustBinaryId::new("my-binary-id");
 
-        let config = NextestConfig::default_config("/fake/dir");
         let mut out = Vec::new();
 
         with_reporter(
-            &config,
             |mut reporter| {
                 // Info started event.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoStarted {
@@ -2337,7 +2143,7 @@ mod tests {
 
                 // A basic setup script.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2367,7 +2173,7 @@ mod tests {
                 // A setup script with a slow warning, combined output, and an
                 // execution failure.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2396,7 +2202,7 @@ mod tests {
 
                 // A setup script that's terminating and has multiple errors.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2437,7 +2243,7 @@ mod tests {
                 // (this is not a real situation but we're just testing out
                 // various cases).
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2468,7 +2274,7 @@ mod tests {
 
                 // A setup script that has exited.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2496,7 +2302,7 @@ mod tests {
 
                 // A test is running.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2524,7 +2330,7 @@ mod tests {
 
                 // A test is being terminated due to a timeout.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2555,7 +2361,7 @@ mod tests {
 
                 // A test is exiting.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2586,7 +2392,7 @@ mod tests {
 
                 // A test has exited.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2620,7 +2426,7 @@ mod tests {
 
                 // Delay before next attempt.
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoResponse {
@@ -2661,7 +2467,7 @@ mod tests {
                     .unwrap();
 
                 reporter
-                    .write_event(TestEvent {
+                    .write_event(&TestEvent {
                         timestamp: Local::now().into(),
                         elapsed: Duration::ZERO,
                         kind: TestEventKind::InfoFinished { missing: 2 },
@@ -2725,12 +2531,9 @@ mod tests {
     #[test]
     fn no_capture_settings() {
         // Ensure that output settings are ignored with no-capture.
-
-        let config = NextestConfig::default_config("/fake/dir");
         let mut out = Vec::new();
 
         with_reporter(
-            &config,
             |reporter| {
                 assert!(reporter.inner.no_capture, "no_capture is true");
                 assert_eq!(
