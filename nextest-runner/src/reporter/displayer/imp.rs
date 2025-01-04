@@ -187,6 +187,14 @@ impl ReporterStderrImpl<'_> {
             ReporterStderrImpl::TerminalWithoutBar | ReporterStderrImpl::Buffer(_) => {}
         }
     }
+
+    #[cfg(test)]
+    fn buf_mut(&mut self) -> Option<&mut Vec<u8>> {
+        match self {
+            Self::Buffer(buf) => Some(buf),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -761,7 +769,7 @@ impl<'a> DisplayReporterImpl<'a> {
                                 let last_status = run_statuses.last_status();
 
                                 self.write_final_status_line(
-                                    *test_instance,
+                                    test_instance.id(),
                                     run_statuses.describe(),
                                     writer,
                                 )?;
@@ -902,7 +910,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
     fn write_final_status_line(
         &self,
-        test_instance: TestInstance<'a>,
+        test_instance: TestInstanceId<'a>,
         describe: ExecutionDescription<'_>,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
@@ -956,11 +964,11 @@ impl<'a> DisplayReporterImpl<'a> {
         };
 
         // Next, print the time taken and the name of the test.
-        write!(
+        writeln!(
             writer,
             "{}{}",
             DisplayBracketedDuration(last_status.time_taken),
-            self.display_test_instance(test_instance.id()),
+            self.display_test_instance(test_instance),
         )?;
 
         // On Windows, also print out the exception if available.
@@ -1753,6 +1761,88 @@ mod tests {
         let output = ReporterStderr::Buffer(out);
         let reporter = builder.build(output);
         f(reporter);
+    }
+
+    #[test]
+    fn final_status_line() {
+        let binary_id = RustBinaryId::new("my-binary-id");
+        let test_instance = TestInstanceId {
+            binary_id: &binary_id,
+            test_name: "test1",
+        };
+
+        let fail_result = ExecutionResult::Fail {
+            abort_status: None,
+            leaked: false,
+        };
+
+        let fail_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 1,
+                total_attempts: 2,
+            },
+            // output is not relevant here.
+            output: make_split_output(Some(fail_result), "", ""),
+            result: fail_result,
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(1),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+        };
+        let fail_describe = ExecutionDescription::Failure {
+            first_status: &fail_status,
+            last_status: &fail_status,
+            retries: &[],
+        };
+
+        let flaky_status = ExecuteStatus {
+            retry_data: RetryData {
+                attempt: 2,
+                total_attempts: 2,
+            },
+            // output is not relevant here.
+            output: make_split_output(Some(fail_result), "", ""),
+            result: ExecutionResult::Pass,
+            start_time: Local::now().into(),
+            time_taken: Duration::from_secs(2),
+            is_slow: false,
+            delay_before_start: Duration::ZERO,
+        };
+
+        // Make an `ExecutionStatuses` with a failure and a success, indicating flakiness.
+        let statuses = ExecutionStatuses::new(vec![fail_status.clone(), flaky_status]);
+        let flaky_describe = statuses.describe();
+
+        let mut out = Vec::new();
+
+        with_reporter(
+            |mut reporter| {
+                // TODO: write a bunch more outputs here.
+                reporter
+                    .inner
+                    .write_final_status_line(
+                        test_instance,
+                        fail_describe,
+                        reporter.stderr.buf_mut().unwrap(),
+                    )
+                    .unwrap();
+
+                reporter
+                    .inner
+                    .write_final_status_line(
+                        test_instance,
+                        flaky_describe,
+                        reporter.stderr.buf_mut().unwrap(),
+                    )
+                    .unwrap();
+            },
+            &mut out,
+        );
+
+        insta::assert_snapshot!(
+            "final_status_output",
+            String::from_utf8(out).expect("output only consists of UTF-8"),
+        );
     }
 
     // ---
