@@ -49,9 +49,11 @@ See [_Specifying rules_](index.md#specifying-rules).
 
 ## Pre-timeout script execution
 
-A given pre-timeout script _S_ is executed when the current profile has at least one rule where the `platform` predicates match the current execution environment, the script _S_ is listed in `pre-timeout`, and a test matching the `filter` has reached its configured timeout.
+A given pre-timeout script _S_ is a candidate for execution when the current profile has at least one rule where the `platform` predicates match the current execution environment, the script _S_ is listed in `pre-timeout`, and a test matching the `filter` _T_ has reached its configured timeout.
 
-Pre-timeout scripts are executed serially, in the order they are defined (_not_ the order they're specified in the rules). If any pre-timeout script exits with a non-zero exit code, an error is logged but the test run continues.
+Only the _first_ candidate pre-timeout script will be executed for each such _T_. Nextest orders execution candidates by their definition order (_not_ the order they're specified in the rules).
+
+If any pre-timeout script exits with a non-zero exit code, an error is logged but the test run continues.
 
 Nextest will proceed with graceful termination of the test only once the pre-timeout script terminates. See [_How nextest terminates tests_](#defining-pre-timeout-scripts). If the pre-timeout script itself is slow, nextest will apply the same termination protocol to the pre-timeout script.
 
