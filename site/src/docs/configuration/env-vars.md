@@ -165,6 +165,6 @@ Nextest sets the dynamic library path at runtime, similar to [what Cargo does](h
 
 Nextest includes the following paths:
 
-- Search paths included from any build script with the [`rustc-link-search` instruction](https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-link-search). Paths outside of the target directory are removed. If additional libraries on the system are needed in the search path, consider using a [setup script <!-- md:flag experimental -->](setup-scripts.md) to configure the environment.
+- Search paths included from any build script with the [`rustc-link-search` instruction](https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-link-search). Paths outside of the target directory are removed. If additional libraries on the system are needed in the search path, consider using a [setup script <!-- md:flag experimental -->](../scripts/setup.md) to configure the environment.
 - The base output directory, such as `target/debug`, and the "deps" directory. This enables support for `dylib` dependencies and rustc compiler plugins.
 - <!-- md:version 0.9.72 --> The rustc sysroot library path, to enable proc-macro tests and binaries compiled with `-C prefer-dynamic` to work.
