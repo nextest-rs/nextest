@@ -9,6 +9,7 @@ use super::{
     TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
+    config::ScriptType,
     errors::{
         provided_by_tool, ConfigParseError, ConfigParseErrorKind, ProfileNotFound,
         UnknownConfigScriptError, UnknownTestGroupError,
@@ -354,9 +355,20 @@ impl NextestConfig {
             ));
         }
 
-        // Check that setup scripts are named as expected.
-        let (valid_scripts, invalid_scripts): (BTreeSet<_>, _) =
-            this_config.scripts.setup.keys().cloned().partition(|script| {
+        if let Some(dup) = this_config.scripts.duplicate_ids().next() {
+            return Err(ConfigParseError::new(
+                config_file,
+                tool,
+                ConfigParseErrorKind::DuplicateConfigScriptName(dup.clone()),
+            ));
+        }
+
+        // Check that scripts are named as expected.
+        let (valid_scripts, invalid_scripts): (BTreeSet<_>, _) = this_config
+            .scripts
+            .all_script_ids()
+            .cloned()
+            .partition(|script| {
                 if let Some(tool) = tool {
                     // The first component must be the tool name.
                     script
@@ -368,10 +380,6 @@ impl NextestConfig {
                     !script.as_identifier().is_tool_identifier()
                 }
             });
-
-        // TODO: validate pre-timeout scripts.
-
-        // TODO: validate no overlap in names between setup and pre-timeout scripts.
 
         if !invalid_scripts.is_empty() {
             let kind = if tool.is_some() {
@@ -451,40 +459,69 @@ impl NextestConfig {
 
         // Check that scripts are known.
         let mut unknown_script_errors = Vec::new();
-        let mut check_script_ids = |profile_name: &str, scripts: &[ScriptId]| {
-            if !scripts.is_empty() && !experimental.contains(&ConfigExperimental::SetupScripts) {
-                return Err(ConfigParseError::new(
-                    config_file,
-                    tool,
-                    ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
-                        feature: ConfigExperimental::SetupScripts,
-                    },
-                ));
-            }
-            for script in scripts {
-                if !known_scripts.contains(script) {
-                    unknown_script_errors.push(UnknownConfigScriptError {
-                        profile_name: profile_name.to_owned(),
-                        name: script.clone(),
-                    });
+        let mut check_script_ids =
+            |profile_name: &str, script_type: ScriptType, scripts: &[ScriptId]| {
+                let config_feature = match script_type {
+                    ScriptType::Setup => ConfigExperimental::SetupScripts,
+                    ScriptType::PreTimeout => ConfigExperimental::PreTimeoutScripts,
+                };
+                if !scripts.is_empty() && !experimental.contains(&config_feature) {
+                    return Err(ConfigParseError::new(
+                        config_file,
+                        tool,
+                        ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
+                            feature: config_feature,
+                        },
+                    ));
                 }
-            }
+                for script in scripts {
+                    if !known_scripts.contains(script) {
+                        unknown_script_errors.push(UnknownConfigScriptError {
+                            profile_name: profile_name.to_owned(),
+                            name: script.clone(),
+                        });
+                    }
+                    let actual_script_type = this_config.scripts.script_type(script);
+                    if actual_script_type != script_type {
+                        return Err(ConfigParseError::new(
+                            config_file,
+                            tool,
+                            ConfigParseErrorKind::WrongConfigScriptType {
+                                script: script.clone(),
+                                attempted: script_type,
+                                actual: actual_script_type,
+                            },
+                        ));
+                    }
+                }
 
-            Ok(())
-        };
+                Ok(())
+            };
 
         this_compiled
             .default
             .scripts
             .iter()
-            .try_for_each(|scripts| check_script_ids("default", &scripts.setup))?;
+            .try_for_each(|scripts| {
+                check_script_ids("default", ScriptType::Setup, &scripts.setup)?;
+                check_script_ids(
+                    "default",
+                    ScriptType::PreTimeout,
+                    scripts.pre_timeout.as_slice(),
+                )
+            })?;
         this_compiled
             .other
             .iter()
             .try_for_each(|(profile_name, data)| {
-                data.scripts
-                    .iter()
-                    .try_for_each(|scripts| check_script_ids(profile_name, &scripts.setup))
+                data.scripts.iter().try_for_each(|scripts| {
+                    check_script_ids(profile_name, ScriptType::Setup, &scripts.setup)?;
+                    check_script_ids(
+                        profile_name,
+                        ScriptType::PreTimeout,
+                        scripts.pre_timeout.as_slice(),
+                    )
+                })
             })?;
 
         // If there were any unknown scripts, error out.
@@ -978,7 +1015,7 @@ impl DefaultProfileImpl {
         &self.overrides
     }
 
-    pub(super) fn setup_scripts(&self) -> &[DeserializedProfileScriptConfig] {
+    pub(super) fn scripts(&self) -> &[DeserializedProfileScriptConfig] {
         &self.scripts
     }
 }
@@ -1043,10 +1080,37 @@ impl CustomProfileImpl {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Scripts {
-    // This is ordered because setup scripts are used in the order they're defined.
+    // These maps are ordered because scripts are used in the order they're defined.
     setup: IndexMap<ScriptId, ScriptConfig>,
-    // This is not ordered because pre-timeout scripts follow different precedence rules.
-    pre_timeout: HashMap<ScriptId, ScriptConfig>,
+    pre_timeout: IndexMap<ScriptId, ScriptConfig>,
+}
+
+impl Scripts {
+    /// Determines the type of the script with the given ID.
+    ///
+    /// Panics if the ID is invalid.
+    fn script_type(&self, id: &ScriptId) -> ScriptType {
+        if self.setup.contains_key(id) {
+            ScriptType::Setup
+        } else if self.pre_timeout.contains_key(id) {
+            ScriptType::PreTimeout
+        } else {
+            panic!("Scripts::script_type called with invalid script ID: {id}")
+        }
+    }
+
+    /// Returns an iterator over the names of all scripts of all types.
+    fn all_script_ids(&self) -> impl Iterator<Item = &ScriptId> {
+        self.setup.keys().chain(self.pre_timeout.keys())
+    }
+
+    /// Returns an iterator over names that are used by more than one type of
+    /// script.
+    fn duplicate_ids(&self) -> impl Iterator<Item = &ScriptId> {
+        self.pre_timeout
+            .keys()
+            .filter(|k| self.setup.contains_key(*k))
+    }
 }
 
 #[cfg(test)]

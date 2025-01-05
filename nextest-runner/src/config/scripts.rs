@@ -246,6 +246,7 @@ impl<'profile> SetupScriptExecuteData<'profile> {
 #[derive(Clone, Debug)]
 pub(crate) struct CompiledProfileScripts<State> {
     pub(super) setup: Vec<ScriptId>,
+    pub(super) pre_timeout: Option<ScriptId>,
     pub(super) data: ProfileScriptData,
     state: State,
 }
@@ -289,6 +290,7 @@ impl CompiledProfileScripts<PreBuildPlatform> {
         match (host_spec, target_spec, filter_expr) {
             (Ok(host_spec), Ok(target_spec), Ok(expr)) => Some(Self {
                 setup: source.setup.clone(),
+                pre_timeout: source.pre_timeout.clone(),
                 data: ProfileScriptData {
                     host_spec,
                     target_spec,
@@ -330,6 +332,7 @@ impl CompiledProfileScripts<PreBuildPlatform> {
 
         CompiledProfileScripts {
             setup: self.setup,
+            pre_timeout: self.pre_timeout,
             data: self.data,
             state: FinalConfig {
                 host_eval,
@@ -399,6 +402,21 @@ impl fmt::Display for ScriptId {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub enum ScriptType {
+    Setup,
+    PreTimeout,
+}
+
+impl fmt::Display for ScriptType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ScriptType::Setup => f.write_str("setup"),
+            ScriptType::PreTimeout => f.write_str("pre-timeout"),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct ProfileScriptData {
     host_spec: MaybeTargetSpec,
@@ -421,6 +439,9 @@ pub(super) struct DeserializedProfileScriptConfig {
     /// The setup script or scripts to run.
     #[serde(deserialize_with = "deserialize_script_ids")]
     setup: Vec<ScriptId>,
+
+    /// The pre-timeout script to run.
+    pre_timeout: Option<ScriptId>,
 }
 
 /// Deserialized form of script configuration before compilation.

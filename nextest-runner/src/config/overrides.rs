@@ -295,7 +295,7 @@ impl CompiledByProfile {
             "default",
             Some(config.default_profile().default_filter()),
             config.default_profile().overrides(),
-            config.default_profile().setup_scripts(),
+            config.default_profile().scripts(),
             &mut errors,
         );
         let other: HashMap<_, _> = config

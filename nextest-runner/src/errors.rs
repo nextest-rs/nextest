@@ -5,7 +5,7 @@
 
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
-    config::{ConfigExperimental, CustomTestGroup, ScriptId, TestGroup},
+    config::{ConfigExperimental, CustomTestGroup, ScriptId, ScriptType, TestGroup},
     helpers::{display_exited_with, dylib_path_envvar},
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
@@ -124,6 +124,21 @@ pub enum ConfigParseErrorKind {
     #[error(
         "invalid config scripts defined by tool: {}\n(config scripts must start with '@tool:<tool-name>:')", .0.iter().join(", "))]
     InvalidConfigScriptsDefinedByTool(BTreeSet<ScriptId>),
+    /// The same config script name was used across config script types.
+    #[error("config script name used more than once: {0}\n(config script names must be unique across all script types)")]
+    DuplicateConfigScriptName(ScriptId),
+    /// The same config script name was used across config script types.
+    #[error("cannot use config script as a {attempted} script: {script}\n(config script is a {actual} script)")]
+    WrongConfigScriptType {
+        /// The name of the config script.
+        script: ScriptId,
+
+        /// The script type that the user attempted to use the script as.
+        attempted: ScriptType,
+
+        /// The actual script type.
+        actual: ScriptType,
+    },
     /// Some config scripts were unknown.
     #[error(
         "unknown config scripts specified by config (destructure this variant for more details)"
