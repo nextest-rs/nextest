@@ -232,11 +232,13 @@ impl NextestVersionConfig {
 pub enum ConfigExperimental {
     /// Enable support for setup scripts.
     SetupScripts,
+    /// Enable support for pre-timeout scripts.
+    PreTimeoutScripts,
 }
 
 impl ConfigExperimental {
     fn known() -> impl Iterator<Item = Self> {
-        vec![Self::SetupScripts].into_iter()
+        vec![Self::SetupScripts, Self::PreTimeoutScripts].into_iter()
     }
 }
 
@@ -246,6 +248,7 @@ impl FromStr for ConfigExperimental {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "setup-scripts" => Ok(Self::SetupScripts),
+            "pre-timeout-scripts" => Ok(Self::PreTimeoutScripts),
             _ => Err(()),
         }
     }
@@ -255,6 +258,7 @@ impl fmt::Display for ConfigExperimental {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::SetupScripts => write!(f, "setup-scripts"),
+            Self::PreTimeoutScripts => write!(f, "pre-timeout-scripts"),
         }
     }
 }

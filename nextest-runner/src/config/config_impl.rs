@@ -328,8 +328,8 @@ impl NextestConfig {
 
         known_groups.extend(valid_groups);
 
-        // If scripts are present, check that the experimental feature is enabled.
-        if !this_config.scripts.is_empty()
+        // If setup scripts are present, check that the experimental feature is enabled.
+        if !this_config.scripts.setup.is_empty()
             && !experimental.contains(&ConfigExperimental::SetupScripts)
         {
             return Err(ConfigParseError::new(
@@ -341,9 +341,22 @@ impl NextestConfig {
             ));
         }
 
+        // If pre-timeout scripts are present, check that the experimental feature is enabled.
+        if !this_config.scripts.pre_timeout.is_empty()
+            && !experimental.contains(&ConfigExperimental::PreTimeoutScripts)
+        {
+            return Err(ConfigParseError::new(
+                config_file,
+                tool,
+                ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
+                    feature: ConfigExperimental::PreTimeoutScripts,
+                },
+            ));
+        }
+
         // Check that setup scripts are named as expected.
         let (valid_scripts, invalid_scripts): (BTreeSet<_>, _) =
-            this_config.scripts.keys().cloned().partition(|script| {
+            this_config.scripts.setup.keys().cloned().partition(|script| {
                 if let Some(tool) = tool {
                     // The first component must be the tool name.
                     script
@@ -355,6 +368,10 @@ impl NextestConfig {
                     !script.as_identifier().is_tool_identifier()
                 }
             });
+
+        // TODO: validate pre-timeout scripts.
+
+        // TODO: validate no overlap in names between setup and pre-timeout scripts.
 
         if !invalid_scripts.is_empty() {
             let kind = if tool.is_some() {
@@ -578,8 +595,7 @@ pub struct EarlyProfile<'cfg> {
     default_profile: &'cfg DefaultProfileImpl,
     custom_profile: Option<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
-    // This is ordered because the scripts are used in the order they're defined.
-    scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
+    scripts: &'cfg Scripts,
     // Invariant: `compiled_data.default_filter` is always present.
     pub(super) compiled_data: CompiledData<PreBuildPlatform>,
 }
@@ -646,7 +662,7 @@ pub struct EvaluatableProfile<'cfg> {
     custom_profile: Option<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
-    scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
+    scripts: &'cfg Scripts,
     // Invariant: `compiled_data.default_filter` is always present.
     pub(super) compiled_data: CompiledData<FinalConfig>,
     // The default filter that's been resolved after considering overrides (i.e.
@@ -684,7 +700,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns the global script configuration.
     pub fn script_config(&self) -> &'cfg IndexMap<ScriptId, ScriptConfig> {
-        self.scripts
+        &self.scripts.setup
     }
 
     /// Returns the retry count for this profile.
@@ -809,7 +825,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 pub(super) struct NextestConfigImpl {
     store: StoreConfigImpl,
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
-    scripts: IndexMap<ScriptId, ScriptConfig>,
+    scripts: Scripts,
     default_profile: DefaultProfileImpl,
     other_profiles: HashMap<String, CustomProfileImpl>,
 }
@@ -863,7 +879,7 @@ struct NextestConfigDeserialize {
     #[serde(default)]
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
     #[serde(default, rename = "script")]
-    scripts: IndexMap<ScriptId, ScriptConfig>,
+    scripts: Scripts,
     #[serde(rename = "profile")]
     profiles: HashMap<String, CustomProfileImpl>,
 }
@@ -1022,6 +1038,15 @@ impl CustomProfileImpl {
     pub(super) fn scripts(&self) -> &[DeserializedProfileScriptConfig] {
         &self.scripts
     }
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct Scripts {
+    // This is ordered because setup scripts are used in the order they're defined.
+    setup: IndexMap<ScriptId, ScriptConfig>,
+    // This is not ordered because pre-timeout scripts follow different precedence rules.
+    pre_timeout: HashMap<ScriptId, ScriptConfig>,
 }
 
 #[cfg(test)]
