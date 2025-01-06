@@ -91,7 +91,7 @@ num_threads = "0.1.7"
 once_cell = "1.20.2"
 owo-colors = "4.1.0"
 pathdiff = { version = "0.2.3", features = ["camino"] }
-pin-project-lite = "0.2.15"
+pin-project-lite = "0.2.16"
 pretty_assertions = "1.4.1"
 proptest = "1.6.0"
 quick-junit = "0.5.1"
