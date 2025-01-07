@@ -41,7 +41,7 @@ This game-theoretic lens provides fresh insight into the benefits of process-per
   * Tests that [must be run on the main thread](../configuration/extra-args.md) of their corresponding process, like tests against certain macOS frameworks
   * Tests that require altering environment variables or other global context
 
-  Even if particular tests don't *require* per-test isolation, they may often *benefit* from it. For example, global in-memory state becomes separated per-test. (You may argue that global state isn't desirable, or should not be used for tests—but instead, think of per-test isolation as a principled, zero-coordination solution to this class of issues.)
+  Even if particular tests don't *require* per-test isolation, they may often *benefit* from it. For example, singletons become separated per-test. (You may argue that singletons aren't desirable, or should not be used for tests—but instead, think of per-test isolation as a principled, zero-coordination solution to this class of issues.)
 
 * **Internal memory handling doesn't need to be coordinated across tests.** Memory corruption in one test doesn't cause others to behave erratically. One test segfaulting does not take down a bunch of other tests.
 
