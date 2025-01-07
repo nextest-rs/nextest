@@ -1,5 +1,6 @@
 ---
 icon: material/dns-outline
+description: Why nextest runs each test in its own process, explained via game theory.
 ---
 
 # Why process-per-test?
