@@ -36,6 +36,8 @@ A cargo-nextest run has two separate phases:
 
 This model solves all the problems of cargo test's execution model, at the cost of a _significantly_ thicker interface to test binaries. This means that **custom test harnesses [may need to be adapted](custom-test-harnesses.md) to work with cargo-nextest.**
 
+For more information about why nextest runs each test in its own process, see [*Why process-per-test?*](why-process-per-test.md)
+
 ## Contributing features back to cargo?
 
 Readers may be wondering if any of this work will be contributed back to cargo.
