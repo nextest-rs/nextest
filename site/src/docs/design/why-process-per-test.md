@@ -1,6 +1,6 @@
 ---
 icon: material/dns-outline
-description: Why nextest runs each test in its own process, explained via game theory.
+description: "Why nextest runs each test in its own process: a game-theoretic view."
 ---
 
 # Why process-per-test?
@@ -53,13 +53,15 @@ Process-per-test is not free, though. It's worth acknowledging some costs:
 
 * Another downside that's noticeable in some situations is process creation **performance**. Creating processes is very fast on Linux and most other Unix-like systems. It is quite slow on Windows, though, and it can be slow on macOS [if anti-malware protections are interfering](../installation/macos.md#gatekeeper).
 
+  How much this is an issue in practice depends on how long individual tests take to run. For many projects on Windows, nextest is overall faster than `cargo test` anyway because it [handles long-pole tests](how-it-works.md) better.
+
 ## The costs of coordination
 
 Process-per-test enables rich lifecycle management with zero coordination via universal OS primitives. What kinds of coordination would enable shared-process tests?
 
 Here's a partial list of operations that nextest performs using OS primitives:
 
-1. **Start a test.** In particular, start a test at a specific moment, and not before then; and also, do not start a test if it is filtered out or the run is cancelled. With a process-per-test model, this is natural: simply start the test process.
+1. **Start a test.** In particular, start a test at a specific moment, and not before then; and also, do not start a test if it is filtered out or the run is cancelled. With a process-per-test model, this is natural: start the test process.
 2. **Know when a test is done, as it's done.** With process-per-test, wait for the process to exit.
 3. **Measure test times.** Not just after a test is done, but while it is running. With process-per-test, use wall-clock time.
 4. **Terminate tests that timed out.** In particular, one test timing out should not cause others to be killed. With process-per-test, this is [solved](architecture/signal-handling.md) via signals on Unix and job objects on Windows.
@@ -75,11 +77,11 @@ Compare this to `cargo test`'s shared-process model. `cargo test` works by embed
 
 * If a test takes down the process, all of the other tests in the binary are effectively cancelled as well. In this case, getting a full accounting of all tests and what happened to them is extremely difficult. [JUnit reports](../machine-readable/junit.md) wouldn't be nearly as valuable if they were missing many tests!
 
-So, effective and robust management of tests in the shared-process model requires coordination between three entities:
+Effective and robust management of tests in a shared-process model requires coordination between three entities:
 
 * **The test runner:** There must be an overall orchestrator, and for robustness it must live in a separate process from any of the test binaries.
 * **A component within the test binary:** These requirements preclude any kind of one-shot model where the list of tests is provided upfront and run to completion. Instead, there must be an in-memory component that's dynamic and event-driven. There needs to be a rich, bidirectional communication protocol between the test runner and this component. (Simpler protocols like [the GNU make jobserver](https://docs.rs/jobserver) can do rate-limiting, but not cancellation, retries, or time measurement.)
-* **The test itself:** For test cancellation in particular, there must be some amount of cooperation from the test itself. Either the test needs to periodically check for a cancellation flag, or it must use async Rust that can be cancelled at the next await point. For more on why, see [the appendix](#appendix).
+* **The test itself:** For cancellation in particular, the test must cooperate. For more on why, see [the appendix](#appendix).
 
 This represents a *lot* of extra work! Not just the technical kind (though that is certainly quite involved), but also the coordination kind: building support for such a protocol and getting developers to adopt it. And it would still not solve every problem. (For example, segfaults would still take down the whole process.)
 
@@ -90,37 +92,36 @@ This represents a *lot* of extra work! Not just the technical kind (though that 
   <figcaption markdown="span">Big Ben, the most recognizable landmark in London. [Unsplash / Henry Be](https://unsplash.com/photos/big-ben-london-MdJq0zFUwrw)</figcaption>
 </figure>
 
-There are many technical benefits to the process-per-test model, but the biggest benefit is in (the lack of) coordination: the process-per-test model acts as a focal point that all participants can agree on by default. This is the key reason that nextest commits to the process-per-test model being the default in perpetuity.
+There are many technical benefits to the process-per-test model, but the biggest benefit is in (the lack of) coordination: the process-per-test model acts as a focal point that all participants can agree on by default. This is the key reason that nextest commits to this model being the default in perpetuity.
 
-Nevertheless, we're excited to see newer developments in this space, and will consider adopting newer patterns that can deliver feature-rich and reliable test running at scale like nextest does today.
+Nevertheless, we're excited to see developments in this space. We'll consider opt-ins for newer patterns that can deliver feature-rich and reliable test running at scale like nextest does today.
 
 ## Appendix: thread cancellation is hard { #appendix }
 
 Many nextest users rely on its ability to cancel running tests due to timeouts. This section talks about why terminating threads is much more difficult than terminating processes.
 
-With process-per-test, nextest sends a `SIGTERM` signal to the test process, and if it doesn't exit within 10 seconds, a `SIGKILL`.
+* With process-per-test, nextest sends a `SIGTERM` signal to the test process, and if it doesn't exit within 10 seconds, a `SIGKILL`.
+* With a shared-process model, assuming each test is in a separate thread, a timeout would require the thread to be killed rather than the process.
 
-With a shared-process model, assuming each test is in a separate thread, a timeout would require the thread to be killed rather than the process. Unlike processes, though, threads lack well-defined isolation, making their termination far more hazardous and unpredictable.
-
-For example, the Windows [`TerminateThread`][terminate-thread] function explicitly warns against ever using it:
+Unlike process termination, though, thread termination is inherently hazardous. The Windows [`TerminateThread`][terminate-thread] function explicitly warns against ever using it:
 
 > TerminateThread is a dangerous function that should only be used in the most extreme cases. You should call TerminateThread only if you know exactly what the target thread is doing, and you control all of the code that the target thread could possibly be running at the time of the termination.
 
-As an example, with `TerminateThread` and the equivalent POSIX [`pthread_cancel`](https://man7.org/linux/man-pages/man3/pthread_cancel.3.html), the behavior of synchronization primitives like `std::sync::Mutex` is undefined. Certainly, Rust mutexes will not be marked [poisoned](https://doc.rust-lang.org/beta/std/sync/struct.Mutex.html#poisoning). It's possible that mutexes are even held forever and never released. The usage of thread-killing operations would be devastating to test reliability.
+With `TerminateThread` and the POSIX equivalent, [`pthread_cancel`](https://man7.org/linux/man-pages/man3/pthread_cancel.3.html), the behavior of synchronization primitives like `std::sync::Mutex` is undefined. Certainly, Rust mutexes will not be marked [poisoned](https://doc.rust-lang.org/beta/std/sync/struct.Mutex.html#poisoning). It's possible (even likely) that mutexes are held forever and never released. Thread-killing operations would be devastating to test reliability.
 
-Practically speaking, the only reliable way to cancel synchronous Rust code is with some kind of cooperation from the test itself. This could mean the test checking a flag every so often, or by the test regularly calling into a library that panics with a special payload when it's time to cancel the test.
+Practically speaking, the only reliable way to cancel synchronous Rust code is with some kind of cooperation from the test itself. This could mean the test checking a flag every so often, or by the test regularly calling into a library that panics with a special payload on cancellation.
 
-With async Rust, cancellation is [somewhat easier](https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html#method.abort), because yield points are cancellation points. However, in an eerie similarity with `pthread_cancel`, Tokio mutexes are [*also* not marked poisoned](https://docs.rs/cancel-safe-futures/0.1/cancel_safe_futures/sync/struct.RobustMutex.html) on a task or future cancellation[^no-tokio-mutex].
+With async Rust, cancellation is [somewhat easier](https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html#method.abort), because yield points are cancellation points. However, in an eerie similarity with `pthread_cancel`, [Tokio mutexes](https://docs.rs/tokio/latest/tokio/sync/struct.Mutex.html) are [*also* not marked poisoned](https://docs.rs/cancel-safe-futures/0.1/cancel_safe_futures/sync/struct.RobustMutex.html) on a task or future cancellation[^no-tokio-mutex].
 
-It can be illuminating to work through why terminating processes is safe and routine, while terminating threads is dangerous.
+It can be illuminating to contrast process termination with thread termination:
 
 * Threads do not generally expect other threads to just disappear without warning, but processes are expected to sometimes exit abnormally.
 * Synchronization across processes is possible via functions like [`flock`][flock], but is often advisory and generally uncommon. Code that uses these tools is generally prepared to encounter protected data in an invalid state.
 * Cross-process mutexes are quite rare (message-passing is much more common), and shared-memory code is usually written with great care.
 
-These examples make clear how focal points manifest and perpetuate: we've all generally agreed that processes might behave in strange ways, but we assume that threads within our processes are going to behave reliably.
+These examples make clear how focal points manifest and perpetuate: we've all generally agreed that other processes might behave in strange ways, but we assume that other threads within our process are going to behave reliably.
 
-[^no-tokio-mutex]: Based on our experiences with cancellation in other Rust projects, we strongly recommend projects treat Tokio mutexes as a feature of last resort.
+[^no-tokio-mutex]: Based on our experiences with cancellation in other Rust projects, we strongly recommend Tokio mutexes be treated as a feature of last resort.
 
 [terminate-thread]: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminatethread
 [flock]: http://linux.die.net/man/2/flock
