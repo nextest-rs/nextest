@@ -122,6 +122,7 @@ nav:
     - "Stability policy": docs/stability/index.md
     - "Design":
           - docs/design/how-it-works.md
+          - docs/design/why-process-per-test.md
           - docs/design/custom-test-harnesses.md
           - "Architecture":
                 - "The runner loop": docs/design/architecture/runner-loop.md
