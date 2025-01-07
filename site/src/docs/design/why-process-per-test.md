@@ -62,7 +62,7 @@ Here's a partial list of operations that nextest performs using OS primitives:
 1. **Start a test.** In particular, start a test at a specific moment, and not before then; and also, do not start a test if it is filtered out or the run is cancelled. With a process-per-test model, this is natural: simply start the test process.
 2. **Know when a test is done, as it's done.** With process-per-test, wait for the process to exit.
 3. **Measure test times.** Not just after a test is done, but while it is running. With process-per-test, use wall-clock time.
-4. **Terminate tests that timed out.** In particular, one test timing out should not cause others to be killed. With process-per-test, this is [solved](architecture/signal-handling.md) via signals on Unix, and process groups on Windows.
+4. **Terminate tests that timed out.** In particular, one test timing out should not cause others to be killed. With process-per-test, this is [solved](architecture/signal-handling.md) via signals on Unix and job objects on Windows.
 5. **Retry failed tests.** This is an extension to point 1: retrying tests, and marking tests as flaky if they succeeded later.
 6. **Cancel tests on an input.** On a test failure or receiving a signal, the test runner may decide to leave tests running but no longer schedule new ones, or to cancel existing tests.
 7. **Gather test output.** With process-per-test, nextest can read standard output and standard error for the process.
