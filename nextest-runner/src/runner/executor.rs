@@ -623,6 +623,7 @@ impl<'a> ExecutorContext<'a> {
             &self.double_spawn,
             &self.test_list,
             &script.test.test_instance,
+            script.test_pid,
         )?;
         let command_mut = cmd.command_mut();
 
@@ -1330,8 +1331,9 @@ impl<'a, 'b> PreTimeoutScriptPacket<'a, 'b> {
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
         test_instance: &TestInstance<'_>,
+        test_pid: u32,
     ) -> Result<PreTimeoutScriptCommand, ChildStartError> {
-        PreTimeoutScriptCommand::new(self.config, double_spawn, test_list, test_instance)
+        PreTimeoutScriptCommand::new(self.config, double_spawn, test_list, test_instance, test_pid)
     }
 
     fn slow_event(&self, elapsed: Duration, will_terminate: Option<Duration>) -> ExecutorEvent<'a> {

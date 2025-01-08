@@ -297,6 +297,7 @@ impl PreTimeoutScriptCommand {
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
         test_instance: &TestInstance<'_>,
+        test_pid: u32,
     ) -> Result<Self, ChildStartError> {
         let mut cmd = create_command(config.program().to_owned(), config.args(), double_spawn);
 
@@ -306,7 +307,13 @@ impl PreTimeoutScriptCommand {
 
         cmd.current_dir(&test_instance.suite_info.cwd)
             // This environment variable is set to indicate that tests are being run under nextest.
-            .env("NEXTEST", "1");
+            .env("NEXTEST", "1")
+            .env("NEXTEST_PRE_TIMEOUT_TEST_PID", test_pid.to_string())
+            .env("NEXTEST_PRE_TIMEOUT_TEST_NAME", test_instance.name)
+            .env("NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID", test_instance.suite_info.binary_id.as_str())
+            .env("NEXTEST_PRE_TIMEOUT_TEST_PACKAGE", test_instance.suite_info.package.name())
+            .env("NEXTEST_PRE_TIMEOUT_TEST_BINARY", &test_instance.suite_info.binary_name)
+            .env("NEXTEST_PRE_TIMEOUT_TEST_BINARY_KIND", test_instance.suite_info.kind.as_str());
 
         // XXX: set special pre-timeout script environment variables.
 
