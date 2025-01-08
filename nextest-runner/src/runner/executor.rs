@@ -952,15 +952,6 @@ impl<'a> ExecutorContext<'a> {
                             false
                         };
 
-                        if !slow_timeout.grace_period.is_zero() {
-                            let _ = resp_tx.send(test.slow_event(
-                                // Pass in the slow timeout period times timeout_hit, since
-                                // stopwatch.elapsed() tends to be slightly longer.
-                                timeout_hit * slow_timeout.period,
-                                will_terminate.then_some(slow_timeout.grace_period),
-                            ));
-                        }
-
                         if will_terminate {
                             if let Some(script) = &pre_timeout_script {
                                 let packet = PreTimeoutScriptPacket {
@@ -974,7 +965,22 @@ impl<'a> ExecutorContext<'a> {
                                 };
                                 self.run_pre_timeout_script(packet, resp_tx, req_rx).await;
                             }
+                        }
 
+                        // Send the will-terminate event *after* the pre-timeout
+                        // script has completed (if it exists), so that the user
+                        // observes the state transitions in this order: running
+                        // slow -> pre-timeout -> terminating.
+                        if !slow_timeout.grace_period.is_zero() {
+                            let _ = resp_tx.send(test.slow_event(
+                                // Pass in the slow timeout period times timeout_hit, since
+                                // stopwatch.elapsed() tends to be slightly longer.
+                                timeout_hit * slow_timeout.period,
+                                will_terminate.then_some(slow_timeout.grace_period),
+                            ));
+                        }
+
+                        if will_terminate {
                             // Attempt to terminate the slow test. As there is a
                             // race between shutting down a slow test and its
                             // own completion, we silently ignore errors to
