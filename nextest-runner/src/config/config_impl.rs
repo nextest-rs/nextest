@@ -4,17 +4,17 @@
 use super::{
     ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
     CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
-    JunitConfig, JunitImpl, NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId,
-    SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
+    JunitConfig, JunitImpl, NextestVersionDeserialize, RetryPolicy, ScriptId, SettingSource,
+    SetupScriptConfig, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
     TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
-    config::ScriptType,
+    config::{PreTimeoutScript, PreTimeoutScriptConfig, ScriptType},
     errors::{
         provided_by_tool, ConfigParseError, ConfigParseErrorKind, ProfileNotFound,
         UnknownConfigScriptError, UnknownTestGroupError,
     },
-    list::TestList,
+    list::{TestInstance, TestList},
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
@@ -736,8 +736,8 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns the global script configuration.
-    pub fn script_config(&self) -> &'cfg IndexMap<ScriptId, ScriptConfig> {
-        &self.scripts.setup
+    pub fn script_config(&self) -> &'cfg Scripts {
+        &self.scripts
     }
 
     /// Returns the retry count for this profile.
@@ -828,6 +828,11 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     /// Returns the list of setup scripts.
     pub fn setup_scripts(&self, test_list: &TestList<'_>) -> SetupScripts<'_> {
         SetupScripts::new(self, test_list)
+    }
+
+    /// Returns the pre-timeout script for the specified test, if it exists.
+    pub fn pre_timeout_script(&self, test_instance: &TestInstance<'_>) -> Option<PreTimeoutScript> {
+        PreTimeoutScript::new(self, test_instance)
     }
 
     /// Returns settings for individual tests.
@@ -1077,12 +1082,15 @@ impl CustomProfileImpl {
     }
 }
 
+/// The scripts defined in a profile.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-struct Scripts {
+pub struct Scripts {
     // These maps are ordered because scripts are used in the order they're defined.
-    setup: IndexMap<ScriptId, ScriptConfig>,
-    pre_timeout: IndexMap<ScriptId, ScriptConfig>,
+    /// The setup scripts defined in a profile.
+    pub setup: IndexMap<ScriptId, SetupScriptConfig>,
+    /// The pre-timeout scripts defined in a profile.
+    pub pre_timeout: IndexMap<ScriptId, PreTimeoutScriptConfig>,
 }
 
 impl Scripts {

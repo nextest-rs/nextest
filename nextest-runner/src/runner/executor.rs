@@ -14,8 +14,8 @@
 use super::HandleSignalResult;
 use crate::{
     config::{
-        EvaluatableProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScriptCommand,
-        SetupScriptExecuteData, SlowTimeout, TestSettings,
+        EvaluatableProfile, PreTimeoutScriptCommand, PreTimeoutScriptConfig, RetryPolicy, ScriptId,
+        SetupScriptCommand, SetupScriptConfig, SetupScriptExecuteData, SlowTimeout, TestSettings,
     },
     double_spawn::DoubleSpawnInfo,
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -25,7 +25,8 @@ use crate::{
         TestInfoResponse, UnitKind, UnitState,
     },
     runner::{
-        parse_env_file, ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
+        parse_env_file, ExecutorEvent, InternalExecuteStatus,
+        InternalPreTimeoutScriptExecuteStatus, InternalSetupScriptExecuteStatus,
         InternalTerminateReason, RunUnitQuery, RunUnitRequest, SignalRequest, UnitExecuteStatus,
     },
     target_runner::TargetRunner,
@@ -573,6 +574,269 @@ impl<'a> ExecutorContext<'a> {
         })
     }
 
+    /// Run a pre-timeoutx script in its own process.
+    #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
+    async fn run_pre_timeout_script<'b>(
+        &self,
+        script: PreTimeoutScriptPacket<'a, 'b>,
+        resp_tx: &UnboundedSender<ExecutorEvent<'a>>,
+        req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
+    ) {
+        let test_instance = script.test.test_instance;
+        let _ = resp_tx.send(ExecutorEvent::PreTimeoutScriptStarted { test_instance });
+
+        let mut stopwatch = crate::time::stopwatch();
+
+        let status = match self
+            .run_pre_timeout_script_inner(script.clone(), &mut stopwatch, resp_tx, req_rx)
+            .await
+        {
+            Ok(status) => status,
+            Err(error) => InternalPreTimeoutScriptExecuteStatus {
+                slow_after: None,
+                output: ChildExecutionOutput::StartError(error),
+                result: ExecutionResult::ExecFail,
+                stopwatch_end: stopwatch.snapshot(),
+            },
+        };
+
+        let _ = resp_tx.send(ExecutorEvent::PreTimeoutScriptFinished {
+            test_instance,
+            script_id: script.script_id,
+            config: script.config,
+            status: status.into_external(),
+        });
+    }
+
+    #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
+    async fn run_pre_timeout_script_inner<'b>(
+        &self,
+        script: PreTimeoutScriptPacket<'a, 'b>,
+        stopwatch: &mut StopwatchStart,
+        resp_tx: &UnboundedSender<ExecutorEvent<'a>>,
+        req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
+    ) -> Result<InternalPreTimeoutScriptExecuteStatus, ChildStartError> {
+        // XXX: this function is 95% the same as run_setup_script_inner. Do we
+        // need to try to factor out a shared helper method?
+
+        let mut cmd = script.make_command(
+            &self.double_spawn,
+            &self.test_list,
+            &script.test.test_instance,
+        )?;
+        let command_mut = cmd.command_mut();
+
+        // If creating a job fails, we might be on an old system. Ignore this -- job objects are a
+        // best-effort thing.
+        let job = super::os::Job::create().ok();
+
+        // For now, pre-timeout scripts always capture stdout and stderr.
+        command_mut.stdout(std::process::Stdio::piped());
+        command_mut.stderr(std::process::Stdio::piped());
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|error| ChildStartError::Spawn(Arc::new(error)))?;
+        let child_pid = child
+            .id()
+            .expect("child has never been polled so must return a PID");
+
+        // If assigning the child to the job fails, ignore this. This can happen if the process has
+        // exited.
+        let _ = super::os::assign_process_to_job(&child, job.as_ref());
+
+        let mut status: Option<ExecutionResult> = None;
+        let slow_timeout = script
+            .config
+            .slow_timeout
+            .unwrap_or(self.profile.slow_timeout());
+        let leak_timeout = script
+            .config
+            .leak_timeout
+            .unwrap_or(self.profile.leak_timeout());
+
+        let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
+
+        let mut timeout_hit = 0;
+
+        let child_fds = ChildFds::new_split(child.stdout.take(), child.stderr.take());
+        let mut child_acc = ChildAccumulator::new(child_fds);
+
+        let mut cx = UnitContext {
+            packet: UnitPacket::PreTimeoutScript(script.clone()),
+            slow_after: None,
+        };
+
+        let (res, leaked) = {
+            let res = loop {
+                tokio::select! {
+                    () = child_acc.fill_buf(), if !child_acc.fds.is_done() => {}
+                    res = child.wait() => {
+                        // The pre-timeout script finished executing.
+                        break res;
+                    }
+                    _ = &mut interval_sleep, if status.is_none() => {
+                        // Mark the script as slow.
+                        cx.slow_after = Some(slow_timeout.period);
+
+                        timeout_hit += 1;
+                        let will_terminate = if let Some(terminate_after) = slow_timeout.terminate_after {
+                            NonZeroUsize::new(timeout_hit as usize)
+                                .expect("timeout_hit was just incremented")
+                                >= terminate_after
+                        } else {
+                            false
+                        };
+
+                        if !slow_timeout.grace_period.is_zero() {
+                            let _ = resp_tx.send(script.slow_event(
+                                // Pass in the slow timeout period times timeout_hit, since
+                                // stopwatch.elapsed() tends to be slightly longer.
+                                timeout_hit * slow_timeout.period,
+                                will_terminate.then_some(slow_timeout.grace_period),
+                            ));
+                        }
+
+                        if will_terminate {
+                            // Attempt to terminate the slow script. As there is
+                            // a race between shutting down a slow test and its
+                            // own completion, we silently ignore errors to
+                            // avoid printing false warnings.
+                            //
+                            // The return result of terminate_child is not used
+                            // here, since it is always marked as a timeout.
+                            _ = super::os::terminate_child(
+                                &cx,
+                                &mut child,
+                                &mut child_acc,
+                                InternalTerminateReason::Timeout,
+                                stopwatch,
+                                req_rx,
+                                job.as_ref(),
+                                slow_timeout.grace_period,
+                            ).await;
+                            status = Some(ExecutionResult::Timeout);
+                            if slow_timeout.grace_period.is_zero() {
+                                break child.wait().await;
+                            }
+                            // Don't break here to give the wait task a chance to finish.
+                        } else {
+                            interval_sleep.as_mut().reset_last_duration();
+                        }
+                    }
+                    recv = req_rx.recv() => {
+                        // The sender stays open longer than the whole loop, and the buffer is big
+                        // enough for all messages ever sent through this channel, so a RecvError
+                        // should never happen.
+                        let req = recv.expect("a RecvError should never happen here");
+
+                        match req {
+                            RunUnitRequest::Signal(req) => {
+                                #[cfg_attr(not(windows), expect(unused_variables))]
+                                let res = handle_signal_request(
+                                    &cx,
+                                    &mut child,
+                                    &mut child_acc,
+                                    req,
+                                    stopwatch,
+                                    interval_sleep.as_mut(),
+                                    req_rx,
+                                    job.as_ref(),
+                                    slow_timeout.grace_period
+                                ).await;
+
+                                // On Unix, the signal the process exited with
+                                // will be picked up by child.wait. On Windows,
+                                // termination by job object will show up as
+                                // exit code 1 -- we need to be clearer about
+                                // that in the UI.
+                                //
+                                // TODO: Can we do something useful with res on
+                                // Unix? For example, it's possible that the
+                                // signal we send is not the same as the signal
+                                // the child exits with. This might be a good
+                                // thing to store in whatever test event log we
+                                // end up building.
+                                #[cfg(windows)]
+                                {
+                                    if matches!(
+                                        res,
+                                        HandleSignalResult::Terminated(super::TerminateChildResult::Killed)
+                                    ) {
+                                        status = Some(ExecutionResult::Fail {
+                                            abort_status: Some(AbortStatus::JobObject),
+                                            leaked: false,
+                                        });
+                                    }
+                                }
+                            }
+                            RunUnitRequest::OtherCancel => {
+                                // Ignore non-signal cancellation requests --
+                                // let the script finish.
+                            }
+                            RunUnitRequest::Query(RunUnitQuery::GetInfo(sender)) => {
+                                _ = sender.send(script.info_response(
+                                    UnitState::Running {
+                                        pid: child_pid,
+                                        time_taken: stopwatch.snapshot().active,
+                                        slow_after: cx.slow_after,
+                                    },
+                                    child_acc.snapshot_in_progress(UnitKind::WAITING_ON_SCRIPT_MESSAGE),
+                                ));
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Build a tentative status using status and the exit status.
+            let tentative_status = status.or_else(|| {
+                res.as_ref()
+                    .ok()
+                    .map(|res| create_execution_result(*res, &child_acc.errors, false))
+            });
+
+            let leaked = detect_fd_leaks(
+                &cx,
+                child_pid,
+                &mut child_acc,
+                tentative_status,
+                leak_timeout,
+                stopwatch,
+                req_rx,
+            )
+            .await;
+
+            (res, leaked)
+        };
+
+        let exit_status = match res {
+            Ok(exit_status) => Some(exit_status),
+            Err(err) => {
+                child_acc.errors.push(ChildFdError::Wait(Arc::new(err)));
+                None
+            }
+        };
+
+        let exit_status = exit_status.expect("None always results in early return");
+
+        let exec_result = status
+            .unwrap_or_else(|| create_execution_result(exit_status, &child_acc.errors, leaked));
+
+        let errors: Vec<_> = child_acc.errors.into_iter().map(ChildError::from).collect();
+
+        Ok(InternalPreTimeoutScriptExecuteStatus {
+            slow_after: cx.slow_after,
+            output: ChildExecutionOutput::Output {
+                result: Some(exec_result),
+                output: child_acc.output.freeze(),
+                errors: ErrorList::new(UnitKind::WAITING_ON_SCRIPT_MESSAGE, errors),
+            },
+            result: exec_result,
+            stopwatch_end: stopwatch.snapshot(),
+        })
+    }
+
     /// Run an individual test in its own process.
     #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
     async fn run_test(
@@ -654,6 +918,7 @@ impl<'a> ExecutorContext<'a> {
         let mut status: Option<ExecutionResult> = None;
         let slow_timeout = test.settings.slow_timeout();
         let leak_timeout = test.settings.leak_timeout();
+        let pre_timeout_script = self.profile.pre_timeout_script(&test.test_instance);
 
         // Use a pausable_sleep rather than an interval here because it's much
         // harder to pause and resume an interval.
@@ -697,6 +962,19 @@ impl<'a> ExecutorContext<'a> {
                         }
 
                         if will_terminate {
+                            if let Some(script) = &pre_timeout_script {
+                                let packet = PreTimeoutScriptPacket {
+                                    script_id: script.id.clone(),
+                                    test: test.clone(),
+                                    test_pid: child_pid,
+                                    test_stopwatch: stopwatch,
+                                    test_slow_after: slow_timeout.period,
+                                    test_output: child_acc.snapshot_in_progress(UnitKind::WAITING_ON_TEST_MESSAGE),
+                                    config: script.config,
+                                };
+                                self.run_pre_timeout_script(packet, resp_tx, req_rx).await;
+                            }
+
                             // Attempt to terminate the slow test. As there is a
                             // race between shutting down a slow test and its
                             // own completion, we silently ignore errors to
@@ -905,16 +1183,16 @@ impl Iterator for BackoffIter {
 
 /// Either a test or a setup script, along with information about how long the
 /// test took.
-pub(super) struct UnitContext<'a> {
-    packet: UnitPacket<'a>,
+pub(super) struct UnitContext<'a, 'b> {
+    packet: UnitPacket<'a, 'b>,
     // TODO: This is a bit of a mess. It isn't clear where this kind of state
     // should live -- many parts of the request-response system need various
     // pieces of this code.
     slow_after: Option<Duration>,
 }
 
-impl<'a> UnitContext<'a> {
-    pub(super) fn packet(&self) -> &UnitPacket<'a> {
+impl<'a, 'b> UnitContext<'a, 'b> {
+    pub(super) fn packet(&self) -> &UnitPacket<'a, 'b> {
         &self.packet
     }
 
@@ -925,21 +1203,23 @@ impl<'a> UnitContext<'a> {
     ) -> InfoResponse<'a> {
         match &self.packet {
             UnitPacket::SetupScript(packet) => packet.info_response(state, output),
+            UnitPacket::PreTimeoutScript(packet) => packet.info_response(state, output),
             UnitPacket::Test(packet) => packet.info_response(state, output),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum UnitPacket<'a> {
+pub(super) enum UnitPacket<'a, 'b> {
     SetupScript(SetupScriptPacket<'a>),
+    PreTimeoutScript(PreTimeoutScriptPacket<'a, 'b>),
     Test(TestPacket<'a>),
 }
 
-impl UnitPacket<'_> {
+impl UnitPacket<'_, '_> {
     pub(super) fn kind(&self) -> UnitKind {
         match self {
-            Self::SetupScript(_) => UnitKind::Script,
+            Self::SetupScript(_) | Self::PreTimeoutScript(_) => UnitKind::Script,
             Self::Test(_) => UnitKind::Test,
         }
     }
@@ -989,7 +1269,7 @@ impl<'a> TestPacket<'a> {
 #[derive(Clone, Debug)]
 pub(super) struct SetupScriptPacket<'a> {
     script_id: ScriptId,
-    config: &'a ScriptConfig,
+    config: &'a SetupScriptConfig,
 }
 
 impl<'a> SetupScriptPacket<'a> {
@@ -1023,6 +1303,54 @@ impl<'a> SetupScriptPacket<'a> {
             state,
             output,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct PreTimeoutScriptPacket<'a, 'b> {
+    script_id: ScriptId,
+    test: TestPacket<'a>,
+    test_pid: u32,
+    test_stopwatch: &'b StopwatchStart,
+    test_slow_after: Duration,
+    test_output: ChildExecutionOutput,
+    config: &'a PreTimeoutScriptConfig,
+}
+
+impl<'a, 'b> PreTimeoutScriptPacket<'a, 'b> {
+    /// Turns self into a command that can be executed.
+    fn make_command(
+        &self,
+        double_spawn: &DoubleSpawnInfo,
+        test_list: &TestList<'_>,
+        test_instance: &TestInstance<'_>,
+    ) -> Result<PreTimeoutScriptCommand, ChildStartError> {
+        PreTimeoutScriptCommand::new(self.config, double_spawn, test_list, test_instance)
+    }
+
+    fn slow_event(&self, elapsed: Duration, will_terminate: Option<Duration>) -> ExecutorEvent<'a> {
+        ExecutorEvent::PreTimeoutScriptSlow {
+            test_instance: self.test.test_instance,
+            elapsed,
+            will_terminate,
+        }
+    }
+
+    pub(super) fn info_response(
+        &self,
+        state: UnitState,
+        output: ChildExecutionOutput,
+    ) -> InfoResponse<'a> {
+        // The provided state is about the pre-timeout script, so we need to wrap
+        // it with the state of the test unit.
+        let state = UnitState::PreTimeout {
+            pid: self.test_pid,
+            time_taken: self.test_stopwatch.snapshot().active,
+            slow_after: self.test_slow_after,
+            script_state: Box::new(state),
+            script_output: output,
+        };
+        self.test.info_response(state, self.test_output.clone())
     }
 }
 
@@ -1130,7 +1458,7 @@ async fn handle_delay_between_attempts<'a>(
 /// could do more sophisticated checks around e.g. if any processes with the
 /// same PGID are around.
 async fn detect_fd_leaks<'a>(
-    cx: &UnitContext<'a>,
+    cx: &UnitContext<'a, '_>,
     child_pid: u32,
     child_acc: &mut ChildAccumulator,
     tentative_result: Option<ExecutionResult>,
@@ -1202,7 +1530,7 @@ async fn detect_fd_leaks<'a>(
 // can cause more harm than good.
 #[expect(clippy::too_many_arguments)]
 async fn handle_signal_request<'a>(
-    cx: &UnitContext<'a>,
+    cx: &UnitContext<'a, '_>,
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
     req: SignalRequest,

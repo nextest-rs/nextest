@@ -486,13 +486,13 @@ impl CompiledData<PreBuildPlatform> {
     pub(super) fn chain(self, other: Self) -> Self {
         let profile_default_filter = self.profile_default_filter.or(other.profile_default_filter);
         let mut overrides = self.overrides;
-        let mut setup_scripts = self.scripts;
+        let mut scripts = self.scripts;
         overrides.extend(other.overrides);
-        setup_scripts.extend(other.scripts);
+        scripts.extend(other.scripts);
         Self {
             profile_default_filter,
             overrides,
-            scripts: setup_scripts,
+            scripts,
         }
     }
 
@@ -506,15 +506,15 @@ impl CompiledData<PreBuildPlatform> {
             .into_iter()
             .map(|override_| override_.apply_build_platforms(build_platforms))
             .collect();
-        let setup_scripts = self
+        let scripts = self
             .scripts
             .into_iter()
-            .map(|setup_script| setup_script.apply_build_platforms(build_platforms))
+            .map(|script| script.apply_build_platforms(build_platforms))
             .collect();
         CompiledData {
             profile_default_filter,
             overrides,
-            scripts: setup_scripts,
+            scripts,
         }
     }
 }

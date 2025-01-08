@@ -9,12 +9,12 @@
 
 use super::{SetupScriptPacket, TestPacket};
 use crate::{
-    config::{ScriptConfig, ScriptId},
+    config::{PreTimeoutScriptConfig, ScriptId, SetupScriptConfig},
     list::TestInstance,
     reporter::{
         events::{
-            ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptEnvMap,
-            SetupScriptExecuteStatus, UnitState,
+            ExecuteStatus, ExecutionResult, InfoResponse, PreTimeoutScriptExecuteStatus, RetryData,
+            SetupScriptEnvMap, SetupScriptExecuteStatus, UnitState,
         },
         TestOutputDisplay,
     },
@@ -41,7 +41,7 @@ use tokio::{
 pub(super) enum ExecutorEvent<'a> {
     SetupScriptStarted {
         script_id: ScriptId,
-        config: &'a ScriptConfig,
+        config: &'a SetupScriptConfig,
         index: usize,
         total: usize,
         // See the note in the `Started` variant.
@@ -49,13 +49,13 @@ pub(super) enum ExecutorEvent<'a> {
     },
     SetupScriptSlow {
         script_id: ScriptId,
-        config: &'a ScriptConfig,
+        config: &'a SetupScriptConfig,
         elapsed: Duration,
         will_terminate: Option<Duration>,
     },
     SetupScriptFinished {
         script_id: ScriptId,
-        config: &'a ScriptConfig,
+        config: &'a SetupScriptConfig,
         index: usize,
         total: usize,
         status: SetupScriptExecuteStatus,
@@ -79,6 +79,20 @@ pub(super) enum ExecutorEvent<'a> {
         retry_data: RetryData,
         elapsed: Duration,
         will_terminate: Option<Duration>,
+    },
+    PreTimeoutScriptStarted {
+        test_instance: TestInstance<'a>,
+    },
+    PreTimeoutScriptSlow {
+        test_instance: TestInstance<'a>,
+        elapsed: Duration,
+        will_terminate: Option<Duration>,
+    },
+    PreTimeoutScriptFinished {
+        test_instance: TestInstance<'a>,
+        script_id: ScriptId,
+        config: &'a PreTimeoutScriptConfig,
+        status: PreTimeoutScriptExecuteStatus,
     },
     AttemptFailedWillRetry {
         test_instance: TestInstance<'a>,
@@ -175,6 +189,25 @@ impl InternalSetupScriptExecuteStatus<'_> {
             time_taken: self.stopwatch_end.active,
             is_slow: self.slow_after.is_some(),
             env_map: self.env_map,
+        }
+    }
+}
+
+pub(super) struct InternalPreTimeoutScriptExecuteStatus {
+    pub(super) slow_after: Option<Duration>,
+    pub(super) output: ChildExecutionOutput,
+    pub(super) result: ExecutionResult,
+    pub(super) stopwatch_end: StopwatchSnapshot,
+}
+
+impl InternalPreTimeoutScriptExecuteStatus {
+    pub(super) fn into_external(self) -> PreTimeoutScriptExecuteStatus {
+        PreTimeoutScriptExecuteStatus {
+            output: self.output,
+            result: self.result,
+            start_time: self.stopwatch_end.start_time.fixed_offset(),
+            time_taken: self.stopwatch_end.active,
+            is_slow: self.slow_after.is_some(),
         }
     }
 }

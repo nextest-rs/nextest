@@ -771,10 +771,73 @@ impl<'a> TestReporterImpl<'a> {
                 // Always display failing setup script output if it exists. We may change this in
                 // the future.
                 if !run_status.result.is_success() {
-                    self.write_setup_script_execute_status(
-                        script_id, command, args, run_status, writer,
+                    self.write_script_execute_status(
+                        script_id,
+                        command,
+                        args,
+                        run_status.result.is_success(),
+                        &run_status.output,
+                        writer,
                     )?;
                 }
+            }
+            TestEventKind::PreTimeoutScriptStarted { test_instance, .. } => {
+                writeln!(
+                    writer,
+                    "{:>12}             {}",
+                    "PRETMT".style(self.styles.pass),
+                    self.display_test_instance(test_instance.id()),
+                )?;
+            }
+            TestEventKind::PreTimeoutScriptSlow {
+                test_instance,
+                elapsed,
+                will_terminate,
+            } => {
+                if !*will_terminate && self.status_levels.status_level >= StatusLevel::Slow {
+                    write!(writer, "{:>12} ", "PRETMT SLOW".style(self.styles.skip))?;
+                } else if *will_terminate {
+                    write!(writer, "{:>12} ", "PRETMT TERM".style(self.styles.fail))?;
+                }
+
+                self.write_slow_duration(*elapsed, writer)?;
+                writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
+            }
+            TestEventKind::PreTimeoutScriptFinished {
+                script_id,
+                command,
+                args,
+                test_instance,
+                run_status,
+            } => {
+                match run_status.result {
+                    ExecutionResult::Pass => {
+                        write!(writer, "{:>12} ", "PRETMT PASS".style(self.styles.pass))?;
+                    }
+                    ExecutionResult::Leak => {
+                        write!(writer, "{:>12} ", "PRETMT LEAK".style(self.styles.skip))?;
+                    }
+                    other => {
+                        let status_str = short_status_str(other);
+                        write!(
+                            writer,
+                            "{:>12} ",
+                            format!("PRETMT {status_str}").style(self.styles.fail),
+                        )?;
+                    }
+                }
+
+                self.write_duration(run_status.time_taken, writer)?;
+                writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
+
+                self.write_script_execute_status(
+                    script_id,
+                    command,
+                    args,
+                    run_status.result.is_success(),
+                    &run_status.output,
+                    writer,
+                )?;
             }
             TestEventKind::TestStarted { test_instance, .. } => {
                 // In no-capture mode, print out a test start event.
@@ -1544,35 +1607,39 @@ impl<'a> TestReporterImpl<'a> {
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let status_str = "status".style(self.styles.count);
+
+        let mut print_running = |pid: u32, time_taken: Duration, slow_after: Option<Duration>| {
+            let running_style = if output_has_errors {
+                self.styles.fail
+            } else if slow_after.is_some() {
+                self.styles.skip
+            } else {
+                self.styles.pass
+            };
+            write!(
+                writer,
+                "{status_str}: {attempt_str}{kind} {} for {:.3?}s as PID {}",
+                "running".style(running_style),
+                time_taken.as_secs_f64(),
+                pid.style(self.styles.count),
+            )?;
+            if let Some(slow_after) = slow_after {
+                write!(
+                    writer,
+                    " (marked slow after {:.3?}s)",
+                    slow_after.as_secs_f64()
+                )?;
+            }
+            writeln!(writer)?;
+            Ok::<_, io::Error>(())
+        };
+
         match state {
             UnitState::Running {
                 pid,
                 time_taken,
                 slow_after,
-            } => {
-                let running_style = if output_has_errors {
-                    self.styles.fail
-                } else if slow_after.is_some() {
-                    self.styles.skip
-                } else {
-                    self.styles.pass
-                };
-                write!(
-                    writer,
-                    "{status_str}: {attempt_str}{kind} {} for {:.3?}s as PID {}",
-                    "running".style(running_style),
-                    time_taken.as_secs_f64(),
-                    pid.style(self.styles.count),
-                )?;
-                if let Some(slow_after) = slow_after {
-                    write!(
-                        writer,
-                        " (marked slow after {:.3?}s)",
-                        slow_after.as_secs_f64()
-                    )?;
-                }
-                writeln!(writer)?;
-            }
+            } => print_running(*pid, *time_taken, *slow_after)?,
             UnitState::Exiting {
                 pid,
                 time_taken,
@@ -1605,6 +1672,42 @@ impl<'a> TestReporterImpl<'a> {
                         waiting_duration.as_secs_f64(),
                         pid.style(self.styles.count),
                         remaining.as_secs_f64(),
+                    )?;
+                }
+            }
+            UnitState::PreTimeout {
+                pid,
+                time_taken,
+                slow_after,
+                script_state,
+                script_output,
+            } => {
+                // Print test status.
+                print_running(*pid, *time_taken, Some(*slow_after))?;
+
+                // Print note about running pre-timeout script.
+                write!(
+                    writer,
+                    "{}:   test has reached timeout, pre-timeout script is running:",
+                    "note".style(self.styles.count)
+                )?;
+
+                // Print state of the pre-timeout script, indented one level
+                // further:
+                let mut writer = IndentWriter::new_skip_initial("    ", writer);
+                writeln!(&mut writer)?;
+                self.write_unit_state(
+                    UnitKind::Script,
+                    "",
+                    script_state,
+                    script_output.has_errors(),
+                    &mut writer,
+                )?;
+                if script_state.has_valid_output() {
+                    self.write_child_execution_output(
+                        &self.output_spec_for_info(UnitKind::Script),
+                        script_output,
+                        &mut writer,
                     )?;
                 }
             }
@@ -1815,16 +1918,17 @@ impl<'a> TestReporterImpl<'a> {
         write!(writer, "[>{:>7.3?}s] ", duration.as_secs_f64())
     }
 
-    fn write_setup_script_execute_status(
+    fn write_script_execute_status(
         &self,
         script_id: &ScriptId,
         command: &str,
         args: &[String],
-        run_status: &SetupScriptExecuteStatus,
+        succeeded: bool,
+        output: &ChildExecutionOutput,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
-        let spec = self.output_spec_for_script(script_id, command, args, run_status);
-        self.write_child_execution_output(&spec, &run_status.output, writer)
+        let spec = self.output_spec_for_script(script_id, command, args, succeeded);
+        self.write_child_execution_output(&spec, &output, writer)
     }
 
     fn write_test_execute_status(
@@ -2109,9 +2213,9 @@ impl<'a> TestReporterImpl<'a> {
         script_id: &ScriptId,
         command: &str,
         args: &[String],
-        run_status: &SetupScriptExecuteStatus,
+        succeeded: bool,
     ) -> ChildOutputSpec {
-        let header_style = if run_status.result.is_success() {
+        let header_style = if succeeded {
             self.styles.pass
         } else {
             self.styles.fail

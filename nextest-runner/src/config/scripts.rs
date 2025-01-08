@@ -13,7 +13,7 @@ use crate::{
         ChildStartError, ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection,
         InvalidConfigScriptName,
     },
-    list::TestList,
+    list::{TestInstance, TestList},
     platform::BuildPlatforms,
     reporter::events::SetupScriptEnvMap,
     test_command::{apply_ld_dyld_env, create_command},
@@ -91,7 +91,7 @@ impl<'profile> SetupScripts<'profile> {
 
         // Build up a map of enabled scripts along with their data, by script ID.
         let mut enabled_scripts = IndexMap::new();
-        for (script_id, config) in script_config {
+        for (script_id, config) in &script_config.setup {
             if enabled_ids.contains(script_id) {
                 let compiled = by_script_id
                     .remove(script_id)
@@ -139,7 +139,7 @@ pub(crate) struct SetupScript<'profile> {
     pub(crate) id: ScriptId,
 
     /// The configuration for the script.
-    pub(crate) config: &'profile ScriptConfig,
+    pub(crate) config: &'profile SetupScriptConfig,
 
     /// The compiled filters to use to check which tests this script is enabled for.
     pub(crate) compiled: Vec<&'profile CompiledProfileScripts<FinalConfig>>,
@@ -166,7 +166,7 @@ pub(crate) struct SetupScriptCommand {
 impl SetupScriptCommand {
     /// Creates a new `SetupScriptCommand` for a setup script.
     pub(crate) fn new(
-        config: &ScriptConfig,
+        config: &SetupScriptConfig,
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
     ) -> Result<Self, ChildStartError> {
@@ -240,6 +240,98 @@ impl<'profile> SetupScriptExecuteData<'profile> {
                 }
             }
         }
+    }
+}
+
+/// Data about a pre-timeout script, returned by an [`EvaluatableProfile`].
+#[derive(Debug)]
+pub struct PreTimeoutScript<'profile> {
+    /// The script ID.
+    pub id: ScriptId,
+
+    /// The configuration for the script.
+    pub config: &'profile PreTimeoutScriptConfig,
+}
+
+impl<'profile> PreTimeoutScript<'profile> {
+    pub(super) fn new(
+        profile: &'profile EvaluatableProfile<'_>,
+        test_instance: &TestInstance<'_>,
+    ) -> Option<Self> {
+        let test_query = test_instance.to_test_query();
+
+        let profile_scripts = &profile.compiled_data.scripts;
+        if profile_scripts.is_empty() {
+            return None;
+        }
+
+        let env = profile.filterset_ecx();
+        for compiled in profile_scripts {
+            if let Some(script_id) = &compiled.pre_timeout {
+                if compiled.is_enabled(&test_query, &env) {
+                    let config = &profile.script_config().pre_timeout[script_id];
+                    return Some(PreTimeoutScript {
+                        id: script_id.clone(),
+                        config,
+                    });
+                }
+            }
+        }
+
+        None
+    }
+}
+
+/// Represents a to-be-run pre-timeout script command with a certain set of arguments.
+pub(crate) struct PreTimeoutScriptCommand {
+    /// The command to be run.
+    command: std::process::Command,
+    /// Double-spawn context.
+    double_spawn: Option<DoubleSpawnContext>,
+}
+
+impl PreTimeoutScriptCommand {
+    /// Creates a new `PreTimeoutScriptCommand` for a setup script.
+    pub(crate) fn new(
+        config: &PreTimeoutScriptConfig,
+        double_spawn: &DoubleSpawnInfo,
+        test_list: &TestList<'_>,
+        test_instance: &TestInstance<'_>,
+    ) -> Result<Self, ChildStartError> {
+        let mut cmd = create_command(config.program().to_owned(), config.args(), double_spawn);
+
+        // NB: we will always override user-provided environment variables with the
+        // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
+        test_list.cargo_env().apply_env(&mut cmd);
+
+        cmd.current_dir(&test_instance.suite_info.cwd)
+            // This environment variable is set to indicate that tests are being run under nextest.
+            .env("NEXTEST", "1");
+
+        apply_ld_dyld_env(&mut cmd, test_list.updated_dylib_path());
+
+        let double_spawn = double_spawn.spawn_context();
+
+        Ok(Self {
+            command: cmd,
+            double_spawn,
+        })
+    }
+
+    /// Returns the command to be run.
+    #[inline]
+    pub(crate) fn command_mut(&mut self) -> &mut std::process::Command {
+        &mut self.command
+    }
+
+    pub(crate) fn spawn(self) -> std::io::Result<tokio::process::Child> {
+        let mut command = tokio::process::Command::from(self.command);
+        let res = command.spawn();
+        if let Some(ctx) = self.double_spawn {
+            ctx.finish();
+        }
+        let child = res?;
+        Ok(child)
     }
 }
 
@@ -444,12 +536,12 @@ pub(super) struct DeserializedProfileScriptConfig {
     pre_timeout: Option<ScriptId>,
 }
 
-/// Deserialized form of script configuration before compilation.
+/// Deserialized form of setup script configuration before compilation.
 ///
 /// This is defined as a top-level element.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct ScriptConfig {
+pub struct SetupScriptConfig {
     /// The command to run. The first element is the program and the second element is a list
     /// of arguments.
     #[serde(deserialize_with = "deserialize_command")]
@@ -473,10 +565,10 @@ pub struct ScriptConfig {
 
     /// JUnit configuration for this script.
     #[serde(default)]
-    pub junit: ScriptJunitConfig,
+    pub junit: SetupScriptJunitConfig,
 }
 
-impl ScriptConfig {
+impl SetupScriptConfig {
     /// Returns the name of the program.
     #[inline]
     pub fn program(&self) -> &str {
@@ -499,7 +591,7 @@ impl ScriptConfig {
 /// A JUnit override configuration.
 #[derive(Copy, Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct ScriptJunitConfig {
+pub struct SetupScriptJunitConfig {
     /// Whether to store successful output.
     ///
     /// Defaults to true.
@@ -513,12 +605,46 @@ pub struct ScriptJunitConfig {
     pub store_failure_output: bool,
 }
 
-impl Default for ScriptJunitConfig {
+impl Default for SetupScriptJunitConfig {
     fn default() -> Self {
         Self {
             store_success_output: true,
             store_failure_output: true,
         }
+    }
+}
+
+/// Deserialized form of pre-timeout script configuration before compilation.
+///
+/// This is defined as a top-level element.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct PreTimeoutScriptConfig {
+    /// The command to run. The first element is the program and the second element is a list
+    /// of arguments.
+    #[serde(deserialize_with = "deserialize_command")]
+    pub command: (String, Vec<String>),
+
+    /// An optional slow timeout for this command.
+    #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
+    pub slow_timeout: Option<SlowTimeout>,
+
+    /// An optional leak timeout for this command.
+    #[serde(default, with = "humantime_serde::option")]
+    pub leak_timeout: Option<Duration>,
+}
+
+impl PreTimeoutScriptConfig {
+    /// Returns the name of the program.
+    #[inline]
+    pub fn program(&self) -> &str {
+        &self.command.0
+    }
+
+    /// Returns the arguments to the command.
+    #[inline]
+    pub fn args(&self) -> &[String] {
+        &self.command.1
     }
 }
 

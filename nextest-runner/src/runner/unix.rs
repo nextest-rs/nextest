@@ -78,7 +78,7 @@ pub(super) fn raise_stop() {
 // Windows) or grace_period (only relevant on Unix) together.
 #[expect(clippy::too_many_arguments)]
 pub(super) async fn terminate_child<'a>(
-    cx: &UnitContext<'a>,
+    cx: &UnitContext<'a, '_>,
     child: &mut Child,
     child_acc: &mut ChildAccumulator,
     reason: InternalTerminateReason,

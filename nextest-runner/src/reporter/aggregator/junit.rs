@@ -100,6 +100,12 @@ impl<'cfg> MetadataJunit<'cfg> {
                     }
                 }
             }
+            TestEventKind::PreTimeoutScriptStarted { .. }
+            | TestEventKind::PreTimeoutScriptSlow { .. }
+            | TestEventKind::PreTimeoutScriptFinished { .. } => {
+                // JUnit reports don't have a good place to include information
+                // about pre-timeout scripts, so we elide them from the report.
+            }
             TestEventKind::InfoStarted { .. }
             | TestEventKind::InfoResponse { .. }
             | TestEventKind::InfoFinished { .. } => {}

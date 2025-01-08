@@ -124,6 +124,42 @@ pub enum TestEventKind<'a> {
         run_status: SetupScriptExecuteStatus,
     },
 
+    /// A pre-timeout script started.
+    PreTimeoutScriptStarted {
+        /// The test instance that timed out.
+        test_instance: TestInstance<'a>,
+    },
+
+    /// A pre-timeout script was slow.
+    PreTimeoutScriptSlow {
+        /// The test instance that timed out.
+        test_instance: TestInstance<'a>,
+
+        /// The amount of time elapsed since the start of execution.
+        elapsed: Duration,
+
+        /// True if the script has hit its timeout and is about to be terminated.
+        will_terminate: bool,
+    },
+
+    /// A pre-timeout script completed execution.
+    PreTimeoutScriptFinished {
+        /// The script ID.
+        script_id: ScriptId,
+
+        /// The command to run.
+        command: &'a str,
+
+        /// The arguments to the command.
+        args: &'a [String],
+
+        /// The test instance that timed out.
+        test_instance: TestInstance<'a>,
+
+        /// The execution status of the pre-timeout script.
+        run_status: PreTimeoutScriptExecuteStatus,
+    },
+
     // TODO: add events for BinaryStarted and BinaryFinished? May want a slightly different way to
     // do things, maybe a couple of reporter traits (one for the run as a whole and one for each
     // binary).
@@ -701,6 +737,25 @@ pub struct SetupScriptEnvMap {
     pub env_map: BTreeMap<String, String>,
 }
 
+/// Information about the execution of a setup script.
+#[derive(Clone, Debug)]
+pub struct PreTimeoutScriptExecuteStatus {
+    /// Output for this pre-timeout script.
+    pub output: ChildExecutionOutput,
+
+    /// The execution result for this setup script: pass, fail or execution error.
+    pub result: ExecutionResult,
+
+    /// The time at which the script started.
+    pub start_time: DateTime<FixedOffset>,
+
+    /// The time it took for the script to run.
+    pub time_taken: Duration,
+
+    /// Whether this script counts as slow.
+    pub is_slow: bool,
+}
+
 /// Data related to retries for a test.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct RetryData {
@@ -961,6 +1016,25 @@ pub enum UnitState {
         remaining: Duration,
     },
 
+    /// The test has exceeded its timeout and nextest is executing the test's
+    /// pre-timeout script. (Only relevant for tests.)
+    PreTimeout {
+        /// The process ID of the test.
+        pid: u32,
+
+        /// The amount of time the unit has been running.
+        time_taken: Duration,
+
+        /// The duration after which the test was marked as slow.
+        slow_after: Duration,
+
+        /// The state of the pre-timeout script.
+        script_state: Box<UnitState>,
+
+        /// The output of the pre-timeout script.
+        script_output: ChildExecutionOutput,
+    },
+
     /// The child process is being terminated by nextest.
     Terminating(UnitTerminatingState),
 
@@ -1000,6 +1074,7 @@ impl UnitState {
         match self {
             UnitState::Running { .. }
             | UnitState::Exiting { .. }
+            | UnitState::PreTimeout { .. }
             | UnitState::Terminating(_)
             | UnitState::Exited { .. } => true,
             UnitState::DelayBeforeNextAttempt { .. } => false,

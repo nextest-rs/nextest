@@ -9,7 +9,7 @@
 
 use super::{RunUnitRequest, RunnerTaskState, ShutdownRequest};
 use crate::{
-    config::{MaxFail, ScriptConfig, ScriptId},
+    config::{MaxFail, ScriptId, SetupScriptConfig},
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{
@@ -406,6 +406,32 @@ where
                     HandleEventResponse::None
                 }
             }
+            InternalEvent::Executor(ExecutorEvent::PreTimeoutScriptStarted { test_instance }) => {
+                self.callback_none_response(TestEventKind::PreTimeoutScriptStarted {
+                    test_instance,
+                })
+            }
+            InternalEvent::Executor(ExecutorEvent::PreTimeoutScriptSlow {
+                test_instance,
+                elapsed,
+                will_terminate,
+            }) => self.callback_none_response(TestEventKind::PreTimeoutScriptSlow {
+                test_instance,
+                elapsed,
+                will_terminate: will_terminate.is_some(),
+            }),
+            InternalEvent::Executor(ExecutorEvent::PreTimeoutScriptFinished {
+                test_instance,
+                script_id,
+                config,
+                status,
+            }) => self.callback_none_response(TestEventKind::PreTimeoutScriptFinished {
+                test_instance,
+                script_id,
+                command: config.program(),
+                args: config.args(),
+                run_status: status,
+            }),
             InternalEvent::Executor(ExecutorEvent::Started {
                 test_instance,
                 req_rx_tx,
@@ -540,7 +566,7 @@ where
     fn new_setup_script(
         &mut self,
         id: ScriptId,
-        config: &'a ScriptConfig,
+        config: &'a SetupScriptConfig,
         index: usize,
         total: usize,
         req_tx: UnboundedSender<RunUnitRequest<'a>>,
@@ -796,7 +822,7 @@ struct ContextSetupScript<'a> {
     id: ScriptId,
     // Store these details primarily for debugging.
     #[expect(dead_code)]
-    config: &'a ScriptConfig,
+    config: &'a SetupScriptConfig,
     #[expect(dead_code)]
     index: usize,
     #[expect(dead_code)]
