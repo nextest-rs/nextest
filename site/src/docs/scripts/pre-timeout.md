@@ -64,8 +64,8 @@ Nextest executes pre-timeout scripts with the same working directory as the test
 * **`NEXTEST_PRE_TIMEOUT_TEST_PID`**: the ID of the process running the test.
 * **`NEXTEST_PRE_TIMEOUT_TEST_NAME`**: the name of the running test.
 * **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID`**: the ID of the binary in which the test is located.
-* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_PACKAGE_NAME`**: the package name component of the binary ID.
-* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_NAME`**: the name component of the binary ID, if known.
-* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_ID_KIND`**: the kind component of the binary ID, if known.
+* **`NEXTEST_PRE_TIMEOUT_TEST_PACKAGE`**: the name of the package (crate) containing the test.
+* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY`**: the name of the binary hosting the test.
+* **`NEXTEST_PRE_TIMEOUT_TEST_BINARY_KIND`**: the kind of the binary hosting the test.
 
 <!-- TODO: a protocol for writing script logs to a file and telling nextest to attach them to JUnit reports? -->

@@ -308,6 +308,8 @@ impl PreTimeoutScriptCommand {
             // This environment variable is set to indicate that tests are being run under nextest.
             .env("NEXTEST", "1");
 
+        // XXX: set special pre-timeout script environment variables.
+
         apply_ld_dyld_env(&mut cmd, test_list.updated_dylib_path());
 
         let double_spawn = double_spawn.spawn_context();
