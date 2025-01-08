@@ -218,7 +218,7 @@ impl NextestConfig {
         let mut compiled = CompiledByProfile::for_default_config();
 
         let mut known_groups = BTreeSet::new();
-        let mut known_scripts = BTreeSet::new();
+        let mut known_scripts = BTreeMap::new();
 
         // Next, merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
@@ -290,7 +290,7 @@ impl NextestConfig {
         experimental: &BTreeSet<ConfigExperimental>,
         unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
         known_groups: &mut BTreeSet<CustomTestGroup>,
-        known_scripts: &mut BTreeSet<ScriptId>,
+        known_scripts: &mut BTreeMap<ScriptId, ScriptType>,
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
@@ -390,7 +390,10 @@ impl NextestConfig {
             return Err(ConfigParseError::new(config_file, tool, kind));
         }
 
-        known_scripts.extend(valid_scripts);
+        known_scripts.extend(valid_scripts.into_iter().map(|id| {
+            let script_type = this_config.scripts.script_type(&id);
+            (id, script_type)
+        }));
 
         let this_config = this_config.into_config_impl();
 
@@ -475,23 +478,25 @@ impl NextestConfig {
                     ));
                 }
                 for script in scripts {
-                    if !known_scripts.contains(script) {
-                        unknown_script_errors.push(UnknownConfigScriptError {
-                            profile_name: profile_name.to_owned(),
-                            name: script.clone(),
-                        });
-                    }
-                    let actual_script_type = this_config.scripts.script_type(script);
-                    if actual_script_type != script_type {
-                        return Err(ConfigParseError::new(
-                            config_file,
-                            tool,
-                            ConfigParseErrorKind::WrongConfigScriptType {
-                                script: script.clone(),
-                                attempted: script_type,
-                                actual: actual_script_type,
-                            },
-                        ));
+                    match known_scripts.get(script) {
+                        None => {
+                            unknown_script_errors.push(UnknownConfigScriptError {
+                                profile_name: profile_name.to_owned(),
+                                name: script.clone(),
+                            });
+                        }
+                        Some(actual_script_type) if *actual_script_type != script_type => {
+                            return Err(ConfigParseError::new(
+                                config_file,
+                                tool,
+                                ConfigParseErrorKind::WrongConfigScriptType {
+                                    script: script.clone(),
+                                    attempted: script_type,
+                                    actual: actual_script_type.clone(),
+                                },
+                            ));
+                        }
+                        Some(_) => (),
                     }
                 }
 
@@ -526,7 +531,7 @@ impl NextestConfig {
 
         // If there were any unknown scripts, error out.
         if !unknown_script_errors.is_empty() {
-            let known_scripts = known_scripts.iter().cloned().collect();
+            let known_scripts = known_scripts.keys().cloned().collect();
             return Err(ConfigParseError::new(
                 config_file,
                 tool,
@@ -1088,8 +1093,10 @@ impl CustomProfileImpl {
 pub struct Scripts {
     // These maps are ordered because scripts are used in the order they're defined.
     /// The setup scripts defined in a profile.
+    #[serde(default)]
     pub setup: IndexMap<ScriptId, SetupScriptConfig>,
     /// The pre-timeout scripts defined in a profile.
+    #[serde(default)]
     pub pre_timeout: IndexMap<ScriptId, PreTimeoutScriptConfig>,
 }
 

@@ -91,8 +91,8 @@ max-threads = 4
 [test-groups.unused]
 max-threads = 20
 
-[script.my-script-unix]
+[script.setup.my-script-unix]
 command = './scripts/my-script.sh'
 
-[script.my-script-windows]
+[script.setup.my-script-windows]
 command = 'cmd /c "scripts\\my-script.bat"'

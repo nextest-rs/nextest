@@ -761,14 +761,14 @@ mod tests {
             # order defined below.
             setup = ["baz", "foo", "@tool:my-tool:toolscript"]
 
-            [script.foo]
+            [script.setup.foo]
             command = "command foo"
 
-            [script.bar]
+            [script.setup.bar]
             command = ["cargo", "run", "-p", "bar"]
             slow-timeout = { period = "60s", terminate-after = 2 }
 
-            [script.baz]
+            [script.setup.baz]
             command = "baz"
             slow-timeout = "1s"
             leak-timeout = "1s"
@@ -778,7 +778,7 @@ mod tests {
         };
 
         let tool_config_contents = indoc! {r#"
-            [script.'@tool:my-tool:toolscript']
+            [script.setup.'@tool:my-tool:toolscript']
             command = "tool-command"
             "#
         };
@@ -892,7 +892,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
             command = ""
         "#},
         "invalid value: string \"\", expected a Unix shell command or a list of arguments"
@@ -901,7 +901,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
             command = []
         "#},
         "invalid length 0, expected a Unix shell command or a list of arguments"
@@ -910,15 +910,15 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
         "#},
-        "script.foo: missing field `command`"
+        "script.setup.foo: missing field `command`"
 
         ; "missing command"
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
             command = "my-command"
             slow-timeout = 34
         "#},
@@ -928,7 +928,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.'@tool:foo']
+            [script.setup.'@tool:foo']
             command = "my-command"
         "#},
         r#"invalid configuration script name: tool identifier not of the form "@tool:tool-name:identifier": `@tool:foo`"#
@@ -937,7 +937,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.'#foo']
+            [script.setup.'#foo']
             command = "my-command"
         "#},
         r"invalid configuration script name: invalid identifier `#foo`"
@@ -967,7 +967,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
             command = "my-command"
 
             [[profile.default.scripts]]
@@ -983,7 +983,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
             command = "my-command"
 
             [[profile.default.scripts]]
@@ -1000,7 +1000,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
             command = "my-command"
 
             [[profile.default.scripts]]
@@ -1019,7 +1019,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
             command = "my-command"
 
             [[profile.ci.overrides]]
@@ -1092,7 +1092,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.'@tool:foo:bar']
+            [script.setup.'@tool:foo:bar']
             command = "my-command"
 
             [[profile.ci.overrides]]
@@ -1133,7 +1133,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.'blarg']
+            [script.setup.'blarg']
             command = "my-command"
 
             [[profile.ci.overrides]]
@@ -1183,7 +1183,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [script.setup.foo]
             command = "my-command"
 
             [[profile.default.scripts]]
