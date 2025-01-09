@@ -144,13 +144,13 @@ where
                 ));
             }
             // Max delay, if specified, can't be zero.
-            if max_delay.map_or(false, |f| f.is_zero()) {
+            if max_delay.is_some_and(|f| f.is_zero()) {
                 return Err(serde::de::Error::custom(
                     "`max-delay` cannot be zero with exponential backoff",
                 ));
             }
             // Max delay can't be less than delay.
-            if max_delay.map_or(false, |max_delay| max_delay < *delay) {
+            if max_delay.is_some_and(|max_delay| max_delay < *delay) {
                 return Err(serde::de::Error::custom(
                     "`max-delay` cannot be less than delay with exponential backoff",
                 ));

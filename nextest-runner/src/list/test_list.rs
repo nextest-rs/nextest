@@ -804,7 +804,7 @@ pub struct RustTestSuite<'g> {
     pub status: RustTestSuiteStatus,
 }
 
-impl<'g> RustTestArtifact<'g> {
+impl RustTestArtifact<'_> {
     /// Run this binary with and without --ignored and get the corresponding outputs.
     async fn exec(
         &self,
