@@ -108,7 +108,7 @@ mod imp {
             // behave like SIGINFO. Useful for testing signal-based info queries
             // on Linux.
             let sigquit_as_info =
-                std::env::var("__NEXTEST_SIGQUIT_AS_INFO").map_or(false, |v| v == "1");
+                std::env::var("__NEXTEST_SIGQUIT_AS_INFO").is_ok_and(|v| v == "1");
 
             Ok(Self {
                 map,

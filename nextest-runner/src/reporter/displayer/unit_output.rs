@@ -88,7 +88,7 @@ impl UnitOutputReporter {
         // environment variable is set in integration tests to ensure that they
         // are.
         let display_empty_outputs =
-            std::env::var_os("__NEXTEST_DISPLAY_EMPTY_OUTPUTS").map_or(false, |v| v == "1");
+            std::env::var_os("__NEXTEST_DISPLAY_EMPTY_OUTPUTS").is_some_and(|v| v == "1");
 
         Self {
             force_success_output,

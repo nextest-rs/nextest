@@ -310,7 +310,7 @@ impl NextestConfig {
                     group
                         .as_identifier()
                         .tool_components()
-                        .map_or(false, |(tool_name, _)| tool_name == tool)
+                        .is_some_and(|(tool_name, _)| tool_name == tool)
                 } else {
                     // If a tool is not specified, it must *not* be a tool identifier.
                     !group.as_identifier().is_tool_identifier()
@@ -349,7 +349,7 @@ impl NextestConfig {
                     script
                         .as_identifier()
                         .tool_components()
-                        .map_or(false, |(tool_name, _)| tool_name == tool)
+                        .is_some_and(|(tool_name, _)| tool_name == tool)
                 } else {
                     // If a tool is not specified, it must *not* be a tool identifier.
                     !script.as_identifier().is_tool_identifier()

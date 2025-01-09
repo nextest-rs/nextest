@@ -155,7 +155,7 @@ impl NextestReleases {
 
         let force_disable_setup = version_data
             .metadata
-            .map_or(false, |metadata| metadata.force_disable_setup);
+            .is_some_and(|metadata| metadata.force_disable_setup);
         let perform_setup = !force_disable_setup && perform_setup_fn(version);
 
         Ok(CheckStatus::Success(MuktiUpdateContext {

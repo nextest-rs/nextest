@@ -231,11 +231,11 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             failure_output.unwrap_or_else(|| Source::track_profile(profile.failure_output()));
         let junit_store_success_output = junit_store_success_output.unwrap_or_else(|| {
             // If the profile doesn't have JUnit enabled, success output can just be false.
-            Source::track_profile(profile.junit().map_or(false, |j| j.store_success_output()))
+            Source::track_profile(profile.junit().is_some_and(|j| j.store_success_output()))
         });
         let junit_store_failure_output = junit_store_failure_output.unwrap_or_else(|| {
             // If the profile doesn't have JUnit enabled, failure output can just be false.
-            Source::track_profile(profile.junit().map_or(false, |j| j.store_failure_output()))
+            Source::track_profile(profile.junit().is_some_and(|j| j.store_failure_output()))
         });
 
         TestSettings {
