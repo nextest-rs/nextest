@@ -157,9 +157,7 @@ mod imp {
             target_os = "macos",
             target_os = "netbsd",
             target_os = "openbsd",
-            // TODO: add illumos once
-            // https://github.com/tokio-rs/tokio/pull/6995 is in a released
-            // version of Tokio.
+            target_os = "illumos",
         ))] {
             fn info_kind() -> Option<SignalKind> {
                 Some(SignalKind::info())
