@@ -98,8 +98,12 @@ impl<'de> Deserialize<'de> for MaxFail {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{
+        test_helpers::{build_platforms, temp_workspace},
+        NextestConfig,
+    };
+    use camino_tempfile::tempdir;
     use indoc::indoc;
-    use serde::Deserialize;
     use test_case::test_case;
 
     #[test]
@@ -127,107 +131,125 @@ mod tests {
         }
     }
 
-    #[derive(Deserialize, Debug)]
-    struct TestConfig {
-        max_fail: MaxFail,
-    }
-
     #[test_case(
         indoc! {r#"
-            max_fail = 1
+            [profile.custom]
+            max-fail = 1
         "#},
-        MaxFail::Count(1)
+        Some(MaxFail::Count(1))
         ; "basic positive number"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = 100
+            [profile.custom]
+            max-fail = 100
         "#},
-        MaxFail::Count(100)
+        Some(MaxFail::Count(100))
         ; "large positive number"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = "all"
+            [profile.custom]
+            max-fail = "all"
         "#},
-        MaxFail::All
+        Some(MaxFail::All)
         ; "all lowercase"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = "ALL"
+            [profile.custom]
+            max-fail = "ALL"
         "#},
-        MaxFail::All
+        Some(MaxFail::All)
         ; "all uppercase"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = "42"
+            [profile.custom]
+            max-fail = "42"
         "#},
-        MaxFail::Count(42)
+        Some(MaxFail::Count(42))
         ; "number as string"
     )]
-    fn test_valid_deserialize(config: &str, expected: MaxFail) {
-        let value: TestConfig = toml::from_str(config).unwrap();
-        assert_eq!(value.max_fail, expected);
-    }
-
     #[test_case(
         indoc! {r#"
-            max_fail = 0
+            [profile.custom]
+            max-fail = 0
         "#},
-        "expected a positive integer"
+        None
         ; "zero number"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = -1
+            [profile.custom]
+            max-fail = -1
         "#},
-        "expected a positive integer"
+        None
         ; "negative number"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = ""
+            [profile.custom]
+            max-fail = ""
         "#},
-        "cannot parse integer from empty string"
+        None
         ; "empty string"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = "invalid"
+            [profile.custom]
+            max-fail = "invalid"
         "#},
-        "invalid digit found in string"
+        None
         ; "invalid string"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = "-1"
+            [profile.custom]
+            max-fail = "-1"
         "#},
-        "max-fail may not be <= 0"
+        None
         ; "negative string number"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = "0"
+            [profile.custom]
+            max-fail = "0"
         "#},
-        "max-fail may not be <= 0"
+        None
         ; "zero string number"
     )]
     #[test_case(
         indoc! {r#"
-            max_fail = true
+            [profile.custom]
+            max-fail = true
         "#},
-        "an integer or the string \"all\""
+        None
         ; "boolean value triggers expecting message"
     )]
-    fn test_invalid_deserialize(config: &str, expected_error: &str) {
-        let err = toml::from_str::<TestConfig>(config).unwrap_err();
-        assert!(
-            err.to_string().contains(expected_error),
-            "Error '{}' should contain '{}'",
-            err,
-            expected_error
+    fn parse_max_fail(config_contents: &str, max_fail: Option<MaxFail>) {
+        let workspace_dir = tempdir().unwrap();
+        let graph = temp_workspace(workspace_dir.path(), config_contents);
+
+        let config = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &graph,
+            None,
+            [],
+            &Default::default(),
         );
+
+        match max_fail {
+            None => assert!(config.is_err()),
+            Some(t) => {
+                let config = config.unwrap();
+                let profile = config
+                    .profile("custom")
+                    .unwrap()
+                    .apply_build_platforms(&build_platforms());
+
+                assert_eq!(profile.max_fail(), t);
+            }
+        }
     }
 }
