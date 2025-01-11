@@ -66,6 +66,9 @@ final-status-level = "flaky"
 # Can be overridden through the `--failure-output` option.
 failure-output = "immediate"
 
+# "max-fail" defines the maximum number of test failures that are allowed before test execution is stopped.
+max-fail = 1
+
 # "success-output" controls production of standard output and standard error on success. This should
 # generally be set to "never".
 success-output = "never"

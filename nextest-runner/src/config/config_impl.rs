@@ -4,8 +4,8 @@
 use super::{
     ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
     CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
-    JunitConfig, JunitImpl, NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId,
-    SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
+    JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
+    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
     TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
@@ -723,6 +723,13 @@ impl<'cfg> EvaluatableProfile<'cfg> {
             .unwrap_or(self.default_profile.threads_required)
     }
 
+    /// Returns the max-fail configuration for this profile.
+    pub fn max_fail(&self) -> MaxFail {
+        self.custom_profile
+            .and_then(|profile| profile.max_fail)
+            .unwrap_or(self.default_profile.max_fail)
+    }
+
     /// Returns extra arguments to be passed to the test binary at runtime.
     pub fn run_extra_args(&self) -> &'cfg [String] {
         self.custom_profile
@@ -925,6 +932,7 @@ pub(super) struct DefaultProfileImpl {
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
     archive: ArchiveConfig,
+    max_fail: MaxFail,
 }
 
 impl DefaultProfileImpl {
@@ -966,6 +974,7 @@ impl DefaultProfileImpl {
             scripts: p.scripts,
             junit: DefaultJunitImpl::for_default_profile(p.junit),
             archive: p.archive.expect("archive present in default profile"),
+            max_fail: p.max_fail.expect("max-fail present in default profile"),
         }
     }
 
@@ -1006,6 +1015,8 @@ pub(super) struct CustomProfileImpl {
     success_output: Option<TestOutputDisplay>,
     #[serde(default)]
     fail_fast: Option<bool>,
+    #[serde(default)]
+    max_fail: Option<MaxFail>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
     #[serde(default, with = "humantime_serde::option")]
