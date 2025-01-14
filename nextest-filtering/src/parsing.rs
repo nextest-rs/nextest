@@ -21,7 +21,7 @@ use winnow::{
     combinator::{alt, delimited, eof, peek, preceded, repeat, terminated, trace},
     stream::{Location, SliceLen, Stream},
     token::{literal, take_till},
-    Parser,
+    LocatingSlice, Parser,
 };
 
 mod glob;
@@ -30,13 +30,13 @@ use crate::{errors::*, NameMatcher};
 pub(crate) use glob::GenericGlob;
 pub(crate) use unicode_string::DisplayParsedString;
 
-pub(crate) type Span<'a> = winnow::Stateful<winnow::Located<&'a str>, State<'a>>;
+pub(crate) type Span<'a> = winnow::Stateful<LocatingSlice<&'a str>, State<'a>>;
 type Error = ();
 type PResult<T> = winnow::PResult<T, Error>;
 
 pub(crate) fn new_span<'a>(input: &'a str, errors: &'a mut Vec<ParseSingleError>) -> Span<'a> {
     Span {
-        input: winnow::Located::new(input),
+        input: LocatingSlice::new(input),
         state: State::new(errors),
     }
 }
