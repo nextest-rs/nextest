@@ -217,9 +217,12 @@ impl<'a, W: Write> Archiver<'a, W> {
                 encoder
                     .include_checksum(true)
                     .map_err(ArchiveCreateError::OutputArchiveIo)?;
-                encoder
-                    .multithread(get_num_cpus() as u32)
-                    .map_err(ArchiveCreateError::OutputArchiveIo)?;
+                if let Err(err) = encoder.multithread(get_num_cpus() as u32) {
+                    tracing::warn!(
+                        ?err,
+                        "libzstd compiled without multithreading. defaulting to single-thread."
+                    );
+                }
                 tar::Builder::new(encoder)
             }
         };
