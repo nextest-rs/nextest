@@ -220,7 +220,7 @@ impl<'a, W: Write> Archiver<'a, W> {
                 if let Err(err) = encoder.multithread(get_num_cpus() as u32) {
                     tracing::warn!(
                         ?err,
-                        "libzstd compiled without multithreading. defaulting to single-thread."
+                        "libzstd compiled without multithreading, defaulting to single-thread"
                     );
                 }
                 tar::Builder::new(encoder)
