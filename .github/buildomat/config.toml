@@ -2,7 +2,10 @@
 # https://github.com/oxidecomputer/buildomat?tab=readme-ov-file#per-repository-configuration.
 
 enable = true
-org_only = true
+# buildomat doesn't run any jobs with sensitive data, so it's fine to let
+# outside users run jobs on it. If it results in too much spam, we can revisit
+# this.
+org_only = false
 allow_users = [
     "nextest-bot",
 ]
