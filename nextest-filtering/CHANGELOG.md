@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0] - 2025-01-15
+
+### Changed
+
+- MSRV updated to Rust 1.81.
+- Internal dependency updates.
+
 ## [0.12.0] - 2024-08-28
 
 ### Changed
@@ -134,6 +141,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.13.0
 [0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.12.0
 [0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.11.0
 [0.10.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.10.0

@@ -8,6 +8,23 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.88] - 2024-01-15
+
+### Added
+
+- If nextest's keyboard input handler is enabled, pressing Enter now produces a summary line (e.g. `Running [ 00:00:05] 131/297: 32 running, 131 passed, 1 skipped`). This enables common use cases where Enter is pressed to mark a point in time.
+- On illumos, Ctrl-T (`SIGINFO`) is now supported as a way to [query live status](https://nexte.st/docs/reporting/#live-output). Querying live status is also supported on BSDs with Ctrl-T, on any Unix via `SIGUSR1`, as well as by pressing the `t` key in interactive sessions.
+
+### Changed
+
+- If nextest is unable to parse `--target` (and in particular, a custom target), it now fails rather than printing a warning and assuming the host platform. This is being treated as a bugfix because the previous behavior was incorrect.
+
+### Fixed
+
+- Custom targets now respect `target_family` predicates like `cfg(unix)`.
+- Nextest now exits cleanly if the progress bar is enabled and writing to standard error fails. This matches the behavior in case the progress bar is disabled.
+- If nextest is compiled with a system libzstd that doesn't have multithreading support, archive support no longer fails. Thanks [Leandros](https://github.com/Leandros) for your first contribution!
+
 ## [0.9.87] - 2024-12-17
 
 ### Changed
@@ -1318,6 +1335,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.88]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.88
 [0.9.87]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.87
 [0.9.86]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86
 [0.9.85]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.85
