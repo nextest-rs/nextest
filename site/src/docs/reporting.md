@@ -63,7 +63,7 @@ To query current test status, do any of the following:
   `--no-input-handler`, or set `NEXTEST_NO_INPUT_HANDLER=1` in the environment.
 
 * On Unix platforms where the `SIGINFO` signal is available (which includes macOS
-  and other BSD-based platforms, though not Linux), send that signal to nextest.
+  and other BSD-based platforms, as well as illumos, though not Linux), send that signal to nextest.
 
   In an interactive terminal, [press Ctrl-T]. Otherwise, run `kill -INFO <pid>`,
   where `<pid>` is the process ID of the running nextest process.
