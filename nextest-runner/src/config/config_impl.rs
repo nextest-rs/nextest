@@ -18,7 +18,9 @@ use crate::{
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, FileSourceFile};
+use config::{
+    builder::DefaultState, Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceFile,
+};
 use guppy::graph::PackageGraph;
 use indexmap::IndexMap;
 use nextest_filtering::{EvalContext, TestQuery};
@@ -545,7 +547,20 @@ impl NextestConfig {
         };
         let ignored_de = serde_ignored::Deserializer::new(config, &mut cb);
         let config: NextestConfigDeserialize = serde_path_to_error::deserialize(ignored_de)
-            .map_err(|error| ConfigParseErrorKind::DeserializeError(Box::new(error)))?;
+            .map_err(|error| {
+                // Both serde_path_to_error and the latest versions of the
+                // config crate report the key. We drop the key from the config
+                // error for consistency.
+                let path = error.path().clone();
+                let config_error = error.into_inner();
+                let error = match config_error {
+                    ConfigError::At { error, .. } => *error,
+                    other => other,
+                };
+                ConfigParseErrorKind::DeserializeError(Box::new(serde_path_to_error::Error::new(
+                    path, error,
+                )))
+            })?;
 
         Ok((config, ignored))
     }
