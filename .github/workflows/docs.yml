@@ -26,7 +26,7 @@ jobs:
       - name: Install nextest for help text in docs
         uses: taiki-e/install-action@nextest
       - name: Install uv
-        uses: eifinger/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a # v5.1.0
+        uses: eifinger/setup-uv@4e3dbecc19008549e0deaff33911d7a8662627b2 # v5.2.0
         with:
           enable-cache: true
       - name: Build rustdoc
