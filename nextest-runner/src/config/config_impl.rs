@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
-    CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
-    JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
-    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
-    TestThreads, ThreadsRequired, ToolConfigFile,
+    fail_fast::FailFast, ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter,
+    ConfigExperimental, CustomTestGroup, DefaultJunitImpl, DeserializedOverride,
+    DeserializedProfileScriptConfig, JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize,
+    RetryPolicy, ScriptConfig, ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup,
+    TestGroupConfig, TestSettings, TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
     errors::{
@@ -723,13 +723,6 @@ impl<'cfg> EvaluatableProfile<'cfg> {
             .unwrap_or(self.default_profile.threads_required)
     }
 
-    /// Returns the max-fail configuration for this profile.
-    pub fn max_fail(&self) -> MaxFail {
-        self.custom_profile
-            .and_then(|profile| profile.max_fail)
-            .unwrap_or(self.default_profile.max_fail)
-    }
-
     /// Returns extra arguments to be passed to the test binary at runtime.
     pub fn run_extra_args(&self) -> &'cfg [String] {
         self.custom_profile
@@ -781,10 +774,24 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns the fail-fast config for this profile.
-    pub fn fail_fast(&self) -> bool {
+    pub fn fail_fast(&self) -> FailFast {
         self.custom_profile
             .and_then(|profile| profile.fail_fast)
             .unwrap_or(self.default_profile.fail_fast)
+    }
+
+    /// Returns the max-fail config for this profile.
+    pub fn max_fail(&self) -> MaxFail {
+        // If fail-fast explicitly sets max-fail, use that.
+        if let Some(fail_fast) = self.custom_profile.and_then(|profile| profile.fail_fast) {
+            match fail_fast {
+                FailFast::Boolean(true) => MaxFail::Count(1),
+                FailFast::Boolean(false) => MaxFail::All,
+                FailFast::MaxFail => MaxFail::from_fail_fast(fail_fast),
+            }
+        } else {
+            MaxFail::from_fail_fast(self.default_profile.fail_fast)
+        }
     }
 
     /// Returns the archive configuration for this profile.
@@ -925,14 +932,13 @@ pub(super) struct DefaultProfileImpl {
     final_status_level: FinalStatusLevel,
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
-    fail_fast: bool,
+    fail_fast: FailFast,
     slow_timeout: SlowTimeout,
     leak_timeout: Duration,
     overrides: Vec<DeserializedOverride>,
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
     archive: ArchiveConfig,
-    max_fail: MaxFail,
 }
 
 impl DefaultProfileImpl {
@@ -974,7 +980,6 @@ impl DefaultProfileImpl {
             scripts: p.scripts,
             junit: DefaultJunitImpl::for_default_profile(p.junit),
             archive: p.archive.expect("archive present in default profile"),
-            max_fail: p.max_fail.expect("max-fail present in default profile"),
         }
     }
 
@@ -1014,9 +1019,7 @@ pub(super) struct CustomProfileImpl {
     #[serde(default)]
     success_output: Option<TestOutputDisplay>,
     #[serde(default)]
-    fail_fast: Option<bool>,
-    #[serde(default)]
-    max_fail: Option<MaxFail>,
+    fail_fast: Option<FailFast>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
     #[serde(default, with = "humantime_serde::option")]

@@ -1,4 +1,4 @@
-use crate::errors::MaxFailParseError;
+use crate::{config::fail_fast::FailFast, errors::MaxFailParseError};
 use serde::Deserialize;
 use std::{cmp::Ordering, fmt, str::FromStr};
 
@@ -14,11 +14,10 @@ pub enum MaxFail {
 
 impl MaxFail {
     /// Returns the max-fail corresponding to the fail-fast.
-    pub fn from_fail_fast(fail_fast: bool) -> Self {
-        if fail_fast {
-            Self::Count(1)
-        } else {
-            Self::All
+    pub fn from_fail_fast(fail_fast: FailFast) -> Self {
+        match fail_fast {
+            FailFast::Boolean(true) => Self::Count(1),
+            _ => Self::All,
         }
     }
 
@@ -98,13 +97,6 @@ impl<'de> Deserialize<'de> for MaxFail {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        test_helpers::{build_platforms, temp_workspace},
-        NextestConfig,
-    };
-    use camino_tempfile::tempdir;
-    use indoc::indoc;
-    use test_case::test_case;
 
     #[test]
     fn maxfail_builder_from_str() {
@@ -128,128 +120,6 @@ mod tests {
 
         for input in failures {
             MaxFail::from_str(input).expect_err(&format!("expected input '{input}' to fail"));
-        }
-    }
-
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = 1
-        "#},
-        Some(MaxFail::Count(1))
-        ; "basic positive number"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = 100
-        "#},
-        Some(MaxFail::Count(100))
-        ; "large positive number"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = "all"
-        "#},
-        Some(MaxFail::All)
-        ; "all lowercase"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = "ALL"
-        "#},
-        Some(MaxFail::All)
-        ; "all uppercase"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = "42"
-        "#},
-        Some(MaxFail::Count(42))
-        ; "number as string"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = 0
-        "#},
-        None
-        ; "zero number"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = -1
-        "#},
-        None
-        ; "negative number"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = ""
-        "#},
-        None
-        ; "empty string"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = "invalid"
-        "#},
-        None
-        ; "invalid string"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = "-1"
-        "#},
-        None
-        ; "negative string number"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = "0"
-        "#},
-        None
-        ; "zero string number"
-    )]
-    #[test_case(
-        indoc! {r#"
-            [profile.custom]
-            max-fail = true
-        "#},
-        None
-        ; "boolean value triggers expecting message"
-    )]
-    fn parse_max_fail(config_contents: &str, max_fail: Option<MaxFail>) {
-        let workspace_dir = tempdir().unwrap();
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
-
-        let config = NextestConfig::from_sources(
-            graph.workspace().root(),
-            &graph,
-            None,
-            [],
-            &Default::default(),
-        );
-
-        match max_fail {
-            None => assert!(config.is_err()),
-            Some(t) => {
-                let config = config.unwrap();
-                let profile = config
-                    .profile("custom")
-                    .unwrap()
-                    .apply_build_platforms(&build_platforms());
-
-                assert_eq!(profile.max_fail(), t);
-            }
         }
     }
 }
