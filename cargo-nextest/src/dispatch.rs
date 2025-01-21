@@ -16,7 +16,7 @@ use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        get_num_cpus, ConfigExperimental, EarlyProfile, MaxFail, NextestConfig,
+        get_num_cpus, ConfigExperimental, EarlyProfile, FailFast, MaxFail, NextestConfig,
         NextestVersionConfig, NextestVersionEval, RetryPolicy, TestGroup, TestThreads,
         ToolConfigFile, VersionOnlyConfig,
     },
@@ -907,10 +907,10 @@ impl TestRunnerOpts {
             builder.set_max_fail(max_fail);
             debug!(max_fail = ?max_fail, "set max fail");
         } else if self.no_fail_fast {
-            builder.set_max_fail(MaxFail::from_fail_fast(false));
+            builder.set_max_fail(MaxFail::from_fail_fast(FailFast::Boolean(false)));
             debug!("set max fail via from_fail_fast(false)");
         } else if self.fail_fast {
-            builder.set_max_fail(MaxFail::from_fail_fast(true));
+            builder.set_max_fail(MaxFail::from_fail_fast(FailFast::Boolean(true)));
             debug!("set max fail via from_fail_fast(true)");
         }
 

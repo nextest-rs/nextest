@@ -21,6 +21,7 @@
 
 mod archive;
 mod config_impl;
+mod fail_fast;
 mod helpers;
 mod identifier;
 mod junit;
@@ -38,6 +39,7 @@ mod track_default;
 
 pub use archive::*;
 pub use config_impl::*;
+pub use fail_fast::*;
 pub use identifier::*;
 pub use junit::*;
 pub use max_fail::*;

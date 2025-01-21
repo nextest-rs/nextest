@@ -1,5 +1,6 @@
-use crate::errors::MaxFailParseError;
-use std::{fmt, str::FromStr};
+use crate::{config::fail_fast::FailFast, errors::MaxFailParseError};
+use serde::Deserialize;
+use std::{cmp::Ordering, fmt, str::FromStr};
 
 /// Type for the max-fail flag
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -13,11 +14,10 @@ pub enum MaxFail {
 
 impl MaxFail {
     /// Returns the max-fail corresponding to the fail-fast.
-    pub fn from_fail_fast(fail_fast: bool) -> Self {
-        if fail_fast {
-            Self::Count(1)
-        } else {
-            Self::All
+    pub fn from_fail_fast(fail_fast: FailFast) -> Self {
+        match fail_fast {
+            FailFast::Boolean(true) => Self::Count(1),
+            _ => Self::All,
         }
     }
 
@@ -52,6 +52,45 @@ impl fmt::Display for MaxFail {
             Self::All => write!(f, "all"),
             Self::Count(n) => write!(f, "{n}"),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for MaxFail {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct V;
+
+        impl serde::de::Visitor<'_> for V {
+            type Value = MaxFail;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "an integer or the string \"all\"")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                MaxFail::from_str(v).map_err(serde::de::Error::custom)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match v.cmp(&0) {
+                    Ordering::Equal | Ordering::Less => Err(serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Unsigned(v as u64),
+                        &"a positive integer",
+                    )),
+                    Ordering::Greater => Ok(MaxFail::Count(v as usize)),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(V)
     }
 }
 
