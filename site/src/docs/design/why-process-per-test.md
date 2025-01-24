@@ -39,7 +39,7 @@ This game-theoretic lens provides fresh insight into the benefits of process-per
 
   * Tests against a graphical API like [EGL](https://www.khronos.org/egl), which only allows one thread in a process to create a GPU context. [`wgpu`](https://github.com/gfx-rs/wgpu) uses nextest for this reason
   * Tests that [must be run on the main thread](../configuration/extra-args.md) of their corresponding process, like tests against certain macOS frameworks
-  * Tests that require altering environment variables or other global context
+  * Tests that require [altering environment variables](../configuration/env-vars.md#altering-the-environment-within-tests) or other global context
 
   Even if particular tests don't *require* per-test isolation, they may often *benefit* from it. For example, singletons become separated per-test. (You may argue that singletons aren't desirable, or should not be used for tests—but instead, think of per-test isolation as a principled, zero-coordination solution to this class of issues.)
 

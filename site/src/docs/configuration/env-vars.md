@@ -1,6 +1,6 @@
 ---
 icon: material/bash
-description: "Environment variables nextest reads and sets, and whether it's safe to alter environment variables within tests."
+description: "Environment variables nextest reads and sets, and whether it's safe to alter them within tests."
 ---
 
 # Environment variables
