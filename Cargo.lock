@@ -3916,9 +3916,9 @@ dependencies = [
 
 [[package]]
 name = "win32job"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b2b1bf557d947847a30eb73f79aa6cdb3eaf3ce02f5e9599438f77896a62b3c"
+checksum = "b62a7c19205285f5dd043af30d44d4bba2bd13f86e3073cea859ad519ae34702"
 dependencies = [
  "thiserror 1.0.69",
  "windows",

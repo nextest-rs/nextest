@@ -131,7 +131,7 @@ tracing-subscriber = { version = "0.3.19", default-features = false, features = 
 unicode-ident = "1.0.15"
 unicode-normalization = "0.1.24"
 whoami = "1.5.2"
-win32job = "2.0.0"
+win32job = "2.0.1"
 windows-sys = "0.59.0"
 winnow = "0.6.24"
 xxhash-rust = "0.8.13"
