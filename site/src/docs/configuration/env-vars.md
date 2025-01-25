@@ -172,17 +172,17 @@ Nextest includes the following paths:
 
 ## Altering the environment within tests
 
+*(The information in this section is true as of Rust 1.84. We'll update this section in the unlikely event that changes occur.)*
+
 Many tests will want to alter their own environment variables[^altering-env]. The [`std::env::set_var`](https://doc.rust-lang.org/std/env/fn.set_var.html) and [`std::env::remove_var`](https://doc.rust-lang.org/std/env/fn.remove_var.html) functions are unsafe in general, and can lead to races if another thread is accessing (writing to or reading from) the environment at the same time.
 
 In particular, the safety contract for `set_var` and `remove_var` requires at least one of these three statements to be true:
 
 1. The program is single-threaded.
 2. The underlying implementations of `set_var` and `remove_var` are thread-safe. This is true on Windows, and on [some Unix platforms like illumos][illumos-env]. Notably, **this is not true on Linux**.
-3. While these functions are being called, no code is simultaneously accessing the environment in ways outside of these functions. (For example, no C code is accessing the environment.)
+3. While these functions are being called, no code is simultaneously accessing the environment other than through Rust's `std::env` module. (For example, no C code is accessing the environment.)
 
-Nextest runs [each test in its own process](../design/why-process-per-test.md). Does that make it safe to alter the environment in tests? Let's look at this case-by-case.
-
-(The information below is true as of Rust 1.84. We'll keep this section updated if changes occur, though they are uncommon.)
+Nextest runs [each test in its own process](../design/why-process-per-test.md). Does that make it safe to alter the environment in tests? The answer is generally **yes**. Let's look at this case-by-case.
 
 !!! warning "This does not apply to `cargo test`"
 
@@ -199,9 +199,11 @@ When nextest starts a standard test annotated with `#[test]` (also known as a *l
 
 So the test process is multithreaded, making statement 1 above false.
 
-But with current versions of Rust, while the test thread is running, the main thread does not read or write environment variables. This is unlikely to ever change, too—there is no reason for the main thread to ever access the environment, and doing so would likely break many existing tests.
+But with current versions of Rust, while the test thread is running, the main thread does not read or write environment variables.
 
-This means that if the test *itself* doesn't create any threads, it is de facto **safe** to alter the environment.
+This is unlikely to ever change—there is no reason for the main thread to ever access the environment, and doing so would likely break many existing tests. So statement 3 is true.
+
+In other words, if the test itself hasn't created any threads yet, it is de facto **safe** to alter the environment.
 
 !!! tip "Alter the environment at the beginning of tests"
 
@@ -211,11 +213,13 @@ This means that if the test *itself* doesn't create any threads, it is de facto 
 
 [Custom test harnesses](../design/custom-test-harnesses.md) may run arbitrary code before test execution, so it's hard to make a general statement.
 
-With the recommended [libtest-mimic harness](https://github.com/LukasKalbertodt/libtest-mimic), the environment is not accessed while tests are running, so statement 3 above is true. In addition, libtest-mimic can be forced to not create any threads by [passing in extra arguments](extra-args.md). (Not creating a test for the thread makes statements 1 and 3 above true.)
+With the recommended [libtest-mimic harness](https://github.com/LukasKalbertodt/libtest-mimic), the environment is not accessed while tests are running, so statement 3 above is true.
 
-This means that if you're using libtest-mimic directly, it is **safe** to alter the environment.
+In addition, libtest-mimic can be forced to not create any threads by [passing in extra arguments](extra-args.md). Not creating a thread for the test makes statements 1 and 3 above both true.
 
-Harnesses that build on top of libtest-mimic might create their own threads, though. You're encouraged to examine the harnesses you're using.
+This means that if you're using libtest-mimic directly, with or without extra arguments, it is **safe** to alter the environment.
+
+Harnesses written on top of libtest-mimic might create their own threads, though. You're encouraged to analyze the harnesses you're using.
 
 !!! info "The `datatest-stable` harness"
 
@@ -230,13 +234,20 @@ Like with custom test harnesses, these wrappers can run arbitrary code before te
 It's worth looking at `#[tokio::test]` as an example:
 
 * By default, the macro runs Tokio in single-threaded mode. This case is equivalent to [a standard test](#a-standard-test), so it is **safe** to alter the environment.
-* If `flavor = "multi_thread"` is specified, `#[tokio::test]` does create at least one worker thread. However, the Tokio runtime does not access the environment after the worker thread pool is created, and any other worker threads are dormant. So statement 3 is still true, and it is **safe** to alter the environment at the beginning of tests.
+
+* If `flavor = "multi_thread"` is specified, `#[tokio::test]` does create at least one worker thread.
+
+  However, the Tokio runtime does not access the environment after the worker thread pool is created, and any other worker threads are dormant at the beginning of the test.
+
+  So statement 3 remains true, and it is **safe** to alter the environment at the beginning of tests.
 
 ### For test harness and proc-macro maintainers
 
-If you maintain a custom test harness or proc-macro, it is recommended that you document environment safety as a property. It is safe for nextest users to alter the environment at the beginning of tests, as long as you can guarantee that created threads, if any, won't access the environment concurrently.
+If you maintain a custom test harness or proc-macro, it is recommended that you document environment safety as a property.
+
+It is safe for nextest users to alter the environment at the beginning of tests, as long as you can guarantee that created threads, if any, won't access the environment concurrently.
 
 (This may not be true for `cargo test` users due to its shared-process model. Be sure to make this clear in your documentation.)
 
 [illumos-env]: https://github.com/illumos/illumos-gate/blob/3da9c6ab7ef58a10539f1228227de9c34e1baf33/usr/src/lib/libc/port/gen/getenv.c#L47-L75
-[^altering-env]: In general, altering the current process's environment variables is fraught with peril since it touches shared mutable state, but tests are a reasonable use case for this functionality. The cargo-nextest binary never alters its own environment variables, but many of nextest's own tests do so.
+[^altering-env]: In general, altering the current process's environment variables is fraught with peril since it touches shared mutable state, but tests are a reasonable use case for this functionality. The cargo-nextest binary never alters its environment variables, but many of nextest's own tests do so.
