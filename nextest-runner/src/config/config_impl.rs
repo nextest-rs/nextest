@@ -4,8 +4,8 @@
 use super::{
     ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
     CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
-    JunitConfig, JunitImpl, NextestVersionDeserialize, RetryPolicy, ScriptConfig, ScriptId,
-    SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
+    JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
+    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
     TestThreads, ThreadsRequired, ToolConfigFile,
 };
 use crate::{
@@ -773,11 +773,11 @@ impl<'cfg> EvaluatableProfile<'cfg> {
             .unwrap_or(self.default_profile.success_output)
     }
 
-    /// Returns the fail-fast config for this profile.
-    pub fn fail_fast(&self) -> bool {
+    /// Returns the max-fail config for this profile.
+    pub fn max_fail(&self) -> MaxFail {
         self.custom_profile
-            .and_then(|profile| profile.fail_fast)
-            .unwrap_or(self.default_profile.fail_fast)
+            .and_then(|profile| profile.max_fail)
+            .unwrap_or(self.default_profile.max_fail)
     }
 
     /// Returns the archive configuration for this profile.
@@ -918,7 +918,7 @@ pub(super) struct DefaultProfileImpl {
     final_status_level: FinalStatusLevel,
     failure_output: TestOutputDisplay,
     success_output: TestOutputDisplay,
-    fail_fast: bool,
+    max_fail: MaxFail,
     slow_timeout: SlowTimeout,
     leak_timeout: Duration,
     overrides: Vec<DeserializedOverride>,
@@ -955,7 +955,7 @@ impl DefaultProfileImpl {
             success_output: p
                 .success_output
                 .expect("success-output present in default profile"),
-            fail_fast: p.fail_fast.expect("fail-fast present in default profile"),
+            max_fail: p.max_fail.expect("fail-fast present in default profile"),
             slow_timeout: p
                 .slow_timeout
                 .expect("slow-timeout present in default profile"),
@@ -1004,8 +1004,12 @@ pub(super) struct CustomProfileImpl {
     failure_output: Option<TestOutputDisplay>,
     #[serde(default)]
     success_output: Option<TestOutputDisplay>,
-    #[serde(default)]
-    fail_fast: Option<bool>,
+    #[serde(
+        default,
+        rename = "fail-fast",
+        deserialize_with = "super::deserialize_fail_fast"
+    )]
+    max_fail: Option<MaxFail>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
     #[serde(default, with = "humantime_serde::option")]

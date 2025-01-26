@@ -72,6 +72,11 @@ success-output = "never"
 
 # Cancel the test run on the first failure. For CI runs, consider setting this
 # to false.
+# Accepted values are
+# * true: cancel the test run on the first failure
+# * false: continue running tests even after a failure
+# * { max-fail = 10 }: cancel the test run after the specified number of failures
+# * { max-fail = "all" }: continue running tests even after a failure
 fail-fast = true
 
 # Treat a test that takes longer than the configured 'period' as slow, and print a message.

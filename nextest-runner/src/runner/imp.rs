@@ -90,9 +90,7 @@ impl TestRunnerBuilder {
                 .unwrap_or_else(|| profile.test_threads())
                 .compute(),
         };
-        let max_fail = self
-            .max_fail
-            .unwrap_or_else(|| MaxFail::from_fail_fast(profile.fail_fast()));
+        let max_fail = self.max_fail.unwrap_or_else(|| profile.max_fail());
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
