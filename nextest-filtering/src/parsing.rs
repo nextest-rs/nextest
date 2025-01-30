@@ -21,7 +21,7 @@ use winnow::{
     combinator::{alt, delimited, eof, peek, preceded, repeat, terminated, trace},
     stream::{Location, SliceLen, Stream},
     token::{literal, take_till},
-    LocatingSlice, Parser,
+    LocatingSlice, ModalParser, Parser,
 };
 
 mod glob;
@@ -231,9 +231,9 @@ fn expect_inner<'a, F, T>(
     mut parser: F,
     make_err: fn(SourceSpan) -> ParseSingleError,
     limit: SpanLength,
-) -> impl Parser<Span<'a>, Option<T>, Error>
+) -> impl ModalParser<Span<'a>, Option<T>, Error>
 where
-    F: Parser<Span<'a>, T, Error>,
+    F: ModalParser<Span<'a>, T, Error>,
 {
     move |input: &mut _| match parser.parse_next(input) {
         Ok(out) => Ok(Some(out)),
@@ -265,9 +265,9 @@ where
 fn expect<'a, F, T>(
     parser: F,
     make_err: fn(SourceSpan) -> ParseSingleError,
-) -> impl Parser<Span<'a>, Option<T>, Error>
+) -> impl ModalParser<Span<'a>, Option<T>, Error>
 where
-    F: Parser<Span<'a>, T, Error>,
+    F: ModalParser<Span<'a>, T, Error>,
 {
     expect_inner(parser, make_err, SpanLength::Unknown)
 }
@@ -276,9 +276,9 @@ fn expect_n<'a, F, T>(
     parser: F,
     make_err: fn(SourceSpan) -> ParseSingleError,
     limit: SpanLength,
-) -> impl Parser<Span<'a>, Option<T>, Error>
+) -> impl ModalParser<Span<'a>, Option<T>, Error>
 where
-    F: Parser<Span<'a>, T, Error>,
+    F: ModalParser<Span<'a>, T, Error>,
 {
     expect_inner(parser, make_err, limit)
 }
@@ -286,13 +286,13 @@ where
 fn expect_char<'a>(
     c: char,
     make_err: fn(SourceSpan) -> ParseSingleError,
-) -> impl Parser<Span<'a>, Option<char>, Error> {
+) -> impl ModalParser<Span<'a>, Option<char>, Error> {
     expect_inner(ws(c), make_err, SpanLength::Exact(0))
 }
 
-fn silent_expect<'a, F, T>(mut parser: F) -> impl Parser<Span<'a>, Option<T>, Error>
+fn silent_expect<'a, F, T>(mut parser: F) -> impl ModalParser<Span<'a>, Option<T>, Error>
 where
-    F: Parser<Span<'a>, T, Error>,
+    F: ModalParser<Span<'a>, T, Error>,
 {
     move |input: &mut _| match parser.parse_next(input) {
         Ok(out) => Ok(Some(out)),
@@ -301,7 +301,9 @@ where
     }
 }
 
-fn ws<'a, T, P: Parser<Span<'a>, T, Error>>(mut inner: P) -> impl Parser<Span<'a>, T, Error> {
+fn ws<'a, T, P: ModalParser<Span<'a>, T, Error>>(
+    mut inner: P,
+) -> impl ModalParser<Span<'a>, T, Error> {
     move |input: &mut Span<'a>| {
         let start = input.checkpoint();
         () = repeat(
@@ -495,7 +497,7 @@ fn parse_glob_matcher(input: &mut Span<'_>) -> PResult<Option<NameMatcher>> {
 // This parse will never fail (because default_matcher won't)
 fn set_matcher<'a>(
     default_matcher: DefaultMatcher,
-) -> impl Parser<Span<'a>, Option<NameMatcher>, Error> {
+) -> impl ModalParser<Span<'a>, Option<NameMatcher>, Error> {
     ws(alt((
         parse_regex_matcher,
         parse_glob_matcher,
@@ -531,7 +533,7 @@ fn recover_unexpected_comma<'i>(input: &mut Span<'i>) -> PResult<()> {
 fn nullary_set_def<'a>(
     name: &'static str,
     make_set: fn(SourceSpan) -> SetDef,
-) -> impl Parser<Span<'a>, Option<SetDef>, Error> {
+) -> impl ModalParser<Span<'a>, Option<SetDef>, Error> {
     move |i: &mut Span<'_>| {
         let start = i.location();
         let _ = literal(name).parse_next(i)?;
@@ -562,7 +564,7 @@ enum DefaultMatcher {
 }
 
 impl DefaultMatcher {
-    fn into_parser<'a>(self) -> impl Parser<Span<'a>, Option<NameMatcher>, Error> {
+    fn into_parser<'a>(self) -> impl ModalParser<Span<'a>, Option<NameMatcher>, Error> {
         move |input: &mut _| match self {
             Self::Equal => parse_matcher_text
                 .map(|res: Option<String>| res.map(NameMatcher::implicit_equal))
@@ -579,7 +581,7 @@ fn unary_set_def<'a>(
     name: &'static str,
     default_matcher: DefaultMatcher,
     make_set: fn(NameMatcher, SourceSpan) -> SetDef,
-) -> impl Parser<Span<'a>, Option<SetDef>, Error> {
+) -> impl ModalParser<Span<'a>, Option<SetDef>, Error> {
     move |i: &mut _| {
         let _ = literal(name).parse_next(i)?;
         let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
@@ -642,9 +644,9 @@ fn parse_set_def(input: &mut Span<'_>) -> PResult<Option<SetDef>> {
     .parse_next(input)
 }
 
-fn expect_expr<'a, P: Parser<Span<'a>, ExprResult, Error>>(
+fn expect_expr<'a, P: ModalParser<Span<'a>, ExprResult, Error>>(
     inner: P,
-) -> impl Parser<Span<'a>, ExprResult, Error> {
+) -> impl ModalParser<Span<'a>, ExprResult, Error> {
     expect(inner, ParseSingleError::ExpectedExpr).map(|res| res.unwrap_or(ExprResult::Error))
 }
 
