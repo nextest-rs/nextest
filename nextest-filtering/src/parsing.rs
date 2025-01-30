@@ -32,7 +32,7 @@ pub(crate) use unicode_string::DisplayParsedString;
 
 pub(crate) type Span<'a> = winnow::Stateful<LocatingSlice<&'a str>, State<'a>>;
 type Error = ();
-type PResult<T> = winnow::PResult<T, Error>;
+type PResult<T> = winnow::ModalResult<T, Error>;
 
 pub(crate) fn new_span<'a>(input: &'a str, errors: &'a mut Vec<ParseSingleError>) -> Span<'a> {
     Span {
