@@ -238,7 +238,7 @@ where
     move |input: &mut _| match parser.parse_next(input) {
         Ok(out) => Ok(Some(out)),
         Err(winnow::error::ErrMode::Backtrack(_)) | Err(winnow::error::ErrMode::Cut(_)) => {
-            let fragment_start = input.location();
+            let fragment_start = input.current_token_start();
             let fragment_length = input.slice_len();
             let span = match limit {
                 SpanLength::Unknown => (fragment_start, fragment_length).into(),
@@ -346,7 +346,7 @@ fn parse_matcher_text<'i>(input: &mut Span<'i>) -> PResult<Option<String>> {
         };
 
         if res.as_ref().map(|s| s.is_empty()).unwrap_or(false) {
-            let start = input.location();
+            let start = input.current_token_start();
             input
                 .state
                 .report_error(ParseSingleError::InvalidString((start..0).into()));
@@ -449,7 +449,7 @@ fn parse_regex<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
                 input.reset(&start);
                 match take_till::<_, _, Error>(0.., ')').parse_next(input) {
                     Ok(_) => {
-                        let start = input.location();
+                        let start = input.current_token_start();
                         let err = ParseSingleError::ExpectedCloseRegex((start, 0).into());
                         input.state.report_error(err);
                         return Ok(None);
@@ -464,10 +464,10 @@ fn parse_regex<'i>(input: &mut Span<'i>) -> PResult<Option<NameMatcher>> {
                 let end = input.checkpoint();
 
                 input.reset(&start);
-                let start = input.location();
+                let start = input.current_token_start();
 
                 input.reset(&end);
-                let end = input.location();
+                let end = input.current_token_start();
 
                 let err = ParseSingleError::invalid_regex(&res, start, end);
                 input.state.report_error(err);
@@ -512,7 +512,7 @@ fn recover_unexpected_comma<'i>(input: &mut Span<'i>) -> PResult<()> {
         let start = input.checkpoint();
         match peek(ws(',')).parse_next(input) {
             Ok(_) => {
-                let pos = input.location();
+                let pos = input.current_token_start();
                 input
                     .state
                     .report_error(ParseSingleError::UnexpectedComma((pos..0).into()));
@@ -535,10 +535,10 @@ fn nullary_set_def<'a>(
     make_set: fn(SourceSpan) -> SetDef,
 ) -> impl ModalParser<Span<'a>, Option<SetDef>, Error> {
     move |i: &mut Span<'_>| {
-        let start = i.location();
+        let start = i.current_token_start();
         let _ = literal(name).parse_next(i)?;
         let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
-        let err_loc = i.location();
+        let err_loc = i.current_token_start();
         match take_till::<_, _, Error>(0.., ')').parse_next(i) {
             Ok(res) => {
                 if !res.trim().is_empty() {
@@ -550,7 +550,7 @@ fn nullary_set_def<'a>(
             Err(_) => unreachable!(),
         };
         let _ = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
-        let end = i.location();
+        let end = i.current_token_start();
         Ok(Some(make_set((start, end - start).into())))
     }
 }
@@ -585,9 +585,9 @@ fn unary_set_def<'a>(
     move |i: &mut _| {
         let _ = literal(name).parse_next(i)?;
         let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
-        let start = i.location();
+        let start = i.current_token_start();
         let res = set_matcher(default_matcher).parse_next(i)?;
-        let end = i.location();
+        let end = i.current_token_start();
         recover_unexpected_comma.parse_next(i)?;
         let _ = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
         Ok(res.map(|matcher| make_set(matcher, (start, end - start).into())))
@@ -597,10 +597,10 @@ fn unary_set_def<'a>(
 fn platform_def(i: &mut Span<'_>) -> PResult<Option<SetDef>> {
     let _ = "platform".parse_next(i)?;
     let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
-    let start = i.location();
+    let start = i.current_token_start();
     // Try parsing the argument as a string for better error messages.
     let res = ws(parse_matcher_text).parse_next(i)?;
-    let end = i.location();
+    let end = i.current_token_start();
     recover_unexpected_comma.parse_next(i)?;
     let _ = expect_char(')', ParseSingleError::ExpectedCloseParenthesis).parse_next(i)?;
 
@@ -771,7 +771,7 @@ fn parse_or_operator<'i>(input: &mut Span<'i>) -> PResult<Option<OrOperator>> {
         "parse_or_operator",
         ws(alt((
             |input: &mut Span<'i>| {
-                let start = input.location();
+                let start = input.current_token_start();
                 // This is not a valid OR operator in this position, but catch it to provide a better
                 // experience.
                 let op = alt(("||", "OR ")).parse_next(input)?;
@@ -874,7 +874,7 @@ fn parse_and_or_difference_operator<'i>(
         "parse_and_or_difference_operator",
         ws(alt((
             |input: &mut Span<'i>| {
-                let start = input.location();
+                let start = input.current_token_start();
                 let op = alt(("&&", "AND ")).parse_next(input)?;
                 // && is not supported in filtersets: suggest using & instead.
                 let length = op.len();

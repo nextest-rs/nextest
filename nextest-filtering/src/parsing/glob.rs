@@ -62,7 +62,7 @@ pub(super) fn parse_glob<'i>(
     implicit: bool,
 ) -> impl ModalParser<Span<'i>, Option<NameMatcher>, Error> {
     trace("parse_glob", move |input: &mut Span<'i>| {
-        let start = input.location();
+        let start = input.current_token_start();
         let res = match parse_matcher_text.parse_next(input) {
             Ok(res) => res,
             Err(_) => {
@@ -77,7 +77,7 @@ pub(super) fn parse_glob<'i>(
         match GenericGlob::new(parsed_value) {
             Ok(glob) => Ok(Some(NameMatcher::Glob { glob, implicit })),
             Err(error) => {
-                let end = input.location();
+                let end = input.current_token_start();
                 let err = ParseSingleError::InvalidGlob {
                     span: (start, end - start).into(),
                     error,
