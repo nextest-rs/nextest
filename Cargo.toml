@@ -78,7 +78,7 @@ libc = "0.2.169"
 libtest-mimic = "0.8.1"
 log = "0.4.24"
 maplit = "1.0.2"
-miette = "7.4.0"
+miette = "7.5.0"
 mukti-metadata = "0.3.0"
 # note: we don't use owo-colors' if_supports_color support for now, instead preferring to use our
 # own supports-color + stylesheets everywhere.
