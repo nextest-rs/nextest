@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Path, Utf8PathBuf};
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{ensure, Context, Result};
 use duct::cmd;
 use fixture_data::models::TestCaseFixtureStatus;
 use guppy::{graph::PackageGraph, MetadataCommand};
@@ -32,51 +32,101 @@ use std::{
     sync::Arc,
 };
 
-pub(crate) fn make_execution_result(
+pub(crate) fn ensure_execution_result(
+    actual: &ExecutionResult,
     status: TestCaseFixtureStatus,
     total_attempts: usize,
-) -> ExecutionResult {
+) -> Result<()> {
     match status {
-        TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::IgnoredPass => ExecutionResult::Pass,
+        TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::IgnoredPass => {
+            ensure!(
+                actual == &ExecutionResult::Pass,
+                "pass: actual result ({actual:?}) matches expected"
+            );
+        }
         TestCaseFixtureStatus::Flaky { pass_attempt } => {
             if pass_attempt <= total_attempts {
-                ExecutionResult::Pass
+                ensure!(
+                    actual == &ExecutionResult::Pass,
+                    "flaky (passing attempt): actual result ({actual:?}) matches expected"
+                );
             } else {
-                ExecutionResult::Fail {
-                    abort_status: None,
-                    leaked: false,
-                }
+                ensure!(
+                    actual
+                        == &ExecutionResult::Fail {
+                            abort_status: None,
+                            leaked: false
+                        },
+                    "flaky (failing attempt): actual result ({actual:?}) matches expected"
+                );
             }
         }
         TestCaseFixtureStatus::Segfault => {
             cfg_if::cfg_if! {
                 if #[cfg(unix)] {
-                    // SIGSEGV is 11.
-                    let abort_status = Some(AbortStatus::UnixSignal(11));
+                    // SIGSEGV is 11. Newer versions of Rust may use SIGABRT
+                    // instead, which is 6. Check for either.
+                    let (abort_status, leaked) = match actual {
+                        ExecutionResult::Fail {
+                            abort_status,
+                            leaked,
+                        } => (abort_status, *leaked),
+                        _ => color_eyre::eyre::bail!("expected ExecutionResult::Fail, found {actual:?}"),
+                    };
+
+                    ensure!(
+                        *abort_status == Some(AbortStatus::UnixSignal(11))
+                            || *abort_status == Some(AbortStatus::UnixSignal(6)),
+                        "segfault: expected SIGSEGV or SIGABRT, found {abort_status:?}"
+                    );
+                    ensure!(!leaked, "segfault: expected no leaks, found leaked");
                 } else if #[cfg(windows)] {
                     // A segfault is an access violation on Windows.
                     let abort_status = Some(AbortStatus::WindowsNtStatus(
                         windows_sys::Win32::Foundation::STATUS_ACCESS_VIOLATION,
                     ));
+                    ensure!(
+                        actual == &ExecutionResult::Fail {
+                            abort_status,
+                            leaked: false,
+                        },
+                        "segfault: actual result ({actual:?}) matches expected"
+                    );
                 } else {
-                    let abort_status = None;
+                    // Unsupported platform.
+                    compile_error!("unsupported platform");
                 }
             }
-            ExecutionResult::Fail {
-                abort_status,
-                leaked: false,
-            }
         }
-        TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::IgnoredFail => ExecutionResult::Fail {
-            abort_status: None,
-            leaked: false,
-        },
-        TestCaseFixtureStatus::FailLeak => ExecutionResult::Fail {
-            abort_status: None,
-            leaked: true,
-        },
-        TestCaseFixtureStatus::Leak => ExecutionResult::Leak,
+        TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::IgnoredFail => {
+            ensure!(
+                actual
+                    == &ExecutionResult::Fail {
+                        abort_status: None,
+                        leaked: false
+                    },
+                "fail: actual result ({actual:?}) matches expected"
+            );
+        }
+        TestCaseFixtureStatus::FailLeak => {
+            ensure!(
+                actual
+                    == &ExecutionResult::Fail {
+                        abort_status: None,
+                        leaked: true
+                    },
+                "fail + leak: actual result ({actual:?}) matches expected"
+            );
+        }
+        TestCaseFixtureStatus::Leak => {
+            ensure!(
+                actual == &ExecutionResult::Leak,
+                "leak: actual result ({actual:?}) matches expected"
+            );
+        }
     }
+
+    Ok(())
 }
 
 #[track_caller]
