@@ -156,7 +156,9 @@ impl CheckResult {
             CheckResult::Leak => Regex::new(&format!(r"LEAK \[.*\] *{name}")).unwrap(),
             CheckResult::Fail => Regex::new(&format!(r"FAIL \[.*\] *{name}")).unwrap(),
             CheckResult::FailLeak => Regex::new(&format!(r"FAIL \+ LEAK \[.*\] *{name}")).unwrap(),
-            CheckResult::Abort => Regex::new(&format!(r"(ABORT|SIGSEGV) \[.*\] *{name}")).unwrap(),
+            CheckResult::Abort => {
+                Regex::new(&format!(r"(ABORT|SIGSEGV|SIGABRT) \[.*\] *{name}")).unwrap()
+            }
         }
     }
 

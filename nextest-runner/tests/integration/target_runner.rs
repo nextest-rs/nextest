@@ -3,7 +3,7 @@
 
 use crate::fixtures::*;
 use camino::Utf8Path;
-use color_eyre::Result;
+use color_eyre::{eyre::ensure, Result};
 use fixture_data::nextest_tests::EXPECTED_TEST_SUITES;
 use nextest_runner::{
     cargo_config::{CargoConfigs, TargetTriple},
@@ -263,7 +263,10 @@ fn test_run_with_target_runner() -> Result<()> {
                     )
                 });
             let valid = match &instance_value.status {
-                InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
+                InstanceStatus::Skipped(_) => {
+                    ensure!(fixture.status.is_ignored(), "test should be skipped");
+                    Ok(())
+                }
                 InstanceStatus::Finished(run_statuses) => {
                     // This test should not have been retried since retries aren't configured.
                     assert_eq!(
@@ -274,26 +277,31 @@ fn test_run_with_target_runner() -> Result<()> {
                     );
                     let run_status = run_statuses.last_status();
 
-                    #[cfg_attr(not(unix), expect(unused_mut))]
-                    let mut expected_status = make_execution_result(fixture.status, 1);
-                    // On Unix, segfaults aren't passed through by the passthrough runner.
                     cfg_if::cfg_if! {
                         if #[cfg(unix)] {
+                            // On Unix, segfaults aren't passed through by the
+                            // passthrough runner.
                             if fixture.status == fixture_data::models::TestCaseFixtureStatus::Segfault {
-                                expected_status = nextest_runner::reporter::events::ExecutionResult::Fail {
-                                    abort_status: None,
-                                    leaked: false,
-                                };
+                                ensure_execution_result(
+                                    &run_status.result,
+                                    fixture_data::models::TestCaseFixtureStatus::Fail,
+                                    1,
+                                )
+                            } else {
+                                ensure_execution_result(&run_status.result, fixture.status, 1)
                             }
+                        } else if #[cfg(windows)] {
+                            ensure_execution_result(&run_status.result, fixture.status, 1)
+                        } else {
+                            compile_error!("unsupported platform")
                         }
                     }
-                    run_status.result == expected_status
                 }
             };
-            if !valid {
+            if let Err(error) = valid {
                 panic!(
-                    "for test {}, mismatch in status: expected {:?}, actual {:?}",
-                    fixture.name, fixture.status, instance_value.status
+                    "for test {}, mismatch in status: expected {:?}, actual {:?}, error: {}",
+                    fixture.name, fixture.status, instance_value.status, error
                 );
             }
         }

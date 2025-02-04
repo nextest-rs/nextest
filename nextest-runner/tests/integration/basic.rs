@@ -3,7 +3,7 @@
 
 use crate::fixtures::*;
 use cfg_if::cfg_if;
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{ensure, Result};
 use fixture_data::{
     models::{TestCaseFixtureStatus, TestSuiteFixture},
     nextest_tests::{get_expected_test, EXPECTED_TEST_SUITES},
@@ -148,21 +148,23 @@ fn test_run() -> Result<()> {
                         fixture.name
                     )
                 });
-            let valid = match &instance_value.status {
-                InstanceStatus::Skipped(_) => fixture.status.is_ignored(),
-                InstanceStatus::Finished(run_statuses) => {
-                    // This test should not have been retried since retries aren't configured.
-                    assert_eq!(
-                        run_statuses.len(),
-                        1,
-                        "test {} should have been run exactly once",
-                        fixture.name
-                    );
-                    let run_status = run_statuses.last_status();
+            let valid = || {
+                match &instance_value.status {
+                    InstanceStatus::Skipped(_) => {
+                        ensure!(fixture.status.is_ignored(), "test should be skipped");
+                        Ok(())
+                    }
+                    InstanceStatus::Finished(run_statuses) => {
+                        // This test should not have been retried since retries aren't configured.
+                        assert_eq!(
+                            run_statuses.len(),
+                            1,
+                            "test {} should have been run exactly once",
+                            fixture.name
+                        );
+                        let run_status = run_statuses.last_status();
 
-                    if run_status.result != make_execution_result(fixture.status, 1) {
-                        false
-                    } else {
+                        ensure_execution_result(&run_status.result, fixture.status, 1)?;
                         // Extracting descriptions works for segfaults on Unix but not on Windows.
                         #[cfg_attr(not(unix), expect(unused_mut))]
                         let mut can_extract_description = fixture.status
@@ -197,14 +199,15 @@ fn test_run() -> Result<()> {
                                 stderr.as_str_lossy(),
                             );
                         }
-                        true
+
+                        Ok(())
                     }
                 }
             };
-            if !valid {
+            if let Err(error) = valid() {
                 panic!(
-                    "for test {}, mismatch in status: expected {:?}, actual {:?}",
-                    fixture.name, fixture.status, instance_value.status
+                    "for test {}, mismatch in status: expected {:?}, actual {:?}, error: {}",
+                    fixture.name, fixture.status, instance_value.status, error,
                 );
             }
         }
@@ -275,7 +278,13 @@ fn test_run_ignored() -> Result<()> {
             let instance_value =
                 &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];
             let valid = match &instance_value.status {
-                InstanceStatus::Skipped(_) => !fixture.status.is_ignored(),
+                InstanceStatus::Skipped(_) => {
+                    ensure!(
+                        !fixture.status.is_ignored(),
+                        "non-ignored tests should be skipped"
+                    );
+                    Ok(())
+                }
                 InstanceStatus::Finished(run_statuses) => {
                     // This test should not have been retried since retries aren't configured.
                     assert_eq!(
@@ -285,13 +294,13 @@ fn test_run_ignored() -> Result<()> {
                         fixture.name
                     );
                     let run_status = run_statuses.last_status();
-                    run_status.result == make_execution_result(fixture.status, 1)
+                    ensure_execution_result(&run_status.result, fixture.status, 1)
                 }
             };
-            if !valid {
+            if let Err(error) = valid {
                 panic!(
-                    "for test {}, mismatch in status: expected {:?}, actual {:?}",
-                    fixture.name, fixture.status, instance_value.status
+                    "for test {}, mismatch in status: expected {:?}, actual {:?}, error: {}",
+                    fixture.name, fixture.status, instance_value.status, error,
                 );
             }
         }
