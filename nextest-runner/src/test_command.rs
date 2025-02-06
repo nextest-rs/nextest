@@ -10,12 +10,12 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::graph::PackageMetadata;
-use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fs::File,
     io::{BufRead, BufReader},
+    sync::LazyLock,
 };
 use tracing::warn;
 
@@ -263,7 +263,7 @@ pub(crate) fn apply_ld_dyld_env(cmd: &mut std::process::Command, dylib_path: &Os
         var.starts_with("LD_") || var.starts_with("DYLD_")
     }
 
-    static LD_DYLD_ENV_VARS: Lazy<HashMap<String, OsString>> = Lazy::new(|| {
+    static LD_DYLD_ENV_VARS: LazyLock<HashMap<String, OsString>> = LazyLock::new(|| {
         std::env::vars_os()
             .filter_map(|(k, v)| match k.into_string() {
                 Ok(k) => is_sip_sanitized(&k).then_some((k, v)),

@@ -1100,8 +1100,8 @@ mod tests {
     use maplit::btreemap;
     use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
     use nextest_metadata::{FilterMatch, MismatchReason, PlatformLibdirUnavailable};
-    use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
+    use std::sync::LazyLock;
     use target_spec::Platform;
 
     #[test]
@@ -1420,7 +1420,7 @@ mod tests {
         );
     }
 
-    static PACKAGE_GRAPH_FIXTURE: Lazy<PackageGraph> = Lazy::new(|| {
+    static PACKAGE_GRAPH_FIXTURE: LazyLock<PackageGraph> = LazyLock::new(|| {
         static FIXTURE_JSON: &str = include_str!("../../../fixtures/cargo-metadata.json");
         let metadata = CargoMetadata::parse_json(FIXTURE_JSON).expect("fixture is valid JSON");
         metadata

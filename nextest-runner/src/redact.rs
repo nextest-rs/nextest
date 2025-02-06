@@ -10,12 +10,16 @@ use crate::{
     list::RustBuildMeta,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use once_cell::sync::Lazy;
 use regex::Regex;
-use std::{collections::BTreeMap, fmt, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
-static CRATE_NAME_HASH_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^([a-zA-Z0-9_-]+)-[a-f0-9]{16}$").unwrap());
+static CRATE_NAME_HASH_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([a-zA-Z0-9_-]+)-[a-f0-9]{16}$").unwrap());
 static TARGET_DIR_REDACTION: &str = "<target-dir>";
 static FILE_COUNT_REDACTION: &str = "<file-count>";
 static DURATION_REDACTION: &str = "<duration>";

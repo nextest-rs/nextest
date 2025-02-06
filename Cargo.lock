@@ -379,7 +379,6 @@ dependencies = [
  "nextest-metadata",
  "nextest-runner",
  "nextest-workspace-hack",
- "once_cell",
  "owo-colors 4.1.0",
  "pathdiff",
  "quick-junit",
@@ -957,7 +956,6 @@ dependencies = [
  "maplit",
  "nextest-metadata",
  "nextest-workspace-hack",
- "once_cell",
 ]
 
 [[package]]
@@ -1902,7 +1900,6 @@ dependencies = [
  "nextest-metadata",
  "nextest-workspace-hack",
  "nix",
- "once_cell",
  "owo-colors 4.1.0",
  "pathdiff",
  "pin-project-lite",

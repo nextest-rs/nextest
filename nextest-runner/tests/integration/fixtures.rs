@@ -24,12 +24,11 @@ use nextest_runner::{
     test_filter::{FilterBound, TestFilterBuilder},
     test_output::{ChildExecutionOutput, ChildOutput},
 };
-use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, HashMap},
     env, fmt,
     io::Cursor,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 pub(crate) fn ensure_execution_result(
@@ -197,7 +196,7 @@ pub(crate) fn load_config() -> NextestConfig {
     .expect("loaded fixture config")
 }
 
-pub(crate) static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
+pub(crate) static PACKAGE_GRAPH: LazyLock<PackageGraph> = LazyLock::new(|| {
     let mut metadata_command = MetadataCommand::new();
     // Construct a package graph with --no-deps since we don't need full dependency
     // information.
@@ -208,8 +207,8 @@ pub(crate) static PACKAGE_GRAPH: Lazy<PackageGraph> = Lazy::new(|| {
         .expect("building package graph failed")
 });
 
-pub(crate) static FIXTURE_RAW_CARGO_TEST_OUTPUT: Lazy<Vec<u8>> =
-    Lazy::new(init_fixture_raw_cargo_test_output);
+pub(crate) static FIXTURE_RAW_CARGO_TEST_OUTPUT: LazyLock<Vec<u8>> =
+    LazyLock::new(init_fixture_raw_cargo_test_output);
 
 fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
     // This is a simple version of what cargo does.
@@ -238,7 +237,7 @@ fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
     output.stdout
 }
 
-pub(crate) static FIXTURE_TARGETS: Lazy<FixtureTargets> = Lazy::new(FixtureTargets::new);
+pub(crate) static FIXTURE_TARGETS: LazyLock<FixtureTargets> = LazyLock::new(FixtureTargets::new);
 
 #[derive(Debug)]
 pub(crate) struct FixtureTargets {

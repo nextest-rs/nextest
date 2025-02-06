@@ -1,8 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use once_cell::sync::Lazy;
-use std::fmt::Write;
+use std::{fmt::Write, sync::LazyLock};
 
 pub(crate) fn short() -> &'static str {
     &VERSION_INFO.short
@@ -13,7 +12,7 @@ pub(crate) fn long() -> &'static str {
 }
 
 // All the data here is static so we can use a singleton.
-static VERSION_INFO: Lazy<VersionInfo> = Lazy::new(|| {
+static VERSION_INFO: LazyLock<VersionInfo> = LazyLock::new(|| {
     let inner = VersionInfoInner::new();
     let short = inner.to_short();
     let long = inner.to_long();

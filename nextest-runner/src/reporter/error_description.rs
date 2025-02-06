@@ -8,9 +8,8 @@ use crate::{
     test_output::{ChildExecutionOutput, ChildOutput},
 };
 use bstr::ByteSlice;
-use once_cell::sync::Lazy;
 use regex::bytes::{Regex, RegexBuilder};
-use std::fmt;
+use std::{fmt, sync::LazyLock};
 use thiserror::Error;
 
 /// Given an error or failure running a test or script, collects and aggregates
@@ -342,14 +341,14 @@ fn heuristic_error_str(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
 // This regex works for the default panic handler for Rust -- other panic handlers may not work,
 // which is why this is heuristic.
 static PANICKED_AT_REGEX_STR: &str = "^thread '([^']+)' panicked at ";
-static PANICKED_AT_REGEX: Lazy<Regex> = Lazy::new(|| {
+static PANICKED_AT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     let mut builder = RegexBuilder::new(PANICKED_AT_REGEX_STR);
     builder.multi_line(true);
     builder.build().unwrap()
 });
 
 static ERROR_REGEX_STR: &str = "^Error: ";
-static ERROR_REGEX: Lazy<Regex> = Lazy::new(|| {
+static ERROR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     let mut builder = RegexBuilder::new(ERROR_REGEX_STR);
     builder.multi_line(true);
     builder.build().unwrap()
