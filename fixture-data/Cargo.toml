@@ -12,4 +12,3 @@ publish = false
 maplit.workspace = true
 nextest-metadata.workspace = true
 nextest-workspace-hack.workspace = true
-once_cell.workspace = true

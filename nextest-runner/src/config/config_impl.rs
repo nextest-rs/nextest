@@ -24,10 +24,10 @@ use config::{
 use guppy::graph::PackageGraph;
 use indexmap::IndexMap;
 use nextest_filtering::{EvalContext, TestQuery};
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::{
     collections::{hash_map, BTreeMap, BTreeSet, HashMap},
+    sync::LazyLock,
     time::Duration,
 };
 use tracing::warn;
@@ -35,13 +35,14 @@ use tracing::warn;
 /// Gets the number of available CPUs and caches the value.
 #[inline]
 pub fn get_num_cpus() -> usize {
-    static NUM_CPUS: Lazy<usize> = Lazy::new(|| match std::thread::available_parallelism() {
-        Ok(count) => count.into(),
-        Err(err) => {
-            warn!("unable to determine num-cpus ({err}), assuming 1 logical CPU");
-            1
-        }
-    });
+    static NUM_CPUS: LazyLock<usize> =
+        LazyLock::new(|| match std::thread::available_parallelism() {
+            Ok(count) => count.into(),
+            Err(err) => {
+                warn!("unable to determine num-cpus ({err}), assuming 1 logical CPU");
+                1
+            }
+        });
 
     *NUM_CPUS
 }

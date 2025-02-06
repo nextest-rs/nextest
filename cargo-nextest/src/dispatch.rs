@@ -44,7 +44,6 @@ use nextest_runner::{
     write_str::WriteStr,
     RustcCli,
 };
-use once_cell::sync::OnceCell;
 use owo_colors::OwoColorize;
 use quick_junit::XmlString;
 use semver::Version;
@@ -53,7 +52,7 @@ use std::{
     env::VarError,
     fmt,
     io::{Cursor, Write},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 use swrite::{swrite, SWrite};
 use tracing::{debug, info, warn, Level};
@@ -1133,8 +1132,8 @@ struct BaseApp {
     current_version: Version,
 
     cargo_configs: CargoConfigs,
-    double_spawn: OnceCell<DoubleSpawnInfo>,
-    target_runner: OnceCell<TargetRunner>,
+    double_spawn: OnceLock<DoubleSpawnInfo>,
+    target_runner: OnceLock<TargetRunner>,
 }
 
 impl BaseApp {
@@ -1235,8 +1234,8 @@ impl BaseApp {
             cargo_configs,
             current_version,
 
-            double_spawn: OnceCell::new(),
-            target_runner: OnceCell::new(),
+            double_spawn: OnceLock::new(),
+            target_runner: OnceLock::new(),
         })
     }
 
