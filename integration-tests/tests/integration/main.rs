@@ -1382,8 +1382,9 @@ fn test_target_arg() {
     set_env_vars();
     let p = TempProject::new().unwrap();
 
-    let host_platform = Platform::current().expect("should detect the host target successfully");
-    let host_triple = host_platform.triple_str();
+    let build_target_platform =
+        Platform::build_target().expect("should detect the host target successfully");
+    let host_triple = build_target_platform.triple_str();
     let output = CargoNextestCli::for_test()
         .args([
             "--manifest-path",
@@ -1400,7 +1401,10 @@ fn test_target_arg() {
         .rust_build_meta
         .platforms
         .expect("should have the platforms field");
-    assert_eq!(build_platforms.host.platform, host_platform.to_summary());
+    assert_eq!(
+        build_platforms.host.platform,
+        build_target_platform.to_summary()
+    );
     assert_eq!(build_platforms.targets[0].platform.triple, host_triple);
     assert_eq!(
         build_platforms.targets[0].libdir,

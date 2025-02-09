@@ -182,7 +182,8 @@ pub struct HostPlatform {
 impl HostPlatform {
     /// Creates a new `HostPlatform` representing the current platform.
     pub fn current(libdir: PlatformLibdir) -> Result<Self, UnknownHostPlatform> {
-        let platform = Platform::current().map_err(|error| UnknownHostPlatform { error })?;
+        // TODO: replace with `rustc -vV` output.
+        let platform = Platform::build_target().map_err(|error| UnknownHostPlatform { error })?;
         Ok(Self { platform, libdir })
     }
 

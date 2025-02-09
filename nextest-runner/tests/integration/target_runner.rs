@@ -170,7 +170,7 @@ fn passthrough_path() -> &'static Utf8Path {
 
 fn current_runner_env_var() -> String {
     PlatformRunner::runner_env_var(
-        &Platform::current().expect("current platform is known to target-spec"),
+        &Platform::build_target().expect("current platform is known to target-spec"),
     )
 }
 

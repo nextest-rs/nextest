@@ -222,7 +222,10 @@ impl NextestReleases {
     }
 
     fn target_triple(&self) -> String {
-        let current = Platform::current().expect("current platform could not be detected");
+        // In this case, use the build target, *not* `rustc -vV` output. This
+        // ensures that e.g. musl binary updates continue to use the musl
+        // target.
+        let current = Platform::build_target().expect("build target could not be detected");
         let triple_str = current.triple_str();
         if triple_str.ends_with("-apple-darwin") {
             // Nextest builds a universal binary for Mac.
