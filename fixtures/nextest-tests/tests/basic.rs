@@ -280,6 +280,10 @@ fn test_cargo_env_vars() {
     );
 
     assert_eq!(std::env::var("MY_ENV_VAR").as_deref(), Ok("my-env-var"));
+    assert_eq!(
+        std::env::var("SCRIPT_NEXTEST_PROFILE").expect("SCRIPT_NEXTEST_PROFILE is set by script"),
+        std::env::var("NEXTEST_PROFILE").expect("NEXTEST_PROFILE is set by nextest"),
+    );
 }
 
 #[test]

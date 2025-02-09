@@ -293,12 +293,14 @@ impl FixtureTargets {
 
     pub(crate) fn make_test_list(
         &self,
+        profile_name: &str,
         test_filter: &TestFilterBuilder,
         target_runner: &TargetRunner,
     ) -> Result<TestList<'_>> {
         let test_bins: Vec<_> = self.test_artifacts.values().cloned().collect();
         let double_spawn = DoubleSpawnInfo::disabled();
         let ctx = TestExecuteContext {
+            profile_name,
             double_spawn: &double_spawn,
             target_runner,
         };

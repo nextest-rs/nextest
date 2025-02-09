@@ -331,7 +331,8 @@ impl<'a> ExecutorContext<'a> {
         resp_tx: &UnboundedSender<ExecutorEvent<'a>>,
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> Result<InternalSetupScriptExecuteStatus<'a>, ChildStartError> {
-        let mut cmd = script.make_command(&self.double_spawn, self.test_list)?;
+        let mut cmd =
+            script.make_command(self.profile.name(), &self.double_spawn, self.test_list)?;
         let command_mut = cmd.command_mut();
 
         command_mut.env("NEXTEST_RUN_ID", format!("{}", self.run_id));
@@ -607,6 +608,7 @@ impl<'a> ExecutorContext<'a> {
         req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
     ) -> Result<InternalExecuteStatus<'a>, ChildStartError> {
         let ctx = TestExecuteContext {
+            profile_name: self.profile.name(),
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
         };
@@ -996,10 +998,11 @@ impl<'a> SetupScriptPacket<'a> {
     /// Turns self into a command that can be executed.
     fn make_command(
         &self,
+        profile_name: &str,
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
     ) -> Result<SetupScriptCommand, ChildStartError> {
-        SetupScriptCommand::new(self.config, double_spawn, test_list)
+        SetupScriptCommand::new(self.config, profile_name, double_spawn, test_list)
     }
 
     fn slow_event(&self, elapsed: Duration, will_terminate: Option<Duration>) -> ExecutorEvent<'a> {

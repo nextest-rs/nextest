@@ -246,6 +246,7 @@ impl<'g> TestList<'g> {
             rust_build_meta: &rust_build_meta,
             double_spawn: ctx.double_spawn,
             dylib_path: &updated_dylib_path,
+            profile_name: ctx.profile_name,
             env: &env,
         };
 
@@ -1044,6 +1045,7 @@ impl<'a> TestInstance<'a> {
             rust_build_meta: &test_list.rust_build_meta,
             double_spawn: ctx.double_spawn,
             dylib_path: test_list.updated_dylib_path(),
+            profile_name: ctx.profile_name,
             env: &test_list.env,
         };
 
@@ -1079,6 +1081,9 @@ impl fmt::Display for TestInstanceId<'_> {
 /// Context required for test execution.
 #[derive(Clone, Debug)]
 pub struct TestExecuteContext<'a> {
+    /// The name of the profile.
+    pub profile_name: &'a str,
+
     /// Double-spawn info.
     pub double_spawn: &'a DoubleSpawnInfo,
 

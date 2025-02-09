@@ -72,7 +72,11 @@ fn test_list_tests() -> Result<()> {
     set_env_vars();
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        NextestConfig::DEFAULT_PROFILE,
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
     let mut summary = test_list.to_summary();
 
     for (name, expected) in &*EXPECTED_TEST_SUITES {
@@ -111,7 +115,11 @@ fn test_run() -> Result<()> {
     set_env_vars();
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        NextestConfig::DEFAULT_PROFILE,
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
     let config = load_config();
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
@@ -243,7 +251,11 @@ fn test_run_ignored() -> Result<()> {
         vec![expr],
     )
     .unwrap();
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        NextestConfig::DEFAULT_PROFILE,
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
     let config = load_config();
     let profile = config
         .profile(NextestConfig::DEFAULT_PROFILE)
@@ -344,7 +356,11 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
         vec![expr],
     )
     .unwrap();
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        NextestConfig::DEFAULT_PROFILE,
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
     for test in test_list.iter_tests() {
         if test.name == "tests::call_dylib_add_two" {
             assert!(
@@ -411,7 +427,11 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
         vec![expr],
     )
     .unwrap();
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        NextestConfig::DEFAULT_PROFILE,
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
     for test in test_list.iter_tests() {
         if test.name.contains("test_multiply_two") || test.name == "tests::call_dylib_add_two" {
             assert!(
@@ -443,7 +463,11 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
         vec![],
     )
     .unwrap();
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        NextestConfig::DEFAULT_PROFILE,
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
     for test in test_list.iter_tests() {
         if test.name.contains("test_multiply_two")
             || test.name.contains("tests::call_dylib_add_two")
@@ -475,7 +499,11 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     set_env_vars();
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
+    let test_list = FIXTURE_TARGETS.make_test_list(
+        NextestConfig::DEFAULT_PROFILE,
+        &test_filter,
+        &TargetRunner::empty(),
+    )?;
     let config = load_config();
     let profile = config
         .profile("with-retries")
@@ -638,7 +666,8 @@ fn test_termination() -> Result<()> {
     )
     .unwrap();
 
-    let test_list = FIXTURE_TARGETS.make_test_list(&test_filter, &TargetRunner::empty())?;
+    let test_list =
+        FIXTURE_TARGETS.make_test_list("with-termination", &test_filter, &TargetRunner::empty())?;
     let config = load_config();
     let profile = config
         .profile("with-termination")
