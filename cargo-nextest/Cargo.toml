@@ -20,6 +20,7 @@ dialoguer.workspace = true
 duct.workspace = true
 enable-ansi-support.workspace = true
 guppy.workspace = true
+indent_write.workspace = true
 itertools.workspace = true
 miette = { workspace = true, features = ["fancy"] }
 # Instead of using workspace dependencies which have floating versions, we pin exact versions here

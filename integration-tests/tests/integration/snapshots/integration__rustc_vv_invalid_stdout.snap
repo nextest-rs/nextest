@@ -1,0 +1,28 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: command.unchecked(true).output().to_snapshot()
+snapshot_kind: text
+---
+exit status|code: Some(96)
+--- stdout ---
+
+
+--- stderr ---
+error: the host platform could not be detected
+
+Caused by:
+  parsing `rustc -vV` output failed, and detecting the build target failed as well
+  - host platform error:
+    error parsing `rustc -vV` output
+      caused by:
+      - output from `rustc -vV` did not contain a `host: ` line; output:
+        ---
+        invalid output to stdout
+        ---
+  - build target error:
+    error parsing `rustc -vV` output
+      caused by:
+      - output from `rustc -vV` did not contain a `host: ` line; output:
+        ---
+        (__NEXTEST_FORCE_BUILD_TARGET set to "error", forcibly failing build target detection)
+        ---

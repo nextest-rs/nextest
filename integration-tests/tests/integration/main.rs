@@ -29,7 +29,7 @@ use integration_tests::{
 };
 use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
 use std::{borrow::Cow, fs::File, io::Write};
-use target_spec::Platform;
+use target_spec::{summaries::TargetFeaturesSummary, Platform};
 
 mod fixtures;
 mod stuck_signal;
@@ -1401,13 +1401,110 @@ fn test_target_arg() {
         .rust_build_meta
         .platforms
         .expect("should have the platforms field");
-    assert_eq!(
-        build_platforms.host.platform,
-        build_target_platform.to_summary()
-    );
+
+    // Target features get reset to unknown, unfortunately, so we can't compare
+    // the full platform.
+    let mut summary = build_target_platform.to_summary();
+    summary.target_features = TargetFeaturesSummary::Unknown;
+    assert_eq!(build_platforms.host.platform, summary);
+
     assert_eq!(build_platforms.targets[0].platform.triple, host_triple);
     assert_eq!(
         build_platforms.targets[0].libdir,
         build_platforms.host.libdir
     );
+}
+
+#[test]
+fn test_rustc_version_verbose_errors() {
+    set_env_vars();
+
+    // Set RUSTC to the shim.
+    let shim_rustc = std::env::var("NEXTEST_BIN_EXE_rustc-shim").unwrap();
+
+    let mut command = CargoNextestCli::for_test();
+    command
+        .args(["debug", "build-platforms", "--output-format", "triple"])
+        .env("RUSTC", &shim_rustc);
+
+    // --- Error cases ---
+    {
+        let mut command = command.clone();
+        command
+            .env("__NEXTEST_RUSTC_SHIM_VERSION_VERBOSE_ERROR", "non-zero")
+            .env("__NEXTEST_FORCE_BUILD_TARGET", "error");
+        insta::assert_snapshot!(
+            "rustc_vv_non_zero",
+            command.unchecked(true).output().to_snapshot()
+        );
+    }
+
+    {
+        let mut command = command.clone();
+        command
+            .env(
+                "__NEXTEST_RUSTC_SHIM_VERSION_VERBOSE_ERROR",
+                "invalid-stdout",
+            )
+            .env("__NEXTEST_FORCE_BUILD_TARGET", "error");
+        insta::assert_snapshot!(
+            "rustc_vv_invalid_stdout",
+            command.unchecked(true).output().to_snapshot()
+        );
+    }
+
+    {
+        let mut command = command.clone();
+        command
+            .env(
+                "__NEXTEST_RUSTC_SHIM_VERSION_VERBOSE_ERROR",
+                "invalid-triple",
+            )
+            .env("__NEXTEST_FORCE_BUILD_TARGET", "error");
+
+        insta::assert_snapshot!(
+            "rustc_vv_invalid_triple",
+            command.unchecked(true).output().to_snapshot()
+        );
+    }
+
+    // --- Warning cases ---
+    {
+        let mut command = command.clone();
+        command
+            .env("__NEXTEST_RUSTC_SHIM_VERSION_VERBOSE_ERROR", "non-zero")
+            .env("__NEXTEST_FORCE_BUILD_TARGET", "x86_64-unknown-linux-gnu");
+        insta::assert_snapshot!(
+            "rustc_vv_non_zero_warning",
+            command.unchecked(true).output().to_snapshot()
+        );
+    }
+
+    {
+        let mut command = command.clone();
+        command
+            .env(
+                "__NEXTEST_RUSTC_SHIM_VERSION_VERBOSE_ERROR",
+                "invalid-stdout",
+            )
+            .env("__NEXTEST_FORCE_BUILD_TARGET", "x86_64-unknown-linux-gnu");
+        insta::assert_snapshot!(
+            "rustc_vv_invalid_stdout_warning",
+            command.unchecked(true).output().to_snapshot()
+        );
+    }
+
+    {
+        let mut command = command.clone();
+        command
+            .env(
+                "__NEXTEST_RUSTC_SHIM_VERSION_VERBOSE_ERROR",
+                "invalid-triple",
+            )
+            .env("__NEXTEST_FORCE_BUILD_TARGET", "x86_64-unknown-linux-gnu");
+        insta::assert_snapshot!(
+            "rustc_vv_invalid_triple_warning",
+            command.unchecked(true).output().to_snapshot()
+        );
+    }
 }

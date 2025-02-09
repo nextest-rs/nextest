@@ -14,6 +14,13 @@ pub struct RustcCli<'a> {
 }
 
 impl<'a> RustcCli<'a> {
+    /// Create a rustc CLI call: `rustc --version --verbose`.
+    pub fn version_verbose() -> Self {
+        let mut cli = Self::default();
+        cli.add_arg("--version").add_arg("--verbose");
+        cli
+    }
+
     /// Create a rustc CLI call: `rustc --print target-libdir`.
     pub fn print_host_libdir() -> Self {
         let mut cli = Self::default();
@@ -36,7 +43,8 @@ impl<'a> RustcCli<'a> {
         self
     }
 
-    fn to_expression(&self) -> duct::Expression {
+    /// Convert the command to a [`duct::Expression`].
+    pub fn to_expression(&self) -> duct::Expression {
         duct::cmd(
             self.rustc_path.as_str(),
             self.args.iter().map(|arg| arg.as_ref()),

@@ -13,7 +13,7 @@ use crate::{
 };
 use camino::{FromPathBufError, Utf8Path, Utf8PathBuf};
 use config::ConfigError;
-use indent_write::fmt::IndentWriter;
+use indent_write::{fmt::IndentWriter, indentable::Indented};
 use itertools::{Either, Itertools};
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::RustBinaryId;
@@ -385,7 +385,7 @@ impl<T: std::error::Error> fmt::Display for ErrorList<T> {
         )?;
         for error in &self.inner {
             let mut indent = IndentWriter::new_skip_initial("  ", f);
-            writeln!(indent, "* {}", DisplayErrorChain(error))?;
+            writeln!(indent, "* {}", DisplayErrorChain::new(error))?;
             f = indent.into_inner();
         }
         Ok(())
@@ -408,11 +408,24 @@ impl<T: std::error::Error> std::error::Error for ErrorList<T> {
 ///
 /// This is similar to the display-error-chain crate, but uses IndentWriter
 /// internally to ensure that subsequent lines are also nested.
-pub(crate) struct DisplayErrorChain<E>(E);
+pub(crate) struct DisplayErrorChain<E> {
+    error: E,
+    initial_indent: &'static str,
+}
 
 impl<E: std::error::Error> DisplayErrorChain<E> {
     pub(crate) fn new(error: E) -> Self {
-        Self(error)
+        Self {
+            error,
+            initial_indent: "",
+        }
+    }
+
+    pub(crate) fn new_with_initial_indent(initial_indent: &'static str, error: E) -> Self {
+        Self {
+            error,
+            initial_indent,
+        }
     }
 }
 
@@ -421,23 +434,26 @@ where
     E: std::error::Error,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)?;
+        let mut writer = IndentWriter::new(self.initial_indent, f);
+        write!(writer, "{}", self.error)?;
 
-        let Some(mut cause) = self.0.source() else {
+        let Some(mut cause) = self.error.source() else {
             return Ok(());
         };
 
-        write!(f, "\n  caused by:")?;
+        write!(writer, "\n  caused by:")?;
 
-        let mut indent = IndentWriter::new_skip_initial("  ", f);
         loop {
-            write!(indent, "\n- {}", cause)?;
+            writeln!(writer)?;
+            let mut indent = IndentWriter::new_skip_initial("    ", writer);
+            write!(indent, "  - {}", cause)?;
 
             let Some(next_cause) = cause.source() else {
                 break Ok(());
             };
 
             cause = next_cause;
+            writer = indent.into_inner();
         }
     }
 }
@@ -762,7 +778,7 @@ pub enum RustBuildMetaParseError {
 
     /// The host platform could not be determined.
     #[error("the host platform could not be determined")]
-    UnknownHostPlatform(#[source] target_spec::Error),
+    DetectBuildTargetError(#[source] target_spec::Error),
 
     /// The build metadata includes features unsupported.
     #[error("unsupported features in the build metadata: {message}")]
@@ -1459,12 +1475,80 @@ pub enum InvalidCargoCliConfigReason {
     DoesntProvideValue,
 }
 
-/// The host platform could not be determined.
+/// The host platform couldn't be detected.
 #[derive(Debug, Error)]
-#[error("the host platform could not be determined")]
-pub struct UnknownHostPlatform {
-    #[source]
-    pub(crate) error: target_spec::Error,
+pub enum HostPlatformDetectError {
+    /// Spawning `rustc -vV` failed, and detecting the build target failed as
+    /// well.
+    #[error(
+        "error spawning `rustc -vV`, and detecting the build \
+         target failed as well\n\
+         - rustc spawn error: {}\n\
+         - build target error: {}\n",
+        DisplayErrorChain::new_with_initial_indent("  ", error),
+        DisplayErrorChain::new_with_initial_indent("  ", build_target_error)
+    )]
+    RustcVvSpawnError {
+        /// The error.
+        error: std::io::Error,
+
+        /// The error that occurred while detecting the build target.
+        build_target_error: Box<target_spec::Error>,
+    },
+
+    /// `rustc -vV` exited with a non-zero code, and detecting the build target
+    /// failed as well.
+    #[error(
+        "`rustc -vV` failed with {}, and detecting the \
+         build target failed as well\n\
+         - `rustc -vV` stdout:\n{}\n\
+         - `rustc -vV` stderr:\n{}\n\
+         - build target error:\n{}\n",
+        status,
+        Indented { item: String::from_utf8_lossy(stdout), indent: "  " },
+        Indented { item: String::from_utf8_lossy(stderr), indent: "  " },
+        DisplayErrorChain::new_with_initial_indent("  ", build_target_error)
+    )]
+    RustcVvFailed {
+        /// The status.
+        status: ExitStatus,
+
+        /// The standard output from `rustc -vV`.
+        stdout: Vec<u8>,
+
+        /// The standard error from `rustc -vV`.
+        stderr: Vec<u8>,
+
+        /// The error that occurred while detecting the build target.
+        build_target_error: Box<target_spec::Error>,
+    },
+
+    /// Parsing the host platform failed, and detecting the build target failed
+    /// as well.
+    #[error(
+        "parsing `rustc -vV` output failed, and detecting the build target \
+         failed as well\n\
+         - host platform error:\n{}\n\
+         - build target error:\n{}\n",
+        DisplayErrorChain::new_with_initial_indent("  ", host_platform_error),
+        DisplayErrorChain::new_with_initial_indent("  ", build_target_error)
+    )]
+    HostPlatformParseError {
+        /// The error that occurred while parsing the host platform.
+        host_platform_error: Box<target_spec::Error>,
+
+        /// The error that occurred while detecting the build target.
+        build_target_error: Box<target_spec::Error>,
+    },
+
+    /// Test-only code: `rustc -vV` was not queried, and detecting the build
+    /// target failed as well.
+    #[error("test-only code, so `rustc -vV` was not called; failed to detect build target")]
+    BuildTargetError {
+        /// The error that occurred while detecting the build target.
+        #[source]
+        build_target_error: Box<target_spec::Error>,
+    },
 }
 
 /// An error occurred while determining the cross-compiling target triple.

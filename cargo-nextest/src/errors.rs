@@ -3,6 +3,7 @@
 
 use crate::{output::StderrStyles, ExtractOutputFormat};
 use camino::Utf8PathBuf;
+use indent_write::indentable::Indented;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
@@ -90,9 +91,9 @@ pub enum ExpectedError {
         err: TestFilterBuilderError,
     },
     #[error("unknown host platform")]
-    UnknownHostPlatform {
+    HostPlatformDetectError {
         #[from]
-        err: UnknownHostPlatform,
+        err: HostPlatformDetectError,
     },
     #[error("target triple error")]
     TargetTripleError {
@@ -398,7 +399,7 @@ impl ExpectedError {
             | Self::RootManifestNotFound { .. }
             | Self::CargoConfigError { .. }
             | Self::TestFilterBuilderError { .. }
-            | Self::UnknownHostPlatform { .. }
+            | Self::HostPlatformDetectError { .. }
             | Self::TargetTripleError { .. }
             | Self::MetadataMaterializeError { .. }
             | Self::UnknownArchiveFormat { .. }
@@ -652,8 +653,8 @@ impl ExpectedError {
                 error!("{err}");
                 err.source()
             }
-            Self::UnknownHostPlatform { err } => {
-                error!("the host platform was unknown to nextest");
+            Self::HostPlatformDetectError { err } => {
+                error!("the host platform could not be detected");
                 Some(err as &dyn Error)
             }
             Self::TargetTripleError { err } => {
@@ -882,7 +883,11 @@ impl ExpectedError {
         };
 
         while let Some(err) = next_error {
-            error!(target: "cargo_nextest::no_heading", "\nCaused by:\n  {}", err);
+            error!(
+                target: "cargo_nextest::no_heading",
+                "\nCaused by:\n{}",
+                Indented { item: err, indent: "  " },
+            );
             next_error = err.source();
         }
     }

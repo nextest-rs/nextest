@@ -31,7 +31,7 @@ fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunn
     .unwrap();
 
     let build_platforms = {
-        let host = HostPlatform::current(PlatformLibdir::from_rustc_stdout(
+        let host = HostPlatform::detect(PlatformLibdir::from_rustc_stdout(
             RustcCli::print_host_libdir().read(),
         ))?;
         let target = if let Some(triple) = TargetTriple::find(&configs, triple)? {

@@ -153,6 +153,24 @@ impl CargoNextestOutput {
     pub fn decode_test_list_json(&self) -> Result<TestListSummary> {
         Ok(serde_json::from_slice(&self.stdout)?)
     }
+
+    /// Returns the output as a (hopefully) platform-independent snapshot that
+    /// can be checked in and compared.
+    pub fn to_snapshot(&self) -> String {
+        // Don't include the command as its representation is
+        // platform-dependent.
+        let output = format!(
+            "exit code: {:?}\n\
+            --- stdout ---\n{}\n\n--- stderr ---\n{}\n",
+            self.exit_status.code(),
+            String::from_utf8_lossy(&self.stdout),
+            String::from_utf8_lossy(&self.stderr),
+        );
+
+        // Turn "exit status" and "exit code" into "exit status|code"
+        let output = output.replace("exit status: ", "exit status|code: ");
+        output.replace("exit code: ", "exit status|code: ")
+    }
 }
 
 impl fmt::Display for CargoNextestOutput {

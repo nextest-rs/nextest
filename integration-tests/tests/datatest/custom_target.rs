@@ -24,7 +24,7 @@ pub(crate) fn custom_invalid(path: &Utf8Path, contents: String) -> datatest_stab
             "--color",
             "always",
             "debug",
-            "show-target",
+            "build-platforms",
             "--target",
             json_path.as_str(),
         ])

@@ -1,0 +1,19 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: command.unchecked(true).output().to_snapshot()
+snapshot_kind: text
+---
+exit status|code: Some(0)
+--- stdout ---
+host triple: x86_64-unknown-linux-gnu
+target triple: (none)
+
+
+--- stderr ---
+warning: for host platform, parsing `rustc -vV` failed; falling back to build target `x86_64-unknown-linux-gnu`
+- host platform error:
+  unknown platform triple
+    caused by:
+    - unknown triple string: invalid-triple
+    - triple not in builtin platforms and heuristic parsing failed
+    - Unrecognized architecture: invalid
