@@ -28,6 +28,7 @@ pub(crate) struct LocalExecuteContext<'a> {
     pub(crate) rust_build_meta: &'a RustBuildMeta<TestListState>,
     pub(crate) double_spawn: &'a DoubleSpawnInfo,
     pub(crate) dylib_path: &'a OsStr,
+    pub(crate) profile_name: &'a str,
     pub(crate) env: &'a EnvironmentMap,
 }
 
@@ -74,6 +75,8 @@ impl TestCommand {
             .env("NEXTEST", "1")
             // This environment variable is set to indicate that each test is being run in its own process.
             .env("NEXTEST_EXECUTION_MODE", "process-per-test")
+            // Set the nextest profile.
+            .env("NEXTEST_PROFILE", lctx.profile_name)
             .env(
                 "CARGO_MANIFEST_DIR",
                 // CARGO_MANIFEST_DIR is set to the *new* cwd after path mapping.

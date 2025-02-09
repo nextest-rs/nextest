@@ -167,6 +167,7 @@ impl SetupScriptCommand {
     /// Creates a new `SetupScriptCommand` for a setup script.
     pub(crate) fn new(
         config: &ScriptConfig,
+        profile_name: &str,
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
     ) -> Result<Self, ChildStartError> {
@@ -185,6 +186,8 @@ impl SetupScriptCommand {
         cmd.current_dir(test_list.workspace_root())
             // This environment variable is set to indicate that tests are being run under nextest.
             .env("NEXTEST", "1")
+            // Set the nextest profile.
+            .env("NEXTEST_PROFILE", profile_name)
             // Setup scripts can define environment variables which are written out here.
             .env("NEXTEST_ENV", &env_path);
 

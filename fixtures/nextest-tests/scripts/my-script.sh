@@ -9,4 +9,11 @@ if [ -n "$__NEXTEST_SETUP_SCRIPT_ERROR" ]; then
     exit 1
 fi
 
+# If NEXTEST_PROFILE is not set, exit with non-zero.
+if [ -z "$NEXTEST_PROFILE" ]; then
+    echo "NEXTEST_PROFILE is not set, exiting with 2"
+    exit 2
+fi
+
 echo MY_ENV_VAR=my-env-var >> "$NEXTEST_ENV"
+echo SCRIPT_NEXTEST_PROFILE="$NEXTEST_PROFILE" >> "$NEXTEST_ENV"

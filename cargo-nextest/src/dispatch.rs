@@ -1634,12 +1634,13 @@ impl App {
                 let target_runner = self
                     .base
                     .load_runner(&binary_list.rust_build_meta.build_platforms);
+                let profile =
+                    profile.apply_build_platforms(&binary_list.rust_build_meta.build_platforms);
                 let ctx = TestExecuteContext {
+                    profile_name: profile.name(),
                     double_spawn,
                     target_runner,
                 };
-                let profile =
-                    profile.apply_build_platforms(&binary_list.rust_build_meta.build_platforms);
                 let ecx = profile.filterset_ecx();
 
                 let test_list =
@@ -1689,11 +1690,12 @@ impl App {
 
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(&build_platforms);
+        let profile = profile.apply_build_platforms(&build_platforms);
         let ctx = TestExecuteContext {
+            profile_name: profile.name(),
             double_spawn,
             target_runner,
         };
-        let profile = profile.apply_build_platforms(&build_platforms);
         let ecx = profile.filterset_ecx();
 
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
@@ -1769,12 +1771,13 @@ impl App {
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(build_platforms);
+
+        let profile = profile.apply_build_platforms(build_platforms);
         let ctx = TestExecuteContext {
+            profile_name: profile.name(),
             double_spawn,
             target_runner,
         };
-
-        let profile = profile.apply_build_platforms(build_platforms);
         let ecx = profile.filterset_ecx();
 
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
