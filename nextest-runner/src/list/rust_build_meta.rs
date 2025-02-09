@@ -215,7 +215,7 @@ mod tests {
         BuildPlatformsSummary, HostPlatformSummary, PlatformLibdirSummary,
         PlatformLibdirUnavailable,
     };
-    use target_spec::summaries::PlatformSummary;
+    use target_spec::{summaries::PlatformSummary, Platform};
     use test_case::test_case;
 
     impl Default for RustBuildMeta<BinaryListState> {
@@ -235,15 +235,19 @@ mod tests {
     }
 
     fn host_current() -> HostPlatform {
-        HostPlatform::current(PlatformLibdir::Unavailable(
-            PlatformLibdirUnavailable::OLD_SUMMARY,
-        ))
-        .expect("should detect the host platform successfully")
+        HostPlatform {
+            platform: Platform::build_target()
+                .expect("should detect the build target successfully"),
+            libdir: PlatformLibdir::Unavailable(PlatformLibdirUnavailable::OLD_SUMMARY),
+        }
     }
 
     fn host_current_with_libdir(libdir: &str) -> HostPlatform {
-        HostPlatform::current(PlatformLibdir::Available(libdir.into()))
-            .expect("should detect the host platform successfully")
+        HostPlatform {
+            platform: Platform::build_target()
+                .expect("should detect the build target successfully"),
+            libdir: PlatformLibdir::Available(libdir.into()),
+        }
     }
 
     fn host_not_current_with_libdir(libdir: &str) -> HostPlatform {
@@ -427,8 +431,7 @@ mod tests {
 
         let rust_build_meta = RustBuildMeta {
             build_platforms: BuildPlatforms {
-                host: HostPlatform::current(PlatformLibdir::Available(host_libdir.clone()))
-                    .expect("should detect the host platform successfully"),
+                host: host_current_with_libdir(host_libdir.as_ref()),
                 target: Some(TargetPlatform::new(
                     TargetTriple::x86_64_unknown_linux_gnu(),
                     PlatformLibdir::Available(target_libdir.clone()),
@@ -467,8 +470,7 @@ mod tests {
             linked_paths: [(Utf8PathBuf::from(tmpdir_dirname), Default::default())].into(),
             base_output_directories: [Utf8PathBuf::from(tmpdir_dirname)].into(),
             build_platforms: BuildPlatforms {
-                host: HostPlatform::current(PlatformLibdir::Available(host_libdir.clone()))
-                    .expect("should detect the host platform successfully"),
+                host: host_current_with_libdir(host_libdir.as_ref()),
                 target: Some(TargetPlatform::new(
                     TargetTriple::x86_64_unknown_linux_gnu(),
                     PlatformLibdir::Available(target_libdir.clone()),

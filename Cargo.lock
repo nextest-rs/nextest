@@ -373,6 +373,7 @@ dependencies = [
  "duct",
  "enable-ansi-support",
  "guppy",
+ "indent_write",
  "itertools 0.14.0",
  "miette",
  "nextest-filtering",

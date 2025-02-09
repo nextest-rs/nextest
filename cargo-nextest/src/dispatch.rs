@@ -1155,22 +1155,7 @@ impl BaseApp {
         // Next, read the build platforms.
         let build_platforms = match reuse_build.binaries_metadata() {
             Some(kind) => kind.binary_list.rust_build_meta.build_platforms.clone(),
-            None => {
-                let host = HostPlatform::current(PlatformLibdir::from_rustc_stdout(
-                    RustcCli::print_host_libdir().read(),
-                ))?;
-
-                let triple_info =
-                    discover_target_triple(&cargo_configs, cargo_opts.target.as_deref())?;
-                let target = triple_info.map(|triple| {
-                    let libdir = PlatformLibdir::from_rustc_stdout(
-                        RustcCli::print_target_libdir(&triple).read(),
-                    );
-                    TargetPlatform::new(triple, libdir)
-                });
-
-                BuildPlatforms { host, target }
-            }
+            None => detect_build_platforms(&cargo_configs, cargo_opts.target.as_deref())?,
         };
 
         // Read the Cargo metadata.
@@ -2103,8 +2088,8 @@ enum DebugCommand {
     /// Print the current executable path.
     CurrentExe,
 
-    /// Show the target platform that nextest would use.
-    ShowTarget {
+    /// Show the build platforms that nextest would use.
+    BuildPlatforms {
         /// The target triple to use.
         #[arg(long)]
         target: Option<String>,
@@ -2112,6 +2097,10 @@ enum DebugCommand {
         /// Override a Cargo configuration value.
         #[arg(long, value_name = "KEY=VALUE")]
         config: Vec<String>,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value_t)]
+        output_format: BuildPlatformsOutputFormat,
     },
 }
 
@@ -2173,13 +2162,31 @@ impl DebugCommand {
                     .map_err(|err| ExpectedError::GetCurrentExeFailed { err })?;
                 println!("{}", exe.display());
             }
-            DebugCommand::ShowTarget { target, config } => {
+            DebugCommand::BuildPlatforms {
+                target,
+                config,
+                output_format,
+            } => {
                 let cargo_configs = CargoConfigs::new(&config).map_err(Box::new)?;
-                let target = discover_target_triple(&cargo_configs, target.as_deref())?;
-                if let Some(target) = target {
-                    println!("{:#?}", target);
-                } else {
-                    println!("no target triple found");
+                let build_platforms = detect_build_platforms(&cargo_configs, target.as_deref())?;
+                match output_format {
+                    BuildPlatformsOutputFormat::Debug => {
+                        println!("{:#?}", build_platforms);
+                    }
+                    BuildPlatformsOutputFormat::Triple => {
+                        println!(
+                            "host triple: {}",
+                            build_platforms.host.platform.triple().as_str()
+                        );
+                        if let Some(target) = &build_platforms.target {
+                            println!(
+                                "target triple: {}",
+                                target.triple.platform.triple().as_str()
+                            );
+                        } else {
+                            println!("target triple: (none)");
+                        }
+                    }
                 }
             }
         }
@@ -2262,6 +2269,17 @@ impl fmt::Display for ExtractOutputFormat {
     }
 }
 
+/// Output format for `nextest debug build-platforms`.
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+pub enum BuildPlatformsOutputFormat {
+    /// Show Debug output.
+    #[default]
+    Debug,
+
+    /// Show just the triple.
+    Triple,
+}
+
 fn acquire_graph_data(
     manifest_path: Option<&Utf8Path>,
     target_dir: Option<&Utf8Path>,
@@ -2301,6 +2319,22 @@ fn acquire_graph_data(
         ExpectedError::cargo_metadata_exec_failed(cargo_cli.all_args(), io_error)
     })?;
     Ok(json)
+}
+
+fn detect_build_platforms(
+    cargo_configs: &CargoConfigs,
+    target_cli_option: Option<&str>,
+) -> Result<BuildPlatforms, ExpectedError> {
+    let host = HostPlatform::detect(PlatformLibdir::from_rustc_stdout(
+        RustcCli::print_host_libdir().read(),
+    ))?;
+    let triple_info = discover_target_triple(cargo_configs, target_cli_option)?;
+    let target = triple_info.map(|triple| {
+        let libdir =
+            PlatformLibdir::from_rustc_stdout(RustcCli::print_target_libdir(&triple).read());
+        TargetPlatform::new(triple, libdir)
+    });
+    Ok(BuildPlatforms { host, target })
 }
 
 fn discover_target_triple(

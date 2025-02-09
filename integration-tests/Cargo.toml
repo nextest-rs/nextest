@@ -13,6 +13,10 @@ path = "test-helpers/cargo-nextest-dup.rs"
 name = "build-seed-archive"
 path = "test-helpers/build-seed-archive.rs"
 
+[[bin]]
+name = "rustc-shim"
+path = "test-helpers/rustc-shim.rs"
+
 [[test]]
 name = "custom-harness"
 harness = false

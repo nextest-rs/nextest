@@ -5,17 +5,23 @@
 
 use crate::{
     cargo_config::{CargoTargetArg, TargetTriple},
-    errors::{RustBuildMetaParseError, TargetTripleError, UnknownHostPlatform},
+    errors::{
+        DisplayErrorChain, HostPlatformDetectError, RustBuildMetaParseError, TargetTripleError,
+    },
     reuse_build::{LibdirMapper, PlatformLibdirMapper},
+    RustcCli,
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use indent_write::indentable::Indented;
 use nextest_metadata::{
     BuildPlatformsSummary, HostPlatformSummary, PlatformLibdirSummary, PlatformLibdirUnavailable,
     TargetPlatformSummary,
 };
-use target_spec::summaries::PlatformSummary;
 pub use target_spec::Platform;
-use tracing::debug;
+use target_spec::{
+    errors::RustcVersionVerboseParseError, summaries::PlatformSummary, TargetFeatures,
+};
+use tracing::{debug, warn};
 
 /// A representation of host and target platform.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,11 +39,18 @@ impl BuildPlatforms {
     /// Creates a new `BuildPlatforms` with no libdirs or targets.
     ///
     /// Used for testing.
-    pub fn new_with_no_target() -> Result<Self, UnknownHostPlatform> {
+    pub fn new_with_no_target() -> Result<Self, HostPlatformDetectError> {
         Ok(Self {
-            host: HostPlatform::current(PlatformLibdir::Unavailable(
-                PlatformLibdirUnavailable::new_const("test"),
-            ))?,
+            host: HostPlatform {
+                // Because this is for testing, we just use the build target
+                // rather than `rustc -vV` output.
+                platform: Platform::build_target().map_err(|build_target_error| {
+                    HostPlatformDetectError::BuildTargetError {
+                        build_target_error: Box::new(build_target_error),
+                    }
+                })?,
+                libdir: PlatformLibdir::Unavailable(PlatformLibdirUnavailable::new_const("test")),
+            },
             target: None,
         })
     }
@@ -127,10 +140,13 @@ impl BuildPlatforms {
         // * the host might be serialized as the target platform as well (we can't detect this case
         //   reliably, so we treat it as the target platform as well, which isn't a problem in
         //   practice).
-        let host = HostPlatform::current(PlatformLibdir::Unavailable(
-            PlatformLibdirUnavailable::OLD_SUMMARY,
-        ))
-        .map_err(|error| RustBuildMetaParseError::UnknownHostPlatform(error.error))?;
+        let host = HostPlatform {
+            // We don't necessarily have `rustc` available, so we use the build
+            // target instead.
+            platform: Platform::build_target()
+                .map_err(RustBuildMetaParseError::DetectBuildTargetError)?,
+            libdir: PlatformLibdir::Unavailable(PlatformLibdirUnavailable::OLD_SUMMARY),
+        };
 
         let target = TargetTriple::deserialize(Some(summary))?.map(|triple| {
             TargetPlatform::new(
@@ -153,10 +169,13 @@ impl BuildPlatforms {
         // * the host might be serialized as the target platform as well (we can't detect this case
         //   reliably, so we treat it as the target platform as well, which isn't a problem in
         //   practice).
-        let host = HostPlatform::current(PlatformLibdir::Unavailable(
-            PlatformLibdirUnavailable::OLD_SUMMARY,
-        ))
-        .map_err(|error| RustBuildMetaParseError::UnknownHostPlatform(error.error))?;
+        let host = HostPlatform {
+            // We don't necessarily have `rustc` available, so we use the build
+            // target instead.
+            platform: Platform::build_target()
+                .map_err(RustBuildMetaParseError::DetectBuildTargetError)?,
+            libdir: PlatformLibdir::Unavailable(PlatformLibdirUnavailable::OLD_SUMMARY),
+        };
 
         let target = TargetTriple::deserialize_str(summary)?.map(|triple| {
             TargetPlatform::new(
@@ -180,10 +199,12 @@ pub struct HostPlatform {
 }
 
 impl HostPlatform {
-    /// Creates a new `HostPlatform` representing the current platform.
-    pub fn current(libdir: PlatformLibdir) -> Result<Self, UnknownHostPlatform> {
-        // TODO: replace with `rustc -vV` output.
-        let platform = Platform::build_target().map_err(|error| UnknownHostPlatform { error })?;
+    /// Creates a new `HostPlatform` representing the current platform by
+    /// querying rustc.
+    ///
+    /// This may fall back to the build target if `rustc -vV` fails.
+    pub fn detect(libdir: PlatformLibdir) -> Result<Self, HostPlatformDetectError> {
+        let platform = detect_host_platform()?;
         Ok(Self { platform, libdir })
     }
 
@@ -211,6 +232,137 @@ impl HostPlatform {
         Self {
             platform: self.platform.clone(),
             libdir: mapper.map(&self.libdir),
+        }
+    }
+}
+
+/// Detect the host platform by using `rustc -vV`, and falling back to the build
+/// target.
+///
+/// Returns an error if both of those methods fail, and produces a warning if
+/// `rustc -vV` fails.
+fn detect_host_platform() -> Result<Platform, HostPlatformDetectError> {
+    // A test-only environment variable to always make the build target a fixed
+    // value, or to error out.
+    const FORCE_BUILD_TARGET_VAR: &str = "__NEXTEST_FORCE_BUILD_TARGET";
+
+    enum ForceBuildTarget {
+        Triple(String),
+        Error,
+    }
+
+    let force_build_target = match std::env::var(FORCE_BUILD_TARGET_VAR).as_deref() {
+        Ok("error") => Some(ForceBuildTarget::Error),
+        Ok(triple) => Some(ForceBuildTarget::Triple(triple.to_owned())),
+        Err(_) => None,
+    };
+
+    let build_target = match force_build_target {
+        Some(ForceBuildTarget::Triple(triple)) => Platform::new(triple, TargetFeatures::Unknown),
+        Some(ForceBuildTarget::Error) => Err(target_spec::Error::RustcVersionVerboseParse(
+            RustcVersionVerboseParseError::MissingHostLine {
+                output: format!(
+                    "({} set to \"error\", forcibly failing build target detection)\n",
+                    FORCE_BUILD_TARGET_VAR
+                ),
+            },
+        )),
+        None => Platform::build_target(),
+    };
+
+    let rustc_vv = RustcCli::version_verbose()
+        .to_expression()
+        .stdout_capture()
+        .stderr_capture()
+        .unchecked();
+    match rustc_vv.run() {
+        Ok(output) => {
+            if output.status.success() {
+                // Neither `rustc` nor `cargo` tell us what target features are
+                // enabled for the host, so we must use
+                // `TargetFeatures::Unknown`.
+                match Platform::from_rustc_version_verbose(output.stdout, TargetFeatures::Unknown) {
+                    Ok(platform) => Ok(platform),
+                    Err(host_platform_error) => {
+                        match build_target {
+                            Ok(build_target) => {
+                                warn!(
+                                    "for host platform, parsing `rustc -vV` failed; \
+                                     falling back to build target `{}`\n\
+                                     - host platform error:\n{}",
+                                    build_target.triple().as_str(),
+                                    DisplayErrorChain::new_with_initial_indent(
+                                        "  ",
+                                        host_platform_error
+                                    ),
+                                );
+                                Ok(build_target)
+                            }
+                            Err(build_target_error) => {
+                                // In this case, we can't do anything.
+                                Err(HostPlatformDetectError::HostPlatformParseError {
+                                    host_platform_error: Box::new(host_platform_error),
+                                    build_target_error: Box::new(build_target_error),
+                                })
+                            }
+                        }
+                    }
+                }
+            } else {
+                match build_target {
+                    Ok(build_target) => {
+                        warn!(
+                            "for host platform, `rustc -vV` failed with {}; \
+                             falling back to build target `{}`\n\
+                             - `rustc -vV` stdout:\n{}\n\
+                             - `rustc -vV` stderr:\n{}",
+                            output.status,
+                            build_target.triple().as_str(),
+                            Indented {
+                                item: String::from_utf8_lossy(&output.stdout),
+                                indent: "  "
+                            },
+                            Indented {
+                                item: String::from_utf8_lossy(&output.stderr),
+                                indent: "  "
+                            },
+                        );
+                        Ok(build_target)
+                    }
+                    Err(build_target_error) => {
+                        // If the build target isn't available either, we
+                        // can't do anything.
+                        Err(HostPlatformDetectError::RustcVvFailed {
+                            status: output.status,
+                            stdout: output.stdout,
+                            stderr: output.stderr,
+                            build_target_error: Box::new(build_target_error),
+                        })
+                    }
+                }
+            }
+        }
+        Err(error) => {
+            match build_target {
+                Ok(build_target) => {
+                    warn!(
+                        "for host platform, failed to spawn `rustc -vV`; \
+                         falling back to build target `{}`\n\
+                         - host platform error:\n{}",
+                        build_target.triple().as_str(),
+                        DisplayErrorChain::new_with_initial_indent("  ", error),
+                    );
+                    Ok(build_target)
+                }
+                Err(build_target_error) => {
+                    // If the build target isn't available either, we
+                    // can't do anything.
+                    Err(HostPlatformDetectError::RustcVvSpawnError {
+                        error,
+                        build_target_error: Box::new(build_target_error),
+                    })
+                }
+            }
         }
     }
 }
