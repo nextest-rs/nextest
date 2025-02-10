@@ -336,7 +336,8 @@ fn test_run_no_tests() {
             "run",
             "-E",
             "none()",
-            "--no-tests=warn",
+            "--no-tests",
+            "warn",
         ])
         .output();
 
