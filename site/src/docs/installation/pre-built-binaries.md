@@ -32,6 +32,12 @@ The instructions below are suitable for both end users and CI. These links will 
     curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
     ```
 
+    For a statically-linked binary with no runtime library dependencies, based on [musl](https://musl.libc.org/):
+
+    ```
+    curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+    ```
+
 === ":material-linux: Linux aarch64"
 
     !!! info
@@ -188,7 +194,6 @@ The latest nextest release is available at:
 
     Nextest's CI isn't run on these platforms -- these binaries most likely work but aren't guaranteed to do so.
 
-    - [**get.nexte.st/latest/linux-musl**](https://get.nexte.st/latest/linux-musl) for Linux x86_64, with musl libc[^musl]
     - [**get.nexte.st/latest/windows-x86**](https://get.nexte.st/latest/windows-x86) for Windows i686
     - [**get.nexte.st/latest/freebsd**](https://get.nexte.st/latest/freebsd) for FreeBSD x86_64
     - [**get.nexte.st/latest/illumos**](https://get.nexte.st/latest/illumos) for illumos x86_64
@@ -196,6 +201,5 @@ The latest nextest release is available at:
 These archives contain a single binary called `cargo-nextest` (`cargo-nextest.exe` on Windows). Add this binary to a location on your PATH.
 
 [^glibc]: The standard Linux binaries target glibc, and have a minimum requirement of glibc 2.27 (Ubuntu 18.04).
-[^musl]: Rust's musl target currently has [a bug](https://github.com/rust-lang/rust/issues/99740) that Rust's glibc target doesn't have. This bug means that nextest's linux-musl binary has slower test runs and is susceptible to signal-related races. Only use the linux-musl binary if the standard Linux binary doesn't work in your environment.
 
 For a full specification of release URLs, see [_Release URLs_](release-urls.md).

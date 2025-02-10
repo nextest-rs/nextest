@@ -40,6 +40,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 ### Miscellaneous
 
 - Nextest now documents the safety of [altering the environment within tests](https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests). As a result of nextest's [process-per-test model](https://nexte.st/docs/design/why-process-per-test/), it is generally safe to call [`std::env::set_var`](https://doc.rust-lang.org/std/env/fn.set_var.html) and [`remove_var`](https://doc.rust-lang.org/std/env/fn.remove_var.html) at the beginning of tests.
+- With Rust 1.84 and above, builds using [musl](https://musl.libc.org) no longer have [slow process spawns](https://github.com/rust-lang/rust/issues/99740). With this improvement, glibc and musl builds of nextest are now roughly at par, and should have similar performance characteristics.
 
 ## [0.9.88] - 2024-01-15
 
