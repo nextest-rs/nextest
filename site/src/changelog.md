@@ -8,6 +8,39 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.89] - 2024-02-10
+
+### Added
+
+- To [configure fail-fast behavior](https://nexte.st/docs/running#failing-fast), `max-fail` can now be specified in configuration. For example, to fail after 5 tests:
+
+  ```toml
+  [profile.default]
+  fail-fast = { max-fail = 5 }
+  ```
+
+  `fail-fast = true` is the same as `{ max-fail = 1 }`, and `fail-fast = false` is `{ max-fail = "all" }`.
+
+  Thanks to [Jayllyz](https://github.com/Jayllyz) for your first contribution!
+
+- Within tests and scripts, the `NEXTEST_PROFILE` environment variable is now always set to the current [configuration profile](https://nexte.st/docs/configuration#profiles). Previously, this would only happen if the profile was configured via `NEXTEST_PROFILE`, as a side effect of the environment being passed through.
+
+### Changed
+
+- The `--max-fail` and `--no-tests` options no longer require using an equals sign. For example, `--max-fail 5` and `--max-fail=5` now both work.
+
+  This was previously done to avoid confusion between test name filters and arguments. But we believe the new `--no-tests` default to fail sufficiently mitigates this downside, and uniformity across options is valuable.
+
+### Fixed
+
+- Nextest now uses `rustc -vV` to obtain the host target triple, rather than using the target the cargo-nextest binary was built for. This fixes behavior for runtime cross-compatible binaries, such as `-linux-musl` binaries running on `-linux-gnu`.
+- If nextest is paused and later continued, the progress bar's time taken now excludes the amount of time nextest was paused for.
+- Update rust-openssl for [CVE-2025-24898](https://nvd.nist.gov/vuln/detail/CVE-2025-24898).
+
+### Miscellaneous
+
+- Nextest now documents the safety of [altering the environment within tests](https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests). As a result of nextest's [process-per-test model](https://nexte.st/docs/design/why-process-per-test/), it is generally safe to call [`std::env::set_var`](https://doc.rust-lang.org/std/env/fn.set_var.html) and [`remove_var`](https://doc.rust-lang.org/std/env/fn.remove_var.html) at the beginning of tests.
+
 ## [0.9.88] - 2024-01-15
 
 ### Added
@@ -1335,6 +1368,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.89]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.89
 [0.9.88]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.88
 [0.9.87]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.87
 [0.9.86]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.86

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.14.0] - 2025-02-10
+
+### Changed
+
+- Internal dependency update: winnow updated to 0.7. Thanks to [Ed Page](https://github.com/epage) for the update!
+
 ## [0.13.0] - 2025-01-15
 
 ### Changed
@@ -141,6 +147,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.14.0
 [0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.13.0
 [0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.12.0
 [0.11.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.11.0

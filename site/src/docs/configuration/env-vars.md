@@ -74,6 +74,11 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 `NEXTEST_RUN_ID`
 : Set to a UUID corresponding to a particular nextest run.
 
+`NEXTEST_PROFILE` <!-- md:version 0.9.89 -->
+: Set to the [nextest profile](index.md#profiles) in use.
+
+    In previous versions, this would only be set if the profile was configured via `NEXTEST_PROFILE`, as a side effect of the environment being passed through. This would not be set if the profile was configured via `--profile`.
+
 `NEXTEST_EXECUTION_MODE`
 : Currently, always set to `process-per-test`. More options may be added in the future if nextest gains the ability to run all tests within the same process ([#27]).
 

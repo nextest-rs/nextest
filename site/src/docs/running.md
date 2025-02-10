@@ -182,7 +182,13 @@ cargo nextest run -E 'platform(host)'
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
 
-## Other runner options
+## Failing fast
+
+By default, nextest cancels the test run on encountering a single failure. Tests currently running are run to completion, but new tests are not started.
+
+This behavior can be customized through either the command-line, or through [configuration](configuration/index.md).
+
+Through the command line:
 
 `--max-fail=N` <!-- md:version 0.9.86 -->
 : Number of tests that can fail before aborting the test run, or `all` to run all tests regardless of the number of failures. Useful for uncovering multiple issues without having to run the whole test suite.
@@ -192,6 +198,27 @@ cargo nextest run -E 'platform(host)'
 
 `--fail-fast`
 : Exit the test run on the first failure. This is the default behavior. Equivalent to `--max-fail=1`.
+
+Through configuration:
+
+```toml title="Fail-fast behavior in <code>.config/nextest.toml</code>"
+[profile.default]
+# Exit the test run after N failures, e.g. 5 failures. max-fail in configuration
+# is available starting cargo-nextest 0.9.89+.
+fail-fast = { max-fail = 5 }
+
+# Exit the test run on the first failure. This is the default behavior.
+fail-fast = true
+# Or:
+fail-fast = { max-fail = 1 }
+
+# Do not exit the test run until all tests complete.
+fail-fast = false
+# Or:
+fail-fast = { max-fail = "all" }
+```
+
+## Other runner options
 
 `-jN`, `--test-threads=N`
 : Number of tests to run simultaneously. Note that this is separate from the number of build jobs to run simultaneously, which is specified by `--build-jobs`.
@@ -209,6 +236,13 @@ cargo nextest run -E 'platform(host)'
 
 `--run-ignored=all`
 : Run both ignored and non-ignored tests.
+
+`--no-tests=fail|warn|pass` <!-- md:version 0.9.75 -->
+: Control behavior when no tests are run. In some cases, e.g. using nextest with [cargo-hack](https://github.com/taiki-e/cargo-hack) to test the powerset of features, it may be useful to set this to `warn` or `pass`.
+
+    If set to `fail` and no tests are found, nextest exits with the advisory code 4 ([`NO_TESTS_RUN`](https://docs.rs/nextest-metadata/latest/nextest_metadata/enum.NextestExitCode.html#associatedconstant.NO_TESTS_RUN)).
+
+    <!-- md:version 0.9.85 --> The default is `fail`. In prior versions, the default was `pass` or `warn`.
 
 [available parallelism]: https://doc.rust-lang.org/std/thread/fn.available_parallelism.html
 
