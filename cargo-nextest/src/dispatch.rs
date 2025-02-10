@@ -858,7 +858,6 @@ pub struct TestRunnerOpts {
         name = "max-fail",
         value_name = "N",
         conflicts_with_all = &["no-run", "fail-fast", "no-fail-fast"],
-        require_equals = true,
     )]
     max_fail: Option<MaxFail>,
 
@@ -868,7 +867,6 @@ pub struct TestRunnerOpts {
         value_enum,
         conflicts_with = "no-run",
         value_name = "ACTION",
-        require_equals = true,
         env = "NEXTEST_NO_TESTS"
     )]
     no_tests: Option<NoTestsBehavior>,
@@ -2433,6 +2431,8 @@ mod tests {
             "cargo nextest run --nocapture",
             "cargo nextest run --no-run",
             "cargo nextest run --final-status-level flaky",
+            "cargo nextest run --max-fail 3",
+            "cargo nextest run --max-fail=all",
             // retry is an alias for flaky -- ensure that it parses
             "cargo nextest run --final-status-level retry",
             "NEXTEST_HIDE_PROGRESS_BAR=1 cargo nextest run",
