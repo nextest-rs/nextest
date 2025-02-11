@@ -22,10 +22,8 @@ pub fn set_env_vars() {
     std::env::set_var("__NEXTEST_DISPLAY_EMPTY_OUTPUTS", "1");
 
     // Unset NEXTEST_PROFILE because we don't want to let it interfere with the
-    // tests.
-    //
-    // TODO: once cargo-nextest 0.9.89 is out, also check that NEXTEST_PROFILE
-    // is actually set before unsetting it.
+    // tests. But ensure that it's set first.
+    std::env::var("NEXTEST_PROFILE").expect("NEXTEST_PROFILE should be set");
     std::env::remove_var("NEXTEST_PROFILE");
 
     // Remove OUT_DIR from the environment, as it interferes with tests (some of them expect that
