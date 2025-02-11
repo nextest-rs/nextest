@@ -1,4 +1,4 @@
-nextest-version = "0.9.86"
+nextest-version = "0.9.89"
 experimental = ["setup-scripts"]
 
 [profile.default]
