@@ -22,7 +22,7 @@ The instructions below are suitable for both end users and CI. These links will 
 
     !!! info
 
-        The command below assumes that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+        The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
 
         If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
 
@@ -72,7 +72,7 @@ The instructions below are suitable for both end users and CI. These links will 
 
     !!! info
 
-        The command below assumes that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+        The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
 
         If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
 
@@ -186,9 +186,11 @@ Install pre-built binaries on other CI systems by downloading and extracting the
 The latest nextest release is available at:
 
 - [**get.nexte.st/latest/linux**](https://get.nexte.st/latest/linux) for Linux x86_64, including Windows Subsystem for Linux (WSL)[^glibc]
+- [**get.nexte.st/latest/linux-musl**](https://get.nexte.st/latest/linux) for a statically linked Linux x86_64 binary, including Windows Subsystem for Linux (WSL)
 - [**get.nexte.st/latest/linux-arm**](https://get.nexte.st/latest/linux-arm) for Linux aarch64[^glibc]
 - [**get.nexte.st/latest/mac**](https://get.nexte.st/latest/mac) for macOS, both x86_64 and Apple Silicon
 - [**get.nexte.st/latest/windows**](https://get.nexte.st/latest/windows) for Windows x86_64
+- [**get.nexte.st/latest/illumos**](https://get.nexte.st/latest/illumos) for illumos x86_64
 
 ??? info "Other platforms"
 
@@ -196,7 +198,6 @@ The latest nextest release is available at:
 
     - [**get.nexte.st/latest/windows-x86**](https://get.nexte.st/latest/windows-x86) for Windows i686
     - [**get.nexte.st/latest/freebsd**](https://get.nexte.st/latest/freebsd) for FreeBSD x86_64
-    - [**get.nexte.st/latest/illumos**](https://get.nexte.st/latest/illumos) for illumos x86_64
 
 These archives contain a single binary called `cargo-nextest` (`cargo-nextest.exe` on Windows). Add this binary to a location on your PATH.
 
