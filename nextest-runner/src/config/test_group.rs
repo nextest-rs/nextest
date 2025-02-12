@@ -18,6 +18,9 @@ pub enum TestGroup {
 }
 
 impl TestGroup {
+    /// The string `"@global"`, indicating the global test group.
+    pub const GLOBAL_STR: &'static str = "@global";
+
     pub(crate) fn make_all_groups(
         custom_groups: impl IntoIterator<Item = CustomTestGroup>,
     ) -> impl Iterator<Item = Self> {
@@ -36,7 +39,7 @@ impl<'de> Deserialize<'de> for TestGroup {
         // Try and deserialize the group as a string. (Note: we don't deserialize a
         // `CustomTestGroup` directly because that errors out on None.
         let group = SmolStr::deserialize(deserializer)?;
-        if group == "@global" {
+        if group == Self::GLOBAL_STR {
             Ok(TestGroup::Global)
         } else {
             Ok(TestGroup::Custom(
@@ -50,7 +53,7 @@ impl FromStr for TestGroup {
     type Err = InvalidCustomTestGroupName;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "@global" {
+        if s == Self::GLOBAL_STR {
             Ok(TestGroup::Global)
         } else {
             Ok(TestGroup::Custom(CustomTestGroup::new(s.into())?))
