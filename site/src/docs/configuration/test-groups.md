@@ -72,6 +72,8 @@ These test groups impact execution in the following ways:
 
 Nextest will continue to schedule as many tests as possible, accounting for global and group concurrency limits.
 
+<!-- md:version 0.9.90 --> The test group a test is running in is exposed via the `NEXTEST_TEST_GROUP` environment variable. If a test is not in any groups, this variable is set to `"@global"`.
+
 ## Showing test groups
 
 You can show the test groups currently in effect with `cargo nextest show-config test-groups`.
@@ -93,6 +95,33 @@ group: <u style="text-decoration-style:single"><b>serial-integration</b></u> (ma
 </pre>
 
 This command accepts [all the same options](../listing.md#options-and-arguments) that `cargo nextest list` does.
+
+## Slot numbers
+
+<!-- md:version 0.9.90 -->
+
+Nextest assigns each test a *global slot number*. Additionally, if a test is in a group, the test is also assigned a *group slot number*.
+
+Slot numbers are integers that start from 0 and go up from there. They are useful to assign resources such as blocks of port numbers to tests.
+
+Slot numbers are:
+
+* **Unique** for the lifetime of the test, either globally or within the group.
+
+  For example, if a test in the group `resource-limited` is assigned the global slot 10 and the group slot 5, then while this test is running:
+
+  - No other test within the same run will be assigned the global slot 10.
+  - No other tests in the `resource-limited` group will be assigned the group slot 5.
+
+  After this test finishes, the global slot number 10 and the group slot number 5 are freed up, and can be reused for other tests.
+
+* **Stable** across [retries](../features/retries.md) within the same run (though not across runs).
+
+* **Compact**, in the sense that each test is always assigned the smallest possible slot number starting from 0, depending on which numbers are free at the time the test starts.
+
+  For example, if a test group is limited to serial execution, the group slot number is always 0 for those tests.
+
+Global and group slot numbers can be accessed via the `NEXTEST_TEST_GLOBAL_SLOT` and `NEXTEST_TEST_GROUP_SLOT` [environment variables](env-vars.md#environment-variables-nextest-sets), respectively. (If a test is not within a group, `NEXTEST_TEST_GROUP_SLOT` is set to `none`.)
 
 ## Comparison with `threads-required`
 
@@ -118,7 +147,7 @@ threads-required = 1  # this is the default, shown for clarity
 With this configuration:
 
 - Tests whose names start with `group::heavy::`, and tests that start with `group::light::`, are both part of `my-group`.
-- The `group::heavy::` tests will take up two slots within _both_ global and group concurrency limits.
-- The `group::light::` tests will take up one slot within both limits.
+- The `group::heavy::` tests will take up two threads within _both_ global and group concurrency limits.
+- The `group::light::` tests will take up one thread within both limits.
 
-> **Note:** Setting `threads-required` to be greater than a test group's `max-threads` will not cause issues; a test that does so will take up all slots available.
+> **Note:** Setting `threads-required` to be greater than a test group's `max-threads` will not cause issues; a test that does so will take up all threads available.

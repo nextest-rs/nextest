@@ -82,6 +82,17 @@ Nextest exposes these environment variables to your tests _at runtime only_. The
 `NEXTEST_EXECUTION_MODE`
 : Currently, always set to `process-per-test`. More options may be added in the future if nextest gains the ability to run all tests within the same process ([#27]).
 
+`NEXTEST_TEST_GROUP` <!-- md:version 0.9.90 -->
+: Set to the [test group](test-groups.md) the test is in, or `"@global"` if the test is not in any groups.
+
+`NEXTEST_TEST_GLOBAL_SLOT` <!-- md:version 0.9.90 -->
+: Set to the [global slot number](test-groups.md#slot-numbers). Global slot numbers are non-negative integers starting from 0 that are unique within the run for the lifetime of the test, but are reused after the test finishes.
+
+`NEXTEST_TEST_GROUP_SLOT` <!-- md:version 0.9.90 -->
+: If the test is in a group, set to the [group slot number](test-groups.md#slot-numbers). Group slot numbers are non-negative integers that are unique within the test group for the lifetime of the test, but are reused after the test finishes.
+
+    If the test is not in any groups, this is set to `"none"`.
+
 `NEXTEST_BIN_EXE_<name>`
 : The absolute path to a binary target's executable. This is only set when running an [integration test] or benchmark. The `<name>` is the name of the binary target, exactly as-is. For example, `NEXTEST_BIN_EXE_my-program` for a binary named `my-program`.
 

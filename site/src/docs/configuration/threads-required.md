@@ -6,7 +6,7 @@ icon: material/weight-lifter
 
 Nextest achieves [its performance](../benchmarks/index.md) through running [many tests in parallel](../design/how-it-works.md). However, some projects have tests that consume a disproportionate amount of resources like CPU or memory. If too many of these _heavy tests_ are run concurrently, your machine's CPU might be overwhelmed, or it might run out of memory.
 
-With nextest, you can mark heavy tests as taking up multiple threads or "slots" out of the total amount of available parallelism. In other words, you can assign those tests a higher "weight". This is done by using the `threads-required` [per-test override](per-test-overrides.md).
+With nextest, you can mark heavy tests as taking up multiple threads out of the total amount of available parallelism. In other words, you can assign those tests a higher "weight". This is done by using the `threads-required` [per-test override](per-test-overrides.md).
 
 For example, on a machine with 16 logical CPUs, nextest will run 16 tests concurrently by default. However, if you mark tests that begin with `tests::heavy::` as requiring 2 threads each:
 

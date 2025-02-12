@@ -8,6 +8,16 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.90] - 2025-02-12
+
+### Added
+
+- Tests are now assigned global and group *slot numbers*. These numbers are non-negative integers starting from 0 that are unique for the lifetime of the test, but are reused after the test ends.
+
+  Global and group slot numbers can be accessed via the `NEXTEST_TEST_GLOBAL_SLOT` and `NEXTEST_TEST_GROUP_SLOT` environment variables, respectively. For more, see [*Slot numbers*](http://nexte.st/docs/configuration/test-groups#slot-numbers).
+
+- [Test environments](http://nexte.st/docs/configuration/env-vars/#environment-variables-nextest-sets) now have the `NEXTEST_TEST_GROUP` variable set to the [test group](http://nexte.st/docs/configuration/test-groups) they're in, or `"@global"` if the test is not in any groups.
+
 ## [0.9.89] - 2025-02-10
 
 ### Added
@@ -1369,6 +1379,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.90]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.90
 [0.9.89]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.89
 [0.9.88]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.88
 [0.9.87]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.87

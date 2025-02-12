@@ -229,7 +229,7 @@ fail-fast = { max-fail = "all" }
   * a positive integer (e.g. `8`) to run that many tests simultaneously.
   * a negative integer (e.g. `-2`) to run available parallelism minus that many tests simultaneously. For example, on a machine with 8 CPU hyperthreads, `-2` would run 6 tests simultaneously.
 
-  Tests can be marked as taking up more than one available slot. For more, see [*Heavy tests and `threads-required`*](configuration/threads-required.md).
+  Tests can be marked as taking up more than one available thread. For more, see [*Heavy tests and `threads-required`*](configuration/threads-required.md).
 
 `--run-ignored=only` <!-- md:version 0.9.76 -->
 : Run only ignored tests. (With prior nextest versions, use `--run-ignored=ignored-only`.)
