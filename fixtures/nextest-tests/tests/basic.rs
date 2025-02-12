@@ -383,13 +383,17 @@ fn test_stdin_closed() {
 /// This should be called if and only if the test-group is serial.
 fn assert_with_retries_serial() {
     let profile = std::env::var("NEXTEST_PROFILE").expect("NEXTEST_PROFILE should be set");
+    let group = std::env::var("NEXTEST_TEST_GROUP").expect("NEXTEST_TEST_GROUP should be set");
     let group_slot =
         std::env::var("NEXTEST_TEST_GROUP_SLOT").expect("NEXTEST_TEST_GROUP_SLOT should be set");
+    println!("NEXTEST_TEST_GROUP = {group}, NEXTEST_TEST_GROUP_SLOT = {group_slot}");
+
     if profile == "with-retries" {
-        // Check that NEXTEST_TEST_GROUP_SLOT is set.
+        assert_eq!(group, "serial", "NEXTEST_TEST_GROUP should be serial");
         // This test is in a serial group, so the group slot should be 0.
         assert_eq!(group_slot, "0", "NEXTEST_TEST_GROUP_SLOT should be 0");
     } else {
+        assert_eq!(group, "@global", "NEXTEST_TEST_GROUP should be @global");
         assert_eq!(group_slot, "none", "NEXTEST_TEST_GROUP_SLOT should be none");
     }
 }
