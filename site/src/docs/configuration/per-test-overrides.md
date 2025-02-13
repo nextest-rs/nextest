@@ -78,12 +78,13 @@ When `--profile ci` is specified:
 
 ## Override precedence
 
-Overrides are configured as an ordered list, and are applied in the following order. For a given test _T_ and a given setting _S_:
+Overrides are configured as an ordered list, and are applied in the following order. For a given test _T_ and a given setting _S_, overrides are applied in the following order:
 
-1. If nextest is run with `--profile my-profile`, the first override within `profile.my-profile.overrides` that matches _T_ and configures _S_.
-2. The first override within `profile.default.overrides` that matches _T_ and configures _S_.
-3. If nextest is run with `--profile my-profile`, the global configuration for that profile, if it configures _S_.
-4. The global configuration specified by `profile.default`.
+1. Command-line arguments and environment variables for _S_, if specified, take precedence over all overrides. See [*Hierarchical configuration*](index.md#hierarchical-configuration) for more.
+2. If nextest is run with `--profile my-profile`, the first override within `profile.my-profile.overrides` that matches _T_ and configures _S_ is applied.
+3. Otherwise, the first override within `profile.default.overrides` that matches _T_ and configures _S_ is applied.
+4. Otherwise, if nextest is run with `--profile my-profile`, the global configuration for that profile is applied, if it configures _S_.
+5. If none of the above conditions apply, the global configuration specified by `profile.default` is applied.
 
 Precedence is evaluated separately for each override. If a particular override does not configure a setting, it is ignored for that setting.
 
@@ -108,7 +109,9 @@ filter = 'package(my-package) and test(/^flaky::/)'
 retries = 3
 ```
 
-If nextest is run with `--profile ci`:
+If nextest is run with `--retries 5`, all tests are retried 5 times. The slow timeout settings are evaluated as listed below.
+
+Otherwise, if nextest is run with `--profile ci`:
 
 - Tests in `my-package` that begin with `flaky::` are retried 3 times, and are run with a slow timeout of 45 seconds.
 - Other tests in `my-package` are retried 2 times and are run with a slow timeout of 45 seconds.

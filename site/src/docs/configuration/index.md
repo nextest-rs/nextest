@@ -46,8 +46,6 @@ The `--tool-config-file` argument may be specified multiple times. Config files 
 
 ## Hierarchical configuration
 
-For this example:
-
 Configuration is resolved in the following order:
 
 1. Command-line arguments. For example, if `--retries=3` is specified on the command line, failing tests are retried up to 3 times.

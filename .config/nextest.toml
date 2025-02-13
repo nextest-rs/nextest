@@ -9,7 +9,8 @@ final-status-level = "slow"
 # than 180 seconds, it likely means that nextest is stuck waiting for the sleep command to exit.
 # This is a bug.
 filter = 'package(integration-tests)'
-slow-timeout = { period = "60s", terminate-after = 3 }
+slow-timeout = { period = "1ms", terminate-after = 3 }
+retries = 3
 test-group = "my-group"
 junit.store-success-output = true
 
