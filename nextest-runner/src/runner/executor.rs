@@ -19,7 +19,7 @@ use crate::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
-    list::{TestExecuteContext, TestInstance, TestList},
+    list::{TestExecuteContext, TestInstance, TestInstanceWithSettings, TestList},
     reporter::events::{
         AbortStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptInfoResponse,
         TestInfoResponse, UnitKind, UnitState,
@@ -161,28 +161,27 @@ impl<'a> ExecutorContext<'a> {
     /// Returns a future that runs all attempts of a single test instance.
     pub(super) async fn run_test_instance(
         &self,
-        test_instance: TestInstance<'a>,
+        test: TestInstanceWithSettings<'a>,
         cx: FutureQueueContext,
-        settings: TestSettings<'a>,
         resp_tx: UnboundedSender<ExecutorEvent<'a>>,
         setup_script_data: Arc<SetupScriptExecuteData<'a>>,
     ) {
-        debug!(test_name = test_instance.name, "running test");
+        debug!(test_name = test.instance.name, "running test");
 
-        let settings = Arc::new(settings);
+        let settings = Arc::new(test.settings);
 
         let retry_policy = self.force_retries.unwrap_or_else(|| settings.retries());
         let total_attempts = retry_policy.count() + 1;
         let mut backoff_iter = BackoffIter::new(retry_policy);
 
-        if let FilterMatch::Mismatch { reason } = test_instance.test_info.filter_match {
+        if let FilterMatch::Mismatch { reason } = test.instance.test_info.filter_match {
             debug_assert!(
                 false,
                 "this test should already have been skipped in a filter step"
             );
             // Failure to send means the receiver was dropped.
             let _ = resp_tx.send(ExecutorEvent::Skipped {
-                test_instance,
+                test_instance: test.instance,
                 reason,
             });
             return;
@@ -193,7 +192,7 @@ impl<'a> ExecutorContext<'a> {
         // Wait for the Started event to be processed by the
         // execution future.
         _ = resp_tx.send(ExecutorEvent::Started {
-            test_instance,
+            test_instance: test.instance,
             req_rx_tx,
         });
         let mut req_rx = match req_rx_rx.await {
@@ -220,7 +219,7 @@ impl<'a> ExecutorContext<'a> {
                 // dropping the receiver.
                 let (tx, rx) = oneshot::channel();
                 _ = resp_tx.send(ExecutorEvent::RetryStarted {
-                    test_instance,
+                    test_instance: test.instance,
                     retry_data,
                     tx,
                 });
@@ -239,7 +238,7 @@ impl<'a> ExecutorContext<'a> {
             // it's a lot easier to pass it in than to try and hook on
             // additional information later.
             let packet = TestPacket {
-                test_instance,
+                test_instance: test.instance,
                 cx: cx.clone(),
                 retry_data,
                 settings: settings.clone(),
@@ -263,7 +262,7 @@ impl<'a> ExecutorContext<'a> {
                 let previous_slow = run_status.is_slow;
 
                 let _ = resp_tx.send(ExecutorEvent::AttemptFailedWillRetry {
-                    test_instance,
+                    test_instance: test.instance,
                     failure_output: settings.failure_output(),
                     run_status,
                     delay_before_next_attempt: delay,
@@ -291,7 +290,7 @@ impl<'a> ExecutorContext<'a> {
         // In either case, the test is finished.
         let last_run_status = last_run_status.into_external();
         let _ = resp_tx.send(ExecutorEvent::Finished {
-            test_instance,
+            test_instance: test.instance,
             success_output: settings.success_output(),
             failure_output: settings.failure_output(),
             junit_store_success_output: settings.junit_store_success_output(),

@@ -3,7 +3,7 @@
 
 use super::{
     CompiledProfileScripts, DeserializedProfileScriptConfig, EvaluatableProfile, NextestConfig,
-    NextestConfigImpl,
+    NextestConfigImpl, TestPriority,
 };
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
@@ -29,6 +29,7 @@ use target_spec::{Platform, TargetSpec};
 /// moment.
 #[derive(Clone, Debug)]
 pub struct TestSettings<'p, Source = ()> {
+    priority: (TestPriority, Source),
     threads_required: (ThreadsRequired, Source),
     run_extra_args: (&'p [String], Source),
     retries: (RetryPolicy, Source),
@@ -42,11 +43,16 @@ pub struct TestSettings<'p, Source = ()> {
 }
 
 pub(crate) trait TrackSource<'p>: Sized {
+    fn track_default<T>(value: T) -> (T, Self);
     fn track_profile<T>(value: T) -> (T, Self);
     fn track_override<T>(value: T, source: &'p CompiledOverride<FinalConfig>) -> (T, Self);
 }
 
 impl<'p> TrackSource<'p> for () {
+    fn track_default<T>(value: T) -> (T, Self) {
+        (value, ())
+    }
+
     fn track_profile<T>(value: T) -> (T, Self) {
         (value, ())
     }
@@ -58,11 +64,22 @@ impl<'p> TrackSource<'p> for () {
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum SettingSource<'p> {
+    /// A default configuration not specified in, or possible to override from,
+    /// a profile.
+    Default,
+
+    /// A configuration specified in a profile.
     Profile,
+
+    /// An override specified in a profile.
     Override(&'p CompiledOverride<FinalConfig>),
 }
 
 impl<'p> TrackSource<'p> for SettingSource<'p> {
+    fn track_default<T>(value: T) -> (T, Self) {
+        (value, SettingSource::Default)
+    }
+
     fn track_profile<T>(value: T) -> (T, Self) {
         (value, SettingSource::Profile)
     }
@@ -73,6 +90,11 @@ impl<'p> TrackSource<'p> for SettingSource<'p> {
 }
 
 impl<'p> TestSettings<'p> {
+    /// Returns the test's priority.
+    pub fn priority(&self) -> TestPriority {
+        self.priority.0
+    }
+
     /// Returns the number of threads required for this test.
     pub fn threads_required(&self) -> ThreadsRequired {
         self.threads_required.0
@@ -132,6 +154,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
     {
         let ecx = profile.filterset_ecx();
 
+        let mut priority = None;
         let mut threads_required = None;
         let mut run_extra_args = None;
         let mut retries = None;
@@ -161,6 +184,12 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
                     continue;
                 }
                 // If no expression is present, it's equivalent to "all()".
+            }
+
+            if priority.is_none() {
+                if let Some(p) = override_.data.priority {
+                    priority = Some(Source::track_override(p, override_));
+                }
             }
             if threads_required.is_none() {
                 if let Some(t) = override_.data.threads_required {
@@ -215,6 +244,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
         }
 
         // If no overrides were found, use the profile defaults.
+        let priority = priority.unwrap_or_else(|| Source::track_default(TestPriority::default()));
         let threads_required =
             threads_required.unwrap_or_else(|| Source::track_profile(profile.threads_required()));
         let run_extra_args =
@@ -242,6 +272,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             threads_required,
             run_extra_args,
             retries,
+            priority,
             slow_timeout,
             leak_timeout,
             test_group,
@@ -543,6 +574,7 @@ pub(super) struct ProfileOverrideData {
     host_spec: MaybeTargetSpec,
     target_spec: MaybeTargetSpec,
     filter: Option<FilterOrDefaultFilter>,
+    priority: Option<TestPriority>,
     threads_required: Option<ThreadsRequired>,
     run_extra_args: Option<Vec<String>>,
     retries: Option<RetryPolicy>,
@@ -625,6 +657,7 @@ impl CompiledOverride<PreBuildPlatform> {
                         host_spec,
                         target_spec,
                         filter,
+                        priority: source.priority,
                         threads_required: source.threads_required,
                         run_extra_args: source.run_extra_args.clone(),
                         retries: source.retries,
@@ -765,6 +798,8 @@ pub(super) struct DeserializedOverride {
     filter: Option<String>,
     /// Overrides. (This used to use serde(flatten) but that has issues:
     /// https://github.com/serde-rs/serde/issues/2312.)
+    #[serde(default)]
+    priority: Option<TestPriority>,
     #[serde(default)]
     default_filter: Option<String>,
     #[serde(default)]

@@ -273,6 +273,14 @@ impl ConfigCompileErrorKind {
     }
 }
 
+/// A test priority specified was out of range.
+#[derive(Clone, Debug, Error)]
+#[error("test priority ({priority}) out of range: must be between -100 and 100, both inclusive")]
+pub struct TestPriorityOutOfRange {
+    /// The priority that was out of range.
+    pub priority: i8,
+}
+
 /// An execution error occurred while attempting to start a test.
 #[derive(Clone, Debug, Error)]
 pub enum ChildStartError {

@@ -687,6 +687,57 @@ fn test_relocated_run() {
 }
 
 #[test]
+fn test_run_with_priorities() {
+    set_env_vars();
+
+    let p = TempProject::new().unwrap();
+
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-j1",
+            "--profile",
+            "with-priorities",
+        ])
+        .unchecked(true)
+        // The above tests pass so don't pass in unchecked(true) here.
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "correct exit code for command\n{output}",
+    );
+
+    // -j1 means the tests should always run in the order specified in
+    // `with-priorities`: `test_success`, then `test_flaky_mod_4`, then
+    // `test_cargo_env_vars`.
+    let stderr = output.stderr_as_str();
+    let test_success = stderr
+        .find("nextest-tests::basic test_success")
+        .expect("test_success is present in output");
+    let test_flaky_mod_4 = stderr
+        .find("nextest-tests::basic test_flaky_mod_4")
+        .expect("test_flaky_mod_4 is present in output");
+    let test_cargo_env_vars = stderr
+        .find("nextest-tests::basic test_cargo_env_vars")
+        .expect("test_cargo_env_vars is present in output");
+
+    assert!(
+        test_success < test_flaky_mod_4,
+        "test_success runs before test_flaky_mod_4\n{output}"
+    );
+    assert!(
+        test_flaky_mod_4 < test_cargo_env_vars,
+        "test_flaky_mod_4 runs before test_cargo_env_vars\n{output}"
+    );
+}
+
+#[test]
 fn test_run_from_archive_with_no_includes() {
     set_env_vars();
 
