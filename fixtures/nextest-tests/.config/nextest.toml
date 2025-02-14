@@ -90,6 +90,20 @@ default-filter = "not (test(test_flaky) | package(cdylib-example) | test(test_ca
 [profile.archive-all]
 archive.include = [{ path = "", relative-to = "target" }]
 
+# Test priority support.
+[profile.with-priorities]
+default-filter = "test(=test_success) | test(=test_cargo_env_vars) | test(=test_flaky_mod_4)"
+
+[[profile.with-priorities.overrides]]
+# test_cargo_env_vars is alphabetically before test_success, but priority forces
+# it to be run last.
+filter = "test(=test_cargo_env_vars)"
+priority = -50
+
+[[profile.with-priorities.overrides]]
+filter = "test(=test_success)"
+priority = 50
+
 [test-groups.flaky]
 max-threads = 4
 

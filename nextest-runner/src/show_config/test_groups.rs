@@ -83,7 +83,7 @@ impl<'a> ShowTestGroups<'a> {
                             .or_insert_with(|| ShowTestGroupsData::new(source));
                         data.matching_tests.insert(&suite.binary_id, test_name);
                     }
-                    SettingSource::Profile => {
+                    SettingSource::Profile | SettingSource::Default => {
                         if let Some(non_overrides) = non_overrides.as_mut() {
                             if settings.mode.matches_group(&TestGroup::Global) {
                                 non_overrides.insert(&suite.binary_id, test_name);

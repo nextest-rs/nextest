@@ -4,6 +4,7 @@
 use super::{DisplayFilterMatcher, TestListDisplayFilter};
 use crate::{
     cargo_config::EnvironmentMap,
+    config::{EvaluatableProfile, TestSettings},
     double_spawn::DoubleSpawnInfo,
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
@@ -509,6 +510,14 @@ impl<'g> TestList<'g> {
         })
     }
 
+    /// Produces a priority queue of tests based on the given profile.
+    pub fn to_priority_queue(
+        &'g self,
+        profile: &'g EvaluatableProfile<'g>,
+    ) -> TestPriorityQueue<'g> {
+        TestPriorityQueue::new(self, profile)
+    }
+
     /// Outputs this list as a string with the given format.
     pub fn to_string(&self, output_format: OutputFormat) -> Result<String, WriteTestListError> {
         let mut s = String::with_capacity(1024);
@@ -769,6 +778,49 @@ impl<'g> TestList<'g> {
         }
         Ok(())
     }
+}
+
+/// A test list that has been sorted and has had priorities applied to it.
+pub struct TestPriorityQueue<'a> {
+    tests: Vec<TestInstanceWithSettings<'a>>,
+}
+
+impl<'a> TestPriorityQueue<'a> {
+    fn new(test_list: &'a TestList<'a>, profile: &'a EvaluatableProfile<'a>) -> Self {
+        let mut tests = test_list
+            .iter_tests()
+            .map(|instance| {
+                let settings = profile.settings_for(&instance.to_test_query());
+                TestInstanceWithSettings { instance, settings }
+            })
+            .collect::<Vec<_>>();
+        // Note: this is a stable sort so that tests with the same priority are
+        // sorted by what `iter_tests` produced.
+        tests.sort_by_key(|test| test.settings.priority());
+
+        Self { tests }
+    }
+}
+
+impl<'a> IntoIterator for TestPriorityQueue<'a> {
+    type Item = TestInstanceWithSettings<'a>;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.tests.into_iter()
+    }
+}
+
+/// A test instance, along with computed settings from a profile.
+///
+/// Returned from [`TestPriorityQueue`].
+#[derive(Debug)]
+pub struct TestInstanceWithSettings<'a> {
+    /// The test instance.
+    pub instance: TestInstance<'a>,
+
+    /// The settings for this test.
+    pub settings: TestSettings<'a>,
 }
 
 /// A suite of tests within a single Rust test binary.

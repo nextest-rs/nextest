@@ -9,7 +9,7 @@ use crate::{
     double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError, TestRunnerExecuteErrors},
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
-    list::{TestInstance, TestList},
+    list::{TestInstanceWithSettings, TestList},
     reporter::events::{RunStats, TestEvent},
     runner::ExecutorEvent,
     signal::{SignalHandler, SignalHandlerKind},
@@ -316,8 +316,9 @@ impl<'a> TestRunnerInner<'a> {
 
             let filter_resp_tx = resp_tx.clone();
 
-            let run_tests_fut = futures::stream::iter(self.test_list.iter_tests())
-                .filter_map(move |test_instance| {
+            let tests = self.test_list.to_priority_queue(self.profile);
+            let run_tests_fut = futures::stream::iter(tests)
+                .filter_map(move |test| {
                     // Filter tests before assigning a FutureQueueContext to
                     // them.
                     //
@@ -328,28 +329,29 @@ impl<'a> TestRunnerInner<'a> {
                     let filter_resp_tx = filter_resp_tx.clone();
                     async move {
                         if let FilterMatch::Mismatch { reason } =
-                            test_instance.test_info.filter_match
+                            test.instance.test_info.filter_match
                         {
                             // Failure to send means the receiver was dropped.
                             let _ = filter_resp_tx.send(ExecutorEvent::Skipped {
-                                test_instance,
+                                test_instance: test.instance,
                                 reason,
                             });
                             return None;
                         }
-                        Some(test_instance)
+                        Some(test)
                     }
                 })
-                .map(move |test_instance: TestInstance<'a>| {
-                    let query = test_instance.to_test_query();
-                    let settings = self.profile.settings_for(&query);
-                    let threads_required = settings.threads_required().compute(self.test_threads);
-                    let test_group = match settings.test_group() {
+                .map(move |test: TestInstanceWithSettings<'a>| {
+                    let threads_required =
+                        test.settings.threads_required().compute(self.test_threads);
+                    let test_group = match test.settings.test_group() {
                         TestGroup::Global => None,
                         TestGroup::Custom(name) => Some(name.clone()),
                     };
                     let resp_tx = resp_tx.clone();
                     let setup_script_data = setup_script_data.clone();
+
+                    let test_instance = test.instance;
 
                     let f = move |cx: FutureQueueContext| {
                         debug!("running test instance: {}; cx: {cx:?}", test_instance.id());
@@ -375,9 +377,8 @@ impl<'a> TestRunnerInner<'a> {
                             let ((), mut ret) = unsafe {
                                 TokioScope::scope_and_collect(move |scope| {
                                     scope.spawn(executor_cx_ref.run_test_instance(
-                                        test_instance,
+                                        test,
                                         cx,
-                                        settings,
                                         resp_tx.clone(),
                                         setup_script_data,
                                     ))
