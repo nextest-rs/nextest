@@ -11,7 +11,22 @@ To understand how nextest works, it is useful to first look at the execution mod
 
 By default, cargo test uses this execution model:
 
-![Cargo test execution model](../../static/cargo-test-model.png)
+``` mermaid
+flowchart TD
+    A[build every test binary] --> B@{ shape: docs, label: "binaries to run?" }
+
+    subgraph XX [ ]
+        D[run binary, wait until it exits]
+        E{exit code 0?}
+        D --> E
+    end
+
+    B -->|no| C[success]
+
+    B -->|yes| D
+    E -->|no| G[failure]
+    E -->|yes| B
+```
 
 In this model, each test binary is run serially, and binaries are responsible for running individual tests in parallel.
 
@@ -27,7 +42,29 @@ However, this model has several problems:
 
 cargo-nextest uses a very different execution model, inspired by state-of-the-art test runners used at large corporations. Here's what cargo-nextest does:
 
-![Nextest execution model](../../static/nextest-model.png)
+```mermaid
+flowchart TD
+    subgraph list_tests [list phase]
+        A[build every test binary] --> B[for every binary, list tests]
+    end
+
+    subgraph run_tests [run phase]
+        B --> C
+
+        E[execute test process in parallel, wait until it exits]
+        F[collect test result]
+        E --> F
+        F -.->|possibly retry| E
+        F --> C
+
+        C@{ shape: docs, label: "tests to run?" }
+        C -->|yes| E
+    end
+
+    C -->|no| D{test failures?}
+    D -->|no| I[success]
+    D -->|yes| J[failure]
+```
 
 A cargo-nextest run has two separate phases:
 
