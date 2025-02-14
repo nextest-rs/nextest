@@ -22,6 +22,9 @@ for more information.
 
 ## Supported overrides
 
+`priority` <!-- md:version 0.9.91 -->
+: The [test priority](test-priorities.md): a number from -100 to 100, both inclusive, with a default of 0.
+
 `retries`
 : The number of retries, or a more complex [retry policy](../features/retries.md) for this test.
 

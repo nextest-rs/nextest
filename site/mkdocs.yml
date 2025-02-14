@@ -108,6 +108,7 @@ nav:
           - "More configuration":
                 - "Specifying platforms": docs/configuration/specifying-platforms.md
                 - "Minimum versions": docs/configuration/minimum-versions.md
+                - "Test priorities": docs/configuration/test-priorities.md
                 - "Heavy tests": docs/configuration/threads-required.md
                 - "Mutual exclusion and rate-limiting": docs/configuration/test-groups.md
                 - "Environment variables": docs/configuration/env-vars.md
