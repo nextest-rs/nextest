@@ -7,7 +7,7 @@ use duct::cmd;
 use fixture_data::models::TestCaseFixtureStatus;
 use guppy::{graph::PackageGraph, MetadataCommand};
 use maplit::btreeset;
-use nextest_filtering::{CompiledExpr, EvalContext};
+use nextest_filtering::{CompiledExpr, EvalContext, ParseContext};
 use nextest_metadata::{MismatchReason, RustBinaryId};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
@@ -185,9 +185,10 @@ pub(crate) fn workspace_root() -> Utf8PathBuf {
 }
 
 pub(crate) fn load_config() -> NextestConfig {
+    let pcx = ParseContext::new(&PACKAGE_GRAPH);
     NextestConfig::from_sources(
         workspace_root(),
-        &PACKAGE_GRAPH,
+        &pcx,
         None,
         [],
         // Enable setup scripts.

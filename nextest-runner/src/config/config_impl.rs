@@ -21,9 +21,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use config::{
     builder::DefaultState, Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceFile,
 };
-use guppy::graph::PackageGraph;
 use indexmap::IndexMap;
-use nextest_filtering::{EvalContext, TestQuery};
+use nextest_filtering::{EvalContext, ParseContext, TestQuery};
 use serde::Deserialize;
 use std::{
     collections::{hash_map, BTreeMap, BTreeSet, HashMap},
@@ -96,7 +95,7 @@ impl NextestConfig {
     /// default config options.
     pub fn from_sources<'a, I>(
         workspace_root: impl Into<Utf8PathBuf>,
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         config_file: Option<&Utf8Path>,
         tool_config_files: impl IntoIterator<IntoIter = I>,
         experimental: &BTreeSet<ConfigExperimental>,
@@ -106,7 +105,7 @@ impl NextestConfig {
     {
         Self::from_sources_impl(
             workspace_root,
-            graph,
+            pcx,
             config_file,
             tool_config_files,
             experimental,
@@ -135,7 +134,7 @@ impl NextestConfig {
     // A custom unknown_callback can be passed in while testing.
     fn from_sources_impl<'a, I>(
         workspace_root: impl Into<Utf8PathBuf>,
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         config_file: Option<&Utf8Path>,
         tool_config_files: impl IntoIterator<IntoIter = I>,
         experimental: &BTreeSet<ConfigExperimental>,
@@ -147,7 +146,7 @@ impl NextestConfig {
         let workspace_root = workspace_root.into();
         let tool_config_files_rev = tool_config_files.into_iter().rev();
         let (inner, compiled) = Self::read_from_sources(
-            graph,
+            pcx,
             &workspace_root,
             config_file,
             tool_config_files_rev,
@@ -205,7 +204,7 @@ impl NextestConfig {
     // ---
 
     fn read_from_sources<'a>(
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         workspace_root: &Utf8Path,
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
@@ -226,7 +225,7 @@ impl NextestConfig {
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
             let source = File::new(config_file.as_str(), FileFormat::Toml);
             Self::deserialize_individual_config(
-                graph,
+                pcx,
                 workspace_root,
                 config_file,
                 Some(tool),
@@ -253,7 +252,7 @@ impl NextestConfig {
         };
 
         Self::deserialize_individual_config(
-            graph,
+            pcx,
             workspace_root,
             &config_file,
             None,
@@ -283,7 +282,7 @@ impl NextestConfig {
 
     #[expect(clippy::too_many_arguments)]
     fn deserialize_individual_config(
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         workspace_root: &Utf8Path,
         config_file: &Utf8Path,
         tool: Option<&str>,
@@ -391,7 +390,7 @@ impl NextestConfig {
         }
 
         // Compile the overrides for this file.
-        let this_compiled = CompiledByProfile::new(graph, &this_config)
+        let this_compiled = CompiledByProfile::new(pcx, &this_config)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
 
         // Check that all overrides specify known test groups.
@@ -1097,11 +1096,13 @@ mod tests {
         let tool_path = workspace_root.join(".config/tool.toml");
         std::fs::write(&tool_path, tool_config_contents).unwrap();
 
+        let pcx = ParseContext::new(&graph);
+
         let mut unknown_keys = HashMap::new();
 
         let _ = NextestConfig::from_sources_impl(
             workspace_root,
-            &graph,
+            &pcx,
             None,
             &[ToolConfigFile {
                 tool: "my-tool".to_owned(),

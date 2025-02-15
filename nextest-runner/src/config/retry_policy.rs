@@ -177,7 +177,7 @@ mod tests {
     use config::ConfigError;
     use guppy::graph::cargo::BuildPlatform;
     use indoc::indoc;
-    use nextest_filtering::TestQuery;
+    use nextest_filtering::{ParseContext, TestQuery};
     use test_case::test_case;
 
     #[test]
@@ -205,10 +205,11 @@ mod tests {
         let workspace_dir = tempdir().unwrap();
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let pcx = ParseContext::new(&graph);
 
         let config = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             [],
             &Default::default(),
@@ -380,10 +381,11 @@ mod tests {
         let workspace_path: &Utf8Path = workspace_dir.path();
 
         let graph = temp_workspace(workspace_path, config_contents);
+        let pcx = ParseContext::new(&graph);
 
         let config_err = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             [],
             &Default::default(),
@@ -617,10 +619,11 @@ mod tests {
 
         let graph = temp_workspace(workspace_path, config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
+        let pcx = ParseContext::new(&graph);
 
         let config = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &[][..],
             &Default::default(),

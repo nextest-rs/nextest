@@ -286,12 +286,12 @@ impl ConfigOpts {
     pub fn make_config(
         &self,
         workspace_root: &Utf8Path,
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         experimental: &BTreeSet<ConfigExperimental>,
     ) -> Result<NextestConfig> {
         NextestConfig::from_sources(
             workspace_root,
-            graph,
+            pcx,
             self.config_file.as_deref(),
             &self.tool_config_files,
             experimental,
@@ -1222,7 +1222,7 @@ impl BaseApp {
         })
     }
 
-    fn load_config(&self) -> Result<(VersionOnlyConfig, NextestConfig)> {
+    fn load_config(&self, pcx: &ParseContext<'_>) -> Result<(VersionOnlyConfig, NextestConfig)> {
         // Load the version-only config first to avoid incompatibilities with parsing the rest of
         // the config.
         let version_only_config = self
@@ -1244,7 +1244,7 @@ impl BaseApp {
 
         let config = self.config_opts.make_config(
             &self.workspace_root,
-            self.graph(),
+            pcx,
             version_only_config.experimental(),
         )?;
 
@@ -1421,7 +1421,8 @@ impl BaseApp {
         let path_mapper = PathMapper::noop();
 
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
-        let (_, config) = self.load_config()?;
+        let pcx = ParseContext::new(self.graph());
+        let (_, config) = self.load_config(&pcx)?;
         let profile = self
             .load_profile(&config)?
             .apply_build_platforms(&build_platforms);
@@ -1547,13 +1548,12 @@ impl App {
         Ok(Self { base, build_filter })
     }
 
-    fn build_filtering_expressions(&self) -> Result<Vec<Filterset>> {
-        let pcx = ParseContext::new(self.base.graph());
+    fn build_filtering_expressions(&self, pcx: &ParseContext<'_>) -> Result<Vec<Filterset>> {
         let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
             .filterset
             .iter()
-            .map(|input| Filterset::parse(input.clone(), &pcx, FiltersetKind::Test))
+            .map(|input| Filterset::parse(input.clone(), pcx, FiltersetKind::Test))
             .partition_result();
 
         if !all_errors.is_empty() {
@@ -1589,9 +1589,11 @@ impl App {
         list_type: ListType,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let (version_only_config, config) = self.base.load_config()?;
+        let pcx = ParseContext::new(self.base.graph());
+
+        let (version_only_config, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
-        let filter_exprs = self.build_filtering_expressions()?;
+        let filter_exprs = self.build_filtering_expressions(&pcx)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -1650,7 +1652,8 @@ impl App {
         groups: Vec<TestGroup>,
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
-        let (_, config) = self.base.load_config()?;
+        let pcx = ParseContext::new(self.base.graph());
+        let (_, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
 
         // Validate test groups before doing any other work.
@@ -1662,7 +1665,7 @@ impl App {
         };
         let settings = ShowTestGroupSettings { mode, show_default };
 
-        let filter_exprs = self.build_filtering_expressions()?;
+        let filter_exprs = self.build_filtering_expressions(&pcx)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;
@@ -1705,7 +1708,8 @@ impl App {
         cli_args: Vec<String>,
         output_writer: &mut OutputWriter,
     ) -> Result<i32> {
-        let (version_only_config, config) = self.base.load_config()?;
+        let pcx = ParseContext::new(self.base.graph());
+        let (version_only_config, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
 
         // Construct this here so that errors are reported before the build step.
@@ -1744,7 +1748,7 @@ impl App {
             CaptureStrategy::Combined
         };
 
-        let filter_exprs = self.build_filtering_expressions()?;
+        let filter_exprs = self.build_filtering_expressions(&pcx)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
 
         let binary_list = self.base.build_binary_list()?;

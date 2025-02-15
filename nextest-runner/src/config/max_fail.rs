@@ -172,6 +172,7 @@ mod tests {
     };
     use camino_tempfile::tempdir;
     use indoc::indoc;
+    use nextest_filtering::ParseContext;
     use test_case::test_case;
 
     #[test]
@@ -243,9 +244,11 @@ mod tests {
         let workspace_dir = tempdir().unwrap();
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
+        let pcx = ParseContext::new(&graph);
+
         let config = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             [],
             &Default::default(),
@@ -335,10 +338,11 @@ mod tests {
     fn invalid_fail_fast(config_contents: &str, error_str: &str) {
         let workspace_dir = tempdir().unwrap();
         let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let pcx = ParseContext::new(&graph);
 
         let error = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             [],
             &Default::default(),

@@ -13,7 +13,7 @@ use crate::{
     platform::BuildPlatforms,
     reporter::TestOutputDisplay,
 };
-use guppy::graph::{cargo::BuildPlatform, PackageGraph};
+use guppy::graph::cargo::BuildPlatform;
 use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext, TestQuery};
 use owo_colors::{OwoColorize, Style};
 use serde::{Deserialize, Deserializer};
@@ -317,12 +317,12 @@ pub(super) struct CompiledByProfile {
 
 impl CompiledByProfile {
     pub(super) fn new(
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         config: &NextestConfigImpl,
     ) -> Result<Self, ConfigParseErrorKind> {
         let mut errors = vec![];
         let default = CompiledData::new(
-            graph,
+            pcx,
             "default",
             Some(config.default_profile().default_filter()),
             config.default_profile().overrides(),
@@ -335,7 +335,7 @@ impl CompiledByProfile {
                 (
                     profile_name.to_owned(),
                     CompiledData::new(
-                        graph,
+                        pcx,
                         profile_name,
                         profile.default_filter(),
                         profile.overrides(),
@@ -445,48 +445,48 @@ pub(super) struct CompiledData<State> {
 
 impl CompiledData<PreBuildPlatform> {
     fn new(
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         profile_name: &str,
         profile_default_filter: Option<&str>,
         overrides: &[DeserializedOverride],
         scripts: &[DeserializedProfileScriptConfig],
         errors: &mut Vec<ConfigCompileError>,
     ) -> Self {
-        let profile_default_filter = profile_default_filter.and_then(|filter| {
-            let cx = ParseContext::new(graph);
-            match Filterset::parse(filter.to_owned(), &cx, FiltersetKind::DefaultFilter) {
-                Ok(expr) => Some(CompiledDefaultFilter {
-                    expr: expr.compiled,
-                    profile: profile_name.to_owned(),
-                    section: CompiledDefaultFilterSection::Profile,
-                }),
-                Err(err) => {
-                    errors.push(ConfigCompileError {
-                        profile_name: profile_name.to_owned(),
-                        section: ConfigCompileSection::DefaultFilter,
-                        kind: ConfigCompileErrorKind::Parse {
-                            host_parse_error: None,
-                            target_parse_error: None,
-                            filter_parse_errors: vec![err],
-                        },
-                    });
-                    None
+        let profile_default_filter =
+            profile_default_filter.and_then(|filter| {
+                match Filterset::parse(filter.to_owned(), pcx, FiltersetKind::DefaultFilter) {
+                    Ok(expr) => Some(CompiledDefaultFilter {
+                        expr: expr.compiled,
+                        profile: profile_name.to_owned(),
+                        section: CompiledDefaultFilterSection::Profile,
+                    }),
+                    Err(err) => {
+                        errors.push(ConfigCompileError {
+                            profile_name: profile_name.to_owned(),
+                            section: ConfigCompileSection::DefaultFilter,
+                            kind: ConfigCompileErrorKind::Parse {
+                                host_parse_error: None,
+                                target_parse_error: None,
+                                filter_parse_errors: vec![err],
+                            },
+                        });
+                        None
+                    }
                 }
-            }
-        });
+            });
 
         let overrides = overrides
             .iter()
             .enumerate()
             .filter_map(|(index, source)| {
-                CompiledOverride::new(graph, profile_name, index, source, errors)
+                CompiledOverride::new(pcx, profile_name, index, source, errors)
             })
             .collect();
         let scripts = scripts
             .iter()
             .enumerate()
             .filter_map(|(index, source)| {
-                CompiledProfileScripts::new(graph, profile_name, index, source, errors)
+                CompiledProfileScripts::new(pcx, profile_name, index, source, errors)
             })
             .collect();
         Self {
@@ -585,7 +585,7 @@ pub(super) struct ProfileOverrideData {
 
 impl CompiledOverride<PreBuildPlatform> {
     fn new(
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         profile_name: &str,
         index: usize,
         source: &DeserializedOverride,
@@ -604,7 +604,6 @@ impl CompiledOverride<PreBuildPlatform> {
             });
             return None;
         }
-        let cx = ParseContext::new(graph);
         // In the future, based on the settings we may want to have
         // restrictions on the kind here.
         let kind = FiltersetKind::Test;
@@ -612,11 +611,11 @@ impl CompiledOverride<PreBuildPlatform> {
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
         let filter = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(Filterset::parse(filter.clone(), &cx, kind)).transpose()
+            Some(Filterset::parse(filter.clone(), pcx, kind)).transpose()
         });
         let default_filter = source.default_filter.as_ref().map_or(Ok(None), |filter| {
             // XXX: kind should be Filterset::DefaultFilter!
-            Some(Filterset::parse(filter.clone(), &cx, kind)).transpose()
+            Some(Filterset::parse(filter.clone(), pcx, kind)).transpose()
         });
 
         match (host_spec, target_spec, filter, default_filter) {
@@ -945,9 +944,11 @@ mod tests {
         let graph = temp_workspace(workspace_dir.path(), config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
 
+        let pcx = ParseContext::new(&graph);
+
         let nextest_config_result = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &[][..],
             &Default::default(),
@@ -1188,10 +1189,11 @@ mod tests {
         let workspace_path: &Utf8Path = workspace_dir.path();
 
         let graph = temp_workspace(workspace_path, config_contents);
+        let pcx = ParseContext::new(&graph);
 
         let err = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             [],
             &Default::default(),
@@ -1250,10 +1252,11 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
+        let pcx = ParseContext::new(&graph);
 
         let nextest_config = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &[][..],
             &Default::default(),

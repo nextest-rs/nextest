@@ -133,6 +133,7 @@ mod tests {
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use maplit::btreeset;
+    use nextest_filtering::ParseContext;
     use std::collections::BTreeSet;
     use test_case::test_case;
 
@@ -202,9 +203,10 @@ mod tests {
         let tool_path = workspace_root.join(".config/tool.toml");
         std::fs::write(&tool_path, input).unwrap();
 
+        let pcx = ParseContext::new(&graph);
         let config_res = NextestConfig::from_sources(
             workspace_root,
-            &graph,
+            &pcx,
             None,
             &[ToolConfigFile {
                 tool: "my-tool".to_owned(),
@@ -298,8 +300,9 @@ mod tests {
         let graph = temp_workspace(workspace_path, config_contents);
         let workspace_root = graph.workspace().root();
 
+        let pcx = ParseContext::new(&graph);
         let config_res =
-            NextestConfig::from_sources(workspace_root, &graph, None, &[][..], &Default::default());
+            NextestConfig::from_sources(workspace_root, &pcx, None, &[][..], &Default::default());
         match expected {
             Ok(expected_groups) => {
                 let config = config_res.expect("config is valid");
@@ -443,9 +446,10 @@ mod tests {
         let tool2_path = workspace_root.join(".config/tool2.toml");
         std::fs::write(&tool2_path, tool2_config).unwrap();
 
+        let pcx = ParseContext::new(&graph);
         let config = NextestConfig::from_sources(
             workspace_root,
-            &graph,
+            &pcx,
             None,
             &[
                 ToolConfigFile {
