@@ -1175,17 +1175,16 @@ mod tests {
             benches::ignored_bench_foo: benchmark
         "};
 
-        let cx = ParseContext {
-            graph: &PACKAGE_GRAPH_FIXTURE,
-            kind: FiltersetKind::Test,
-        };
+        let cx = ParseContext::new(&PACKAGE_GRAPH_FIXTURE);
 
         let test_filter = TestFilterBuilder::new(
             RunIgnored::Default,
             None,
             TestFilterPatterns::default(),
             // Test against the platform() predicate because this is the most important one here.
-            vec![Filterset::parse("platform(target)".to_owned(), &cx).unwrap()],
+            vec![
+                Filterset::parse("platform(target)".to_owned(), &cx, FiltersetKind::Test).unwrap(),
+            ],
         )
         .unwrap();
         let fake_cwd: Utf8PathBuf = "/fake/cwd".into();

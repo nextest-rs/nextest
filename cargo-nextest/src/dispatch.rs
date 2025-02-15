@@ -1548,15 +1548,12 @@ impl App {
     }
 
     fn build_filtering_expressions(&self) -> Result<Vec<Filterset>> {
-        let pcx = ParseContext {
-            graph: self.base.graph(),
-            kind: FiltersetKind::Test,
-        };
+        let pcx = ParseContext::new(self.base.graph());
         let (exprs, all_errors): (Vec<_>, Vec<_>) = self
             .build_filter
             .filterset
             .iter()
-            .map(|input| Filterset::parse(input.clone(), &pcx))
+            .map(|input| Filterset::parse(input.clone(), &pcx, FiltersetKind::Test))
             .partition_result();
 
         if !all_errors.is_empty() {

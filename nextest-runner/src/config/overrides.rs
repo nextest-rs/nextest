@@ -453,11 +453,8 @@ impl CompiledData<PreBuildPlatform> {
         errors: &mut Vec<ConfigCompileError>,
     ) -> Self {
         let profile_default_filter = profile_default_filter.and_then(|filter| {
-            let cx = ParseContext {
-                graph,
-                kind: FiltersetKind::DefaultFilter,
-            };
-            match Filterset::parse(filter.to_owned(), &cx) {
+            let cx = ParseContext::new(graph);
+            match Filterset::parse(filter.to_owned(), &cx, FiltersetKind::DefaultFilter) {
                 Ok(expr) => Some(CompiledDefaultFilter {
                     expr: expr.compiled,
                     profile: profile_name.to_owned(),
@@ -607,20 +604,19 @@ impl CompiledOverride<PreBuildPlatform> {
             });
             return None;
         }
-        let cx = ParseContext {
-            graph,
-            // In the future, based on the settings we may want to have restrictions on the kind
-            // here.
-            kind: FiltersetKind::Test,
-        };
+        let cx = ParseContext::new(graph);
+        // In the future, based on the settings we may want to have
+        // restrictions on the kind here.
+        let kind = FiltersetKind::Test;
 
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
         let filter = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(Filterset::parse(filter.clone(), &cx)).transpose()
+            Some(Filterset::parse(filter.clone(), &cx, kind)).transpose()
         });
         let default_filter = source.default_filter.as_ref().map_or(Ok(None), |filter| {
-            Some(Filterset::parse(filter.clone(), &cx)).transpose()
+            // XXX: kind should be Filterset::DefaultFilter!
+            Some(Filterset::parse(filter.clone(), &cx, kind)).transpose()
         });
 
         match (host_spec, target_spec, filter, default_filter) {

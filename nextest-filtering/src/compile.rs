@@ -17,17 +17,14 @@ use std::collections::HashSet;
 pub(crate) fn compile(
     expr: &ParsedExpr,
     cx: &ParseContext<'_>,
+    kind: FiltersetKind,
 ) -> Result<CompiledExpr, Vec<ParseSingleError>> {
     let mut errors = vec![];
-    check_banned_predicates(expr, cx.kind, &mut errors);
+    check_banned_predicates(expr, kind, &mut errors);
 
-    let in_workspace_packages: Vec<_> = cx
-        .graph
-        .resolve_workspace()
-        .packages(guppy::graph::DependencyDirection::Forward)
-        .collect();
-    let mut cache = cx.graph.new_depends_cache();
-    let expr = compile_expr(expr, &in_workspace_packages, &mut cache, &mut errors);
+    let workspace_packages = &cx.make_cache().workspace_packages;
+    let mut cache = cx.graph().new_depends_cache();
+    let expr = compile_expr(expr, workspace_packages, &mut cache, &mut errors);
 
     if errors.is_empty() {
         Ok(expr)

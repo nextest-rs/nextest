@@ -9,13 +9,13 @@ use crate::{
     },
 };
 use guppy::{
-    graph::{cargo::BuildPlatform, PackageGraph},
+    graph::{cargo::BuildPlatform, PackageGraph, PackageMetadata},
     PackageId,
 };
 use miette::SourceSpan;
 use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use recursion::{Collapsible, CollapsibleExt, MappableFrame, PartiallyApplied};
-use std::{collections::HashSet, fmt};
+use std::{collections::HashSet, fmt, sync::OnceLock};
 
 /// Matcher for name
 ///
@@ -268,16 +268,51 @@ impl FiltersetLeaf {
 }
 
 /// Inputs to filterset parsing.
-#[derive(Copy, Clone, Debug)]
-pub struct ParseContext<'a> {
+#[derive(Debug)]
+pub struct ParseContext<'g> {
     /// The package graph.
-    pub graph: &'a PackageGraph,
+    graph: &'g PackageGraph,
 
-    /// What kind of expression this is.
-    ///
-    /// In some cases, expressions must restrict themselves to a subset of the full filtering
-    /// language. This is used to determine what subset of the language is allowed.
-    pub kind: FiltersetKind,
+    /// Cached data computed on first access.
+    cache: OnceLock<ParseContextCache<'g>>,
+}
+
+impl<'g> ParseContext<'g> {
+    /// Creates a new `ParseContext`.
+    #[inline]
+    pub fn new(graph: &'g PackageGraph) -> Self {
+        Self {
+            graph,
+            cache: OnceLock::new(),
+        }
+    }
+
+    /// Returns the package graph.
+    #[inline]
+    pub fn graph(&self) -> &'g PackageGraph {
+        self.graph
+    }
+
+    pub(crate) fn make_cache(&self) -> &ParseContextCache<'g> {
+        self.cache
+            .get_or_init(|| ParseContextCache::new(self.graph))
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ParseContextCache<'g> {
+    pub(crate) workspace_packages: Vec<PackageMetadata<'g>>,
+}
+
+impl<'g> ParseContextCache<'g> {
+    fn new(graph: &'g PackageGraph) -> Self {
+        Self {
+            workspace_packages: graph
+                .resolve_workspace()
+                .packages(guppy::graph::DependencyDirection::Forward)
+                .collect(),
+        }
+    }
 }
 
 /// The kind of filterset being parsed.
@@ -311,7 +346,11 @@ pub struct EvalContext<'a> {
 
 impl Filterset {
     /// Parse a filterset.
-    pub fn parse(input: String, cx: &ParseContext<'_>) -> Result<Self, FiltersetParseErrors> {
+    pub fn parse(
+        input: String,
+        cx: &ParseContext<'_>,
+        kind: FiltersetKind,
+    ) -> Result<Self, FiltersetParseErrors> {
         let mut errors = Vec::new();
         match parse(new_span(&input, &mut errors)) {
             Ok(parsed_expr) => {
@@ -321,7 +360,7 @@ impl Filterset {
 
                 match parsed_expr {
                     ExprResult::Valid(parsed) => {
-                        let compiled = crate::compile::compile(&parsed, cx)
+                        let compiled = crate::compile::compile(&parsed, cx, kind)
                             .map_err(|errors| FiltersetParseErrors::new(input.clone(), errors))?;
                         Ok(Self {
                             input,
