@@ -1,0 +1,49 @@
+---
+source: integration-tests/tests/integration/main.rs
+expression: output.stderr_as_str()
+snapshot_kind: text
+---
+info: experimental features enabled: setup-scripts
+  error: operator didn't match any binary names
+   ╭────
+ 1 │ binary(unknown) & binary_id(unknown) & binary(=unknown) | binary_id(=unknown)
+   ·        ───┬───
+   ·           ╰── no binary names matched this
+   ╰────
+
+  error: operator didn't match any binary IDs
+   ╭────
+ 1 │ binary(unknown) & binary_id(unknown) & binary(=unknown) | binary_id(=unknown)
+   ·                             ───┬───
+   ·                                ╰── no binary IDs matched this
+   ╰────
+
+  error: operator didn't match any binary names
+   ╭────
+ 1 │ binary(unknown) & binary_id(unknown) & binary(=unknown) | binary_id(=unknown)
+   ·                                               ────┬───
+   ·                                                   ╰── no binary names matched this
+   ╰────
+
+  error: operator didn't match any binary IDs
+   ╭────
+ 1 │ binary(unknown) & binary_id(unknown) & binary(=unknown) | binary_id(=unknown)
+   ·                                                                     ────┬───
+   ·                                                                         ╰── no binary IDs matched this
+   ╰────
+
+  error: operator didn't match any binary IDs
+   ╭────
+ 1 │ binary_id(nextest-tests::does_not_exist) | binary_id(=nextest-tests::basic)
+   ·           ──────────────┬──────────────
+   ·                         ╰── no binary IDs matched this
+   ╰────
+
+  error: operator didn't match any binary IDs
+   ╭────
+ 1 │ binary_id(nextest-tests::example/*) | binary_id(dylib-test::example/*)
+   ·                                                 ──────────┬──────────
+   ·                                                           ╰── no binary IDs matched this
+   ╰────
+
+error: failed to parse filterset

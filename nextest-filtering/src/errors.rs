@@ -118,6 +118,14 @@ pub enum ParseSingleError {
     #[error("operator didn't match any packages")]
     NoPackageMatch(#[label("no packages matched this")] SourceSpan),
 
+    /// This matcher didn't match any binary IDs.
+    #[error("operator didn't match any binary IDs")]
+    NoBinaryIdMatch(#[label("no binary IDs matched this")] SourceSpan),
+
+    /// This matcher didn't match any binary names.
+    #[error("operator didn't match any binary names")]
+    NoBinaryNameMatch(#[label("no binary names matched this")] SourceSpan),
+
     /// Expected "host" or "target" for a `platform()` predicate.
     #[error("invalid argument for platform")]
     InvalidPlatformArgument(#[label("expected \"target\" or \"host\"")] SourceSpan),

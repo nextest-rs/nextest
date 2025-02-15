@@ -35,6 +35,7 @@ proptest = { workspace = true, optional = true }
 recursion.workspace = true
 regex-syntax.workspace = true
 regex.workspace = true
+smol_str.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
 winnow.workspace = true

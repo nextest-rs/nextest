@@ -164,6 +164,38 @@ fn test_list_binaries_only() {
         .output();
 
     check_list_binaries_output(&output.stdout);
+
+    // Check error messages for unknown binary IDs.
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "list",
+            "--cargo-quiet",
+            "--workspace",
+            "--all-targets",
+            "--message-format",
+            "json",
+            "--list-type",
+            "binaries-only",
+            // Doesn't exist.
+            "-E",
+            "binary(unknown) & binary_id(unknown) & binary(=unknown) | binary_id(=unknown)",
+            // Does exist.
+            "-E",
+            "binary_id(with-build-script) | binary_id(=with-build-script) | \
+             binary(nextest-tests) | binary(=nextest-tests)",
+            // First one doesn't exist, second one does.
+            "-E",
+            "binary_id(nextest-tests::does_not_exist) | binary_id(=nextest-tests::basic)",
+            // First one exists, second one doesn't.
+            "-E",
+            "binary_id(nextest-tests::example/*) | binary_id(dylib-test::example/*)",
+        ])
+        .unchecked(true)
+        .output();
+
+    insta::assert_snapshot!(output.stderr_as_str());
 }
 
 #[test]
@@ -321,7 +353,7 @@ fn test_run_no_tests() {
 
     let stderr = output.stderr_as_str();
     assert!(
-        stderr.contains("Starting 0 tests across 0 binaries (8 binaries skipped)"),
+        stderr.contains("Starting 0 tests across 0 binaries (7 binaries skipped)"),
         "stderr contains 'Starting' message: {output}"
     );
     assert!(

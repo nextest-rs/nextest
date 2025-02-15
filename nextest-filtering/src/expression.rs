@@ -9,12 +9,13 @@ use crate::{
     },
 };
 use guppy::{
-    graph::{cargo::BuildPlatform, PackageGraph, PackageMetadata},
+    graph::{cargo::BuildPlatform, BuildTargetId, PackageGraph, PackageMetadata},
     PackageId,
 };
 use miette::SourceSpan;
 use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use recursion::{Collapsible, CollapsibleExt, MappableFrame, PartiallyApplied};
+use smol_str::SmolStr;
 use std::{collections::HashSet, fmt, sync::OnceLock};
 
 /// Matcher for name
@@ -302,16 +303,52 @@ impl<'g> ParseContext<'g> {
 #[derive(Debug)]
 pub(crate) struct ParseContextCache<'g> {
     pub(crate) workspace_packages: Vec<PackageMetadata<'g>>,
+    // Ordinarily we'd store RustBinaryId here, but that wouldn't allow looking
+    // up a string.
+    pub(crate) binary_ids: HashSet<SmolStr>,
+    pub(crate) binary_names: HashSet<&'g str>,
 }
 
 impl<'g> ParseContextCache<'g> {
     fn new(graph: &'g PackageGraph) -> Self {
+        let workspace_packages: Vec<_> = graph
+            .resolve_workspace()
+            .packages(guppy::graph::DependencyDirection::Forward)
+            .collect();
+        let (binary_ids, binary_names) = workspace_packages
+            .iter()
+            .flat_map(|pkg| {
+                pkg.build_targets().filter_map(|bt| {
+                    let kind = compute_kind(&bt.id())?;
+                    let binary_id = RustBinaryId::from_parts(pkg.name(), &kind, bt.name());
+                    Some((SmolStr::new(binary_id.as_str()), bt.name()))
+                })
+            })
+            .unzip();
+
         Self {
-            workspace_packages: graph
-                .resolve_workspace()
-                .packages(guppy::graph::DependencyDirection::Forward)
-                .collect(),
+            workspace_packages,
+            binary_ids,
+            binary_names,
         }
+    }
+}
+
+fn compute_kind(id: &BuildTargetId<'_>) -> Option<RustTestBinaryKind> {
+    match id {
+        // Note this covers both libraries and proc macros, but we treat
+        // libraries the same as proc macros while constructing a `RustBinaryId`
+        // anyway.
+        BuildTargetId::Library => Some(RustTestBinaryKind::LIB),
+        BuildTargetId::Benchmark(_) => Some(RustTestBinaryKind::BENCH),
+        BuildTargetId::Example(_) => Some(RustTestBinaryKind::EXAMPLE),
+        BuildTargetId::BuildScript => {
+            // Build scripts don't have tests in them.
+            None
+        }
+        BuildTargetId::Binary(_) => Some(RustTestBinaryKind::BIN),
+        BuildTargetId::Test(_) => Some(RustTestBinaryKind::TEST),
+        _ => panic!("unknown build target id: {id:?}"),
     }
 }
 
@@ -524,9 +561,24 @@ impl<Set> MappableFrame for ExprFrame<Set, PartiallyApplied> {
         use ExprFrame::*;
         match input {
             Not(a) => Not(f(a)),
-            Union(a, b) => Union(f(a), f(b)),
-            Intersection(a, b) => Intersection(f(a), f(b)),
-            Difference(a, b) => Difference(f(a), f(b)),
+            // Note: reverse the order because the recursion crate processes
+            // entries via a stack, as LIFO. Calling f(b) before f(a) means
+            // error messages for a show up before those for b.
+            Union(a, b) => {
+                let b = f(b);
+                let a = f(a);
+                Union(a, b)
+            }
+            Intersection(a, b) => {
+                let b = f(b);
+                let a = f(a);
+                Intersection(a, b)
+            }
+            Difference(a, b) => {
+                let b = f(b);
+                let a = f(a);
+                Difference(a, b)
+            }
             Parens(a) => Parens(f(a)),
             Set(f) => Set(f),
         }
