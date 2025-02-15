@@ -238,6 +238,9 @@ impl RustTestBinaryKind {
     /// The "bin" kind, used for unit tests within binaries.
     pub const BIN: Self = Self::new_const("bin");
 
+    /// The "example" kind, used for unit tests within examples.
+    pub const EXAMPLE: Self = Self::new_const("example");
+
     /// The "proc-macro" kind, used for tests within procedural macros.
     pub const PROC_MACRO: Self = Self::new_const("proc-macro");
 }
@@ -380,6 +383,9 @@ where
 impl Ord for RustBinaryId {
     fn cmp(&self, other: &RustBinaryId) -> Ordering {
         // Use the components as the canonical sort order.
+        //
+        // Note: this means that we can't impl Borrow<str> for RustBinaryId,
+        // since the Ord impl is inconsistent with that of &str.
         self.components().cmp(&other.components())
     }
 }

@@ -448,7 +448,7 @@ fn test_expr_kind() {
 #[test]
 fn test_expr_binary() {
     let graph = load_graph();
-    let expr = parse("binary(my-binary)", &graph);
+    let expr = parse("binary(crate_f)", &graph);
 
     let pid_a = mk_pid('a');
     let cx = EvalContext {
@@ -457,7 +457,7 @@ fn test_expr_binary() {
 
     assert!(expr.matches_test(
         &TestQuery {
-            binary_query: binary_query(&graph, &pid_a, "lib", "my-binary", BuildPlatform::Target)
+            binary_query: binary_query(&graph, &pid_a, "lib", "crate_f", BuildPlatform::Target)
                 .to_query(),
             test_name: "test_something"
         },
@@ -473,7 +473,7 @@ fn test_expr_binary() {
     ));
     assert!(expr.matches_test(
         &TestQuery {
-            binary_query: binary_query(&graph, &pid_a, "lib2", "my-binary", BuildPlatform::Target)
+            binary_query: binary_query(&graph, &pid_a, "lib2", "crate_f", BuildPlatform::Target)
                 .to_query(),
             test_name: "test_something"
         },
@@ -738,7 +738,7 @@ fn test_expr_test_intersect(input: &str) {
 fn test_binary_query() {
     let graph = load_graph();
     let expr = parse(
-        "binary(foo) + !platform(target) + kind(bench) + (package(~_a) & (!test(/foo/) | kind(bin)))",
+        "binary(crate_a) + !platform(target) + kind(bench) + (package(~_a) & (!test(/foo/) | kind(bin)))",
         &graph,
     );
 
@@ -748,10 +748,10 @@ fn test_binary_query() {
         default_filter: &CompiledExpr::ALL,
     };
 
-    // binary = foo should match the first predicate (pid_a should not be relevant).
+    // binary = crate_a should match the first predicate (pid_a should not be relevant).
     assert_eq!(
         expr.matches_binary(
-            &binary_query(&graph, &pid_a, "lib", "foo", BuildPlatform::Target).to_query(),
+            &binary_query(&graph, &pid_a, "lib", "crate_a", BuildPlatform::Target).to_query(),
             &cx,
         ),
         Some(true)

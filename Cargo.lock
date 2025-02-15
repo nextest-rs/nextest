@@ -1141,9 +1141,9 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.17.14"
+version = "0.17.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29c20ac214f84bec493542e97ef5469eae1763789060740ed2f7aba2deaff393"
+checksum = "2dadc932032945158611b2b45baae9f6fc0024a6f91dd57f61f5edb4ad507f3b"
 dependencies = [
  "ahash",
  "camino",
@@ -1823,6 +1823,7 @@ dependencies = [
  "recursion",
  "regex",
  "regex-syntax 0.8.5",
+ "smol_str",
  "test-case",
  "test-strategy",
  "thiserror 2.0.11",
@@ -3068,16 +3069,15 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "target-spec"
-version = "3.4.0"
+version = "3.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9e2827c8368f9860f6d263f872175b7dd1d62628fc7518335fb1a660e477d6a"
+checksum = "2bc8a7884e5638da28cd5bd0d9c33df2da1df204cbbb57a52a4762a4ab3b0be9"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
  "serde",
  "serde_json",
  "target-lexicon",
- "unicode-ident",
 ]
 
 [[package]]

@@ -24,7 +24,10 @@ test = true
 
 [[example]]
 name = "other"
-test = true
+# Note that setting test = false does not mean that tests are disabled. It just
+# means that `cargo nextest run` won't run tests by default. It will run tests
+# when `cargo nextest run --all-targets` is used.
+test = false
 
 # Make this crate its own workspace.
 [workspace]
@@ -34,7 +37,7 @@ members = [
     "derive",
     "dylib-test",
     "with-build-script",
-    "proc-macro-test"
+    "proc-macro-test",
 ]
 
 [dependencies]

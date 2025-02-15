@@ -61,7 +61,7 @@ fs-err = "3.1.0"
 future-queue = "0.4.0"
 futures = "0.3.31"
 globset = "0.4.15"
-guppy = "0.17.14"
+guppy = "0.17.16"
 hex = "0.4.3"
 home = "0.5.11"
 http = "1.2.0"
@@ -157,6 +157,7 @@ nextest-workspace-hack = { path = "workspace-hack" }
 
 # Uncomment for testing.
 # cargo_metadata = { path = "../cargo_metadata" }
+# guppy = { path = "../../guppy/guppy" }
 # future-queue = { path = "../future-queue" }
 # target-spec = { path = "../guppy/target-spec" }
 # target-spec-miette = { path = "../guppy/target-spec-miette" }
