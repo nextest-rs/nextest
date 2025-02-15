@@ -248,6 +248,7 @@ mod tests {
     use camino_tempfile::tempdir;
     use config::ConfigError;
     use indoc::indoc;
+    use nextest_filtering::ParseContext;
     use test_case::test_case;
 
     #[test]
@@ -274,9 +275,11 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
+        let pcx = ParseContext::new(&graph);
+
         let config = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             [],
             &Default::default(),
@@ -424,9 +427,11 @@ mod tests {
 
         let graph = temp_workspace(workspace_path, config_contents);
 
+        let pcx = ParseContext::new(&graph);
+
         let config_err = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             [],
             &Default::default(),

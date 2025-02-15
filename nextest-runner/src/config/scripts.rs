@@ -19,7 +19,7 @@ use crate::{
     test_command::{apply_ld_dyld_env, create_command},
 };
 use camino_tempfile::Utf8TempPath;
-use guppy::graph::{cargo::BuildPlatform, PackageGraph};
+use guppy::graph::cargo::BuildPlatform;
 use indexmap::IndexMap;
 use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery};
 use serde::{de::Error, Deserialize};
@@ -255,7 +255,7 @@ pub(crate) struct CompiledProfileScripts<State> {
 
 impl CompiledProfileScripts<PreBuildPlatform> {
     pub(super) fn new(
-        graph: &PackageGraph,
+        pcx: &ParseContext<'_>,
         profile_name: &str,
         index: usize,
         source: &DeserializedProfileScriptConfig,
@@ -279,14 +279,13 @@ impl CompiledProfileScripts<PreBuildPlatform> {
 
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
-        let cx = ParseContext::new(graph);
 
         let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
             // TODO: probably want to restrict the set of expressions here via
             // the `kind` parameter.
             Some(Filterset::parse(
                 filter.clone(),
-                &cx,
+                pcx,
                 FiltersetKind::DefaultFilter,
             ))
             .transpose()
@@ -649,6 +648,8 @@ mod tests {
         let tool_path = workspace_dir.path().join(".config/my-tool.toml");
         std::fs::write(&tool_path, tool_config_contents).unwrap();
 
+        let pcx = ParseContext::new(&graph);
+
         let tool_config_files = [ToolConfigFile {
             tool: "my-tool".to_owned(),
             config_file: tool_path,
@@ -657,7 +658,7 @@ mod tests {
         // First, check that if the experimental feature isn't enabled, we get an error.
         let nextest_config_error = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &tool_config_files,
             &Default::default(),
@@ -673,7 +674,7 @@ mod tests {
         // Now, check with the experimental feature enabled.
         let nextest_config_result = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &tool_config_files,
             &btreeset! { ConfigExperimental::SetupScripts },
@@ -807,10 +808,11 @@ mod tests {
         let workspace_dir = tempdir().unwrap();
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let pcx = ParseContext::new(&graph);
 
         let nextest_config_error = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &[][..],
             &btreeset! { ConfigExperimental::SetupScripts },
@@ -904,9 +906,11 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
+        let pcx = ParseContext::new(&graph);
+
         let error = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &[][..],
             &btreeset! { ConfigExperimental::SetupScripts },
@@ -965,9 +969,11 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
+        let pcx = ParseContext::new(&graph);
+
         let error = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &[][..],
             &btreeset! { ConfigExperimental::SetupScripts },
@@ -1015,9 +1021,11 @@ mod tests {
             config_file: tool_path,
         }];
 
+        let pcx = ParseContext::new(&graph);
+
         let error = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &tool_config_files,
             &btreeset! { ConfigExperimental::SetupScripts },
@@ -1076,9 +1084,11 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
+        let pcx = ParseContext::new(&graph);
+
         let error = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &[][..],
             &btreeset! { ConfigExperimental::SetupScripts },

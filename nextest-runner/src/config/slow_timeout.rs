@@ -84,6 +84,7 @@ mod tests {
     };
     use camino_tempfile::tempdir;
     use indoc::indoc;
+    use nextest_filtering::ParseContext;
     use test_case::test_case;
 
     #[test_case(
@@ -184,9 +185,11 @@ mod tests {
 
         let graph = temp_workspace(workspace_dir.path(), config_contents);
 
+        let pcx = ParseContext::new(&graph);
+
         let nextest_config_result = NextestConfig::from_sources(
             graph.workspace().root(),
-            &graph,
+            &pcx,
             None,
             &[][..],
             &Default::default(),
