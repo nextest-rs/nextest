@@ -28,11 +28,8 @@ fn mk_pid(c: char) -> PackageId {
 }
 
 fn parse(input: &str, graph: &PackageGraph) -> Filterset {
-    let cx = ParseContext {
-        graph,
-        kind: FiltersetKind::Test,
-    };
-    let expr = Filterset::parse(input.to_owned(), &cx).unwrap();
+    let cx = ParseContext::new(graph);
+    let expr = Filterset::parse(input.to_owned(), &cx, FiltersetKind::Test).unwrap();
     eprintln!("expression: {expr:?}");
     expr
 }
@@ -393,21 +390,22 @@ fn test_expr_with_no_matching_packages() {
     }
 
     let graph = load_graph();
-    let cx = ParseContext {
-        graph: &graph,
-        kind: FiltersetKind::Test,
-    };
+    let cx = ParseContext::new(&graph);
 
-    let errors = Filterset::parse("deps(does-not-exist)".to_owned(), &cx).unwrap_err();
+    let errors =
+        Filterset::parse("deps(does-not-exist)".to_owned(), &cx, FiltersetKind::Test).unwrap_err();
     assert_error(&errors);
 
-    let errors = Filterset::parse("deps(=does-not-exist)".to_owned(), &cx).unwrap_err();
+    let errors =
+        Filterset::parse("deps(=does-not-exist)".to_owned(), &cx, FiltersetKind::Test).unwrap_err();
     assert_error(&errors);
 
-    let errors = Filterset::parse("deps(~does-not-exist)".to_owned(), &cx).unwrap_err();
+    let errors =
+        Filterset::parse("deps(~does-not-exist)".to_owned(), &cx, FiltersetKind::Test).unwrap_err();
     assert_error(&errors);
 
-    let errors = Filterset::parse("deps(/does-not/)".to_owned(), &cx).unwrap_err();
+    let errors =
+        Filterset::parse("deps(/does-not/)".to_owned(), &cx, FiltersetKind::Test).unwrap_err();
     assert_error(&errors);
 }
 

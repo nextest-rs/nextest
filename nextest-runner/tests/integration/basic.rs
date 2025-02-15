@@ -238,11 +238,13 @@ fn test_run() -> Result<()> {
 fn test_run_ignored() -> Result<()> {
     set_env_vars();
 
-    let pcx = ParseContext {
-        graph: &PACKAGE_GRAPH,
-        kind: FiltersetKind::Test,
-    };
-    let expr = Filterset::parse("not test(test_slow_timeout)".to_owned(), &pcx).unwrap();
+    let pcx = ParseContext::new(&PACKAGE_GRAPH);
+    let expr = Filterset::parse(
+        "not test(test_slow_timeout)".to_owned(),
+        &pcx,
+        FiltersetKind::Test,
+    )
+    .unwrap();
 
     let test_filter = TestFilterBuilder::new(
         RunIgnored::Only,
@@ -336,13 +338,11 @@ fn test_run_ignored() -> Result<()> {
 fn test_filter_expr_with_string_filters() -> Result<()> {
     set_env_vars();
 
-    let pcx = ParseContext {
-        graph: &PACKAGE_GRAPH,
-        kind: FiltersetKind::Test,
-    };
+    let pcx = ParseContext::new(&PACKAGE_GRAPH);
     let expr = Filterset::parse(
         "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
         &pcx,
+        FiltersetKind::Test,
     )
     .expect("filterset is valid");
 
@@ -410,13 +410,11 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
 fn test_filter_expr_without_string_filters() -> Result<()> {
     set_env_vars();
 
-    let pcx = ParseContext {
-        graph: &PACKAGE_GRAPH,
-        kind: FiltersetKind::Test,
-    };
+    let pcx = ParseContext::new(&PACKAGE_GRAPH);
     let expr = Filterset::parse(
         "test(test_multiply_two) | test(=tests::call_dylib_add_two)".to_owned(),
         &pcx,
+        FiltersetKind::Test,
     )
     .expect("filterset is valid");
 
@@ -653,11 +651,13 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
 fn test_termination() -> Result<()> {
     set_env_vars();
 
-    let pcx = ParseContext {
-        graph: &PACKAGE_GRAPH,
-        kind: FiltersetKind::Test,
-    };
-    let expr = Filterset::parse("test(/^test_slow_timeout/)".to_owned(), &pcx).unwrap();
+    let pcx = ParseContext::new(&PACKAGE_GRAPH);
+    let expr = Filterset::parse(
+        "test(/^test_slow_timeout/)".to_owned(),
+        &pcx,
+        FiltersetKind::Test,
+    )
+    .unwrap();
     let test_filter = TestFilterBuilder::new(
         RunIgnored::Only,
         None,

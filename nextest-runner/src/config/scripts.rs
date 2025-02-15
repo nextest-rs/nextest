@@ -279,14 +279,17 @@ impl CompiledProfileScripts<PreBuildPlatform> {
 
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
-        let cx = ParseContext {
-            graph,
-            // TODO: probably want to restrict the set of expressions here.
-            kind: FiltersetKind::Test,
-        };
+        let cx = ParseContext::new(graph);
 
         let filter_expr = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(Filterset::parse(filter.clone(), &cx)).transpose()
+            // TODO: probably want to restrict the set of expressions here via
+            // the `kind` parameter.
+            Some(Filterset::parse(
+                filter.clone(),
+                &cx,
+                FiltersetKind::DefaultFilter,
+            ))
+            .transpose()
         });
 
         match (host_spec, target_spec, filter_expr) {

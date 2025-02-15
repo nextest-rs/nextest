@@ -53,11 +53,12 @@ fn main() {
     let args = Args::parse();
 
     let graph = load_graph(args.cargo_metadata);
-    let cx = nextest_filtering::ParseContext {
-        graph: &graph,
-        kind: nextest_filtering::FiltersetKind::Test,
-    };
-    match nextest_filtering::Filterset::parse(args.expr, &cx) {
+    let cx = nextest_filtering::ParseContext::new(&graph);
+    match nextest_filtering::Filterset::parse(
+        args.expr,
+        &cx,
+        nextest_filtering::FiltersetKind::Test,
+    ) {
         Ok(expr) => println!("{expr:?}"),
         Err(FiltersetParseErrors { input, errors, .. }) => {
             for error in errors {
