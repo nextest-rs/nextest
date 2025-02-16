@@ -604,18 +604,19 @@ impl CompiledOverride<PreBuildPlatform> {
             });
             return None;
         }
-        // In the future, based on the settings we may want to have
-        // restrictions on the kind here.
-        let kind = FiltersetKind::Test;
 
         let host_spec = MaybeTargetSpec::new(source.platform.host.as_deref());
         let target_spec = MaybeTargetSpec::new(source.platform.target.as_deref());
         let filter = source.filter.as_ref().map_or(Ok(None), |filter| {
-            Some(Filterset::parse(filter.clone(), pcx, kind)).transpose()
+            Some(Filterset::parse(filter.clone(), pcx, FiltersetKind::Test)).transpose()
         });
         let default_filter = source.default_filter.as_ref().map_or(Ok(None), |filter| {
-            // XXX: kind should be Filterset::DefaultFilter!
-            Some(Filterset::parse(filter.clone(), pcx, kind)).transpose()
+            Some(Filterset::parse(
+                filter.clone(),
+                pcx,
+                FiltersetKind::DefaultFilter,
+            ))
+            .transpose()
         });
 
         match (host_spec, target_spec, filter, default_filter) {
@@ -1086,6 +1087,26 @@ mod tests {
         }]
 
         ; "default-filter without platform"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [[profile.default.overrides]]
+            platform = 'cfg(unix)'
+            default-filter = "not default()"
+            retries = 2
+        "#},
+        "default",
+        &[MietteJsonReport {
+            message: "predicate not allowed in `default-filter` expressions".to_owned(),
+            labels: vec![
+                MietteJsonLabel {
+                    label: "this predicate causes infinite recursion".to_owned(),
+                    span: MietteJsonSpan { offset: 4, length: 9 },
+                },
+            ],
+        }]
+
+        ; "default filterset in default-filter"
     )]
     #[test_case(
         indoc! {r#"
