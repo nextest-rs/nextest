@@ -132,7 +132,7 @@ unicode-normalization = "0.1.24"
 whoami = "1.5.2"
 win32job = "2.0.1"
 windows-sys = "0.59.0"
-winnow = "0.7.2"
+winnow = "0.7.3"
 xxhash-rust = "0.8.13"
 zstd = { version = "0.13.2", features = ["zstdmt"] }
 
