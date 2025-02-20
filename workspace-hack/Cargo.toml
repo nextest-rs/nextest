@@ -34,7 +34,7 @@ rand = { version = "0.8.5" }
 regex-automata = { version = "0.4.8", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "unicode"] }
 regex-syntax = { version = "0.8.5" }
 serde = { version = "1.0.217", features = ["alloc", "derive"] }
-serde_json = { version = "1.0.138", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.139", features = ["unbounded_depth"] }
 smallvec = { version = "1.14.0", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.4.1", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.4", default-features = false, features = ["fixtures"] }
