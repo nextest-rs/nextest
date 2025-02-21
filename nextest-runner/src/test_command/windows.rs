@@ -21,8 +21,8 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
 
     static RANDOM_SEQ: OnceLock<AtomicUsize> = OnceLock::new();
     let rand_seq = RANDOM_SEQ.get_or_init(|| {
-        use rand::{rngs::OsRng, RngCore};
-        AtomicUsize::new(OsRng.next_u32() as _)
+        use rand::RngCore;
+        AtomicUsize::new(rand::rng().next_u32() as _)
     });
 
     // A 64kb pipe capacity is the same as a typical Linux default.
