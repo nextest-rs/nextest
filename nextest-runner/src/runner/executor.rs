@@ -36,7 +36,7 @@ use crate::{
 use future_queue::FutureQueueContext;
 use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
-use rand::{distributions::OpenClosed01, thread_rng, Rng};
+use rand::{distr::OpenClosed01, Rng};
 use std::{
     num::NonZeroUsize,
     pin::Pin,
@@ -918,7 +918,7 @@ impl BackoffIter {
     }
 
     fn apply_jitter(duration: Duration) -> Duration {
-        let jitter: f64 = thread_rng().sample(OpenClosed01);
+        let jitter: f64 = rand::rng().sample(OpenClosed01);
         // Apply jitter in the range (0.5, 1].
         duration.mul_f64(0.5 + jitter / 2.)
     }
