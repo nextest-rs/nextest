@@ -5,30 +5,30 @@
 use clap::{Args, ValueEnum};
 use miette::{GraphicalTheme, MietteHandlerOpts, ThemeStyles};
 use nextest_runner::{reporter::ReporterStderr, write_str::WriteStr};
-use owo_colors::{style, OwoColorize, Style};
+use owo_colors::{OwoColorize, Style, style};
 use std::{
     fmt,
     io::{self, BufWriter, Stderr, Stdout, Write},
     marker::PhantomData,
 };
 use tracing::{
+    Event, Level, Subscriber,
     field::{Field, Visit},
     level_filters::LevelFilter,
-    Event, Level, Subscriber,
 };
 use tracing_subscriber::{
+    Layer,
     filter::Targets,
-    fmt::{format, FmtContext, FormatEvent, FormatFields},
+    fmt::{FmtContext, FormatEvent, FormatFields, format},
     layer::SubscriberExt,
     registry::LookupSpan,
     util::SubscriberInitExt,
-    Layer,
 };
 
 pub(crate) mod clap_styles {
     use clap::builder::{
-        styling::{AnsiColor, Effects, Style},
         Styles,
+        styling::{AnsiColor, Effects, Style},
     };
 
     const HEADER: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);

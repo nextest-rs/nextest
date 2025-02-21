@@ -8,8 +8,8 @@ use crate::{
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstanceId,
     reporter::{
-        events::{ExecutionDescription, ExecutionResult, TestEvent, TestEventKind, UnitKind},
         UnitErrorDescription,
+        events::{ExecutionDescription, ExecutionResult, TestEvent, TestEventKind, UnitKind},
     },
     test_output::{ChildExecutionOutput, ChildOutput},
 };

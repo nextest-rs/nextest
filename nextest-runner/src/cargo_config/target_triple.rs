@@ -8,7 +8,7 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use std::fmt;
-use target_spec::{summaries::PlatformSummary, Platform, TargetFeatures};
+use target_spec::{Platform, TargetFeatures, summaries::PlatformSummary};
 
 /// Represents a target triple that's being cross-compiled against.
 #[derive(Clone, Debug, PartialEq, Eq)]

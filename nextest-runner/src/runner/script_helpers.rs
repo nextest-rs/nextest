@@ -37,7 +37,7 @@ pub(super) async fn parse_env_file(
                 return Err(SetupScriptOutputError::EnvFileParse {
                     path: env_path.to_owned(),
                     line: line.to_owned(),
-                })
+                });
             }
         };
 

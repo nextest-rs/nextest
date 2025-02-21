@@ -126,7 +126,7 @@ pub struct TestGroupConfig {
 mod tests {
     use super::*;
     use crate::{
-        config::{test_helpers::*, NextestConfig, ToolConfigFile},
+        config::{NextestConfig, ToolConfigFile, test_helpers::*},
         errors::{ConfigParseErrorKind, UnknownTestGroupError},
     };
     use camino::Utf8Path;

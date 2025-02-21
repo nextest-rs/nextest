@@ -6,8 +6,8 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    displayer::{DisplayReporter, DisplayReporterBuilder, StatusLevels},
     FinalStatusLevel, StatusLevel, TestOutputDisplay,
+    displayer::{DisplayReporter, DisplayReporterBuilder, StatusLevels},
 };
 use crate::{
     config::EvaluatableProfile,

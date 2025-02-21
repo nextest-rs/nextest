@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{output::OutputContext, ExpectedError, Result};
+use crate::{ExpectedError, Result, output::OutputContext};
 use camino::Utf8PathBuf;
 use nextest_metadata::NextestExitCode;
 use nextest_runner::update::{CheckStatus, MuktiBackend, UpdateVersion};

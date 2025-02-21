@@ -3,7 +3,7 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
-use color_eyre::eyre::{bail, Context};
+use color_eyre::eyre::{Context, bail};
 use cp_r::CopyOptions;
 use fs_err as fs;
 use integration_tests::{nextest_cli::CargoNextestCli, seed::nextest_tests_dir};

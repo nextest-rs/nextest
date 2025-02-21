@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for ThreadsRequired {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{test_helpers::*, NextestConfig};
+    use crate::config::{NextestConfig, test_helpers::*};
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use nextest_filtering::ParseContext;

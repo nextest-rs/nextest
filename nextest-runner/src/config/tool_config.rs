@@ -57,8 +57,8 @@ impl FromStr for ToolConfigFile {
 mod tests {
     use super::*;
     use crate::config::{
-        test_helpers::*, NextestConfig, NextestVersionConfig, NextestVersionReq, RetryPolicy,
-        TestGroup, VersionOnlyConfig,
+        NextestConfig, NextestVersionConfig, NextestVersionReq, RetryPolicy, TestGroup,
+        VersionOnlyConfig, test_helpers::*,
     };
     use camino_tempfile::tempdir;
     use guppy::graph::cargo::BuildPlatform;

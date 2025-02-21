@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::{output::StderrStyles, ExtractOutputFormat};
+use crate::{ExtractOutputFormat, output::StderrStyles};
 use camino::Utf8PathBuf;
 use indent_write::indentable::Indented;
 use itertools::Itertools;
@@ -12,7 +12,7 @@ use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, string::FromUtf8Error};
 use thiserror::Error;
-use tracing::{error, info, Level};
+use tracing::{Level, error, info};
 
 pub(crate) type Result<T, E = ExpectedError> = std::result::Result<T, E>;
 

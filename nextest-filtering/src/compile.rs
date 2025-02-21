@@ -7,8 +7,8 @@ use crate::{
     parsing::{ParsedExpr, SetDef},
 };
 use guppy::{
-    graph::{DependsCache, PackageMetadata},
     PackageId,
+    graph::{DependsCache, PackageMetadata},
 };
 use miette::SourceSpan;
 use recursion::CollapsibleExt;

@@ -47,7 +47,9 @@ impl PausableSleep {
                 *this.pause_state = SleepPauseState::Paused { remaining };
             }
             SleepPauseState::Paused { remaining } => {
-                panic!("illegal state transition: pause() called while sleep was paused (remaining = {remaining:?})");
+                panic!(
+                    "illegal state transition: pause() called while sleep was paused (remaining = {remaining:?})"
+                );
             }
         }
     }

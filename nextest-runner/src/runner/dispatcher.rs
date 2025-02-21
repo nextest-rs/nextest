@@ -25,7 +25,7 @@ use debug_ignore::DebugIgnore;
 use quick_junit::ReportUuid;
 use std::{collections::BTreeMap, time::Duration};
 use tokio::sync::{
-    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     oneshot,
 };
 use tracing::debug;

@@ -215,7 +215,7 @@ mod tests {
         BuildPlatformsSummary, HostPlatformSummary, PlatformLibdirSummary,
         PlatformLibdirUnavailable,
     };
-    use target_spec::{summaries::PlatformSummary, Platform};
+    use target_spec::{Platform, summaries::PlatformSummary};
     use test_case::test_case;
 
     impl Default for RustBuildMeta<BinaryListState> {
@@ -362,7 +362,10 @@ mod tests {
             ..Default::default()
         };
         let actual = RustBuildMeta::<BinaryListState>::from_summary(summary);
-        assert!(matches!(actual, Err(RustBuildMetaParseError::Unsupported { .. })), "Expect the parse result to be an error of RustBuildMetaParseError::Unsupported, actual {actual:?}");
+        assert!(
+            matches!(actual, Err(RustBuildMetaParseError::Unsupported { .. })),
+            "Expect the parse result to be an error of RustBuildMetaParseError::Unsupported, actual {actual:?}"
+        );
     }
 
     #[test]

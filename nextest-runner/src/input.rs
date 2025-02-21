@@ -275,7 +275,7 @@ enum InputHandlerFinishError {
 
 #[cfg(unix)]
 mod imp {
-    use libc::{tcgetattr, tcsetattr, ECHO, ICANON, TCSAFLUSH, TCSANOW, VMIN, VTIME};
+    use libc::{ECHO, ICANON, TCSAFLUSH, TCSANOW, VMIN, VTIME, tcgetattr, tcsetattr};
     use std::{ffi::c_int, io, mem, os::fd::AsRawFd};
 
     pub(super) type Error = io::Error;
@@ -361,7 +361,7 @@ mod imp {
 mod imp {
     use std::{io, os::windows::io::AsRawHandle};
     use windows_sys::Win32::System::Console::{
-        GetConsoleMode, SetConsoleMode, CONSOLE_MODE, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT,
+        CONSOLE_MODE, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, GetConsoleMode, SetConsoleMode,
     };
 
     pub(super) type Error = io::Error;

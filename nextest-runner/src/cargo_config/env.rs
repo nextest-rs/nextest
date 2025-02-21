@@ -4,7 +4,7 @@
 use super::{CargoConfigSource, CargoConfigs, DiscoveredConfig};
 use camino::{Utf8Path, Utf8PathBuf};
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     ffi::OsString,
     process::Command,
 };
@@ -157,7 +157,7 @@ mod imp {
     use super::*;
     use std::{borrow::Borrow, cmp, ffi::OsStr, os::windows::prelude::OsStrExt};
     use windows_sys::Win32::Globalization::{
-        CompareStringOrdinal, CSTR_EQUAL, CSTR_GREATER_THAN, CSTR_LESS_THAN,
+        CSTR_EQUAL, CSTR_GREATER_THAN, CSTR_LESS_THAN, CompareStringOrdinal,
     };
 
     pub(super) fn strip_unc_prefix(path: &Utf8Path) -> &Utf8Path {

@@ -13,11 +13,7 @@ use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
 
 pub(crate) mod plural {
     pub(crate) fn were_plural_if(plural: bool) -> &'static str {
-        if plural {
-            "were"
-        } else {
-            "was"
-        }
+        if plural { "were" } else { "was" }
     }
 
     pub(crate) fn setup_scripts_str(count: usize) -> &'static str {
@@ -33,35 +29,19 @@ pub(crate) mod plural {
     }
 
     pub(crate) fn tests_plural_if(plural: bool) -> &'static str {
-        if plural {
-            "tests"
-        } else {
-            "test"
-        }
+        if plural { "tests" } else { "test" }
     }
 
     pub(crate) fn binaries_str(count: usize) -> &'static str {
-        if count == 1 {
-            "binary"
-        } else {
-            "binaries"
-        }
+        if count == 1 { "binary" } else { "binaries" }
     }
 
     pub(crate) fn paths_str(count: usize) -> &'static str {
-        if count == 1 {
-            "path"
-        } else {
-            "paths"
-        }
+        if count == 1 { "path" } else { "paths" }
     }
 
     pub(crate) fn files_str(count: usize) -> &'static str {
-        if count == 1 {
-            "file"
-        } else {
-            "files"
-        }
+        if count == 1 { "file" } else { "files" }
     }
 
     pub(crate) fn directories_str(count: usize) -> &'static str {
@@ -81,11 +61,7 @@ pub(crate) mod plural {
     }
 
     pub(crate) fn libraries_str(count: usize) -> &'static str {
-        if count == 1 {
-            "library"
-        } else {
-            "libraries"
-        }
+        if count == 1 { "library" } else { "libraries" }
     }
 }
 

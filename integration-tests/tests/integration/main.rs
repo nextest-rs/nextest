@@ -29,13 +29,13 @@ use integration_tests::{
 };
 use nextest_metadata::{BuildPlatform, NextestExitCode, TestListSummary};
 use std::{borrow::Cow, fs::File, io::Write};
-use target_spec::{summaries::TargetFeaturesSummary, Platform};
+use target_spec::{Platform, summaries::TargetFeaturesSummary};
 
 mod fixtures;
 mod stuck_signal;
 mod temp_project;
 
-use crate::temp_project::{create_uds, UdsStatus};
+use crate::temp_project::{UdsStatus, create_uds};
 use camino_tempfile::Utf8TempDir;
 use fixtures::*;
 use temp_project::TempProject;

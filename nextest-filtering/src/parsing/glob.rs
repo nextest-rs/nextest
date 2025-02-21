@@ -3,12 +3,12 @@
 
 //! Glob matching.
 
-use super::{parse_matcher_text, Error, Span};
+use super::{Error, Span, parse_matcher_text};
 use crate::{
-    errors::{GlobConstructError, ParseSingleError},
     NameMatcher,
+    errors::{GlobConstructError, ParseSingleError},
 };
-use winnow::{combinator::trace, stream::Location, ModalParser, Parser};
+use winnow::{ModalParser, Parser, combinator::trace, stream::Location};
 
 /// A glob pattern.
 ///

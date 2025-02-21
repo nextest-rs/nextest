@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     env,
     ffi::OsString,
-    process::{exit, Command},
+    process::{Command, exit},
 };
 
 fn main() {

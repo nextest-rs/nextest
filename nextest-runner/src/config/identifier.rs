@@ -4,7 +4,7 @@
 use crate::errors::InvalidIdentifier;
 use smol_str::SmolStr;
 use std::fmt;
-use unicode_normalization::{is_nfc_quick, IsNormalized, UnicodeNormalization};
+use unicode_normalization::{IsNormalized, UnicodeNormalization, is_nfc_quick};
 
 /// An identifier used in configuration.
 ///

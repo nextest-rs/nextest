@@ -3,8 +3,8 @@
 
 use camino::Utf8PathBuf;
 use color_eyre::{
-    eyre::{bail, Context},
     Result,
+    eyre::{Context, bail},
 };
 use nextest_metadata::TestListSummary;
 use std::{

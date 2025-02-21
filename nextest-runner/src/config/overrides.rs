@@ -885,7 +885,7 @@ impl<'de> Deserialize<'de> for PlatformStrings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{test_helpers::*, NextestConfig};
+    use crate::config::{NextestConfig, test_helpers::*};
     use camino::Utf8Path;
     use camino_tempfile::tempdir;
     use indoc::indoc;
@@ -1252,7 +1252,9 @@ mod tests {
                 assert_eq!(&reports, expected_reports, "reports match");
             }
             other => {
-                panic!("for config error {other:?}, expected ConfigParseErrorKind::FiltersetOrCfgParseError");
+                panic!(
+                    "for config error {other:?}, expected ConfigParseErrorKind::FiltersetOrCfgParseError"
+                );
             }
         };
     }

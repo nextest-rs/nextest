@@ -61,8 +61,8 @@ impl SignalHandler {
 mod imp {
     use super::*;
     use std::io;
-    use tokio::signal::unix::{signal, SignalKind};
-    use tokio_stream::{wrappers::SignalStream, StreamExt, StreamMap};
+    use tokio::signal::unix::{SignalKind, signal};
+    use tokio_stream::{StreamExt, StreamMap, wrappers::SignalStream};
 
     #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
     enum SignalId {
@@ -173,7 +173,7 @@ mod imp {
 #[cfg(windows)]
 mod imp {
     use super::*;
-    use tokio::signal::windows::{ctrl_c, CtrlC};
+    use tokio::signal::windows::{CtrlC, ctrl_c};
 
     #[derive(Debug)]
     pub(super) struct Signals {

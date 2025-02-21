@@ -3,9 +3,10 @@
 
 use crate::fixtures::*;
 use camino::Utf8Path;
-use color_eyre::{eyre::ensure, Result};
+use color_eyre::{Result, eyre::ensure};
 use fixture_data::nextest_tests::EXPECTED_TEST_SUITES;
 use nextest_runner::{
+    RustcCli,
     cargo_config::{CargoConfigs, TargetTriple},
     config::NextestConfig,
     double_spawn::DoubleSpawnInfo,
@@ -16,7 +17,6 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{RunIgnored, TestFilterBuilder},
-    RustcCli,
 };
 use std::env;
 use target_spec::Platform;
@@ -110,9 +110,11 @@ fn disregards_non_matching() {
         Vec::new(),
     )
     .unwrap();
-    assert!(PlatformRunner::find_config(&configs, &windows)
-        .unwrap()
-        .is_none());
+    assert!(
+        PlatformRunner::find_config(&configs, &windows)
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]

@@ -6,7 +6,7 @@ use fixture_data::{
     models::{TestCaseFixtureProperty, TestCaseFixtureStatus, TestSuiteFixtureProperty},
     nextest_tests::EXPECTED_TEST_SUITES,
 };
-use integration_tests::nextest_cli::{cargo_bin, CargoNextestCli};
+use integration_tests::nextest_cli::{CargoNextestCli, cargo_bin};
 use nextest_metadata::{
     BinaryListSummary, BuildPlatform, RustTestSuiteStatusSummary, TestListSummary,
 };

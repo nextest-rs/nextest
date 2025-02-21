@@ -4,18 +4,18 @@
 use super::{ArchiveCounts, ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
     config::{
-        get_num_cpus, ArchiveConfig, ArchiveIncludeOnMissing, EvaluatableProfile, RecursionDepth,
+        ArchiveConfig, ArchiveIncludeOnMissing, EvaluatableProfile, RecursionDepth, get_num_cpus,
     },
     errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},
     list::{BinaryList, OutputFormat, SerializableFormat},
     redact::Redactor,
-    reuse_build::{PathMapper, LIBDIRS_BASE_DIR},
+    reuse_build::{LIBDIRS_BASE_DIR, PathMapper},
 };
 use atomicwrites::{AtomicFile, OverwriteBehavior};
 use camino::{Utf8Path, Utf8PathBuf};
 use core::fmt;
-use guppy::{graph::PackageGraph, PackageId};
+use guppy::{PackageId, graph::PackageGraph};
 use std::{
     collections::HashSet,
     fs,
@@ -399,7 +399,9 @@ impl<'a, W: Write> Archiver<'a, W> {
 
             // Archive build script output in order to set environment variables from there
             let Some(out_dir_parent) = build_script_out_dir.parent() else {
-                warn!("could not determine parent directory of output directory {build_script_out_dir}");
+                warn!(
+                    "could not determine parent directory of output directory {build_script_out_dir}"
+                );
                 continue;
             };
             let out_file_path = out_dir_parent.join("output");

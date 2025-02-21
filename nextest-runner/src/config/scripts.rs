@@ -22,7 +22,7 @@ use camino_tempfile::Utf8TempPath;
 use guppy::graph::cargo::BuildPlatform;
 use indexmap::IndexMap;
 use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery};
-use serde::{de::Error, Deserialize};
+use serde::{Deserialize, de::Error};
 use smol_str::SmolStr;
 use std::{
     collections::{HashMap, HashSet},
@@ -592,7 +592,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        config::{test_helpers::*, ConfigExperimental, NextestConfig, ToolConfigFile},
+        config::{ConfigExperimental, NextestConfig, ToolConfigFile, test_helpers::*},
         errors::{ConfigParseErrorKind, DisplayErrorChain, UnknownConfigScriptError},
     };
     use camino_tempfile::tempdir;
@@ -948,7 +948,9 @@ mod tests {
                 assert_eq!(&reports, expected_reports, "reports match");
             }
             other => {
-                panic!("for config error {other:?}, expected ConfigParseErrorKind::CompiledDataParseError");
+                panic!(
+                    "for config error {other:?}, expected ConfigParseErrorKind::CompiledDataParseError"
+                );
             }
         }
     }
@@ -991,7 +993,9 @@ mod tests {
                 }
             }
             other => {
-                panic!("for config error {other:?}, expected ConfigParseErrorKind::InvalidConfigScriptsDefined");
+                panic!(
+                    "for config error {other:?}, expected ConfigParseErrorKind::InvalidConfigScriptsDefined"
+                );
             }
         }
     }
@@ -1043,7 +1047,9 @@ mod tests {
                 }
             }
             other => {
-                panic!("for config error {other:?}, expected ConfigParseErrorKind::InvalidConfigScriptsDefinedByTool");
+                panic!(
+                    "for config error {other:?}, expected ConfigParseErrorKind::InvalidConfigScriptsDefinedByTool"
+                );
             }
         }
     }
@@ -1128,7 +1134,9 @@ mod tests {
                 }
             }
             other => {
-                panic!("for config error {other:?}, expected ConfigParseErrorKind::UnknownConfigScripts");
+                panic!(
+                    "for config error {other:?}, expected ConfigParseErrorKind::UnknownConfigScripts"
+                );
             }
         }
     }

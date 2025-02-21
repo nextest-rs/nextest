@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    NameMatcher,
     parsing::{
         AndOperator, DifferenceOperator, GenericGlob, NotOperator, OrOperator, ParsedExpr, SetDef,
     },
-    NameMatcher,
 };
 use guppy::graph::cargo::BuildPlatform;
 use proptest::prelude::*;
