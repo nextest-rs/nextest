@@ -8,7 +8,7 @@ use std::{
     io::{self, Write},
     time::Duration,
 };
-use swrite::{swrite, SWrite};
+use swrite::{SWrite, swrite};
 
 #[derive(Debug)]
 pub(super) struct ProgressBarState {

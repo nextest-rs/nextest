@@ -3,10 +3,10 @@
 
 use crate::fixtures::*;
 use cfg_if::cfg_if;
-use color_eyre::eyre::{ensure, Result};
+use color_eyre::eyre::{Result, ensure};
 use fixture_data::{
     models::{TestCaseFixtureStatus, TestSuiteFixture},
-    nextest_tests::{get_expected_test, EXPECTED_TEST_SUITES},
+    nextest_tests::{EXPECTED_TEST_SUITES, get_expected_test},
 };
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::{FilterMatch, MismatchReason};
@@ -17,10 +17,10 @@ use nextest_runner::{
     list::BinaryList,
     platform::BuildPlatforms,
     reporter::{
+        UnitErrorDescription,
         events::{
             ExecutionDescription, ExecutionResult, FinalRunStats, RunStatsFailureKind, UnitKind,
         },
-        UnitErrorDescription,
     },
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,

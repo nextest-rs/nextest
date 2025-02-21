@@ -58,7 +58,7 @@ impl MuktiBackend {
                 return Err(UpdateError::MuktiProjectNotFound {
                     not_found: self.package_name.clone(),
                     known: releases_json.projects.keys().cloned().collect(),
-                })
+                });
             }
         };
 

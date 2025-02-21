@@ -8,8 +8,8 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::{
-    graph::{cargo::BuildPlatform, PackageGraph},
     MetadataCommand, PackageId,
+    graph::{PackageGraph, cargo::BuildPlatform},
 };
 use nextest_filtering::BinaryQuery;
 use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
@@ -87,9 +87,9 @@ pub(super) fn build_platforms() -> BuildPlatforms {
     BuildPlatforms {
         host: HostPlatform {
             platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
-            libdir: PlatformLibdir::Available(
-                Utf8PathBuf::from("/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib")
-            ),
+            libdir: PlatformLibdir::Available(Utf8PathBuf::from(
+                "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib",
+            )),
         },
         target: Some(TargetPlatform {
             triple: TargetTriple {
@@ -97,9 +97,9 @@ pub(super) fn build_platforms() -> BuildPlatforms {
                 source: TargetTripleSource::Env,
                 location: TargetDefinitionLocation::Builtin,
             },
-            libdir: PlatformLibdir::Available(
-                Utf8PathBuf::from("/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-apple-darwin/lib")
-            ),
+            libdir: PlatformLibdir::Available(Utf8PathBuf::from(
+                "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-apple-darwin/lib",
+            )),
         }),
     }
 }
@@ -134,9 +134,9 @@ pub(super) fn custom_build_platforms(workspace_dir: &Utf8Path) -> BuildPlatforms
 
     let host = HostPlatform {
         platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
-        libdir: PlatformLibdir::Available(
-            Utf8PathBuf::from("/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib")
-        ),
+        libdir: PlatformLibdir::Available(Utf8PathBuf::from(
+            "/home/fake/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib",
+        )),
     };
     let target = TargetPlatform {
         triple,

@@ -4,12 +4,12 @@
 //! Platform-related data structures.
 
 use crate::{
+    RustcCli,
     cargo_config::{CargoTargetArg, TargetTriple},
     errors::{
         DisplayErrorChain, HostPlatformDetectError, RustBuildMetaParseError, TargetTripleError,
     },
     reuse_build::{LibdirMapper, PlatformLibdirMapper},
-    RustcCli,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use indent_write::indentable::Indented;
@@ -19,7 +19,7 @@ use nextest_metadata::{
 };
 pub use target_spec::Platform;
 use target_spec::{
-    errors::RustcVersionVerboseParseError, summaries::PlatformSummary, TargetFeatures,
+    TargetFeatures, errors::RustcVersionVerboseParseError, summaries::PlatformSummary,
 };
 use tracing::{debug, warn};
 

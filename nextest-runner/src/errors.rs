@@ -612,7 +612,9 @@ pub enum ToolConfigFileParseError {
 
 /// Error returned while parsing a [`MaxFail`](crate::config::MaxFail) input.
 #[derive(Clone, Debug, Error)]
-#[error("unrecognized value for max-fail: {input}\n(hint: expected either a positive integer or \"all\")")]
+#[error(
+    "unrecognized value for max-fail: {input}\n(hint: expected either a positive integer or \"all\")"
+)]
 pub struct MaxFailParseError {
     /// The input that failed to parse.
     pub input: String,
@@ -925,7 +927,7 @@ pub enum CreateTestListError {
         "for `{binary_id}`, command `{}` produced non-UTF-8 output:\n--- stdout:\n{}\n--- stderr:\n{}\n---",
         shell_words::join(command),
         String::from_utf8_lossy(stdout),
-        String::from_utf8_lossy(stderr),
+        String::from_utf8_lossy(stderr)
     )]
     CommandNonUtf8 {
         /// The binary ID for which gathering the list of tests failed.
@@ -1892,9 +1894,10 @@ mod self_update_errors {
         EmptyString,
 
         /// The input is not a valid version requirement.
-        #[error("`{input}` is not a valid semver requirement\n\
+        #[error(
+            "`{input}` is not a valid semver requirement\n\
                 (hint: see https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html for the correct format)"
-                )]
+        )]
         InvalidVersionReq {
             /// The input that was provided.
             input: String,

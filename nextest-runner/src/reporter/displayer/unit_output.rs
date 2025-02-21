@@ -6,9 +6,9 @@
 use crate::{
     errors::DisplayErrorChain,
     reporter::{
-        events::*,
-        helpers::{highlight_end, Styles},
         ByteSubslice, TestOutputErrorSlice, UnitErrorDescription,
+        events::*,
+        helpers::{Styles, highlight_end},
     },
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };

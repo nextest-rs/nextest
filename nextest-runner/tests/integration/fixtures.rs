@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use camino::{Utf8Path, Utf8PathBuf};
-use color_eyre::eyre::{ensure, Context, Result};
+use color_eyre::eyre::{Context, Result, ensure};
 use duct::cmd;
 use fixture_data::models::TestCaseFixtureStatus;
-use guppy::{graph::PackageGraph, MetadataCommand};
+use guppy::{MetadataCommand, graph::PackageGraph};
 use maplit::btreeset;
 use nextest_filtering::{CompiledExpr, EvalContext, ParseContext};
 use nextest_metadata::{MismatchReason, RustBinaryId};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
-    config::{get_num_cpus, ConfigExperimental, NextestConfig},
+    config::{ConfigExperimental, NextestConfig, get_num_cpus},
     double_spawn::DoubleSpawnInfo,
     list::{
         BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
@@ -19,7 +19,7 @@ use nextest_runner::{
     platform::BuildPlatforms,
     reporter::events::{AbortStatus, ExecutionResult, ExecutionStatuses, RunStats, TestEventKind},
     reuse_build::PathMapper,
-    runner::{configure_handle_inheritance, TestRunner},
+    runner::{TestRunner, configure_handle_inheritance},
     target_runner::TargetRunner,
     test_filter::{FilterBound, TestFilterBuilder},
     test_output::{ChildExecutionOutput, ChildOutput},

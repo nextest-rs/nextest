@@ -19,8 +19,8 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use futures::prelude::*;
 use guppy::{
-    graph::{PackageGraph, PackageMetadata},
     PackageId,
+    graph::{PackageGraph, PackageMetadata},
 };
 use nextest_filtering::{BinaryQuery, EvalContext, TestQuery};
 use nextest_metadata::{

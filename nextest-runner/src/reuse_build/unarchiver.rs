@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    ArchiveEvent, ArchiveFormat, LibdirMapper, PlatformLibdirMapper, BINARIES_METADATA_FILE_NAME,
-    CARGO_METADATA_FILE_NAME, LIBDIRS_BASE_DIR,
+    ArchiveEvent, ArchiveFormat, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME,
+    LIBDIRS_BASE_DIR, LibdirMapper, PlatformLibdirMapper,
 };
 use crate::{
     errors::{ArchiveExtractError, ArchiveReadError},
@@ -12,7 +12,7 @@ use crate::{
 };
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use camino_tempfile::Utf8TempDir;
-use guppy::{graph::PackageGraph, CargoMetadata};
+use guppy::{CargoMetadata, graph::PackageGraph};
 use nextest_metadata::BinaryListSummary;
 use std::{
     fs,

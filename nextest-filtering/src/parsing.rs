@@ -17,16 +17,16 @@ use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
 use std::fmt;
 use winnow::{
+    LocatingSlice, ModalParser, Parser,
     ascii::line_ending,
     combinator::{alt, delimited, eof, peek, preceded, repeat, terminated, trace},
     stream::{Location, SliceLen, Stream},
     token::{literal, take_till},
-    LocatingSlice, ModalParser, Parser,
 };
 
 mod glob;
 mod unicode_string;
-use crate::{errors::*, NameMatcher};
+use crate::{NameMatcher, errors::*};
 pub(crate) use glob::GenericGlob;
 pub(crate) use unicode_string::DisplayParsedString;
 

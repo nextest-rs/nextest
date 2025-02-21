@@ -2,23 +2,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
+    ExpectedError, Result, ReuseBuildKind,
     cargo_cli::{CargoCli, CargoOptions},
-    output::{should_redact, OutputContext, OutputOpts, OutputWriter, StderrStyles},
-    reuse_build::{make_path_mapper, ArchiveFormatOpt, ReuseBuildOpts},
-    version, ExpectedError, Result, ReuseBuildKind,
+    output::{OutputContext, OutputOpts, OutputWriter, StderrStyles, should_redact},
+    reuse_build::{ArchiveFormatOpt, ReuseBuildOpts, make_path_mapper},
+    version,
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{builder::BoolishValueParser, ArgAction, Args, Parser, Subcommand, ValueEnum};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, builder::BoolishValueParser};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
 use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
+    RustcCli,
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        get_num_cpus, ConfigExperimental, EarlyProfile, MaxFail, NextestConfig,
-        NextestVersionConfig, NextestVersionEval, RetryPolicy, TestGroup, TestThreads,
-        ToolConfigFile, VersionOnlyConfig,
+        ConfigExperimental, EarlyProfile, MaxFail, NextestConfig, NextestVersionConfig,
+        NextestVersionEval, RetryPolicy, TestGroup, TestThreads, ToolConfigFile, VersionOnlyConfig,
+        get_num_cpus,
     },
     double_spawn::DoubleSpawnInfo,
     errors::{TargetTripleError, WriteTestListError},
@@ -31,18 +33,17 @@ use nextest_runner::{
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
     redact::Redactor,
     reporter::{
+        FinalStatusLevel, ReporterBuilder, StatusLevel, TestOutputDisplay, TestOutputErrorSlice,
         events::{FinalRunStats, RunStatsFailureKind},
-        highlight_end, structured, FinalStatusLevel, ReporterBuilder, StatusLevel,
-        TestOutputDisplay, TestOutputErrorSlice,
+        highlight_end, structured,
     },
-    reuse_build::{archive_to_file, ArchiveReporter, PathMapper, ReuseBuildInfo},
-    runner::{configure_handle_inheritance, TestRunnerBuilder},
+    reuse_build::{ArchiveReporter, PathMapper, ReuseBuildInfo, archive_to_file},
+    runner::{TestRunnerBuilder, configure_handle_inheritance},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
     write_str::WriteStr,
-    RustcCli,
 };
 use owo_colors::OwoColorize;
 use quick_junit::XmlString;
@@ -54,8 +55,8 @@ use std::{
     io::{Cursor, Write},
     sync::{Arc, OnceLock},
 };
-use swrite::{swrite, SWrite};
-use tracing::{debug, info, warn, Level};
+use swrite::{SWrite, swrite};
+use tracing::{Level, debug, info, warn};
 
 /// A next-generation test runner for Rust.
 ///
@@ -1537,7 +1538,9 @@ struct App {
 fn check_experimental_filtering(_output: OutputContext) {
     const EXPERIMENTAL_ENV: &str = "NEXTEST_EXPERIMENTAL_FILTER_EXPR";
     if std::env::var(EXPERIMENTAL_ENV).is_ok() {
-        warn!("filtersets are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set");
+        warn!(
+            "filtersets are no longer experimental: NEXTEST_EXPERIMENTAL_FILTER_EXPR does not need to be set"
+        );
     }
 }
 

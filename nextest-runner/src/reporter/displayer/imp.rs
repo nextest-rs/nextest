@@ -6,19 +6,19 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    formatters::{
-        write_final_warnings, write_skip_counts, DisplayBracketedDuration, DisplayDurationBy,
-        DisplaySlowDuration,
-    },
-    progress::{progress_bar_msg, progress_str, write_summary_str, ProgressBarState},
-    unit_output::TestOutputDisplay,
     ChildOutputSpec, FinalStatusLevel, OutputStoreFinal, StatusLevel, StatusLevels,
     UnitOutputReporter,
+    formatters::{
+        DisplayBracketedDuration, DisplayDurationBy, DisplaySlowDuration, write_final_warnings,
+        write_skip_counts,
+    },
+    progress::{ProgressBarState, progress_bar_msg, progress_str, write_summary_str},
+    unit_output::TestOutputDisplay,
 };
 use crate::{
     config::{CompiledDefaultFilter, ScriptId},
     errors::WriteEventError,
-    helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
+    helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
     list::{TestInstance, TestInstanceId},
     reporter::{events::*, helpers::Styles, imp::ReporterStderr},
 };
@@ -32,7 +32,7 @@ use std::{
     io::{self, BufWriter, Write},
     time::Duration,
 };
-use swrite::{swrite, SWrite};
+use swrite::{SWrite, swrite};
 
 pub(crate) struct DisplayReporterBuilder {
     pub(crate) default_filter: CompiledDefaultFilter,

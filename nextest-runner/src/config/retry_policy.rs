@@ -167,8 +167,8 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            test_helpers::{binary_query, build_platforms, temp_workspace},
             NextestConfig,
+            test_helpers::{binary_query, build_platforms, temp_workspace},
         },
         errors::ConfigParseErrorKind,
     };
@@ -396,7 +396,9 @@ mod tests {
             ConfigParseErrorKind::DeserializeError(path_error) => match path_error.inner() {
                 ConfigError::Message(message) => message,
                 other => {
-                    panic!("for config error {config_err:?}, expected ConfigError::Message for inner error {other:?}");
+                    panic!(
+                        "for config error {config_err:?}, expected ConfigError::Message for inner error {other:?}"
+                    );
                 }
             },
             other => {

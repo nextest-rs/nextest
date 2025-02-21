@@ -10,8 +10,8 @@ use super::{
 };
 use crate::{
     errors::{
-        provided_by_tool, ConfigParseError, ConfigParseErrorKind, ProfileNotFound,
-        UnknownConfigScriptError, UnknownTestGroupError,
+        ConfigParseError, ConfigParseErrorKind, ProfileNotFound, UnknownConfigScriptError,
+        UnknownTestGroupError, provided_by_tool,
     },
     list::TestList,
     platform::BuildPlatforms,
@@ -19,13 +19,13 @@ use crate::{
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{
-    builder::DefaultState, Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceFile,
+    Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceFile, builder::DefaultState,
 };
 use indexmap::IndexMap;
 use nextest_filtering::{EvalContext, ParseContext, TestQuery};
 use serde::Deserialize;
 use std::{
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, hash_map},
     sync::LazyLock,
     time::Duration,
 };

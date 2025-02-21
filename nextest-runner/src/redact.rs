@@ -6,7 +6,7 @@
 //! Used for snapshot testing.
 
 use crate::{
-    helpers::{convert_rel_path_to_forward_slash, FormattedDuration},
+    helpers::{FormattedDuration, convert_rel_path_to_forward_slash},
     list::RustBuildMeta,
 };
 use camino::{Utf8Path, Utf8PathBuf};

@@ -17,7 +17,7 @@ use tokio::{process::Child, sync::mpsc::UnboundedReceiver};
 pub(super) use win32job::Job;
 use win32job::JobError;
 use windows_sys::Win32::{
-    Foundation::{SetHandleInformation, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE},
+    Foundation::{HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation},
     System::{
         Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
         JobObjects::TerminateJobObject,

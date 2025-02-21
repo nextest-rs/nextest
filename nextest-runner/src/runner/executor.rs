@@ -25,8 +25,9 @@ use crate::{
         TestInfoResponse, UnitKind, UnitState,
     },
     runner::{
-        parse_env_file, ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
+        ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
         InternalTerminateReason, RunUnitQuery, RunUnitRequest, SignalRequest, UnitExecuteStatus,
+        parse_env_file,
     },
     target_runner::TargetRunner,
     test_command::{ChildAccumulator, ChildFds},
@@ -36,7 +37,7 @@ use crate::{
 use future_queue::FutureQueueContext;
 use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
-use rand::{distr::OpenClosed01, Rng};
+use rand::{Rng, distr::OpenClosed01};
 use std::{
     num::NonZeroUsize,
     pin::Pin,

@@ -4,13 +4,13 @@
 use crate::{
     errors::{FiltersetParseErrors, ParseSingleError},
     parsing::{
-        new_span, parse, DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob,
-        ParsedExpr, SetDef,
+        DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob, ParsedExpr, SetDef,
+        new_span, parse,
     },
 };
 use guppy::{
-    graph::{cargo::BuildPlatform, BuildTargetId, PackageGraph, PackageMetadata},
     PackageId,
+    graph::{BuildTargetId, PackageGraph, PackageMetadata, cargo::BuildPlatform},
 };
 use miette::SourceSpan;
 use nextest_metadata::{RustBinaryId, RustTestBinaryKind};

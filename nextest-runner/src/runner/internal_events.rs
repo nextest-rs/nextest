@@ -12,11 +12,11 @@ use crate::{
     config::{ScriptConfig, ScriptId},
     list::TestInstance,
     reporter::{
+        TestOutputDisplay,
         events::{
             ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptEnvMap,
             SetupScriptExecuteStatus, UnitState,
         },
-        TestOutputDisplay,
     },
     signal::ShutdownEvent,
     test_output::ChildExecutionOutput,

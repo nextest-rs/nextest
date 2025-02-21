@@ -18,11 +18,7 @@ pub enum MaxFail {
 impl MaxFail {
     /// Returns the max-fail corresponding to the fail-fast.
     pub fn from_fail_fast(fail_fast: bool) -> Self {
-        if fail_fast {
-            Self::Count(1)
-        } else {
-            Self::All
-        }
+        if fail_fast { Self::Count(1) } else { Self::All }
     }
 
     /// Returns true if the max-fail has been exceeded.
@@ -165,8 +161,8 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            test_helpers::{build_platforms, temp_workspace},
             NextestConfig,
+            test_helpers::{build_platforms, temp_workspace},
         },
         errors::ConfigParseErrorKind,
     };

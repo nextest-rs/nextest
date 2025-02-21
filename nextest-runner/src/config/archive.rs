@@ -4,7 +4,7 @@
 use super::TrackDefault;
 use crate::config::helpers::deserialize_relative_path;
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
-use serde::{de::Unexpected, Deserialize};
+use serde::{Deserialize, de::Unexpected};
 use std::fmt;
 
 /// Configuration for archives.
@@ -239,8 +239,8 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            test_helpers::{build_platforms, temp_workspace},
             NextestConfig,
+            test_helpers::{build_platforms, temp_workspace},
         },
         errors::ConfigParseErrorKind,
     };
@@ -442,7 +442,9 @@ mod tests {
             ConfigParseErrorKind::DeserializeError(path_error) => match path_error.inner() {
                 ConfigError::Message(message) => message,
                 other => {
-                    panic!("for config error {config_err:?}, expected ConfigError::Message for inner error {other:?}");
+                    panic!(
+                        "for config error {config_err:?}, expected ConfigError::Message for inner error {other:?}"
+                    );
                 }
             },
             other => {

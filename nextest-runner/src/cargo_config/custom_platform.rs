@@ -86,9 +86,9 @@ impl ExtractedCustomPlatform {
 mod tests {
     use super::*;
     use crate::cargo_config::{
-        test_helpers::setup_temp_dir, CargoTargetArg, TargetDefinitionLocation, TargetTriple,
+        CargoTargetArg, TargetDefinitionLocation, TargetTriple, test_helpers::setup_temp_dir,
     };
-    use color_eyre::eyre::{bail, eyre, Context, Result};
+    use color_eyre::eyre::{Context, Result, bail, eyre};
 
     #[test]
     fn test_extracted_custom_platform() -> Result<()> {

@@ -3,8 +3,8 @@
 
 use camino::{Utf8Component, Utf8PathBuf};
 use serde::{
-    de::{Error, Unexpected},
     Deserialize,
+    de::{Error, Unexpected},
 };
 
 /// Deserializes a well-formed relative path.
@@ -33,7 +33,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use color_eyre::eyre::{bail, Context, Result};
+    use color_eyre::eyre::{Context, Result, bail};
     use serde::de::IntoDeserializer;
 
     #[test]

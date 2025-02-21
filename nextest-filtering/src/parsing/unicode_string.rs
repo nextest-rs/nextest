@@ -3,13 +3,13 @@
 
 // Adapted from https://github.com/Geal/nom/blob/294ffb3d9e0ade2c3b7ddfff52484b6d643dcce1/examples/string.rs
 
-use super::{expect_n, PResult, Span, SpanLength};
+use super::{PResult, Span, SpanLength, expect_n};
 use crate::errors::ParseSingleError;
 use std::fmt;
 use winnow::{
+    Parser,
     combinator::{alt, delimited, preceded, repeat, trace},
     token::{take_till, take_while},
-    Parser,
 };
 
 fn parse_unicode(input: &mut Span<'_>) -> PResult<char> {
