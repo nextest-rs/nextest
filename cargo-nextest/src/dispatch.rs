@@ -841,12 +841,18 @@ pub struct TestRunnerOpts {
     retries: Option<usize>,
 
     /// Cancel test run on the first failure
-    #[arg(long, name = "fail-fast", conflicts_with = "no-run")]
+    #[arg(
+        long,
+        visible_alias = "ff",
+        name = "fail-fast",
+        conflicts_with = "no-run"
+    )]
     fail_fast: bool,
 
     /// Run all tests regardless of failure
     #[arg(
         long,
+        visible_alias = "nff",
         name = "no-fail-fast",
         conflicts_with = "no-run",
         overrides_with = "fail-fast"
