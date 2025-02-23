@@ -74,7 +74,7 @@ indoc = "2.0.5"
 insta = { version = "1.42.1", default-features = false }
 is_ci = "1.2.0"
 itertools = "0.14.0"
-libc = "0.2.169"
+libc = "0.2.170"
 libtest-mimic = "0.8.1"
 log = "0.4.26"
 maplit = "1.0.2"
