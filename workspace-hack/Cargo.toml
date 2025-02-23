@@ -22,15 +22,16 @@ bit-vec = { version = "0.8.0" }
 camino = { version = "1.1.9", default-features = false, features = ["serde1"] }
 clap = { version = "4.5.30", features = ["derive", "env", "unicode", "wrap_help"] }
 clap_builder = { version = "4.5.30", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
-console = { version = "0.15.8" }
+console = { version = "0.15.10" }
 either = { version = "1.13.0" }
-getrandom = { version = "0.2.15", default-features = false, features = ["std"] }
+getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2.15", default-features = false, features = ["std"] }
+idna_adapter = { version = "1.0.0", default-features = false, features = ["compiled_data"] }
 indexmap = { version = "2.7.1", features = ["serde"] }
 log = { version = "0.4.26", default-features = false, features = ["std"] }
 memchr = { version = "2.7.4" }
 miette = { version = "7.5.0", features = ["fancy"] }
 num-traits = { version = "0.2.19", default-features = false, features = ["std"] }
-regex-automata = { version = "0.4.8", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "unicode"] }
+regex-automata = { version = "0.4.9", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "unicode"] }
 regex-syntax = { version = "0.8.5" }
 serde = { version = "1.0.218", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.139", features = ["unbounded_depth"] }
@@ -45,7 +46,7 @@ zerocopy = { version = "0.7.35", features = ["derive", "simd"] }
 
 [build-dependencies]
 camino = { version = "1.1.9", default-features = false, features = ["serde1"] }
-cc = { version = "1.2.5", default-features = false, features = ["parallel"] }
+cc = { version = "1.2.15", default-features = false, features = ["parallel"] }
 proc-macro2 = { version = "1.0.93" }
 quote = { version = "1.0.38" }
 serde = { version = "1.0.218", features = ["alloc", "derive"] }
@@ -55,10 +56,11 @@ syn = { version = "2.0.98", features = ["extra-traits", "full", "visit", "visit-
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.170", features = ["extra_traits"] }
-linux-raw-sys = { version = "0.4.14", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
+linux-raw-sys = { version = "0.4.15", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 mio = { version = "1.0.3", features = ["net", "os-ext"] }
-rustix = { version = "0.38.37", features = ["fs", "stdio", "termios"] }
+rustix = { version = "0.38.44", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.14.0", default-features = false, features = ["const_new"] }
 tokio = { version = "1.43.0", default-features = false, features = ["net"] }
 
@@ -69,9 +71,10 @@ libc = { version = "0.2.170", features = ["extra_traits"] }
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.170", features = ["extra_traits"] }
 mio = { version = "1.0.3", features = ["net", "os-ext"] }
-rustix = { version = "0.38.37", features = ["fs", "stdio", "termios"] }
+rustix = { version = "0.38.44", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.14.0", default-features = false, features = ["const_new"] }
 tokio = { version = "1.43.0", default-features = false, features = ["net"] }
 
@@ -82,9 +85,10 @@ libc = { version = "0.2.170", features = ["extra_traits"] }
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.1", default-features = false, features = ["std"] }
 smallvec = { version = "1.14.0", default-features = false, features = ["const_new"] }
 tokio = { version = "1.43.0", default-features = false, features = ["net"] }
-windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Shell"] }
-windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Environment", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
+windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
+windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Environment", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 
 ### END HAKARI SECTION
