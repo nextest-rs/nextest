@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.15.0] - 2025-02-24
+
+### Changed
+
+- Added support for rejecting unknown binary IDs.
+
 ## [0.14.0] - 2025-02-10
 
 ### Changed
@@ -147,6 +153,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.15.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.15.0
 [0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.14.0
 [0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.13.0
 [0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.12.0
