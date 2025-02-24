@@ -193,10 +193,10 @@ Through the command line:
 `--max-fail=N` <!-- md:version 0.9.86 -->
 : Number of tests that can fail before aborting the test run, or `all` to run all tests regardless of the number of failures. Useful for uncovering multiple issues without having to run the whole test suite.
 
-`--no-fail-fast`
+`--no-fail-fast` (<!-- md:version 0.9.92 --> alias `--nff`)
 : Do not exit the test run in case a test fails. Most useful for CI scenarios. Equivalent to `--max-fail=all`.
 
-`--fail-fast`
+`--fail-fast` (<!-- md:version 0.9.92 --> alias `--ff`)
 : Exit the test run on the first failure. This is the default behavior. Equivalent to `--max-fail=1`.
 
 Through configuration:
