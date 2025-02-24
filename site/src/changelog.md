@@ -8,6 +8,18 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.92] - 2025-02-24
+
+### Added
+
+- `--nff` and `--ff` are aliases for `--no-fail-fast` and `--fail-fast`, respectively.
+
+### Fixed
+
+- In filtersets, `binary_id` patterns that don't match any binary IDs in the workspace are now rejected. This is a small behavior change that is being treated as a bugfix to align with `package`, `deps` and `rdeps` behavior.
+
+  `binary_id` patterns are not rejected if they match any test binaries that are in the workspace, regardless of whether they're built or not. In the future, we may add a warning for binary ID patterns only matching binaries that aren't built, but this is not an error.
+
 ## [0.9.91] - 2025-02-13
 
 ### Added
@@ -1385,6 +1397,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.92]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.92
 [0.9.91]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.91
 [0.9.90]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.90
 [0.9.89]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.89

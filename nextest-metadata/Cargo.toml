@@ -9,7 +9,8 @@ repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://docs.rs/nextest-metadata"
 keywords = ["nextest", "test-runner"]
 categories = ["development-tools::testing"]
-rust-version.workspace = true
+# Older version for nextest-metadata.
+rust-version = "1.78"
 
 [dependencies]
 camino = { workspace = true, features = ["serde1"] }

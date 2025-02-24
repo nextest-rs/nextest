@@ -53,6 +53,25 @@ jobs:
       - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
       - name: Build rustdoc
         run: cargo doc --all-features --workspace
+  
+  nextest-metadata-msrv:
+    name: Build and test nextest-metadata on MSRV
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        rust-version: ["1.78"]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust-version }}
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
+      - name: Build nextest-metadata
+        run: cargo build --package nextest-metadata
+      - name: Run nextest-metadata tests
+        run: cargo nextest run --package nextest-metadata
 
   build:
     name: Build and test

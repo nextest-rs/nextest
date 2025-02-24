@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.2] - 2025-02-24
+
+### Added
+
+`RustTestBinaryKind::EXAMPLE` is the string `"example"`.
+
+### Changed
+
+MSRV updated to Rust 1.78.
+
 ## [0.12.1] - 2024-09-05
 
 Internal dependency updates.
@@ -243,6 +253,7 @@ This release is compatible with cargo-nextest 0.9.10 and later.
 
 - Initial version, with support for listing tests.
 
+[0.12.2]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.2
 [0.12.1]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.1
 [0.12.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.12.0
 [0.11.3]: https://github.com/nextest-rs/nextest/releases/tag/nextest-metadata-0.11.3
