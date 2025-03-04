@@ -100,7 +100,7 @@ rand = "0.9.0"
 recursion = "0.5.2"
 regex = "1.11.1"
 regex-syntax = "0.8.5"
-semver = "1.0.25"
+semver = "1.0.26"
 self_update = { version = "0.42.0", default-features = false, features = [
     "archive-tar",
     "compression-flate2",
