@@ -13,8 +13,6 @@ It can also run your tests for (almost) arbitrary targets.
 
 The main benefit of using nextest with Miri is that each test runs in its own process. This means that it's easier to [identify memory leaks](https://github.com/rust-lang/miri/issues/1481), for example.
 
-Miri can be very taxing on most computers. If nextest is run under Miri, it configures itself to use 1 thread by default. This mirrors `cargo miri test`. You can customize this with the `--test-threads`/`-j` option.
-
 ## Usage
 
 After [installing Miri](https://github.com/rust-lang/miri#using-miri), run:
