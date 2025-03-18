@@ -11,7 +11,7 @@ It can also run your tests for (almost) arbitrary targets.
 
 The main benefit of using nextest with Miri is that each test runs [in its own process](../design/why-process-per-test.md). This has several advantages:
 
-* Miri itself is single-threaded, so `cargo miri test`, which runs several tests in the same process, is also single-threaded. But nextest can run Miri tests in parallel.
+* Miri itself is single-threaded, so `cargo miri test`, which runs several tests in the same process, is also single-threaded. But nextest can run Miri tests in parallel, leading to test runs up to **3-4x faster**.
 * Each test gets a separate Miri context, which can make it easier to perform operations like [identifying memory leaks](https://github.com/rust-lang/miri/issues/1481).
 
 Note, however, that `cargo miri test` is able to detect data races where two tests race on a shared resource. Miri with nextest will not detect such races.
