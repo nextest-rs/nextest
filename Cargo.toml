@@ -121,7 +121,7 @@ tar = "0.4.44"
 target-spec = { version = "3.4.2", features = ["custom", "summaries"] }
 target-spec-miette = "0.4.4"
 test-case = "3.3.1"
-test-strategy = "0.4.0"
+test-strategy = "0.4.1"
 thiserror = "2.0.12"
 tokio = "1.44.1"
 tokio-stream = "0.1.17"
