@@ -22,8 +22,8 @@ bit-vec = { version = "0.8.0" }
 camino = { version = "1.1.9", default-features = false, features = ["serde1"] }
 clap = { version = "4.5.32", features = ["derive", "env", "unicode", "wrap_help"] }
 clap_builder = { version = "4.5.32", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
-console = { version = "0.15.10" }
-either = { version = "1.13.0" }
+console = { version = "0.15.11" }
+either = { version = "1.15.0", features = ["use_std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2.15", default-features = false, features = ["std"] }
 idna_adapter = { version = "1.0.0", default-features = false, features = ["compiled_data"] }
 indexmap = { version = "2.8.0", features = ["serde"] }
@@ -42,15 +42,14 @@ tokio = { version = "1.44.1", features = ["fs", "io-std", "io-util", "macros", "
 tracing-core = { version = "0.1.33" }
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt", "tracing-log"] }
 xxhash-rust = { version = "0.8.15", default-features = false, features = ["xxh3", "xxh64"] }
-zerocopy = { version = "0.7.35", features = ["derive", "simd"] }
 
 [build-dependencies]
 camino = { version = "1.1.9", default-features = false, features = ["serde1"] }
-cc = { version = "1.2.15", default-features = false, features = ["parallel"] }
-proc-macro2 = { version = "1.0.93" }
-quote = { version = "1.0.38" }
+cc = { version = "1.2.16", default-features = false, features = ["parallel"] }
+proc-macro2 = { version = "1.0.94" }
+quote = { version = "1.0.40" }
 serde = { version = "1.0.219", features = ["alloc", "derive"] }
-syn = { version = "2.0.98", features = ["extra-traits", "full", "visit", "visit-mut"] }
+syn = { version = "2.0.100", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
@@ -58,9 +57,8 @@ futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.171", features = ["extra_traits"] }
-linux-raw-sys = { version = "0.4.15", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 mio = { version = "1.0.3", features = ["net", "os-ext"] }
-rustix = { version = "0.38.44", features = ["fs", "stdio", "termios"] }
+rustix = { version = "1.0.2", features = ["fs", "termios"] }
 smallvec = { version = "1.14.0", default-features = false, features = ["const_new"] }
 tokio = { version = "1.44.1", default-features = false, features = ["net"] }
 
@@ -74,7 +72,7 @@ futures-sink = { version = "0.3.31" }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.1", default-features = false, features = ["std"] }
 libc = { version = "0.2.171", features = ["extra_traits"] }
 mio = { version = "1.0.3", features = ["net", "os-ext"] }
-rustix = { version = "0.38.44", features = ["fs", "stdio", "termios"] }
+rustix = { version = "1.0.2", features = ["fs", "termios"] }
 smallvec = { version = "1.14.0", default-features = false, features = ["const_new"] }
 tokio = { version = "1.44.1", default-features = false, features = ["net"] }
 
