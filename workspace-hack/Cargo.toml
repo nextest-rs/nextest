@@ -27,7 +27,7 @@ either = { version = "1.13.0" }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2.15", default-features = false, features = ["std"] }
 idna_adapter = { version = "1.0.0", default-features = false, features = ["compiled_data"] }
 indexmap = { version = "2.8.0", features = ["serde"] }
-log = { version = "0.4.26", default-features = false, features = ["std"] }
+log = { version = "0.4.27", default-features = false, features = ["std"] }
 memchr = { version = "2.7.4" }
 miette = { version = "7.5.0", features = ["fancy"] }
 num-traits = { version = "0.2.19", default-features = false, features = ["std"] }
