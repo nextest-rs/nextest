@@ -1,5 +1,7 @@
 # Changelog
 
+For versions after 0.75.0, see the [cargo-nextest changelog](https://nexte.st/changelog).
+
 ## [0.75.0] - 2025-02-13
 
 See the changelog for [cargo-nextest 0.9.92](https://nexte.st/changelog#0.9.92).

@@ -73,7 +73,7 @@ jobs:
       - uses: taiki-e/create-gh-release-action@b7abb0cf5e72cb5500307b577f9ca3fd4c5be9d2 # v1
         with:
           prefix: nextest-runner
-          changelog: nextest-runner/CHANGELOG.md
+          # No need for a changelog -- use the cargo-nextest changelog instead.
           title: $prefix $version
           branch: main
         env:

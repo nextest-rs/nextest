@@ -8,6 +8,13 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.93] - 2025-03-24
+
+### Fixed
+
+- If `cargo metadata` fails, print the command that failed to execute. This works around possibly-broken Cargo installations producing no output.
+- Update ring to address [GHSA-4p46-pwfr-66x6](https://github.com/advisories/GHSA-4p46-pwfr-66x6).
+
 ## [0.9.92] - 2025-02-24
 
 ### Added
@@ -1397,6 +1404,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.93]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.93
 [0.9.92]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.92
 [0.9.91]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.91
 [0.9.90]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.90
