@@ -131,7 +131,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.18"
 unicode-normalization = "0.1.24"
-whoami = "1.5.2"
+whoami = "1.6.0"
 win32job = "2.0.2"
 windows-sys = "0.59.0"
 winnow = "0.7.4"
