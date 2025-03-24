@@ -10,7 +10,7 @@ use nextest_metadata::NextestExitCode;
 use nextest_runner::{errors::*, redact::Redactor};
 use owo_colors::OwoColorize;
 use semver::Version;
-use std::{error::Error, string::FromUtf8Error};
+use std::{error::Error, process::ExitStatus, string::FromUtf8Error};
 use thiserror::Error;
 use tracing::{Level, error, info};
 
@@ -44,14 +44,20 @@ pub enum ExpectedError {
         err: std::io::Error,
     },
     #[error("cargo metadata failed")]
-    CargoMetadataFailed { command: String },
+    CargoMetadataFailed {
+        command: String,
+        exit_status: ExitStatus,
+    },
     #[error("cargo locate-project exec failed")]
     CargoLocateProjectExecFailed {
         command: String,
         err: std::io::Error,
     },
     #[error("cargo locate-project failed")]
-    CargoLocateProjectFailed { command: String },
+    CargoLocateProjectFailed {
+        command: String,
+        exit_status: ExitStatus,
+    },
     #[error("workspace root is not valid UTF-8")]
     WorkspaceRootInvalidUtf8 {
         #[source]
@@ -290,9 +296,11 @@ impl ExpectedError {
 
     pub(crate) fn cargo_metadata_failed(
         command: impl IntoIterator<Item = impl AsRef<str>>,
+        exit_status: ExitStatus,
     ) -> Self {
         Self::CargoMetadataFailed {
             command: shell_words::join(command),
+            exit_status,
         }
     }
 
@@ -308,9 +316,11 @@ impl ExpectedError {
 
     pub(crate) fn cargo_locate_project_failed(
         command: impl IntoIterator<Item = impl AsRef<str>>,
+        exit_status: ExitStatus,
     ) -> Self {
         Self::CargoLocateProjectFailed {
             command: shell_words::join(command),
+            exit_status,
         }
     }
 
@@ -470,16 +480,30 @@ impl ExpectedError {
                 error!("failed to execute `{}`", command.style(styles.bold));
                 Some(err as &dyn Error)
             }
-            Self::CargoMetadataFailed { .. } => {
-                // The error produced by `cargo metadata` is enough.
+            Self::CargoMetadataFailed {
+                command,
+                exit_status,
+            } => {
+                error!(
+                    "command `{}` failed with {}",
+                    command.style(styles.bold),
+                    exit_status
+                );
                 None
             }
             Self::CargoLocateProjectExecFailed { command, err } => {
                 error!("failed to execute `{}`", command.style(styles.bold));
                 Some(err as &dyn Error)
             }
-            Self::CargoLocateProjectFailed { .. } => {
-                // The error produced by `cargo locate-project` is enough.
+            Self::CargoLocateProjectFailed {
+                command,
+                exit_status,
+            } => {
+                error!(
+                    "command `{}` failed with {}",
+                    command.style(styles.bold),
+                    exit_status
+                );
                 None
             }
             Self::WorkspaceRootInvalidUtf8 { err } => {
