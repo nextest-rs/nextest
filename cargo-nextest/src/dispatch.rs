@@ -1897,6 +1897,7 @@ impl ShowConfigCommand {
                 if !locate_project_output.status.success() {
                     return Err(ExpectedError::cargo_locate_project_failed(
                         cargo_cli.all_args(),
+                        locate_project_output.status,
                     ));
                 }
                 let workspace_root = String::from_utf8(locate_project_output.stdout)
@@ -2319,7 +2320,10 @@ fn acquire_graph_data(
         .run()
         .map_err(|err| ExpectedError::cargo_metadata_exec_failed(cargo_cli.all_args(), err))?;
     if !output.status.success() {
-        return Err(ExpectedError::cargo_metadata_failed(cargo_cli.all_args()));
+        return Err(ExpectedError::cargo_metadata_failed(
+            cargo_cli.all_args(),
+            output.status,
+        ));
     }
 
     let json = String::from_utf8(output.stdout).map_err(|error| {
