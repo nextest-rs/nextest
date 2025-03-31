@@ -43,6 +43,7 @@ use nextest_runner::{
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
     test_filter::{FilterBound, RunIgnored, TestFilterBuilder, TestFilterPatterns},
+    test_output::CaptureStrategy,
     write_str::WriteStr,
 };
 use owo_colors::OwoColorize;
@@ -825,19 +826,13 @@ pub struct TestRunnerOpts {
         short = 'j',
         visible_alias = "jobs",
         value_name = "N",
-        conflicts_with_all = &["no-capture", "no-run"],
         env = "NEXTEST_TEST_THREADS",
-        allow_negative_numbers = true,
+        allow_negative_numbers = true
     )]
     test_threads: Option<TestThreads>,
 
     /// Number of retries for failing tests [default: from profile]
-    #[arg(
-        long,
-        env = "NEXTEST_RETRIES",
-        value_name = "N",
-        conflicts_with = "no-run"
-    )]
+    #[arg(long, env = "NEXTEST_RETRIES", value_name = "N")]
     retries: Option<usize>,
 
     /// Cancel test run on the first failure
@@ -845,6 +840,11 @@ pub struct TestRunnerOpts {
         long,
         visible_alias = "ff",
         name = "fail-fast",
+        // TODO: It would be nice to warn rather than error if fail-fast is used
+        // with no-run, so that this matches the other options like
+        // test-threads. But there seem to be issues with that: clap 4.5 doesn't
+        // appear to like `Option<bool>` very much. With `ArgAction::SetTrue` it
+        // always sets the value to false or true rather than leaving it unset.
         conflicts_with = "no-run"
     )]
     fail_fast: bool,
@@ -869,13 +869,7 @@ pub struct TestRunnerOpts {
     max_fail: Option<MaxFail>,
 
     /// Behavior if there are no tests to run [default: fail]
-    #[arg(
-        long,
-        value_enum,
-        conflicts_with = "no-run",
-        value_name = "ACTION",
-        env = "NEXTEST_NO_TESTS"
-    )]
+    #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
     no_tests: Option<NoTestsBehavior>,
 }
 
@@ -897,6 +891,26 @@ impl TestRunnerOpts {
         &self,
         cap_strat: nextest_runner::test_output::CaptureStrategy,
     ) -> Option<TestRunnerBuilder> {
+        // Warn on conflicts between options. This is a warning and not an error
+        // because these options can be specified via environment variables as
+        // well.
+        if self.test_threads.is_some() {
+            if let Some(reasons) =
+                no_run_no_capture_reasons(self.no_run, cap_strat == CaptureStrategy::None)
+            {
+                warn!("ignoring --test-threads because {reasons}");
+            }
+        }
+
+        if self.retries.is_some() && self.no_run {
+            warn!("ignoring --retries because --no-run is specified");
+        }
+        if self.no_tests.is_some() && self.no_run {
+            warn!("ignoring --no-tests because --no-run is specified");
+        }
+
+        // ---
+
         if self.no_run {
             return None;
         }
@@ -926,6 +940,15 @@ impl TestRunnerOpts {
     }
 }
 
+fn no_run_no_capture_reasons(no_run: bool, no_capture: bool) -> Option<&'static str> {
+    match (no_run, no_capture) {
+        (true, true) => Some("--no-run and --no-capture are specified"),
+        (true, false) => Some("--no-run is specified"),
+        (false, true) => Some("--no-capture is specified"),
+        (false, false) => None,
+    }
+}
+
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum IgnoreOverridesOpt {
     Retries,
@@ -948,41 +971,22 @@ enum MessageFormat {
 #[command(next_help_heading = "Reporter options")]
 struct ReporterOpts {
     /// Output stdout and stderr on failure
-    #[arg(
-        long,
-        value_enum,
-        conflicts_with_all = &["no-capture", "no-run"],
-        value_name = "WHEN",
-        env = "NEXTEST_FAILURE_OUTPUT",
-    )]
+    #[arg(long, value_enum, value_name = "WHEN", env = "NEXTEST_FAILURE_OUTPUT")]
     failure_output: Option<TestOutputDisplayOpt>,
 
     /// Output stdout and stderr on success
-    #[arg(
-        long,
-        value_enum,
-        conflicts_with_all = &["no-capture", "no-run"],
-        value_name = "WHEN",
-        env = "NEXTEST_SUCCESS_OUTPUT",
-    )]
+    #[arg(long, value_enum, value_name = "WHEN", env = "NEXTEST_SUCCESS_OUTPUT")]
     success_output: Option<TestOutputDisplayOpt>,
 
     // status_level does not conflict with --no-capture because pass vs skip still makes sense.
     /// Test statuses to output
-    #[arg(
-        long,
-        value_enum,
-        conflicts_with = "no-run",
-        value_name = "LEVEL",
-        env = "NEXTEST_STATUS_LEVEL"
-    )]
+    #[arg(long, value_enum, value_name = "LEVEL", env = "NEXTEST_STATUS_LEVEL")]
     status_level: Option<StatusLevelOpt>,
 
     /// Test statuses to output at the end of the run.
     #[arg(
         long,
         value_enum,
-        conflicts_with = "no-run",
         value_name = "LEVEL",
         env = "NEXTEST_FINAL_STATUS_LEVEL"
     )]
@@ -1004,12 +1008,10 @@ struct ReporterOpts {
         long,
         name = "message-format",
         value_enum,
-        default_value_t,
-        conflicts_with = "no-run",
         value_name = "FORMAT",
         env = "NEXTEST_MESSAGE_FORMAT"
     )]
-    message_format: MessageFormat,
+    message_format: Option<MessageFormat>,
 
     /// Version of structured message-format to use (experimental).
     ///
@@ -1017,7 +1019,6 @@ struct ReporterOpts {
     /// consumption across changes to nextest. If not specified, the latest version is used.
     #[arg(
         long,
-        conflicts_with = "no-run",
         requires = "message-format",
         value_name = "VERSION",
         env = "NEXTEST_MESSAGE_FORMAT_VERSION"
@@ -1026,7 +1027,41 @@ struct ReporterOpts {
 }
 
 impl ReporterOpts {
-    fn to_builder(&self, no_capture: bool, should_colorize: bool) -> ReporterBuilder {
+    fn to_builder(&self, no_run: bool, no_capture: bool, should_colorize: bool) -> ReporterBuilder {
+        // Warn on conflicts between options. This is a warning and not an error
+        // because these options can be specified via environment variables as
+        // well.
+        if no_run && no_capture {
+            warn!("ignoring --no-capture because --no-run is specified");
+        }
+
+        let reasons = no_run_no_capture_reasons(no_run, no_capture);
+
+        if self.failure_output.is_some() {
+            if let Some(reasons) = reasons {
+                warn!("ignoring --failure-output because {}", reasons);
+            }
+        }
+        if self.success_output.is_some() {
+            if let Some(reasons) = reasons {
+                warn!("ignoring --success-output because {}", reasons);
+            }
+        }
+        if self.status_level.is_some() && no_run {
+            warn!("ignoring --status-level because --no-run is specified");
+        }
+        if self.final_status_level.is_some() && no_run {
+            warn!("ignoring --final-status-level because --no-run is specified");
+        }
+        if self.message_format.is_some() && no_run {
+            warn!("ignoring --message-format because --no-run is specified");
+        }
+        if self.message_format_version.is_some() && no_run {
+            warn!("ignoring --message-format-version because --no-run is specified");
+        }
+
+        // ---
+
         let mut builder = ReporterBuilder::default();
         builder.set_no_capture(no_capture);
         builder.set_colorize(should_colorize);
@@ -1723,7 +1758,9 @@ impl App {
 
         // Construct this here so that errors are reported before the build step.
         let mut structured_reporter = structured::StructuredReporter::new();
-        match reporter_opts.message_format {
+        let message_format = reporter_opts.message_format.unwrap_or_default();
+
+        match message_format {
             MessageFormat::Human => {}
             MessageFormat::LibtestJson | MessageFormat::LibtestJsonPlus => {
                 // This is currently an experimental feature, and is gated on this environment
@@ -1738,7 +1775,7 @@ impl App {
 
                 let libtest = structured::LibtestReporter::new(
                     reporter_opts.message_format_version.as_deref(),
-                    if matches!(reporter_opts.message_format, MessageFormat::LibtestJsonPlus) {
+                    if matches!(message_format, MessageFormat::LibtestJsonPlus) {
                         structured::EmitNextestObject::Yes
                     } else {
                         structured::EmitNextestObject::No
@@ -1751,11 +1788,24 @@ impl App {
 
         let cap_strat = if no_capture {
             CaptureStrategy::None
-        } else if matches!(reporter_opts.message_format, MessageFormat::Human) {
+        } else if matches!(message_format, MessageFormat::Human) {
             CaptureStrategy::Split
         } else {
             CaptureStrategy::Combined
         };
+
+        let should_colorize = self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr);
+
+        // Make the runner and reporter builders. Do them now so warnings are
+        // emitted before we start doing the build.
+        let runner_builder = runner_opts.to_builder(cap_strat);
+        let mut reporter_builder =
+            reporter_opts.to_builder(runner_opts.no_run, no_capture, should_colorize);
+        reporter_builder.set_verbose(self.base.output.verbose);
 
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
         let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
@@ -1776,11 +1826,6 @@ impl App {
         let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
 
         let output = output_writer.reporter_output();
-        let should_colorize = self
-            .base
-            .output
-            .color
-            .should_colorize(supports_color::Stream::Stderr);
 
         let signal_handler = SignalHandlerKind::Standard;
         let input_handler = if reporter_opts.no_input_handler {
@@ -1792,14 +1837,10 @@ impl App {
         };
 
         // Make the runner.
-        let runner_builder = match runner_opts.to_builder(cap_strat) {
-            Some(runner_builder) => runner_builder,
-            None => {
-                // This means --no-run was passed in. Exit.
-                return Ok(0);
-            }
+        let Some(runner_builder) = runner_builder else {
+            // This means --no-run was passed in. Exit.
+            return Ok(0);
         };
-
         let runner = runner_builder.build(
             &test_list,
             &profile,
@@ -1811,10 +1852,8 @@ impl App {
         )?;
 
         // Make the reporter.
-        let mut reporter = reporter_opts
-            .to_builder(no_capture, should_colorize)
-            .set_verbose(self.base.output.verbose)
-            .build(&test_list, &profile, output, structured_reporter);
+        let mut reporter =
+            reporter_builder.build(&test_list, &profile, output, structured_reporter);
 
         configure_handle_inheritance(no_capture)?;
         let run_stats = runner.try_execute(|event| {
@@ -2452,6 +2491,29 @@ mod tests {
             "NEXTEST_HIDE_PROGRESS_BAR=1 cargo nextest run",
             "NEXTEST_HIDE_PROGRESS_BAR=true cargo nextest run",
             // ---
+            // --no-run conflicts that produce warnings rather than errors
+            // ---
+            "cargo nextest run --no-run -j8",
+            "cargo nextest run --no-run --retries 3",
+            "NEXTEST_TEST_THREADS=8 cargo nextest run --no-run",
+            "cargo nextest run --no-run --success-output never",
+            "NEXTEST_SUCCESS_OUTPUT=never cargo nextest run --no-run",
+            "cargo nextest run --no-run --failure-output immediate",
+            "NEXTEST_FAILURE_OUTPUT=immediate cargo nextest run --no-run",
+            "cargo nextest run --no-run --status-level pass",
+            "NEXTEST_STATUS_LEVEL=pass cargo nextest run --no-run",
+            "cargo nextest run --no-run --final-status-level skip",
+            "NEXTEST_FINAL_STATUS_LEVEL=skip cargo nextest run --no-run",
+            // ---
+            // --no-capture conflicts that produce warnings rather than errors
+            // ---
+            "cargo nextest run --no-capture --test-threads=24",
+            "NEXTEST_NO_CAPTURE=1 cargo nextest run --test-threads=24",
+            "cargo nextest run --no-capture --failure-output=never",
+            "NEXTEST_NO_CAPTURE=1 cargo nextest run --failure-output=never",
+            "cargo nextest run --no-capture --success-output=final",
+            "NEXTEST_SUCCESS_OUTPUT=final cargo nextest run --no-capture",
+            // ---
             // Cargo options
             // ---
             "cargo nextest list --lib --bins",
@@ -2494,47 +2556,14 @@ mod tests {
 
         let invalid: &[(&'static str, ErrorKind)] = &[
             // ---
-            // --no-capture and these options conflict
-            // ---
-            (
-                "cargo nextest run --no-capture --test-threads=24",
-                ArgumentConflict,
-            ),
-            (
-                "cargo nextest run --no-capture --failure-output=never",
-                ArgumentConflict,
-            ),
-            (
-                "cargo nextest run --no-capture --success-output=final",
-                ArgumentConflict,
-            ),
-            // ---
             // --no-run and these options conflict
             // ---
-            ("cargo nextest run --no-run -j8", ArgumentConflict),
-            ("cargo nextest run --no-run --retries 3", ArgumentConflict),
             ("cargo nextest run --no-run --fail-fast", ArgumentConflict),
             (
                 "cargo nextest run --no-run --no-fail-fast",
                 ArgumentConflict,
             ),
             ("cargo nextest run --no-run --max-fail=3", ArgumentConflict),
-            (
-                "cargo nextest run --no-run --failure-output immediate",
-                ArgumentConflict,
-            ),
-            (
-                "cargo nextest run --no-run --success-output never",
-                ArgumentConflict,
-            ),
-            (
-                "cargo nextest run --no-run --status-level pass",
-                ArgumentConflict,
-            ),
-            (
-                "cargo nextest run --no-run --final-status-level skip",
-                ArgumentConflict,
-            ),
             // ---
             // --max-fail and these options conflict
             // ---
