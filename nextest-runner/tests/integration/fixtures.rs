@@ -80,13 +80,20 @@ pub(crate) fn ensure_execution_result(
                     );
                     ensure!(!leaked, "segfault: expected no leaks, found leaked");
                 } else if #[cfg(windows)] {
-                    // A segfault is an access violation on Windows.
-                    let abort_status = Some(AbortStatus::WindowsNtStatus(
+                    // For Rust versions before 1.86.
+                    let access_violation = Some(AbortStatus::WindowsNtStatus(
                         windows_sys::Win32::Foundation::STATUS_ACCESS_VIOLATION,
+                    ));
+                    // 1.86 and above.
+                    let stack_buffer_overrun = Some(AbortStatus::WindowsNtStatus(
+                        windows_sys::Win32::Foundation::STATUS_STACK_BUFFER_OVERRUN,
                     ));
                     ensure!(
                         actual == &ExecutionResult::Fail {
-                            abort_status,
+                            abort_status: access_violation,
+                            leaked: false,
+                        } || actual == &ExecutionResult::Fail {
+                            abort_status: stack_buffer_overrun,
                             leaked: false,
                         },
                         "segfault: actual result ({actual:?}) matches expected"

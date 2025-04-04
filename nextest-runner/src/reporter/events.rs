@@ -773,7 +773,7 @@ impl ExecutionResult {
 /// A regular exit code or Windows NT abort status for a test.
 ///
 /// Returned as part of the [`ExecutionResult::Fail`] variant.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum AbortStatus {
     /// The test was aborted due to a signal on Unix.
     #[cfg(unix)]
@@ -803,6 +803,19 @@ impl AbortStatus {
             } else {
                 None
             }
+        }
+    }
+}
+
+impl fmt::Debug for AbortStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            #[cfg(unix)]
+            AbortStatus::UnixSignal(signal) => write!(f, "UnixSignal({})", signal),
+            #[cfg(windows)]
+            AbortStatus::WindowsNtStatus(status) => write!(f, "WindowsNtStatus({:x})", status),
+            #[cfg(windows)]
+            AbortStatus::JobObject => write!(f, "JobObject"),
         }
     }
 }
