@@ -395,10 +395,7 @@ impl<'a> TestRunnerInner<'a> {
                                 );
                                 return None;
                             };
-                            match result {
-                                Ok(()) => None,
-                                Err(join_error) => Some(join_error),
-                            }
+                            result.err()
                         }
                     };
 
