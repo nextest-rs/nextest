@@ -26,7 +26,7 @@ console = { version = "0.15.10" }
 either = { version = "1.13.0" }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2.15", default-features = false, features = ["std"] }
 idna_adapter = { version = "1.0.0", default-features = false, features = ["compiled_data"] }
-indexmap = { version = "2.8.0", features = ["serde"] }
+indexmap = { version = "2.9.0", features = ["serde"] }
 log = { version = "0.4.27", default-features = false, features = ["std"] }
 memchr = { version = "2.7.4" }
 miette = { version = "7.5.0", features = ["fancy"] }
