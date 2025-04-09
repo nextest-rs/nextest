@@ -135,6 +135,10 @@ jobs:
             os: windows-latest
             build-target: i686-pc-windows-msvc
             build-tool: cargo
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            build-target: aarch64-pc-windows-msvc
+            build-tool: cargo
           - target: universal-apple-darwin
             # macos-14 for M1 runners
             os: macos-14
@@ -186,7 +190,7 @@ jobs:
         id: archive-output
         shell: bash
         run: |
-          if [[ ${{ matrix.target }} == "x86_64-pc-windows-msvc" || ${{ matrix.target }} == "i686-pc-windows-msvc" ]]; then
+          if [[ ${{ matrix.target }} == *-pc-windows-msvc ]]; then
             echo "${{ matrix.target }}-tar=${{ github.ref_name }}-${{ matrix.target }}".tar.gz >> $GITHUB_OUTPUT
             echo "${{ matrix.target }}-zip=${{ github.ref_name }}-${{ matrix.target }}".zip >> $GITHUB_OUTPUT
           else
@@ -200,6 +204,8 @@ jobs:
       x86_64-windows-zip: ${{ steps.archive-output.outputs.x86_64-pc-windows-msvc-zip }}
       i686-windows-tar: ${{ steps.archive-output.outputs.i686-pc-windows-msvc-tar }}
       i686-windows-zip: ${{ steps.archive-output.outputs.i686-pc-windows-msvc-zip }}
+      aarch64-windows-tar: ${{ steps.archive-output.outputs.aarch64-pc-windows-msvc-tar }}
+      aarch64-windows-zip: ${{ steps.archive-output.outputs.aarch64-pc-windows-msvc-zip }}
       mac-tar: ${{ steps.archive-output.outputs.universal-apple-darwin-tar }}
       x86_64-unknown-freebsd-tar: ${{ steps.archive-output.outputs.x86_64-unknown-freebsd-tar }}
       x86_64-unknown-illumos-tar: ${{ steps.archive-output.outputs.x86_64-unknown-illumos-tar }}
@@ -249,6 +255,8 @@ jobs:
             --archive x86_64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-windows-zip }} \
             --archive i686-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-tar }} \
             --archive i686-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.i686-windows-zip }} \
+            --archive aarch64-pc-windows-msvc:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-windows-tar }} \
+            --archive aarch64-pc-windows-msvc:zip=${{ needs.build-cargo-nextest-binaries.outputs.aarch64-windows-zip }} \
             --archive universal-apple-darwin:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.mac-tar }} \
             --archive x86_64-unknown-freebsd:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-freebsd-tar }} \
             --archive x86_64-unknown-illumos:tar.gz=${{ needs.build-cargo-nextest-binaries.outputs.x86_64-unknown-illumos-tar }} \
@@ -263,6 +271,8 @@ jobs:
             --alias windows-tar=x86_64-pc-windows-msvc:tar.gz \
             --alias windows-x86=i686-pc-windows-msvc:zip \
             --alias windows-x86-tar=i686-pc-windows-msvc:tar.gz \
+            --alias windows-arm=aarch64-pc-windows-msvc:zip \
+            --alias windows-arm-tar=aarch64-pc-windows-msvc:tar.gz \
             --alias mac=universal-apple-darwin:tar.gz \
             --alias freebsd=x86_64-unknown-freebsd:tar.gz \
             --alias illumos=x86_64-unknown-illumos:tar.gz \
