@@ -46,7 +46,7 @@ chrono = "0.4.40"
 clap = { version = "4.5.35", features = ["derive"] }
 console-subscriber = "0.4.1"
 cp_r = "0.5.2"
-crossterm = { version = "0.28.1", features = ["event-stream"] }
+crossterm = { version = "0.29.0", features = ["event-stream"] }
 datatest-stable = { version = "0.3.2", features = ["include-dir"] }
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
