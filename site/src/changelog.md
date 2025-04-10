@@ -8,6 +8,16 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.94-rc.1] - 2025-04-10
+
+### Added
+
+Official binaries are now available for aarch64-pc-windows-msvc (Windows on ARM). Release links TBD.
+
+### Fixed
+
+On Unix platforms, nextest will no longer attempt to set up input handling if it isn't part of the foreground process group. This addresses a hang with watchexec.
+
 ## [0.9.93] - 2025-03-24
 
 ### Fixed
@@ -1404,6 +1414,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.94-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.94-rc.1
 [0.9.93]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.93
 [0.9.92]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.92
 [0.9.91]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.91
