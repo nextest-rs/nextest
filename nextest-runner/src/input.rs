@@ -10,10 +10,7 @@
 use crate::errors::DisplayErrorChain;
 use crossterm::event::{Event, EventStream, KeyCode};
 use futures::StreamExt;
-use std::{
-    io::IsTerminal,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use tracing::{debug, warn};
 
@@ -52,7 +49,7 @@ impl InputHandler {
 
     /// Creates a new `InputHandler` that reads from standard input.
     pub(crate) fn new() -> Self {
-        if std::io::stdin().is_terminal() {
+        if imp::is_foreground_process() {
             // Try enabling non-canonical mode.
             match InputHandlerImpl::new() {
                 Ok(handler) => {
@@ -72,7 +69,10 @@ impl InputHandler {
                 }
             }
         } else {
-            debug!("not reading input because stdin is not a tty");
+            debug!(
+                "not reading input because nextest is not \
+                 a foreground process in a terminal"
+            );
             Self::noop()
         }
     }
@@ -276,9 +276,26 @@ enum InputHandlerFinishError {
 #[cfg(unix)]
 mod imp {
     use libc::{ECHO, ICANON, TCSAFLUSH, TCSANOW, VMIN, VTIME, tcgetattr, tcsetattr};
-    use std::{ffi::c_int, io, mem, os::fd::AsRawFd};
+    use std::{
+        ffi::c_int,
+        io::{self, IsTerminal},
+        mem,
+        os::fd::AsRawFd,
+    };
 
     pub(super) type Error = io::Error;
+
+    pub(super) fn is_foreground_process() -> bool {
+        if !std::io::stdin().is_terminal() {
+            return false;
+        }
+
+        // Also check that tcgetpgrp is the same. If tcgetpgrp fails, it'll
+        // return -1 and this check will fail.
+        //
+        // See https://stackoverflow.com/a/2428429.
+        unsafe { libc::getpgrp() == libc::tcgetpgrp(std::io::stdin().as_raw_fd()) }
+    }
 
     /// A scope guard to enable non-canonical input mode on Unix platforms.
     ///
@@ -359,12 +376,23 @@ mod imp {
 
 #[cfg(windows)]
 mod imp {
-    use std::{io, os::windows::io::AsRawHandle};
+    use std::{
+        io::{self, IsTerminal},
+        os::windows::io::AsRawHandle,
+    };
     use windows_sys::Win32::System::Console::{
         CONSOLE_MODE, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, GetConsoleMode, SetConsoleMode,
     };
 
     pub(super) type Error = io::Error;
+
+    pub(super) fn is_foreground_process() -> bool {
+        // Windows doesn't have a notion of foreground and background process
+        // groups: https://github.com/microsoft/terminal/issues/680. But:
+        //
+        // XXX do we need to do checks other than is_terminal here?
+        std::io::stdin().is_terminal()
+    }
 
     /// A scope guard to enable raw input mode on Windows.
     ///
