@@ -8,15 +8,17 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.94-rc.1] - 2025-04-10
+## [0.9.94] - 2025-04-10
 
 ### Added
 
-Official binaries are now available for aarch64-pc-windows-msvc (Windows on ARM). Release links TBD.
+Official binaries are now available for aarch64-pc-windows-msvc (Windows on ARM). Installation instructions are available at [_Pre-built binaries_](https://nexte.st/docs/installation/pre-built-binaries) under _Other platforms_.
 
 ### Fixed
 
-On Unix platforms, nextest will no longer attempt to set up input handling if it isn't part of the foreground process group. This addresses a hang with watchexec.
+On Unix platforms, nextest will no longer attempt to set up input handling if it isn't in the foreground process group of the [controlling terminal](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap11.html). This addresses a hang with commands like watchexec: these commands forward standard input to nextest (so [`is_terminal`](https://doc.rust-lang.org/beta/std/io/trait.IsTerminal.html#tymethod.is_terminal) returns true), but do not give nextest full terminal control.
+
+There are still some reports of watchexec hangs even with this change; we'll track them down and fix bugs as necessary.
 
 ## [0.9.93] - 2025-03-24
 
@@ -1414,7 +1416,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.94-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.94-rc.1
+[0.9.94]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.94
 [0.9.93]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.93
 [0.9.92]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.92
 [0.9.91]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.91

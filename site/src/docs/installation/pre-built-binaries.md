@@ -86,7 +86,7 @@ The instructions below are suitable for both end users and CI. These links will 
     $tmp | Remove-Item
     ```
 
-    Or, using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions):
+    Or, using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
 
     ```
     curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -95,6 +95,44 @@ The instructions below are suitable for both end users and CI. These links will 
     Windows Subsystem for Linux (WSL) users should follow the **Linux x86_64** instructions.
 
 ??? info "Other platforms"
+
+    === "Windows aarch64"
+
+        <!-- md:version 0.9.94 -->
+
+        Run in PowerShell:
+
+        ```powershell
+        $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+        Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows-arm
+        $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
+        $tmp | Expand-Archive -DestinationPath $outputDir -Force
+        $tmp | Remove-Item
+        ```
+
+        Or, using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
+
+        ```
+        curl -LsSf https://get.nexte.st/latest/windows-arm-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        ```
+
+    === "Windows i686"
+
+        Run in PowerShell:
+
+        ```powershell
+        $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+        Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows-x86
+        $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
+        $tmp | Expand-Archive -DestinationPath $outputDir -Force
+        $tmp | Remove-Item
+        ```
+
+        Or, using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
+
+        ```
+        curl -LsSf https://get.nexte.st/latest/windows-x86-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        ```
 
     === "FreeBSD x86_64"
 
@@ -108,7 +146,7 @@ The instructions below are suitable for both end users and CI. These links will 
         curl -LsSf https://get.nexte.st/latest/illumos | gunzip | tar xf - -C ${CARGO_HOME:-~/.cargo}/bin
         ```
 
-        As of 2022-12, the current version of illumos tar has [a bug](https://www.illumos.org/issues/15228) where `tar zxf` doesn't work over standard input.
+        As of 2025-04, the current version of illumos tar has [a bug](https://www.illumos.org/issues/15228) where `tar zxf` doesn't work over standard input.
 
 ## Community-maintained binaries
 

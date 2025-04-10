@@ -9,7 +9,7 @@ description: Design document describing how nextest handles interactive keyboard
 
     This is a design document intended for nextest contributors and curious readers.
 
-Currently, nextest handles keyboard inputs in interactive terminals:
+Currently, nextest handles keyboard inputs in interactive terminals (and on Unix, with the additional condition that it is in the foreground process group of the [controlling terminal](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap11.html)):
 
 - On `t` being pressed, nextest prints [the status and captured
   output](../../reporting.md#live-output) for currently-running tests.
@@ -464,4 +464,4 @@ middle ground between the default driver settings and raw mode.
 
 [^disable-input-handler]: For this reason, users may wish to disable the input handler entirely. This is supported by passing in `--no-input-handler`, or setting `NEXTEST_NO_INPUT_HANDLER=1` in the environment.
 
-*Last substantive revision: 2025-01-01*
+*Last substantive revision: 2025-04-10*
