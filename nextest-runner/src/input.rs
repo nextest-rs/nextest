@@ -282,11 +282,13 @@ mod imp {
         mem,
         os::fd::AsRawFd,
     };
+    use tracing::debug;
 
     pub(super) type Error = io::Error;
 
     pub(super) fn is_foreground_process() -> bool {
         if !std::io::stdin().is_terminal() {
+            debug!("stdin is not a terminal => is_foreground_process() is false");
             return false;
         }
 
@@ -294,7 +296,29 @@ mod imp {
         // return -1 and this check will fail.
         //
         // See https://stackoverflow.com/a/2428429.
-        unsafe { libc::getpgrp() == libc::tcgetpgrp(std::io::stdin().as_raw_fd()) }
+        let pgrp = unsafe { libc::getpgrp() };
+        let tc_pgrp = unsafe { libc::tcgetpgrp(std::io::stdin().as_raw_fd()) };
+        if tc_pgrp == -1 {
+            debug!(
+                "stdin is a terminal, and pgrp = {pgrp}, but tcgetpgrp failed with error {} => \
+                 is_foreground_process() is false",
+                io::Error::last_os_error()
+            );
+            return false;
+        }
+        if pgrp != tc_pgrp {
+            debug!(
+                "stdin is a terminal, but pgrp {} != tcgetpgrp {} => is_foreground_process() is false",
+                pgrp, tc_pgrp
+            );
+            return false;
+        }
+
+        debug!(
+            "stdin is a terminal, and pgrp {pgrp} == tcgetpgrp {tc_pgrp} => \
+             is_foreground_process() is true"
+        );
+        true
     }
 
     /// A scope guard to enable non-canonical input mode on Unix platforms.
@@ -380,6 +404,7 @@ mod imp {
         io::{self, IsTerminal},
         os::windows::io::AsRawHandle,
     };
+    use tracing::debug;
     use windows_sys::Win32::System::Console::{
         CONSOLE_MODE, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, GetConsoleMode, SetConsoleMode,
     };
@@ -388,10 +413,18 @@ mod imp {
 
     pub(super) fn is_foreground_process() -> bool {
         // Windows doesn't have a notion of foreground and background process
-        // groups: https://github.com/microsoft/terminal/issues/680. But:
+        // groups: https://github.com/microsoft/terminal/issues/680. So simply
+        // checking that stdin is a terminal is enough.
         //
-        // XXX do we need to do checks other than is_terminal here?
-        std::io::stdin().is_terminal()
+        // This function is written slightly non-idiomatically, because it
+        // follows the same structure as the more complex Unix function above.
+        if !std::io::stdin().is_terminal() {
+            debug!("stdin is not a terminal => is_foreground_process() is false");
+            return false;
+        }
+
+        debug!("stdin is a terminal => is_foreground_process() is true");
+        true
     }
 
     /// A scope guard to enable raw input mode on Windows.
