@@ -57,7 +57,7 @@ futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.1", default-features = false, features = ["std"] }
-libc = { version = "0.2.171", features = ["extra_traits"] }
+libc = { version = "0.2.172", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.4.15", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 mio = { version = "1.0.3", features = ["net", "os-ext"] }
 rustix = { version = "0.38.44", features = ["fs", "termios"] }
@@ -65,21 +65,21 @@ smallvec = { version = "1.15.0", default-features = false, features = ["const_ne
 tokio = { version = "1.44.2", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-libc = { version = "0.2.171", features = ["extra_traits"] }
+libc = { version = "0.2.172", features = ["extra_traits"] }
 
 [target.x86_64-apple-darwin.dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.1", default-features = false, features = ["std"] }
-libc = { version = "0.2.171", features = ["extra_traits"] }
+libc = { version = "0.2.172", features = ["extra_traits"] }
 mio = { version = "1.0.3", features = ["net", "os-ext"] }
 rustix = { version = "0.38.44", features = ["fs", "termios"] }
 smallvec = { version = "1.15.0", default-features = false, features = ["const_new"] }
 tokio = { version = "1.44.2", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
-libc = { version = "0.2.171", features = ["extra_traits"] }
+libc = { version = "0.2.172", features = ["extra_traits"] }
 
 [target.x86_64-pc-windows-msvc.dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
