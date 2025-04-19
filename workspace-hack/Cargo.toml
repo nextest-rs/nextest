@@ -20,8 +20,8 @@ backtrace = { version = "0.3.71", features = ["gimli-symbolize"] }
 bit-set = { version = "0.8.0" }
 bit-vec = { version = "0.8.0" }
 camino = { version = "1.1.9", default-features = false, features = ["serde1"] }
-clap = { version = "4.5.36", features = ["derive", "env", "unicode", "wrap_help"] }
-clap_builder = { version = "4.5.36", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
+clap = { version = "4.5.37", features = ["derive", "env", "unicode", "wrap_help"] }
+clap_builder = { version = "4.5.37", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 console = { version = "0.15.10" }
 either = { version = "1.13.0" }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2.15", default-features = false, features = ["std"] }
