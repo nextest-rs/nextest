@@ -50,7 +50,7 @@ crossterm = { version = "0.29.0", features = ["event-stream"] }
 datatest-stable = { version = "0.3.2", features = ["include-dir"] }
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
-derive-where = "1.2.7"
+derive-where = "1.3.0"
 duct = "0.13.7"
 dunce = "1.0.5"
 enable-ansi-support = "0.2.1"
