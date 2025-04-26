@@ -11,7 +11,7 @@ use fixture_data::{
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
-    config::{NextestConfig, RetryPolicy},
+    config::{LeakTimeoutResult, NextestConfig, RetryPolicy},
     double_spawn::DoubleSpawnInfo,
     input::InputHandlerKind,
     list::BinaryList,
@@ -556,7 +556,8 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                         TestCaseFixtureStatus::Pass | TestCaseFixtureStatus::Leak => 1,
                         // Note that currently only the flaky test fixtures are controlled by overrides.
                         // If more tests are controlled by retry overrides, this may need to be updated.
-                        TestCaseFixtureStatus::Fail
+                        TestCaseFixtureStatus::LeakFail
+                        | TestCaseFixtureStatus::Fail
                         | TestCaseFixtureStatus::FailLeak
                         | TestCaseFixtureStatus::Segfault => profile_retries.count() + 1,
                         TestCaseFixtureStatus::IgnoredPass | TestCaseFixtureStatus::IgnoredFail => {
@@ -574,7 +575,10 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                     match run_statuses.describe() {
                         ExecutionDescription::Success { single_status } => {
                             if fixture.status == TestCaseFixtureStatus::Leak {
-                                single_status.result == ExecutionResult::Leak
+                                single_status.result
+                                    == ExecutionResult::Leak {
+                                        result: LeakTimeoutResult::Pass,
+                                    }
                             } else {
                                 single_status.result == ExecutionResult::Pass
                             }
@@ -611,15 +615,21 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
                                 assert!(
                                     matches!(
                                         retry.result,
-                                        ExecutionResult::Fail { .. } | ExecutionResult::Leak
+                                        ExecutionResult::Fail { .. }
+                                            | ExecutionResult::Leak {
+                                                result: LeakTimeoutResult::Fail
+                                            }
                                     ),
-                                    "retry {} should be fail or leak",
+                                    "retry {} should be fail or leak => fail",
                                     retry.retry_data.attempt
                                 );
                             }
                             matches!(
                                 first_status.result,
-                                ExecutionResult::Fail { .. } | ExecutionResult::Leak
+                                ExecutionResult::Fail { .. }
+                                    | ExecutionResult::Leak {
+                                        result: LeakTimeoutResult::Fail
+                                    }
                             )
                         }
                     }

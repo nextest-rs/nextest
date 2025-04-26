@@ -23,6 +23,7 @@
 //! using before
 
 use crate::{
+    config::LeakTimeoutResult,
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::RustTestSuite,
     reporter::events::{ExecutionResult, TestEvent, TestEventKind},
@@ -246,8 +247,14 @@ impl<'cfg> LibtestReporter<'cfg> {
                 (
                     KIND_TEST,
                     match run_statuses.last_status().result {
-                        ExecutionResult::Pass | ExecutionResult::Leak => EVENT_OK,
-                        ExecutionResult::Fail { .. }
+                        ExecutionResult::Pass
+                        | ExecutionResult::Leak {
+                            result: LeakTimeoutResult::Pass,
+                        } => EVENT_OK,
+                        ExecutionResult::Leak {
+                            result: LeakTimeoutResult::Fail,
+                        }
+                        | ExecutionResult::Fail { .. }
                         | ExecutionResult::ExecFail
                         | ExecutionResult::Timeout => EVENT_FAILED,
                     },

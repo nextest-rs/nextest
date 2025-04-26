@@ -327,12 +327,16 @@ fn test_result_failure() -> Result<(), std::io::Error> {
     ))
 }
 
+// This 360 second timeout is synchronized with a per-test override in
+// <repo-root>/.config/nextest.toml.
+const SUBPROCESS_TIMEOUT_SECS: u64 = 360;
+
 #[cfg(any(unix, windows))]
 #[test]
 fn test_subprocess_doesnt_exit() {
-    // Note: this is synchronized with a per-test override in the main nextest repo.
-    let mut cmd = sleep_cmd(360);
-    // Try setting stdout to a piped process -- this will cause the runner to hang, unless
+    let mut cmd = sleep_cmd(SUBPROCESS_TIMEOUT_SECS);
+    // Try setting stdout to a piped process -- this will cause the runner to
+    // hang, unless nextest doesn't block on grandchildren exiting.
     cmd.stdout(std::process::Stdio::piped());
     cmd.spawn().unwrap();
 }
@@ -340,14 +344,25 @@ fn test_subprocess_doesnt_exit() {
 #[cfg(any(unix, windows))]
 #[test]
 fn test_subprocess_doesnt_exit_fail() {
-    let mut cmd = sleep_cmd(360);
+    let mut cmd = sleep_cmd(SUBPROCESS_TIMEOUT_SECS);
     cmd.stdout(std::process::Stdio::piped());
     cmd.spawn().unwrap();
     panic!("this is a panic");
 }
 
+#[cfg(any(unix, windows))]
+#[test]
+fn test_subprocess_doesnt_exit_leak_fail() {
+    // Note: this is synchronized with a per-test override in ../.config/nextest.toml.
+    let mut cmd = sleep_cmd(SUBPROCESS_TIMEOUT_SECS);
+    // Try setting stdout to a piped process -- this will cause the runner to
+    // hang, unless nextest doesn't block on grandchildren exiting.
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.spawn().unwrap();
+}
+
 #[cfg(windows)]
-fn sleep_cmd(secs: usize) -> std::process::Command {
+fn sleep_cmd(secs: u64) -> std::process::Command {
     // Apparently, this is the most reliable way to sleep for a bit on Windows.
     // * "timeout" doesn't work in a non-console context such as GitHub Actions runners.
     // * "waitfor" requires uniquely-named signals.
@@ -360,7 +375,7 @@ fn sleep_cmd(secs: usize) -> std::process::Command {
 }
 
 #[cfg(unix)]
-fn sleep_cmd(secs: usize) -> std::process::Command {
+fn sleep_cmd(secs: u64) -> std::process::Command {
     let mut cmd = std::process::Command::new("sleep");
     cmd.arg(&format!("{secs}"));
     cmd

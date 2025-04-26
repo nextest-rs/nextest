@@ -8,7 +8,7 @@
 
 use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::{
-    config::ScriptId,
+    config::{LeakTimeoutResult, ScriptId},
     list::{TestInstance, TestInstanceId, TestList},
     test_output::ChildExecutionOutput,
 };
@@ -374,6 +374,10 @@ pub struct RunStats {
     /// The number of tests that passed but leaked handles.
     pub leaky: usize,
 
+    /// The number of tests that otherwise passed, but leaked handles and were
+    /// treated as failed as a result.
+    pub leaky_failed: usize,
+
     /// The number of tests that encountered an execution failure.
     pub exec_failed: usize,
 
@@ -426,10 +430,16 @@ impl RunStats {
         self.setup_scripts_finished_count += 1;
 
         match status.result {
-            ExecutionResult::Pass | ExecutionResult::Leak => {
+            ExecutionResult::Pass
+            | ExecutionResult::Leak {
+                result: LeakTimeoutResult::Pass,
+            } => {
                 self.setup_scripts_passed += 1;
             }
-            ExecutionResult::Fail { .. } => {
+            ExecutionResult::Fail { .. }
+            | ExecutionResult::Leak {
+                result: LeakTimeoutResult::Fail,
+            } => {
                 self.setup_scripts_failed += 1;
             }
             ExecutionResult::ExecFail => {
@@ -462,7 +472,9 @@ impl RunStats {
                     self.flaky += 1;
                 }
             }
-            ExecutionResult::Leak => {
+            ExecutionResult::Leak {
+                result: LeakTimeoutResult::Pass,
+            } => {
                 self.passed += 1;
                 self.leaky += 1;
                 if last_status.is_slow {
@@ -470,6 +482,15 @@ impl RunStats {
                 }
                 if run_statuses.len() > 1 {
                     self.flaky += 1;
+                }
+            }
+            ExecutionResult::Leak {
+                result: LeakTimeoutResult::Fail,
+            } => {
+                self.failed += 1;
+                self.leaky_failed += 1;
+                if last_status.is_slow {
+                    self.failed_slow += 1;
                 }
             }
             ExecutionResult::Fail { .. } => {
@@ -617,13 +638,13 @@ impl<'a> ExecutionDescription<'a> {
     /// Returns the status level for this `ExecutionDescription`.
     pub fn status_level(&self) -> StatusLevel {
         match self {
-            ExecutionDescription::Success { single_status } => {
-                if single_status.result == ExecutionResult::Leak {
-                    StatusLevel::Leak
-                } else {
-                    StatusLevel::Pass
-                }
-            }
+            ExecutionDescription::Success { single_status } => match single_status.result {
+                ExecutionResult::Leak {
+                    result: LeakTimeoutResult::Pass,
+                } => StatusLevel::Leak,
+                ExecutionResult::Pass => StatusLevel::Pass,
+                other => unreachable!("Success only permits Pass or Leak Pass, found {other:?}"),
+            },
             // A flaky test implies that we print out retry information for it.
             ExecutionDescription::Flaky { .. } => StatusLevel::Retry,
             ExecutionDescription::Failure { .. } => StatusLevel::Fail,
@@ -637,10 +658,16 @@ impl<'a> ExecutionDescription<'a> {
                 // Slow is higher priority than leaky, so return slow first here.
                 if single_status.is_slow {
                     FinalStatusLevel::Slow
-                } else if single_status.result == ExecutionResult::Leak {
-                    FinalStatusLevel::Leak
                 } else {
-                    FinalStatusLevel::Pass
+                    match single_status.result {
+                        ExecutionResult::Pass => FinalStatusLevel::Pass,
+                        ExecutionResult::Leak {
+                            result: LeakTimeoutResult::Pass,
+                        } => FinalStatusLevel::Leak,
+                        other => {
+                            unreachable!("Success only permits Pass or Leak Pass, found {other:?}")
+                        }
+                    }
                 }
             }
             // A flaky test implies that we print out retry information for it.
@@ -739,9 +766,15 @@ pub enum ExecutionResult {
     /// The test passed but leaked handles. This usually indicates that
     /// a subprocess that inherit standard IO was created, but it didn't shut down when
     /// the test failed.
-    ///
-    /// This is treated as a pass.
-    Leak,
+    Leak {
+        /// Whether this leak was treated as a failure.
+        ///
+        /// Note the difference between `Fail { leaked: true }` and `Leak {
+        /// failed: true }`. In the former case, the test failed and also leaked
+        /// handles. In the latter case, the test passed but leaked handles, and
+        /// configuration indicated that this is a failure.
+        result: LeakTimeoutResult,
+    },
     /// The test failed.
     Fail {
         /// The abort status of the test, if any (for example, the signal on Unix).
@@ -762,10 +795,16 @@ impl ExecutionResult {
     /// Returns true if the test was successful.
     pub fn is_success(self) -> bool {
         match self {
-            ExecutionResult::Pass | ExecutionResult::Leak => true,
-            ExecutionResult::Fail { .. } | ExecutionResult::ExecFail | ExecutionResult::Timeout => {
-                false
+            ExecutionResult::Pass
+            | ExecutionResult::Leak {
+                result: LeakTimeoutResult::Pass,
+            } => true,
+            ExecutionResult::Leak {
+                result: LeakTimeoutResult::Fail,
             }
+            | ExecutionResult::Fail { .. }
+            | ExecutionResult::ExecFail
+            | ExecutionResult::Timeout => false,
         }
     }
 }
