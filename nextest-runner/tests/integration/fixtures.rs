@@ -11,7 +11,7 @@ use nextest_filtering::{CompiledExpr, EvalContext, ParseContext};
 use nextest_metadata::{MismatchReason, RustBinaryId};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
-    config::{ConfigExperimental, NextestConfig, get_num_cpus},
+    config::{ConfigExperimental, LeakTimeoutResult, NextestConfig, get_num_cpus},
     double_spawn::DoubleSpawnInfo,
     list::{
         BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
@@ -126,8 +126,20 @@ pub(crate) fn ensure_execution_result(
         }
         TestCaseFixtureStatus::Leak => {
             ensure!(
-                actual == &ExecutionResult::Leak,
+                actual
+                    == &ExecutionResult::Leak {
+                        result: LeakTimeoutResult::Pass
+                    },
                 "leak: actual result ({actual:?}) matches expected"
+            );
+        }
+        TestCaseFixtureStatus::LeakFail => {
+            ensure!(
+                actual
+                    == &ExecutionResult::Leak {
+                        result: LeakTimeoutResult::Fail
+                    },
+                "leak => fail: actual result ({actual:?}) matches expected"
             );
         }
     }

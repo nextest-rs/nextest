@@ -14,8 +14,8 @@
 use super::HandleSignalResult;
 use crate::{
     config::{
-        EvaluatableProfile, RetryPolicy, ScriptConfig, ScriptId, SetupScriptCommand,
-        SetupScriptExecuteData, SlowTimeout, TestGroup, TestSettings,
+        EvaluatableProfile, LeakTimeout, LeakTimeoutResult, RetryPolicy, ScriptConfig, ScriptId,
+        SetupScriptCommand, SetupScriptExecuteData, SlowTimeout, TestGroup, TestSettings,
     },
     double_spawn::DoubleSpawnInfo,
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -380,10 +380,7 @@ impl<'a> ExecutorContext<'a> {
             .config
             .slow_timeout
             .unwrap_or(SlowTimeout::VERY_LARGE);
-        let leak_timeout = script
-            .config
-            .leak_timeout
-            .unwrap_or(Duration::from_millis(100));
+        let leak_timeout = script.config.leak_timeout.unwrap_or_default();
 
         let mut interval_sleep = std::pin::pin!(crate::time::pausable_sleep(slow_timeout.period));
 
@@ -521,9 +518,9 @@ impl<'a> ExecutorContext<'a> {
 
             // Build a tentative status using status and the exit status.
             let tentative_status = status.or_else(|| {
-                res.as_ref()
-                    .ok()
-                    .map(|res| create_execution_result(*res, &child_acc.errors, false))
+                res.as_ref().ok().map(|res| {
+                    create_execution_result(*res, &child_acc.errors, false, LeakTimeoutResult::Pass)
+                })
             });
 
             let leaked = detect_fd_leaks(
@@ -550,8 +547,9 @@ impl<'a> ExecutorContext<'a> {
 
         let exit_status = exit_status.expect("None always results in early return");
 
-        let exec_result = status
-            .unwrap_or_else(|| create_execution_result(exit_status, &child_acc.errors, leaked));
+        let exec_result = status.unwrap_or_else(|| {
+            create_execution_result(exit_status, &child_acc.errors, leaked, leak_timeout.result)
+        });
 
         // Read from the environment map. If there's an error here, add it to the list of child errors.
         let mut errors: Vec<_> = child_acc.errors.into_iter().map(ChildError::from).collect();
@@ -827,9 +825,9 @@ impl<'a> ExecutorContext<'a> {
 
             // Build a tentative status using status and the exit status.
             let tentative_status = status.or_else(|| {
-                res.as_ref()
-                    .ok()
-                    .map(|res| create_execution_result(*res, &child_acc.errors, false))
+                res.as_ref().ok().map(|res| {
+                    create_execution_result(*res, &child_acc.errors, false, LeakTimeoutResult::Pass)
+                })
             });
 
             let leaked = detect_fd_leaks(
@@ -855,8 +853,9 @@ impl<'a> ExecutorContext<'a> {
         };
 
         let exit_status = exit_status.expect("None always results in early return");
-        let exec_result = status
-            .unwrap_or_else(|| create_execution_result(exit_status, &child_acc.errors, leaked));
+        let exec_result = status.unwrap_or_else(|| {
+            create_execution_result(exit_status, &child_acc.errors, leaked, leak_timeout.result)
+        });
 
         Ok(InternalExecuteStatus {
             test,
@@ -1174,14 +1173,14 @@ async fn detect_fd_leaks<'a>(
     child_pid: u32,
     child_acc: &mut ChildAccumulator,
     tentative_result: Option<ExecutionResult>,
-    leak_timeout: Duration,
+    leak_timeout: LeakTimeout,
     stopwatch: &mut StopwatchStart,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
 ) -> bool {
     loop {
         // Ignore stop and continue events here since the leak timeout should be very small.
         // TODO: we may want to consider them.
-        let mut sleep = std::pin::pin!(tokio::time::sleep(leak_timeout));
+        let mut sleep = std::pin::pin!(tokio::time::sleep(leak_timeout.period));
         let waiting_stopwatch = crate::time::stopwatch();
 
         tokio::select! {
@@ -1219,7 +1218,7 @@ async fn detect_fd_leaks<'a>(
                                 slow_after: cx.slow_after,
                                 tentative_result,
                                 waiting_duration: snapshot.active,
-                                remaining: leak_timeout
+                                remaining: leak_timeout.period
                                     .checked_sub(snapshot.active)
                                     .unwrap_or_default(),
                             },
@@ -1305,6 +1304,7 @@ fn create_execution_result(
     exit_status: ExitStatus,
     child_errors: &[ChildFdError],
     leaked: bool,
+    leak_timeout_result: LeakTimeoutResult,
 ) -> ExecutionResult {
     if !child_errors.is_empty() {
         // If an error occurred while waiting on the child handles, treat it as
@@ -1312,7 +1312,11 @@ fn create_execution_result(
         ExecutionResult::ExecFail
     } else if exit_status.success() {
         if leaked {
-            ExecutionResult::Leak
+            // Note: this is test passed (exited with code 0) + leaked handles,
+            // not test failed and also leaked handles.
+            ExecutionResult::Leak {
+                result: leak_timeout_result,
+            }
         } else {
             ExecutionResult::Pass
         }

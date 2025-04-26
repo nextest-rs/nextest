@@ -143,6 +143,7 @@ pub fn check_list_binaries_output(stdout: &[u8]) {
 enum CheckResult {
     Pass,
     Leak,
+    LeakFail,
     Fail,
     FailLeak,
     Abort,
@@ -154,6 +155,7 @@ impl CheckResult {
         match self {
             CheckResult::Pass => Regex::new(&format!(r"PASS \[.*\] *{name}")).unwrap(),
             CheckResult::Leak => Regex::new(&format!(r"LEAK \[.*\] *{name}")).unwrap(),
+            CheckResult::LeakFail => Regex::new(&format!(r"LEAK-FAIL \[.*\] *{name}")).unwrap(),
             CheckResult::Fail => Regex::new(&format!(r"FAIL \[.*\] *{name}")).unwrap(),
             CheckResult::FailLeak => Regex::new(&format!(r"FAIL \+ LEAK \[.*\] *{name}")).unwrap(),
             CheckResult::Abort => {
@@ -166,7 +168,10 @@ impl CheckResult {
         // By default, output is only displayed for fail, fail + leak, and abort
         // tests.
         match self {
-            CheckResult::Fail | CheckResult::FailLeak | CheckResult::Abort => {
+            CheckResult::LeakFail
+            | CheckResult::Fail
+            | CheckResult::FailLeak
+            | CheckResult::Abort => {
                 vec![
                     (
                         "stdout",
@@ -224,6 +229,7 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
     let mut leak_count = 0;
     let mut pass_count = 0;
     let mut fail_count = 0;
+    let mut leak_fail_count = 0;
     let mut skip_count = 0;
 
     for (binary_id, fixture) in &*EXPECTED_TEST_SUITES {
@@ -313,6 +319,12 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
                     leak_count += 1;
                     CheckResult::Leak
                 }
+                TestCaseFixtureStatus::LeakFail => {
+                    run_count += 1;
+                    fail_count += 1;
+                    leak_fail_count += 1;
+                    CheckResult::LeakFail
+                }
                 TestCaseFixtureStatus::Fail | TestCaseFixtureStatus::Flaky { .. } => {
                     // Flaky tests are not currently retried by this test suite. (They are retried
                     // by the older suite in nextest-runner/tests/integration).
@@ -359,6 +371,11 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
     }
 
     let tests_str = if run_count == 1 { "test" } else { "tests" };
+    let leak_fail_regex_str = if leak_fail_count > 0 {
+        format!(r" \({} due to being leaky\)", leak_fail_count)
+    } else {
+        String::new()
+    };
 
     let summary_regex_str = match (leak_count, fail_count) {
         (0, 0) => {
@@ -368,7 +385,7 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
         }
         (0, _) => {
             format!(
-                r"Summary \[.*\] *{run_count} {tests_str} run: {pass_count} passed, {fail_count} failed, {skip_count} skipped"
+                r"Summary \[.*\] *{run_count} {tests_str} run: {pass_count} passed, {fail_count} failed{leak_fail_regex_str}, {skip_count} skipped"
             )
         }
         (_, 0) => {
@@ -378,7 +395,7 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
         }
         (_, _) => {
             format!(
-                r"Summary \[.*\] *{run_count} {tests_str} run: {pass_count} passed \({leak_count} leaky\), {fail_count} failed, {skip_count} skipped"
+                r"Summary \[.*\] *{run_count} {tests_str} run: {pass_count} passed \({leak_count} leaky\), {fail_count} failed{leak_fail_regex_str}, {skip_count} skipped"
             )
         }
     };

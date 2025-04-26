@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::{
-    CompiledProfileScripts, DeserializedProfileScriptConfig, EvaluatableProfile, NextestConfig,
-    NextestConfigImpl, TestPriority,
+    CompiledProfileScripts, DeserializedProfileScriptConfig, EvaluatableProfile, LeakTimeout,
+    NextestConfig, NextestConfigImpl, TestPriority,
 };
 use crate::{
     config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
@@ -18,7 +18,7 @@ use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext, Te
 use owo_colors::{OwoColorize, Style};
 use serde::{Deserialize, Deserializer};
 use smol_str::SmolStr;
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 use target_spec::{Platform, TargetSpec};
 
 /// Settings for individual tests.
@@ -34,7 +34,7 @@ pub struct TestSettings<'p, Source = ()> {
     run_extra_args: (&'p [String], Source),
     retries: (RetryPolicy, Source),
     slow_timeout: (SlowTimeout, Source),
-    leak_timeout: (Duration, Source),
+    leak_timeout: (LeakTimeout, Source),
     test_group: (TestGroup, Source),
     success_output: (TestOutputDisplay, Source),
     failure_output: (TestOutputDisplay, Source),
@@ -116,7 +116,7 @@ impl<'p> TestSettings<'p> {
     }
 
     /// Returns the leak timeout for this test.
-    pub fn leak_timeout(&self) -> Duration {
+    pub fn leak_timeout(&self) -> LeakTimeout {
         self.leak_timeout.0
     }
 
@@ -299,7 +299,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
     }
 
     /// Returns the leak timeout for this test, with the source attached.
-    pub(crate) fn leak_timeout_with_source(&self) -> (Duration, Source) {
+    pub(crate) fn leak_timeout_with_source(&self) -> (LeakTimeout, Source) {
         self.leak_timeout
     }
 
@@ -576,7 +576,7 @@ pub(super) struct ProfileOverrideData {
     run_extra_args: Option<Vec<String>>,
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
-    leak_timeout: Option<Duration>,
+    leak_timeout: Option<LeakTimeout>,
     pub(super) test_group: Option<TestGroup>,
     success_output: Option<TestOutputDisplay>,
     failure_output: Option<TestOutputDisplay>,
@@ -806,8 +806,8 @@ pub(super) struct DeserializedOverride {
     retries: Option<RetryPolicy>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
-    #[serde(default, with = "humantime_serde::option")]
-    leak_timeout: Option<Duration>,
+    #[serde(default, deserialize_with = "super::deserialize_leak_timeout")]
+    leak_timeout: Option<LeakTimeout>,
     #[serde(default)]
     test_group: Option<TestGroup>,
     #[serde(default)]
@@ -885,11 +885,11 @@ impl<'de> Deserialize<'de> for PlatformStrings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{NextestConfig, test_helpers::*};
+    use crate::config::{LeakTimeoutResult, NextestConfig, test_helpers::*};
     use camino::Utf8Path;
     use camino_tempfile::tempdir;
     use indoc::indoc;
-    use std::num::NonZeroUsize;
+    use std::{num::NonZeroUsize, time::Duration};
     use test_case::test_case;
 
     /// Basic test to ensure overrides work. Add new override parameters to this test.
@@ -979,7 +979,13 @@ mod tests {
                 grace_period: Duration::from_secs(10),
             }
         );
-        assert_eq!(overrides.leak_timeout(), Duration::from_millis(300));
+        assert_eq!(
+            overrides.leak_timeout(),
+            LeakTimeout {
+                period: Duration::from_millis(300),
+                result: LeakTimeoutResult::Pass,
+            }
+        );
         assert_eq!(overrides.test_group(), &test_group("my-group"));
         assert_eq!(overrides.success_output(), TestOutputDisplay::Never);
         assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
@@ -1022,7 +1028,13 @@ mod tests {
                 grace_period: Duration::ZERO,
             }
         );
-        assert_eq!(overrides.leak_timeout(), Duration::from_millis(300));
+        assert_eq!(
+            overrides.leak_timeout(),
+            LeakTimeout {
+                period: Duration::from_millis(300),
+                result: LeakTimeoutResult::Pass,
+            }
+        );
         assert_eq!(overrides.test_group(), &test_group("my-group"));
         assert_eq!(
             overrides.success_output(),

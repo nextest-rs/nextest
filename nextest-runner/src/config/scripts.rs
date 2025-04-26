@@ -4,8 +4,8 @@
 //! Setup scripts.
 
 use super::{
-    ConfigIdentifier, EvaluatableProfile, FinalConfig, MaybeTargetSpec, PlatformStrings,
-    PreBuildPlatform, SlowTimeout,
+    ConfigIdentifier, EvaluatableProfile, FinalConfig, LeakTimeout, MaybeTargetSpec,
+    PlatformStrings, PreBuildPlatform, SlowTimeout,
 };
 use crate::{
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
@@ -29,7 +29,6 @@ use std::{
     fmt,
     process::Command,
     sync::Arc,
-    time::Duration,
 };
 
 /// Data about setup scripts, returned by an [`EvaluatableProfile`].
@@ -444,8 +443,8 @@ pub struct ScriptConfig {
     pub slow_timeout: Option<SlowTimeout>,
 
     /// An optional leak timeout for this command.
-    #[serde(default, with = "humantime_serde::option")]
-    pub leak_timeout: Option<Duration>,
+    #[serde(default, deserialize_with = "super::deserialize_leak_timeout")]
+    pub leak_timeout: Option<LeakTimeout>,
 
     /// Whether to capture standard output for this command.
     #[serde(default)]

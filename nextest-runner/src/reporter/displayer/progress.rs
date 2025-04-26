@@ -206,6 +206,7 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
         failed_slow: _,
         timed_out,
         leaky,
+        leaky_failed,
         exec_failed,
         skipped,
     } = run_stats;
@@ -247,10 +248,19 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
     if failed > 0 {
         swrite!(
             out,
-            "{} {}, ",
+            "{} {}",
             failed.style(styles.count),
             "failed".style(styles.fail),
         );
+        if leaky_failed > 0 {
+            swrite!(
+                out,
+                " ({} due to being {})",
+                leaky_failed.style(styles.count),
+                "leaky".style(styles.fail),
+            );
+        }
+        swrite!(out, ", ");
     }
 
     if exec_failed > 0 {

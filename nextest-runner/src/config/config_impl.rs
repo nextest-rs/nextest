@@ -6,7 +6,7 @@ use super::{
     CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
     JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
     ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
-    TestThreads, ThreadsRequired, ToolConfigFile,
+    TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
 };
 use crate::{
     errors::{
@@ -27,7 +27,6 @@ use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map},
     sync::LazyLock,
-    time::Duration,
 };
 use tracing::warn;
 
@@ -739,7 +738,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 
     /// Returns the time after which a child process that hasn't closed its handles is marked as
     /// leaky.
-    pub fn leak_timeout(&self) -> Duration {
+    pub fn leak_timeout(&self) -> LeakTimeout {
         self.custom_profile
             .and_then(|profile| profile.leak_timeout)
             .unwrap_or(self.default_profile.leak_timeout)
@@ -920,7 +919,7 @@ pub(super) struct DefaultProfileImpl {
     success_output: TestOutputDisplay,
     max_fail: MaxFail,
     slow_timeout: SlowTimeout,
-    leak_timeout: Duration,
+    leak_timeout: LeakTimeout,
     overrides: Vec<DeserializedOverride>,
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
@@ -1012,8 +1011,8 @@ pub(super) struct CustomProfileImpl {
     max_fail: Option<MaxFail>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
-    #[serde(default, with = "humantime_serde::option")]
-    leak_timeout: Option<Duration>,
+    #[serde(default, deserialize_with = "super::deserialize_leak_timeout")]
+    leak_timeout: Option<LeakTimeout>,
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
     #[serde(default)]

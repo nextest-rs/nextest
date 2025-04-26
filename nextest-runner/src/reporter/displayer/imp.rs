@@ -16,7 +16,7 @@ use super::{
     unit_output::TestOutputDisplay,
 };
 use crate::{
-    config::{CompiledDefaultFilter, ScriptId},
+    config::{CompiledDefaultFilter, LeakTimeoutResult, ScriptId},
     errors::WriteEventError,
     helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
     list::{TestInstance, TestInstanceId},
@@ -822,9 +822,14 @@ impl<'a> DisplayReporterImpl<'a> {
             ExecutionResult::Pass => {
                 write!(writer, "{:>12} ", "SETUP PASS".style(self.styles.pass))?;
             }
-            ExecutionResult::Leak => {
-                write!(writer, "{:>12} ", "SETUP LEAK".style(self.styles.skip))?;
-            }
+            ExecutionResult::Leak { result } => match result {
+                LeakTimeoutResult::Pass => {
+                    write!(writer, "{:>12} ", "SETUP LEAK".style(self.styles.skip))?;
+                }
+                LeakTimeoutResult::Fail => {
+                    write!(writer, "{:>12} ", "SETUP LKFAIL".style(self.styles.fail))?;
+                }
+            },
             other => {
                 let status_str = short_status_str(other);
                 write!(
@@ -854,7 +859,11 @@ impl<'a> DisplayReporterImpl<'a> {
         let last_status = describe.last_status();
         match describe {
             ExecutionDescription::Success { .. } => {
-                if last_status.result == ExecutionResult::Leak {
+                if last_status.result
+                    == (ExecutionResult::Leak {
+                        result: LeakTimeoutResult::Pass,
+                    })
+                {
                     write!(writer, "{:>12} ", "LEAK".style(self.styles.skip))?;
                 } else {
                     write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
@@ -918,17 +927,30 @@ impl<'a> DisplayReporterImpl<'a> {
         match describe {
             ExecutionDescription::Success { .. } => {
                 match (last_status.is_slow, last_status.result) {
-                    (true, ExecutionResult::Leak) => {
+                    (
+                        true,
+                        ExecutionResult::Leak {
+                            result: LeakTimeoutResult::Pass,
+                        },
+                    ) => {
                         write!(writer, "{:>12} ", "SLOW + LEAK".style(self.styles.skip))?;
                     }
-                    (true, _) => {
+                    (true, ExecutionResult::Pass) => {
                         write!(writer, "{:>12} ", "SLOW".style(self.styles.skip))?;
                     }
-                    (false, ExecutionResult::Leak) => {
+                    (
+                        false,
+                        ExecutionResult::Leak {
+                            result: LeakTimeoutResult::Pass,
+                        },
+                    ) => {
                         write!(writer, "{:>12} ", "LEAK".style(self.styles.skip))?;
                     }
-                    (false, _) => {
+                    (false, ExecutionResult::Pass) => {
                         write!(writer, "{:>12} ", "PASS".style(self.styles.pass))?;
+                    }
+                    (_, other) => {
+                        unreachable!("success is limited to pass and leak, found {other:?}")
                     }
                 }
             }
@@ -1338,10 +1360,20 @@ impl<'a> DisplayReporterImpl<'a> {
 
                 write!(writer, "{}", "passed".style(style))
             }
-            Some(ExecutionResult::Leak) => write!(
+            Some(ExecutionResult::Leak {
+                result: LeakTimeoutResult::Pass,
+            }) => write!(
                 writer,
                 "{}",
                 "passed with leaked handles".style(self.styles.skip)
+            ),
+            Some(ExecutionResult::Leak {
+                result: LeakTimeoutResult::Fail,
+            }) => write!(
+                writer,
+                "passed, but {} so was marked {}",
+                "leaked handles".style(self.styles.fail),
+                "failed".style(self.styles.fail),
             ),
             Some(ExecutionResult::Timeout) => {
                 write!(writer, "{}", "timed out".style(self.styles.fail))
@@ -1621,7 +1653,12 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
         } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
         ExecutionResult::Pass => "PASS".into(),
-        ExecutionResult::Leak => "LEAK".into(),
+        ExecutionResult::Leak {
+            result: LeakTimeoutResult::Pass,
+        } => "LEAK".into(),
+        ExecutionResult::Leak {
+            result: LeakTimeoutResult::Fail,
+        } => "LEAK-FAIL".into(),
         ExecutionResult::Timeout => "TIMEOUT".into(),
     }
 }
@@ -1652,7 +1689,12 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
         ExecutionResult::Pass => "PASS".into(),
-        ExecutionResult::Leak => "LEAK".into(),
+        ExecutionResult::Leak {
+            result: LeakTimeoutResult::Pass,
+        } => "LEAK".into(),
+        ExecutionResult::Leak {
+            result: LeakTimeoutResult::Fail,
+        } => "LKFAIL".into(),
         ExecutionResult::Timeout => "TMT".into(),
     }
 }
@@ -1880,6 +1922,7 @@ mod tests {
                                 failed_slow: 1,
                                 timed_out: 1,
                                 leaky: 1,
+                                leaky_failed: 2,
                                 exec_failed: 1,
                                 skipped: 5,
                             },

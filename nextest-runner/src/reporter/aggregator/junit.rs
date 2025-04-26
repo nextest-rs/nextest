@@ -4,7 +4,7 @@
 //! Code to generate JUnit XML reports from test events.
 
 use crate::{
-    config::{JunitConfig, ScriptId},
+    config::{JunitConfig, LeakTimeoutResult, ScriptId},
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstanceId,
     reporter::{
@@ -287,9 +287,17 @@ fn non_success_kind_and_type(kind: UnitKind, result: ExecutionResult) -> (NonSuc
         } => (NonSuccessKind::Failure, format!("{kind} failure")),
         ExecutionResult::Timeout => (NonSuccessKind::Failure, format!("{kind} timeout")),
         ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure".to_owned()),
-        ExecutionResult::Leak => (
+        ExecutionResult::Leak {
+            result: LeakTimeoutResult::Pass,
+        } => (
             NonSuccessKind::Error,
             format!("{kind} passed but leaked handles"),
+        ),
+        ExecutionResult::Leak {
+            result: LeakTimeoutResult::Fail,
+        } => (
+            NonSuccessKind::Error,
+            format!("{kind} passed, but leaked handles so was marked failed"),
         ),
         ExecutionResult::Pass => {
             unreachable!("this is a failure status")
