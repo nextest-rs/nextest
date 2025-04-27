@@ -10,7 +10,6 @@ final-status-level = "slow"
 # This is a bug.
 filter = 'package(integration-tests)'
 slow-timeout = { period = "60s", terminate-after = 3 }
-retries = 3
 test-group = "my-group"
 junit.store-success-output = true
 
