@@ -189,33 +189,54 @@ pub(super) fn progress_str(
 }
 
 pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut String) {
+    // Written in this style to ensure new fields are accounted for.
+    let &RunStats {
+        initial_run_count: _,
+        finished_count: _,
+        setup_scripts_initial_count: _,
+        setup_scripts_finished_count: _,
+        setup_scripts_passed: _,
+        setup_scripts_failed: _,
+        setup_scripts_exec_failed: _,
+        setup_scripts_timed_out: _,
+        passed,
+        passed_slow,
+        flaky,
+        failed,
+        failed_slow: _,
+        timed_out,
+        leaky,
+        exec_failed,
+        skipped,
+    } = run_stats;
+
     swrite!(
         out,
         "{} {}",
-        run_stats.passed.style(styles.count),
+        passed.style(styles.count),
         "passed".style(styles.pass)
     );
 
-    if run_stats.passed_slow > 0 || run_stats.flaky > 0 || run_stats.leaky > 0 {
+    if passed_slow > 0 || flaky > 0 || leaky > 0 {
         let mut text = Vec::with_capacity(3);
-        if run_stats.passed_slow > 0 {
+        if passed_slow > 0 {
             text.push(format!(
                 "{} {}",
-                run_stats.passed_slow.style(styles.count),
+                passed_slow.style(styles.count),
                 "slow".style(styles.skip),
             ));
         }
-        if run_stats.flaky > 0 {
+        if flaky > 0 {
             text.push(format!(
                 "{} {}",
-                run_stats.flaky.style(styles.count),
+                flaky.style(styles.count),
                 "flaky".style(styles.skip),
             ));
         }
-        if run_stats.leaky > 0 {
+        if leaky > 0 {
             text.push(format!(
                 "{} {}",
-                run_stats.leaky.style(styles.count),
+                leaky.style(styles.count),
                 "leaky".style(styles.skip),
             ));
         }
@@ -223,29 +244,29 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
     }
     swrite!(out, ", ");
 
-    if run_stats.failed > 0 {
+    if failed > 0 {
         swrite!(
             out,
             "{} {}, ",
-            run_stats.failed.style(styles.count),
+            failed.style(styles.count),
             "failed".style(styles.fail),
         );
     }
 
-    if run_stats.exec_failed > 0 {
+    if exec_failed > 0 {
         swrite!(
             out,
             "{} {}, ",
-            run_stats.exec_failed.style(styles.count),
+            exec_failed.style(styles.count),
             "exec failed".style(styles.fail),
         );
     }
 
-    if run_stats.timed_out > 0 {
+    if timed_out > 0 {
         swrite!(
             out,
             "{} {}, ",
-            run_stats.timed_out.style(styles.count),
+            timed_out.style(styles.count),
             "timed out".style(styles.fail),
         );
     }
@@ -253,7 +274,7 @@ pub(super) fn write_summary_str(run_stats: &RunStats, styles: &Styles, out: &mut
     swrite!(
         out,
         "{} {}",
-        run_stats.skipped.style(styles.count),
+        skipped.style(styles.count),
         "skipped".style(styles.skip),
     );
 }
