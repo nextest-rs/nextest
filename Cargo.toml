@@ -88,7 +88,7 @@ newtype-uuid = { version = "1.2.1", features = ["v4"] }
 nextest-filtering = { version = "0.15.0", path = "nextest-filtering" }
 nextest-metadata = { version = "0.12.2", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
-nix = { version = "0.29.0", default-features = false, features = ["signal"] }
+nix = { version = "0.30.0", default-features = false, features = ["signal"] }
 num_threads = "0.1.7"
 owo-colors = "4.2.0"
 pathdiff = { version = "0.2.3", features = ["camino"] }
