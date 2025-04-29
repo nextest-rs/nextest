@@ -38,8 +38,6 @@ For this test, nextest will output something like:
 
 ---
 
-Leaky tests that are otherwise successful are considered to have passed.
-
 ## Leaky tests that nextest currently does not detect
 
 Tests which spawn subprocesses that do not inherit either standard output or standard error are not currently detected by nextest. For example, the following test is not currently detected as leaky:
@@ -71,3 +69,28 @@ leak-timeout = "500ms"
 ```
 
 Nextest also supports [per-test overrides](../configuration/per-test-overrides.md) for the leak timeout.
+
+## Marking leaky tests as failures
+
+<!-- md:version 0.9.95 -->
+
+By default, leaky tests are considered to be successful. You can choose to mark these tests as failures instead:
+
+```toml
+[profile.default]
+leak-timeout = { period = "500ms", result = "fail" }
+```
+
+A failure caused by leaked handles will be marked as **LEAK-FAIL**:
+
+=== "Colorized"
+
+    ```bash exec="true" result="ansi"
+    cat src/outputs/leak-fail.ansi
+    ```
+
+=== "Plaintext"
+
+    ```bash exec="true" result="text"
+    cat src/outputs/leak-fail.ansi | ../scripts/strip-ansi.sh
+    ```

@@ -1,0 +1,15 @@
+[32;1m Nextest run[0m ID [1m676e92cc-cf6d-4d31-8794-fe9999813e75[0m with nextest profile: [1mdefault[0m
+[32;1m    Starting[0m [1m1[0m test across [1m7[0m binaries ([1m26[0m tests [33;1mskipped[0m)
+[31;1m   LEAK-FAIL[0m [   0.104s] [35;1mnextest-tests::basic[0m [34;1mtest_subprocess_doesnt_exit_leak_fail[0m
+  [31;1mstdout[0m [31;1m───[0m
+
+    running 1 test
+    test test_subprocess_doesnt_exit_leak_fail ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+    [0m
+
+    (test [31;1mfailed[0m: exited with code 0, but leaked handles)
+
+────────────
+[31;1m     Summary[0m [   0.105s] [1m1[0m test run: [1m0[0m [32;1mpassed[0m, [1m1[0m [31;1mfailed[0m ([1m1[0m due to being [31;1mleaky[0m), [1m26[0m [33;1mskipped[0m
