@@ -8,6 +8,18 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.95-rc.1] - 2025-04-28
+
+### Added
+
+You can now mark [leaky tests](https://nexte.st/docs/features/leaky-tests/) as failed rather than passed (docs upcoming). The default is still to treat them as passed.
+
+### Fixed
+
+Fixed an occasional hang on Linux with [libtest JSON output](https://nexte.st/docs/machine-readable/libtest-json/). For more details, see [#2316].
+
+[#2316]: https://github.com/nextest-rs/nextest/pull/2316
+
 ## [0.9.94] - 2025-04-10
 
 ### Added
@@ -1416,6 +1428,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.95-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.95-rc.1
 [0.9.94]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.94
 [0.9.93]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.93
 [0.9.92]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.92
