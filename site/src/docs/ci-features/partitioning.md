@@ -1,5 +1,6 @@
 ---
 icon: material/set-split
+description: Split up test runs across multiple runners through counted partitioning or hashed sharding.
 ---
 
 # Partitioning test runs in CI
@@ -26,15 +27,15 @@ Counted partitioning also applies after all other test filters. For example, if 
 
 Hashed sharding is specified with `--partition hash:m/n`, where m and n are both integers, and 1 ≤ m ≤ n. Specifying this operator means "run tests in hashed bucket m of n".
 
-The main benefit of hashed sharding is that it is completely deterministic (the hash is based on a combination of the binary and test names). Unlike with counted partitioning, adding or removing tests, or changing test filters, will never cause a test to fall into a different bucket. The hash algorithm is guaranteed never to change within a nextest version series.
+The main benefit of hashed sharding is that it is completely deterministic (the hash is based on a combination of [binary ID](../running.md#binary-ids) and test names). Unlike with counted partitioning, adding or removing tests, or changing test filters, will never cause a test to fall into a different bucket. The hash algorithm is guaranteed never to change within a nextest version series.
 
 For sufficiently large numbers of tests, hashed sharding produces roughly the same number of tests per bucket. However, smaller test runs may result in an uneven distribution.
 
 ## Reusing builds
 
-By default, each job has to do its own build before starting a test run. To save on the extra work, nextest supports [archiving builds](archiving.md) in one job for later reuse in other jobs. See the example below for how to do this.
+By default, each job has to do its own build before starting a test run. To save on the extra work, nextest supports [archiving builds](archiving.md) in one job for later reuse in other jobs. See [*Example: Use in GitHub Actions*](#example) below for how to do this.
 
-## Example: Use in GitHub Actions
+## Example: Use in GitHub Actions { #example }
 
 See [this working example](https://github.com/nextest-rs/reuse-build-partition-example/blob/main/.github/workflows/ci.yml) for how to [reuse builds](archiving.md) and partition test runs on GitHub Actions.
 
