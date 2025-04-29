@@ -4,13 +4,11 @@
 use super::Stdio;
 use std::{
     io,
-    os::fd::{AsRawFd, FromRawFd, OwnedFd},
+    os::fd::{FromRawFd, OwnedFd},
 };
 
 pub(super) struct State {
     pub(super) ours: OwnedFd,
-    #[expect(dead_code)]
-    theirs: OwnedFd,
 }
 
 pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
@@ -100,6 +98,8 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
                 ours = std::os::fd::OwnedFd::from_raw_fd(fds[0]);
                 theirs = std::os::fd::OwnedFd::from_raw_fd(fds[1]);
             } else {
+                use std::os::fd::AsRawFd;
+
                 cvt(libc::pipe(fds.as_mut_ptr()))?;
 
                 ours = std::os::fd::OwnedFd::from_raw_fd(fds[0]);
@@ -110,9 +110,11 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
             }
         }
 
-        cmd.stderr(Stdio::from_raw_fd(theirs.as_raw_fd()))
-            .stdout(Stdio::from_raw_fd(theirs.as_raw_fd()));
+        // Note: cmd.stderr and cmd.stdout own the fds. Therefore we must use
+        // try_clone to duplicate theirs.
+        cmd.stderr(Stdio::from(theirs.try_clone()?))
+            .stdout(Stdio::from(theirs));
     }
 
-    Ok(State { ours, theirs })
+    Ok(State { ours })
 }
