@@ -21,7 +21,7 @@ use crate::{
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
     list::{TestExecuteContext, TestInstance, TestInstanceWithSettings, TestList},
     reporter::events::{
-        AbortStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptInfoResponse,
+        ExecutionResult, FailureStatus, InfoResponse, RetryData, SetupScriptInfoResponse,
         TestInfoResponse, UnitKind, UnitState,
     },
     runner::{
@@ -492,7 +492,9 @@ impl<'a> ExecutorContext<'a> {
                                         HandleSignalResult::Terminated(super::TerminateChildResult::Killed)
                                     ) {
                                         status = Some(ExecutionResult::Fail {
-                                            abort_status: Some(AbortStatus::JobObject),
+                                            failure_status: FailureStatus::Abort(
+                                                crate::reporter::events::AbortStatus::JobObject,
+                                            ),
                                             leaked: false,
                                         });
                                     }
@@ -798,7 +800,9 @@ impl<'a> ExecutorContext<'a> {
                                         HandleSignalResult::Terminated(super::TerminateChildResult::Killed)
                                     ) {
                                         status = Some(ExecutionResult::Fail {
-                                            abort_status: Some(AbortStatus::JobObject),
+                                            failure_status: FailureStatus::Abort(
+                                                crate::reporter::events::AbortStatus::JobObject,
+                                            ),
                                             leaked: false,
                                         });
                                     }
@@ -1331,7 +1335,7 @@ fn create_execution_result(
         }
     } else {
         ExecutionResult::Fail {
-            abort_status: AbortStatus::extract(exit_status),
+            failure_status: FailureStatus::extract(exit_status),
             leaked,
         }
     }

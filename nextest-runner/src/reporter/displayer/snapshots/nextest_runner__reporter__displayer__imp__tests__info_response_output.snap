@@ -60,7 +60,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 ────────
 
 * 5/20:   setup-exited: setup-exited arg1 arg2
-  status: script failed with leaked handles after 9.999s (marked slow after 3.000s)
+  status: script failed with exit code 1, and leaked handles after 9.999s (marked slow after 3.000s)
   errors:
     error spawning child process
       caused by:

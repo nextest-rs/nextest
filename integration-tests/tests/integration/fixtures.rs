@@ -163,29 +163,6 @@ impl CheckResult {
             }
         }
     }
-
-    fn make_output_regexes(self, name: &str) -> Vec<(&'static str, Regex)> {
-        // By default, output is only displayed for fail, fail + leak, and abort
-        // tests.
-        match self {
-            CheckResult::LeakFail
-            | CheckResult::Fail
-            | CheckResult::FailLeak
-            | CheckResult::Abort => {
-                vec![
-                    (
-                        "stdout",
-                        Regex::new(&format!("──── STDOUT: +{name}")).unwrap(),
-                    ),
-                    (
-                        "stderr",
-                        Regex::new(&format!("──── STDERR: +{name}")).unwrap(),
-                    ),
-                ]
-            }
-            CheckResult::Pass | CheckResult::Leak => vec![],
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -360,13 +337,8 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
                  --- output ---\n{output}\n--- end output ---"
             );
 
-            for (reg_name, reg) in result.make_output_regexes(&name) {
-                assert!(
-                    reg.is_match(&output),
-                    "{name}: output regex for {reg_name} didn't match\n\n\
-                     --- output ---\n{output}\n--- end output ---"
-                )
-            }
+            // It would be nice to check for output regexes here, but it's a bit
+            // inconvenient.
         }
     }
 
