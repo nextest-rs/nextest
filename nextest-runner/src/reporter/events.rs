@@ -778,7 +778,7 @@ pub enum ExecutionResult {
     /// The test failed.
     Fail {
         /// The abort status of the test, if any (for example, the signal on Unix).
-        abort_status: Option<AbortStatus>,
+        failure_status: FailureStatus,
 
         /// Whether a test leaked handles. If set to true, this usually indicates that
         /// a subprocess that inherit standard IO was created, but it didn't shut down when
@@ -805,6 +805,31 @@ impl ExecutionResult {
             | ExecutionResult::Fail { .. }
             | ExecutionResult::ExecFail
             | ExecutionResult::Timeout => false,
+        }
+    }
+}
+
+/// Failure status: either an exit code or an abort status.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FailureStatus {
+    /// The test exited with a non-zero exit code.
+    ExitCode(i32),
+
+    /// The test aborted.
+    Abort(AbortStatus),
+}
+
+impl FailureStatus {
+    /// Extract the failure status from an `ExitStatus`.
+    pub fn extract(exit_status: ExitStatus) -> Self {
+        if let Some(abort_status) = AbortStatus::extract(exit_status) {
+            FailureStatus::Abort(abort_status)
+        } else {
+            FailureStatus::ExitCode(
+                exit_status
+                    .code()
+                    .expect("if abort_status is None, then code must be present"),
+            )
         }
     }
 }

@@ -17,7 +17,9 @@ use nextest_runner::{
         BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
     },
     platform::BuildPlatforms,
-    reporter::events::{AbortStatus, ExecutionResult, ExecutionStatuses, RunStats, TestEventKind},
+    reporter::events::{
+        AbortStatus, ExecutionResult, ExecutionStatuses, FailureStatus, RunStats, TestEventKind,
+    },
     reuse_build::PathMapper,
     runner::{TestRunner, configure_handle_inheritance},
     target_runner::TargetRunner,
@@ -53,7 +55,7 @@ pub(crate) fn ensure_execution_result(
                 ensure!(
                     actual
                         == &ExecutionResult::Fail {
-                            abort_status: None,
+                            failure_status: FailureStatus::ExitCode(101),
                             leaked: false
                         },
                     "flaky (failing attempt): actual result ({actual:?}) matches expected"
@@ -65,35 +67,35 @@ pub(crate) fn ensure_execution_result(
                 if #[cfg(unix)] {
                     // SIGSEGV is 11. Newer versions of Rust may use SIGABRT
                     // instead, which is 6. Check for either.
-                    let (abort_status, leaked) = match actual {
+                    let (failure_status, leaked) = match actual {
                         ExecutionResult::Fail {
-                            abort_status,
+                            failure_status,
                             leaked,
-                        } => (abort_status, *leaked),
+                        } => (failure_status, *leaked),
                         _ => color_eyre::eyre::bail!("expected ExecutionResult::Fail, found {actual:?}"),
                     };
 
                     ensure!(
-                        *abort_status == Some(AbortStatus::UnixSignal(11))
-                            || *abort_status == Some(AbortStatus::UnixSignal(6)),
-                        "segfault: expected SIGSEGV or SIGABRT, found {abort_status:?}"
+                        *failure_status == FailureStatus::Abort(AbortStatus::UnixSignal(11))
+                            || *failure_status == FailureStatus::Abort(AbortStatus::UnixSignal(6)),
+                        "segfault: expected SIGSEGV or SIGABRT, found {failure_status:?}"
                     );
                     ensure!(!leaked, "segfault: expected no leaks, found leaked");
                 } else if #[cfg(windows)] {
                     // For Rust versions before 1.86.
-                    let access_violation = Some(AbortStatus::WindowsNtStatus(
+                    let access_violation = FailureStatus::Abort(AbortStatus::WindowsNtStatus(
                         windows_sys::Win32::Foundation::STATUS_ACCESS_VIOLATION,
                     ));
                     // 1.86 and above.
-                    let stack_buffer_overrun = Some(AbortStatus::WindowsNtStatus(
+                    let stack_buffer_overrun = FailureStatus::Abort(AbortStatus::WindowsNtStatus(
                         windows_sys::Win32::Foundation::STATUS_STACK_BUFFER_OVERRUN,
                     ));
                     ensure!(
                         actual == &ExecutionResult::Fail {
-                            abort_status: access_violation,
+                            failure_status: access_violation,
                             leaked: false,
                         } || actual == &ExecutionResult::Fail {
-                            abort_status: stack_buffer_overrun,
+                            failure_status: stack_buffer_overrun,
                             leaked: false,
                         },
                         "segfault: actual result ({actual:?}) matches expected"
@@ -108,7 +110,7 @@ pub(crate) fn ensure_execution_result(
             ensure!(
                 actual
                     == &ExecutionResult::Fail {
-                        abort_status: None,
+                        failure_status: FailureStatus::ExitCode(101),
                         leaked: false
                     },
                 "fail: actual result ({actual:?}) matches expected"
@@ -118,7 +120,7 @@ pub(crate) fn ensure_execution_result(
             ensure!(
                 actual
                     == &ExecutionResult::Fail {
-                        abort_status: None,
+                        failure_status: FailureStatus::ExitCode(101),
                         leaked: true
                     },
                 "fail + leak: actual result ({actual:?}) matches expected"

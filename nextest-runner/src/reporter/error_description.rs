@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::events::{AbortStatus, ExecutionResult, UnitKind};
+use super::events::{AbortStatus, ExecutionResult, FailureStatus, UnitKind};
 use crate::{
     errors::{ChildError, ChildStartError, ErrorList},
     helpers::display_abort_status,
@@ -62,7 +62,7 @@ impl<'a> UnitErrorDescription<'a> {
                     }
 
                     if let ExecutionResult::Fail {
-                        abort_status: Some(status),
+                        failure_status: FailureStatus::Abort(status),
                         leaked,
                     } = result
                     {

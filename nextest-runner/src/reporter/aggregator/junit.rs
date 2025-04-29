@@ -9,7 +9,10 @@ use crate::{
     list::TestInstanceId,
     reporter::{
         UnitErrorDescription,
-        events::{ExecutionDescription, ExecutionResult, TestEvent, TestEventKind, UnitKind},
+        events::{
+            ExecutionDescription, ExecutionResult, FailureStatus, TestEvent, TestEventKind,
+            UnitKind,
+        },
     },
     test_output::{ChildExecutionOutput, ChildOutput},
 };
@@ -264,27 +267,30 @@ impl fmt::Display for SuiteKey<'_> {
 fn non_success_kind_and_type(kind: UnitKind, result: ExecutionResult) -> (NonSuccessKind, String) {
     match result {
         ExecutionResult::Fail {
-            abort_status: Some(_),
+            failure_status: FailureStatus::Abort(_),
             leaked: true,
         } => (
             NonSuccessKind::Failure,
             format!("{kind} abort with leaked handles"),
         ),
         ExecutionResult::Fail {
-            abort_status: Some(_),
+            failure_status: FailureStatus::Abort(_),
             leaked: false,
         } => (NonSuccessKind::Failure, format!("{kind} abort")),
         ExecutionResult::Fail {
-            abort_status: None,
+            failure_status: FailureStatus::ExitCode(code),
             leaked: true,
         } => (
             NonSuccessKind::Failure,
-            format!("{kind} failure with leaked handles"),
+            format!("{kind} failure with exit code {code}, and leaked handles"),
         ),
         ExecutionResult::Fail {
-            abort_status: None,
+            failure_status: FailureStatus::ExitCode(code),
             leaked: false,
-        } => (NonSuccessKind::Failure, format!("{kind} failure")),
+        } => (
+            NonSuccessKind::Failure,
+            format!("{kind} failure with exit code {code}"),
+        ),
         ExecutionResult::Timeout => (NonSuccessKind::Failure, format!("{kind} timeout")),
         ExecutionResult::ExecFail => (NonSuccessKind::Error, "execution failure".to_owned()),
         ExecutionResult::Leak {
@@ -297,7 +303,7 @@ fn non_success_kind_and_type(kind: UnitKind, result: ExecutionResult) -> (NonSuc
             result: LeakTimeoutResult::Fail,
         } => (
             NonSuccessKind::Error,
-            format!("{kind} passed, but leaked handles so was marked failed"),
+            format!("{kind} exited with code 0, but leaked handles so was marked failed"),
         ),
         ExecutionResult::Pass => {
             unreachable!("this is a failure status")
@@ -475,7 +481,7 @@ mod tests {
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
-                        abort_status: None,
+                        failure_status: FailureStatus::ExitCode(101),
                         leaked: true,
                     }),
                     output: ChildOutput::Combined {
@@ -501,7 +507,7 @@ mod tests {
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
-                        abort_status: None,
+                        failure_status: FailureStatus::ExitCode(101),
                         leaked: false,
                     }),
                     output: ChildOutput::Split(ChildSplitOutput {
@@ -531,7 +537,9 @@ mod tests {
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
-                        abort_status: Some(AbortStatus::UnixSignal(libc::SIGTERM)),
+                        failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(
+                            libc::SIGTERM,
+                        )),
                         leaked: false,
                     }),
                     output: ChildOutput::Split(ChildSplitOutput {
@@ -552,7 +560,9 @@ mod tests {
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
-                        abort_status: Some(AbortStatus::UnixSignal(libc::SIGTERM)),
+                        failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(
+                            libc::SIGTERM,
+                        )),
                         leaked: true,
                     }),
                     output: ChildOutput::Split(ChildSplitOutput {
@@ -586,7 +596,7 @@ mod tests {
                 status: TestCaseStatus::non_success(NonSuccessKind::Failure),
                 output: ChildExecutionOutput::Output {
                     result: Some(ExecutionResult::Fail {
-                        abort_status: None,
+                        failure_status: FailureStatus::ExitCode(101),
                         leaked: false,
                     }),
                     output: ChildOutput::Split(ChildSplitOutput {

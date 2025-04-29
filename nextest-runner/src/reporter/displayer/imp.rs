@@ -25,14 +25,13 @@ use crate::{
 use debug_ignore::DebugIgnore;
 use indent_write::io::IndentWriter;
 use nextest_metadata::MismatchReason;
-use owo_colors::{OwoColorize, Style};
+use owo_colors::OwoColorize;
 use std::{
     borrow::Cow,
     cmp::Reverse,
     io::{self, BufWriter, Write},
     time::Duration,
 };
-use swrite::{SWrite, swrite};
 
 pub(crate) struct DisplayReporterBuilder {
     pub(crate) default_filter: CompiledDefaultFilter,
@@ -319,9 +318,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 // Always display failing setup script output if it exists. We may change this in
                 // the future.
                 if !run_status.result.is_success() {
-                    self.write_setup_script_execute_status(
-                        script_id, command, args, run_status, writer,
-                    )?;
+                    self.write_setup_script_execute_status(run_status, writer)?;
                 }
             }
             TestEventKind::TestStarted { test_instance, .. } => {
@@ -413,7 +410,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         .failure_output(*failure_output)
                         .is_immediate()
                     {
-                        self.write_test_execute_status(test_instance, run_status, true, writer)?;
+                        self.write_test_execute_status(run_status, true, writer)?;
                     }
 
                     // The final output doesn't show retries, so don't store this result in
@@ -482,7 +479,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     self.write_status_line(*test_instance, describe, writer)?;
                 }
                 if output_on_test_finished.show_immediate {
-                    self.write_test_execute_status(test_instance, last_status, false, writer)?;
+                    self.write_test_execute_status(last_status, false, writer)?;
                 }
                 if let OutputStoreFinal::Yes { display_output } =
                     output_on_test_finished.store_final
@@ -774,12 +771,7 @@ impl<'a> DisplayReporterImpl<'a> {
                                     writer,
                                 )?;
                                 if *display_output {
-                                    self.write_test_execute_status(
-                                        test_instance,
-                                        last_status,
-                                        false,
-                                        writer,
-                                    )?;
+                                    self.write_test_execute_status(last_status, false, writer)?;
                                 }
                             }
                         }
@@ -907,7 +899,7 @@ impl<'a> DisplayReporterImpl<'a> {
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
         if let ExecutionResult::Fail {
-            abort_status: Some(abort_status),
+            failure_status: FailureStatus::Abort(abort_status),
             leaked: _,
         } = last_status.result
         {
@@ -996,7 +988,7 @@ impl<'a> DisplayReporterImpl<'a> {
         // On Windows, also print out the exception if available.
         #[cfg(windows)]
         if let ExecutionResult::Fail {
-            abort_status: Some(abort_status),
+            failure_status: FailureStatus::Abort(abort_status),
             leaked: _,
         } = last_status.result
         {
@@ -1371,28 +1363,52 @@ impl<'a> DisplayReporterImpl<'a> {
                 result: LeakTimeoutResult::Fail,
             }) => write!(
                 writer,
-                "passed, but {} so was marked {}",
-                "leaked handles".style(self.styles.fail),
+                "{}: exited with code 0, but leaked handles",
                 "failed".style(self.styles.fail),
             ),
             Some(ExecutionResult::Timeout) => {
                 write!(writer, "{}", "timed out".style(self.styles.fail))
             }
             Some(ExecutionResult::Fail {
-                abort_status,
+                failure_status: FailureStatus::Abort(abort_status),
+                // TODO: show leaked info here like in FailureStatus::ExitCode
+                // below?
+                leaked: _,
+            }) => {
+                // The errors are shown in the output.
+                write!(writer, "{}", "aborted".style(self.styles.fail))?;
+                #[cfg(unix)]
+                {
+                    let AbortStatus::UnixSignal(sig) = abort_status;
+                    write!(writer, " with signal {}", sig.style(self.styles.count))?;
+                    if let Some(s) = crate::helpers::signal_str(sig) {
+                        write!(writer, ": SIG{}", s)?;
+                    }
+                }
+                #[cfg(windows)]
+                {
+                    _ = abort_status;
+                }
+                Ok(())
+            }
+            Some(ExecutionResult::Fail {
+                failure_status: FailureStatus::ExitCode(code),
                 leaked,
             }) => {
-                if abort_status.is_some() {
-                    write!(writer, "{}", "aborted".style(self.styles.fail))
-                    // The errors are shown in the output.
-                } else if leaked {
+                if leaked {
                     write!(
                         writer,
-                        "{} with leaked handles",
-                        "failed".style(self.styles.fail)
+                        "{} with exit code {}, and leaked handles",
+                        "failed".style(self.styles.fail),
+                        code.style(self.styles.count),
                     )
                 } else {
-                    write!(writer, "{}", "failed".style(self.styles.fail))
+                    write!(
+                        writer,
+                        "{} with exit code {}",
+                        "failed".style(self.styles.fail),
+                        code.style(self.styles.count),
+                    )
                 }
             }
             Some(ExecutionResult::ExecFail) => {
@@ -1410,125 +1426,96 @@ impl<'a> DisplayReporterImpl<'a> {
 
     fn write_setup_script_execute_status(
         &self,
-        script_id: &ScriptId,
-        command: &str,
-        args: &[String],
         run_status: &SetupScriptExecuteStatus,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
-        let spec = self.output_spec_for_script(script_id, command, args, run_status);
+        let spec = self.output_spec_for_finished(run_status.result, false);
         self.unit_output.write_child_execution_output(
             &self.styles,
             &spec,
             &run_status.output,
             writer,
-        )
+        )?;
+
+        if show_finished_status_info_line(run_status.result) {
+            write!(
+                writer,
+                // Align with output.
+                "    (script ",
+            )?;
+            self.write_info_execution_result(Some(run_status.result), run_status.is_slow, writer)?;
+            writeln!(writer, ")\n")?;
+        }
+
+        Ok(())
     }
 
     fn write_test_execute_status(
         &self,
-        test_instance: &TestInstance<'a>,
         run_status: &ExecuteStatus,
         is_retry: bool,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
-        let spec = self.output_spec_for_test(test_instance.id(), run_status, is_retry);
+        let spec = self.output_spec_for_finished(run_status.result, is_retry);
         self.unit_output.write_child_execution_output(
             &self.styles,
             &spec,
             &run_status.output,
             writer,
-        )
-    }
+        )?;
 
-    // Returns the number of characters written out to the screen.
-    fn write_attempt(&self, run_status: &ExecuteStatus, style: Style, out: &mut String) -> usize {
-        if run_status.retry_data.total_attempts > 1 {
-            // 3 for 'TRY' + 1 for ' ' + length of the current attempt + 1 for following space.
-            let attempt_str = format!("{}", run_status.retry_data.attempt);
-            let out_len = 3 + 1 + attempt_str.len() + 1;
-            swrite!(out, "{} {} ", "TRY".style(style), attempt_str.style(style));
-            out_len
-        } else {
-            0
+        if show_finished_status_info_line(run_status.result) {
+            write!(
+                writer,
+                // Align with output.
+                "    (test ",
+            )?;
+            self.write_info_execution_result(Some(run_status.result), run_status.is_slow, writer)?;
+            writeln!(writer, ")\n")?;
         }
+
+        Ok(())
     }
 
-    fn output_spec_for_test(
-        &self,
-        test_instance: TestInstanceId<'a>,
-        run_status: &ExecuteStatus,
-        is_retry: bool,
-    ) -> ChildOutputSpec {
+    fn output_spec_for_finished(&self, result: ExecutionResult, is_retry: bool) -> ChildOutputSpec {
         let header_style = if is_retry {
             self.styles.retry
-        } else if run_status.result.is_success() {
-            self.styles.pass
+        } else if result.is_success() {
+            match result {
+                ExecutionResult::Leak {
+                    result: LeakTimeoutResult::Pass,
+                } => self.styles.skip,
+                ExecutionResult::Pass => self.styles.pass,
+                other => panic!("success means leak-pass or pass, found {:?}", other),
+            }
         } else {
             self.styles.fail
         };
 
-        let hbar = self.theme_characters.hbar(4);
+        // Adding this hbar at the end gives the text a bit of visual weight
+        // that makes it look more balanced.
+        let hbar = self.theme_characters.hbar(3);
 
-        let stdout_header = {
-            let mut header = String::new();
-            swrite!(header, "{} ", hbar.style(header_style));
-            let out_len = self.write_attempt(run_status, header_style, &mut header);
-            swrite!(
-                header,
-                "{:width$} {}",
-                "STDOUT:".style(header_style),
-                self.display_test_instance(test_instance),
-                // The width is to align test instances.
-                width = (19 - out_len),
-            );
-            header
-        };
-
-        let stderr_header = {
-            let mut header = String::new();
-            swrite!(header, "{} ", hbar.style(header_style));
-            let out_len = self.write_attempt(run_status, header_style, &mut header);
-            swrite!(
-                header,
-                "{:width$} {}",
-                "STDERR:".style(header_style),
-                self.display_test_instance(test_instance),
-                // The width is to align test instances.
-                width = (19 - out_len),
-            );
-            header
-        };
-
-        let combined_header = {
-            let mut header = String::new();
-            swrite!(header, "{} ", hbar.style(header_style));
-            let out_len = self.write_attempt(run_status, header_style, &mut header);
-            swrite!(
-                header,
-                "{:width$} {}",
-                "OUTPUT:".style(header_style),
-                self.display_test_instance(test_instance),
-                // The width is to align test instances.
-                width = (19 - out_len),
-            );
-            header
-        };
-
-        let exec_fail_header = {
-            let mut header = String::new();
-            swrite!(header, "{} ", hbar.style(header_style));
-            let out_len = self.write_attempt(run_status, header_style, &mut header);
-            swrite!(
-                header,
-                "{:width$} {}",
-                "EXECFAIL:".style(header_style),
-                self.display_test_instance(test_instance),
-                // The width is to align test instances.
-                width = (19 - out_len)
-            );
-            header
-        };
+        let stdout_header = format!(
+            "  {} {}",
+            "stdout".style(header_style),
+            hbar.style(header_style),
+        );
+        let stderr_header = format!(
+            "  {} {}",
+            "stderr".style(header_style),
+            hbar.style(header_style),
+        );
+        let combined_header = format!(
+            "  {} {}",
+            "output".style(header_style),
+            hbar.style(header_style),
+        );
+        let exec_fail_header = format!(
+            "  {} {}",
+            "exec fail".style(header_style),
+            hbar.style(header_style),
+        );
 
         ChildOutputSpec {
             kind: UnitKind::Test,
@@ -1536,9 +1523,8 @@ impl<'a> DisplayReporterImpl<'a> {
             stderr_header,
             combined_header,
             exec_fail_header,
-            // No output indent for now -- maybe this should be supported?
-            // Definitely worth trying out.
-            output_indent: "",
+            // 4 spaces align with 2 beyond the start of "stdout" and "stderr".
+            output_indent: "    ",
         }
     }
 
@@ -1560,65 +1546,51 @@ impl<'a> DisplayReporterImpl<'a> {
             output_indent: "  ",
         }
     }
+}
 
-    fn output_spec_for_script(
-        &self,
-        script_id: &ScriptId,
-        command: &str,
-        args: &[String],
-        run_status: &SetupScriptExecuteStatus,
-    ) -> ChildOutputSpec {
-        let header_style = if run_status.result.is_success() {
-            self.styles.pass
-        } else {
-            self.styles.fail
-        };
+const LIBTEST_PANIC_EXIT_CODE: i32 = 101;
 
-        let hbar = self.theme_characters.hbar(4);
-
-        let stdout_header = {
-            format!(
-                "{} {:19} {}",
-                hbar.style(header_style),
-                "STDOUT:".style(header_style),
-                self.display_script_instance(script_id.clone(), command, args),
-            )
-        };
-
-        let stderr_header = {
-            format!(
-                "{} {:19} {}",
-                hbar.style(header_style),
-                "STDERR:".style(header_style),
-                self.display_script_instance(script_id.clone(), command, args),
-            )
-        };
-
-        let combined_header = {
-            format!(
-                "{} {:19} {}",
-                hbar.style(header_style),
-                "OUTPUT:".style(header_style),
-                self.display_script_instance(script_id.clone(), command, args),
-            )
-        };
-
-        let exec_fail_header = {
-            format!(
-                "{} {:19} {}",
-                hbar.style(header_style),
-                "EXECFAIL:".style(header_style),
-                self.display_script_instance(script_id.clone(), command, args),
-            )
-        };
-
-        ChildOutputSpec {
-            kind: UnitKind::Script,
-            stdout_header,
-            stderr_header,
-            combined_header,
-            exec_fail_header,
-            output_indent: "",
+// Whether to show a status line for finished units (after STDOUT:/STDERR:).
+// This does not apply to info responses which have their own logic.
+fn show_finished_status_info_line(result: ExecutionResult) -> bool {
+    // Don't show the status line if the exit code is the default from cargo test panicking.
+    match result {
+        ExecutionResult::Pass => false,
+        ExecutionResult::Leak {
+            result: LeakTimeoutResult::Pass,
+        } => {
+            // Show the leaked-handles message
+            true
+        }
+        ExecutionResult::Leak {
+            result: LeakTimeoutResult::Fail,
+        } => {
+            // This is a confusing state without the message at the end.
+            true
+        }
+        ExecutionResult::Fail {
+            failure_status: FailureStatus::ExitCode(code),
+            leaked,
+        } => {
+            // Don't show the status line if the exit code is the default from
+            // cargo test panicking, and if there were no leaked handles.
+            code != LIBTEST_PANIC_EXIT_CODE && !leaked
+        }
+        ExecutionResult::Fail {
+            failure_status: FailureStatus::Abort(_),
+            leaked: _,
+        } => {
+            // Showing a line at the end aids in clarity.
+            true
+        }
+        ExecutionResult::ExecFail => {
+            // This is already shown as an error so there's no reason to show it
+            // again.
+            false
+        }
+        ExecutionResult::Timeout => {
+            // Show this to be clear what happened.
+            true
         }
     }
 }
@@ -1628,7 +1600,7 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
     match result {
         #[cfg(unix)]
         ExecutionResult::Fail {
-            abort_status: Some(AbortStatus::UnixSignal(sig)),
+            failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(sig)),
             leaked: _,
         } => match crate::helpers::signal_str(sig) {
             Some(s) => format!("SIG{s}").into(),
@@ -1636,7 +1608,9 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
         },
         #[cfg(windows)]
         ExecutionResult::Fail {
-            abort_status: Some(AbortStatus::WindowsNtStatus(_)) | Some(AbortStatus::JobObject),
+            failure_status:
+                FailureStatus::Abort(AbortStatus::WindowsNtStatus(_))
+                | FailureStatus::Abort(AbortStatus::JobObject),
             leaked: _,
         } => {
             // Going to print out the full error message on the following line -- just "ABORT" will
@@ -1644,11 +1618,11 @@ fn status_str(result: ExecutionResult) -> Cow<'static, str> {
             "ABORT".into()
         }
         ExecutionResult::Fail {
-            abort_status: None,
+            failure_status: FailureStatus::ExitCode(_),
             leaked: true,
         } => "FAIL + LEAK".into(),
         ExecutionResult::Fail {
-            abort_status: None,
+            failure_status: FailureStatus::ExitCode(_),
             leaked: false,
         } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
@@ -1668,7 +1642,7 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
     match result {
         #[cfg(unix)]
         ExecutionResult::Fail {
-            abort_status: Some(AbortStatus::UnixSignal(sig)),
+            failure_status: FailureStatus::Abort(AbortStatus::UnixSignal(sig)),
             leaked: _,
         } => match crate::helpers::signal_str(sig) {
             Some(s) => s.into(),
@@ -1676,7 +1650,9 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
         },
         #[cfg(windows)]
         ExecutionResult::Fail {
-            abort_status: Some(AbortStatus::WindowsNtStatus(_)) | Some(AbortStatus::JobObject),
+            failure_status:
+                FailureStatus::Abort(AbortStatus::WindowsNtStatus(_))
+                | FailureStatus::Abort(AbortStatus::JobObject),
             leaked: _,
         } => {
             // Going to print out the full error message on the following line -- just "ABORT" will
@@ -1684,7 +1660,7 @@ fn short_status_str(result: ExecutionResult) -> Cow<'static, str> {
             "ABORT".into()
         }
         ExecutionResult::Fail {
-            abort_status: None,
+            failure_status: FailureStatus::ExitCode(_),
             leaked: _,
         } => "FAIL".into(),
         ExecutionResult::ExecFail => "XFAIL".into(),
@@ -1814,7 +1790,7 @@ mod tests {
         };
 
         let fail_result = ExecutionResult::Fail {
-            abort_status: None,
+            failure_status: FailureStatus::ExitCode(1),
             leaked: false,
         };
 
@@ -2075,7 +2051,7 @@ mod tests {
                                 args: &args,
                                 state: UnitState::Exited {
                                     result: ExecutionResult::Fail {
-                                        abort_status: None,
+                                        failure_status: FailureStatus::ExitCode(1),
                                         leaked: true,
                                     },
                                     time_taken: Duration::from_millis(9999),
