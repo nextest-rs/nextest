@@ -163,4 +163,5 @@ nextest-workspace-hack = { path = "workspace-hack" }
 # future-queue = { path = "../future-queue" }
 # target-spec = { path = "../guppy/target-spec" }
 # target-spec-miette = { path = "../guppy/target-spec-miette" }
+# tokio = { path = "../../tokio/tokio" }
 # quick-junit = { path = "../quick-junit" }

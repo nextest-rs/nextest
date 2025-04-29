@@ -17,6 +17,7 @@ use crate::{
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use debug_ignore::DebugIgnore;
 use futures::prelude::*;
 use guppy::{
     PackageId,
@@ -627,7 +628,9 @@ impl<'g> TestList<'g> {
             );
         }
 
-        Ok(test_binary.into_test_suite(RustTestSuiteStatus::Listed { test_cases }))
+        Ok(test_binary.into_test_suite(RustTestSuiteStatus::Listed {
+            test_cases: test_cases.into(),
+        }))
     }
 
     fn process_skipped(
@@ -958,7 +961,7 @@ pub enum RustTestSuiteStatus {
     /// The test suite was executed with `--list` and the list of test cases was obtained.
     Listed {
         /// The test cases contained within this test suite.
-        test_cases: BTreeMap<String, RustTestCaseSummary>,
+        test_cases: DebugIgnore<BTreeMap<String, RustTestCaseSummary>>,
     },
 
     /// The test suite was not executed.
@@ -999,7 +1002,9 @@ impl RustTestSuiteStatus {
         BTreeMap<String, RustTestCaseSummary>,
     ) {
         match self {
-            Self::Listed { test_cases } => (RustTestSuiteStatusSummary::LISTED, test_cases.clone()),
+            Self::Listed { test_cases } => {
+                (RustTestSuiteStatusSummary::LISTED, test_cases.clone().0)
+            }
             Self::Skipped {
                 reason: BinaryMismatchReason::Expression,
             } => (RustTestSuiteStatusSummary::SKIPPED, BTreeMap::new()),
@@ -1290,7 +1295,7 @@ mod tests {
                                 ignored: true,
                                 filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                             },
-                        },
+                        }.into(),
                     },
                     cwd: fake_cwd.clone(),
                     build_platform: BuildPlatform::Target,

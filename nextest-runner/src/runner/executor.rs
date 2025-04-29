@@ -39,6 +39,7 @@ use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
 use rand::{Rng, distr::OpenClosed01};
 use std::{
+    fmt,
     num::NonZeroUsize,
     pin::Pin,
     process::{ExitStatus, Stdio},
@@ -604,8 +605,7 @@ impl<'a> ExecutorContext<'a> {
         }
     }
 
-    #[instrument(level = "debug", skip(self, resp_tx, req_rx))]
-    async fn run_test_inner<'test>(
+    async fn run_test_inner(
         &self,
         test: TestPacket<'a>,
         stopwatch: &mut StopwatchStart,
@@ -982,7 +982,7 @@ impl UnitPacket<'_> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(super) struct TestPacket<'a> {
     test_instance: TestInstance<'a>,
     cx: FutureQueueContext,
@@ -1021,6 +1021,15 @@ impl<'a> TestPacket<'a> {
             retry_data: self.retry_data,
             output,
         })
+    }
+}
+
+impl fmt::Debug for TestPacket<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TestPacket")
+            .field("test_instance", &self.test_instance.id())
+            .field("cx", &self.cx)
+            .finish_non_exhaustive()
     }
 }
 
