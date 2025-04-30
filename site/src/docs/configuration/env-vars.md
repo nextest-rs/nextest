@@ -37,6 +37,12 @@ Nextest reads some of its command-line options as environment variables. In all 
 `NEXTEST_FAILURE_OUTPUT`
 : Display output for failing tests (see [_Displaying captured test output_](../reporting.md#displaying-captured-test-output))
 
+`NEXTEST_NO_INPUT_HANDLER`
+: <!-- md:version 0.9.86 --> Disable [interactive keyboard handling](../reporting.md#live-output)
+
+`NEXTEST_NO_OUTPUT_INDENT`
+: <!-- md:version 0.9.95 --> Disable [indentation of captured test output](../reporting.md#other-options)
+
 `NEXTEST_VERBOSE`
 : Verbose output
 

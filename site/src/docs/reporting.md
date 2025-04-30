@@ -111,6 +111,11 @@ The possible values are:
 
 These options can also be configured via [global configuration](configuration/index.md) and [per-test overrides](configuration/per-test-overrides.md). Specifying these options over the command line will override configuration settings.
 
+#### Other options for completed tests { #other-options }
+
+`--no-output-indent` <!-- md:version 0.9.95 -->
+: By default, nextest indents captured output by 4 spaces for visual clarity. This flag disables that behavior. Can also be set through `NEXTEST_NO_OUTPUT_INDENT=1` in the environment.
+
 ## Options and arguments
 
 For a full list of options, see the [options and arguments](running.md#options-and-arguments) for `cargo nextest run`.

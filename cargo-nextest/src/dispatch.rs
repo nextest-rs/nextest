@@ -1004,8 +1004,8 @@ struct ReporterOpts {
     ///
     /// This option has no effect with **--no-capture**, since that passes
     /// through standard output and standard error.
-    #[arg(long, env = "NEXTEST_NO_INDENT_OUTPUT", value_parser = BoolishValueParser::new())]
-    no_indent_output: bool,
+    #[arg(long, env = "NEXTEST_NO_OUTPUT_INDENT", value_parser = BoolishValueParser::new())]
+    no_output_indent: bool,
 
     /// Disable handling of input keys from the terminal.
     ///
@@ -1090,7 +1090,7 @@ impl ReporterOpts {
             builder.set_final_status_level(final_status_level.into());
         }
         builder.set_hide_progress_bar(self.hide_progress_bar);
-        builder.set_no_indent_output(self.no_indent_output);
+        builder.set_no_output_indent(self.no_output_indent);
         builder
     }
 }

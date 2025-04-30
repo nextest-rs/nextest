@@ -42,7 +42,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) should_colorize: bool,
     pub(crate) no_capture: bool,
     pub(crate) hide_progress_bar: bool,
-    pub(crate) no_indent_output: bool,
+    pub(crate) no_output_indent: bool,
 }
 
 impl DisplayReporterBuilder {
@@ -118,7 +118,7 @@ impl DisplayReporterBuilder {
                     final_status_level: self.status_levels.final_status_level,
                 },
                 no_capture: self.no_capture,
-                no_indent_output: self.no_indent_output,
+                no_output_indent: self.no_output_indent,
                 styles,
                 theme_characters,
                 cancel_status: None,
@@ -220,7 +220,7 @@ struct DisplayReporterImpl<'a> {
     default_filter: CompiledDefaultFilter,
     status_levels: StatusLevels,
     no_capture: bool,
-    no_indent_output: bool,
+    no_output_indent: bool,
     styles: Box<Styles>,
     theme_characters: ThemeCharacters,
     cancel_status: Option<CancelReason>,
@@ -1516,7 +1516,7 @@ impl<'a> DisplayReporterImpl<'a> {
         // ── stderr ──
         // <test stderr>
         let (six_char_start, six_char_end, eight_char_start, eight_char_end, output_indent) =
-            if self.no_indent_output {
+            if self.no_output_indent {
                 (
                     self.theme_characters.hbar(2),
                     self.theme_characters.hbar(2),
@@ -1816,7 +1816,7 @@ mod tests {
             should_colorize: false,
             no_capture: true,
             hide_progress_bar: false,
-            no_indent_output: false,
+            no_output_indent: false,
         };
         let output = ReporterStderr::Buffer(out);
         let reporter = builder.build(output);

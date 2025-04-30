@@ -8,15 +8,18 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.95-rc.2] - 2025-04-29
-
-Display formatting improvements.
-
-## [0.9.95-rc.1] - 2025-04-28
+## [0.9.95] - 2025-04-30
 
 ### Added
 
-You can now mark [leaky tests](https://nexte.st/docs/features/leaky-tests/) as failed rather than passed (docs upcoming). The default is still to treat them as passed.
+You can now mark [leaky tests](https://nexte.st/docs/features/leaky-tests/) as failed rather than passed. The default is still to treat them as passed. For more, see [*Marking leaky tests as failures*](https://nexte.st/docs/features/leaky-tests/#marking-leaky-tests-as-failures).
+
+### Changed
+
+Several display formatting improvements with a focus on visual clarity and reduced UI clutter:
+
+- Captured output (typically for failing tests) is now indented by 4 spaces, for easier-to-scan logs. This can be disabled with [the new `--no-output-indent` option](http://nexte.st/docs/reporting/#other-options), or by setting `NEXTEST_NO_OUTPUT_INDENT=1` in the environment.
+- If tests abort or fail through unexpected means (e.g. due to a signal), nextest now prints out a status line explaining what happened. For example, `(test aborted with signal 6: SIGABRT)`.
 
 ### Fixed
 
@@ -1432,8 +1435,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.95-rc.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.95-rc.2
-[0.9.95-rc.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.95-rc.1
+[0.9.95]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.95
 [0.9.94]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.94
 [0.9.93]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.93
 [0.9.92]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.92

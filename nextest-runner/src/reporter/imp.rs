@@ -41,7 +41,7 @@ pub struct ReporterBuilder {
 
     verbose: bool,
     hide_progress_bar: bool,
-    no_indent_output: bool,
+    no_output_indent: bool,
 }
 
 impl ReporterBuilder {
@@ -98,8 +98,8 @@ impl ReporterBuilder {
     }
 
     /// Set to true to disable indentation of captured test output.
-    pub fn set_no_indent_output(&mut self, no_indent_output: bool) -> &mut Self {
-        self.no_indent_output = no_indent_output;
+    pub fn set_no_output_indent(&mut self, no_output_indent: bool) -> &mut Self {
+        self.no_output_indent = no_output_indent;
         self
     }
 }
@@ -132,7 +132,7 @@ impl ReporterBuilder {
             should_colorize: self.should_colorize,
             no_capture: self.no_capture,
             hide_progress_bar: self.hide_progress_bar,
-            no_indent_output: self.no_indent_output,
+            no_output_indent: self.no_output_indent,
         }
         .build(output);
 
