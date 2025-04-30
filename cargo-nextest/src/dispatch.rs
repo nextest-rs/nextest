@@ -996,6 +996,17 @@ struct ReporterOpts {
     #[arg(long, env = "NEXTEST_HIDE_PROGRESS_BAR", value_parser = BoolishValueParser::new())]
     hide_progress_bar: bool,
 
+    /// Do not indent captured test output.
+    ///
+    /// By default, test output produced by **--failure-output** and
+    /// **--success-output** is indented for visual clarity. This flag disables
+    /// that behavior.
+    ///
+    /// This option has no effect with **--no-capture**, since that passes
+    /// through standard output and standard error.
+    #[arg(long, env = "NEXTEST_NO_INDENT_OUTPUT", value_parser = BoolishValueParser::new())]
+    no_indent_output: bool,
+
     /// Disable handling of input keys from the terminal.
     ///
     /// By default, when running a terminal, nextest accepts the `t` key to dump
@@ -1079,6 +1090,7 @@ impl ReporterOpts {
             builder.set_final_status_level(final_status_level.into());
         }
         builder.set_hide_progress_bar(self.hide_progress_bar);
+        builder.set_no_indent_output(self.no_indent_output);
         builder
     }
 }

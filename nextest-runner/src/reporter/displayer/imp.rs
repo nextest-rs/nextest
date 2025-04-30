@@ -42,6 +42,7 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) should_colorize: bool,
     pub(crate) no_capture: bool,
     pub(crate) hide_progress_bar: bool,
+    pub(crate) no_indent_output: bool,
 }
 
 impl DisplayReporterBuilder {
@@ -117,6 +118,7 @@ impl DisplayReporterBuilder {
                     final_status_level: self.status_levels.final_status_level,
                 },
                 no_capture: self.no_capture,
+                no_indent_output: self.no_indent_output,
                 styles,
                 theme_characters,
                 cancel_status: None,
@@ -218,6 +220,7 @@ struct DisplayReporterImpl<'a> {
     default_filter: CompiledDefaultFilter,
     status_levels: StatusLevels,
     no_capture: bool,
+    no_indent_output: bool,
     styles: Box<Styles>,
     theme_characters: ThemeCharacters,
     cancel_status: Option<CancelReason>,
@@ -1492,29 +1495,68 @@ impl<'a> DisplayReporterImpl<'a> {
             self.styles.fail
         };
 
-        // Adding this hbar at the end gives the text a bit of visual weight
-        // that makes it look more balanced.
-        let hbar = self.theme_characters.hbar(3);
+        // Adding an hbar at the end gives the text a bit of visual weight that
+        // makes it look more balanced. Align it with the end of the header to
+        // provide a visual transition from status lines (PASS/FAIL etc) to
+        // indented output.
+        //
+        // With indentation, the output looks like:
+        //
+        //         FAIL [ .... ]
+        //   stdout ───
+        //     <test stdout>
+        //   stderr ───
+        //     <test stderr>
+        //
+        // Without indentation:
+        //
+        //         FAIL [ .... ]
+        // ── stdout ──
+        // <test stdout>
+        // ── stderr ──
+        // <test stderr>
+        let (six_char_start, six_char_end, eight_char_start, eight_char_end, output_indent) =
+            if self.no_indent_output {
+                (
+                    self.theme_characters.hbar(2),
+                    self.theme_characters.hbar(2),
+                    self.theme_characters.hbar(1),
+                    self.theme_characters.hbar(1),
+                    "",
+                )
+            } else {
+                (
+                    " ".to_owned(),
+                    self.theme_characters.hbar(3),
+                    " ".to_owned(),
+                    self.theme_characters.hbar(1),
+                    "    ",
+                )
+            };
 
         let stdout_header = format!(
-            "  {} {}",
+            "{} {} {}",
+            six_char_start.style(header_style),
             "stdout".style(header_style),
-            hbar.style(header_style),
+            six_char_end.style(header_style),
         );
         let stderr_header = format!(
-            "  {} {}",
+            "{} {} {}",
+            six_char_start.style(header_style),
             "stderr".style(header_style),
-            hbar.style(header_style),
+            six_char_end.style(header_style),
         );
         let combined_header = format!(
-            "  {} {}",
+            "{} {} {}",
+            six_char_start.style(header_style),
             "output".style(header_style),
-            hbar.style(header_style),
+            six_char_end.style(header_style),
         );
         let exec_fail_header = format!(
-            "  {} {}",
-            "exec fail".style(header_style),
-            hbar.style(header_style),
+            "{} {} {}",
+            eight_char_start.style(header_style),
+            "execfail".style(header_style),
+            eight_char_end.style(header_style),
         );
 
         ChildOutputSpec {
@@ -1523,8 +1565,7 @@ impl<'a> DisplayReporterImpl<'a> {
             stderr_header,
             combined_header,
             exec_fail_header,
-            // 4 spaces align with 2 beyond the start of "stdout" and "stderr".
-            output_indent: "    ",
+            output_indent,
         }
     }
 
@@ -1775,6 +1816,7 @@ mod tests {
             should_colorize: false,
             no_capture: true,
             hide_progress_bar: false,
+            no_indent_output: false,
         };
         let output = ReporterStderr::Buffer(out);
         let reporter = builder.build(output);
