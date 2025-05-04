@@ -172,7 +172,6 @@ mod tests {
         },
         errors::ConfigParseErrorKind,
     };
-    use camino::Utf8Path;
     use camino_tempfile::tempdir;
     use config::ConfigError;
     use guppy::graph::cargo::BuildPlatform;
@@ -204,7 +203,7 @@ mod tests {
 
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let pcx = ParseContext::new(&graph);
 
         let config = NextestConfig::from_sources(
@@ -378,9 +377,8 @@ mod tests {
         ; "max-delay greater than delay")]
     fn parse_retries_invalid(config_contents: &str, expected_message: &str) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let pcx = ParseContext::new(&graph);
 
         let config_err = NextestConfig::from_sources(
@@ -617,9 +615,8 @@ mod tests {
         retries: RetryPolicy,
     ) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
         let pcx = ParseContext::new(&graph);
 

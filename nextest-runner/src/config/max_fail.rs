@@ -238,7 +238,7 @@ mod tests {
     )]
     fn parse_fail_fast(config_contents: &str, expected: MaxFail) {
         let workspace_dir = tempdir().unwrap();
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
 
         let pcx = ParseContext::new(&graph);
 
@@ -333,7 +333,7 @@ mod tests {
     )]
     fn invalid_fail_fast(config_contents: &str, error_str: &str) {
         let workspace_dir = tempdir().unwrap();
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let pcx = ParseContext::new(&graph);
 
         let error = NextestConfig::from_sources(

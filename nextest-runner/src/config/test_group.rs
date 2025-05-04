@@ -129,8 +129,8 @@ mod tests {
         config::{NextestConfig, ToolConfigFile, test_helpers::*},
         errors::{ConfigParseErrorKind, UnknownTestGroupError},
     };
-    use camino::Utf8Path;
     use camino_tempfile::tempdir;
+    use camino_tempfile_ext::prelude::*;
     use indoc::indoc;
     use maplit::btreeset;
     use nextest_filtering::ParseContext;
@@ -198,10 +198,11 @@ mod tests {
         "#};
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let tool_path = workspace_dir.child(".config/tool.toml");
+        tool_path.write_str(input).unwrap();
+
         let workspace_root = graph.workspace().root();
-        let tool_path = workspace_root.join(".config/tool.toml");
-        std::fs::write(&tool_path, input).unwrap();
 
         let pcx = ParseContext::new(&graph);
         let config_res = NextestConfig::from_sources(
@@ -210,7 +211,7 @@ mod tests {
             None,
             &[ToolConfigFile {
                 tool: "my-tool".to_owned(),
-                config_file: tool_path.clone(),
+                config_file: tool_path.to_path_buf(),
             }][..],
             &Default::default(),
         );
@@ -230,7 +231,7 @@ mod tests {
             }
             Err(expected_error) => {
                 let error = config_res.expect_err("config is invalid");
-                assert_eq!(error.config_file(), &tool_path);
+                assert_eq!(error.config_file(), tool_path);
                 assert_eq!(error.tool(), Some("my-tool"));
                 match &expected_error {
                     GroupExpectedError::InvalidTestGroups(expected_groups) => {
@@ -295,9 +296,8 @@ mod tests {
         expected: Result<BTreeSet<CustomTestGroup>, GroupExpectedError>,
     ) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let workspace_root = graph.workspace().root();
 
         let pcx = ParseContext::new(&graph);
@@ -437,14 +437,13 @@ mod tests {
         expected_known_groups: BTreeSet<TestGroup>,
     ) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path();
 
-        let graph = temp_workspace(workspace_path, user_config);
+        let graph = temp_workspace(&workspace_dir, user_config);
+        let tool1_path = workspace_dir.child(".config/tool1.toml");
+        tool1_path.write_str(tool1_config).unwrap();
+        let tool2_path = workspace_dir.child(".config/tool2.toml");
+        tool2_path.write_str(tool2_config).unwrap();
         let workspace_root = graph.workspace().root();
-        let tool1_path = workspace_root.join(".config/tool1.toml");
-        std::fs::write(&tool1_path, tool1_config).unwrap();
-        let tool2_path = workspace_root.join(".config/tool2.toml");
-        std::fs::write(&tool2_path, tool2_config).unwrap();
 
         let pcx = ParseContext::new(&graph);
         let config = NextestConfig::from_sources(
@@ -454,11 +453,11 @@ mod tests {
             &[
                 ToolConfigFile {
                     tool: "tool1".to_owned(),
-                    config_file: tool1_path,
+                    config_file: tool1_path.to_path_buf(),
                 },
                 ToolConfigFile {
                     tool: "tool2".to_owned(),
-                    config_file: tool2_path,
+                    config_file: tool2_path.to_path_buf(),
                 },
             ][..],
             &Default::default(),

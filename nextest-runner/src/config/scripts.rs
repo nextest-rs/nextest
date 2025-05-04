@@ -595,6 +595,7 @@ mod tests {
         errors::{ConfigParseErrorKind, DisplayErrorChain, UnknownConfigScriptError},
     };
     use camino_tempfile::tempdir;
+    use camino_tempfile_ext::prelude::*;
     use indoc::indoc;
     use maplit::btreeset;
     use test_case::test_case;
@@ -642,16 +643,17 @@ mod tests {
 
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let tool_path = workspace_dir.child(".config/my-tool.toml");
+        tool_path.write_str(tool_config_contents).unwrap();
+
         let package_id = graph.workspace().iter().next().unwrap().id();
-        let tool_path = workspace_dir.path().join(".config/my-tool.toml");
-        std::fs::write(&tool_path, tool_config_contents).unwrap();
 
         let pcx = ParseContext::new(&graph);
 
         let tool_config_files = [ToolConfigFile {
             tool: "my-tool".to_owned(),
-            config_file: tool_path,
+            config_file: tool_path.to_path_buf(),
         }];
 
         // First, check that if the experimental feature isn't enabled, we get an error.
@@ -806,7 +808,7 @@ mod tests {
     fn parse_scripts_invalid_deserialize(config_contents: &str, message: &str) {
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let pcx = ParseContext::new(&graph);
 
         let nextest_config_error = NextestConfig::from_sources(
@@ -903,7 +905,7 @@ mod tests {
     ) {
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
 
         let pcx = ParseContext::new(&graph);
 
@@ -968,7 +970,7 @@ mod tests {
     fn parse_scripts_invalid_defined(config_contents: &str, expected_invalid_scripts: &[&str]) {
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
 
         let pcx = ParseContext::new(&graph);
 
@@ -1015,13 +1017,13 @@ mod tests {
         expected_invalid_scripts: &[&str],
     ) {
         let workspace_dir = tempdir().unwrap();
+        let graph = temp_workspace(&workspace_dir, "");
 
-        let graph = temp_workspace(workspace_dir.path(), "");
-        let tool_path = workspace_dir.path().join(".config/my-tool.toml");
-        std::fs::write(&tool_path, tool_config_contents).unwrap();
+        let tool_path = workspace_dir.child(".config/my-tool.toml");
+        tool_path.write_str(tool_config_contents).unwrap();
         let tool_config_files = [ToolConfigFile {
             tool: "my-tool".to_owned(),
-            config_file: tool_path,
+            config_file: tool_path.to_path_buf(),
         }];
 
         let pcx = ParseContext::new(&graph);
@@ -1087,7 +1089,7 @@ mod tests {
     ) {
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
 
         let pcx = ParseContext::new(&graph);
 

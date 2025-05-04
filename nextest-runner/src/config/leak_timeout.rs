@@ -176,7 +176,7 @@ mod tests {
     ) {
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
 
         let pcx = ParseContext::new(&graph);
 

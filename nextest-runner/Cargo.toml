@@ -135,6 +135,7 @@ self_update = { workspace = true, optional = true, default-features = true }
 
 
 [dev-dependencies]
+camino-tempfile-ext.workspace = true
 color-eyre.workspace = true
 fixture-data.workspace = true
 indoc.workspace = true

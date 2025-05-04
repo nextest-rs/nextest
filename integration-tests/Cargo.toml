@@ -50,6 +50,7 @@ sha2.workspace = true
 whoami.workspace = true
 
 [dev-dependencies]
+camino-tempfile-ext.workspace = true
 cfg-if.workspace = true
 cp_r.workspace = true
 datatest-stable.workspace = true

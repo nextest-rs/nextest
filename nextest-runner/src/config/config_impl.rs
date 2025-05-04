@@ -1090,7 +1090,7 @@ mod tests {
 
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let workspace_root = graph.workspace().root();
         let tool_path = workspace_root.join(".config/tool.toml");
         std::fs::write(&tool_path, tool_config_contents).unwrap();
