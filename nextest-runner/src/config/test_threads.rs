@@ -154,7 +154,7 @@ mod tests {
     fn parse_test_threads(config_contents: &str, n_threads: Option<usize>) {
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
 
         let pcx = ParseContext::new(&graph);
         let config = NextestConfig::from_sources(

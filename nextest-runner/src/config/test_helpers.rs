@@ -7,6 +7,7 @@ use crate::{
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use camino_tempfile_ext::prelude::*;
 use guppy::{
     MetadataCommand, PackageId,
     graph::{PackageGraph, cargo::BuildPlatform},
@@ -14,24 +15,22 @@ use guppy::{
 use nextest_filtering::BinaryQuery;
 use nextest_metadata::{RustBinaryId, RustTestBinaryKind};
 use serde::Deserialize;
-use std::{io::Write, path::PathBuf, process::Command};
+use std::{path::PathBuf, process::Command};
 use target_spec::{Platform, TargetFeatures};
 
-pub(super) fn temp_workspace(temp_dir: &Utf8Path, config_contents: &str) -> PackageGraph {
+pub(super) fn temp_workspace(temp_dir: &Utf8TempDir, config_contents: &str) -> PackageGraph {
     Command::new(cargo_path())
         .args(["init", "--lib", "--name=test-package", "--vcs=none"])
         .current_dir(temp_dir)
         .status()
         .expect("error initializing cargo project");
 
-    let config_dir = temp_dir.join(".config");
-    std::fs::create_dir(&config_dir).expect("error creating config dir");
+    temp_dir
+        .child(".config/nextest.toml")
+        .write_str(config_contents)
+        .expect("error writing config file");
 
-    let config_path = config_dir.join("nextest.toml");
-    let mut config_file = std::fs::File::create(config_path).unwrap();
-    config_file.write_all(config_contents.as_bytes()).unwrap();
-
-    PackageGraph::from_command(MetadataCommand::new().current_dir(temp_dir))
+    PackageGraph::from_command(MetadataCommand::new().current_dir(temp_dir.path()))
         .expect("error creating package graph")
 }
 

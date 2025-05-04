@@ -886,7 +886,6 @@ impl<'de> Deserialize<'de> for PlatformStrings {
 mod tests {
     use super::*;
     use crate::config::{LeakTimeoutResult, NextestConfig, test_helpers::*};
-    use camino::Utf8Path;
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use std::{num::NonZeroUsize, time::Duration};
@@ -942,7 +941,7 @@ mod tests {
 
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
 
         let pcx = ParseContext::new(&graph);
@@ -1219,9 +1218,8 @@ mod tests {
         expected_reports: &[MietteJsonReport],
     ) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let pcx = ParseContext::new(&graph);
 
         let err = NextestConfig::from_sources(
@@ -1285,7 +1283,7 @@ mod tests {
 
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
         let package_id = graph.workspace().iter().next().unwrap().id();
         let pcx = ParseContext::new(&graph);
 

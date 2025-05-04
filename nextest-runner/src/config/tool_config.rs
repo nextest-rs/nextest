@@ -61,6 +61,7 @@ mod tests {
         VersionOnlyConfig, test_helpers::*,
     };
     use camino_tempfile::tempdir;
+    use camino_tempfile_ext::prelude::*;
     use guppy::graph::cargo::BuildPlatform;
     use nextest_filtering::{ParseContext, TestQuery};
 
@@ -173,21 +174,22 @@ mod tests {
 
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let tool1_path = workspace_dir.child(".config/tool1.toml");
+        let tool2_path = workspace_dir.child(".config/tool2.toml");
+        tool1_path.write_str(tool1_config_contents).unwrap();
+        tool2_path.write_str(tool2_config_contents).unwrap();
+
         let workspace_root = graph.workspace().root();
-        let tool1_path = workspace_root.join(".config/tool1.toml");
-        let tool2_path = workspace_root.join(".config/tool2.toml");
-        std::fs::write(&tool1_path, tool1_config_contents).unwrap();
-        std::fs::write(&tool2_path, tool2_config_contents).unwrap();
 
         let tool_config_files = [
             ToolConfigFile {
                 tool: "tool1".to_owned(),
-                config_file: tool1_path,
+                config_file: tool1_path.to_path_buf(),
             },
             ToolConfigFile {
                 tool: "tool2".to_owned(),
-                config_file: tool2_path,
+                config_file: tool2_path.to_path_buf(),
             },
         ];
 

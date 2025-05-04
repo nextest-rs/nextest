@@ -273,7 +273,7 @@ mod tests {
 
         let workspace_dir = tempdir().unwrap();
 
-        let graph = temp_workspace(workspace_dir.path(), config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
 
         let pcx = ParseContext::new(&graph);
 
@@ -423,9 +423,8 @@ mod tests {
         ; "invalid on-missing type")]
     fn parse_invalid(config_contents: &str, expected_message: &str) {
         let workspace_dir = tempdir().unwrap();
-        let workspace_path: &Utf8Path = workspace_dir.path();
 
-        let graph = temp_workspace(workspace_path, config_contents);
+        let graph = temp_workspace(&workspace_dir, config_contents);
 
         let pcx = ParseContext::new(&graph);
 
