@@ -58,7 +58,7 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
     ---
 
-    Use nextest on Linux, Mac, Windows, and elsewhere:material-information-outline:{ title="Nextest also supports illumos, FreeBSD, and many other Unix platforms." }. Download binaries or build it [from source](docs/installation/from-source.md).
+    Use nextest on Linux, Mac, Windows, and elsewhere. Download binaries or build it [from source](docs/installation/from-source.md).
 
     [:octicons-arrow-right-24: Pre-built binaries](docs/installation/pre-built-binaries.md)
 
