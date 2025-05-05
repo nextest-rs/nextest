@@ -66,7 +66,7 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
     ---
 
-    Nextest saves resources for organizations of all sizes, from solo devs to Fortune 10 companies.
+    Nextest powers Rust development at every scale, from independent open source projects to the world's largest technology companies.
 
     [:octicons-arrow-right-24: License (Apache 2.0)](https://github.com/nextest-rs/nextest/blob/main/LICENSE-APACHE)
 
@@ -74,9 +74,9 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
     ---
 
-    We're pushing the state of the art forward [with _care_](docs/design/why-process-per-test.md) about getting the details right.
+    We're pushing the state of the art forward, [with _care_](docs/design/why-process-per-test.md) about getting the details right.
 
-    [:octicons-arrow-right-24: GitHub Sponsors](https://github.com/sponsors/sunshowers)
+    [:octicons-arrow-right-24: Sponsor on GitHub](https://github.com/sponsors/sunshowers)
 
 </div>
 
