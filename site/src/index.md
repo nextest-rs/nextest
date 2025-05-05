@@ -70,11 +70,11 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
     [:octicons-arrow-right-24: License (Apache 2.0)](https://github.com/nextest-rs/nextest/blob/main/LICENSE-APACHE)
 
--   :material-heart-circle:{ .lg .middle } __Made with love__
+-   :material-heart-circle:{ .lg .middle } __State-of-the-art, made with love__
 
     ---
 
-    We're pushing the state of the art forward, [with _care_](docs/design/why-process-per-test.md) about getting the details right.
+    Nextest brings [infrastructure-grade reliability](docs/design/architecture/runner-loop.md) to test runners, [with _care_](docs/design/why-process-per-test.md) about getting the details right.
 
     [:octicons-arrow-right-24: Sponsor on GitHub](https://github.com/sponsors/sunshowers)
 
