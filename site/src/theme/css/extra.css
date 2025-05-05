@@ -11,30 +11,50 @@
 
 .md-typeset .admonition.experimental,
 .md-typeset details.experimental {
-  border-color: rgb(43, 155, 70);
+    border-color: rgb(43, 155, 70);
 }
 .md-typeset .experimental > .admonition-title,
 .md-typeset .experimental > summary {
-  background-color: rgba(43, 155, 70, 0.1);
+    background-color: rgba(43, 155, 70, 0.1);
 }
 .md-typeset .experimental > .admonition-title::before,
 .md-typeset .experimental > summary::before {
-  background-color: rgb(43, 155, 70);
-  -webkit-mask-image: var(--md-status--experimental);
-          mask-image: var(--md-status--experimental);
+    background-color: rgb(43, 155, 70);
+    -webkit-mask-image: var(--md-status--experimental);
+    mask-image: var(--md-status--experimental);
 }
 
 /* Custom colors for light output */
 [data-md-color-scheme="default"] {
     --nextest-color-blend: hsl(180, 100%, 5%);
     --nextest-color-blend-amount: 50%;
-    --ansi-red: color-mix(in srgb, #ff5555, var(--nextest-color-blend) var(--nextest-color-blend-amount));
-    --ansi-green: color-mix(in srgb, #50fa7b, var(--nextest-color-blend) var(--nextest-color-blend-amount));
+    --ansi-red: color-mix(
+        in srgb,
+        #ff5555,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
+    --ansi-green: color-mix(
+        in srgb,
+        #50fa7b,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
     /* ansi-blue is dark enough already */
     --ansi-blue: #265285;
-    --ansi-yellow: color-mix(in srgb, #f1fa8c, var(--nextest-color-blend) var(--nextest-color-blend-amount));
-    --ansi-magenta: color-mix(in srgb, #ff79c6, var(--nextest-color-blend) var(--nextest-color-blend-amount));
-    --ansi-cyan: color-mix(in srgb, #8be9fd, var(--nextest-color-blend) var(--nextest-color-blend-amount));
+    --ansi-yellow: color-mix(
+        in srgb,
+        #f1fa8c,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
+    --ansi-magenta: color-mix(
+        in srgb,
+        #ff79c6,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
+    --ansi-cyan: color-mix(
+        in srgb,
+        #8be9fd,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
 
     --md-accent-fg-color: hsl(350, 45%, 40%);
     --md-typeset-a-color: hsl(192, 29%, 40%);
@@ -44,13 +64,37 @@
 [data-md-color-scheme="slate"] {
     --nextest-color-blend: hsl(180, 100%, 5%);
     --nextest-color-blend-amount: 20%;
-    --ansi-red: color-mix(in srgb, #ff5555, var(--nextest-color-blend) var(--nextest-color-blend-amount));
-    --ansi-green: color-mix(in srgb, #50fa7b, var(--nextest-color-blend) var(--nextest-color-blend-amount));
+    --ansi-red: color-mix(
+        in srgb,
+        #ff5555,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
+    --ansi-green: color-mix(
+        in srgb,
+        #50fa7b,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
     /* ansi-blue needs to be made lighter */
-    --ansi-blue: color-mix(in srgb, #265285, hsl(180, 100%, 95%) var(--nextest-color-blend-amount));
-    --ansi-yellow: color-mix(in srgb, #f1fa8c, var(--nextest-color-blend) var(--nextest-color-blend-amount));
-    --ansi-magenta: color-mix(in srgb, #ff79c6, var(--nextest-color-blend) var(--nextest-color-blend-amount));
-    --ansi-cyan: color-mix(in srgb, #8be9fd, var(--nextest-color-blend) var(--nextest-color-blend-amount));
+    --ansi-blue: color-mix(
+        in srgb,
+        #265285,
+        hsl(180, 100%, 95%) var(--nextest-color-blend-amount)
+    );
+    --ansi-yellow: color-mix(
+        in srgb,
+        #f1fa8c,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
+    --ansi-magenta: color-mix(
+        in srgb,
+        #ff79c6,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
+    --ansi-cyan: color-mix(
+        in srgb,
+        #8be9fd,
+        var(--nextest-color-blend) var(--nextest-color-blend-amount)
+    );
 
     --md-hue: 215;
     --md-accent-fg-color: hsl(350, 45%, 60%);
@@ -98,7 +142,7 @@
 
 @supports (font-variation-settings: normal) {
     :root {
-        --md-text-font: 'Inter var', "Helvetica Neue", "Arial", sans-serif;
+        --md-text-font: "Inter var", "Helvetica Neue", "Arial", sans-serif;
     }
 }
 
@@ -117,7 +161,7 @@
 }
 
 .md-typeset h2 {
-    letter-spacing: -0.030em;
+    letter-spacing: -0.03em;
 }
 
 .md-typeset h3 {
@@ -172,6 +216,7 @@
         display: block;
         margin-left: auto;
         margin-right: auto;
+        padding-left: 0;
         float: none;
         width: 80%;
         max-width: 250px;

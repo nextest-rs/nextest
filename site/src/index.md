@@ -10,23 +10,73 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
 ## Features
 
-<div id="nextest-features" markdown>
+<div class="grid cards" markdown>
 
-<img src="static/cover.png" id="nextest-cover" />
+-   :octicons-sparkles-fill-16:{ .lg .middle } __Clean, beautiful user interface__
 
-- **Clean, beautiful user interface.** Nextest presents its results concisely so you can see which tests passed and failed at a glance.
-- **[Up to 3× as fast](docs/benchmarks/index.md) as cargo test.** Nextest uses a [state-of-the-art execution model](docs/design/how-it-works.md) for faster, more reliable test runs.
-- **Identify [slow](docs/features/slow-tests.md) and [leaky](docs/features/leaky-tests.md) tests.** Use nextest to detect misbehaving tests, identify bottlenecks during test execution, and optionally terminate tests if they take too long.
-- **Filter tests using an embedded language.** Use powerful [filtersets](docs/filtersets/index.md) to specify granular subsets of tests on the command-line, and to enable [per-test overrides](docs/configuration/per-test-overrides.md).
-- **Configure [per-test settings](docs/configuration/per-test-overrides.md)**. [Automatically retry](docs/features/retries.md#per-test-settings) subsets of tests, mark them as [heavy](docs/configuration/threads-required.md), or [run them serially](docs/configuration/test-groups.md).
-- **Designed for CI.** Nextest addresses real-world pain points in continuous integration scenarios:
-  - Use **[pre-built binaries](docs/installation/pre-built-binaries.md)** for quick installation.
-  - Set up CI-specific **[configuration profiles](docs/configuration/index.md)**.
-  - **[Reuse builds](docs/ci-features/archiving.md)** and **[partition test runs](docs/ci-features/partitioning.md)** across multiple CI jobs. (Check out [this example](https://github.com/nextest-rs/reuse-build-partition-example/blob/main/.github/workflows/ci.yml) on GitHub Actions).
-  - [**Automatically retry**](docs/features/retries.md) failing tests, and mark them as flaky if they pass later.
-  - Print failing output **[at the end of test runs](docs/reporting.md)**.
-  - Output information about test runs as **[JUnit XML](docs/machine-readable/junit.md)**, and [in other formats](docs/machine-readable/index.md).
-- **Cross-platform.** Nextest works on Linux and other Unixes, macOS, and Windows, so you get its benefits no matter what platform you use.
+    ---
+
+    <img src="static/cover.png" id="nextest-cover" />
+
+    See which tests passed and failed at a glance.
+
+    [:octicons-arrow-right-24: Running tests](docs/running.md)
+
+-   :material-clock-fast:{ .lg .middle } __Up to 3x as fast as cargo test__
+
+    ---
+
+    Nextest uses a modern [execution model](docs/design/how-it-works.md) for faster, more reliable test runs.
+
+    [:octicons-arrow-right-24: Benchmarks](docs/benchmarks/index.md)
+
+-   :material-speedometer-slow:{ .lg .middle } __Identify misbehaving tests__
+
+    ---
+
+    Treat tests as cattle, not pets. Detect slow tests and terminate them if they take too long.
+
+    [:octicons-arrow-right-24: Slow tests and timeouts](docs/features/slow-tests.md)
+
+-   :material-chevron-double-right:{ .lg .middle } __Customize settings by test__
+
+    ---
+
+    Automatically [retry](docs/features/retries.md) some tests, mark them as [heavy](docs/configuration/threads-required.md), run them [serially](docs/configuration/test-groups.md), and much more.
+
+    [:octicons-arrow-right-24: Per-test settings](docs/configuration/per-test-overrides.md)
+
+-   :octicons-git-merge-24:{ .lg .middle } __Designed for CI__
+
+    ---
+
+    Set up CI configuration, [reuse](docs/ci-features/archiving.md) and [partition](docs/ci-features/partitioning.md) tests across multiple workers, and output [JUnit XML](docs/machine-readable/junit.md).
+
+    [:octicons-arrow-right-24: Configuration profiles](docs/configuration/index.md#profiles)
+
+-   :material-language-rust:{ .lg .middle } __Cross-platform__
+
+    ---
+
+    Use nextest on Linux, Mac, Windows, and elsewhere:material-information-outline:{ title="Nextest also supports illumos, FreeBSD, and many other Unix platforms." }. Download binaries or build it [from source](docs/installation/from-source.md).
+
+    [:octicons-arrow-right-24: Pre-built binaries](docs/installation/pre-built-binaries.md)
+
+-   :material-scale-balance:{ .lg .middle } __Open source, widely trusted__
+
+    ---
+
+    Nextest saves resources for organizations of all sizes, from solo devs to Fortune 10 companies.
+
+    [:octicons-arrow-right-24: License (Apache 2.0)](https://github.com/nextest-rs/nextest/blob/main/LICENSE-APACHE)
+
+-   :material-heart-circle:{ .lg .middle } __Made with love__
+
+    ---
+
+    We're pushing the state of the art forward [with _care_](docs/design/why-process-per-test.md) about getting the details right.
+
+    [:octicons-arrow-right-24: GitHub Sponsors](https://github.com/sponsors/sunshowers)
 
 </div>
 
