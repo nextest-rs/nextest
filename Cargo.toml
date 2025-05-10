@@ -107,7 +107,7 @@ self_update = { version = "0.42.0", default-features = false, features = [
     "compression-flate2",
 ] }
 serde = { version = "1.0.219", features = ["derive"] }
-serde_ignored = "0.1.11"
+serde_ignored = "0.1.12"
 serde_json = "1.0.140"
 serde_path_to_error = "0.1.17"
 sha2 = "0.10.9"
