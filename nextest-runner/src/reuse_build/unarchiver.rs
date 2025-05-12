@@ -57,7 +57,7 @@ impl<'a> Unarchiver<'a> {
 
                 let temp_dir = if persist {
                     // Persist the temporary directory.
-                    let _ = temp_dir.into_path();
+                    let _ = temp_dir.keep();
                     None
                 } else {
                     Some(temp_dir)
