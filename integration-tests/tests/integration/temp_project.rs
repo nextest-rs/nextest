@@ -123,7 +123,7 @@ impl TempProject {
     #[expect(dead_code)]
     pub fn persist(&mut self) {
         if let Some(dir) = self.temp_dir.take() {
-            _ = dir.into_path();
+            _ = dir.keep();
         }
     }
 
