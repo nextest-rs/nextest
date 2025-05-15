@@ -8,6 +8,12 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.96] - 2025-05-15
+
+### Miscellaneous
+
+- Pre-built binaries are now built with Rust 1.87, which is the first version to support `posix_spawn`-based process spawning on illumos.
+
 ## [0.9.95] - 2025-04-30
 
 ### Added
@@ -1435,6 +1441,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.96]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.96
 [0.9.95]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.95
 [0.9.94]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.94
 [0.9.93]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.93
