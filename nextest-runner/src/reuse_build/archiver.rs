@@ -683,8 +683,7 @@ fn find_std(libdir: &Utf8Path) -> io::Result<Utf8PathBuf> {
         }
     }
 
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(io::Error::other(
         "could not find the Rust standard library in the libdir",
     ))
 }

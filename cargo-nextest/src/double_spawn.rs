@@ -29,6 +29,9 @@ impl DoubleSpawnOpts {
         let mut command = std::process::Command::new(&self.program);
         // Note: exec only returns an error -- in the success case it never returns.
         let err = command.args(args).exec();
-        Err(ExpectedError::DoubleSpawnExecError { command, err })
+        Err(ExpectedError::DoubleSpawnExecError {
+            command: Box::new(command),
+            err,
+        })
     }
 }

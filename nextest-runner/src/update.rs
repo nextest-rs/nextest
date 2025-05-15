@@ -449,15 +449,12 @@ impl MuktiUpdateContext<'_> {
             cmd.args(["nextest", "self", "setup", "--source", "self-update"]);
             let status = cmd.status().map_err(UpdateError::SelfSetup)?;
             if !status.success() {
-                return Err(UpdateError::SelfSetup(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "`cargo nextest self setup` failed with exit code {}",
-                        status
-                            .code()
-                            .map_or("(unknown)".to_owned(), |c| c.to_string())
-                    ),
-                )));
+                return Err(UpdateError::SelfSetup(io::Error::other(format!(
+                    "`cargo nextest self setup` failed with exit code {}",
+                    status
+                        .code()
+                        .map_or("(unknown)".to_owned(), |c| c.to_string())
+                ))));
             }
         }
 

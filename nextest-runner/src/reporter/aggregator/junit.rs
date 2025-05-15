@@ -574,7 +574,7 @@ mod tests {
                     errors: ErrorList::new(
                         "collecting child output",
                         vec![ChildError::Fd(ChildFdError::Wait(Arc::new(
-                            io::Error::new(io::ErrorKind::Other, "huh"),
+                            io::Error::other("huh"),
                         )))],
                     ),
                 },
@@ -608,7 +608,7 @@ mod tests {
                     errors: ErrorList::new(
                         "collecting child output",
                         vec![ChildError::Fd(ChildFdError::ReadStdout(Arc::new(
-                            io::Error::new(io::ErrorKind::Other, "stdout error"),
+                            io::Error::other("stdout error"),
                         )))],
                     ),
                 },
@@ -628,7 +628,7 @@ mod tests {
                 comment: "exec fail + combined + store (exec fail means nothing to store)",
                 status: TestCaseStatus::non_success(NonSuccessKind::Error),
                 output: ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(
-                    io::Error::new(io::ErrorKind::Other, "start error"),
+                    io::Error::other("start error"),
                 ))),
                 store_stdout_stderr: true,
                 message: Some("error spawning child process"),

@@ -62,7 +62,7 @@ pub trait WriteStr {
                 if output.error.is_err() {
                     output.error
                 } else {
-                    Err(io::Error::new(io::ErrorKind::Other, "formatter error"))
+                    Err(io::Error::other("formatter error"))
                 }
             }
         }

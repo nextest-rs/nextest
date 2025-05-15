@@ -259,7 +259,7 @@ pub enum ExpectedError {
     },
     #[error("double-spawn execution error")]
     DoubleSpawnExecError {
-        command: std::process::Command,
+        command: Box<std::process::Command>,
         #[source]
         err: std::io::Error,
     },
