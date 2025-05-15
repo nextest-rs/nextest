@@ -94,6 +94,8 @@ impl DisplayReporterBuilder {
 
             ReporterStderr::Terminal => {
                 let state = ProgressBarState::new(self.test_count, theme_characters.progress_chars);
+                // Note: even if we create a progress bar here, if stderr is
+                // piped, indicatif will not show it.
                 ReporterStderrImpl::TerminalWithBar { state }
             }
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
