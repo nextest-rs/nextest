@@ -836,6 +836,9 @@ impl ContextTestInstance<'_> {
     }
 }
 
+// Almost all events are executor events, which is much larger than the others,
+// so it doesn't make sense to optimize for the rare signal and input events.
+#[expect(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum InternalEvent<'a> {
     Executor(ExecutorEvent<'a>),

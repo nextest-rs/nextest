@@ -149,8 +149,7 @@ mod imp {
         let path = Path::new(PROC_SELF_EXE);
         match path.symlink_metadata() {
             Ok(_) => Ok(path.to_owned()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(std::io::Error::other(
                 "no /proc/self/exe available. Is /proc mounted?",
             )),
             Err(e) => Err(e),

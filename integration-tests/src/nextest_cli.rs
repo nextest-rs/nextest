@@ -62,7 +62,7 @@ impl CargoNextestCli {
         let output = command.output().wrap_err("failed to get current exe")?;
 
         let output = CargoNextestOutput {
-            command,
+            command: Box::new(command),
             exit_status: output.status,
             stdout: output.stdout,
             stderr: output.stderr,
@@ -120,7 +120,7 @@ impl CargoNextestCli {
         let output = command.output().expect("failed to execute");
 
         let ret = CargoNextestOutput {
-            command,
+            command: Box::new(command),
             exit_status: output.status,
             stdout: output.stdout,
             stderr: output.stderr,
@@ -135,7 +135,7 @@ impl CargoNextestCli {
 }
 
 pub struct CargoNextestOutput {
-    pub command: Command,
+    pub command: Box<Command>,
     pub exit_status: ExitStatus,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,

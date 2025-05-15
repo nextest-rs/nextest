@@ -773,7 +773,7 @@ note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose bac
     #[test]
     fn strips_human_output_start_error() {
         let inner_error = eyre!("inner error");
-        let error = io::Error::new(io::ErrorKind::Other, inner_error);
+        let error = io::Error::other(inner_error);
 
         let output = ChildExecutionOutput::StartError(ChildStartError::Spawn(Arc::new(error)));
 
