@@ -17,7 +17,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@83254c543806f3224380bf1001d6fac8feaf2d0b # v2
+        uses: taiki-e/install-action@13608a19a2204ea4cc0b5888e995ab288684b613 # v2
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1
@@ -42,7 +42,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@83254c543806f3224380bf1001d6fac8feaf2d0b # v2
+        uses: taiki-e/install-action@13608a19a2204ea4cc0b5888e995ab288684b613 # v2
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1
@@ -67,7 +67,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@83254c543806f3224380bf1001d6fac8feaf2d0b # v2
+        uses: taiki-e/install-action@13608a19a2204ea4cc0b5888e995ab288684b613 # v2
         with:
           tool: cargo-release@0.25.0
       - uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1
@@ -233,7 +233,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo release
-        uses: taiki-e/install-action@83254c543806f3224380bf1001d6fac8feaf2d0b # v2
+        uses: taiki-e/install-action@13608a19a2204ea4cc0b5888e995ab288684b613 # v2
         with:
           tool: cargo-release@0.25.0
       - name: Download mukti
