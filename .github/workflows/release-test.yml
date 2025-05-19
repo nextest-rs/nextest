@@ -82,7 +82,7 @@ jobs:
           mkdir -p target/unsigned
           cd target/unsigned
           cp ../${{ matrix.build-target }}/release/internal-test.exe .
-          curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/verpatch-1.0.10/verpatch-bin-1.0.10.zip"
+          curl -LsSfO "https://github.com/nextest-rs/mukti/releases/download/verpatch-1.0.10/verpatch-bin-1.0.10.zip"
           unzip verpatch-bin-1.0.10.zip
       - name: Add metadata to Windows binary
         if: endsWith(matrix.target, '-pc-windows-msvc')
