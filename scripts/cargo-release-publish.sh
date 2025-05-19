@@ -10,7 +10,7 @@ git checkout -B to-release
 
 # Publish all crates except cargo-nextest first. Do this against main so `.cargo_vcs_info.json` is
 # valid. (cargo-nextest is the only crate that cares about commit info.)
-cargo release publish --publish --execute --no-confirm --workspace --exclude cargo-nextest
+cargo release publish --publish --execute --no-confirm --workspace --exclude cargo-nextest --exclude internal-test
 
 if [[ $PUBLISH_CARGO_NEXTEST == "1" ]]; then
     # Write out commit-related metadata. This matches cargo-nextest's build.rs.
