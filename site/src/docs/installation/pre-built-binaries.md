@@ -242,3 +242,12 @@ These archives contain a single binary called `cargo-nextest` (`cargo-nextest.ex
 [^glibc]: The standard Linux binaries target glibc, and have a minimum requirement of glibc 2.27 (Ubuntu 18.04).
 
 For a full specification of release URLs, see [_Release URLs_](release-urls.md).
+
+## Code signing policy
+
+Nextest's Windows binaries will soon be signed. Free code signing is provided by SignPath.io, and the certificate by SignPath Foundation.
+
+* Committers and reviewers: [Members team](https://github.com/orgs/nextest-rs/teams/members)
+* Approvers: [Owners](https://github.com/orgs/nextest-rs/people?query=role%3Aowner)
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it, e.g. via the [self-update feature](updating.md).

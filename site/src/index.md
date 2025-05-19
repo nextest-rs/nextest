@@ -151,6 +151,8 @@ The source code for nextest is licensed under the
 [MIT](https://github.com/nextest-rs/nextest/blob/main/LICENSE-MIT) and [Apache
 2.0](https://github.com/nextest-rs/nextest/blob/main/LICENSE-APACHE) licenses.
 
+For information about code signing, see [*Code signing policy*](docs/installation/pre-built-binaries.md#code-signing-policy).
+
 This document is licensed under [CC BY 4.0]. This means that you are welcome to share, adapt or
 modify this material as long as you give appropriate credit.
 
