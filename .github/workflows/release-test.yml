@@ -73,13 +73,43 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_PROFILE_RELEASE_LTO: true
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+
+      - name: Download verpatch on Windows
+        if: endsWith(matrix.target, '-pc-windows-msvc')
+        shell: bash
+        run: |
+          set -x
+          mkdir -p target/unsigned
+          cd target/unsigned
+          cp ../${{ matrix.build-target }}/release/internal-test.exe .
+          curl -LsSf "https://github.com/nextest-rs/mukti/releases/download/verpatch-1.0.10/verpatch-bin-1.0.10.zip"
+          unzip verpatch-bin-1.0.10.zip
+      - name: Add metadata to Windows binary
+        if: endsWith(matrix.target, '-pc-windows-msvc')
+        shell: powershell
+        run: |
+          cd target/unsigned
+          # Extract version from ref_name, e.g. internal-test-0.9.97 -> 0.9.97
+          $refName = "${{ github.ref_name }}"
+          if ($refName -match "^internal-test-(.+)$") {
+            $version = $Matches[1]
+          } else {
+            Write-Error "Could not extract version from ref_name: $refName"
+            exit 1
+          }
+          .\verpatch.exe /va .\internal-test.exe `
+            $version /high `
+            /pv $version `
+            /s product "internal-test" `
+            /s "(c)" "Copyright (c) The nextest Contributors. License: MIT OR Apache-2.0"
+
       - name: Upload unsigned Windows artifact
         id: upload-unsigned-artifact
         if: endsWith(matrix.target, '-pc-windows-msvc')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-unsigned
-          path: target/${{ matrix.build-target }}/release/internal-test.exe
+          path: target/unsigned/internal-test.exe
       - run: mkdir -p target/signed
       - name: Submit signing request
         id: submit-signing-request
