@@ -98,6 +98,8 @@ jobs:
         id: archive-windows-artifact
         if: endsWith(matrix.target, '-pc-windows-msvc')
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd target/signed
           tar -czf ${{ github.ref_name }}-${{ matrix.target }}.tar.gz internal-test.exe
