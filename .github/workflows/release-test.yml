@@ -117,7 +117,7 @@ jobs:
             ${{ github.ref_name }}-${{ matrix.target }}.zip \
             > ${{ github.ref_name }}-${{ matrix.target }}.b2
 
-          gh release upload ${{ github.ref_name }} \  
+          gh release upload ${{ github.ref_name }} \
             ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
             ${{ github.ref_name }}-${{ matrix.target }}.zip \
             ${{ github.ref_name }}-${{ matrix.target }}.sha256 \
