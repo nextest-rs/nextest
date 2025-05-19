@@ -27,9 +27,9 @@ jobs:
     outputs:
       version: ${{ steps.create-gh-release.outputs.version }}
 
-  build-cargo-nextest-binaries:
-    name: Build cargo-nextest binaries for ${{ matrix.target }}
-    if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'cargo-nextest-')
+  build-internal-test-binaries:
+    name: Build internal-test binaries for ${{ matrix.target }}
+    if: github.repository_owner == 'nextest-rs' && startsWith(github.ref_name, 'internal-test-')
     needs:
       - internal-test-release
     strategy:
