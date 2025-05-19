@@ -105,7 +105,7 @@ jobs:
           tar -czf ${{ github.ref_name }}-${{ matrix.target }}.tar.gz internal-test.exe
           # Windows has 7z, not zip.
           7z a ${{ github.ref_name }}-${{ matrix.target }}.zip internal-test.exe
-          gh release upload ${{ github.ref }} \
+          gh release upload ${{ github.ref_name }} \
             ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
             ${{ github.ref_name }}-${{ matrix.target }}.zip
       - name: Set archive output variable
