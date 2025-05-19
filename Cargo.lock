@@ -1658,7 +1658,7 @@ dependencies = [
 
 [[package]]
 name = "internal-test"
-version = "0.1.2-b.6"
+version = "0.1.2-b.7"
 
 [[package]]
 name = "ipnet"
