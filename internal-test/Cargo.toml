@@ -1,6 +1,6 @@
 [package]
 name = "internal-test"
-version = "0.1.2-b.3"
+version = "0.1.2-b.4"
 rust-version.workspace = true
 edition.workspace = true
 license.workspace = true
