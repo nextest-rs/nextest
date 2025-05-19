@@ -89,7 +89,8 @@ jobs:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '34634019-2ee0-4162-830a-72cd1a0cb73f'
           project-slug: 'nextest'
-          signing-policy-slug: 'internal-test'
+          signing-policy-slug: 'nextest'
+          artifact-configuration-slug: 'internal-test'
           github-artifact-id: '${{ steps.upload-unsigned-artifact.outputs.artifact-id }}'
           wait-for-completion: true
           output-artifact-directory: 'target/signed'
