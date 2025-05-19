@@ -101,7 +101,7 @@ jobs:
             $version /high `
             /pv $version `
             /s product "internal-test" `
-            /s "(c)" "Copyright (c) The nextest Contributors. License: MIT OR Apache-2.0"
+            /s "(c)" "(c) The nextest Contributors. License: MIT OR Apache-2.0"
 
       - name: Upload unsigned Windows artifact
         id: upload-unsigned-artifact

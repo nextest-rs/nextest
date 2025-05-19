@@ -199,13 +199,43 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_PROFILE_RELEASE_LTO: true
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+
+      - name: Download verpatch on Windows
+        if: endsWith(matrix.target, '-pc-windows-msvc')
+        shell: bash
+        run: |
+          set -x
+          mkdir -p target/unsigned
+          cd target/unsigned
+          cp ../${{ matrix.build-target }}/release/cargo-nextest.exe .
+          curl -LsSfO "https://github.com/nextest-rs/mukti/releases/download/verpatch-1.0.10/verpatch-bin-1.0.10.zip"
+          unzip verpatch-bin-1.0.10.zip
+      - name: Add metadata to Windows binary
+        if: endsWith(matrix.target, '-pc-windows-msvc')
+        shell: powershell
+        run: |
+          cd target/unsigned
+          # Extract version from ref_name, e.g. cargo-nextest-0.9.97 -> 0.9.97
+          $refName = "${{ github.ref_name }}"
+          if ($refName -match "^cargo-nextest-(.+)$") {
+            $version = $Matches[1]
+          } else {
+            Write-Error "Could not extract version from ref_name: $refName"
+            exit 1
+          }
+          .\verpatch.exe /va .\cargo-nextest.exe `
+            $version /high `
+            /pv $version `
+            /s product "cargo-nextest" `
+            /s "(c)" "(c) The nextest Contributors. License: MIT OR Apache-2.0"
+
       - name: Upload unsigned Windows artifact
         id: upload-unsigned-artifact
         if: endsWith(matrix.target, '-pc-windows-msvc')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-unsigned
-          path: target/${{ matrix.build-target }}/release/cargo-nextest.exe
+          path: target/unsigned/cargo-nextest.exe
       - run: mkdir -p target/signed
         if: endsWith(matrix.target, '-pc-windows-msvc')
       - name: Submit Windows artifact signing request
