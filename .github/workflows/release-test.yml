@@ -101,17 +101,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -x
           cd target/signed
 
           tar -czf ${{ github.ref_name }}-${{ matrix.target }}.tar.gz internal-test.exe
           # Windows has 7z, not zip.
           7z a ${{ github.ref_name }}-${{ matrix.target }}.zip internal-test.exe
 
-          sha256sum \
+          sha256sum --binary \
             ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
             ${{ github.ref_name }}-${{ matrix.target }}.zip \
             > ${{ github.ref_name }}-${{ matrix.target }}.sha256
-          b2sum \
+          b2sum --binary \
             ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
             ${{ github.ref_name }}-${{ matrix.target }}.zip \
             > ${{ github.ref_name }}-${{ matrix.target }}.b2
