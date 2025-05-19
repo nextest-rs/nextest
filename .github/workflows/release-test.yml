@@ -100,9 +100,8 @@ jobs:
         shell: bash
         run: |
           cd target/signed
-          unzip ${{ matrix.target }}-unsigned.zip
           tar -czf ${{ github.ref_name }}-${{ matrix.target }}.tar.gz internal-test.exe
-          mv ${{ matrix.target }}-unsigned.zip ${{ github.ref_name }}-${{ matrix.target }}.zip
+          zip -r ${{ github.ref_name }}-${{ matrix.target }}.zip internal-test.exe
           gh release upload ${{ github.ref }} \
             ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
             ${{ github.ref_name }}-${{ matrix.target }}.zip
