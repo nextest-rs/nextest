@@ -102,12 +102,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd target/signed
+
           tar -czf ${{ github.ref_name }}-${{ matrix.target }}.tar.gz internal-test.exe
           # Windows has 7z, not zip.
           7z a ${{ github.ref_name }}-${{ matrix.target }}.zip internal-test.exe
-          gh release upload ${{ github.ref_name }} \
+
+          sha256sum \
             ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip
+            ${{ github.ref_name }}-${{ matrix.target }}.zip \
+            > ${{ github.ref_name }}-${{ matrix.target }}.sha256
+          b2sum \
+            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
+            ${{ github.ref_name }}-${{ matrix.target }}.zip \
+            > ${{ github.ref_name }}-${{ matrix.target }}.b2
+
+          gh release upload ${{ github.ref_name }} \  
+            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
+            ${{ github.ref_name }}-${{ matrix.target }}.zip \
+            ${{ github.ref_name }}-${{ matrix.target }}.sha256 \
+            ${{ github.ref_name }}-${{ matrix.target }}.b2
       - name: Set archive output variable
         id: archive-output
         shell: bash
