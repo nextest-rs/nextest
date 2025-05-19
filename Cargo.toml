@@ -7,6 +7,7 @@ members = [
   "nextest-filtering",
   "nextest-metadata",
   "nextest-runner",
+  "internal-test",
   "workspace-hack",
 ]
 

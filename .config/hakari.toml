@@ -24,5 +24,6 @@ platforms = [
 exact-versions = true
 
 [traversal-excludes]
+workspace-members = ["internal-test"]
 # This is not part of the default build and is rarely needed.
 third-party = [{ name = "console-subscriber" }]
