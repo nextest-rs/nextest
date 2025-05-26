@@ -200,6 +200,9 @@ jobs:
           CARGO_PROFILE_RELEASE_LTO: true
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
 
+      - name: Install just on Windows
+        if: endsWith(matrix.target, '-pc-windows-msvc')
+        uses: taiki-e/install-action@just
       - name: Download verpatch on Windows
         if: endsWith(matrix.target, '-pc-windows-msvc')
         shell: bash
@@ -212,6 +215,8 @@ jobs:
           unzip verpatch-bin-1.0.10.zip
       - name: Add metadata to Windows binary
         if: endsWith(matrix.target, '-pc-windows-msvc')
+        # Bash seems to screw up argument parsing for verpatch. We really should
+        # rewrite this tool in Rust at some point.
         shell: powershell
         run: |
           cd target/unsigned
@@ -228,6 +233,12 @@ jobs:
             /pv $version `
             /s product "cargo-nextest" `
             /s "(c)" "(c) The nextest Contributors. License: MIT OR Apache-2.0"
+      - name: Get the Windows signing policy slug
+        if: endsWith(matrix.target, '-pc-windows-msvc')
+        id: get-signing-policy-slug
+        shell: bash
+        run: |
+          just win-signing-policy-slug "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload unsigned Windows artifact
         id: upload-unsigned-artifact
@@ -246,7 +257,7 @@ jobs:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '34634019-2ee0-4162-830a-72cd1a0cb73f'
           project-slug: 'nextest'
-          signing-policy-slug: 'test-signing'
+          signing-policy-slug: '${{ steps.get-signing-policy-slug.outputs.signing-policy-slug }}'
           github-artifact-id: '${{ steps.upload-unsigned-artifact.outputs.artifact-id }}'
           wait-for-completion: true
           output-artifact-directory: 'target/signed'
