@@ -706,7 +706,7 @@ fn test_termination() -> Result<()> {
     ] {
         let (_, instance_value) = instance_statuses
             .iter()
-            .find(|(&(_, name), _)| name == test_name)
+            .find(|&(&(_, name), _)| name == test_name)
             .unwrap_or_else(|| panic!("{test_name} should be present"));
         let valid = match &instance_value.status {
             InstanceStatus::Skipped(_) => panic!("{test_name} should have been run"),

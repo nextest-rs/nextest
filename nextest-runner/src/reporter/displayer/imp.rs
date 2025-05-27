@@ -1774,7 +1774,7 @@ impl ThemeCharacters {
     }
 
     fn hbar(&self, width: usize) -> String {
-        std::iter::repeat(self.hbar).take(width).collect()
+        std::iter::repeat_n(self.hbar, width).collect()
     }
 }
 

@@ -8,7 +8,7 @@ repository = "https://github.com/nextest-rs/nextest"
 documentation = "https://nexte.st"
 keywords = ["nextest", "test-runner", "flaky-tests", "junit"]
 categories = ["development-tools::cargo-plugins", "development-tools::testing"]
-edition = "2021"
+edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]

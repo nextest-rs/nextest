@@ -133,7 +133,7 @@ async fn fill_buf_opt<R: AsyncRead + Unpin>(
 
 /// A version of [`FusedBufReader::is_done`] that works with an `Option<FusedBufReader>`.
 fn is_done_opt<R: AsyncRead + Unpin>(reader: &Option<FusedBufReader<R>>) -> bool {
-    reader.as_ref().map_or(true, |r| r.is_done())
+    reader.as_ref().is_none_or(|r| r.is_done())
 }
 
 /// Output and result accumulator for a child process.

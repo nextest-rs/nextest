@@ -51,7 +51,9 @@ fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunn
 #[test]
 fn parses_cargo_env() {
     set_env_vars();
-    std::env::set_var(current_runner_env_var(), "cargo_with_default --arg --arg2");
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe { std::env::set_var(current_runner_env_var(), "cargo_with_default --arg --arg2") };
 
     let (_, def_runner) = runner_for_target(None).unwrap();
 
@@ -64,10 +66,14 @@ fn parses_cargo_env() {
         );
     }
 
-    std::env::set_var(
-        "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUNNER",
-        "cargo_with_specific",
-    );
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe {
+        std::env::set_var(
+            "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUNNER",
+            "cargo_with_specific",
+        )
+    };
 
     let (_, specific_runner) = runner_for_target(Some("aarch64-linux-android")).unwrap();
 
@@ -150,10 +156,14 @@ fn parses_cargo_config_cfg() {
 #[test]
 fn falls_back_to_cargo_config() {
     let linux = parse_triple("x86_64-unknown-linux-musl");
-    std::env::set_var(
-        "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
-        "cargo-runner-windows",
-    );
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe {
+        std::env::set_var(
+            "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER",
+            "cargo-runner-windows",
+        )
+    };
 
     let (_, target_runner) = runner_for_target(Some(linux.triple_str())).unwrap();
 
@@ -191,10 +201,14 @@ fn test_listing_with_target_runner() -> Result<()> {
     let test_count = test_list.test_count();
 
     {
-        std::env::set_var(
-            current_runner_env_var(),
-            format!("{} --ensure-this-arg-is-sent", passthrough_path()),
-        );
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe {
+            std::env::set_var(
+                current_runner_env_var(),
+                format!("{} --ensure-this-arg-is-sent", passthrough_path()),
+            )
+        };
         let (_, target_runner) = runner_for_target(None).unwrap();
 
         let test_list = FIXTURE_TARGETS.make_test_list(
@@ -223,10 +237,14 @@ fn test_run_with_target_runner() -> Result<()> {
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
 
-    std::env::set_var(
-        current_runner_env_var(),
-        format!("{} --ensure-this-arg-is-sent", passthrough_path()),
-    );
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe {
+        std::env::set_var(
+            current_runner_env_var(),
+            format!("{} --ensure-this-arg-is-sent", passthrough_path()),
+        )
+    };
     let (build_platforms, target_runner) = runner_for_target(None).unwrap();
 
     for (_, platform_runner) in target_runner.all_build_platforms() {

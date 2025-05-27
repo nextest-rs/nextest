@@ -653,7 +653,7 @@ impl<'g> TestList<'g> {
     fn parse_impl<'a>(
         binary_id: &'a RustBinaryId,
         list_output: &'a str,
-    ) -> impl Iterator<Item = Result<&'a str, CreateTestListError>> + 'a {
+    ) -> impl Iterator<Item = Result<&'a str, CreateTestListError>> + 'a + use<'a> {
         // The output is in the form:
         // <test name>: test
         // <test name>: test

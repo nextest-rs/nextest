@@ -28,12 +28,14 @@ pub(super) fn configure_handle_inheritance_impl(
     no_capture: bool,
 ) -> Result<(), ConfigureHandleInheritanceError> {
     unsafe fn set_handle_inherit(handle: u32, inherit: bool) -> std::io::Result<()> {
-        let handle = GetStdHandle(handle);
+        // SAFETY: Win32 call, handle is assumed to be valid
+        let handle = unsafe { GetStdHandle(handle) };
         if handle == INVALID_HANDLE_VALUE {
             return Err(std::io::Error::last_os_error());
         }
         let flags = if inherit { HANDLE_FLAG_INHERIT } else { 0 };
-        if SetHandleInformation(handle, HANDLE_FLAG_INHERIT, flags) == 0 {
+        // SAFETY: Win32 call, handle is assumed to be valid
+        if unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, flags) } == 0 {
             Err(std::io::Error::last_os_error())
         } else {
             Ok(())

@@ -2663,7 +2663,9 @@ mod tests {
         // Unset all NEXTEST_ env vars because they can conflict with the try_parse_from below.
         for (k, _) in std::env::vars() {
             if k.starts_with("NEXTEST_") {
-                std::env::remove_var(k);
+                // SAFETY:
+                // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+                unsafe { std::env::remove_var(k) };
             }
         }
 
@@ -2679,7 +2681,9 @@ mod tests {
             let mut env_keys = Vec::with_capacity(env_vars.len());
             for k_v in &env_vars {
                 let (k, v) = k_v.split_once('=').expect("valid env var");
-                std::env::set_var(k, v);
+                // SAFETY:
+                // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+                unsafe { std::env::set_var(k, v) };
                 env_keys.push(k);
             }
 
@@ -2692,7 +2696,9 @@ mod tests {
             // Unset any environment variables we set. (Don't really need to preserve the old value
             // for now.)
             for &k in &env_keys {
-                std::env::remove_var(k);
+                // SAFETY:
+                // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+                unsafe { std::env::remove_var(k) };
             }
         }
 

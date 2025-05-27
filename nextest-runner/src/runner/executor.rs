@@ -1259,13 +1259,7 @@ async fn handle_signal_request<'a>(
     child_acc: &mut ChildAccumulator,
     req: SignalRequest,
     stopwatch: &mut StopwatchStart,
-    // These annotations are needed to silence lints on non-Unix platforms.
-    //
-    // It would be nice to use an expect lint here, but Rust 1.81 appears to
-    // have a bug where it complains about expectations not being fulfilled on
-    // Windows, even though they are in reality. The bug is fixed in Rust 1.83,
-    // so we should switch to expect after the MSRV is bumped to 1.83+.
-    #[cfg_attr(not(unix), allow(unused_mut, unused_variables))] mut interval_sleep: Pin<
+    #[cfg_attr(not(unix), expect(unused_mut, unused_variables))] mut interval_sleep: Pin<
         &mut PausableSleep,
     >,
     req_rx: &mut UnboundedReceiver<RunUnitRequest<'a>>,
