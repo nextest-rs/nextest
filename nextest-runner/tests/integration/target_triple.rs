@@ -11,7 +11,9 @@ use target_spec::{Platform, TargetFeatures};
 
 #[test]
 fn parses_target_cli_option() {
-    std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl");
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe { std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl") };
     let triple = target_triple(Some("aarch64-unknown-linux-gnu"), Vec::new()).unwrap();
 
     assert_eq!(
@@ -26,7 +28,9 @@ fn parses_target_cli_option() {
 
 #[test]
 fn parses_cargo_env() {
-    std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl");
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe { std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl") };
     let triple = target_triple(None, Vec::new()).unwrap();
 
     assert_eq!(
@@ -44,7 +48,9 @@ static MY_TARGET_JSON_PATH: &str = "../custom-target/my-target.json";
 
 #[test]
 fn parses_custom_target_cli() {
-    std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl");
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe { std::env::set_var("CARGO_BUILD_TARGET", "x86_64-unknown-linux-musl") };
     let expected_path = workspace_root()
         .join(MY_TARGET_JSON_PATH)
         .canonicalize_utf8()
@@ -68,7 +74,9 @@ fn parses_custom_target_cli() {
 
 #[test]
 fn parses_custom_target_env() {
-    std::env::set_var("CARGO_BUILD_TARGET", MY_TARGET_JSON_PATH);
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe { std::env::set_var("CARGO_BUILD_TARGET", MY_TARGET_JSON_PATH) };
     let expected_path = workspace_root()
         .join(MY_TARGET_JSON_PATH)
         .canonicalize_utf8()
@@ -116,7 +124,9 @@ fn parses_custom_target_cli_from_rust_target_path() {
 
 #[test]
 fn parses_custom_target_env_from_rust_target_path() {
-    std::env::set_var("CARGO_BUILD_TARGET", MY_TARGET_TRIPLE_STR);
+    // SAFETY:
+    // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+    unsafe { std::env::set_var("CARGO_BUILD_TARGET", MY_TARGET_TRIPLE_STR) };
     let target_paths = vec![workspace_root().join("../custom-target")];
     let expected_path = workspace_root()
         .join(MY_TARGET_JSON_PATH)

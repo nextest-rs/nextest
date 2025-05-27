@@ -41,7 +41,7 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
         )))] {
             #[inline]
             unsafe fn set_cloexec(fd: libc::c_int) -> io::Result<()> {
-                cvt(libc::ioctl(fd, libc::FIOCLEX))?;
+                cvt(unsafe { libc::ioctl(fd, libc::FIOCLEX) })?;
                 Ok(())
             }
         } else if #[cfg(any(
@@ -59,10 +59,10 @@ pub(super) fn setup_io(cmd: &mut std::process::Command) -> io::Result<State> {
         ))] {
             #[inline]
             unsafe fn set_cloexec(fd: libc::c_int) -> io::Result<()> {
-                let previous = cvt(libc::fcntl(fd, libc::F_GETFD))?;
+                let previous = cvt(unsafe { libc::fcntl(fd, libc::F_GETFD) })?;
                 let new = previous | libc::FD_CLOEXEC;
                 if new != previous {
-                    cvt(libc::fcntl(fd, libc::F_SETFD, new))?;
+                    cvt(unsafe { libc::fcntl(fd, libc::F_SETFD, new) })?;
                 }
                 Ok(())
             }

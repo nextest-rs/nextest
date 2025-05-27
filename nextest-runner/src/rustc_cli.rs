@@ -118,7 +118,9 @@ mod tests {
 
     #[test]
     fn test_should_respect_rustc_env() {
-        env::set_var("RUSTC", "cargo");
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { env::set_var("RUSTC", "cargo") };
         let mut cli = RustcCli::default();
         cli.add_arg("--version");
         let output = cli.read().expect("cargo --version should run successfully");
@@ -133,7 +135,9 @@ mod tests {
     fn test_fail_to_spawn() {
         let fake_dir = Utf8TempDir::new().expect("should create the temp dir successfully");
         // No OS will allow executing a directory.
-        env::set_var("RUSTC", fake_dir.path());
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { env::set_var("RUSTC", fake_dir.path()) };
         let mut cli = RustcCli::default();
         cli.add_arg("--version");
         let output = cli.read();

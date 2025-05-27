@@ -3,6 +3,7 @@ name = "nextest-metadata"
 version = "0.12.2"
 description = "Structured access to nextest machine-readable output."
 license = "MIT OR Apache-2.0"
+# On older edition due to earlier MSRV.
 edition = "2021"
 readme = "README.md"
 repository = "https://github.com/nextest-rs/nextest"

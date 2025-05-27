@@ -709,10 +709,14 @@ mod tests {
         )
         .unwrap();
         if let Some(env) = env {
-            std::env::set_var("CARGO_BUILD_TARGET", env);
+            // SAFETY:
+            // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+            unsafe { std::env::set_var("CARGO_BUILD_TARGET", env) };
         }
         let ret = TargetTriple::from_cargo_configs(&configs).unwrap();
-        std::env::remove_var("CARGO_BUILD_TARGET");
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { std::env::remove_var("CARGO_BUILD_TARGET") };
         ret
     }
 

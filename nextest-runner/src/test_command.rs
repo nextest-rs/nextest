@@ -137,7 +137,7 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str> + AsRef<OsStr>,
 {
-    let cmd = if let Some(current_exe) = double_spawn.current_exe() {
+    if let Some(current_exe) = double_spawn.current_exe() {
         let mut cmd = std::process::Command::new(current_exe);
         cmd.args([DoubleSpawnInfo::SUBCOMMAND_NAME, "--", program.as_str()]);
         cmd.arg(shell_words::join(args));
@@ -146,9 +146,7 @@ where
         let mut cmd = std::process::Command::new(program);
         cmd.args(args);
         cmd
-    };
-
-    cmd
+    }
 }
 
 fn apply_package_env(cmd: &mut std::process::Command, package: &PackageMetadata<'_>) {

@@ -237,7 +237,9 @@ fn test_target_dir() {
 
     // CARGO_TARGET_DIR env var
     {
-        std::env::set_var("CARGO_TARGET_DIR", "test-target-dir-2");
+        // SAFETY:
+        // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
+        unsafe { std::env::set_var("CARGO_TARGET_DIR", "test-target-dir-2") };
         run_check("test-target-dir-2", vec![]);
     }
 

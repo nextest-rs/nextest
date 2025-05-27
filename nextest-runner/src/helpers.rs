@@ -369,7 +369,7 @@ where
 }
 
 // From https://twitter.com/8051Enthusiast/status/1571909110009921538
-extern "C" {
+unsafe extern "C" {
     fn __nextest_external_symbol_that_does_not_exist();
 }
 

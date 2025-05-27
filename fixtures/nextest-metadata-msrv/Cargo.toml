@@ -1,0 +1,11 @@
+[workspace]
+members = ["."]
+
+[package]
+name = "nextest-metadata-msrv-test"
+edition = "2021"
+# Same as nextest-metadata's MSRV.
+rust-version = "1.78"
+
+[dependencies]
+nextest-metadata = { path = "../../nextest-metadata" }

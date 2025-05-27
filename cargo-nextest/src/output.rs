@@ -352,7 +352,7 @@ impl OutputWriter {
                 _lifetime: PhantomData,
             },
             #[cfg(test)]
-            Self::Test { ref mut stdout, .. } => StdoutWriter::Test { buf: stdout },
+            Self::Test { stdout, .. } => StdoutWriter::Test { buf: stdout },
         }
     }
 
@@ -360,7 +360,7 @@ impl OutputWriter {
         match self {
             Self::Normal => ReporterStderr::Terminal,
             #[cfg(test)]
-            Self::Test { ref mut stderr, .. } => ReporterStderr::Buffer(stderr),
+            Self::Test { stderr, .. } => ReporterStderr::Buffer(stderr),
         }
     }
 
@@ -371,7 +371,7 @@ impl OutputWriter {
                 _lifetime: PhantomData,
             },
             #[cfg(test)]
-            Self::Test { ref mut stderr, .. } => StderrWriter::Test { buf: stderr },
+            Self::Test { stderr, .. } => StderrWriter::Test { buf: stderr },
         }
     }
 }

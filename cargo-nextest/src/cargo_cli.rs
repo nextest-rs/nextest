@@ -345,7 +345,10 @@ impl<'a> CargoCli<'a> {
         // ---
 
         if options.cargo_verbose > 0 {
-            self.add_args(std::iter::repeat("--verbose").take(options.cargo_verbose.into()));
+            self.add_args(std::iter::repeat_n(
+                "--verbose",
+                options.cargo_verbose.into(),
+            ));
         }
         if options.ignore_rust_version {
             self.add_arg("--ignore-rust-version");

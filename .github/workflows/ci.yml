@@ -55,7 +55,7 @@ jobs:
         run: cargo doc --all-features --workspace
   
   nextest-metadata-msrv:
-    name: Build and test nextest-metadata on MSRV
+    name: Build nextest-metadata on MSRV
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -66,12 +66,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
-      - name: Install latest nextest release
-        uses: taiki-e/install-action@nextest
-      - name: Build nextest-metadata
-        run: cargo build --package nextest-metadata
-      - name: Run nextest-metadata tests
-        run: cargo nextest run --package nextest-metadata
+      - name: Build nextest-metadata-msrv
+        run: cd fixtures/nextest-metadata-msrv && cargo build
+      # It would be nice to run tests, but it seems hard to do that without some
+      # horrible patching of the various Cargo.toml files. It's also not really
+      # necessary, since we already run tests in the "Build and test" job below.
 
   build:
     name: Build and test
@@ -83,8 +82,8 @@ jobs:
           # macos-14 for M1 runners
           - macos-14
           - windows-latest
-        # 1.81 is the MSRV
-        rust-version: ["1.81", stable]
+        # 1.85 is the MSRV
+        rust-version: ["1.85", stable]
       fail-fast: false
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
