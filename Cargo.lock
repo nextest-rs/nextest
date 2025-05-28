@@ -363,9 +363,9 @@ dependencies = [
 
 [[package]]
 name = "camino-tempfile-ext"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7b3ab964bd19840be2c70b7795188187a8c1c90006a310b1500bf67b35a80d3"
+checksum = "97daccb5e4621ca2bbd3e8716a24f11721afed7fc82c9008d30c6fed3390183a"
 dependencies = [
  "camino",
  "camino-tempfile",
