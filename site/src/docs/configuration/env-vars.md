@@ -55,6 +55,9 @@ Nextest also reads the following environment variables to emulate Cargo's behavi
 `CARGO`
 : Path to the `cargo` binary to use for builds
 
+`CARGO_BUILD_TARGET`
+: Build target for cross-compilation
+
 `CARGO_TARGET_DIR`
 : Where to place generated artifacts
 
