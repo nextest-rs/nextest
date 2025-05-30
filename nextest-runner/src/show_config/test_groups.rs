@@ -35,7 +35,7 @@ impl<'a> ShowTestGroups<'a> {
         profile: &EarlyProfile<'_>,
         groups: impl IntoIterator<Item = TestGroup>,
     ) -> Result<ValidatedTestGroups, ShowTestGroupsError> {
-        let groups = groups.into_iter().collect();
+        let groups: BTreeSet<_> = groups.into_iter().collect();
         let known_groups: BTreeSet<_> =
             TestGroup::make_all_groups(profile.test_group_config().keys().cloned()).collect();
         let unknown_groups = &groups - &known_groups;
