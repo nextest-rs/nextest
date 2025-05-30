@@ -1,5 +1,5 @@
 [alias]
-xfmt = "fmt -- --config imports_granularity=Crate --config group_imports=One"
+xfmt = "fmt -- --config imports_granularity=Crate --config group_imports=One --config format_code_in_doc_comments=true"
 local-nt = "run --package cargo-nextest -- nextest"
 
 [build]

@@ -309,14 +309,14 @@ impl RustBinaryId {
     ///     RustBinaryId::new("foo-lib"),
     /// );
     /// assert_eq!(
-    ///    RustBinaryId::from_parts("foo-derive", &RustTestBinaryKind::PROC_MACRO, "derive"),
-    ///    RustBinaryId::new("foo-derive"),
+    ///     RustBinaryId::from_parts("foo-derive", &RustTestBinaryKind::PROC_MACRO, "derive"),
+    ///     RustBinaryId::new("foo-derive"),
     /// );
     ///
     /// // Integration tests.
     /// assert_eq!(
-    ///    RustBinaryId::from_parts("foo-lib", &RustTestBinaryKind::TEST, "foo_test"),
-    ///    RustBinaryId::new("foo-lib::foo_test"),
+    ///     RustBinaryId::from_parts("foo-lib", &RustTestBinaryKind::TEST, "foo_test"),
+    ///     RustBinaryId::new("foo-lib::foo_test"),
     /// );
     ///
     /// // Other kinds.
