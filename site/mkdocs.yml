@@ -59,7 +59,7 @@ plugins:
 
 extra:
     # **Rust MSRV**. Update at release time.
-    msrv: "1.81"
+    msrv: "1.85"
     status:
         experimental: "Experimental: not stable yet"
         new: Recently added
