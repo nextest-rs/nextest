@@ -23,13 +23,12 @@ clap = { version = "4.5.39", features = ["derive", "env", "unicode", "unstable-m
 clap_builder = { version = "4.5.39", default-features = false, features = ["color", "env", "std", "suggestions", "unicode", "usage", "wrap_help"] }
 console = { version = "0.15.10" }
 either = { version = "1.13.0" }
+form_urlencoded = { version = "1.2.1" }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2.15", default-features = false, features = ["std"] }
-idna_adapter = { version = "1.0.0", default-features = false, features = ["compiled_data"] }
 indexmap = { version = "2.9.0", features = ["serde"] }
 log = { version = "0.4.27", default-features = false, features = ["std"] }
 memchr = { version = "2.7.4" }
 miette = { version = "7.6.0", features = ["fancy"] }
-num-traits = { version = "0.2.19", default-features = false, features = ["std"] }
 regex-automata = { version = "0.4.9", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "unicode"] }
 regex-syntax = { version = "0.8.5" }
 serde = { version = "1.0.219", features = ["alloc", "derive"] }
@@ -38,6 +37,8 @@ smallvec = { version = "1.15.0", default-features = false, features = ["const_ge
 target-spec = { version = "3.4.2", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.4", default-features = false, features = ["fixtures"] }
 tokio = { version = "1.45.1", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
+toml = { version = "0.8.22", features = ["preserve_order"] }
+toml_edit = { version = "0.22.26", features = ["serde"] }
 tracing-core = { version = "0.1.33" }
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt", "tracing-log"] }
 xxhash-rust = { version = "0.8.15", default-features = false, features = ["xxh3", "xxh64"] }
@@ -61,6 +62,7 @@ getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.3", default
 libc = { version = "0.2.172", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.4.15", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 mio = { version = "1.0.3", features = ["net", "os-ext"] }
+percent-encoding = { version = "2.3.1" }
 rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38.44", features = ["fs", "termios"] }
 rustix-dff4ba8e3ae991db = { package = "rustix", version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.0", default-features = false, features = ["const_new"] }
@@ -78,6 +80,7 @@ futures-sink = { version = "0.3.31" }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.3", default-features = false, features = ["std"] }
 libc = { version = "0.2.172", features = ["extra_traits"] }
 mio = { version = "1.0.3", features = ["net", "os-ext"] }
+percent-encoding = { version = "2.3.1" }
 rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38.44", features = ["fs", "termios"] }
 rustix-dff4ba8e3ae991db = { package = "rustix", version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.0", default-features = false, features = ["const_new"] }
@@ -92,6 +95,7 @@ futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3.3", default-features = false, features = ["std"] }
+percent-encoding = { version = "2.3.1" }
 smallvec = { version = "1.15.0", default-features = false, features = ["const_new"] }
 tokio = { version = "1.45.1", default-features = false, features = ["net"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Win32_Globalization", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
