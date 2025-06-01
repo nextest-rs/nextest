@@ -15,6 +15,7 @@
 
 use guppy::graph::cargo::BuildPlatform;
 use miette::SourceSpan;
+use recursion::CollapsibleExt;
 use std::fmt;
 use winnow::{
     LocatingSlice, ModalParser, Parser,
@@ -26,7 +27,11 @@ use winnow::{
 
 mod glob;
 mod unicode_string;
-use crate::{NameMatcher, errors::*};
+use crate::{
+    NameMatcher,
+    errors::*,
+    expression::{ExprFrame, Wrapped},
+};
 pub(crate) use glob::GenericGlob;
 pub(crate) use unicode_string::DisplayParsedString;
 
@@ -41,12 +46,10 @@ pub(crate) fn new_span<'a>(input: &'a str, errors: &'a mut Vec<ParseSingleError>
     }
 }
 
-/// A filterset that hasn't been compiled against a package graph.
-///
-/// Not part of the public API. Exposed for testing only.
+/// A filterset that has been parsed but not yet compiled against a package
+/// graph.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[doc(hidden)]
-pub enum SetDef<S = SourceSpan> {
+pub enum ParsedLeaf<S = SourceSpan> {
     Package(NameMatcher, S),
     Deps(NameMatcher, S),
     Rdeps(NameMatcher, S),
@@ -60,26 +63,35 @@ pub enum SetDef<S = SourceSpan> {
     None,
 }
 
-impl SetDef {
+impl ParsedLeaf {
+    /// Returns true if this leaf can only be evaluated at runtime, i.e. it
+    /// requires test names to be available.
+    ///
+    /// Currently, this also returns true (conservatively) for the `Default`
+    /// leaf, which is used to represent the default set of tests to run.
+    pub fn is_runtime_only(&self) -> bool {
+        matches!(self, Self::Test(_, _) | Self::Default(_))
+    }
+
     #[cfg(test)]
-    fn drop_source_span(self) -> SetDef<()> {
+    fn drop_source_span(self) -> ParsedLeaf<()> {
         match self {
-            Self::Package(matcher, _) => SetDef::Package(matcher, ()),
-            Self::Deps(matcher, _) => SetDef::Deps(matcher, ()),
-            Self::Rdeps(matcher, _) => SetDef::Rdeps(matcher, ()),
-            Self::Kind(matcher, _) => SetDef::Kind(matcher, ()),
-            Self::Binary(matcher, _) => SetDef::Binary(matcher, ()),
-            Self::BinaryId(matcher, _) => SetDef::BinaryId(matcher, ()),
-            Self::Platform(platform, _) => SetDef::Platform(platform, ()),
-            Self::Test(matcher, _) => SetDef::Test(matcher, ()),
-            Self::Default(_) => SetDef::Default(()),
-            Self::All => SetDef::All,
-            Self::None => SetDef::None,
+            Self::Package(matcher, _) => ParsedLeaf::Package(matcher, ()),
+            Self::Deps(matcher, _) => ParsedLeaf::Deps(matcher, ()),
+            Self::Rdeps(matcher, _) => ParsedLeaf::Rdeps(matcher, ()),
+            Self::Kind(matcher, _) => ParsedLeaf::Kind(matcher, ()),
+            Self::Binary(matcher, _) => ParsedLeaf::Binary(matcher, ()),
+            Self::BinaryId(matcher, _) => ParsedLeaf::BinaryId(matcher, ()),
+            Self::Platform(platform, _) => ParsedLeaf::Platform(platform, ()),
+            Self::Test(matcher, _) => ParsedLeaf::Test(matcher, ()),
+            Self::Default(_) => ParsedLeaf::Default(()),
+            Self::All => ParsedLeaf::All,
+            Self::None => ParsedLeaf::None,
         }
     }
 }
 
-impl<S> fmt::Display for SetDef<S> {
+impl<S> fmt::Display for ParsedLeaf<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Package(matcher, _) => write!(f, "package({matcher})"),
@@ -108,7 +120,7 @@ pub enum ParsedExpr<S = SourceSpan> {
     Intersection(AndOperator, Box<ParsedExpr<S>>, Box<ParsedExpr<S>>),
     Difference(DifferenceOperator, Box<ParsedExpr<S>>, Box<ParsedExpr<S>>),
     Parens(Box<ParsedExpr<S>>),
-    Set(SetDef<S>),
+    Set(ParsedLeaf<S>),
 }
 
 impl ParsedExpr {
@@ -119,6 +131,24 @@ impl ParsedExpr {
             ExprResult::Valid(expr) => Ok(expr),
             ExprResult::Error => Err(errors),
         }
+    }
+
+    /// Returns runtime-only leaves, i.e. ones that require test names to be
+    /// available.
+    pub fn runtime_only_leaves(&self) -> Vec<&ParsedLeaf> {
+        use ExprFrame::*;
+
+        let mut leaves = Vec::new();
+        Wrapped(self).collapse_frames(|layer: ExprFrame<&ParsedLeaf, ()>| match layer {
+            Set(leaf) => {
+                if leaf.is_runtime_only() {
+                    leaves.push(leaf);
+                }
+            }
+            Not(_) | Union(_, _) | Intersection(_, _) | Difference(_, _) | Parens(_) => (),
+        });
+
+        leaves
     }
 
     fn boxed(self) -> Box<Self> {
@@ -147,12 +177,12 @@ impl ParsedExpr {
 
     #[cfg(test)]
     fn all() -> ParsedExpr {
-        ParsedExpr::Set(SetDef::All)
+        ParsedExpr::Set(ParsedLeaf::All)
     }
 
     #[cfg(test)]
     fn none() -> ParsedExpr {
-        ParsedExpr::Set(SetDef::None)
+        ParsedExpr::Set(ParsedLeaf::None)
     }
 
     #[cfg(test)]
@@ -532,8 +562,8 @@ fn recover_unexpected_comma<'i>(input: &mut Span<'i>) -> PResult<()> {
 
 fn nullary_set_def<'a>(
     name: &'static str,
-    make_set: fn(SourceSpan) -> SetDef,
-) -> impl ModalParser<Span<'a>, Option<SetDef>, Error> {
+    make_set: fn(SourceSpan) -> ParsedLeaf,
+) -> impl ModalParser<Span<'a>, Option<ParsedLeaf>, Error> {
     move |i: &mut Span<'_>| {
         let start = i.current_token_start();
         let _ = literal(name).parse_next(i)?;
@@ -580,8 +610,8 @@ impl DefaultMatcher {
 fn unary_set_def<'a>(
     name: &'static str,
     default_matcher: DefaultMatcher,
-    make_set: fn(NameMatcher, SourceSpan) -> SetDef,
-) -> impl ModalParser<Span<'a>, Option<SetDef>, Error> {
+    make_set: fn(NameMatcher, SourceSpan) -> ParsedLeaf,
+) -> impl ModalParser<Span<'a>, Option<ParsedLeaf>, Error> {
     move |i: &mut _| {
         let _ = literal(name).parse_next(i)?;
         let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
@@ -594,7 +624,7 @@ fn unary_set_def<'a>(
     }
 }
 
-fn platform_def(i: &mut Span<'_>) -> PResult<Option<SetDef>> {
+fn platform_def(i: &mut Span<'_>) -> PResult<Option<ParsedLeaf>> {
     let _ = "platform".parse_next(i)?;
     let _ = expect_char('(', ParseSingleError::ExpectedOpenParenthesis).parse_next(i)?;
     let start = i.current_token_start();
@@ -620,25 +650,25 @@ fn platform_def(i: &mut Span<'_>) -> PResult<Option<SetDef>> {
             None
         }
     };
-    Ok(platform.map(|platform| SetDef::Platform(platform, (start, end - start).into())))
+    Ok(platform.map(|platform| ParsedLeaf::Platform(platform, (start, end - start).into())))
 }
 
-fn parse_set_def(input: &mut Span<'_>) -> PResult<Option<SetDef>> {
+fn parse_set_def(input: &mut Span<'_>) -> PResult<Option<ParsedLeaf>> {
     trace(
         "parse_set_def",
         ws(alt((
-            unary_set_def("package", DefaultMatcher::Glob, SetDef::Package),
-            unary_set_def("deps", DefaultMatcher::Glob, SetDef::Deps),
-            unary_set_def("rdeps", DefaultMatcher::Glob, SetDef::Rdeps),
-            unary_set_def("kind", DefaultMatcher::Equal, SetDef::Kind),
+            unary_set_def("package", DefaultMatcher::Glob, ParsedLeaf::Package),
+            unary_set_def("deps", DefaultMatcher::Glob, ParsedLeaf::Deps),
+            unary_set_def("rdeps", DefaultMatcher::Glob, ParsedLeaf::Rdeps),
+            unary_set_def("kind", DefaultMatcher::Equal, ParsedLeaf::Kind),
             // binary_id must go above binary, otherwise we'll parse the opening predicate wrong.
-            unary_set_def("binary_id", DefaultMatcher::Glob, SetDef::BinaryId),
-            unary_set_def("binary", DefaultMatcher::Glob, SetDef::Binary),
-            unary_set_def("test", DefaultMatcher::Contains, SetDef::Test),
+            unary_set_def("binary_id", DefaultMatcher::Glob, ParsedLeaf::BinaryId),
+            unary_set_def("binary", DefaultMatcher::Glob, ParsedLeaf::Binary),
+            unary_set_def("test", DefaultMatcher::Contains, ParsedLeaf::Test),
             platform_def,
-            nullary_set_def("default", SetDef::Default),
-            nullary_set_def("all", |_| SetDef::All),
-            nullary_set_def("none", |_| SetDef::None),
+            nullary_set_def("default", ParsedLeaf::Default),
+            nullary_set_def("all", |_| ParsedLeaf::All),
+            nullary_set_def("none", |_| ParsedLeaf::None),
         ))),
     )
     .parse_next(input)
@@ -996,22 +1026,22 @@ mod tests {
     }
 
     #[track_caller]
-    fn parse_set(input: &str) -> SetDef {
+    fn parse_set(input: &str) -> ParsedLeaf {
         let mut errors = Vec::new();
         let span = new_span(input, &mut errors);
         parse_set_def.parse_peek(span).unwrap().1.unwrap()
     }
 
-    macro_rules! assert_set_def {
+    macro_rules! assert_parsed_leaf {
         ($input: expr, $name:ident, $matches:expr) => {
-            assert!(matches!($input, SetDef::$name(x, _) if x == $matches));
+            assert!(matches!($input, ParsedLeaf::$name(x, _) if x == $matches));
         };
     }
 
     #[test]
     fn test_parse_name_matcher() {
         // Basic matchers
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(~something)"),
             Test,
             NameMatcher::Contains {
@@ -1020,7 +1050,7 @@ mod tests {
             }
         );
 
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(=something)"),
             Test,
             NameMatcher::Equal {
@@ -1028,29 +1058,29 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(/some.*/)"),
             Test,
             NameMatcher::Regex(regex::Regex::new("some.*").unwrap())
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(#something)"),
             Test,
             make_glob_matcher("something", false)
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(#something*)"),
             Test,
             make_glob_matcher("something*", false)
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set(r"test(#something/[?])"),
             Test,
             make_glob_matcher("something/[?]", false)
         );
 
         // Default matchers
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(something)"),
             Test,
             NameMatcher::Contains {
@@ -1058,14 +1088,14 @@ mod tests {
                 implicit: true,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("package(something)"),
             Package,
             make_glob_matcher("something", true)
         );
 
         // Explicit contains matching
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(~something)"),
             Test,
             NameMatcher::Contains {
@@ -1073,7 +1103,7 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(~~something)"),
             Test,
             NameMatcher::Contains {
@@ -1081,7 +1111,7 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(~=something)"),
             Test,
             NameMatcher::Contains {
@@ -1089,7 +1119,7 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(~/something/)"),
             Test,
             NameMatcher::Contains {
@@ -1097,7 +1127,7 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(~#something)"),
             Test,
             NameMatcher::Contains {
@@ -1107,7 +1137,7 @@ mod tests {
         );
 
         // Explicit equals matching.
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(=something)"),
             Test,
             NameMatcher::Equal {
@@ -1115,7 +1145,7 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(=~something)"),
             Test,
             NameMatcher::Equal {
@@ -1123,7 +1153,7 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(==something)"),
             Test,
             NameMatcher::Equal {
@@ -1131,7 +1161,7 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(=/something/)"),
             Test,
             NameMatcher::Equal {
@@ -1139,7 +1169,7 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(=#something)"),
             Test,
             NameMatcher::Equal {
@@ -1149,22 +1179,22 @@ mod tests {
         );
 
         // Explicit glob matching.
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(#~something)"),
             Test,
             make_glob_matcher("~something", false)
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(#=something)"),
             Test,
             make_glob_matcher("=something", false)
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(#/something/)"),
             Test,
             make_glob_matcher("/something/", false)
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(##something)"),
             Test,
             make_glob_matcher("#something", false)
@@ -1173,7 +1203,7 @@ mod tests {
 
     #[test]
     fn test_parse_name_matcher_quote() {
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set(r"test(some'thing)"),
             Test,
             NameMatcher::Contains {
@@ -1181,7 +1211,7 @@ mod tests {
                 implicit: true,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set(r"test(some(thing\))"),
             Test,
             NameMatcher::Contains {
@@ -1189,7 +1219,7 @@ mod tests {
                 implicit: true,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set(r"test(some \u{55})"),
             Test,
             NameMatcher::Contains {
@@ -1201,12 +1231,12 @@ mod tests {
 
     #[test]
     fn test_parse_set_def() {
-        assert_eq!(SetDef::All, parse_set("all()"));
-        assert_eq!(SetDef::All, parse_set(" all ( ) "));
+        assert_eq!(ParsedLeaf::All, parse_set("all()"));
+        assert_eq!(ParsedLeaf::All, parse_set(" all ( ) "));
 
-        assert_eq!(SetDef::None, parse_set("none()"));
+        assert_eq!(ParsedLeaf::None, parse_set("none()"));
 
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("package(=something)"),
             Package,
             NameMatcher::Equal {
@@ -1214,17 +1244,17 @@ mod tests {
                 implicit: false,
             }
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("deps(something)"),
             Deps,
             make_glob_matcher("something", true)
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("rdeps(something)"),
             Rdeps,
             make_glob_matcher("something", true)
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("test(something)"),
             Test,
             NameMatcher::Contains {
@@ -1232,13 +1262,13 @@ mod tests {
                 implicit: true,
             }
         );
-        assert_set_def!(parse_set("platform(host)"), Platform, BuildPlatform::Host);
-        assert_set_def!(
+        assert_parsed_leaf!(parse_set("platform(host)"), Platform, BuildPlatform::Host);
+        assert_parsed_leaf!(
             parse_set("platform(target)"),
             Platform,
             BuildPlatform::Target
         );
-        assert_set_def!(
+        assert_parsed_leaf!(
             parse_set("platform(    host    )"),
             Platform,
             BuildPlatform::Host
@@ -1404,7 +1434,7 @@ mod tests {
     #[test]
     fn test_parse_comma() {
         // accept escaped comma
-        let expr = ParsedExpr::Set(SetDef::Test(
+        let expr = ParsedExpr::Set(ParsedLeaf::Test(
             NameMatcher::Contains {
                 value: "a,".to_string(),
                 implicit: false,

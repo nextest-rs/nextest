@@ -12,15 +12,15 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, builder::BoolishValueParser};
 use guppy::graph::PackageGraph;
 use itertools::Itertools;
-use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext};
+use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::BuildPlatform;
 use nextest_runner::{
     RustcCli,
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        ConfigExperimental, EarlyProfile, MaxFail, NextestConfig, NextestVersionConfig,
-        NextestVersionEval, RetryPolicy, TestGroup, TestThreads, ToolConfigFile, VersionOnlyConfig,
-        get_num_cpus,
+        ConfigExperimental, EarlyProfile, EvaluatableProfile, MaxFail, NextestConfig,
+        NextestVersionConfig, NextestVersionEval, RetryPolicy, TestGroup, TestThreads,
+        ToolConfigFile, VersionOnlyConfig, get_num_cpus,
     },
     double_spawn::DoubleSpawnInfo,
     errors::{TargetTripleError, WriteTestListError},
@@ -612,7 +612,7 @@ impl TestBuildFilter {
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
         env: EnvironmentMap,
-        ecx: &EvalContext<'_>,
+        profile: &EvaluatableProfile<'_>,
         reuse_build: &ReuseBuildInfo,
     ) -> Result<TestList<'g>> {
         let path_mapper = make_path_mapper(
@@ -636,7 +636,7 @@ impl TestBuildFilter {
             &test_filter_builder,
             workspace_root,
             env,
-            ecx,
+            profile,
             if self.ignore_default_filter {
                 FilterBound::All
             } else {
@@ -1624,7 +1624,7 @@ impl App {
         ctx: &TestExecuteContext<'_>,
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
-        ecx: &EvalContext<'_>,
+        profile: &EvaluatableProfile<'_>,
     ) -> Result<TestList> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
@@ -1634,7 +1634,7 @@ impl App {
             binary_list,
             test_filter_builder,
             env,
-            ecx,
+            profile,
             &self.base.reuse_build,
         )
     }
@@ -1679,10 +1679,9 @@ impl App {
                     double_spawn,
                     target_runner,
                 };
-                let ecx = profile.filterset_ecx();
 
                 let test_list =
-                    self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
+                    self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
                 let mut writer = output_writer.stdout_writer();
                 test_list.write(
@@ -1735,9 +1734,8 @@ impl App {
             double_spawn,
             target_runner,
         };
-        let ecx = profile.filterset_ecx();
 
-        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
+        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
         let mut writer = output_writer.stdout_writer();
 
@@ -1833,9 +1831,8 @@ impl App {
             double_spawn,
             target_runner,
         };
-        let ecx = profile.filterset_ecx();
 
-        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &ecx)?;
+        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
 
         let output = output_writer.reporter_output();
 

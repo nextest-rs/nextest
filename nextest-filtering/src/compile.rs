@@ -4,7 +4,7 @@
 use crate::{
     errors::{BannedPredicateReason, ParseSingleError},
     expression::*,
-    parsing::{ParsedExpr, SetDef},
+    parsing::{ParsedExpr, ParsedLeaf},
 };
 use guppy::{
     PackageId,
@@ -43,8 +43,8 @@ fn check_banned_predicates(
         FiltersetKind::Test => {}
         FiltersetKind::DefaultFilter => {
             // The `default` predicate is banned.
-            Wrapped(expr).collapse_frames(|layer: ExprFrame<&SetDef, ()>| {
-                if let ExprFrame::Set(SetDef::Default(span)) = layer {
+            Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, ()>| {
+                if let ExprFrame::Set(ParsedLeaf::Default(span)) = layer {
                     errors.push(ParseSingleError::BannedPredicate {
                         kind,
                         span: *span,
@@ -110,41 +110,41 @@ fn rdependencies_packages(
 }
 
 fn compile_set_def(
-    set: &SetDef,
+    set: &ParsedLeaf,
     cx_cache: &ParseContextCache<'_>,
     cache: &mut DependsCache<'_>,
     errors: &mut Vec<ParseSingleError>,
 ) -> FiltersetLeaf {
     match set {
-        SetDef::Package(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
+        ParsedLeaf::Package(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
             matching_packages(matcher, &cx_cache.workspace_packages),
             *span,
             errors,
         )),
-        SetDef::Deps(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
+        ParsedLeaf::Deps(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
             dependencies_packages(matcher, &cx_cache.workspace_packages, cache),
             *span,
             errors,
         )),
-        SetDef::Rdeps(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
+        ParsedLeaf::Rdeps(matcher, span) => FiltersetLeaf::Packages(expect_non_empty_packages(
             rdependencies_packages(matcher, &cx_cache.workspace_packages, cache),
             *span,
             errors,
         )),
-        SetDef::Kind(matcher, span) => FiltersetLeaf::Kind(matcher.clone(), *span),
-        SetDef::Binary(matcher, span) => FiltersetLeaf::Binary(
+        ParsedLeaf::Kind(matcher, span) => FiltersetLeaf::Kind(matcher.clone(), *span),
+        ParsedLeaf::Binary(matcher, span) => FiltersetLeaf::Binary(
             expect_non_empty_binary_names(matcher, &cx_cache.binary_names, *span, errors),
             *span,
         ),
-        SetDef::BinaryId(matcher, span) => FiltersetLeaf::BinaryId(
+        ParsedLeaf::BinaryId(matcher, span) => FiltersetLeaf::BinaryId(
             expect_non_empty_binary_ids(matcher, &cx_cache.binary_ids, *span, errors),
             *span,
         ),
-        SetDef::Platform(platform, span) => FiltersetLeaf::Platform(*platform, *span),
-        SetDef::Test(matcher, span) => FiltersetLeaf::Test(matcher.clone(), *span),
-        SetDef::Default(_) => FiltersetLeaf::Default,
-        SetDef::All => FiltersetLeaf::All,
-        SetDef::None => FiltersetLeaf::None,
+        ParsedLeaf::Platform(platform, span) => FiltersetLeaf::Platform(*platform, *span),
+        ParsedLeaf::Test(matcher, span) => FiltersetLeaf::Test(matcher.clone(), *span),
+        ParsedLeaf::Default(_) => FiltersetLeaf::Default,
+        ParsedLeaf::All => FiltersetLeaf::All,
+        ParsedLeaf::None => FiltersetLeaf::None,
     }
 }
 
@@ -211,7 +211,7 @@ fn compile_expr(
 ) -> CompiledExpr {
     use crate::expression::ExprFrame::*;
 
-    Wrapped(expr).collapse_frames(|layer: ExprFrame<&SetDef, CompiledExpr>| match layer {
+    Wrapped(expr).collapse_frames(|layer: ExprFrame<&ParsedLeaf, CompiledExpr>| match layer {
         Set(set) => CompiledExpr::Set(compile_set_def(set, cx_cache, cache, errors)),
         Not(expr) => CompiledExpr::Not(Box::new(expr)),
         Union(expr_1, expr_2) => CompiledExpr::Union(Box::new(expr_1), Box::new(expr_2)),

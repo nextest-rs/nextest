@@ -626,9 +626,12 @@ impl<'a> ExecutorContext<'a> {
             double_spawn: &self.double_spawn,
             target_runner: &self.target_runner,
         };
-        let mut cmd =
-            test.test_instance
-                .make_command(&ctx, self.test_list, test.settings.run_extra_args());
+        let mut cmd = test.test_instance.make_command(
+            &ctx,
+            self.test_list,
+            test.settings.run_wrapper(),
+            test.settings.run_extra_args(),
+        );
         let command_mut = cmd.command_mut();
 
         // Debug environment variable for testing.

@@ -5,15 +5,17 @@ use super::{
     ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
     CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
     JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
-    ScriptId, ScriptType, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig,
-    TestSettings, TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
+    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
+    TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
 };
 use crate::{
-    config::SetupScriptConfig,
+    config::{ListSettings, ProfileScriptType, ScriptInfo, SetupScriptConfig},
     errors::{
-        ConfigParseError, ConfigParseErrorKind, ProfileNotFound, UnknownConfigScriptError,
-        UnknownTestGroupError, provided_by_tool,
+        ConfigParseError, ConfigParseErrorKind, ProfileListScriptUsesRunFiltersError,
+        ProfileNotFound, ProfileScriptErrors, ProfileUnknownScriptError,
+        ProfileWrongConfigScriptTypeError, UnknownTestGroupError, provided_by_tool,
     },
+    helpers::plural,
     list::TestList,
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
@@ -22,8 +24,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use config::{
     Config, ConfigBuilder, ConfigError, File, FileFormat, FileSourceFile, builder::DefaultState,
 };
+use iddqd::IdOrdMap;
 use indexmap::IndexMap;
-use nextest_filtering::{EvalContext, ParseContext, TestQuery};
+use nextest_filtering::{BinaryQuery, EvalContext, Filterset, ParseContext, TestQuery};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map},
@@ -60,6 +63,17 @@ pub trait ConfigWarnings {
         config_file: &Utf8Path,
         workspace_root: &Utf8Path,
         tool: Option<&str>,
+    );
+
+    /// Handle warning about empty script sections with neither setup nor
+    /// wrapper scripts.
+    fn empty_script_sections(
+        &mut self,
+        config_file: &Utf8Path,
+        workspace_root: &Utf8Path,
+        tool: Option<&str>,
+        profile_name: &str,
+        empty_count: usize,
     );
 }
 
@@ -129,6 +143,27 @@ impl ConfigWarnings for DefaultConfigWarnings {
                 .strip_prefix(workspace_root)
                 .unwrap_or(config_file),
             provided_by_tool(tool),
+        );
+    }
+
+    fn empty_script_sections(
+        &mut self,
+        config_file: &Utf8Path,
+        workspace_root: &Utf8Path,
+        tool: Option<&str>,
+        profile_name: &str,
+        empty_count: usize,
+    ) {
+        warn!(
+            "in config file {}{}, [[profile.{}.scripts]] has {} {} \
+             with neither setup nor wrapper scripts",
+            config_file
+                .strip_prefix(workspace_root)
+                .unwrap_or(config_file),
+            provided_by_tool(tool),
+            profile_name,
+            empty_count,
+            plural::sections_str(empty_count),
         );
     }
 }
@@ -325,7 +360,7 @@ impl NextestConfig {
         let mut compiled = CompiledByProfile::for_default_config();
 
         let mut known_groups = BTreeSet::new();
-        let mut known_scripts = BTreeMap::new();
+        let mut known_scripts = IdOrdMap::new();
 
         // Next, merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
@@ -397,7 +432,7 @@ impl NextestConfig {
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
         known_groups: &mut BTreeSet<CustomTestGroup>,
-        known_scripts: &mut BTreeMap<ScriptId, ScriptType>,
+        known_scripts: &mut IdOrdMap<ScriptInfo>,
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
@@ -451,17 +486,34 @@ impl NextestConfig {
             this_config.scripts.setup = this_config.old_setup_scripts.clone();
         }
 
-        // If setup scripts are present, check that the experimental feature is
-        // enabled.
-        if !this_config.scripts.setup.is_empty()
-            && !experimental.contains(&ConfigExperimental::SetupScripts)
+        // Check for experimental features that are used but not enabled.
         {
+            let mut missing_features = BTreeSet::new();
+            if !this_config.scripts.setup.is_empty()
+                && !experimental.contains(&ConfigExperimental::SetupScripts)
+            {
+                missing_features.insert(ConfigExperimental::SetupScripts);
+            }
+            if !this_config.scripts.wrapper.is_empty()
+                && !experimental.contains(&ConfigExperimental::WrapperScripts)
+            {
+                missing_features.insert(ConfigExperimental::WrapperScripts);
+            }
+            if !missing_features.is_empty() {
+                return Err(ConfigParseError::new(
+                    config_file,
+                    tool,
+                    ConfigParseErrorKind::ExperimentalFeaturesNotEnabled { missing_features },
+                ));
+            }
+        }
+
+        let duplicate_ids: BTreeSet<_> = this_config.scripts.duplicate_ids().cloned().collect();
+        if !duplicate_ids.is_empty() {
             return Err(ConfigParseError::new(
                 config_file,
                 tool,
-                ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
-                    feature: ConfigExperimental::SetupScripts,
-                },
+                ConfigParseErrorKind::DuplicateConfigScriptNames(duplicate_ids),
             ));
         }
 
@@ -492,10 +544,11 @@ impl NextestConfig {
             return Err(ConfigParseError::new(config_file, tool, kind));
         }
 
-        known_scripts.extend(valid_scripts.into_iter().map(|id| {
-            let script_type = this_config.scripts.script_type(&id);
-            (id, script_type)
-        }));
+        known_scripts.extend(
+            valid_scripts
+                .into_iter()
+                .map(|id| this_config.scripts.script_info(id)),
+        );
 
         let this_config = this_config.into_config_impl();
 
@@ -557,72 +610,148 @@ impl NextestConfig {
             ));
         }
 
-        // Check that scripts are known.
-        let mut unknown_script_errors = Vec::new();
-        let mut check_script_ids =
-            |profile_name: &str, script_type: ScriptType, scripts: &[ScriptId]| {
-                let config_feature = match script_type {
-                    ScriptType::Setup => ConfigExperimental::SetupScripts,
-                };
-                if !scripts.is_empty() && !experimental.contains(&config_feature) {
-                    return Err(ConfigParseError::new(
-                        config_file,
-                        tool,
-                        ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
-                            feature: config_feature,
-                        },
-                    ));
-                }
-                for script in scripts {
-                    match known_scripts.get(script) {
-                        None => {
-                            unknown_script_errors.push(UnknownConfigScriptError {
+        // Check that scripts are known and that there aren't any other errors
+        // with them.
+        let mut profile_script_errors = ProfileScriptErrors::default();
+        let mut check_script_ids = |profile_name: &str,
+                                    script_type: ProfileScriptType,
+                                    expr: Option<&Filterset>,
+                                    scripts: &[ScriptId]| {
+            for script in scripts {
+                if let Some(script_info) = known_scripts.get(script) {
+                    if !script_info.script_type.matches(script_type) {
+                        profile_script_errors.wrong_script_types.push(
+                            ProfileWrongConfigScriptTypeError {
                                 profile_name: profile_name.to_owned(),
                                 name: script.clone(),
-                            });
-                        }
-                        Some(actual_script_type) if *actual_script_type != script_type => {
-                            return Err(ConfigParseError::new(
-                                config_file,
-                                tool,
-                                ConfigParseErrorKind::WrongConfigScriptType {
-                                    script: script.clone(),
-                                    attempted: script_type,
-                                    actual: *actual_script_type,
-                                },
-                            ));
-                        }
-                        Some(_) => (),
+                                attempted: script_type,
+                                actual: script_info.script_type,
+                            },
+                        );
                     }
+                    if script_type == ProfileScriptType::ListWrapper {
+                        if let Some(expr) = expr {
+                            let runtime_only_leaves = expr.parsed.runtime_only_leaves();
+                            if !runtime_only_leaves.is_empty() {
+                                let filters = runtime_only_leaves
+                                    .iter()
+                                    .map(|leaf| leaf.to_string())
+                                    .collect();
+                                profile_script_errors.list_scripts_using_run_filters.push(
+                                    ProfileListScriptUsesRunFiltersError {
+                                        profile_name: profile_name.to_owned(),
+                                        name: script.clone(),
+                                        script_type,
+                                        filters,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    profile_script_errors
+                        .unknown_scripts
+                        .push(ProfileUnknownScriptError {
+                            profile_name: profile_name.to_owned(),
+                            name: script.clone(),
+                        });
+                }
+            }
+        };
+
+        let mut empty_script_count = 0;
+
+        this_compiled.default.scripts.iter().for_each(|scripts| {
+            if scripts.setup.is_empty()
+                && scripts.list_wrapper.is_none()
+                && scripts.run_wrapper.is_none()
+            {
+                empty_script_count += 1;
+            }
+
+            check_script_ids(
+                "default",
+                ProfileScriptType::Setup,
+                scripts.data.expr(),
+                &scripts.setup,
+            );
+            check_script_ids(
+                "default",
+                ProfileScriptType::ListWrapper,
+                scripts.data.expr(),
+                scripts.list_wrapper.as_slice(),
+            );
+            check_script_ids(
+                "default",
+                ProfileScriptType::RunWrapper,
+                scripts.data.expr(),
+                scripts.run_wrapper.as_slice(),
+            );
+        });
+
+        if empty_script_count > 0 {
+            warnings.empty_script_sections(
+                config_file,
+                workspace_root,
+                tool,
+                "default",
+                empty_script_count,
+            );
+        }
+
+        this_compiled.other.iter().for_each(|(profile_name, data)| {
+            let mut empty_script_count = 0;
+            data.scripts.iter().for_each(|scripts| {
+                if scripts.setup.is_empty()
+                    && scripts.list_wrapper.is_none()
+                    && scripts.run_wrapper.is_none()
+                {
+                    empty_script_count += 1;
                 }
 
-                Ok(())
-            };
+                check_script_ids(
+                    profile_name,
+                    ProfileScriptType::Setup,
+                    scripts.data.expr(),
+                    &scripts.setup,
+                );
+                check_script_ids(
+                    profile_name,
+                    ProfileScriptType::ListWrapper,
+                    scripts.data.expr(),
+                    scripts.list_wrapper.as_slice(),
+                );
+                check_script_ids(
+                    profile_name,
+                    ProfileScriptType::RunWrapper,
+                    scripts.data.expr(),
+                    scripts.run_wrapper.as_slice(),
+                );
+            });
 
-        this_compiled
-            .default
-            .scripts
-            .iter()
-            .try_for_each(|scripts| {
-                check_script_ids("default", ScriptType::Setup, &scripts.setup)
-            })?;
-        this_compiled
-            .other
-            .iter()
-            .try_for_each(|(profile_name, data)| {
-                data.scripts.iter().try_for_each(|scripts| {
-                    check_script_ids(profile_name, ScriptType::Setup, &scripts.setup)
-                })
-            })?;
+            if empty_script_count > 0 {
+                warnings.empty_script_sections(
+                    config_file,
+                    workspace_root,
+                    tool,
+                    profile_name,
+                    empty_script_count,
+                );
+            }
+        });
 
-        // If there were any unknown scripts, error out.
-        if !unknown_script_errors.is_empty() {
-            let known_scripts = known_scripts.keys().cloned().collect();
+        // If there were any errors parsing profile-specific script data, error
+        // out.
+        if !profile_script_errors.is_empty() {
+            let known_scripts = known_scripts
+                .iter()
+                .map(|script| script.id.clone())
+                .collect();
             return Err(ConfigParseError::new(
                 config_file,
                 tool,
-                ConfigParseErrorKind::UnknownConfigScripts {
-                    errors: unknown_script_errors,
+                ConfigParseErrorKind::ProfileScriptErrors {
+                    errors: Box::new(profile_script_errors),
                     known_scripts,
                 },
             ));
@@ -935,6 +1064,11 @@ impl<'cfg> EvaluatableProfile<'cfg> {
         SetupScripts::new(self, test_list)
     }
 
+    /// Returns list-time settings for a test binary.
+    pub fn list_settings_for(&self, query: &BinaryQuery<'_>) -> ListSettings<'_> {
+        ListSettings::new(self, query)
+    }
+
     /// Returns settings for individual tests.
     pub fn settings_for(&self, query: &TestQuery<'_>) -> TestSettings {
         TestSettings::new(self, query)
@@ -1212,6 +1346,7 @@ mod tests {
         unknown_keys: IdHashMap<UnknownKeys>,
         reserved_profiles: IdHashMap<ReservedProfiles>,
         deprecated_scripts: IdHashMap<DeprecatedScripts>,
+        empty_script_warnings: IdHashMap<EmptyScriptSections>,
     }
 
     impl ConfigWarnings for TestConfigWarnings {
@@ -1243,6 +1378,24 @@ mod tests {
                     tool: tool.map(|s| s.to_owned()),
                     config_file: config_file.to_owned(),
                     profiles: profiles.iter().map(|&s| s.to_owned()).collect(),
+                })
+                .unwrap();
+        }
+
+        fn empty_script_sections(
+            &mut self,
+            config_file: &Utf8Path,
+            _workspace_root: &Utf8Path,
+            tool: Option<&str>,
+            profile_name: &str,
+            empty_count: usize,
+        ) {
+            self.empty_script_warnings
+                .insert_unique(EmptyScriptSections {
+                    tool: tool.map(|s| s.to_owned()),
+                    config_file: config_file.to_owned(),
+                    profile_name: profile_name.to_owned(),
+                    empty_count,
                 })
                 .unwrap();
         }
@@ -1302,6 +1455,37 @@ mod tests {
         type Key<'a> = Option<&'a str>;
         fn key(&self) -> Self::Key<'_> {
             self.tool.as_deref()
+        }
+        id_upcast!();
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    struct WrapperScriptWarning {
+        tool: Option<String>,
+        config_file: Utf8PathBuf,
+        script_id: ScriptId,
+    }
+
+    impl IdHashItem for WrapperScriptWarning {
+        type Key<'a> = &'a ScriptId;
+        fn key(&self) -> Self::Key<'_> {
+            &self.script_id
+        }
+        id_upcast!();
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    struct EmptyScriptSections {
+        tool: Option<String>,
+        config_file: Utf8PathBuf,
+        profile_name: String,
+        empty_count: usize,
+    }
+
+    impl IdHashItem for EmptyScriptSections {
+        type Key<'a> = (&'a Option<String>, &'a str);
+        fn key(&self) -> Self::Key<'_> {
+            (&self.tool, &self.profile_name)
         }
         id_upcast!();
     }
@@ -1420,6 +1604,109 @@ mod tests {
                 }
             },
         )
+    }
+
+    #[test]
+    fn script_warnings() {
+        let config_contents = r#"
+        experimental = ["setup-scripts", "wrapper-scripts"]
+
+        [scripts.wrapper.script1]
+        command = "echo test"
+
+        [scripts.wrapper.script2]
+        command = "echo test2"
+
+        [scripts.setup.script3]
+        command = "echo setup"
+
+        [[profile.default.scripts]]
+        filter = 'all()'
+        # Empty - no setup or wrapper scripts
+
+        [[profile.default.scripts]]
+        filter = 'test(foo)'
+        setup = ["script3"]
+
+        [profile.custom]
+        [[profile.custom.scripts]]
+        filter = 'all()'
+        # Empty - no setup or wrapper scripts
+
+        [[profile.custom.scripts]]
+        filter = 'test(bar)'
+        # Another empty section
+        "#;
+
+        let tool_config_contents = r#"
+        experimental = ["setup-scripts", "wrapper-scripts"]
+
+        [scripts.wrapper."@tool:tool:disabled_script"]
+        command = "echo disabled"
+
+        [scripts.setup."@tool:tool:setup_script"]
+        command = "echo setup"
+
+        [profile.tool]
+        [[profile.tool.scripts]]
+        filter = 'all()'
+        # Empty section
+
+        [[profile.tool.scripts]]
+        filter = 'test(foo)'
+        setup = ["@tool:tool:setup_script"]
+        "#;
+
+        let workspace_dir = tempdir().unwrap();
+        let graph = temp_workspace(&workspace_dir, config_contents);
+        let workspace_root = graph.workspace().root();
+        let tool_path = workspace_root.join(".config/tool.toml");
+        std::fs::write(&tool_path, tool_config_contents).unwrap();
+
+        let pcx = ParseContext::new(&graph);
+
+        let mut warnings = TestConfigWarnings::default();
+
+        let experimental = maplit::btreeset! {
+            ConfigExperimental::SetupScripts,
+            ConfigExperimental::WrapperScripts
+        };
+        let _ = NextestConfig::from_sources_with_warnings(
+            workspace_root,
+            &pcx,
+            None,
+            &[ToolConfigFile {
+                tool: "tool".to_owned(),
+                config_file: tool_path.clone(),
+            }][..],
+            &experimental,
+            &mut warnings,
+        )
+        .expect("config is valid");
+
+        assert_eq!(
+            warnings.empty_script_warnings,
+            id_hash_map! {
+                EmptyScriptSections {
+                    tool: None,
+                    config_file: workspace_root.join(".config/nextest.toml"),
+                    profile_name: "default".to_owned(),
+                    empty_count: 1,
+                },
+                EmptyScriptSections {
+                    tool: None,
+                    config_file: workspace_root.join(".config/nextest.toml"),
+                    profile_name: "custom".to_owned(),
+                    empty_count: 2,
+                },
+                EmptyScriptSections {
+                    tool: Some("tool".to_owned()),
+                    config_file: tool_path,
+                    profile_name: "tool".to_owned(),
+                    empty_count: 1,
+                }
+            }
+        );
     }
 
     #[test]

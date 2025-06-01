@@ -5,7 +5,7 @@
 nextest-version = { required = "0.9.54", recommended = "0.9.56" }
 
 # This must be on one line for test_setup_scripts_not_enabled to work.
-experimental = ["setup-scripts"]
+experimental = ["setup-scripts", "wrapper-scripts"]
 
 [profile.default]
 # disable fail-fast to ensure a deterministic test run
@@ -15,11 +15,25 @@ fail-fast = false
 platform = { host = "cfg(unix)" }
 filter = "test(=test_cargo_env_vars)"
 setup = "my-script-unix"
+run-wrapper = "wrapper1-unix"
 
 [[profile.default.scripts]]
 platform = { host = "cfg(windows)" }
 filter = "test(=test_cargo_env_vars)"
 setup = "my-script-windows"
+run-wrapper = "wrapper1-windows"
+
+[[profile.default.scripts]]
+platform = { host = "cfg(unix)" }
+filter = "binary(nextest-tests)"
+setup = "my-script-unix"
+list-wrapper = "wrapper1-unix"
+
+[[profile.default.scripts]]
+platform = { host = "cfg(windows)" }
+filter = "binary(nextest-tests)"
+setup = "my-script-windows"
+list-wrapper = "wrapper1-windows"
 
 [[profile.default.overrides]]
 # This override goes before the next one to ensure that
@@ -123,3 +137,13 @@ command = './scripts/my-script.sh'
 
 [scripts.setup.my-script-windows]
 command = 'cmd /c "scripts\\my-script.bat"'
+
+[scripts.wrapper.wrapper1-unix]
+command = { command-line = "./debug/wrapper within", relative-to = "target" }
+target-runner = "within-wrapper"
+
+[scripts.wrapper.wrapper1-windows]
+command = { command-line = "debug/wrapper.exe within", relative-to = "target" }
+target-runner = "within-wrapper"
+
+# TODO: tests for around/override/ignore target runner

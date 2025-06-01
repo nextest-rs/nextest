@@ -41,8 +41,10 @@ members = [
 ]
 
 [dependencies]
-dylib-test = { path = "dylib-test" }
 uuid = "1.2.1"
+
+[dev-dependencies]
+dylib-test = { path = "dylib-test" }
 
 # Test that the "line-tables-only" debug setting works.
 [profile.dev]
@@ -51,3 +53,8 @@ debug = 1
 [profile.dev-line-tables-only]
 inherits = "dev"
 debug = "line-tables-only"
+
+[[bin]]
+name = "wrapper"
+path = "src/bin/wrapper.rs"
+test = false

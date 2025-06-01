@@ -63,9 +63,10 @@ impl TempProject {
             }
         }
 
-        let temp_dir = camino_tempfile::Builder::new()
+        let mut temp_dir = camino_tempfile::Builder::new()
             .prefix("nextest-fixture-")
             .tempdir()?;
+        temp_dir.disable_cleanup(std::env::var("KEEP_TEMP_DIR").is_ok());
         // Note: can't use canonicalize here because it ends up creating a UNC path on Windows,
         // which doesn't match compile time.
         let temp_root: Utf8PathBuf = fixup_macos_path(temp_dir.path());

@@ -5,7 +5,9 @@
 
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
-    config::{ConfigExperimental, CustomTestGroup, ScriptId, ScriptType, TestGroup},
+    config::{
+        ConfigExperimental, CustomTestGroup, ProfileScriptType, ScriptId, ScriptType, TestGroup,
+    },
     helpers::{display_exited_with, dylib_path_envvar},
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
@@ -132,26 +134,17 @@ pub enum ConfigParseErrorKind {
     InvalidConfigScriptsDefinedByTool(BTreeSet<ScriptId>),
     /// The same config script name was used across config script types.
     #[error(
-        "cannot use config script as a {attempted} script: {script}\n\
-         (config script is a {actual} script)"
+        "config script names used more than once: {}\n\
+         (config script names must be unique across all script types)", .0.iter().join(", ")
     )]
-    WrongConfigScriptType {
-        /// The name of the config script.
-        script: ScriptId,
-
-        /// The script type that the user attempted to use the script as.
-        attempted: ScriptType,
-
-        /// The actual script type.
-        actual: ScriptType,
-    },
-    /// Some config scripts were unknown.
+    DuplicateConfigScriptNames(BTreeSet<ScriptId>),
+    /// Errors occurred while parsing `[[profile.<profile-name>.scripts]]`.
     #[error(
-        "unknown config scripts specified by config (destructure this variant for more details)"
+        "errors in profile-specific config scripts (destructure this variant for more details)"
     )]
-    UnknownConfigScripts {
-        /// The list of errors that occurred.
-        errors: Vec<UnknownConfigScriptError>,
+    ProfileScriptErrors {
+        /// The errors that occurred.
+        errors: Box<ProfileScriptErrors>,
 
         /// Known scripts up to this point.
         known_scripts: BTreeSet<ScriptId>,
@@ -177,11 +170,11 @@ pub enum ConfigParseErrorKind {
         /// The name of the experimental feature.
         features: BTreeSet<String>,
     },
-    /// An experimental feature was used but not enabled.
-    #[error("experimental feature `{feature}` is used but not enabled")]
-    ExperimentalFeatureNotEnabled {
-        /// The feature that was not enabled.
-        feature: ConfigExperimental,
+    /// Experimental features were used but not enabled.
+    #[error("experimental features used but not enabled: {}", .missing_features.iter().join(", "))]
+    ExperimentalFeaturesNotEnabled {
+        /// The features that were not enabled.
+        missing_features: BTreeSet<ConfigExperimental>,
     },
 }
 
@@ -530,15 +523,71 @@ pub struct UnknownTestGroupError {
     pub name: TestGroup,
 }
 
-/// An unknown script was specified in the config.
+/// While parsing profile-specific config scripts, an unknown script was
+/// encountered.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub struct UnknownConfigScriptError {
-    /// The name of the profile under which the unknown script was found.
+pub struct ProfileUnknownScriptError {
+    /// The name of the profile under which the errors occurred.
     pub profile_name: String,
 
     /// The name of the unknown script.
     pub name: ScriptId,
+}
+
+/// While parsing profile-specific config scripts, a script of the wrong type
+/// was encountered.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileWrongConfigScriptTypeError {
+    /// The name of the profile under which the errors occurred.
+    pub profile_name: String,
+
+    /// The name of the config script.
+    pub name: ScriptId,
+
+    /// The script type that the user attempted to use the script as.
+    pub attempted: ProfileScriptType,
+
+    /// The script type that the script actually is.
+    pub actual: ScriptType,
+}
+
+/// While parsing profile-specific config scripts, a list-time-enabled script
+/// used a filter that can only be used at test run time.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileListScriptUsesRunFiltersError {
+    /// The name of the profile under which the errors occurred.
+    pub profile_name: String,
+
+    /// The name of the config script.
+    pub name: ScriptId,
+
+    /// The script type.
+    pub script_type: ProfileScriptType,
+
+    /// The filters that were used.
+    pub filters: BTreeSet<String>,
+}
+
+/// Errors that occurred while parsing `[[profile.*.scripts]]`.
+#[derive(Clone, Debug, Default)]
+pub struct ProfileScriptErrors {
+    /// The list of unknown script errors.
+    pub unknown_scripts: Vec<ProfileUnknownScriptError>,
+
+    /// The list of wrong script type errors.
+    pub wrong_script_types: Vec<ProfileWrongConfigScriptTypeError>,
+
+    /// The list of list-time-enabled scripts that used a run-time filter.
+    pub list_scripts_using_run_filters: Vec<ProfileListScriptUsesRunFiltersError>,
+}
+
+impl ProfileScriptErrors {
+    /// Returns true if there are no errors recorded.
+    pub fn is_empty(&self) -> bool {
+        self.unknown_scripts.is_empty()
+            && self.wrong_script_types.is_empty()
+            && self.list_scripts_using_run_filters.is_empty()
+    }
 }
 
 /// An error which indicates that a profile was requested but not known to nextest.

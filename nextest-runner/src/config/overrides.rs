@@ -3,10 +3,13 @@
 
 use super::{
     CompiledProfileScripts, DeserializedProfileScriptConfig, EvaluatableProfile, LeakTimeout,
-    NextestConfig, NextestConfigImpl, TestPriority,
+    NextestConfig, NextestConfigImpl, TestPriority, WrapperScriptConfig,
 };
 use crate::{
-    config::{FinalConfig, PreBuildPlatform, RetryPolicy, SlowTimeout, TestGroup, ThreadsRequired},
+    config::{
+        FinalConfig, PreBuildPlatform, RetryPolicy, ScriptId, SlowTimeout, TestGroup,
+        ThreadsRequired,
+    },
     errors::{
         ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection, ConfigParseErrorKind,
     },
@@ -14,12 +17,75 @@ use crate::{
     reporter::TestOutputDisplay,
 };
 use guppy::graph::cargo::BuildPlatform;
-use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext, TestQuery};
+use nextest_filtering::{
+    BinaryQuery, CompiledExpr, Filterset, FiltersetKind, ParseContext, TestQuery,
+};
 use owo_colors::{OwoColorize, Style};
 use serde::{Deserialize, Deserializer};
 use smol_str::SmolStr;
 use std::collections::HashMap;
 use target_spec::{Platform, TargetSpec};
+
+/// Settings for a test binary.
+#[derive(Clone, Debug)]
+pub struct ListSettings<'p, Source = ()> {
+    list_wrapper: Option<(&'p WrapperScriptConfig, Source)>,
+}
+
+impl<'p, Source: Copy> ListSettings<'p, Source> {
+    pub(super) fn new(profile: &'p EvaluatableProfile<'_>, query: &BinaryQuery<'_>) -> Self
+    where
+        Source: TrackSource<'p>,
+    {
+        let ecx = profile.filterset_ecx();
+
+        let mut list_wrapper = None;
+
+        for override_ in &profile.compiled_data.scripts {
+            if let Some(wrapper) = &override_.list_wrapper {
+                if list_wrapper.is_none() {
+                    let (wrapper, source) = map_wrapper_script(
+                        profile,
+                        Source::track_script(wrapper.clone(), override_),
+                    );
+
+                    if !override_
+                        .is_enabled_binary(query, &ecx)
+                        .expect("test() in list-time scripts should have been rejected")
+                    {
+                        continue;
+                    }
+
+                    list_wrapper = Some((wrapper, source));
+                }
+            }
+        }
+
+        Self { list_wrapper }
+    }
+}
+
+impl<'p> ListSettings<'p> {
+    /// Returns a default list-settings without a wrapper script.
+    ///
+    /// Debug command used for testing.
+    pub fn debug_empty() -> Self {
+        Self { list_wrapper: None }
+    }
+
+    /// Sets the wrapper to use for list-time scripts.
+    ///
+    /// Debug command used for testing.
+    pub fn debug_set_list_wrapper(&mut self, wrapper: &'p WrapperScriptConfig) -> &mut Self {
+        self.list_wrapper = Some((wrapper, ()));
+        self
+    }
+
+    /// Returns the list-time wrapper script.
+    pub fn list_wrapper(&self) -> Option<&'p WrapperScriptConfig> {
+        self.list_wrapper.as_ref().map(|(wrapper, _)| *wrapper)
+    }
+}
 
 /// Settings for individual tests.
 ///
@@ -31,6 +97,7 @@ use target_spec::{Platform, TargetSpec};
 pub struct TestSettings<'p, Source = ()> {
     priority: (TestPriority, Source),
     threads_required: (ThreadsRequired, Source),
+    run_wrapper: Option<(&'p WrapperScriptConfig, Source)>,
     run_extra_args: (&'p [String], Source),
     retries: (RetryPolicy, Source),
     slow_timeout: (SlowTimeout, Source),
@@ -46,6 +113,7 @@ pub(crate) trait TrackSource<'p>: Sized {
     fn track_default<T>(value: T) -> (T, Self);
     fn track_profile<T>(value: T) -> (T, Self);
     fn track_override<T>(value: T, source: &'p CompiledOverride<FinalConfig>) -> (T, Self);
+    fn track_script<T>(value: T, source: &'p CompiledProfileScripts<FinalConfig>) -> (T, Self);
 }
 
 impl<'p> TrackSource<'p> for () {
@@ -58,6 +126,10 @@ impl<'p> TrackSource<'p> for () {
     }
 
     fn track_override<T>(value: T, _source: &'p CompiledOverride<FinalConfig>) -> (T, Self) {
+        (value, ())
+    }
+
+    fn track_script<T>(value: T, _source: &'p CompiledProfileScripts<FinalConfig>) -> (T, Self) {
         (value, ())
     }
 }
@@ -73,6 +145,10 @@ pub(crate) enum SettingSource<'p> {
 
     /// An override specified in a profile.
     Override(&'p CompiledOverride<FinalConfig>),
+
+    /// An override specified in the `scripts` section.
+    #[expect(dead_code)]
+    Script(&'p CompiledProfileScripts<FinalConfig>),
 }
 
 impl<'p> TrackSource<'p> for SettingSource<'p> {
@@ -87,6 +163,10 @@ impl<'p> TrackSource<'p> for SettingSource<'p> {
     fn track_override<T>(value: T, source: &'p CompiledOverride<FinalConfig>) -> (T, Self) {
         (value, SettingSource::Override(source))
     }
+
+    fn track_script<T>(value: T, source: &'p CompiledProfileScripts<FinalConfig>) -> (T, Self) {
+        (value, SettingSource::Script(source))
+    }
 }
 
 impl<'p> TestSettings<'p> {
@@ -98,6 +178,11 @@ impl<'p> TestSettings<'p> {
     /// Returns the number of threads required for this test.
     pub fn threads_required(&self) -> ThreadsRequired {
         self.threads_required.0
+    }
+
+    /// Returns the run-time wrapper script for this test.
+    pub fn run_wrapper(&self) -> Option<&'p WrapperScriptConfig> {
+        self.run_wrapper.map(|(script, _)| script)
     }
 
     /// Returns extra arguments to pass at runtime for this test.
@@ -156,6 +241,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
 
         let mut priority = None;
         let mut threads_required = None;
+        let mut run_wrapper = None;
         let mut run_extra_args = None;
         let mut retries = None;
         let mut slow_timeout = None;
@@ -243,10 +329,23 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             }
         }
 
+        for override_ in &profile.compiled_data.scripts {
+            if !override_.is_enabled(query, &ecx) {
+                continue;
+            }
+
+            if run_wrapper.is_none() {
+                if let Some(wrapper) = &override_.run_wrapper {
+                    run_wrapper = Some(Source::track_script(wrapper.clone(), override_));
+                }
+            }
+        }
+
         // If no overrides were found, use the profile defaults.
         let priority = priority.unwrap_or_else(|| Source::track_default(TestPriority::default()));
         let threads_required =
             threads_required.unwrap_or_else(|| Source::track_profile(profile.threads_required()));
+        let run_wrapper = run_wrapper.map(|wrapper| map_wrapper_script(profile, wrapper));
         let run_extra_args =
             run_extra_args.unwrap_or_else(|| Source::track_profile(profile.run_extra_args()));
         let retries = retries.unwrap_or_else(|| Source::track_profile(profile.retries()));
@@ -271,6 +370,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
         TestSettings {
             threads_required,
             run_extra_args,
+            run_wrapper,
             retries,
             priority,
             slow_timeout,
@@ -307,6 +407,26 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
     pub(crate) fn test_group_with_source(&self) -> &(TestGroup, Source) {
         &self.test_group
     }
+}
+
+fn map_wrapper_script<'p, Source>(
+    profile: &'p EvaluatableProfile<'_>,
+    (script, source): (ScriptId, Source),
+) -> (&'p WrapperScriptConfig, Source)
+where
+    Source: TrackSource<'p>,
+{
+    let wrapper_config = profile
+        .script_config()
+        .wrapper
+        .get(&script)
+        .unwrap_or_else(|| {
+            panic!(
+                "wrapper script {script} not found \
+                 (should have been checked while reading config)"
+            )
+        });
+    (wrapper_config, source)
 }
 
 #[derive(Clone, Debug)]

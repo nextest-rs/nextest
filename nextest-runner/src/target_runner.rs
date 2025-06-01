@@ -88,6 +88,19 @@ pub struct PlatformRunner {
 }
 
 impl PlatformRunner {
+    /// A debug function to create a new `PlatformRunner`.
+    pub fn debug_new(
+        runner_binary: Utf8PathBuf,
+        args: Vec<String>,
+        source: PlatformRunnerSource,
+    ) -> Self {
+        Self {
+            runner_binary,
+            args,
+            source,
+        }
+    }
+
     fn by_precedence(
         configs: &CargoConfigs,
         platform: &Platform,

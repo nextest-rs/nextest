@@ -48,7 +48,7 @@ pub use nextest_version::*;
 pub use overrides::*;
 pub use priority::*;
 pub use retry_policy::*;
-pub(super) use scripts::*;
+pub use scripts::*;
 pub use slow_timeout::*;
 pub use test_group::*;
 pub use test_threads::*;

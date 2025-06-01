@@ -11,6 +11,7 @@ use crate::{
 use camino::{Utf8Path, Utf8PathBuf};
 use guppy::graph::PackageMetadata;
 use std::{
+    borrow::Cow,
     collections::{BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fs::File,
@@ -24,12 +25,19 @@ pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
 
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
+    pub(crate) phase: TestCommandPhase,
     // Note: Must use TestListState here to get remapped paths.
     pub(crate) rust_build_meta: &'a RustBuildMeta<TestListState>,
     pub(crate) double_spawn: &'a DoubleSpawnInfo,
     pub(crate) dylib_path: &'a OsStr,
     pub(crate) profile_name: &'a str,
     pub(crate) env: &'a EnvironmentMap,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum TestCommandPhase {
+    List,
+    Run,
 }
 
 /// Represents a to-be-run test command for a test binary with a certain set of arguments.
@@ -45,7 +53,7 @@ impl TestCommand {
     pub(crate) fn new(
         lctx: &LocalExecuteContext<'_>,
         program: String,
-        args: &[&str],
+        args: &[Cow<'_, str>],
         cwd: &Utf8Path,
         package: &PackageMetadata<'_>,
         non_test_binaries: &BTreeSet<(String, Utf8PathBuf)>,
@@ -82,6 +90,14 @@ impl TestCommand {
                 // CARGO_MANIFEST_DIR is set to the *new* cwd after path mapping.
                 cwd,
             );
+        match lctx.phase {
+            TestCommandPhase::List => {
+                cmd.env("NEXTEST_TEST_PHASE", "list");
+            }
+            TestCommandPhase::Run => {
+                cmd.env("NEXTEST_TEST_PHASE", "run");
+            }
+        }
 
         apply_package_env(&mut cmd, package);
 
@@ -135,7 +151,7 @@ pub(crate) fn create_command<I, S>(
 ) -> std::process::Command
 where
     I: IntoIterator<Item = S>,
-    S: AsRef<str> + AsRef<OsStr>,
+    S: AsRef<str>,
 {
     if let Some(current_exe) = double_spawn.current_exe() {
         let mut cmd = std::process::Command::new(current_exe);
@@ -144,7 +160,7 @@ where
         cmd
     } else {
         let mut cmd = std::process::Command::new(program);
-        cmd.args(args);
+        cmd.args(args.into_iter().map(|arg| arg.as_ref().to_owned()));
         cmd
     }
 }
