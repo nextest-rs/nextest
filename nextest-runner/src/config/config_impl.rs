@@ -5,10 +5,11 @@ use super::{
     ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
     CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
     JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
-    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
-    TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
+    ScriptId, ScriptType, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig,
+    TestSettings, TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
 };
 use crate::{
+    config::SetupScriptConfig,
     errors::{
         ConfigParseError, ConfigParseErrorKind, ProfileNotFound, UnknownConfigScriptError,
         UnknownTestGroupError, provided_by_tool,
@@ -52,6 +53,14 @@ pub trait ConfigWarnings {
         tool: Option<&str>,
         profiles: &[&str],
     );
+
+    /// Handle deprecated `[script.*]` configuration.
+    fn deprecated_script_config(
+        &mut self,
+        config_file: &Utf8Path,
+        workspace_root: &Utf8Path,
+        tool: Option<&str>,
+    );
 }
 
 /// Default implementation of ConfigWarnings that logs warnings using the tracing crate.
@@ -79,7 +88,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         }
 
         warn!(
-            "ignoring unknown configuration keys in config file {}{}:{unknown_str}",
+            "in config file {}{}, ignoring unknown configuration keys: {unknown_str}",
             config_file
                 .strip_prefix(workspace_root)
                 .unwrap_or(config_file),
@@ -95,7 +104,7 @@ impl ConfigWarnings for DefaultConfigWarnings {
         profiles: &[&str],
     ) {
         warn!(
-            "unknown profiles in the reserved `default-` namespace in config file {}{}:",
+            "in config file {}{}, ignoring unknown profiles in the reserved `default-` namespace:",
             config_file
                 .strip_prefix(workspace_root)
                 .unwrap_or(config_file),
@@ -105,6 +114,22 @@ impl ConfigWarnings for DefaultConfigWarnings {
         for profile in profiles {
             warn!("  {profile}");
         }
+    }
+
+    fn deprecated_script_config(
+        &mut self,
+        config_file: &Utf8Path,
+        workspace_root: &Utf8Path,
+        tool: Option<&str>,
+    ) {
+        warn!(
+            "in config file {}{}, [script.*] is deprecated and will be removed in a \
+             future version of nextest; use the `scripts.setup` table instead",
+            config_file
+                .strip_prefix(workspace_root)
+                .unwrap_or(config_file),
+            provided_by_tool(tool),
+        );
     }
 }
 
@@ -300,7 +325,7 @@ impl NextestConfig {
         let mut compiled = CompiledByProfile::for_default_config();
 
         let mut known_groups = BTreeSet::new();
-        let mut known_scripts = BTreeSet::new();
+        let mut known_scripts = BTreeMap::new();
 
         // Next, merge in tool configs.
         for ToolConfigFile { config_file, tool } in tool_config_files_rev {
@@ -372,13 +397,13 @@ impl NextestConfig {
         experimental: &BTreeSet<ConfigExperimental>,
         warnings: &mut impl ConfigWarnings,
         known_groups: &mut BTreeSet<CustomTestGroup>,
-        known_scripts: &mut BTreeSet<ScriptId>,
+        known_scripts: &mut BTreeMap<ScriptId, ScriptType>,
     ) -> Result<(), ConfigParseError> {
         // Try building default builder + this file to get good error attribution and handle
         // overrides additively.
         let default_builder = Self::make_default_config();
         let this_builder = default_builder.add_source(source);
-        let (this_config, unknown) = Self::build_and_deserialize_config(&this_builder)
+        let (mut this_config, unknown) = Self::build_and_deserialize_config(&this_builder)
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
 
         if !unknown.is_empty() {
@@ -411,8 +436,24 @@ impl NextestConfig {
 
         known_groups.extend(valid_groups);
 
-        // If scripts are present, check that the experimental feature is enabled.
-        if !this_config.scripts.is_empty()
+        // If both scripts and old_setup_scripts are present, produce an error.
+        if !this_config.scripts.is_empty() && !this_config.old_setup_scripts.is_empty() {
+            return Err(ConfigParseError::new(
+                config_file,
+                tool,
+                ConfigParseErrorKind::BothScriptAndScriptsSetupDefined,
+            ));
+        }
+
+        // If old_setup_scripts are present, produce a warning.
+        if !this_config.old_setup_scripts.is_empty() {
+            warnings.deprecated_script_config(config_file, workspace_root, tool);
+            this_config.scripts.setup = this_config.old_setup_scripts.clone();
+        }
+
+        // If setup scripts are present, check that the experimental feature is
+        // enabled.
+        if !this_config.scripts.setup.is_empty()
             && !experimental.contains(&ConfigExperimental::SetupScripts)
         {
             return Err(ConfigParseError::new(
@@ -425,8 +466,11 @@ impl NextestConfig {
         }
 
         // Check that setup scripts are named as expected.
-        let (valid_scripts, invalid_scripts): (BTreeSet<_>, _) =
-            this_config.scripts.keys().cloned().partition(|script| {
+        let (valid_scripts, invalid_scripts): (BTreeSet<_>, _) = this_config
+            .scripts
+            .all_script_ids()
+            .cloned()
+            .partition(|script| {
                 if let Some(tool) = tool {
                     // The first component must be the tool name.
                     script
@@ -448,7 +492,10 @@ impl NextestConfig {
             return Err(ConfigParseError::new(config_file, tool, kind));
         }
 
-        known_scripts.extend(valid_scripts);
+        known_scripts.extend(valid_scripts.into_iter().map(|id| {
+            let script_type = this_config.scripts.script_type(&id);
+            (id, script_type)
+        }));
 
         let this_config = this_config.into_config_impl();
 
@@ -512,45 +559,65 @@ impl NextestConfig {
 
         // Check that scripts are known.
         let mut unknown_script_errors = Vec::new();
-        let mut check_script_ids = |profile_name: &str, scripts: &[ScriptId]| {
-            if !scripts.is_empty() && !experimental.contains(&ConfigExperimental::SetupScripts) {
-                return Err(ConfigParseError::new(
-                    config_file,
-                    tool,
-                    ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
-                        feature: ConfigExperimental::SetupScripts,
-                    },
-                ));
-            }
-            for script in scripts {
-                if !known_scripts.contains(script) {
-                    unknown_script_errors.push(UnknownConfigScriptError {
-                        profile_name: profile_name.to_owned(),
-                        name: script.clone(),
-                    });
+        let mut check_script_ids =
+            |profile_name: &str, script_type: ScriptType, scripts: &[ScriptId]| {
+                let config_feature = match script_type {
+                    ScriptType::Setup => ConfigExperimental::SetupScripts,
+                };
+                if !scripts.is_empty() && !experimental.contains(&config_feature) {
+                    return Err(ConfigParseError::new(
+                        config_file,
+                        tool,
+                        ConfigParseErrorKind::ExperimentalFeatureNotEnabled {
+                            feature: config_feature,
+                        },
+                    ));
                 }
-            }
+                for script in scripts {
+                    match known_scripts.get(script) {
+                        None => {
+                            unknown_script_errors.push(UnknownConfigScriptError {
+                                profile_name: profile_name.to_owned(),
+                                name: script.clone(),
+                            });
+                        }
+                        Some(actual_script_type) if *actual_script_type != script_type => {
+                            return Err(ConfigParseError::new(
+                                config_file,
+                                tool,
+                                ConfigParseErrorKind::WrongConfigScriptType {
+                                    script: script.clone(),
+                                    attempted: script_type,
+                                    actual: *actual_script_type,
+                                },
+                            ));
+                        }
+                        Some(_) => (),
+                    }
+                }
 
-            Ok(())
-        };
+                Ok(())
+            };
 
         this_compiled
             .default
             .scripts
             .iter()
-            .try_for_each(|scripts| check_script_ids("default", &scripts.setup))?;
+            .try_for_each(|scripts| {
+                check_script_ids("default", ScriptType::Setup, &scripts.setup)
+            })?;
         this_compiled
             .other
             .iter()
             .try_for_each(|(profile_name, data)| {
-                data.scripts
-                    .iter()
-                    .try_for_each(|scripts| check_script_ids(profile_name, &scripts.setup))
+                data.scripts.iter().try_for_each(|scripts| {
+                    check_script_ids(profile_name, ScriptType::Setup, &scripts.setup)
+                })
             })?;
 
         // If there were any unknown scripts, error out.
         if !unknown_script_errors.is_empty() {
-            let known_scripts = known_scripts.iter().cloned().collect();
+            let known_scripts = known_scripts.keys().cloned().collect();
             return Err(ConfigParseError::new(
                 config_file,
                 tool,
@@ -670,7 +737,7 @@ pub struct EarlyProfile<'cfg> {
     custom_profile: Option<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
-    scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
+    scripts: &'cfg ScriptConfig,
     // Invariant: `compiled_data.default_filter` is always present.
     pub(super) compiled_data: CompiledData<PreBuildPlatform>,
 }
@@ -737,7 +804,7 @@ pub struct EvaluatableProfile<'cfg> {
     custom_profile: Option<&'cfg CustomProfileImpl>,
     test_groups: &'cfg BTreeMap<CustomTestGroup, TestGroupConfig>,
     // This is ordered because the scripts are used in the order they're defined.
-    scripts: &'cfg IndexMap<ScriptId, ScriptConfig>,
+    scripts: &'cfg ScriptConfig,
     // Invariant: `compiled_data.default_filter` is always present.
     pub(super) compiled_data: CompiledData<FinalConfig>,
     // The default filter that's been resolved after considering overrides (i.e.
@@ -774,7 +841,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns the global script configuration.
-    pub fn script_config(&self) -> &'cfg IndexMap<ScriptId, ScriptConfig> {
+    pub fn script_config(&self) -> &'cfg ScriptConfig {
         self.scripts
     }
 
@@ -900,7 +967,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
 pub(super) struct NextestConfigImpl {
     store: StoreConfigImpl,
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
-    scripts: IndexMap<ScriptId, ScriptConfig>,
+    scripts: ScriptConfig,
     default_profile: DefaultProfileImpl,
     other_profiles: HashMap<String, CustomProfileImpl>,
 }
@@ -953,8 +1020,11 @@ struct NextestConfigDeserialize {
 
     #[serde(default)]
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
+    // Previous version of setup scripts, stored as "script.<name of script>".
     #[serde(default, rename = "script")]
-    scripts: IndexMap<ScriptId, ScriptConfig>,
+    old_setup_scripts: IndexMap<ScriptId, SetupScriptConfig>,
+    #[serde(default)]
+    scripts: ScriptConfig,
     #[serde(rename = "profile")]
     profiles: HashMap<String, CustomProfileImpl>,
 }
@@ -966,6 +1036,16 @@ impl NextestConfigDeserialize {
             .remove("default")
             .expect("default profile should exist");
         let default_profile = DefaultProfileImpl::new(p);
+
+        // XXX: This is not quite right (doesn't obey precedence) but is okay
+        // because it's unlikely folks are using the combination of setup
+        // scripts *and* tools *and* relying on this. If it breaks, well, this
+        // feature isn't stable.
+        for (script_id, script_config) in self.old_setup_scripts {
+            if let indexmap::map::Entry::Vacant(entry) = self.scripts.setup.entry(script_id) {
+                entry.insert(script_config);
+            }
+        }
 
         NextestConfigImpl {
             store: self.store,
@@ -1131,6 +1211,7 @@ mod tests {
     struct TestConfigWarnings {
         unknown_keys: IdHashMap<UnknownKeys>,
         reserved_profiles: IdHashMap<ReservedProfiles>,
+        deprecated_scripts: IdHashMap<DeprecatedScripts>,
     }
 
     impl ConfigWarnings for TestConfigWarnings {
@@ -1165,6 +1246,20 @@ mod tests {
                 })
                 .unwrap();
         }
+
+        fn deprecated_script_config(
+            &mut self,
+            config_file: &Utf8Path,
+            _workspace_root: &Utf8Path,
+            tool: Option<&str>,
+        ) {
+            self.deprecated_scripts
+                .insert_unique(DeprecatedScripts {
+                    tool: tool.map(|s| s.to_owned()),
+                    config_file: config_file.to_owned(),
+                })
+                .unwrap();
+        }
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1190,6 +1285,20 @@ mod tests {
     }
 
     impl IdHashItem for ReservedProfiles {
+        type Key<'a> = Option<&'a str>;
+        fn key(&self) -> Self::Key<'_> {
+            self.tool.as_deref()
+        }
+        id_upcast!();
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    struct DeprecatedScripts {
+        tool: Option<String>,
+        config_file: Utf8PathBuf,
+    }
+
+    impl IdHashItem for DeprecatedScripts {
         type Key<'a> = Option<&'a str>;
         fn key(&self) -> Self::Key<'_> {
             self.tool.as_deref()
@@ -1311,5 +1420,58 @@ mod tests {
                 }
             },
         )
+    }
+
+    #[test]
+    fn deprecated_script_config_warning() {
+        let config_contents = r#"
+        experimental = ["setup-scripts"]
+
+        [script.my-script]
+        command = "echo hello"
+"#;
+
+        let tool_config_contents = r#"
+        experimental = ["setup-scripts"]
+
+        [script."@tool:my-tool:my-script"]
+        command = "echo hello"
+"#;
+
+        let temp_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&temp_dir, config_contents);
+        let workspace_root = graph.workspace().root();
+        let tool_path = workspace_root.join(".config/my-tool.toml");
+        std::fs::write(&tool_path, tool_config_contents).unwrap();
+        let pcx = ParseContext::new(&graph);
+
+        let mut warnings = TestConfigWarnings::default();
+        NextestConfig::from_sources_with_warnings(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[ToolConfigFile {
+                tool: "my-tool".to_owned(),
+                config_file: tool_path.clone(),
+            }],
+            &maplit::btreeset! {ConfigExperimental::SetupScripts},
+            &mut warnings,
+        )
+        .expect("config is valid");
+
+        assert_eq!(
+            warnings.deprecated_scripts,
+            id_hash_map! {
+                DeprecatedScripts {
+                    tool: None,
+                    config_file: graph.workspace().root().join(".config/nextest.toml"),
+                },
+                DeprecatedScripts {
+                    tool: Some("my-tool".to_owned()),
+                    config_file: tool_path,
+                }
+            }
+        );
     }
 }

@@ -14,8 +14,9 @@
 use super::HandleSignalResult;
 use crate::{
     config::{
-        EvaluatableProfile, LeakTimeout, LeakTimeoutResult, RetryPolicy, ScriptConfig, ScriptId,
-        SetupScriptCommand, SetupScriptExecuteData, SlowTimeout, TestGroup, TestSettings,
+        EvaluatableProfile, LeakTimeout, LeakTimeoutResult, RetryPolicy, ScriptId,
+        SetupScriptCommand, SetupScriptConfig, SetupScriptExecuteData, SlowTimeout, TestGroup,
+        TestSettings,
     },
     double_spawn::DoubleSpawnInfo,
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},
@@ -1040,7 +1041,7 @@ impl fmt::Debug for TestPacket<'_> {
 #[derive(Clone, Debug)]
 pub(super) struct SetupScriptPacket<'a> {
     script_id: ScriptId,
-    config: &'a ScriptConfig,
+    config: &'a SetupScriptConfig,
 }
 
 impl<'a> SetupScriptPacket<'a> {

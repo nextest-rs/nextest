@@ -5,7 +5,7 @@
 
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
-    config::{ConfigExperimental, CustomTestGroup, ScriptId, TestGroup},
+    config::{ConfigExperimental, CustomTestGroup, ScriptId, ScriptType, TestGroup},
     helpers::{display_exited_with, dylib_path_envvar},
     redact::Redactor,
     reuse_build::{ArchiveFormat, ArchiveStep},
@@ -117,6 +117,12 @@ pub enum ConfigParseErrorKind {
         /// Known groups up to this point.
         known_groups: BTreeSet<TestGroup>,
     },
+    /// Both `[script.*]` and `[scripts.setup.*]` were defined.
+    #[error(
+        "both `[script.*]` and `[scripts.setup.*]` defined\n\
+         (hint: [script.*] will be removed in the future—switch to [scripts.setup.*])"
+    )]
+    BothScriptAndScriptsSetupDefined,
     /// An invalid set of config scripts was defined by the user.
     #[error("invalid config scripts defined: {}\n(config scripts cannot start with '@tool:' unless specified by a tool)", .0.iter().join(", "))]
     InvalidConfigScriptsDefined(BTreeSet<ScriptId>),
@@ -124,6 +130,21 @@ pub enum ConfigParseErrorKind {
     #[error(
         "invalid config scripts defined by tool: {}\n(config scripts must start with '@tool:<tool-name>:')", .0.iter().join(", "))]
     InvalidConfigScriptsDefinedByTool(BTreeSet<ScriptId>),
+    /// The same config script name was used across config script types.
+    #[error(
+        "cannot use config script as a {attempted} script: {script}\n\
+         (config script is a {actual} script)"
+    )]
+    WrongConfigScriptType {
+        /// The name of the config script.
+        script: ScriptId,
+
+        /// The script type that the user attempted to use the script as.
+        attempted: ScriptType,
+
+        /// The actual script type.
+        actual: ScriptType,
+    },
     /// Some config scripts were unknown.
     #[error(
         "unknown config scripts specified by config (destructure this variant for more details)"
