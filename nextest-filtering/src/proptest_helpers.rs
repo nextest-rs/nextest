@@ -4,7 +4,8 @@
 use crate::{
     NameMatcher,
     parsing::{
-        AndOperator, DifferenceOperator, GenericGlob, NotOperator, OrOperator, ParsedExpr, SetDef,
+        AndOperator, DifferenceOperator, GenericGlob, NotOperator, OrOperator, ParsedExpr,
+        ParsedLeaf,
     },
 };
 use guppy::graph::cargo::BuildPlatform;
@@ -13,7 +14,7 @@ use proptest::prelude::*;
 impl ParsedExpr<()> {
     #[doc(hidden)]
     pub fn strategy() -> impl Strategy<Value = Self> {
-        let leaf = SetDef::strategy().prop_map(Self::Set);
+        let leaf = ParsedLeaf::strategy().prop_map(Self::Set);
 
         leaf.prop_recursive(8, 256, 10, |inner| {
             // Since `Expr` explicitly tracks parentheses, the below blocks need to add parentheses
@@ -103,7 +104,7 @@ impl ParsedExpr<()> {
     }
 }
 
-impl SetDef<()> {
+impl ParsedLeaf<()> {
     pub(crate) fn strategy() -> impl Strategy<Value = Self> {
         prop_oneof![
             1 => NameMatcher::default_glob_strategy().prop_map(|s| Self::Package(s, ())),

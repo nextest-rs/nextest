@@ -83,6 +83,9 @@ impl<'a> ShowTestGroups<'a> {
                             .or_insert_with(|| ShowTestGroupsData::new(source));
                         data.matching_tests.insert(&suite.binary_id, test_name);
                     }
+                    SettingSource::Script(_) => {
+                        panic!("show-test-groups is not set via script section");
+                    }
                     SettingSource::Profile | SettingSource::Default => {
                         if let Some(non_overrides) = non_overrides.as_mut() {
                             if settings.mode.matches_group(&TestGroup::Global) {

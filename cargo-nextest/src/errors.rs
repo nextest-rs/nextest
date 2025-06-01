@@ -7,10 +7,10 @@ use indent_write::indentable::Indented;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::{errors::*, redact::Redactor};
+use nextest_runner::{errors::*, helpers::plural, redact::Redactor};
 use owo_colors::OwoColorize;
 use semver::Version;
-use std::{error::Error, process::ExitStatus, string::FromUtf8Error};
+use std::{error::Error, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
 use swrite::{SWrite, swriteln};
 use thiserror::Error;
 use tracing::{Level, error, info};
@@ -261,6 +261,7 @@ pub enum ExpectedError {
     #[error("double-spawn execution error")]
     DoubleSpawnExecError {
         command: Box<std::process::Command>,
+        current_dir: Result<PathBuf, std::io::Error>,
         #[source]
         err: std::io::Error,
     },
@@ -429,7 +430,7 @@ impl ExpectedError {
             Self::ConfigParseError { err } => {
                 // Experimental features not being enabled are their own error.
                 match err.kind() {
-                    ConfigParseErrorKind::ExperimentalFeatureNotEnabled { .. } => {
+                    ConfigParseErrorKind::ExperimentalFeaturesNotEnabled { .. } => {
                         NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
                     }
                     _ => NextestExitCode::SETUP_ERROR,
@@ -625,30 +626,78 @@ impl ExpectedError {
                         );
                         None
                     }
-                    ConfigParseErrorKind::UnknownConfigScripts {
+                    ConfigParseErrorKind::ProfileScriptErrors {
                         errors,
                         known_scripts,
                     } => {
-                        let known_scripts_str = known_scripts
-                            .iter()
-                            .map(|group_name| group_name.style(styles.bold))
-                            .join(", ");
-                        let mut errors_str = String::new();
-                        for error in errors {
-                            swriteln!(
-                                errors_str,
-                                " - script `{}` specified within profile `{}`",
-                                error.name.style(styles.bold),
-                                error.profile_name.style(styles.bold)
-                            );
-                        }
+                        let ProfileScriptErrors {
+                            unknown_scripts,
+                            wrong_script_types,
+                            list_scripts_using_run_filters,
+                        } = &**errors;
 
-                        error!(
-                            "for config file `{}`{}, unknown scripts defined \
-                        (known scripts: {known_scripts_str}):\n{errors_str}",
+                        let mut errors_str: String = format!(
+                            "for config file `{}`{}, errors encountered parsing [[profile.*.scripts]]\n",
                             err.config_file(),
                             provided_by_tool(err.tool()),
                         );
+
+                        if !unknown_scripts.is_empty() {
+                            let known_scripts_str = known_scripts
+                                .iter()
+                                .map(|group_name| group_name.style(styles.bold))
+                                .join(", ");
+                            swriteln!(
+                                errors_str,
+                                "- unknown scripts specified (known scripts: {known_scripts_str}):",
+                            );
+                            for error in unknown_scripts {
+                                errors_str.push_str(&format!(
+                                    "  - script `{}` specified within profile `{}`\n",
+                                    error.name.style(styles.bold),
+                                    error.profile_name.style(styles.bold)
+                                ));
+                            }
+                        }
+
+                        if !wrong_script_types.is_empty() {
+                            swriteln!(errors_str, "- scripts specified with incorrect type:");
+                            for error in wrong_script_types {
+                                errors_str.push_str(&format!(
+                                    "  - script `{}` specified within profile `{}` as {}, \
+                                     but is actually {}\n",
+                                    error.name.style(styles.bold),
+                                    error.profile_name.style(styles.bold),
+                                    error.attempted.style(styles.bold),
+                                    error.actual.style(styles.bold)
+                                ));
+                            }
+                        }
+
+                        if !list_scripts_using_run_filters.is_empty() {
+                            swriteln!(
+                                errors_str,
+                                "- list-wrapper scripts specified using filters \
+                                 only available at runtime:",
+                            );
+                            for error in list_scripts_using_run_filters {
+                                let filters_str = plural::filters_str(error.filters.len());
+                                let filters = error
+                                    .filters
+                                    .iter()
+                                    .map(|f| f.style(styles.bold))
+                                    .join(", ");
+                                swriteln!(
+                                    errors_str,
+                                    "  - script `{}` specified within profile `{}` \
+                                     uses runtime {filters_str}: {filters}",
+                                    error.name.style(styles.bold),
+                                    error.profile_name.style(styles.bold)
+                                );
+                            }
+                        }
+
+                        error!("{errors_str}");
                         None
                     }
                     ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known } => {
@@ -891,8 +940,18 @@ impl ExpectedError {
                 error!("[double-spawn] failed to parse arguments `{args}`");
                 Some(err as &dyn Error)
             }
-            Self::DoubleSpawnExecError { command, err } => {
-                error!("[double-spawn] failed to exec `{command:?}`");
+            Self::DoubleSpawnExecError {
+                command,
+                current_dir,
+                err,
+            } => {
+                let current_dir_str = match current_dir {
+                    Ok(dir) => dir.to_string_lossy().into_owned(),
+                    Err(e) => format!("(error: {})", e),
+                };
+                error!(
+                    "[double-spawn] failed to exec `{command:?}`, current_dir: `{current_dir_str}`"
+                );
                 Some(err as &dyn Error)
             }
             Self::InvalidMessageFormatVersion { err } => {

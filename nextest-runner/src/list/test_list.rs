@@ -4,7 +4,10 @@
 use super::{DisplayFilterMatcher, TestListDisplayFilter};
 use crate::{
     cargo_config::EnvironmentMap,
-    config::{EvaluatableProfile, TestSettings},
+    config::{
+        EvaluatableProfile, ListSettings, TestSettings, WrapperScriptConfig,
+        WrapperScriptTargetRunner,
+    },
     double_spawn::DoubleSpawnInfo,
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
     helpers::{convert_build_platform, dylib_path, dylib_path_envvar, write_test_name},
@@ -12,7 +15,7 @@ use crate::{
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
     target_runner::{PlatformRunner, TargetRunner},
-    test_command::{LocalExecuteContext, TestCommand},
+    test_command::{LocalExecuteContext, TestCommand, TestCommandPhase},
     test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilterBuilder},
     write_str::WriteStr,
 };
@@ -31,6 +34,7 @@ use nextest_metadata::{
 };
 use owo_colors::OwoColorize;
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
     fmt, io,
@@ -230,7 +234,7 @@ impl<'g> TestList<'g> {
         filter: &TestFilterBuilder,
         workspace_root: Utf8PathBuf,
         env: EnvironmentMap,
-        ecx: &EvalContext<'_>,
+        profile: &impl ListProfile,
         bound: FilterBound,
         list_threads: usize,
     ) -> Result<Self, CreateTestListError>
@@ -245,6 +249,7 @@ impl<'g> TestList<'g> {
             updated_dylib_path.to_string_lossy(),
         );
         let lctx = LocalExecuteContext {
+            phase: TestCommandPhase::List,
             rust_build_meta: &rust_build_meta,
             double_spawn: ctx.double_spawn,
             dylib_path: &updated_dylib_path,
@@ -252,11 +257,14 @@ impl<'g> TestList<'g> {
             env: &env,
         };
 
+        let ecx = profile.filterset_ecx();
+
         let runtime = Runtime::new().map_err(CreateTestListError::TokioRuntimeCreate)?;
 
         let stream = futures::stream::iter(test_artifacts).map(|test_binary| {
             async {
-                let binary_match = filter.filter_binary_match(&test_binary, ecx, bound);
+                let binary_query = test_binary.to_binary_query();
+                let binary_match = filter.filter_binary_match(&test_binary, &ecx, bound);
                 match binary_match {
                     FilterBinaryMatch::Definite | FilterBinaryMatch::Possible => {
                         debug!(
@@ -265,12 +273,14 @@ impl<'g> TestList<'g> {
                             test_binary.binary_id,
                         );
                         // Run the binary to obtain the test list.
-                        let (non_ignored, ignored) =
-                            test_binary.exec(&lctx, ctx.target_runner).await?;
+                        let list_settings = profile.list_settings_for(&binary_query);
+                        let (non_ignored, ignored) = test_binary
+                            .exec(&lctx, &list_settings, ctx.target_runner)
+                            .await?;
                         let (bin, info) = Self::process_output(
                             test_binary,
                             filter,
-                            ecx,
+                            &ecx,
                             bound,
                             non_ignored.as_str(),
                             ignored.as_str(),
@@ -783,6 +793,25 @@ impl<'g> TestList<'g> {
     }
 }
 
+/// Profile implementation for test lists.
+pub trait ListProfile {
+    /// Returns the evaluation context.
+    fn filterset_ecx(&self) -> EvalContext<'_>;
+
+    /// Returns list-time settings for a test binary.
+    fn list_settings_for(&self, query: &BinaryQuery<'_>) -> ListSettings<'_>;
+}
+
+impl<'g> ListProfile for EvaluatableProfile<'g> {
+    fn filterset_ecx(&self) -> EvalContext<'_> {
+        self.filterset_ecx()
+    }
+
+    fn list_settings_for(&self, query: &BinaryQuery<'_>) -> ListSettings<'_> {
+        self.list_settings_for(query)
+    }
+}
+
 /// A test list that has been sorted and has had priorities applied to it.
 pub struct TestPriorityQueue<'a> {
     tests: Vec<TestInstanceWithSettings<'a>>,
@@ -865,6 +894,7 @@ impl RustTestArtifact<'_> {
     async fn exec(
         &self,
         lctx: &LocalExecuteContext<'_>,
+        list_settings: &ListSettings<'_>,
         target_runner: &TargetRunner,
     ) -> Result<(String, String), CreateTestListError> {
         // This error situation has been known to happen with reused builds. It produces
@@ -877,8 +907,8 @@ impl RustTestArtifact<'_> {
         }
         let platform_runner = target_runner.for_build_platform(self.build_platform);
 
-        let non_ignored = self.exec_single(false, lctx, platform_runner);
-        let ignored = self.exec_single(true, lctx, platform_runner);
+        let non_ignored = self.exec_single(false, lctx, list_settings, platform_runner);
+        let ignored = self.exec_single(true, lctx, list_settings, platform_runner);
 
         let (non_ignored_out, ignored_out) = futures::future::join(non_ignored, ignored).await;
         Ok((non_ignored_out?, ignored_out?))
@@ -888,32 +918,29 @@ impl RustTestArtifact<'_> {
         &self,
         ignored: bool,
         lctx: &LocalExecuteContext<'_>,
+        list_settings: &ListSettings<'_>,
         runner: Option<&PlatformRunner>,
     ) -> Result<String, CreateTestListError> {
-        let mut argv = Vec::new();
+        let mut cli = TestCommandCli::default();
+        cli.apply_wrappers(
+            list_settings.list_wrapper(),
+            runner,
+            &lctx.rust_build_meta.target_directory,
+        );
+        cli.push(self.binary_path.as_str());
 
-        let program: String = if let Some(runner) = runner {
-            argv.extend(runner.args());
-            argv.push(self.binary_path.as_str());
-            runner.binary().into()
-        } else {
-            debug_assert!(
-                self.binary_path.is_absolute(),
-                "binary path {} is absolute",
-                self.binary_path
-            );
-            self.binary_path.clone().into()
-        };
-
-        argv.extend(["--list", "--format", "terse"]);
+        cli.extend(["--list", "--format", "terse"]);
         if ignored {
-            argv.push("--ignored");
+            cli.push("--ignored");
         }
 
         let cmd = TestCommand::new(
             lctx,
-            program.clone(),
-            &argv,
+            cli.program
+                .clone()
+                .expect("at least one argument passed in")
+                .into_owned(),
+            &cli.args,
             &self.cwd,
             &self.package,
             &self.non_test_binaries,
@@ -924,27 +951,21 @@ impl RustTestArtifact<'_> {
                 .await
                 .map_err(|error| CreateTestListError::CommandExecFail {
                     binary_id: self.binary_id.clone(),
-                    command: std::iter::once(program.clone())
-                        .chain(argv.iter().map(|&s| s.to_owned()))
-                        .collect(),
+                    command: cli.to_owned_cli(),
                     error,
                 })?;
 
         if output.status.success() {
             String::from_utf8(output.stdout).map_err(|err| CreateTestListError::CommandNonUtf8 {
                 binary_id: self.binary_id.clone(),
-                command: std::iter::once(program)
-                    .chain(argv.iter().map(|&s| s.to_owned()))
-                    .collect(),
+                command: cli.to_owned_cli(),
                 stdout: err.into_bytes(),
                 stderr: output.stderr,
             })
         } else {
             Err(CreateTestListError::CommandFail {
                 binary_id: self.binary_id.clone(),
-                command: std::iter::once(program)
-                    .chain(argv.iter().map(|&s| s.to_owned()))
-                    .collect(),
+                command: cli.to_owned_cli(),
                 exit_status: output.status,
                 stdout: output.stdout,
                 stderr: output.stderr,
@@ -1074,31 +1095,31 @@ impl<'a> TestInstance<'a> {
         &self,
         ctx: &TestExecuteContext<'_>,
         test_list: &TestList<'_>,
+        wrapper_script: Option<&'a WrapperScriptConfig>,
         extra_args: &[String],
     ) -> TestCommand {
+        // TODO: non-rust tests
+
         let platform_runner = ctx
             .target_runner
             .for_build_platform(self.suite_info.build_platform);
-        // TODO: non-rust tests
 
-        let mut args = Vec::new();
+        let mut cli = TestCommandCli::default();
+        cli.apply_wrappers(
+            wrapper_script,
+            platform_runner,
+            &test_list.rust_build_meta().target_directory,
+        );
+        cli.push(self.suite_info.binary_path.as_str());
 
-        let program: String = match platform_runner {
-            Some(runner) => {
-                args.extend(runner.args());
-                args.push(self.suite_info.binary_path.as_str());
-                runner.binary().into()
-            }
-            None => self.suite_info.binary_path.to_owned().into(),
-        };
-
-        args.extend(["--exact", self.name, "--nocapture"]);
+        cli.extend(["--exact", self.name, "--nocapture"]);
         if self.test_info.ignored {
-            args.push("--ignored");
+            cli.push("--ignored");
         }
-        args.extend(extra_args.iter().map(String::as_str));
+        cli.extend(extra_args.iter().map(String::as_str));
 
         let lctx = LocalExecuteContext {
+            phase: TestCommandPhase::Run,
             rust_build_meta: &test_list.rust_build_meta,
             double_spawn: ctx.double_spawn,
             dylib_path: test_list.updated_dylib_path(),
@@ -1108,12 +1129,94 @@ impl<'a> TestInstance<'a> {
 
         TestCommand::new(
             &lctx,
-            program,
-            &args,
+            cli.program
+                .expect("at least one argument is guaranteed")
+                .into_owned(),
+            &cli.args,
             &self.suite_info.cwd,
             &self.suite_info.package,
             &self.suite_info.non_test_binaries,
         )
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct TestCommandCli<'a> {
+    program: Option<Cow<'a, str>>,
+    args: Vec<Cow<'a, str>>,
+}
+
+impl<'a> TestCommandCli<'a> {
+    fn apply_wrappers(
+        &mut self,
+        wrapper_script: Option<&'a WrapperScriptConfig>,
+        platform_runner: Option<&'a PlatformRunner>,
+        target_dir: &Utf8Path,
+    ) {
+        // Apply the wrapper script if it's enabled.
+        if let Some(wrapper) = wrapper_script {
+            match wrapper.target_runner {
+                WrapperScriptTargetRunner::Ignore => {
+                    // Ignore the platform runner.
+                    self.push(wrapper.command.program(target_dir));
+                    self.extend(wrapper.command.args.iter().map(String::as_str));
+                }
+                WrapperScriptTargetRunner::AroundWrapper => {
+                    // Platform runner goes first.
+                    if let Some(runner) = platform_runner {
+                        self.push(runner.binary());
+                        self.extend(runner.args());
+                    }
+                    self.push(wrapper.command.program(target_dir));
+                    self.extend(wrapper.command.args.iter().map(String::as_str));
+                }
+                WrapperScriptTargetRunner::WithinWrapper => {
+                    // Wrapper script goes first.
+                    self.push(wrapper.command.program(target_dir));
+                    self.extend(wrapper.command.args.iter().map(String::as_str));
+                    if let Some(runner) = platform_runner {
+                        self.push(runner.binary());
+                        self.extend(runner.args());
+                    }
+                }
+                WrapperScriptTargetRunner::OverridesWrapper => {
+                    // Target runner overrides wrapper.
+                    if let Some(runner) = platform_runner {
+                        self.push(runner.binary());
+                        self.extend(runner.args());
+                    }
+                }
+            }
+        } else {
+            // If no wrapper script is enabled, use the platform runner.
+            if let Some(runner) = platform_runner {
+                self.push(runner.binary());
+                self.extend(runner.args());
+            }
+        }
+    }
+
+    fn push(&mut self, arg: impl Into<Cow<'a, str>>) {
+        if self.program.is_none() {
+            self.program = Some(arg.into());
+        } else {
+            self.args.push(arg.into());
+        }
+    }
+
+    fn extend(&mut self, args: impl IntoIterator<Item = &'a str>) {
+        for arg in args {
+            self.push(arg);
+        }
+    }
+
+    fn to_owned_cli(&self) -> Vec<String> {
+        let mut owned_cli = Vec::new();
+        if let Some(program) = &self.program {
+            owned_cli.push(program.to_string());
+        }
+        owned_cli.extend(self.args.iter().map(|arg| arg.clone().into_owned()));
+        owned_cli
     }
 }
 
@@ -1153,8 +1256,10 @@ mod tests {
     use super::*;
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
+        config::{ScriptCommand, ScriptCommandRelativeTo},
         list::SerializableFormat,
         platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
+        target_runner::PlatformRunnerSource,
         test_filter::{RunIgnored, TestFilterPatterns},
     };
     use guppy::CargoMetadata;
@@ -1479,6 +1584,207 @@ mod tests {
                 .expect("json-pretty succeeded"),
             EXPECTED_JSON_PRETTY
         );
+    }
+
+    #[test]
+    fn apply_wrappers_examples() {
+        cfg_if::cfg_if! {
+            if #[cfg(windows)]
+            {
+                let target_dir = Utf8Path::new("C:\\foo\\bar");
+            } else {
+                let target_dir = Utf8Path::new("/foo/bar");
+            }
+        };
+
+        // Test with no wrappers
+        {
+            let mut cli_no_wrappers = TestCommandCli::default();
+            cli_no_wrappers.apply_wrappers(None, None, target_dir);
+            cli_no_wrappers.extend(["binary", "arg"]);
+            assert_eq!(cli_no_wrappers.to_owned_cli(), vec!["binary", "arg"]);
+        }
+
+        // Test with platform runner only
+        {
+            let runner = PlatformRunner::debug_new(
+                "runner".into(),
+                Vec::new(),
+                PlatformRunnerSource::Env("fake".to_owned()),
+            );
+            let mut cli_runner_only = TestCommandCli::default();
+            cli_runner_only.apply_wrappers(None, Some(&runner), target_dir);
+            cli_runner_only.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_runner_only.to_owned_cli(),
+                vec!["runner", "binary", "arg"],
+            );
+        }
+
+        // Test wrapper with ignore target runner
+        {
+            let runner = PlatformRunner::debug_new(
+                "runner".into(),
+                Vec::new(),
+                PlatformRunnerSource::Env("fake".to_owned()),
+            );
+            let wrapper_ignore = WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "wrapper".into(),
+                    args: Vec::new(),
+                    relative_to: ScriptCommandRelativeTo::None,
+                },
+                target_runner: WrapperScriptTargetRunner::Ignore,
+            };
+            let mut cli_wrapper_ignore = TestCommandCli::default();
+            cli_wrapper_ignore.apply_wrappers(Some(&wrapper_ignore), Some(&runner), target_dir);
+            cli_wrapper_ignore.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_wrapper_ignore.to_owned_cli(),
+                vec!["wrapper", "binary", "arg"],
+            );
+        }
+
+        // Test wrapper with around wrapper (runner first)
+        {
+            let runner = PlatformRunner::debug_new(
+                "runner".into(),
+                Vec::new(),
+                PlatformRunnerSource::Env("fake".to_owned()),
+            );
+            let wrapper_around = WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "wrapper".into(),
+                    args: Vec::new(),
+                    relative_to: ScriptCommandRelativeTo::None,
+                },
+                target_runner: WrapperScriptTargetRunner::AroundWrapper,
+            };
+            let mut cli_wrapper_around = TestCommandCli::default();
+            cli_wrapper_around.apply_wrappers(Some(&wrapper_around), Some(&runner), target_dir);
+            cli_wrapper_around.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_wrapper_around.to_owned_cli(),
+                vec!["runner", "wrapper", "binary", "arg"],
+            );
+        }
+
+        // Test wrapper with within wrapper (wrapper first)
+        {
+            let runner = PlatformRunner::debug_new(
+                "runner".into(),
+                Vec::new(),
+                PlatformRunnerSource::Env("fake".to_owned()),
+            );
+            let wrapper_within = WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "wrapper".into(),
+                    args: Vec::new(),
+                    relative_to: ScriptCommandRelativeTo::None,
+                },
+                target_runner: WrapperScriptTargetRunner::WithinWrapper,
+            };
+            let mut cli_wrapper_within = TestCommandCli::default();
+            cli_wrapper_within.apply_wrappers(Some(&wrapper_within), Some(&runner), target_dir);
+            cli_wrapper_within.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_wrapper_within.to_owned_cli(),
+                vec!["wrapper", "runner", "binary", "arg"],
+            );
+        }
+
+        // Test wrapper with overrides wrapper (runner only)
+        {
+            let runner = PlatformRunner::debug_new(
+                "runner".into(),
+                Vec::new(),
+                PlatformRunnerSource::Env("fake".to_owned()),
+            );
+            let wrapper_overrides = WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "wrapper".into(),
+                    args: Vec::new(),
+                    relative_to: ScriptCommandRelativeTo::None,
+                },
+                target_runner: WrapperScriptTargetRunner::OverridesWrapper,
+            };
+            let mut cli_wrapper_overrides = TestCommandCli::default();
+            cli_wrapper_overrides.apply_wrappers(
+                Some(&wrapper_overrides),
+                Some(&runner),
+                target_dir,
+            );
+            cli_wrapper_overrides.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_wrapper_overrides.to_owned_cli(),
+                vec!["runner", "binary", "arg"],
+            );
+        }
+
+        // Test wrapper with args
+        {
+            let wrapper_with_args = WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "wrapper".into(),
+                    args: vec!["--flag".to_string(), "value".to_string()],
+                    relative_to: ScriptCommandRelativeTo::None,
+                },
+                target_runner: WrapperScriptTargetRunner::Ignore,
+            };
+            let mut cli_wrapper_args = TestCommandCli::default();
+            cli_wrapper_args.apply_wrappers(Some(&wrapper_with_args), None, target_dir);
+            cli_wrapper_args.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_wrapper_args.to_owned_cli(),
+                vec!["wrapper", "--flag", "value", "binary", "arg"],
+            );
+        }
+
+        // Test platform runner with args
+        {
+            let runner_with_args = PlatformRunner::debug_new(
+                "runner".into(),
+                vec!["--runner-flag".into(), "value".into()],
+                PlatformRunnerSource::Env("fake".to_owned()),
+            );
+            let mut cli_runner_args = TestCommandCli::default();
+            cli_runner_args.apply_wrappers(None, Some(&runner_with_args), target_dir);
+            cli_runner_args.extend(["binary", "arg"]);
+            assert_eq!(
+                cli_runner_args.to_owned_cli(),
+                vec!["runner", "--runner-flag", "value", "binary", "arg"],
+            );
+        }
+
+        // Test wrapper with ScriptCommandRelativeTo::Target
+        {
+            let wrapper_relative_to_target = WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "abc/def/my-wrapper".into(),
+                    args: vec!["--verbose".to_string()],
+                    relative_to: ScriptCommandRelativeTo::Target,
+                },
+                target_runner: WrapperScriptTargetRunner::Ignore,
+            };
+            let mut cli_wrapper_relative = TestCommandCli::default();
+            cli_wrapper_relative.apply_wrappers(
+                Some(&wrapper_relative_to_target),
+                None,
+                target_dir,
+            );
+            cli_wrapper_relative.extend(["binary", "arg"]);
+            cfg_if::cfg_if! {
+                if #[cfg(windows)] {
+                    let wrapper_path = "C:\\foo\\bar\\abc\\def\\my-wrapper";
+                } else {
+                    let wrapper_path = "/foo/bar/abc/def/my-wrapper";
+                }
+            }
+            assert_eq!(
+                cli_wrapper_relative.to_owned_cli(),
+                vec![wrapper_path, "--verbose", "binary", "arg"],
+            );
+        }
     }
 
     static PACKAGE_GRAPH_FIXTURE: LazyLock<PackageGraph> = LazyLock::new(|| {

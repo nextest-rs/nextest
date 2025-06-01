@@ -88,6 +88,8 @@ pub static EXPECTED_TEST_SUITES: LazyLock<BTreeMap<RustBinaryId, TestSuiteFixtur
                 "nextest-tests",
                 BuildPlatform::Target,
                 vec![
+                    // This is a fake test name produced by wrapper.rs.
+                    TestCaseFixture::new("fake_test_name", TestCaseFixtureStatus::IgnoredPass),
                     TestCaseFixture::new("tests::bin_success", TestCaseFixtureStatus::Pass),
                 ],
             ),
@@ -99,12 +101,20 @@ pub static EXPECTED_TEST_SUITES: LazyLock<BTreeMap<RustBinaryId, TestSuiteFixtur
                     TestCaseFixture::new("tests::other_bin_success", TestCaseFixtureStatus::Pass),
                 ],
             ),
+            "nextest-tests::bin/wrapper".into() => TestSuiteFixture::new(
+                "nextest-tests::bin/wrapper",
+                "wrapper",
+                BuildPlatform::Target,
+                vec![],
+            ),
             // Example tests
             "nextest-tests::example/nextest-tests".into() => TestSuiteFixture::new(
                 "nextest-tests::example/nextest-tests",
                 "nextest-tests",
                 BuildPlatform::Target,
                 vec![
+                    // This is a fake test name produced by wrapper.rs.
+                    TestCaseFixture::new("fake_test_name", TestCaseFixtureStatus::IgnoredPass),
                     TestCaseFixture::new("tests::example_success", TestCaseFixtureStatus::Pass),
                 ],
             ),

@@ -4,7 +4,7 @@
 use crate::{
     errors::{FiltersetParseErrors, ParseSingleError},
     parsing::{
-        DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob, ParsedExpr, SetDef,
+        DisplayParsedRegex, DisplayParsedString, ExprResult, GenericGlob, ParsedExpr, ParsedLeaf,
         new_span, parse,
     },
 };
@@ -130,6 +130,17 @@ pub enum FiltersetLeaf {
     All,
     /// No tests
     None,
+}
+
+impl FiltersetLeaf {
+    /// Returns true if this leaf can only be evaluated at runtime, i.e. it
+    /// requires test names to be available.
+    ///
+    /// Currently, this also returns true (conservatively) for the `Default`
+    /// leaf, which is used to represent the default set of tests to run.
+    pub fn is_runtime_only(&self) -> bool {
+        matches!(self, Self::Test(_, _) | Self::Default)
+    }
 }
 
 /// A query for a binary, passed into [`Filterset::matches_binary`].
@@ -604,7 +615,7 @@ impl<'a> Collapsible for Wrapped<&'a CompiledExpr> {
 }
 
 impl<'a> Collapsible for Wrapped<&'a ParsedExpr> {
-    type FrameToken = ExprFrame<&'a SetDef, PartiallyApplied>;
+    type FrameToken = ExprFrame<&'a ParsedLeaf, PartiallyApplied>;
 
     fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
         match self.0 {

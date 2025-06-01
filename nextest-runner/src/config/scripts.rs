@@ -22,8 +22,11 @@ use crate::{
 use camino::Utf8Path;
 use camino_tempfile::Utf8TempPath;
 use guppy::graph::cargo::BuildPlatform;
+use iddqd::{IdOrdItem, id_upcast};
 use indexmap::IndexMap;
-use nextest_filtering::{EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery};
+use nextest_filtering::{
+    BinaryQuery, EvalContext, Filterset, FiltersetKind, ParseContext, TestQuery,
+};
 use serde::{Deserialize, de::Error};
 use smol_str::SmolStr;
 use std::{
@@ -41,39 +44,114 @@ pub struct ScriptConfig {
     /// The setup scripts defined in nextest's configuration.
     #[serde(default)]
     pub setup: IndexMap<ScriptId, SetupScriptConfig>,
+    /// The wrapper scripts defined in nextest's configuration.
+    #[serde(default)]
+    pub wrapper: IndexMap<ScriptId, WrapperScriptConfig>,
 }
 
 impl ScriptConfig {
     pub(super) fn is_empty(&self) -> bool {
-        self.setup.is_empty()
+        self.setup.is_empty() && self.wrapper.is_empty()
     }
 
-    /// Determines the type of the script with the given ID.
+    /// Returns information about the script with the given ID.
     ///
     /// Panics if the ID is invalid.
-    pub(super) fn script_type(&self, id: &ScriptId) -> ScriptType {
-        if self.setup.contains_key(id) {
+    pub(super) fn script_info(&self, id: ScriptId) -> ScriptInfo {
+        let script_type = if self.setup.contains_key(&id) {
             ScriptType::Setup
+        } else if self.wrapper.contains_key(&id) {
+            ScriptType::Wrapper
         } else {
-            panic!("Scripts::script_type called with invalid script ID: {id}")
+            panic!("ScriptConfig::script_info called with invalid script ID: {id}")
+        };
+
+        ScriptInfo {
+            id: id.clone(),
+            script_type,
         }
     }
 
     /// Returns an iterator over the names of all scripts of all types.
     pub(super) fn all_script_ids(&self) -> impl Iterator<Item = &ScriptId> {
-        self.setup.keys()
+        self.setup.keys().chain(self.wrapper.keys())
+    }
+
+    /// Returns an iterator over names that are used by more than one type of
+    /// script.
+    pub(super) fn duplicate_ids(&self) -> impl Iterator<Item = &ScriptId> {
+        self.wrapper.keys().filter(|k| self.setup.contains_key(*k))
     }
 }
 
+/// Basic information about a script, used during error checking.
+#[derive(Clone, Debug)]
+pub struct ScriptInfo {
+    /// The script ID.
+    pub id: ScriptId,
+
+    /// The type of the script.
+    pub script_type: ScriptType,
+}
+
+impl IdOrdItem for ScriptInfo {
+    type Key<'a> = &'a ScriptId;
+    fn key(&self) -> Self::Key<'_> {
+        &self.id
+    }
+    id_upcast!();
+}
+
+/// The script type as configured in the `[scripts]` table.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum ScriptType {
+    /// A setup script.
     Setup,
+
+    /// A wrapper script.
+    Wrapper,
+}
+
+impl ScriptType {
+    pub(super) fn matches(self, profile_script_type: ProfileScriptType) -> bool {
+        match self {
+            ScriptType::Setup => profile_script_type == ProfileScriptType::Setup,
+            ScriptType::Wrapper => {
+                profile_script_type == ProfileScriptType::ListWrapper
+                    || profile_script_type == ProfileScriptType::RunWrapper
+            }
+        }
+    }
 }
 
 impl fmt::Display for ScriptType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ScriptType::Setup => f.write_str("setup"),
+            ScriptType::Wrapper => f.write_str("wrapper"),
+        }
+    }
+}
+
+/// A script type as configured in `[[profile.*.scripts]]`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProfileScriptType {
+    /// A setup script.
+    Setup,
+
+    /// A list-time wrapper script.
+    ListWrapper,
+
+    /// A run-time wrapper script.
+    RunWrapper,
+}
+
+impl fmt::Display for ProfileScriptType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ProfileScriptType::Setup => f.write_str("setup"),
+            ProfileScriptType::ListWrapper => f.write_str("list-wrapper"),
+            ProfileScriptType::RunWrapper => f.write_str("run-wrapper"),
         }
     }
 }
@@ -301,8 +379,10 @@ impl<'profile> SetupScriptExecuteData<'profile> {
 #[derive(Clone, Debug)]
 pub(crate) struct CompiledProfileScripts<State> {
     pub(super) setup: Vec<ScriptId>,
+    pub(super) list_wrapper: Option<ScriptId>,
+    pub(super) run_wrapper: Option<ScriptId>,
     pub(super) data: ProfileScriptData,
-    state: State,
+    pub(super) state: State,
 }
 
 impl CompiledProfileScripts<PreBuildPlatform> {
@@ -346,6 +426,8 @@ impl CompiledProfileScripts<PreBuildPlatform> {
         match (host_spec, target_spec, filter_expr) {
             (Ok(host_spec), Ok(target_spec), Ok(expr)) => Some(Self {
                 setup: source.setup.clone(),
+                list_wrapper: source.list_wrapper.clone(),
+                run_wrapper: source.run_wrapper.clone(),
                 data: ProfileScriptData {
                     host_spec,
                     target_spec,
@@ -387,6 +469,8 @@ impl CompiledProfileScripts<PreBuildPlatform> {
 
         CompiledProfileScripts {
             setup: self.setup,
+            list_wrapper: self.list_wrapper,
+            run_wrapper: self.run_wrapper,
             data: self.data,
             state: FinalConfig {
                 host_eval,
@@ -398,6 +482,28 @@ impl CompiledProfileScripts<PreBuildPlatform> {
 }
 
 impl CompiledProfileScripts<FinalConfig> {
+    pub(super) fn is_enabled_binary(
+        &self,
+        query: &BinaryQuery<'_>,
+        cx: &EvalContext<'_>,
+    ) -> Option<bool> {
+        if !self.state.host_eval {
+            return Some(false);
+        }
+        if query.platform == BuildPlatform::Host && !self.state.host_test_eval {
+            return Some(false);
+        }
+        if query.platform == BuildPlatform::Target && !self.state.target_eval {
+            return Some(false);
+        }
+
+        if let Some(expr) = &self.data.expr {
+            expr.matches_binary(query, cx)
+        } else {
+            Some(true)
+        }
+    }
+
     pub(super) fn is_enabled(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
         if !self.state.host_eval {
             return false;
@@ -463,6 +569,12 @@ pub(super) struct ProfileScriptData {
     expr: Option<Filterset>,
 }
 
+impl ProfileScriptData {
+    pub(super) fn expr(&self) -> Option<&Filterset> {
+        self.expr.as_ref()
+    }
+}
+
 /// Deserialized form of profile-specific script configuration before compilation.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -476,8 +588,16 @@ pub(super) struct DeserializedProfileScriptConfig {
     filter: Option<String>,
 
     /// The setup script or scripts to run.
-    #[serde(deserialize_with = "deserialize_script_ids")]
+    #[serde(default, deserialize_with = "deserialize_script_ids")]
     setup: Vec<ScriptId>,
+
+    /// The wrapper script to run at list time.
+    #[serde(default)]
+    list_wrapper: Option<ScriptId>,
+
+    /// The wrapper script to run at run time.
+    #[serde(default)]
+    run_wrapper: Option<ScriptId>,
 }
 
 /// Deserialized form of setup script configuration before compilation.
@@ -545,6 +665,64 @@ impl Default for SetupScriptJunitConfig {
     }
 }
 
+/// Deserialized form of wrapper script configuration before compilation.
+///
+/// This is defined as a top-level element.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct WrapperScriptConfig {
+    /// The command to run.
+    pub command: ScriptCommand,
+
+    /// How this script interacts with a configured target runner, if any.
+    /// Defaults to ignoring the target runner.
+    #[serde(default)]
+    pub target_runner: WrapperScriptTargetRunner,
+}
+
+/// Interaction of wrapper script with a configured target runner.
+#[derive(Clone, Debug, Default)]
+pub enum WrapperScriptTargetRunner {
+    /// The target runner is ignored. This is the default.
+    #[default]
+    Ignore,
+
+    /// The target runner overrides the wrapper.
+    OverridesWrapper,
+
+    /// The target runner runs within the wrapper script. The command line used
+    /// is `<wrapper> <target-runner> <test-binary> <args>`.
+    WithinWrapper,
+
+    /// The target runner runs around the wrapper script. The command line used
+    /// is `<target-runner> <wrapper> <test-binary> <args>`.
+    AroundWrapper,
+}
+
+impl<'de> Deserialize<'de> for WrapperScriptTargetRunner {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "ignore" => Ok(WrapperScriptTargetRunner::Ignore),
+            "overrides-wrapper" => Ok(WrapperScriptTargetRunner::OverridesWrapper),
+            "within-wrapper" => Ok(WrapperScriptTargetRunner::WithinWrapper),
+            "around-wrapper" => Ok(WrapperScriptTargetRunner::AroundWrapper),
+            _ => Err(serde::de::Error::unknown_variant(
+                &s,
+                &[
+                    "ignore",
+                    "overrides-wrapper",
+                    "within-wrapper",
+                    "around-wrapper",
+                ],
+            )),
+        }
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -605,9 +783,17 @@ impl ScriptCommand {
     pub fn program(&self, target_dir: &Utf8Path) -> String {
         match self.relative_to {
             ScriptCommandRelativeTo::None => self.program.clone(),
-            ScriptCommandRelativeTo::Target => target_dir
-                .join(convert_rel_path_to_main_sep(self.program.as_ref()))
-                .to_string(),
+            ScriptCommandRelativeTo::Target => {
+                // If the path is relative, convert it to the main separator.
+                let path = Utf8Path::new(&self.program);
+                if path.is_relative() {
+                    target_dir
+                        .join(convert_rel_path_to_main_sep(path))
+                        .to_string()
+                } else {
+                    path.to_string()
+                }
+            }
         }
     }
 }
@@ -792,7 +978,10 @@ mod tests {
     use super::*;
     use crate::{
         config::{ConfigExperimental, NextestConfig, ToolConfigFile, test_helpers::*},
-        errors::{ConfigParseErrorKind, DisplayErrorChain, UnknownConfigScriptError},
+        errors::{
+            ConfigParseErrorKind, DisplayErrorChain, ProfileListScriptUsesRunFiltersError,
+            ProfileScriptErrors, ProfileUnknownScriptError, ProfileWrongConfigScriptTypeError,
+        },
     };
     use camino_tempfile::tempdir;
     use camino_tempfile_ext::prelude::*;
@@ -866,8 +1055,11 @@ mod tests {
         )
         .unwrap_err();
         match nextest_config_error.kind() {
-            ConfigParseErrorKind::ExperimentalFeatureNotEnabled { feature } => {
-                assert_eq!(*feature, ConfigExperimental::SetupScripts);
+            ConfigParseErrorKind::ExperimentalFeaturesNotEnabled { missing_features } => {
+                assert_eq!(
+                    *missing_features,
+                    btreeset! { ConfigExperimental::SetupScripts }
+                );
             }
             other => panic!("unexpected error kind: {other:?}"),
         }
@@ -1052,6 +1244,26 @@ mod tests {
 
         ; "invalid script name"
     )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.wrapper.foo]
+            command = "my-command"
+            target-runner = "not-a-valid-value"
+        "#},
+        r#"unknown variant `not-a-valid-value`, expected one of `ignore`, `overrides-wrapper`, `within-wrapper`, `around-wrapper`"#
+
+        ; "invalid target-runner value"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.wrapper.foo]
+            command = "my-command"
+            target-runner = ["foo"]
+        "#},
+        r#"invalid type: sequence, expected a string"#
+
+        ; "target-runner is not a string"
+    )]
     fn parse_scripts_invalid_deserialize(config_contents: &str, message: &str) {
         let workspace_dir = tempdir().unwrap();
 
@@ -1063,7 +1275,7 @@ mod tests {
             &pcx,
             None,
             &[][..],
-            &btreeset! { ConfigExperimental::SetupScripts },
+            &btreeset! { ConfigExperimental::SetupScripts, ConfigExperimental::WrapperScripts },
         )
         .expect_err("config is invalid");
         let actual_message = DisplayErrorChain::new(nextest_config_error).to_string();
@@ -1161,7 +1373,7 @@ mod tests {
             &pcx,
             None,
             &[][..],
-            &btreeset! { ConfigExperimental::SetupScripts },
+            &btreeset! { ConfigExperimental::SetupScripts, ConfigExperimental::WrapperScripts },
         )
         .expect_err("config is invalid");
         match error.kind() {
@@ -1226,7 +1438,7 @@ mod tests {
             &pcx,
             None,
             &[][..],
-            &btreeset! { ConfigExperimental::SetupScripts },
+            &btreeset! { ConfigExperimental::SetupScripts, ConfigExperimental::WrapperScripts },
         )
         .expect_err("config is invalid");
         match error.kind() {
@@ -1305,22 +1517,22 @@ mod tests {
     #[test_case(
         indoc! {r#"
             [scripts.setup.foo]
-            command = "my-command"
+            command = 'echo foo'
 
             [[profile.default.scripts]]
-            filter = "test(script1)"
-            setup = "bar"
+            platform = 'cfg(unix)'
+            setup = ['bar']
 
             [[profile.ci.scripts]]
-            filter = "test(script2)"
-            setup = ["baz"]
+            platform = 'cfg(unix)'
+            setup = ['baz']
         "#},
         vec![
-            UnknownConfigScriptError {
+            ProfileUnknownScriptError {
                 profile_name: "default".to_owned(),
                 name: ScriptId::new("bar".into()).unwrap(),
             },
-            UnknownConfigScriptError {
+            ProfileUnknownScriptError {
                 profile_name: "ci".to_owned(),
                 name: ScriptId::new("baz".into()).unwrap(),
             },
@@ -1331,7 +1543,7 @@ mod tests {
     )]
     fn parse_scripts_invalid_unknown(
         config_contents: &str,
-        expected_errors: Vec<UnknownConfigScriptError>,
+        expected_errors: Vec<ProfileUnknownScriptError>,
         expected_known_scripts: &[&str],
     ) {
         let workspace_dir = tempdir().unwrap();
@@ -1345,28 +1557,32 @@ mod tests {
             &pcx,
             None,
             &[][..],
-            &btreeset! { ConfigExperimental::SetupScripts },
+            &btreeset! { ConfigExperimental::SetupScripts, ConfigExperimental::WrapperScripts },
         )
         .expect_err("config is invalid");
         match error.kind() {
-            ConfigParseErrorKind::UnknownConfigScripts {
+            ConfigParseErrorKind::ProfileScriptErrors {
                 errors,
                 known_scripts,
             } => {
+                let ProfileScriptErrors {
+                    unknown_scripts,
+                    wrong_script_types,
+                    list_scripts_using_run_filters,
+                } = &**errors;
+                assert_eq!(wrong_script_types.len(), 0, "no wrong script types");
                 assert_eq!(
-                    errors.len(),
+                    list_scripts_using_run_filters.len(),
+                    0,
+                    "no scripts using run filters in list phase"
+                );
+                assert_eq!(
+                    unknown_scripts.len(),
                     expected_errors.len(),
                     "correct number of errors"
                 );
-                for (error, expected_error) in errors.iter().zip(expected_errors) {
-                    assert_eq!(
-                        error.profile_name, expected_error.profile_name,
-                        "profile name matches"
-                    );
-                    assert_eq!(
-                        error.name, expected_error.name,
-                        "unknown script name matches"
-                    );
+                for (error, expected_error) in unknown_scripts.iter().zip(expected_errors) {
+                    assert_eq!(error, &expected_error, "error matches");
                 }
                 assert_eq!(
                     known_scripts.len(),
@@ -1383,8 +1599,252 @@ mod tests {
             }
             other => {
                 panic!(
-                    "for config error {other:?}, expected ConfigParseErrorKind::UnknownConfigScripts"
+                    "for config error {other:?}, expected ConfigParseErrorKind::ProfileScriptErrors"
                 );
+            }
+        }
+    }
+
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.setup-script]
+            command = 'echo setup'
+
+            [scripts.wrapper.wrapper-script]
+            command = 'echo wrapper'
+
+            [[profile.default.scripts]]
+            platform = 'cfg(unix)'
+            setup = ['wrapper-script']
+            list-wrapper = 'setup-script'
+
+            [[profile.ci.scripts]]
+            platform = 'cfg(unix)'
+            setup = 'wrapper-script'
+            run-wrapper = 'setup-script'
+        "#},
+        vec![
+            ProfileWrongConfigScriptTypeError {
+                profile_name: "default".to_owned(),
+                name: ScriptId::new("wrapper-script".into()).unwrap(),
+                attempted: ProfileScriptType::Setup,
+                actual: ScriptType::Wrapper,
+            },
+            ProfileWrongConfigScriptTypeError {
+                profile_name: "default".to_owned(),
+                name: ScriptId::new("setup-script".into()).unwrap(),
+                attempted: ProfileScriptType::ListWrapper,
+                actual: ScriptType::Setup,
+            },
+            ProfileWrongConfigScriptTypeError {
+                profile_name: "ci".to_owned(),
+                name: ScriptId::new("wrapper-script".into()).unwrap(),
+                attempted: ProfileScriptType::Setup,
+                actual: ScriptType::Wrapper,
+            },
+            ProfileWrongConfigScriptTypeError {
+                profile_name: "ci".to_owned(),
+                name: ScriptId::new("setup-script".into()).unwrap(),
+                attempted: ProfileScriptType::RunWrapper,
+                actual: ScriptType::Setup,
+            },
+        ],
+        &["setup-script", "wrapper-script"]
+
+        ; "wrong script types"
+    )]
+    fn parse_scripts_invalid_wrong_type(
+        config_contents: &str,
+        expected_errors: Vec<ProfileWrongConfigScriptTypeError>,
+        expected_known_scripts: &[&str],
+    ) {
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+
+        let pcx = ParseContext::new(&graph);
+
+        let error = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &btreeset! { ConfigExperimental::SetupScripts, ConfigExperimental::WrapperScripts },
+        )
+        .expect_err("config is invalid");
+        match error.kind() {
+            ConfigParseErrorKind::ProfileScriptErrors {
+                errors,
+                known_scripts,
+            } => {
+                let ProfileScriptErrors {
+                    unknown_scripts,
+                    wrong_script_types,
+                    list_scripts_using_run_filters,
+                } = &**errors;
+                assert_eq!(unknown_scripts.len(), 0, "no unknown scripts");
+                assert_eq!(
+                    list_scripts_using_run_filters.len(),
+                    0,
+                    "no scripts using run filters in list phase"
+                );
+                assert_eq!(
+                    wrong_script_types.len(),
+                    expected_errors.len(),
+                    "correct number of errors"
+                );
+                for (error, expected_error) in wrong_script_types.iter().zip(expected_errors) {
+                    assert_eq!(error, &expected_error, "error matches");
+                }
+                assert_eq!(
+                    known_scripts.len(),
+                    expected_known_scripts.len(),
+                    "correct number of known scripts"
+                );
+                for (script, expected_script) in known_scripts.iter().zip(expected_known_scripts) {
+                    assert_eq!(
+                        script.as_str(),
+                        *expected_script,
+                        "known script name matches"
+                    );
+                }
+            }
+            other => {
+                panic!(
+                    "for config error {other:?}, expected ConfigParseErrorKind::ProfileScriptErrors"
+                );
+            }
+        }
+    }
+
+    #[test_case(
+        indoc! {r#"
+            [scripts.wrapper.list-script]
+            command = 'echo list'
+
+            [[profile.default.scripts]]
+            filter = 'test(hello)'
+            list-wrapper = 'list-script'
+
+            [[profile.ci.scripts]]
+            filter = 'test(world)'
+            list-wrapper = 'list-script'
+        "#},
+        vec![
+            ProfileListScriptUsesRunFiltersError {
+                profile_name: "default".to_owned(),
+                name: ScriptId::new("list-script".into()).unwrap(),
+                script_type: ProfileScriptType::ListWrapper,
+                filters: vec!["test(hello)".to_owned()].into_iter().collect(),
+            },
+            ProfileListScriptUsesRunFiltersError {
+                profile_name: "ci".to_owned(),
+                name: ScriptId::new("list-script".into()).unwrap(),
+                script_type: ProfileScriptType::ListWrapper,
+                filters: vec!["test(world)".to_owned()].into_iter().collect(),
+            },
+        ],
+        &["list-script"]
+
+        ; "list scripts using run filters"
+    )]
+    fn parse_scripts_invalid_list_using_run_filters(
+        config_contents: &str,
+        expected_errors: Vec<ProfileListScriptUsesRunFiltersError>,
+        expected_known_scripts: &[&str],
+    ) {
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+
+        let pcx = ParseContext::new(&graph);
+
+        let error = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &btreeset! { ConfigExperimental::SetupScripts, ConfigExperimental::WrapperScripts },
+        )
+        .expect_err("config is invalid");
+        match error.kind() {
+            ConfigParseErrorKind::ProfileScriptErrors {
+                errors,
+                known_scripts,
+            } => {
+                let ProfileScriptErrors {
+                    unknown_scripts,
+                    wrong_script_types,
+                    list_scripts_using_run_filters,
+                } = &**errors;
+                assert_eq!(unknown_scripts.len(), 0, "no unknown scripts");
+                assert_eq!(wrong_script_types.len(), 0, "no wrong script types");
+                assert_eq!(
+                    list_scripts_using_run_filters.len(),
+                    expected_errors.len(),
+                    "correct number of errors"
+                );
+                for (error, expected_error) in
+                    list_scripts_using_run_filters.iter().zip(expected_errors)
+                {
+                    assert_eq!(error, &expected_error, "error matches");
+                }
+                assert_eq!(
+                    known_scripts.len(),
+                    expected_known_scripts.len(),
+                    "correct number of known scripts"
+                );
+                for (script, expected_script) in known_scripts.iter().zip(expected_known_scripts) {
+                    assert_eq!(
+                        script.as_str(),
+                        *expected_script,
+                        "known script name matches"
+                    );
+                }
+            }
+            other => {
+                panic!(
+                    "for config error {other:?}, expected ConfigParseErrorKind::ProfileScriptErrors"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_scripts_empty_sections() {
+        let config_contents = indoc! {r#"
+            [scripts.setup.foo]
+            command = 'echo foo'
+
+            [[profile.default.scripts]]
+            platform = 'cfg(unix)'
+
+            [[profile.ci.scripts]]
+            platform = 'cfg(unix)'
+        "#};
+
+        let workspace_dir = tempdir().unwrap();
+
+        let graph = temp_workspace(&workspace_dir, config_contents);
+
+        let pcx = ParseContext::new(&graph);
+
+        // The config should still be valid, just with warnings
+        let result = NextestConfig::from_sources(
+            graph.workspace().root(),
+            &pcx,
+            None,
+            &[][..],
+            &btreeset! { ConfigExperimental::SetupScripts, ConfigExperimental::WrapperScripts },
+        );
+
+        match result {
+            Ok(_config) => {
+                // Config should be valid, warnings are just printed to stderr
+                // The warnings we added should have been printed during config parsing
+            }
+            Err(e) => {
+                panic!("Config should be valid but got error: {e:?}");
             }
         }
     }

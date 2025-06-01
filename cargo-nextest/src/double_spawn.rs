@@ -31,6 +31,7 @@ impl DoubleSpawnOpts {
         let err = command.args(args).exec();
         Err(ExpectedError::DoubleSpawnExecError {
             command: Box::new(command),
+            current_dir: std::env::current_dir(),
             err,
         })
     }

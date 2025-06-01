@@ -76,6 +76,16 @@ pub mod plural {
     pub fn libraries_str(count: usize) -> &'static str {
         if count == 1 { "library" } else { "libraries" }
     }
+
+    /// Returns "filter" if `count` is 1, otherwise "filters".
+    pub fn filters_str(count: usize) -> &'static str {
+        if count == 1 { "filter" } else { "filters" }
+    }
+
+    /// Returns "section" if `count` is 1, otherwise "sections".
+    pub fn sections_str(count: usize) -> &'static str {
+        if count == 1 { "section" } else { "sections" }
+    }
 }
 
 pub(crate) struct DisplayTestInstance<'a> {

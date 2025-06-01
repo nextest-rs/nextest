@@ -7,14 +7,18 @@ use duct::cmd;
 use fixture_data::models::TestCaseFixtureStatus;
 use guppy::{MetadataCommand, graph::PackageGraph};
 use maplit::btreeset;
-use nextest_filtering::{CompiledExpr, EvalContext, ParseContext};
+use nextest_filtering::{BinaryQuery, CompiledExpr, EvalContext, ParseContext};
 use nextest_metadata::{MismatchReason, RustBinaryId};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
-    config::{ConfigExperimental, LeakTimeoutResult, NextestConfig, get_num_cpus},
+    config::{
+        ConfigExperimental, LeakTimeoutResult, ListSettings, NextestConfig, ScriptCommand,
+        ScriptCommandRelativeTo, WrapperScriptConfig, WrapperScriptTargetRunner, get_num_cpus,
+    },
     double_spawn::DoubleSpawnInfo,
     list::{
-        BinaryList, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList, TestListState,
+        BinaryList, ListProfile, RustBuildMeta, RustTestArtifact, TestExecuteContext, TestList,
+        TestListState,
     },
     platform::BuildPlatforms,
     reporter::events::{
@@ -217,7 +221,7 @@ pub(crate) fn load_config() -> NextestConfig {
         None,
         [],
         // Enable setup scripts.
-        &btreeset! { ConfigExperimental::SetupScripts },
+        &btreeset! { ConfigExperimental::SetupScripts, ConfigExperimental::WrapperScripts },
     )
     .expect("loaded fixture config")
 }
@@ -330,9 +334,6 @@ impl FixtureTargets {
             double_spawn: &double_spawn,
             target_runner,
         };
-        let ecx = EvalContext {
-            default_filter: &CompiledExpr::ALL,
-        };
 
         TestList::new(
             &ctx,
@@ -341,11 +342,47 @@ impl FixtureTargets {
             test_filter,
             workspace_root(),
             self.env.to_owned(),
-            &ecx,
+            &FakeListProfile::new(),
             FilterBound::All,
             get_num_cpus(),
         )
         .context("Failed to make test list")
+    }
+}
+
+struct FakeListProfile {
+    fake_wrapper: WrapperScriptConfig,
+}
+
+impl FakeListProfile {
+    pub fn new() -> Self {
+        Self {
+            fake_wrapper: WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "debug/wrapper".to_owned(),
+                    args: vec!["within".to_owned()],
+                    relative_to: ScriptCommandRelativeTo::Target,
+                },
+                target_runner: WrapperScriptTargetRunner::WithinWrapper,
+            },
+            // TODO: tests for around/overrides-runner/ignore
+        }
+    }
+}
+
+impl ListProfile for FakeListProfile {
+    fn filterset_ecx(&self) -> EvalContext<'_> {
+        EvalContext {
+            default_filter: &CompiledExpr::ALL,
+        }
+    }
+
+    fn list_settings_for(&self, query: &BinaryQuery<'_>) -> ListSettings<'_> {
+        let mut settings = ListSettings::debug_empty();
+        if query.binary_name == "nextest-tests" {
+            settings.debug_set_list_wrapper(&self.fake_wrapper);
+        }
+        settings
     }
 }
 
