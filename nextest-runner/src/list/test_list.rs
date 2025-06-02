@@ -645,7 +645,7 @@ impl<'g> TestList<'g> {
         binary_id: &'a RustBinaryId,
         list_output: &'a str,
     ) -> Result<Vec<&'a str>, CreateTestListError> {
-        let mut list = Self::parse_impl(binary_id, list_output).collect::<Result<Vec<_>, _>>()?;
+        let mut list = Self::parse_impl(binary_id, list_output)?;
         list.sort_unstable();
         Ok(list)
     }
@@ -653,25 +653,35 @@ impl<'g> TestList<'g> {
     fn parse_impl<'a>(
         binary_id: &'a RustBinaryId,
         list_output: &'a str,
-    ) -> impl Iterator<Item = Result<&'a str, CreateTestListError>> + 'a + use<'a> {
+    ) -> Result<Vec<&'a str>, CreateTestListError> {
         // The output is in the form:
         // <test name>: test
         // <test name>: test
         // ...
 
-        list_output.lines().map(move |line| {
-            line.strip_suffix(": test")
+        // note: iai_callgrind appends "0 tests, 1 benchmarks" after the final newline,
+        // so once we encounter an empty line, we stop parsing.
+        let mut list = Vec::new();
+
+        for line in list_output.lines() {
+            if line.is_empty() {
+                break;
+            }
+            list.push( line.strip_suffix(": test")
                 .or_else(|| line.strip_suffix(": benchmark"))
+                .or_else(|| line.strip_suffix(": bench"))
                 .ok_or_else(|| {
                     CreateTestListError::parse_line(
                         binary_id.clone(),
                         format!(
-                            "line '{line}' did not end with the string ': test' or ': benchmark'"
+                            "line '{line}' did not end with any of ': test', ': benchmark' or ': bench'",
                         ),
                         list_output,
                     )
-                })
-        })
+                })?);
+        }
+
+        Ok(list)
     }
 
     /// Writes this test list out in a human-friendly format.
@@ -1173,11 +1183,13 @@ mod tests {
             tests::foo::test_bar: test
             tests::baz::test_quux: test
             benches::bench_foo: benchmark
+            benches::bench_iai: bench
         "};
         let ignored_output = indoc! {"
             tests::ignored::test_bar: test
             tests::baz::test_ignored: test
             benches::ignored_bench_foo: benchmark
+            benches::ignored_bench_iai: bench
         "};
 
         let cx = ParseContext::new(&PACKAGE_GRAPH_FIXTURE);
@@ -1283,6 +1295,10 @@ mod tests {
                                 ignored: false,
                                 filter_match: FilterMatch::Matches,
                             },
+                            "benches::bench_iai".to_owned() => RustTestCaseSummary {
+                                ignored: false,
+                                filter_match: FilterMatch::Matches,
+                            },
                             "tests::ignored::test_bar".to_owned() => RustTestCaseSummary {
                                 ignored: true,
                                 filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
@@ -1292,6 +1308,10 @@ mod tests {
                                 filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                             },
                             "benches::ignored_bench_foo".to_owned() => RustTestCaseSummary {
+                                ignored: true,
+                                filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
+                            },
+                            "benches::ignored_bench_iai".to_owned() => RustTestCaseSummary {
                                 ignored: true,
                                 filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                             },
@@ -1326,6 +1346,7 @@ mod tests {
         static EXPECTED_HUMAN: &str = indoc! {"
         fake-package::fake-binary:
             benches::bench_foo
+            benches::bench_iai
             tests::baz::test_quux
             tests::foo::test_bar
         "};
@@ -1335,7 +1356,9 @@ mod tests {
               cwd: /fake/cwd
               build platform: target
                 benches::bench_foo
+                benches::bench_iai
                 benches::ignored_bench_foo (skipped)
+                benches::ignored_bench_iai (skipped)
                 tests::baz::test_ignored (skipped)
                 tests::baz::test_quux
                 tests::foo::test_bar
@@ -1386,7 +1409,7 @@ mod tests {
                 ],
                 "target-platform": "aarch64-unknown-linux-gnu"
               },
-              "test-count": 6,
+              "test-count": 8,
               "rust-suites": {
                 "fake-package::fake-binary": {
                   "package-name": "metadata-helper",
@@ -1405,7 +1428,20 @@ mod tests {
                         "status": "matches"
                       }
                     },
+                    "benches::bench_iai": {
+                      "ignored": false,
+                      "filter-match": {
+                        "status": "matches"
+                      }
+                    },
                     "benches::ignored_bench_foo": {
+                      "ignored": true,
+                      "filter-match": {
+                        "status": "mismatch",
+                        "reason": "ignored"
+                      }
+                    },
+                    "benches::ignored_bench_iai": {
                       "ignored": true,
                       "filter-match": {
                         "status": "mismatch",
