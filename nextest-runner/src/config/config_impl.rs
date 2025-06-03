@@ -30,6 +30,84 @@ use std::{
 };
 use tracing::warn;
 
+/// Trait for handling configuration warnings.
+///
+/// This trait allows for different warning handling strategies, such as logging warnings
+/// (the default behavior) or collecting them for testing purposes.
+pub trait ConfigWarnings {
+    /// Handle unknown configuration keys found in a config file.
+    fn unknown_config_keys(
+        &mut self,
+        config_file: &Utf8Path,
+        workspace_root: &Utf8Path,
+        tool: Option<&str>,
+        unknown: &BTreeSet<String>,
+    );
+
+    /// Handle unknown profiles found in the reserved `default-` namespace.
+    fn unknown_reserved_profiles(
+        &mut self,
+        config_file: &Utf8Path,
+        workspace_root: &Utf8Path,
+        tool: Option<&str>,
+        profiles: &[&str],
+    );
+}
+
+/// Default implementation of ConfigWarnings that logs warnings using the tracing crate.
+pub struct DefaultConfigWarnings;
+
+impl ConfigWarnings for DefaultConfigWarnings {
+    fn unknown_config_keys(
+        &mut self,
+        config_file: &Utf8Path,
+        workspace_root: &Utf8Path,
+        tool: Option<&str>,
+        unknown: &BTreeSet<String>,
+    ) {
+        let mut unknown_str = String::new();
+        if unknown.len() == 1 {
+            // Print this on the same line.
+            unknown_str.push(' ');
+            unknown_str.push_str(unknown.iter().next().unwrap());
+        } else {
+            for ignored_key in unknown {
+                unknown_str.push('\n');
+                unknown_str.push_str("  - ");
+                unknown_str.push_str(ignored_key);
+            }
+        }
+
+        warn!(
+            "ignoring unknown configuration keys in config file {}{}:{unknown_str}",
+            config_file
+                .strip_prefix(workspace_root)
+                .unwrap_or(config_file),
+            provided_by_tool(tool),
+        )
+    }
+
+    fn unknown_reserved_profiles(
+        &mut self,
+        config_file: &Utf8Path,
+        workspace_root: &Utf8Path,
+        tool: Option<&str>,
+        profiles: &[&str],
+    ) {
+        warn!(
+            "unknown profiles in the reserved `default-` namespace in config file {}{}:",
+            config_file
+                .strip_prefix(workspace_root)
+                .unwrap_or(config_file),
+            provided_by_tool(tool),
+        );
+
+        for profile in profiles {
+            warn!("  {profile}");
+        }
+    }
+}
+
 /// Gets the number of available CPUs and caches the value.
 #[inline]
 pub fn get_num_cpus() -> usize {
@@ -102,31 +180,35 @@ impl NextestConfig {
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
     {
+        Self::from_sources_with_warnings(
+            workspace_root,
+            pcx,
+            config_file,
+            tool_config_files,
+            experimental,
+            &mut DefaultConfigWarnings,
+        )
+    }
+
+    /// Load configuration from the given sources with custom warning handling.
+    pub fn from_sources_with_warnings<'a, I>(
+        workspace_root: impl Into<Utf8PathBuf>,
+        pcx: &ParseContext<'_>,
+        config_file: Option<&Utf8Path>,
+        tool_config_files: impl IntoIterator<IntoIter = I>,
+        experimental: &BTreeSet<ConfigExperimental>,
+        warnings: &mut impl ConfigWarnings,
+    ) -> Result<Self, ConfigParseError>
+    where
+        I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
+    {
         Self::from_sources_impl(
             workspace_root,
             pcx,
             config_file,
             tool_config_files,
             experimental,
-            |config_file, tool, unknown| {
-                let mut unknown_str = String::new();
-                if unknown.len() == 1 {
-                    // Print this on the same line.
-                    unknown_str.push(' ');
-                    unknown_str.push_str(unknown.iter().next().unwrap());
-                } else {
-                    for ignored_key in unknown {
-                        unknown_str.push('\n');
-                        unknown_str.push_str("  - ");
-                        unknown_str.push_str(ignored_key);
-                    }
-                }
-
-                warn!(
-                    "ignoring unknown configuration keys in config file {config_file}{}:{unknown_str}",
-                    provided_by_tool(tool),
-                )
-            },
+            warnings,
         )
     }
 
@@ -137,7 +219,7 @@ impl NextestConfig {
         config_file: Option<&Utf8Path>,
         tool_config_files: impl IntoIterator<IntoIter = I>,
         experimental: &BTreeSet<ConfigExperimental>,
-        mut unknown_callback: impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
+        warnings: &mut impl ConfigWarnings,
     ) -> Result<Self, ConfigParseError>
     where
         I: Iterator<Item = &'a ToolConfigFile> + DoubleEndedIterator,
@@ -150,7 +232,7 @@ impl NextestConfig {
             config_file,
             tool_config_files_rev,
             experimental,
-            &mut unknown_callback,
+            warnings,
         )?;
         Ok(Self {
             workspace_root,
@@ -208,7 +290,7 @@ impl NextestConfig {
         file: Option<&Utf8Path>,
         tool_config_files_rev: impl Iterator<Item = &'a ToolConfigFile>,
         experimental: &BTreeSet<ConfigExperimental>,
-        unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
+        warnings: &mut impl ConfigWarnings,
     ) -> Result<(NextestConfigImpl, CompiledByProfile), ConfigParseError> {
         // First, get the default config.
         let mut composite_builder = Self::make_default_config();
@@ -231,7 +313,7 @@ impl NextestConfig {
                 source.clone(),
                 &mut compiled,
                 experimental,
-                unknown_callback,
+                warnings,
                 &mut known_groups,
                 &mut known_scripts,
             )?;
@@ -258,7 +340,7 @@ impl NextestConfig {
             source.clone(),
             &mut compiled,
             experimental,
-            unknown_callback,
+            warnings,
             &mut known_groups,
             &mut known_scripts,
         )?;
@@ -288,7 +370,7 @@ impl NextestConfig {
         source: File<FileSourceFile, FileFormat>,
         compiled_out: &mut CompiledByProfile,
         experimental: &BTreeSet<ConfigExperimental>,
-        unknown_callback: &mut impl FnMut(&Utf8Path, Option<&str>, &BTreeSet<String>),
+        warnings: &mut impl ConfigWarnings,
         known_groups: &mut BTreeSet<CustomTestGroup>,
         known_scripts: &mut BTreeSet<ScriptId>,
     ) -> Result<(), ConfigParseError> {
@@ -300,7 +382,7 @@ impl NextestConfig {
             .map_err(|kind| ConfigParseError::new(config_file, tool, kind))?;
 
         if !unknown.is_empty() {
-            unknown_callback(config_file, tool, &unknown);
+            warnings.unknown_config_keys(config_file, workspace_root, tool, &unknown);
         }
 
         // Check that test groups are named as expected.
@@ -375,17 +457,12 @@ impl NextestConfig {
             .filter(|p| p.starts_with("default-") && !NextestConfig::DEFAULT_PROFILES.contains(p))
             .collect();
         if !unknown_default_profiles.is_empty() {
-            warn!(
-                "unknown profiles in the reserved `default-` namespace in config file {}{}:",
-                config_file
-                    .strip_prefix(workspace_root)
-                    .unwrap_or(config_file),
-                provided_by_tool(tool),
+            warnings.unknown_reserved_profiles(
+                config_file,
+                workspace_root,
+                tool,
+                &unknown_default_profiles,
             );
-
-            for profile in unknown_default_profiles {
-                warn!("  {profile}");
-            }
         }
 
         // Compile the overrides for this file.
@@ -1047,6 +1124,78 @@ mod tests {
     use super::*;
     use crate::config::test_helpers::*;
     use camino_tempfile::tempdir;
+    use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
+
+    /// Test implementation of ConfigWarnings that collects warnings for testing.
+    #[derive(Default)]
+    struct TestConfigWarnings {
+        unknown_keys: IdHashMap<UnknownKeys>,
+        reserved_profiles: IdHashMap<ReservedProfiles>,
+    }
+
+    impl ConfigWarnings for TestConfigWarnings {
+        fn unknown_config_keys(
+            &mut self,
+            config_file: &Utf8Path,
+            _workspace_root: &Utf8Path,
+            tool: Option<&str>,
+            unknown: &BTreeSet<String>,
+        ) {
+            self.unknown_keys
+                .insert_unique(UnknownKeys {
+                    tool: tool.map(|s| s.to_owned()),
+                    config_file: config_file.to_owned(),
+                    keys: unknown.clone(),
+                })
+                .unwrap();
+        }
+
+        fn unknown_reserved_profiles(
+            &mut self,
+            config_file: &Utf8Path,
+            _workspace_root: &Utf8Path,
+            tool: Option<&str>,
+            profiles: &[&str],
+        ) {
+            self.reserved_profiles
+                .insert_unique(ReservedProfiles {
+                    tool: tool.map(|s| s.to_owned()),
+                    config_file: config_file.to_owned(),
+                    profiles: profiles.iter().map(|&s| s.to_owned()).collect(),
+                })
+                .unwrap();
+        }
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    struct UnknownKeys {
+        tool: Option<String>,
+        config_file: Utf8PathBuf,
+        keys: BTreeSet<String>,
+    }
+
+    impl IdHashItem for UnknownKeys {
+        type Key<'a> = Option<&'a str>;
+        fn key(&self) -> Self::Key<'_> {
+            self.tool.as_deref()
+        }
+        id_upcast!();
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    struct ReservedProfiles {
+        tool: Option<String>,
+        config_file: Utf8PathBuf,
+        profiles: Vec<String>,
+    }
+
+    impl IdHashItem for ReservedProfiles {
+        type Key<'a> = Option<&'a str>;
+        fn key(&self) -> Self::Key<'_> {
+            self.tool.as_deref()
+        }
+        id_upcast!();
+    }
 
     #[test]
     fn default_config_is_valid() {
@@ -1065,6 +1214,9 @@ mod tests {
         retries = 3
         ignored2 = "hi"
 
+        [profile.default-foo]
+        retries = 5
+
         [[profile.default.overrides]]
         filter = 'test(test_foo)'
         retries = 20
@@ -1078,6 +1230,9 @@ mod tests {
         [profile.default]
         retries = 4
         ignored5 = false
+
+        [profile.default-bar]
+        retries = 5
 
         [profile.tool]
         retries = 12
@@ -1097,51 +1252,64 @@ mod tests {
 
         let pcx = ParseContext::new(&graph);
 
-        let mut unknown_keys = HashMap::new();
+        let mut warnings = TestConfigWarnings::default();
 
-        let _ = NextestConfig::from_sources_impl(
+        let _ = NextestConfig::from_sources_with_warnings(
             workspace_root,
             &pcx,
             None,
             &[ToolConfigFile {
                 tool: "my-tool".to_owned(),
-                config_file: tool_path,
+                config_file: tool_path.clone(),
             }][..],
             &Default::default(),
-            |_path, tool, ignored| {
-                unknown_keys.insert(tool.map(|s| s.to_owned()), ignored.clone());
-            },
+            &mut warnings,
         )
         .expect("config is valid");
 
         assert_eq!(
-            unknown_keys.len(),
+            warnings.unknown_keys.len(),
             2,
             "there are two files with unknown keys"
         );
 
-        let keys = unknown_keys
-            .remove(&None)
-            .expect("unknown keys for .config/nextest.toml");
         assert_eq!(
-            keys,
-            maplit::btreeset! {
-                "ignored1".to_owned(),
-                "profile.default.ignored2".to_owned(),
-                "profile.default.overrides.0.ignored3".to_owned(),
+            warnings.unknown_keys,
+            id_hash_map! {
+                UnknownKeys {
+                    tool: None,
+                    config_file: workspace_root.join(".config/nextest.toml"),
+                    keys: maplit::btreeset! {
+                        "ignored1".to_owned(),
+                        "profile.default.ignored2".to_owned(),
+                        "profile.default.overrides.0.ignored3".to_owned(),
+                    }
+                },
+                UnknownKeys {
+                    tool: Some("my-tool".to_owned()),
+                    config_file: tool_path.clone(),
+                    keys: maplit::btreeset! {
+                        "store.ignored4".to_owned(),
+                        "profile.default.ignored5".to_owned(),
+                        "profile.tool.overrides.0.ignored6".to_owned(),
+                    }
+                }
             }
         );
-
-        let keys = unknown_keys
-            .remove(&Some("my-tool".to_owned()))
-            .expect("unknown keys for my-tool");
         assert_eq!(
-            keys,
-            maplit::btreeset! {
-                "store.ignored4".to_owned(),
-                "profile.default.ignored5".to_owned(),
-                "profile.tool.overrides.0.ignored6".to_owned(),
-            }
-        );
+            warnings.reserved_profiles,
+            id_hash_map! {
+                ReservedProfiles {
+                    tool: None,
+                    config_file: workspace_root.join(".config/nextest.toml"),
+                    profiles: vec!["default-foo".to_owned()],
+                },
+                ReservedProfiles {
+                    tool: Some("my-tool".to_owned()),
+                    config_file: tool_path,
+                    profiles: vec!["default-bar".to_owned()],
+                }
+            },
+        )
     }
 }
