@@ -11,6 +11,7 @@ use nextest_runner::{errors::*, redact::Redactor};
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, process::ExitStatus, string::FromUtf8Error};
+use swrite::{SWrite, swriteln};
 use thiserror::Error;
 use tracing::{Level, error, info};
 
@@ -608,11 +609,12 @@ impl ExpectedError {
                             .join(", ");
                         let mut errors_str = String::new();
                         for error in errors {
-                            errors_str.push_str(&format!(
-                                " - group `{}` in overrides for profile `{}`\n",
+                            swriteln!(
+                                errors_str,
+                                " - group `{}` in overrides for profile `{}`",
                                 error.name.style(styles.bold),
                                 error.profile_name.style(styles.bold)
-                            ));
+                            );
                         }
 
                         error!(
@@ -633,11 +635,12 @@ impl ExpectedError {
                             .join(", ");
                         let mut errors_str = String::new();
                         for error in errors {
-                            errors_str.push_str(&format!(
-                                " - script `{}` specified within profile `{}`\n",
+                            swriteln!(
+                                errors_str,
+                                " - script `{}` specified within profile `{}`",
                                 error.name.style(styles.bold),
                                 error.profile_name.style(styles.bold)
-                            ));
+                            );
                         }
 
                         error!(
