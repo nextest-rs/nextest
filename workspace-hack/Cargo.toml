@@ -25,6 +25,7 @@ console = { version = "0.15.10" }
 either = { version = "1.13.0" }
 form_urlencoded = { version = "1.2.1" }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2.15", default-features = false, features = ["std"] }
+hashbrown = { version = "0.15.2", default-features = false, features = ["allocator-api2", "inline-more"] }
 indexmap = { version = "2.9.0", features = ["serde"] }
 log = { version = "0.4.27", default-features = false, features = ["std"] }
 memchr = { version = "2.7.4" }
