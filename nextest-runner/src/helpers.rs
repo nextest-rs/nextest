@@ -1,6 +1,8 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! General support code for nextest-runner.
+
 use crate::{
     config::ScriptId,
     list::{Styles, TestInstanceId},
@@ -11,12 +13,15 @@ use camino::{Utf8Path, Utf8PathBuf};
 use owo_colors::{OwoColorize, Style};
 use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
 
-pub(crate) mod plural {
-    pub(crate) fn were_plural_if(plural: bool) -> &'static str {
+/// Utilities for pluralizing various words based on count or plurality.
+pub mod plural {
+    /// Returns "were" if `plural` is true, otherwise "was".
+    pub fn were_plural_if(plural: bool) -> &'static str {
         if plural { "were" } else { "was" }
     }
 
-    pub(crate) fn setup_scripts_str(count: usize) -> &'static str {
+    /// Returns "setup script" if `count` is 1, otherwise "setup scripts".
+    pub fn setup_scripts_str(count: usize) -> &'static str {
         if count == 1 {
             "setup script"
         } else {
@@ -24,27 +29,33 @@ pub(crate) mod plural {
         }
     }
 
-    pub(crate) fn tests_str(count: usize) -> &'static str {
+    /// Returns "test" if `count` is 1, otherwise "tests".
+    pub fn tests_str(count: usize) -> &'static str {
         tests_plural_if(count != 1)
     }
 
-    pub(crate) fn tests_plural_if(plural: bool) -> &'static str {
+    /// Returns "tests" if `plural` is true, otherwise "test".
+    pub fn tests_plural_if(plural: bool) -> &'static str {
         if plural { "tests" } else { "test" }
     }
 
-    pub(crate) fn binaries_str(count: usize) -> &'static str {
+    /// Returns "binary" if `count` is 1, otherwise "binaries".
+    pub fn binaries_str(count: usize) -> &'static str {
         if count == 1 { "binary" } else { "binaries" }
     }
 
-    pub(crate) fn paths_str(count: usize) -> &'static str {
+    /// Returns "path" if `count` is 1, otherwise "paths".
+    pub fn paths_str(count: usize) -> &'static str {
         if count == 1 { "path" } else { "paths" }
     }
 
-    pub(crate) fn files_str(count: usize) -> &'static str {
+    /// Returns "file" if `count` is 1, otherwise "files".
+    pub fn files_str(count: usize) -> &'static str {
         if count == 1 { "file" } else { "files" }
     }
 
-    pub(crate) fn directories_str(count: usize) -> &'static str {
+    /// Returns "directory" if `count` is 1, otherwise "directories".
+    pub fn directories_str(count: usize) -> &'static str {
         if count == 1 {
             "directory"
         } else {
@@ -52,7 +63,8 @@ pub(crate) mod plural {
         }
     }
 
-    pub(crate) fn this_crate_str(count: usize) -> &'static str {
+    /// Returns "this crate" if `count` is 1, otherwise "these crates".
+    pub fn this_crate_str(count: usize) -> &'static str {
         if count == 1 {
             "this crate"
         } else {
@@ -60,7 +72,8 @@ pub(crate) mod plural {
         }
     }
 
-    pub(crate) fn libraries_str(count: usize) -> &'static str {
+    /// Returns "library" if `count` is 1, otherwise "libraries".
+    pub fn libraries_str(count: usize) -> &'static str {
         if count == 1 { "library" } else { "libraries" }
     }
 }
