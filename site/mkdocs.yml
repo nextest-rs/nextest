@@ -114,6 +114,7 @@ nav:
                 - "Environment variables": docs/configuration/env-vars.md
                 - "Extra arguments": docs/configuration/extra-args.md
                 - docs/configuration/setup-scripts.md
+                - docs/configuration/wrapper-scripts.md
     - Machine-readable output:
           - "About output formats": docs/machine-readable/index.md
           - "JUnit support": docs/machine-readable/junit.md

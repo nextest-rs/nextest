@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.16.0] - 2025-06-04
+
+### Added
+
+- `ParsedLeaf` is now available as a public API.
+
+### Changed
+
+- MSRV updated to Rust 1.85.
+
 ## [0.15.0] - 2025-02-24
 
 ### Changed
@@ -153,6 +163,7 @@ For more information, see the changelog for [cargo-nextest 0.9.64](https://nexte
 
 Initial release.
 
+[0.16.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.16.0
 [0.15.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.15.0
 [0.14.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.14.0
 [0.13.0]: https://github.com/nextest-rs/nextest/releases/tag/nextest-filtering-0.13.0

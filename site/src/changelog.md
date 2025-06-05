@@ -8,6 +8,16 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.98-b.1] - 2025-06-04
+
+### Added
+
+- Experimental support for [wrapper scripts](https://nexte.st/docs/configuration/wrapper-scripts/) for test execution.
+
+### Changed
+
+- Setup scripts are now specified within the `[scripts.setup]` table, for example `[scripts.setup.db-generate]`. The previous `[script.db-generate]` configuration will continue to work for a short while.
+
 ## [0.9.97] - 2025-05-29
 
 ### Fixed
@@ -1453,6 +1463,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.98-b.1]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.98-b.1
 [0.9.97]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.97
 [0.9.96]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.96
 [0.9.95]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.95
