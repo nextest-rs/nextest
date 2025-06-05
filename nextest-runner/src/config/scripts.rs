@@ -31,6 +31,51 @@ use std::{
     sync::Arc,
 };
 
+/// The scripts defined in nextest configuration.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ScriptConfig {
+    // These maps are ordered because scripts are used in the order they're defined.
+    /// The setup scripts defined in nextest's configuration.
+    #[serde(default)]
+    pub setup: IndexMap<ScriptId, SetupScriptConfig>,
+}
+
+impl ScriptConfig {
+    pub(super) fn is_empty(&self) -> bool {
+        self.setup.is_empty()
+    }
+
+    /// Determines the type of the script with the given ID.
+    ///
+    /// Panics if the ID is invalid.
+    pub(super) fn script_type(&self, id: &ScriptId) -> ScriptType {
+        if self.setup.contains_key(id) {
+            ScriptType::Setup
+        } else {
+            panic!("Scripts::script_type called with invalid script ID: {id}")
+        }
+    }
+
+    /// Returns an iterator over the names of all scripts of all types.
+    pub(super) fn all_script_ids(&self) -> impl Iterator<Item = &ScriptId> {
+        self.setup.keys()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub enum ScriptType {
+    Setup,
+}
+
+impl fmt::Display for ScriptType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ScriptType::Setup => f.write_str("setup"),
+        }
+    }
+}
+
 /// Data about setup scripts, returned by an [`EvaluatableProfile`].
 pub struct SetupScripts<'profile> {
     enabled_scripts: IndexMap<&'profile ScriptId, SetupScript<'profile>>,
@@ -90,7 +135,7 @@ impl<'profile> SetupScripts<'profile> {
 
         // Build up a map of enabled scripts along with their data, by script ID.
         let mut enabled_scripts = IndexMap::new();
-        for (script_id, config) in script_config {
+        for (script_id, config) in &script_config.setup {
             if enabled_ids.contains(script_id) {
                 let compiled = by_script_id
                     .remove(script_id)
@@ -138,7 +183,7 @@ pub(crate) struct SetupScript<'profile> {
     pub(crate) id: ScriptId,
 
     /// The configuration for the script.
-    pub(crate) config: &'profile ScriptConfig,
+    pub(crate) config: &'profile SetupScriptConfig,
 
     /// The compiled filters to use to check which tests this script is enabled for.
     pub(crate) compiled: Vec<&'profile CompiledProfileScripts<FinalConfig>>,
@@ -165,7 +210,7 @@ pub(crate) struct SetupScriptCommand {
 impl SetupScriptCommand {
     /// Creates a new `SetupScriptCommand` for a setup script.
     pub(crate) fn new(
-        config: &ScriptConfig,
+        config: &SetupScriptConfig,
         profile_name: &str,
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
@@ -427,12 +472,12 @@ pub(super) struct DeserializedProfileScriptConfig {
     setup: Vec<ScriptId>,
 }
 
-/// Deserialized form of script configuration before compilation.
+/// Deserialized form of setup script configuration before compilation.
 ///
 /// This is defined as a top-level element.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct ScriptConfig {
+pub struct SetupScriptConfig {
     /// The command to run. The first element is the program and the second element is a list
     /// of arguments.
     #[serde(deserialize_with = "deserialize_command")]
@@ -456,10 +501,10 @@ pub struct ScriptConfig {
 
     /// JUnit configuration for this script.
     #[serde(default)]
-    pub junit: ScriptJunitConfig,
+    pub junit: SetupScriptJunitConfig,
 }
 
-impl ScriptConfig {
+impl SetupScriptConfig {
     /// Returns the name of the program.
     #[inline]
     pub fn program(&self) -> &str {
@@ -482,7 +527,7 @@ impl ScriptConfig {
 /// A JUnit override configuration.
 #[derive(Copy, Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct ScriptJunitConfig {
+pub struct SetupScriptJunitConfig {
     /// Whether to store successful output.
     ///
     /// Defaults to true.
@@ -496,7 +541,7 @@ pub struct ScriptJunitConfig {
     pub store_failure_output: bool,
 }
 
-impl Default for ScriptJunitConfig {
+impl Default for SetupScriptJunitConfig {
     fn default() -> Self {
         Self {
             store_success_output: true,
@@ -619,14 +664,14 @@ mod tests {
             # order defined below.
             setup = ["baz", "foo", "@tool:my-tool:toolscript"]
 
-            [script.foo]
+            [scripts.setup.foo]
             command = "command foo"
 
-            [script.bar]
+            [scripts.setup.bar]
             command = ["cargo", "run", "-p", "bar"]
             slow-timeout = { period = "60s", terminate-after = 2 }
 
-            [script.baz]
+            [scripts.setup.baz]
             command = "baz"
             slow-timeout = "1s"
             leak-timeout = "1s"
@@ -636,7 +681,7 @@ mod tests {
         };
 
         let tool_config_contents = indoc! {r#"
-            [script.'@tool:my-tool:toolscript']
+            [scripts.setup.'@tool:my-tool:toolscript']
             command = "tool-command"
             "#
         };
@@ -753,7 +798,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
             command = ""
         "#},
         "invalid value: string \"\", expected a Unix shell command or a list of arguments"
@@ -762,7 +807,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
             command = []
         "#},
         "invalid length 0, expected a Unix shell command or a list of arguments"
@@ -771,15 +816,15 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
         "#},
-        "script.foo: missing field `command`"
+        "scripts.setup.foo: missing field `command`"
 
         ; "missing command"
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
             command = "my-command"
             slow-timeout = 34
         "#},
@@ -789,7 +834,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.'@tool:foo']
+            [scripts.setup.'@tool:foo']
             command = "my-command"
         "#},
         r#"invalid configuration script name: tool identifier not of the form "@tool:tool-name:identifier": `@tool:foo`"#
@@ -798,7 +843,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.'#foo']
+            [scripts.setup.'#foo']
             command = "my-command"
         "#},
         r"invalid configuration script name: invalid identifier `#foo`"
@@ -829,7 +874,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
             command = "my-command"
 
             [[profile.default.scripts]]
@@ -845,7 +890,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
             command = "my-command"
 
             [[profile.default.scripts]]
@@ -862,7 +907,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
             command = "my-command"
 
             [[profile.default.scripts]]
@@ -881,7 +926,7 @@ mod tests {
     )]
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
             command = "my-command"
 
             [[profile.ci.overrides]]
@@ -958,7 +1003,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.'@tool:foo:bar']
+            [scripts.setup.'@tool:foo:bar']
             command = "my-command"
 
             [[profile.ci.overrides]]
@@ -1003,7 +1048,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.'blarg']
+            [scripts.setup.'blarg']
             command = "my-command"
 
             [[profile.ci.overrides]]
@@ -1057,7 +1102,7 @@ mod tests {
 
     #[test_case(
         indoc! {r#"
-            [script.foo]
+            [scripts.setup.foo]
             command = "my-command"
 
             [[profile.default.scripts]]

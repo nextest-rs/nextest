@@ -9,7 +9,7 @@
 
 use super::{RunUnitRequest, RunnerTaskState, ShutdownRequest};
 use crate::{
-    config::{MaxFail, ScriptConfig, ScriptId},
+    config::{MaxFail, ScriptId, SetupScriptConfig},
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{
@@ -551,7 +551,7 @@ where
     fn new_setup_script(
         &mut self,
         id: ScriptId,
-        config: &'a ScriptConfig,
+        config: &'a SetupScriptConfig,
         index: usize,
         total: usize,
         req_tx: UnboundedSender<RunUnitRequest<'a>>,
@@ -807,7 +807,7 @@ struct ContextSetupScript<'a> {
     id: ScriptId,
     // Store these details primarily for debugging.
     #[expect(dead_code)]
-    config: &'a ScriptConfig,
+    config: &'a SetupScriptConfig,
     #[expect(dead_code)]
     index: usize,
     #[expect(dead_code)]

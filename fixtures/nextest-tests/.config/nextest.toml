@@ -118,8 +118,8 @@ max-threads = 20
 [test-groups.serial]
 max-threads = 1
 
-[script.my-script-unix]
+[scripts.setup.my-script-unix]
 command = './scripts/my-script.sh'
 
-[script.my-script-windows]
+[scripts.setup.my-script-windows]
 command = 'cmd /c "scripts\\my-script.bat"'
