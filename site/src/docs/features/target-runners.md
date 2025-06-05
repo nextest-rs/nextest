@@ -9,6 +9,8 @@ If you're cross-compiling Rust code, you may wish to run tests through a wrapper
 - The environment variable `CARGO_TARGET_<triple>_RUNNER`, if it matches the target platform, takes highest precedence.
 - Otherwise, nextest reads [the `target.<triple>.runner` and `target.<cfg>.runner` settings](https://doc.rust-lang.org/cargo/reference/config.html#targettriplerunner) from `.cargo/config.toml`.
 
+Target runners are widely compatible with the Rust ecosystem, but they don't support fine-grained filtering. For runners scoped to particular tests or binaries, see <!-- md:version 0.9.98 --> [wrapper scripts :material-flask-outline:](../configuration/wrapper-scripts.md).
+
 ## Example
 
 If you're on Linux cross-compiling to Windows, you can choose to run tests through [Wine](https://www.winehq.org/).

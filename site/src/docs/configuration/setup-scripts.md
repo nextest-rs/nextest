@@ -12,8 +12,10 @@ status: experimental
     - **Enable with:** Add `experimental = ["setup-scripts"]` to `.config/nextest.toml`
     - **Tracking issue:** [#978](https://github.com/nextest-rs/nextest/issues/978)
 
-Nextest supports running _setup scripts_ before tests are run. Setup scripts can be scoped to
-particular tests via [filtersets](../filtersets/index.md).
+Nextest supports running _setup scripts_ before tests are run. Setup scripts can be scoped to:
+
+* Sets of tests, using [filtersets](../filtersets/index.md).
+* Specific platforms, using [`cfg` expressions](specifying-platforms.md)
 
 Setup scripts are configured in two parts: _defining scripts_, and _setting up rules_ for when they should be executed.
 

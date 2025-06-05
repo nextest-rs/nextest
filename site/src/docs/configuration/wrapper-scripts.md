@@ -16,8 +16,8 @@ Nextest supports wrapping test execution with custom commands via _wrapper scrip
 
 Wrapper scripts can be scoped to:
 
-- Particular tests via [filtersets](../filtersets/index.md)
-- And to particular platforms.
+* Sets of tests, using [filtersets](../filtersets/index.md).
+* Specific platforms, using [`cfg` expressions](../configuration/specifying-platforms.md).
 
 Wrapper scripts are configured in two parts: _defining scripts_, and _setting up rules_ for when they should be executed.
 
@@ -55,9 +55,13 @@ Wrapper scripts can have the following configuration options attached to them:
 
 - **`target-runner`**: Interaction with [target runners](../features/target-runners.md), if one is specified. The following values are permitted:
 
-  - **`within-wrapper`**: Run the target runner as an argument the wrapper script. For example, if the target runner is `qemu-arm` and the wrapper is `valgrind --leak-check=full`, the full command that's run is `valgrind --leak-check=full qemu-arm <test-binary> <args...>`.
+  - **`within-wrapper`**: Run the target runner as an argument to the wrapper.
 
-  - **`around-wrapper`**: Run the wrapper script as an argument to the target runner. For example, if the target runner is `my-linux-emulator` and the wrapper is `sudo`, then the full command that's run is `my-linux-emulator sudo <test-binary> <args...>`.
+    For example, if the target runner is `qemu-arm` and the wrapper is `valgrind --leak-check=full`, the full command that's run is `valgrind --leak-check=full qemu-arm <test-binary> <args...>`.
+
+  - **`around-wrapper`**: Run the wrapper script as an argument to the target runner.
+
+    For example, if the target runner is `my-linux-emulator` and the wrapper is `sudo`, the full command that's run is `my-linux-emulator sudo <test-binary> <args...>`.
 
   - **`overrides-wrapper`**: The wrapper script is disabled, and only the target runner is used.
 
@@ -104,9 +108,21 @@ run-wrapper = 'wine-script'
 
 If `list-wrapper` is specified, `filter` cannot contain `test()` or `default()` predicates, since those predicates can only be evaluated after listing is completed.
 
+## Wrapper scripts vs target runners
+
+Both wrapper scripts and [target runners](../features/target-runners.md) can be used to wrap test executables. The key differences between the two are related to configurability and scope.
+
+| Feature                 | Wrapper scripts                                                                                                 | Target runners                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **Configuration scope** | Fine-grained filtering by test name, binary, etc.                                                               | Global, for all tests per execution            |
+| **List vs run phase**   | Can be selectively used for list, run, or both                                                                  | Always used for both list and run phases       |
+| **Compatibility**       | Only supported by nextest                                                                                       | Wide compatibility, supported by Cargo         |
+| **Multiple scripts**    | Multiple wrapper scripts can be defined and applied selectively                                                 | Only one target runner can be active at a time |
+| **Use cases**           | Running tests with `sudo`, memory checkers like `valgrind`, profilers, cross-compilation, emulators like `qemu` | Cross-compilation, emulators like `qemu`       |
+
 ## Wrapper script precedence
 
 Wrapper scripts follow the same precedence order as [per-test settings](per-test-overrides.md#override-precedence).
 
 * The `list-wrapper` and `run-wrapper` configurations are evaluated separately.
-* Only the first wrapper script that matches a test is run.
+* Only the first wrapper script that matches a test is used.
