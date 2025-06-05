@@ -53,7 +53,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 index: _,
                 total: _,
                 script_id,
-                command,
+                program,
                 args,
                 junit_store_success_output,
                 junit_store_failure_output,
@@ -94,7 +94,7 @@ impl<'cfg> MetadataJunit<'cfg> {
                 test_suite.add_test_case(testcase);
 
                 // Add properties corresponding to the setup script.
-                test_suite.add_property(("command", command));
+                test_suite.add_property(("command", program.as_str()));
                 test_suite.add_property(("args".to_owned(), shell_words::join(args)));
                 // Also add environment variables set by the script.
                 if let Some(env_map) = run_status.env_map {

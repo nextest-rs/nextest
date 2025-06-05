@@ -279,7 +279,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 index,
                 total,
                 script_id,
-                command,
+                program,
                 args,
                 ..
             } => {
@@ -289,12 +289,12 @@ impl<'a> DisplayReporterImpl<'a> {
                     "SETUP".style(self.styles.pass),
                     // index + 1 so that it displays as e.g. "1/2" and "2/2".
                     format!("{}/{}", index + 1, total),
-                    self.display_script_instance(script_id.clone(), command, args)
+                    self.display_script_instance(script_id.clone(), program, args)
                 )?;
             }
             TestEventKind::SetupScriptSlow {
                 script_id,
-                command,
+                program,
                 args,
                 elapsed,
                 will_terminate,
@@ -309,17 +309,17 @@ impl<'a> DisplayReporterImpl<'a> {
                     writer,
                     "{}{}",
                     DisplaySlowDuration(*elapsed),
-                    self.display_script_instance(script_id.clone(), command, args)
+                    self.display_script_instance(script_id.clone(), program, args)
                 )?;
             }
             TestEventKind::SetupScriptFinished {
                 script_id,
-                command,
+                program,
                 args,
                 run_status,
                 ..
             } => {
-                self.write_setup_script_status_line(script_id, command, args, run_status, writer)?;
+                self.write_setup_script_status_line(script_id, program, args, run_status, writer)?;
                 // Always display failing setup script output if it exists. We may change this in
                 // the future.
                 if !run_status.result.is_success() {
@@ -1053,7 +1053,7 @@ impl<'a> DisplayReporterImpl<'a> {
         match response {
             InfoResponse::SetupScript(SetupScriptInfoResponse {
                 script_id,
-                command,
+                program,
                 args,
                 state,
                 output,
@@ -1062,7 +1062,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 writeln!(
                     writer,
                     "{}",
-                    self.display_script_instance(script_id.clone(), command, args)
+                    self.display_script_instance(script_id.clone(), program, args)
                 )?;
 
                 // Write the state of the script.
@@ -1962,7 +1962,7 @@ mod tests {
                             // same response, but it's easiest to test in this manner.
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 script_id: ScriptId::new(SmolStr::new("setup")).unwrap(),
-                                command: "setup",
+                                program: "setup".to_owned(),
                                 args: &args,
                                 state: UnitState::Running {
                                     pid: 4567,
@@ -1990,7 +1990,7 @@ mod tests {
                             total: 20,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 script_id: ScriptId::new(SmolStr::new("setup-slow")).unwrap(),
-                                command: "setup-slow",
+                                program: "setup-slow".to_owned(),
                                 args: &args,
                                 state: UnitState::Running {
                                     pid: 4568,
@@ -2020,7 +2020,7 @@ mod tests {
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 script_id: ScriptId::new(SmolStr::new("setup-terminating"))
                                     .unwrap(),
-                                command: "setup-terminating",
+                                program: "setup-terminating".to_owned(),
                                 args: &args,
                                 state: UnitState::Terminating(UnitTerminatingState {
                                     pid: 5094,
@@ -2060,7 +2060,7 @@ mod tests {
                             total: 20,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 script_id: ScriptId::new(SmolStr::new("setup-exiting")).unwrap(),
-                                command: "setup-exiting",
+                                program: "setup-exiting".to_owned(),
                                 args: &args,
                                 state: UnitState::Exiting {
                                     pid: 9987,
@@ -2091,7 +2091,7 @@ mod tests {
                             total: 20,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
                                 script_id: ScriptId::new(SmolStr::new("setup-exited")).unwrap(),
-                                command: "setup-exited",
+                                program: "setup-exited".to_owned(),
                                 args: &args,
                                 state: UnitState::Exited {
                                     result: ExecutionResult::Fail {

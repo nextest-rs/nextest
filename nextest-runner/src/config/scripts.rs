@@ -13,11 +13,13 @@ use crate::{
         ChildStartError, ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection,
         InvalidConfigScriptName,
     },
+    helpers::convert_rel_path_to_main_sep,
     list::TestList,
     platform::BuildPlatforms,
     reporter::events::SetupScriptEnvMap,
     test_command::{apply_ld_dyld_env, create_command},
 };
+use camino::Utf8Path;
 use camino_tempfile::Utf8TempPath;
 use guppy::graph::cargo::BuildPlatform;
 use indexmap::IndexMap;
@@ -215,7 +217,13 @@ impl SetupScriptCommand {
         double_spawn: &DoubleSpawnInfo,
         test_list: &TestList<'_>,
     ) -> Result<Self, ChildStartError> {
-        let mut cmd = create_command(config.program().to_owned(), config.args(), double_spawn);
+        let mut cmd = create_command(
+            config
+                .command
+                .program(&test_list.rust_build_meta().target_directory),
+            &config.command.args,
+            double_spawn,
+        );
 
         // NB: we will always override user-provided environment variables with the
         // `CARGO_*` and `NEXTEST_*` variables set directly on `cmd` below.
@@ -480,8 +488,7 @@ pub(super) struct DeserializedProfileScriptConfig {
 pub struct SetupScriptConfig {
     /// The command to run. The first element is the program and the second element is a list
     /// of arguments.
-    #[serde(deserialize_with = "deserialize_command")]
-    pub command: (String, Vec<String>),
+    pub command: ScriptCommand,
 
     /// An optional slow timeout for this command.
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
@@ -505,18 +512,6 @@ pub struct SetupScriptConfig {
 }
 
 impl SetupScriptConfig {
-    /// Returns the name of the program.
-    #[inline]
-    pub fn program(&self) -> &str {
-        &self.command.0
-    }
-
-    /// Returns the arguments to the command.
-    #[inline]
-    pub fn args(&self) -> &[String] {
-        &self.command.1
-    }
-
     /// Returns true if at least some output isn't being captured.
     #[inline]
     pub fn no_capture(&self) -> bool {
@@ -589,47 +584,207 @@ where
     deserializer.deserialize_any(ScriptIdVisitor)
 }
 
-fn deserialize_command<'de, D>(deserializer: D) -> Result<(String, Vec<String>), D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    struct CommandVisitor;
+/// The script command to run.
+#[derive(Clone, Debug)]
+pub struct ScriptCommand {
+    /// The program to run.
+    pub program: String,
 
-    impl<'de> serde::de::Visitor<'de> for CommandVisitor {
-        type Value = (String, Vec<String>);
+    /// The arguments to pass to the program.
+    pub args: Vec<String>,
 
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a Unix shell command or a list of arguments")
-        }
+    /// Which directory to interpret the program as relative to.
+    ///
+    /// This controls just how `program` is interpreted, in case it is a
+    /// relative path.
+    pub relative_to: ScriptCommandRelativeTo,
+}
 
-        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            let mut args = shell_words::split(value).map_err(E::custom)?;
-            if args.is_empty() {
-                return Err(E::invalid_value(serde::de::Unexpected::Str(value), &self));
-            }
-            let program = args.remove(0);
-            Ok((program, args))
-        }
-
-        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-        where
-            A: serde::de::SeqAccess<'de>,
-        {
-            let Some(program) = seq.next_element::<String>()? else {
-                return Err(A::Error::invalid_length(0, &self));
-            };
-            let mut args = Vec::new();
-            while let Some(value) = seq.next_element::<String>()? {
-                args.push(value);
-            }
-            Ok((program, args))
+impl ScriptCommand {
+    /// Returns the program to run, resolved with respect to the target directory.
+    pub fn program(&self, target_dir: &Utf8Path) -> String {
+        match self.relative_to {
+            ScriptCommandRelativeTo::None => self.program.clone(),
+            ScriptCommandRelativeTo::Target => target_dir
+                .join(convert_rel_path_to_main_sep(self.program.as_ref()))
+                .to_string(),
         }
     }
+}
 
-    deserializer.deserialize_any(CommandVisitor)
+impl<'de> Deserialize<'de> for ScriptCommand {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct CommandVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for CommandVisitor {
+            type Value = ScriptCommand;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a Unix shell command, a list of arguments, or a table with command-line and relative-to")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let mut args = shell_words::split(value).map_err(E::custom)?;
+                if args.is_empty() {
+                    return Err(E::invalid_value(serde::de::Unexpected::Str(value), &self));
+                }
+                let program = args.remove(0);
+                Ok(ScriptCommand {
+                    program,
+                    args,
+                    relative_to: ScriptCommandRelativeTo::None,
+                })
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let Some(program) = seq.next_element::<String>()? else {
+                    return Err(A::Error::invalid_length(0, &self));
+                };
+                let mut args = Vec::new();
+                while let Some(value) = seq.next_element::<String>()? {
+                    args.push(value);
+                }
+                Ok(ScriptCommand {
+                    program,
+                    args,
+                    relative_to: ScriptCommandRelativeTo::None,
+                })
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut command_line = None;
+                let mut relative_to = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "command-line" => {
+                            if command_line.is_some() {
+                                return Err(A::Error::duplicate_field("command-line"));
+                            }
+                            command_line = Some(map.next_value_seed(CommandInnerSeed)?);
+                        }
+                        "relative-to" => {
+                            if relative_to.is_some() {
+                                return Err(A::Error::duplicate_field("relative-to"));
+                            }
+                            relative_to = Some(map.next_value::<ScriptCommandRelativeTo>()?);
+                        }
+                        _ => {
+                            return Err(A::Error::unknown_field(
+                                &key,
+                                &["command-line", "relative-to"],
+                            ));
+                        }
+                    }
+                }
+
+                let (program, arguments) =
+                    command_line.ok_or_else(|| A::Error::missing_field("command-line"))?;
+                let relative_to = relative_to.unwrap_or(ScriptCommandRelativeTo::None);
+
+                Ok(ScriptCommand {
+                    program,
+                    args: arguments,
+                    relative_to,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(CommandVisitor)
+    }
+}
+
+struct CommandInnerSeed;
+
+impl<'de> serde::de::DeserializeSeed<'de> for CommandInnerSeed {
+    type Value = (String, Vec<String>);
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct CommandInnerVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for CommandInnerVisitor {
+            type Value = (String, Vec<String>);
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string or array of strings")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let mut args = shell_words::split(value).map_err(E::custom)?;
+                if args.is_empty() {
+                    return Err(E::invalid_value(
+                        serde::de::Unexpected::Str(value),
+                        &"a non-empty command string",
+                    ));
+                }
+                let program = args.remove(0);
+                Ok((program, args))
+            }
+
+            fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+            where
+                S: serde::de::SeqAccess<'de>,
+            {
+                let mut args = Vec::new();
+                while let Some(value) = seq.next_element::<String>()? {
+                    args.push(value);
+                }
+                if args.is_empty() {
+                    return Err(S::Error::invalid_length(0, &self));
+                }
+                let program = args.remove(0);
+                Ok((program, args))
+            }
+        }
+
+        deserializer.deserialize_any(CommandInnerVisitor)
+    }
+}
+
+/// The directory to interpret a [`ScriptCommand`] as relative to, in case it is
+/// a relative path.
+///
+/// If specified, the program will be joined with the provided path.
+#[derive(Clone, Copy, Debug)]
+pub enum ScriptCommandRelativeTo {
+    /// Do not join the program with any path.
+    None,
+
+    /// Join the program with the target directory.
+    Target,
+    // TODO: TargetProfile, similar to ArchiveRelativeTo
+}
+
+impl<'de> Deserialize<'de> for ScriptCommandRelativeTo {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "none" => Ok(ScriptCommandRelativeTo::None),
+            "target" => Ok(ScriptCommandRelativeTo::Target),
+            _ => Err(serde::de::Error::unknown_variant(&s, &["none", "target"])),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -801,7 +956,8 @@ mod tests {
             [scripts.setup.foo]
             command = ""
         "#},
-        "invalid value: string \"\", expected a Unix shell command or a list of arguments"
+        "invalid value: string \"\", expected a Unix shell command, a list of arguments, \
+         or a table with command-line and relative-to"
 
         ; "empty command"
     )]
@@ -810,7 +966,8 @@ mod tests {
             [scripts.setup.foo]
             command = []
         "#},
-        "invalid length 0, expected a Unix shell command or a list of arguments"
+        "invalid length 0, expected a Unix shell command, a list of arguments, \
+         or a table with command-line and relative-to"
 
         ; "empty command list"
     )]
@@ -821,6 +978,51 @@ mod tests {
         "scripts.setup.foo: missing field `command`"
 
         ; "missing command"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = { command-line = "" }
+        "#},
+        "invalid value: string \"\", expected a non-empty command string"
+
+        ; "empty command-line in table"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = { command-line = [] }
+        "#},
+        "invalid length 0, expected a string or array of strings"
+
+        ; "empty command-line array in table"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = { relative-to = "target" }
+        "#},
+        "missing field `command-line`"
+
+        ; "missing command-line in table"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = { command-line = "my-command", relative-to = "invalid" }
+        "#},
+        r#"unknown variant `invalid`, expected `none` or `target`"#
+
+        ; "invalid relative-to value"
+    )]
+    #[test_case(
+        indoc! {r#"
+            [scripts.setup.foo]
+            command = { command-line = "my-command", unknown-field = "value" }
+        "#},
+        r#"unknown field `unknown-field`, expected `command-line` or `relative-to`"#
+
+        ; "unknown field in command table"
     )]
     #[test_case(
         indoc! {r#"
