@@ -66,10 +66,10 @@ pub enum TestEventKind<'a> {
         /// The script ID.
         script_id: ScriptId,
 
-        /// The command to run.
-        command: &'a str,
+        /// The program to run.
+        program: String,
 
-        /// The arguments to the command.
+        /// The arguments to the program.
         args: &'a [String],
 
         /// True if some output from the setup script is being passed through.
@@ -81,10 +81,10 @@ pub enum TestEventKind<'a> {
         /// The script ID.
         script_id: ScriptId,
 
-        /// The command to run.
-        command: &'a str,
+        /// The program to run.
+        program: String,
 
-        /// The arguments to the command.
+        /// The arguments to the program.
         args: &'a [String],
 
         /// The amount of time elapsed since the start of execution.
@@ -105,10 +105,10 @@ pub enum TestEventKind<'a> {
         /// The script ID.
         script_id: ScriptId,
 
-        /// The command to run.
-        command: &'a str,
+        /// The program to run.
+        program: String,
 
-        /// The arguments to the command.
+        /// The arguments to the program.
         args: &'a [String],
 
         /// Whether the JUnit report should store success output for this script.
@@ -977,10 +977,10 @@ pub struct SetupScriptInfoResponse<'a> {
     /// The identifier of the setup script instance.
     pub script_id: ScriptId,
 
-    /// The command to run.
-    pub command: &'a str,
+    /// The program to run.
+    pub program: String,
 
-    /// The list of arguments to the command.
+    /// The list of arguments to the program.
     pub args: &'a [String],
 
     /// The state of the setup script.

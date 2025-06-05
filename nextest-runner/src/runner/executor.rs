@@ -106,12 +106,16 @@ impl<'a> ExecutorContext<'a> {
 
             let script_id = script.id.clone();
             let config = script.config;
+            let program = config
+                .command
+                .program(&self.test_list.rust_build_meta().target_directory);
 
             let script_fut = async move {
                 let (req_rx_tx, req_rx_rx) = oneshot::channel();
                 let _ = this_resp_tx.send(ExecutorEvent::SetupScriptStarted {
                     script_id: script_id.clone(),
                     config,
+                    program: program.clone(),
                     index,
                     total,
                     req_rx_tx,
@@ -128,6 +132,7 @@ impl<'a> ExecutorContext<'a> {
                 let packet = SetupScriptPacket {
                     script_id: script_id.clone(),
                     config,
+                    program: program.clone(),
                 };
 
                 let status = self
@@ -144,6 +149,7 @@ impl<'a> ExecutorContext<'a> {
                 let _ = this_resp_tx.send(ExecutorEvent::SetupScriptFinished {
                     script_id,
                     config,
+                    program,
                     index,
                     total,
                     status,
@@ -1042,6 +1048,7 @@ impl fmt::Debug for TestPacket<'_> {
 pub(super) struct SetupScriptPacket<'a> {
     script_id: ScriptId,
     config: &'a SetupScriptConfig,
+    program: String,
 }
 
 impl<'a> SetupScriptPacket<'a> {
@@ -1059,6 +1066,7 @@ impl<'a> SetupScriptPacket<'a> {
         ExecutorEvent::SetupScriptSlow {
             script_id: self.script_id.clone(),
             config: self.config,
+            program: self.program.clone(),
             elapsed,
             will_terminate,
         }
@@ -1071,8 +1079,8 @@ impl<'a> SetupScriptPacket<'a> {
     ) -> InfoResponse<'a> {
         InfoResponse::SetupScript(SetupScriptInfoResponse {
             script_id: self.script_id.clone(),
-            command: self.config.program(),
-            args: self.config.args(),
+            program: self.program.clone(),
+            args: &self.config.command.args,
             state,
             output,
         })

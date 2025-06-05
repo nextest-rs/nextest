@@ -42,6 +42,7 @@ pub(super) enum ExecutorEvent<'a> {
     SetupScriptStarted {
         script_id: ScriptId,
         config: &'a SetupScriptConfig,
+        program: String,
         index: usize,
         total: usize,
         // See the note in the `Started` variant.
@@ -50,12 +51,14 @@ pub(super) enum ExecutorEvent<'a> {
     SetupScriptSlow {
         script_id: ScriptId,
         config: &'a SetupScriptConfig,
+        program: String,
         elapsed: Duration,
         will_terminate: Option<Duration>,
     },
     SetupScriptFinished {
         script_id: ScriptId,
         config: &'a SetupScriptConfig,
+        program: String,
         index: usize,
         total: usize,
         status: SetupScriptExecuteStatus,
