@@ -476,7 +476,7 @@ impl NextestConfig {
             return Err(ConfigParseError::new(
                 config_file,
                 tool,
-                ConfigParseErrorKind::BothScriptAndScriptsSetupDefined,
+                ConfigParseErrorKind::BothScriptAndScriptsDefined,
             ));
         }
 

@@ -5,7 +5,7 @@ status: experimental
 
 # Setup scripts
 
-<!-- md:version 0.9.59 -->
+<!-- md:version 0.9.98 --> (originally <!-- md:version 0.9.59 -->)
 
 !!! experimental "Experimental: This feature is not yet stable"
 
@@ -21,20 +21,22 @@ Setup scripts are configured in two parts: _defining scripts_, and _setting up r
 
 ## Defining scripts
 
-Setup scripts are defined using the top-level `script` configuration. For example, to define a script named "my-script", which runs `my-script.sh`:
+Setup scripts are defined using the top-level `scripts.setup` configuration. For example, to define a script named "my-script", which runs `my-script.sh`:
 
 ```toml title="Setup script definition in <code>.config/nextest.toml</code>"
-[script.my-script]
+[scripts.setup.my-script]
 command = 'my-script.sh'
 ```
+
+(In versions of nextest before 0.9.98, setup scripts were specified in the top-level `[script.*]` configuration. This configuration is deprecated but still currently supported. It will be removed in a future version of nextest.)
 
 Commands can either be specified using Unix shell rules, or as a list of arguments. In the following example, `script1` and `script2` are equivalent.
 
 ```toml
-[script.script1]
+[scripts.setup.script1]
 command = 'script.sh -c "Hello, world!"'
 
-[script.script2]
+[scripts.setup.script2]
 command = ['script.sh', '-c', 'Hello, world!']
 ```
 
@@ -48,7 +50,7 @@ Setup scripts can have the following configuration options attached to them:
 ### Example
 
 ```toml title="Advanced setup script definition"
-[script.db-generate]
+[scripts.setup.db-generate]
 command = 'cargo run -p db-generate'
 slow-timeout = { period = "60s", terminate-after = 2 }
 leak-timeout = "1s"
@@ -111,7 +113,7 @@ echo "MY_ENV_VAR=Hello, world!" >> "$NEXTEST_ENV"
 And you define a setup script and a corresponding rule:
 
 ```toml
-[script.my-env-script]
+[scripts.setup.my-env-script]
 command = 'my-env-script.sh'
 
 [[profile.default.scripts]]
@@ -162,7 +164,7 @@ are always included by default. To alter this behavior, use the
 settings:
 
 ```toml title="Configuration to control JUnit output for setup scripts"
-[script.my-script]
+[scripts.setup.my-script]
 command = 'my-script.sh'
 junit.store-success-output = false
 junit.store-failure-output = true

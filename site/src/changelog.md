@@ -8,7 +8,7 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.98-b.1] - 2025-06-04
+## [0.9.98] - 2025-06-06
 
 ### Added
 
@@ -16,7 +16,7 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
 ### Changed
 
-- Setup scripts are now specified within the `[scripts.setup]` table, for example `[scripts.setup.db-generate]`. The previous `[script.db-generate]` configuration will continue to work for a short while.
+- [Setup scripts](https://nexte.st/docs/configuration/setup-scripts) are now specified within the `[scripts.setup]` table, for example `[scripts.setup.db-generate]`. The previous `[script.db-generate]` configuration will continue to work for a short while.
 
 ## [0.9.97] - 2025-05-29
 

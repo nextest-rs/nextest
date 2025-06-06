@@ -119,12 +119,12 @@ pub enum ConfigParseErrorKind {
         /// Known groups up to this point.
         known_groups: BTreeSet<TestGroup>,
     },
-    /// Both `[script.*]` and `[scripts.setup.*]` were defined.
+    /// Both `[script.*]` and `[scripts.*]` were defined.
     #[error(
-        "both `[script.*]` and `[scripts.setup.*]` defined\n\
-         (hint: [script.*] will be removed in the future—switch to [scripts.setup.*])"
+        "both `[script.*]` and `[scripts.*]` defined\n\
+         (hint: [script.*] will be removed in the future: switch to [scripts.setup.*])"
     )]
-    BothScriptAndScriptsSetupDefined,
+    BothScriptAndScriptsDefined,
     /// An invalid set of config scripts was defined by the user.
     #[error("invalid config scripts defined: {}\n(config scripts cannot start with '@tool:' unless specified by a tool)", .0.iter().join(", "))]
     InvalidConfigScriptsDefined(BTreeSet<ScriptId>),
