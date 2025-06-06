@@ -5,9 +5,10 @@ use crate::fixtures::*;
 use cfg_if::cfg_if;
 use color_eyre::eyre::{Result, ensure};
 use fixture_data::{
-    models::{TestCaseFixtureStatus, TestSuiteFixture},
+    models::{TestCaseFixtureStatus, TestNameAndFilterMatch, TestSuiteFixture},
     nextest_tests::{EXPECTED_TEST_SUITES, get_expected_test},
 };
+use iddqd::IdOrdMap;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
@@ -49,7 +50,7 @@ fn test_list_binaries() -> Result<()> {
         binary_name,
         build_platform,
         ..
-    } in EXPECTED_TEST_SUITES.values()
+    } in EXPECTED_TEST_SUITES.iter()
     {
         let bin = binary_list
             .rust_binaries
@@ -79,21 +80,24 @@ fn test_list_tests() -> Result<()> {
     )?;
     let mut summary = test_list.to_summary();
 
-    for (name, expected) in &*EXPECTED_TEST_SUITES {
+    for expected in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(name)
-            .unwrap_or_else(|| panic!("unexpected test name {name}"));
+            .get(&expected.binary_id)
+            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
         let info = summary
             .rust_suites
             .remove(&test_binary.binary_id)
             .unwrap_or_else(|| panic!("test list not found for {}", test_binary.binary_path));
-        let tests: Vec<_> = info
+        let tests: IdOrdMap<_> = info
             .test_cases
             .iter()
-            .map(|(name, info)| (name.as_str(), info.filter_match))
+            .map(|(name, info)| TestNameAndFilterMatch {
+                name: name.as_str(),
+                filter_match: info.filter_match,
+            })
             .collect();
-        assert_eq!(&expected.test_cases, &tests, "test list matches");
+        expected.assert_test_cases_match(&tests);
     }
 
     // Are there any remaining tests?
@@ -141,11 +145,11 @@ fn test_run() -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
-    for (binary_id, expected) in &*EXPECTED_TEST_SUITES {
+    for expected in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(binary_id)
-            .unwrap_or_else(|| panic!("unexpected binary ID {binary_id}"));
+            .get(&expected.binary_id)
+            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
         for fixture in &expected.test_cases {
             let instance_value = instance_statuses
                 .get(&(test_binary.binary_path.as_path(), fixture.name))
@@ -279,11 +283,11 @@ fn test_run_ignored() -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
-    for (name, expected) in &*EXPECTED_TEST_SUITES {
+    for expected in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(name)
-            .unwrap_or_else(|| panic!("unexpected test name {name}"));
+            .get(&expected.binary_id)
+            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
         for fixture in &expected.test_cases {
             if fixture.name.contains("test_slow_timeout") {
                 // These tests are filtered out by the expression above.
@@ -534,11 +538,11 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
-    for (name, expected) in &*EXPECTED_TEST_SUITES {
+    for expected in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(name)
-            .unwrap_or_else(|| panic!("unexpected test name {name}"));
+            .get(&expected.binary_id)
+            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
         for fixture in &expected.test_cases {
             let instance_value =
                 &instance_statuses[&(test_binary.binary_path.as_path(), fixture.name)];

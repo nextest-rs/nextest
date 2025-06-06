@@ -279,11 +279,11 @@ fn test_run_with_target_runner() -> Result<()> {
 
     let (instance_statuses, run_stats) = execute_collect(runner);
 
-    for (name, expected) in &*EXPECTED_TEST_SUITES {
+    for expected in &*EXPECTED_TEST_SUITES {
         let test_binary = FIXTURE_TARGETS
             .test_artifacts
-            .get(name)
-            .unwrap_or_else(|| panic!("unexpected test name {name}"));
+            .get(&expected.binary_id)
+            .unwrap_or_else(|| panic!("unexpected binary ID {}", expected.binary_id));
         for fixture in &expected.test_cases {
             let instance_value = instance_statuses
                 .get(&(test_binary.binary_path.as_path(), fixture.name))

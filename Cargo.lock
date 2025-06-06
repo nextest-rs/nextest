@@ -1046,7 +1046,7 @@ checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 name = "fixture-data"
 version = "0.1.0"
 dependencies = [
- "maplit",
+ "iddqd",
  "nextest-metadata",
  "nextest-workspace-hack",
 ]
@@ -1555,9 +1555,9 @@ dependencies = [
 
 [[package]]
 name = "iddqd"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb5b72a689cecdaca7349c7fd30715e3f494945e60c480de56a7089c814fa622"
+checksum = "9f6ebdbf573a5215d3b9bf3388deedb9501d619a43184f926b376909e11ed3ed"
 dependencies = [
  "allocator-api2",
  "equivalent",
