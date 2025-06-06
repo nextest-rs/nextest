@@ -1,5 +1,6 @@
 ---
 icon: material/book-open-variant
+description: Reference documentation for all nextest configuration parameters and settings.
 ---
 
 # Configuration reference
