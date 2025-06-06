@@ -61,7 +61,7 @@ pub fn check_list_full_output(stdout: &[u8], platform: Option<BuildPlatform>) {
         "test suite counts match"
     );
 
-    for test_suite in test_suites.values() {
+    for test_suite in test_suites {
         match platform {
             Some(p) if test_suite.build_platform != p => continue,
             _ => {}
@@ -123,7 +123,7 @@ pub fn check_list_binaries_output(stdout: &[u8]) {
     let test_suite = &*EXPECTED_TEST_SUITES;
     let mut expected_binary_ids = test_suite
         .iter()
-        .map(|(binary_id, fixture)| (binary_id.clone(), fixture.build_platform))
+        .map(|fixture| (fixture.binary_id.clone(), fixture.build_platform))
         .collect::<Vec<_>>();
     expected_binary_ids.sort_by(|(a, _), (b, _)| a.cmp(b));
     let mut actual_binary_ids = result
@@ -209,7 +209,8 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
     let mut leak_fail_count = 0;
     let mut skip_count = 0;
 
-    for (binary_id, fixture) in &*EXPECTED_TEST_SUITES {
+    for fixture in &*EXPECTED_TEST_SUITES {
+        let binary_id = &fixture.binary_id;
         if fixture.has_property(TestSuiteFixtureProperty::NotInDefaultSet)
             && properties & RunProperty::WithDefaultFilter as u64 != 0
         {
