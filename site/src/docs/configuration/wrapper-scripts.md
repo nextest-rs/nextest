@@ -56,7 +56,7 @@ A wrapper script will be invoked with the test binary as the first argument, and
 
 !!! warning
 
-    Make sure your wrapper script runs the test binary and arguments passed into it! If you do not do so, your test will silently succeed.
+    Make sure your wrapper script runs the test binary and arguments passed into it! If you do not do so, your test will succeed even though it isn't being executed.
 
 ### Wrapper script configuration
 
