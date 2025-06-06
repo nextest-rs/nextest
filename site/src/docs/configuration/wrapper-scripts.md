@@ -12,6 +12,11 @@ status: experimental
     - **Enable with:** Add `experimental = ["wrapper-scripts"]` to `.config/nextest.toml`
     - **Tracking issue:** [#2384](https://github.com/nextest-rs/nextest/issues/2384)
 
+!!! warning
+
+    This is an advanced feature, and it can cause your tests to silently stop
+    working if used incorrectly. Use with caution.
+
 Nextest supports wrapping test execution with custom commands via _wrapper scripts_.
 
 Wrapper scripts can be scoped to:
@@ -49,6 +54,10 @@ command = { command-line = "debug/my-wrapper-bin", relative-to = "target" }
 
 A wrapper script will be invoked with the test binary as the first argument, and the argument list passed in as subsequent arguments.
 
+!!! warning
+
+    Make sure your wrapper script runs the test binary and arguments passed into it! If you do not do so, your test will silently succeed.
+
 ### Wrapper script configuration
 
 Wrapper scripts can have the following configuration options attached to them:
@@ -79,16 +88,21 @@ Wrapper scripts can be invoked:
 
 ### Examples
 
-In some situations, tests must be run as root. Here's an example of setting up `sudo` on Linux in CI, assuming you have configured your CI to allow `sudo` without prompting:
+!!! danger
+
+    While running tests as root is necessary in some situations, a test running as root on the host computer can potentially **damage the system**. If at all possible, consider having the wrapper script run the test within a container instead. Running tests as root within a container is meaningfully safer than running them as root on the host.
+
+    For tests that must be run as root, scope them as tightly as possible using a precise filterset. A filterset of the kind `binary_id(binary_name) and test(=test_name)` is recommended.
+
+Here's an example of setting up `sudo` on Linux in CI, assuming you have configured your CI to allow `sudo` without prompting:
 
 ```toml title="Basic rules"
 [scripts.wrapper.sudo-script]
 command = 'sudo'
 
 [[profile.ci.scripts]]
-filter = 'test(root_tests)'
-# A platform can also be specified.
-platform = { host = 'cfg(target_os = "linux")' }
+filter = 'binary_id(package::binary) and test(=root_test)'
+platform = 'cfg(target_os = "linux")'
 run-wrapper = 'sudo-script'
 ```
 
@@ -102,6 +116,7 @@ command = 'wine'
 
 [[profile.windows-tests.scripts]]
 filter = 'binary(windows_compat_tests)'
+platform = { host = 'cfg(unix)', target = 'cfg(windows)' }
 list-wrapper = 'wine-script'
 run-wrapper = 'wine-script'
 ```
