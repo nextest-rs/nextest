@@ -64,6 +64,10 @@ Wrapper scripts can have the following configuration options attached to them:
 
 - **`target-runner`**: Interaction with [target runners](../features/target-runners.md), if one is specified. The following values are permitted:
 
+  - **`ignore`**: The target runner is disabled, and only the wrapper script is used. This is the default.
+
+  - **`overrides-wrapper`**: The wrapper script is disabled, and only the target runner is used.
+
   - **`within-wrapper`**: Run the target runner as an argument to the wrapper.
 
     For example, if the target runner is `qemu-arm` and the wrapper is `valgrind --leak-check=full`, the full command that's run is `valgrind --leak-check=full qemu-arm <test-binary> <args...>`.
@@ -71,10 +75,6 @@ Wrapper scripts can have the following configuration options attached to them:
   - **`around-wrapper`**: Run the wrapper script as an argument to the target runner.
 
     For example, if the target runner is `my-linux-emulator` and the wrapper is `sudo`, the full command that's run is `my-linux-emulator sudo <test-binary> <args...>`.
-
-  - **`overrides-wrapper`**: The wrapper script is disabled, and only the target runner is used.
-
-  - **`ignore`**: The target runner is disabled, and only the wrapper script is used.
 
 ## Setting up rules
 
