@@ -30,7 +30,7 @@ These parameters are specified at the root level of the configuration file.
 
 - **Type**: Array of strings
 - **Description**: Enables experimental features
-- **Documentation**: [_Setup scripts_](setup-scripts.md), [_wrapper scripts_](wrapper-scripts.md))
+- **Documentation**: [_Setup scripts_](setup-scripts.md), [_wrapper scripts_](wrapper-scripts.md)
 - **Default**: `[]`: no experimental features are enabled
 - **Valid values**: `["setup-scripts", "wrapper-scripts"]`
 - **Example**:
