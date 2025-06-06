@@ -507,7 +507,7 @@ impl<'g> TestList<'g> {
     }
 
     /// Iterates over all the test suites.
-    pub fn iter(&self) -> impl Iterator<Item = &RustTestSuite> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = &RustTestSuite<'_>> + '_ {
         self.rust_suites.values()
     }
 

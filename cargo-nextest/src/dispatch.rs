@@ -1625,7 +1625,7 @@ impl App {
         binary_list: Arc<BinaryList>,
         test_filter_builder: TestFilterBuilder,
         profile: &EvaluatableProfile<'_>,
-    ) -> Result<TestList> {
+    ) -> Result<TestList<'_>> {
         let env = EnvironmentMap::new(&self.base.cargo_configs);
         self.build_filter.compute_test_list(
             ctx,

@@ -1070,7 +1070,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns settings for individual tests.
-    pub fn settings_for(&self, query: &TestQuery<'_>) -> TestSettings {
+    pub fn settings_for(&self, query: &TestQuery<'_>) -> TestSettings<'_> {
         TestSettings::new(self, query)
     }
 
@@ -1078,7 +1078,7 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     pub(crate) fn settings_with_source_for(
         &self,
         query: &TestQuery<'_>,
-    ) -> TestSettings<SettingSource<'_>> {
+    ) -> TestSettings<'_, SettingSource<'_>> {
         TestSettings::new(self, query)
     }
 
