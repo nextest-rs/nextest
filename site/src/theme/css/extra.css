@@ -156,6 +156,15 @@
     font-feature-settings: "ss01", "ss03", "cv11";
 }
 
+.md-typeset h1 > code,
+.md-typeset h2 > code,
+.md-typeset h3 > code,
+.md-typeset h4 > code,
+.md-typeset h5 > code,
+.md-typeset h6 > code {
+    font-weight: 450;
+}
+
 .md-typeset h1 {
     letter-spacing: -0.041em;
 }

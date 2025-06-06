@@ -6,6 +6,8 @@ icon: material/tune
 
 cargo-nextest supports repository-specific configuration at the location `.config/nextest.toml` from the Cargo workspace root. The location of the configuration file can be overridden with the `--config-file` option.
 
+For a comprehensive list of all configuration parameters, see the [Configuration reference](reference.md).
+
 The default configuration shipped with cargo-nextest is:
 
 ```bash exec="true" result="toml"
@@ -69,3 +71,8 @@ Configuration is resolved in the following order:
    then failing tests are retried up to 5 times.
 7. Tool-specific configuration for the `default` profile.
 8. The default configuration listed above, which is that tests are never retried.
+
+## See also
+
+- [Configuration reference](reference.md) - comprehensive list of all configuration parameters
+- [Per-test overrides](per-test-overrides.md) - customize settings for specific tests

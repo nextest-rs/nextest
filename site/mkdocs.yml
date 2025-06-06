@@ -104,6 +104,7 @@ nav:
                 - "cargo-mutants": docs/integrations/cargo-mutants.md
     - Configuration:
           - "Configuring nextest": docs/configuration/index.md
+          - "Configuration reference": docs/configuration/reference.md
           - docs/configuration/per-test-overrides.md
           - "More configuration":
                 - "Specifying platforms": docs/configuration/specifying-platforms.md
