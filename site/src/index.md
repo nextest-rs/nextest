@@ -84,7 +84,7 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
 Install cargo-nextest for your platform using the [pre-built binaries](docs/installation/pre-built-binaries.md).
 
-Run all tests in a workspace:
+For most Rust projects, nextest works out of the box. To run all tests in a workspace:
 
 ```
 cargo nextest run

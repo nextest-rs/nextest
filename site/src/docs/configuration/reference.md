@@ -9,6 +9,18 @@ This page provides a comprehensive reference of all configuration parameters ava
 
 For more information about how configuration works, see the [main configuration page](index.md).
 
+## Configuration file locations
+
+Configuration is loaded in the following order (higher priority overrides lower):
+
+1. Repository config (`.config/nextest.toml`)
+2. Tool-specific configs (specified via `--tool-config-file`)
+3. Default embedded config
+
+Tool-specific configs allow tools to provide their own nextest configuration that integrates with repository settings.
+
+For more information about configuration hierarchy, see thhe [_Hierarchical configuration_](index.md#hierarchical-configuration).
+
 ## Top-level configuration
 
 These parameters are specified at the root level of the configuration file.
@@ -84,7 +96,7 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 - **Type**: Array of strings
 - **Description**: Extra arguments to pass to test binaries
 - **Documentation**: [_Extra arguments_](extra-args.md)
-- **Default*: `[]`: no extra arguments
+- **Default**: `[]`: no extra arguments
 - **Example**: `run-extra-args = ["--nocapture"]`
 
 ### Retry configuration
@@ -306,8 +318,6 @@ All profile-level settings can be overridden:
 - `junit.store-success-output`
 - `junit.store-failure-output`
 
-For detailed information, see [_Per-test overrides_](per-test-overrides.md).
-
 ## Test group configuration
 
 Custom test groups are defined under `[test-groups.<name>]` sections.
@@ -346,6 +356,12 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
 - **Type**: String (duration) or object
 - **Description**: Timeout configuration for the setup script
 - **Default**: No timeout
+- **Examples**:
+  ```toml
+  slow-timeout = "30s"
+  # or
+  slow-timeout = { period = "60s", terminate-after = 1, grace-period = "5s" }
+  ```
 
 #### `scripts.setup.<name>.leak-timeout`
 
@@ -421,38 +437,56 @@ At least one of these filters must be specified.
 - **Type**: String or object
 - **Description**: Platform specification for when scripts apply
 - **Documentation**: [_Specifying platforms_](specifying-platforms.md)
+- **Default**: Scripts apply to all platforms
+- **Examples**:
+  ```toml
+  platform = "x86_64-unknown-linux-gnu"
+  # or
+  platform = { host = "cfg(unix)", target = "aarch64-apple-darwin" }
+  ```
 
 #### `filter`
 
 - **Type**: String (filterset expression)
 - **Description**: Test filter for when scripts apply
 - **Documentation**: [_Filterset DSL_](../filtersets/index.md)
+- **Default**: Scripts apply to all tests
+- **Example**: `filter = 'test(integration_test)'`
 
 ### Profile script instructions
+
+At least one instruction must be specified.
 
 #### `setup`
 
 - **Type**: String or array of strings
 - **Description**: Setup script(s) to run
+- **Documentation**: [_Setup scripts_](setup-scripts.md)
+- **Examples**:
+  ```toml
+  setup = "my-setup"
+  # or
+  setup = ["setup1", "setup2"]
+  ```
 
 #### `list-wrapper`
 
 - **Type**: String
 - **Description**: Wrapper script to use during test listing
+- **Documentation**: [_Wrapper scripts_](wrapper-scripts.md)
+- **Example**: `list-wrapper = "my-list-wrapper"`
 
 #### `run-wrapper`
 
 - **Type**: String
 - **Description**: Wrapper script to use during test execution
+- **Documentation**: [_Wrapper scripts_](wrapper-scripts.md)
+- **Example**: `run-wrapper = "my-run-wrapper"`
 
-## Configuration file precedence
+## Default configuration
 
-Configuration is loaded in the following order (higher priority overrides lower):
+The default configuration shipped with cargo-nextest is:
 
-1. Repository config (`.config/nextest.toml`)
-2. Tool-specific configs (specified via `--tool-config-file`)
-3. Default embedded config
-
-Tool-specific configs allow tools to provide their own nextest configuration that integrates with repository settings.
-
-For more information about configuration hierarchy, see the [_Hierarchical configuration_](index.md#hierarchical-configuration).
+```bash exec="true" result="toml"
+cat ../nextest-runner/default-config.toml
+```
