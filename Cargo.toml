@@ -129,7 +129,7 @@ thiserror = "2.0.12"
 tokio = "1.45.1"
 tokio-stream = "0.1.17"
 toml = "0.8.23"
-toml_edit = "0.22.26"
+toml_edit = "0.22.27"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.18"
