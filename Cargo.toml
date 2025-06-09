@@ -138,7 +138,7 @@ whoami = "1.6.0"
 win32job = "2.0.3"
 windows-sys = "0.59.0"
 winnow = "0.7.10"
-xxhash-rust = "0.8.13"
+xxhash-rust = "0.8.15"
 zstd = { version = "0.13.3", features = ["zstdmt"] }
 
 # make backtrace + color-eyre faster on debug builds
