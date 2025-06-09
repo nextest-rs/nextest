@@ -97,7 +97,7 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 - **Description**: Extra arguments to pass to test binaries
 - **Documentation**: [_Extra arguments_](extra-args.md)
 - **Default**: `[]`: no extra arguments
-- **Example**: `run-extra-args = ["--nocapture"]`
+- **Example**: `run-extra-args = ["--test-threads", "1"]`
 
 ### Retry configuration
 
@@ -348,7 +348,7 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
   # or
   command = ["cargo", "run", "--bin", "setup"]
   # or
-  command = { command-line = "my-setup", relative-to = "target" }
+  command = { command-line = "debug/my-setup", relative-to = "target" }
   ```
 
 #### `scripts.setup.<name>.slow-timeout`
