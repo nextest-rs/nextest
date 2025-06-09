@@ -40,10 +40,9 @@ jobs:
           mv target/doc target/gh-pages/rustdoc
       - name: Publish
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: cloudflare/pages-action@1
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: nextest
-          directory: target/gh-pages
+          command: pages deploy target/gh-pages --project-name=nextest
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
