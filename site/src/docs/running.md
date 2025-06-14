@@ -27,7 +27,7 @@ This will produce output that looks like:
 In nextest's run output:
 
 - Tests are marked **`PASS`** or **`FAIL`**, and the amount of wall-clock time each test takes is listed within square brackets.
-- Tests that take more than a specified amount of time (60 seconds by default) are marked **SLOW**. See [Slow tests and timeouts](features/slow-tests.md).
+- Tests that take more than a specified amount of time (60 seconds by default) are marked **SLOW**. See [*Slow tests and timeouts*](features/slow-tests.md).
 - The part of the test in magenta is the _binary ID_ for a unit test binary (see [Binary IDs](#binary-ids) below).
 
 - The part after the binary ID is the _test name_, including the module the test is in. The final part of the test name is highlighted in bold blue text.

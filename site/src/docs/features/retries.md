@@ -101,4 +101,4 @@ retries = { backoff = "exponential", count = 2, delay = "5s", jitter = true }
 
 ## JUnit support
 
-Flaky test detection is integrated with nextest's JUnit support. For more information, see [JUnit support](../machine-readable/junit.md).
+Flaky test detection is integrated with nextest's JUnit support. For more information, see [*JUnit support*](../machine-readable/junit.md).
