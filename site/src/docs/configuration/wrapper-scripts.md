@@ -45,11 +45,31 @@ command = 'script.sh -c "Hello, world!"'
 command = ['script.sh', '-c', 'Hello, world!']
 ```
 
-Commands can also be interpreted as relative to the target directory. This does not change the working directory of the test—it just prepends the target directory to the command if it is relative.
+### Specifying `relative-to`
+
+Commands can be interpreted as relative to a particular directory by specifying the `relative-to` parameter:
+
+<div class="compact" markdown>
+
+`"none"`
+: Do not alter the command. This is the default value.
+
+`"target"`
+: The target directory.
+
+`"workspace-root"` <!-- md:version 0.9.99 -->
+: The workspace root.
+
+</div>
+
+Setting `relative-to` does not change the working directory of the test. It just prepends the directory to the command if it is relative.
 
 ```toml
 [scripts.wrapper.script1]
 command = { command-line = "debug/my-wrapper-bin", relative-to = "target" }
+
+[scripts.wrapper.script2]
+command = { command-line = "scripts/wrapper-script.sh", relative-to = "workspace-root" }
 ```
 
 A wrapper script will be invoked with the test binary as the first argument, and the argument list passed in as subsequent arguments.
@@ -62,17 +82,22 @@ A wrapper script will be invoked with the test binary as the first argument, and
 
 Wrapper scripts can have the following configuration options attached to them:
 
-- **`target-runner`**: Interaction with [target runners](../features/target-runners.md), if one is specified. The following values are permitted:
+`target-runner`
+: Interaction with [target runners](../features/target-runners.md), if one is specified. The following values are permitted:
 
-  - **`ignore`**: The target runner is disabled, and only the wrapper script is used. This is the default.
+  `ignore`
+  : The target runner is disabled, and only the wrapper script is used. This is the default.
 
-  - **`overrides-wrapper`**: The wrapper script is disabled, and only the target runner is used.
+  `overrides-wrapper`
+  : The wrapper script is disabled, and only the target runner is used.
 
-  - **`within-wrapper`**: Run the target runner as an argument to the wrapper.
+  `within-wrapper`
+  : Run the target runner as an argument to the wrapper.
 
     For example, if the target runner is `qemu-arm` and the wrapper is `valgrind --leak-check=full`, the full command that's run is `valgrind --leak-check=full qemu-arm <test-binary> <args...>`.
 
-  - **`around-wrapper`**: Run the wrapper script as an argument to the target runner.
+  `around-wrapper`
+  : Run the wrapper script as an argument to the target runner.
 
     For example, if the target runner is `my-linux-emulator` and the wrapper is `sudo`, the full command that's run is `my-linux-emulator sudo <test-binary> <args...>`.
 

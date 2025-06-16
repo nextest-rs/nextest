@@ -8,6 +8,16 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.99] - 2025-06-16
+
+### Added
+
+- Script commands now support `relative-to = "workspace-root"`. This has minimal impact on setup scripts since they always run relative to the workspace root, but allows wrapper scripts to be invoked more easily.
+
+### Changed
+
+- On remapping workspace or target directories, they're now converted to absolute ones. This should not have user-visible effects.
+
 ## [0.9.98] - 2025-06-06
 
 ### Added
@@ -1463,6 +1473,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.99]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.99
 [0.9.98]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.98
 [0.9.97]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.97
 [0.9.96]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.96

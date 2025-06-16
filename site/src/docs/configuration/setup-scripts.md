@@ -40,12 +40,48 @@ command = 'script.sh -c "Hello, world!"'
 command = ['script.sh', '-c', 'Hello, world!']
 ```
 
+### Specifying `relative-to`
+
+Commands can be interpreted as relative to a particular directory by specifying the `relative-to` parameter:
+
+<div class="compact" markdown>
+
+`"none"`
+: Do not alter the command. This is the default value.
+
+`"target"`
+: The target directory.
+
+`"workspace-root"` <!-- md:version 0.9.99 -->
+: The workspace root.
+
+</div>
+
+Setting `relative-to` does not change the working directory of the setup script, which is always the workspace root. It just prepends the directory to the command if it is relative.
+
+```toml
+[scripts.setup.script1]
+command = { command-line = "debug/my-setup-bin", relative-to = "target" }
+
+[scripts.setup.script2]
+command = { command-line = "scripts/setup-script.sh", relative-to = "workspace-root" }
+```
+
+### Setup script configuration
+
 Setup scripts can have the following configuration options attached to them:
 
-- **`slow-timeout`**: Mark a setup script [as slow](../features/slow-tests.md) or [terminate it](../features/slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, setup scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
-- **`leak-timeout`**: Mark setup scripts [leaky](../features/leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.
-- **`capture-stdout`**: `true` if the script's standard output should be captured, `false` if not. By default, this is `false`.
-- **`capture-stderr`**: `true` if the script's standard error should be captured, `false` if not. By default, this is `false`.
+`slow-timeout`
+: Mark a setup script [as slow](../features/slow-tests.md) or [terminate it](../features/slow-tests.md#terminating-tests-after-a-timeout), using the same configuration as for tests. By default, setup scripts are not marked as slow or terminated (this is different from the slow timeout for tests).
+
+`leak-timeout`
+: Mark setup scripts [leaky](../features/leaky-tests.md) after a timeout, using the same configuration as for tests. By default, the leak timeout is 100ms.
+
+`capture-stdout`
+: `true` if the script's standard output should be captured, `false` if not. By default, this is `false`.
+
+`capture-stderr`
+: `true` if the script's standard error should be captured, `false` if not. By default, this is `false`.
 
 ### Example
 
