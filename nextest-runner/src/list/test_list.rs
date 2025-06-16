@@ -250,6 +250,9 @@ impl<'g> TestList<'g> {
         );
         let lctx = LocalExecuteContext {
             phase: TestCommandPhase::List,
+            // Note: this is the remapped workspace root, not the original one.
+            // (We really should have newtypes for this.)
+            workspace_root: &workspace_root,
             rust_build_meta: &rust_build_meta,
             double_spawn: ctx.double_spawn,
             dylib_path: &updated_dylib_path,
@@ -925,6 +928,7 @@ impl RustTestArtifact<'_> {
         cli.apply_wrappers(
             list_settings.list_wrapper(),
             runner,
+            lctx.workspace_root,
             &lctx.rust_build_meta.target_directory,
         );
         cli.push(self.binary_path.as_str());
@@ -1108,6 +1112,7 @@ impl<'a> TestInstance<'a> {
         cli.apply_wrappers(
             wrapper_script,
             platform_runner,
+            test_list.workspace_root(),
             &test_list.rust_build_meta().target_directory,
         );
         cli.push(self.suite_info.binary_path.as_str());
@@ -1120,6 +1125,7 @@ impl<'a> TestInstance<'a> {
 
         let lctx = LocalExecuteContext {
             phase: TestCommandPhase::Run,
+            workspace_root: test_list.workspace_root(),
             rust_build_meta: &test_list.rust_build_meta,
             double_spawn: ctx.double_spawn,
             dylib_path: test_list.updated_dylib_path(),
@@ -1151,6 +1157,7 @@ impl<'a> TestCommandCli<'a> {
         &mut self,
         wrapper_script: Option<&'a WrapperScriptConfig>,
         platform_runner: Option<&'a PlatformRunner>,
+        workspace_root: &Utf8Path,
         target_dir: &Utf8Path,
     ) {
         // Apply the wrapper script if it's enabled.
@@ -1158,7 +1165,7 @@ impl<'a> TestCommandCli<'a> {
             match wrapper.target_runner {
                 WrapperScriptTargetRunner::Ignore => {
                     // Ignore the platform runner.
-                    self.push(wrapper.command.program(target_dir));
+                    self.push(wrapper.command.program(workspace_root, target_dir));
                     self.extend(wrapper.command.args.iter().map(String::as_str));
                 }
                 WrapperScriptTargetRunner::AroundWrapper => {
@@ -1167,12 +1174,12 @@ impl<'a> TestCommandCli<'a> {
                         self.push(runner.binary());
                         self.extend(runner.args());
                     }
-                    self.push(wrapper.command.program(target_dir));
+                    self.push(wrapper.command.program(workspace_root, target_dir));
                     self.extend(wrapper.command.args.iter().map(String::as_str));
                 }
                 WrapperScriptTargetRunner::WithinWrapper => {
                     // Wrapper script goes first.
-                    self.push(wrapper.command.program(target_dir));
+                    self.push(wrapper.command.program(workspace_root, target_dir));
                     self.extend(wrapper.command.args.iter().map(String::as_str));
                     if let Some(runner) = platform_runner {
                         self.push(runner.binary());
@@ -1591,8 +1598,10 @@ mod tests {
         cfg_if::cfg_if! {
             if #[cfg(windows)]
             {
+                let workspace_root = Utf8Path::new("D:\\workspace\\root");
                 let target_dir = Utf8Path::new("C:\\foo\\bar");
             } else {
+                let workspace_root = Utf8Path::new("/workspace/root");
                 let target_dir = Utf8Path::new("/foo/bar");
             }
         };
@@ -1600,7 +1609,7 @@ mod tests {
         // Test with no wrappers
         {
             let mut cli_no_wrappers = TestCommandCli::default();
-            cli_no_wrappers.apply_wrappers(None, None, target_dir);
+            cli_no_wrappers.apply_wrappers(None, None, workspace_root, target_dir);
             cli_no_wrappers.extend(["binary", "arg"]);
             assert_eq!(cli_no_wrappers.to_owned_cli(), vec!["binary", "arg"]);
         }
@@ -1613,7 +1622,7 @@ mod tests {
                 PlatformRunnerSource::Env("fake".to_owned()),
             );
             let mut cli_runner_only = TestCommandCli::default();
-            cli_runner_only.apply_wrappers(None, Some(&runner), target_dir);
+            cli_runner_only.apply_wrappers(None, Some(&runner), workspace_root, target_dir);
             cli_runner_only.extend(["binary", "arg"]);
             assert_eq!(
                 cli_runner_only.to_owned_cli(),
@@ -1637,7 +1646,12 @@ mod tests {
                 target_runner: WrapperScriptTargetRunner::Ignore,
             };
             let mut cli_wrapper_ignore = TestCommandCli::default();
-            cli_wrapper_ignore.apply_wrappers(Some(&wrapper_ignore), Some(&runner), target_dir);
+            cli_wrapper_ignore.apply_wrappers(
+                Some(&wrapper_ignore),
+                Some(&runner),
+                workspace_root,
+                target_dir,
+            );
             cli_wrapper_ignore.extend(["binary", "arg"]);
             assert_eq!(
                 cli_wrapper_ignore.to_owned_cli(),
@@ -1661,7 +1675,12 @@ mod tests {
                 target_runner: WrapperScriptTargetRunner::AroundWrapper,
             };
             let mut cli_wrapper_around = TestCommandCli::default();
-            cli_wrapper_around.apply_wrappers(Some(&wrapper_around), Some(&runner), target_dir);
+            cli_wrapper_around.apply_wrappers(
+                Some(&wrapper_around),
+                Some(&runner),
+                workspace_root,
+                target_dir,
+            );
             cli_wrapper_around.extend(["binary", "arg"]);
             assert_eq!(
                 cli_wrapper_around.to_owned_cli(),
@@ -1685,7 +1704,12 @@ mod tests {
                 target_runner: WrapperScriptTargetRunner::WithinWrapper,
             };
             let mut cli_wrapper_within = TestCommandCli::default();
-            cli_wrapper_within.apply_wrappers(Some(&wrapper_within), Some(&runner), target_dir);
+            cli_wrapper_within.apply_wrappers(
+                Some(&wrapper_within),
+                Some(&runner),
+                workspace_root,
+                target_dir,
+            );
             cli_wrapper_within.extend(["binary", "arg"]);
             assert_eq!(
                 cli_wrapper_within.to_owned_cli(),
@@ -1712,6 +1736,7 @@ mod tests {
             cli_wrapper_overrides.apply_wrappers(
                 Some(&wrapper_overrides),
                 Some(&runner),
+                workspace_root,
                 target_dir,
             );
             cli_wrapper_overrides.extend(["binary", "arg"]);
@@ -1732,7 +1757,12 @@ mod tests {
                 target_runner: WrapperScriptTargetRunner::Ignore,
             };
             let mut cli_wrapper_args = TestCommandCli::default();
-            cli_wrapper_args.apply_wrappers(Some(&wrapper_with_args), None, target_dir);
+            cli_wrapper_args.apply_wrappers(
+                Some(&wrapper_with_args),
+                None,
+                workspace_root,
+                target_dir,
+            );
             cli_wrapper_args.extend(["binary", "arg"]);
             assert_eq!(
                 cli_wrapper_args.to_owned_cli(),
@@ -1748,11 +1778,48 @@ mod tests {
                 PlatformRunnerSource::Env("fake".to_owned()),
             );
             let mut cli_runner_args = TestCommandCli::default();
-            cli_runner_args.apply_wrappers(None, Some(&runner_with_args), target_dir);
+            cli_runner_args.apply_wrappers(
+                None,
+                Some(&runner_with_args),
+                workspace_root,
+                target_dir,
+            );
             cli_runner_args.extend(["binary", "arg"]);
             assert_eq!(
                 cli_runner_args.to_owned_cli(),
                 vec!["runner", "--runner-flag", "value", "binary", "arg"],
+            );
+        }
+
+        // Test wrapper with ScriptCommandRelativeTo::WorkspaceRoot
+        {
+            let wrapper_relative_to_workspace_root = WrapperScriptConfig {
+                command: ScriptCommand {
+                    program: "abc/def/my-wrapper".into(),
+                    args: vec!["--verbose".to_string()],
+                    relative_to: ScriptCommandRelativeTo::WorkspaceRoot,
+                },
+                target_runner: WrapperScriptTargetRunner::Ignore,
+            };
+            let mut cli_wrapper_relative = TestCommandCli::default();
+            cli_wrapper_relative.apply_wrappers(
+                Some(&wrapper_relative_to_workspace_root),
+                None,
+                workspace_root,
+                target_dir,
+            );
+            cli_wrapper_relative.extend(["binary", "arg"]);
+
+            cfg_if::cfg_if! {
+                if #[cfg(windows)] {
+                    let wrapper_path = "D:\\workspace\\root\\abc\\def\\my-wrapper";
+                } else {
+                    let wrapper_path = "/workspace/root/abc/def/my-wrapper";
+                }
+            }
+            assert_eq!(
+                cli_wrapper_relative.to_owned_cli(),
+                vec![wrapper_path, "--verbose", "binary", "arg"],
             );
         }
 
@@ -1770,6 +1837,7 @@ mod tests {
             cli_wrapper_relative.apply_wrappers(
                 Some(&wrapper_relative_to_target),
                 None,
+                workspace_root,
                 target_dir,
             );
             cli_wrapper_relative.extend(["binary", "arg"]);

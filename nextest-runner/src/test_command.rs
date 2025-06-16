@@ -26,6 +26,7 @@ pub(crate) use imp::{Child, ChildAccumulator, ChildFds};
 #[derive(Clone, Debug)]
 pub(crate) struct LocalExecuteContext<'a> {
     pub(crate) phase: TestCommandPhase,
+    pub(crate) workspace_root: &'a Utf8Path,
     // Note: Must use TestListState here to get remapped paths.
     pub(crate) rust_build_meta: &'a RustBuildMeta<TestListState>,
     pub(crate) double_spawn: &'a DoubleSpawnInfo,
