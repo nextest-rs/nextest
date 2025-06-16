@@ -106,9 +106,10 @@ impl<'a> ExecutorContext<'a> {
 
             let script_id = script.id.clone();
             let config = script.config;
-            let program = config
-                .command
-                .program(&self.test_list.rust_build_meta().target_directory);
+            let program = config.command.program(
+                self.test_list.workspace_root(),
+                &self.test_list.rust_build_meta().target_directory,
+            );
 
             let script_fut = async move {
                 let (req_rx_tx, req_rx_rx) = oneshot::channel();

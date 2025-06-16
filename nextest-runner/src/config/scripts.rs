@@ -296,9 +296,10 @@ impl SetupScriptCommand {
         test_list: &TestList<'_>,
     ) -> Result<Self, ChildStartError> {
         let mut cmd = create_command(
-            config
-                .command
-                .program(&test_list.rust_build_meta().target_directory),
+            config.command.program(
+                test_list.workspace_root(),
+                &test_list.rust_build_meta().target_directory,
+            ),
             &config.command.args,
             double_spawn,
         );
@@ -780,9 +781,20 @@ pub struct ScriptCommand {
 
 impl ScriptCommand {
     /// Returns the program to run, resolved with respect to the target directory.
-    pub fn program(&self, target_dir: &Utf8Path) -> String {
+    pub fn program(&self, workspace_root: &Utf8Path, target_dir: &Utf8Path) -> String {
         match self.relative_to {
             ScriptCommandRelativeTo::None => self.program.clone(),
+            ScriptCommandRelativeTo::WorkspaceRoot => {
+                // If the path is relative, convert it to the main separator.
+                let path = Utf8Path::new(&self.program);
+                if path.is_relative() {
+                    workspace_root
+                        .join(convert_rel_path_to_main_sep(path))
+                        .to_string()
+                } else {
+                    path.to_string()
+                }
+            }
             ScriptCommandRelativeTo::Target => {
                 // If the path is relative, convert it to the main separator.
                 let path = Utf8Path::new(&self.program);
@@ -954,6 +966,9 @@ pub enum ScriptCommandRelativeTo {
     /// Do not join the program with any path.
     None,
 
+    /// Join the program with the workspace root.
+    WorkspaceRoot,
+
     /// Join the program with the target directory.
     Target,
     // TODO: TargetProfile, similar to ArchiveRelativeTo
@@ -967,6 +982,7 @@ impl<'de> Deserialize<'de> for ScriptCommandRelativeTo {
         let s = String::deserialize(deserializer)?;
         match s.as_str() {
             "none" => Ok(ScriptCommandRelativeTo::None),
+            "workspace-root" => Ok(ScriptCommandRelativeTo::WorkspaceRoot),
             "target" => Ok(ScriptCommandRelativeTo::Target),
             _ => Err(serde::de::Error::unknown_variant(&s, &["none", "target"])),
         }
