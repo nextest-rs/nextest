@@ -10,7 +10,7 @@ use nextest_metadata::NextestExitCode;
 use nextest_runner::{errors::*, helpers::plural, redact::Redactor};
 use owo_colors::OwoColorize;
 use semver::Version;
-use std::{error::Error, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
+use std::{error::Error, io, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
 use swrite::{SWrite, swriteln};
 use thiserror::Error;
 use tracing::{Level, error, info};
@@ -106,6 +106,12 @@ pub enum ExpectedError {
     TargetTripleError {
         #[from]
         err: TargetTripleError,
+    },
+    #[error("remap absolute error")]
+    RemapAbsoluteError {
+        arg_name: &'static str,
+        path: Utf8PathBuf,
+        error: io::Error,
     },
     #[error("metadata materialize error")]
     MetadataMaterializeError {
@@ -413,6 +419,7 @@ impl ExpectedError {
             | Self::TestFilterBuilderError { .. }
             | Self::HostPlatformDetectError { .. }
             | Self::TargetTripleError { .. }
+            | Self::RemapAbsoluteError { .. }
             | Self::MetadataMaterializeError { .. }
             | Self::UnknownArchiveFormat { .. }
             | Self::ArchiveExtractError { .. }
@@ -742,6 +749,18 @@ impl ExpectedError {
                     error!("{err}");
                     err.source()
                 }
+            }
+            Self::RemapAbsoluteError {
+                arg_name,
+                path,
+                error,
+            } => {
+                error!(
+                    "error making {} path absolute: {}",
+                    arg_name.style(styles.bold),
+                    path.style(styles.bold),
+                );
+                Some(error as &dyn Error)
             }
             Self::MetadataMaterializeError { arg_name, err } => {
                 error!(

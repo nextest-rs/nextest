@@ -113,6 +113,33 @@ impl ReuseBuildOpts {
         output: OutputContext,
         output_writer: &mut OutputWriter,
     ) -> Result<ReuseBuildInfo> {
+        // Make the workspace-remap and target-remap options absolute. We choose
+        // not to canonicalize them here to avoid converting paths to verbatim
+        // ones on Windows. Verbatim paths are not supported by tools such as
+        // cmd.exe.
+        let workspace_remap = self
+            .workspace_remap
+            .as_ref()
+            .map(|d| {
+                camino::absolute_utf8(d).map_err(|error| ExpectedError::RemapAbsoluteError {
+                    arg_name: "workspace-remap",
+                    path: d.to_owned(),
+                    error,
+                })
+            })
+            .transpose()?;
+        let target_dir_remap = self
+            .target_dir_remap
+            .as_ref()
+            .map(|d| {
+                camino::absolute_utf8(d).map_err(|error| ExpectedError::RemapAbsoluteError {
+                    arg_name: "target-dir-remap",
+                    path: d.to_owned(),
+                    error,
+                })
+            })
+            .transpose()?;
+
         if let Some(archive_file) = &self.archive_file {
             let format = self.archive_format.to_archive_format(archive_file)?;
             // Process this archive.
@@ -143,7 +170,7 @@ impl ReuseBuildOpts {
                     reporter.report_event(event, &mut writer)?;
                     writer.flush()
                 },
-                self.workspace_remap.as_deref(),
+                workspace_remap.as_deref(),
             )
             .map_err(|err| ExpectedError::ArchiveExtractError {
                 archive_file: archive_file.clone(),
@@ -155,9 +182,11 @@ impl ReuseBuildOpts {
             .cargo_metadata
             .as_ref()
             .map(|path| {
+                // Canonicalize the workspace remap dir to ensure that it's
+                // absolute.
                 Ok(MetadataWithRemap {
                     metadata: ReusedCargoMetadata::materialize(path)?,
-                    remap: self.workspace_remap.clone(),
+                    remap: workspace_remap.clone(),
                 })
             })
             .transpose()
@@ -169,7 +198,7 @@ impl ReuseBuildOpts {
             .map(|path| {
                 Ok(MetadataWithRemap {
                     metadata: ReusedBinaryList::materialize(path)?,
-                    remap: self.target_dir_remap.clone(),
+                    remap: target_dir_remap.clone(),
                 })
             })
             .transpose()
