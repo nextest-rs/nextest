@@ -1,4 +1,4 @@
-nextest-version = "0.9.89"
+nextest-version = "0.9.98"
 experimental = ["setup-scripts"]
 
 [profile.default]
@@ -62,7 +62,7 @@ max-threads = 8
 [test-groups.unused-group]
 max-threads = 8
 
-[script.build-seed-archive]
+[scripts.setup.build-seed-archive]
 # This command builds a seed archive that's used by the integration-tests
 # package. This archive is not currently used by the older nextest-runner
 # integration framework, but that should really go away at some point.
