@@ -1982,9 +1982,9 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 
 [[package]]
 name = "newtype-uuid"
-version = "1.2.2"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8ba303c7a8f8fdee1fe1513cfd918f50f1c69bf65c91b39217bfc2b2af5c081"
+checksum = "d5825f69cf354438a53f85b959f0baa6a7ada1f4bd923f63e42c34090bf288fb"
 dependencies = [
  "uuid",
 ]
