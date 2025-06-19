@@ -53,7 +53,7 @@ datatest-stable = { version = "0.3.2", features = ["include-dir"] }
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
 derive-where = "1.5.0"
-duct = "0.13.7"
+duct = "1.0.0"
 dunce = "1.0.5"
 enable-ansi-support = "0.2.1"
 # we don't use the default formatter so we don't need default features
