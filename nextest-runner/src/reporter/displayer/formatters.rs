@@ -8,9 +8,10 @@ use crate::{
     helpers::plural,
     list::SkipCounts,
     reporter::{
-        events::{CancelReason, FinalRunStats, RunStatsFailureKind},
+        events::{CancelReason, FinalRunStats, RunStatsFailureKind, UnitKind},
         helpers::Styles,
     },
+    run_mode::NextestRunMode,
 };
 use owo_colors::OwoColorize;
 use std::{
@@ -73,15 +74,27 @@ impl fmt::Display for DisplaySlowDuration {
 }
 
 pub(super) fn write_skip_counts(
+    mode: NextestRunMode,
     skip_counts: &SkipCounts,
     default_filter: &CompiledDefaultFilter,
     styles: &Styles,
     writer: &mut dyn Write,
 ) -> io::Result<()> {
-    if skip_counts.skipped_tests > 0 || skip_counts.skipped_binaries > 0 {
+    // When running in benchmark mode, we don't display skip counts for
+    // tests that were skipped but not benchmarks.
+    let real_skipped_tests = if mode == NextestRunMode::Benchmark {
+        skip_counts
+            .skipped_tests
+            .saturating_sub(skip_counts.skipped_tests_non_benchmark)
+    } else {
+        skip_counts.skipped_tests
+    };
+
+    if real_skipped_tests > 0 || skip_counts.skipped_binaries > 0 {
         write!(writer, " (")?;
         write_skip_counts_impl(
-            skip_counts.skipped_tests,
+            mode,
+            real_skipped_tests,
             skip_counts.skipped_binaries,
             styles,
             writer,
@@ -89,7 +102,7 @@ pub(super) fn write_skip_counts(
 
         // Were all tests and binaries that were skipped, skipped due to being in the
         // default set?
-        if skip_counts.skipped_tests == skip_counts.skipped_tests_default_filter
+        if real_skipped_tests == skip_counts.skipped_tests_default_filter
             && skip_counts.skipped_binaries == skip_counts.skipped_binaries_default_filter
         {
             write!(
@@ -106,6 +119,7 @@ pub(super) fn write_skip_counts(
             {
                 write!(writer, ", including ")?;
                 write_skip_counts_impl(
+                    mode,
                     skip_counts.skipped_tests_default_filter,
                     skip_counts.skipped_binaries_default_filter,
                     styles,
@@ -125,6 +139,7 @@ pub(super) fn write_skip_counts(
 }
 
 fn write_skip_counts_impl(
+    mode: NextestRunMode,
     skipped_tests: usize,
     skipped_binaries: usize,
     styles: &Styles,
@@ -136,7 +151,7 @@ fn write_skip_counts_impl(
             writer,
             "{} {} and {} {}",
             skipped_tests.style(styles.count),
-            plural::tests_str(skipped_tests),
+            plural::tests_str(mode, skipped_tests),
             skipped_binaries.style(styles.count),
             plural::binaries_str(skipped_binaries),
         )?;
@@ -145,7 +160,7 @@ fn write_skip_counts_impl(
             writer,
             "{} {}",
             skipped_tests.style(styles.count),
-            plural::tests_str(skipped_tests),
+            plural::tests_str(mode, skipped_tests),
         )?;
     } else if skipped_binaries > 0 {
         write!(
@@ -160,6 +175,7 @@ fn write_skip_counts_impl(
 }
 
 pub(super) fn write_final_warnings(
+    mode: NextestRunMode,
     final_stats: FinalRunStats,
     cancel_status: Option<CancelReason>,
     styles: &Styles,
@@ -181,7 +197,7 @@ pub(super) fn write_final_warnings(
                     "warning".style(styles.skip),
                     not_run.style(styles.count),
                     initial_run_count.style(styles.count),
-                    plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
+                    plural::tests_plural_if(mode, initial_run_count != 1 || not_run != 1),
                     plural::were_plural_if(initial_run_count != 1 || not_run != 1),
                     CancelReason::TestFailure.to_static_str().style(styles.skip),
                     "--no-fail-fast".style(styles.count),
@@ -200,7 +216,7 @@ pub(super) fn write_final_warnings(
                     "warning".style(styles.skip),
                     not_run.style(styles.count),
                     initial_run_count.style(styles.count),
-                    plural::tests_plural_if(initial_run_count != 1 || not_run != 1),
+                    plural::tests_plural_if(mode, initial_run_count != 1 || not_run != 1),
                     plural::were_plural_if(initial_run_count != 1 || not_run != 1),
                     due_to_reason,
                 )?;
@@ -210,6 +226,34 @@ pub(super) fn write_final_warnings(
     }
 
     Ok(())
+}
+
+pub(crate) struct DisplayUnitKind {
+    mode: NextestRunMode,
+    kind: UnitKind,
+}
+
+impl DisplayUnitKind {
+    pub(crate) fn new(mode: NextestRunMode, kind: UnitKind) -> Self {
+        Self { mode, kind }
+    }
+}
+
+impl fmt::Display for DisplayUnitKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.kind {
+            UnitKind::Test => {
+                if self.mode == NextestRunMode::Benchmark {
+                    write!(f, "benchmark")
+                } else {
+                    write!(f, "test")
+                }
+            }
+            UnitKind::Script => {
+                write!(f, "script")
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -222,6 +266,7 @@ mod tests {
     fn test_write_skip_counts() {
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 1,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
@@ -229,6 +274,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 2,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 2,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
@@ -236,6 +282,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
@@ -243,6 +290,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 2,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
@@ -250,6 +298,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 1,
@@ -257,6 +306,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 2,
             skipped_binaries_default_filter: 2,
@@ -264,6 +314,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 0,
@@ -271,6 +322,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 2,
             skipped_binaries_default_filter: 0,
@@ -278,6 +330,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 1,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 1,
@@ -285,6 +338,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 2,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 2,
             skipped_binaries: 3,
             skipped_binaries_default_filter: 3,
@@ -292,6 +346,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 0,
@@ -299,6 +354,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 2,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 3,
             skipped_binaries_default_filter: 0,
@@ -306,6 +362,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 1,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 1,
@@ -313,6 +370,7 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 3,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 2,
             skipped_binaries: 1,
             skipped_binaries_default_filter: 0,
@@ -320,6 +378,49 @@ mod tests {
 
         insta::assert_snapshot!(skip_counts_str(&SkipCounts {
             skipped_tests: 0,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests_default_filter: 0,
+            skipped_binaries: 0,
+            skipped_binaries_default_filter: 0,
+        }, false), @"");
+
+        // Benchmark mode skip counts.
+
+        insta::assert_snapshot!(skip_counts_str_benchmark(&SkipCounts {
+            skipped_tests: 3,
+            skipped_tests_non_benchmark: 3,
+            skipped_tests_default_filter: 0,
+            skipped_binaries: 0,
+            skipped_binaries_default_filter: 0,
+        }, true), @"");
+
+        insta::assert_snapshot!(skip_counts_str_benchmark(&SkipCounts {
+            skipped_tests: 3,
+            skipped_tests_non_benchmark: 3,
+            skipped_tests_default_filter: 0,
+            skipped_binaries: 1,
+            skipped_binaries_default_filter: 0,
+        }, true), @" (1 binary skipped)");
+
+        insta::assert_snapshot!(skip_counts_str_benchmark(&SkipCounts {
+            skipped_tests: 3,
+            skipped_tests_non_benchmark: 1,
+            skipped_tests_default_filter: 1,
+            skipped_binaries: 0,
+            skipped_binaries_default_filter: 0,
+        }, true), @" (2 benchmarks skipped, including 1 benchmark via default-filter in profile.my-profile.overrides)");
+
+        insta::assert_snapshot!(skip_counts_str_benchmark(&SkipCounts {
+            skipped_tests: 3,
+            skipped_tests_non_benchmark: 0,
+            skipped_tests_default_filter: 2,
+            skipped_binaries: 1,
+            skipped_binaries_default_filter: 0,
+        }, true), @" (3 benchmarks and 1 binary skipped, including 2 benchmarks via default-filter in profile.my-profile.overrides)");
+
+        insta::assert_snapshot!(skip_counts_str_benchmark(&SkipCounts {
+            skipped_tests: 0,
+            skipped_tests_non_benchmark: 0,
             skipped_tests_default_filter: 0,
             skipped_binaries: 0,
             skipped_binaries_default_filter: 0,
@@ -327,8 +428,21 @@ mod tests {
     }
 
     fn skip_counts_str(skip_counts: &SkipCounts, override_section: bool) -> String {
+        skip_counts_str_imp(NextestRunMode::Test, skip_counts, override_section)
+    }
+
+    fn skip_counts_str_benchmark(skip_counts: &SkipCounts, override_section: bool) -> String {
+        skip_counts_str_imp(NextestRunMode::Benchmark, skip_counts, override_section)
+    }
+
+    fn skip_counts_str_imp(
+        mode: NextestRunMode,
+        skip_counts: &SkipCounts,
+        override_section: bool,
+    ) -> String {
         let mut buf = Vec::new();
         write_skip_counts(
+            mode,
             skip_counts,
             &CompiledDefaultFilter {
                 expr: CompiledExpr::ALL,
@@ -407,7 +521,14 @@ mod tests {
     fn final_warnings_for(stats: FinalRunStats, cancel_status: Option<CancelReason>) -> String {
         let mut buf: Vec<u8> = Vec::new();
         let styles = Styles::default();
-        write_final_warnings(stats, cancel_status, &styles, &mut buf).unwrap();
+        write_final_warnings(
+            NextestRunMode::Test,
+            stats,
+            cancel_status,
+            &styles,
+            &mut buf,
+        )
+        .unwrap();
         String::from_utf8(buf).unwrap()
     }
 }

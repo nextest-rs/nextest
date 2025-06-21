@@ -14,6 +14,7 @@ use crate::{
     indenter::indented,
     list::{BinaryList, OutputFormat, RustBuildMeta, Styles, TestListState},
     reuse_build::PathMapper,
+    run_mode::NextestRunMode,
     target_runner::{PlatformRunner, TargetRunner},
     test_command::{LocalExecuteContext, TestCommand, TestCommandPhase},
     test_filter::{BinaryMismatchReason, FilterBinaryMatch, FilterBound, TestFilterBuilder},
@@ -42,7 +43,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 use tokio::runtime::Runtime;
-use tracing::debug;
+use tracing::{debug, trace};
 
 /// A Rust test binary built by Cargo. This artifact hasn't been run yet so there's no information
 /// about the tests within it.
@@ -201,6 +202,13 @@ pub struct SkipCounts {
     /// The number of skipped tests.
     pub skipped_tests: usize,
 
+    /// The number of tests skipped due to not being benchmarks.
+    ///
+    /// This is the highest-priority reason for skipping tests.
+    ///
+    /// This is non-zero only when running in benchmark mode.
+    pub skipped_tests_non_benchmark: usize,
+
     /// The number of tests skipped due to not being in the default set.
     pub skipped_tests_default_filter: usize,
 
@@ -215,6 +223,7 @@ pub struct SkipCounts {
 #[derive(Clone, Debug)]
 pub struct TestList<'g> {
     test_count: usize,
+    mode: NextestRunMode,
     rust_build_meta: RustBuildMeta<TestListState>,
     rust_suites: BTreeMap<RustBinaryId, RustTestSuite<'g>>,
     workspace_root: Utf8PathBuf,
@@ -312,6 +321,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites,
+            mode: filter.mode(),
             workspace_root,
             env,
             rust_build_meta,
@@ -370,6 +380,7 @@ impl<'g> TestList<'g> {
 
         Ok(Self {
             rust_suites,
+            mode: filter.mode(),
             workspace_root,
             env,
             rust_build_meta,
@@ -384,6 +395,11 @@ impl<'g> TestList<'g> {
         self.test_count
     }
 
+    /// Returns the mode nextest is running it.
+    pub fn mode(&self) -> NextestRunMode {
+        self.mode
+    }
+
     /// Returns the Rust build-related metadata for this test list.
     pub fn rust_build_meta(&self) -> &RustBuildMeta<TestListState> {
         &self.rust_build_meta
@@ -392,10 +408,19 @@ impl<'g> TestList<'g> {
     /// Returns the total number of skipped tests.
     pub fn skip_counts(&self) -> &SkipCounts {
         self.skip_counts.get_or_init(|| {
+            let mut skipped_tests_non_benchmark = 0;
             let mut skipped_tests_default_filter = 0;
             let skipped_tests = self
                 .iter_tests()
                 .filter(|instance| match instance.test_info.filter_match {
+                    FilterMatch::Mismatch {
+                        reason: MismatchReason::NotBenchmark,
+                    } => {
+                        // If we're running in benchmark mode, we track but
+                        // don't show skip counts for non-benchmark tests.
+                        skipped_tests_non_benchmark += 1;
+                        true
+                    }
                     FilterMatch::Mismatch {
                         reason: MismatchReason::DefaultFilter,
                     } => {
@@ -425,6 +450,7 @@ impl<'g> TestList<'g> {
 
             SkipCounts {
                 skipped_tests,
+                skipped_tests_non_benchmark,
                 skipped_tests_default_filter,
                 skipped_binaries,
                 skipped_binaries_default_filter,
@@ -548,6 +574,7 @@ impl<'g> TestList<'g> {
     pub(crate) fn empty() -> Self {
         Self {
             test_count: 0,
+            mode: NextestRunMode::Test,
             workspace_root: Utf8PathBuf::new(),
             rust_build_meta: RustBuildMeta::empty(),
             env: EnvironmentMap::empty(),
@@ -605,18 +632,18 @@ impl<'g> TestList<'g> {
         // based on one doesn't affect the other.
         let mut non_ignored_filter = filter.build();
         for (test_name, kind) in Self::parse(&test_binary.binary_id, non_ignored.as_ref())? {
+            let filter_match =
+                non_ignored_filter.filter_match(&test_binary, test_name, &kind, ecx, bound, false);
+            trace!(
+                "test binary {}: test {} ({kind:?}) matches non-ignored filter: {filter_match:?}",
+                test_binary.binary_id, test_name,
+            );
             test_cases.insert(
                 test_name.into(),
                 RustTestCaseSummary {
                     kind: Some(kind),
                     ignored: false,
-                    filter_match: non_ignored_filter.filter_match(
-                        &test_binary,
-                        test_name,
-                        ecx,
-                        bound,
-                        false,
-                    ),
+                    filter_match,
                 },
             );
         }
@@ -627,18 +654,18 @@ impl<'g> TestList<'g> {
             // * just ignored tests if --ignored is passed in
             // * all tests, both ignored and non-ignored, if --ignored is not passed in
             // Adding ignored tests after non-ignored ones makes everything resolve correctly.
+            let filter_match =
+                ignored_filter.filter_match(&test_binary, test_name, &kind, ecx, bound, true);
+            trace!(
+                "test binary {}: test {} ({kind:?}) matches ignored filter: {filter_match:?}",
+                test_binary.binary_id, test_name,
+            );
             test_cases.insert(
                 test_name.into(),
                 RustTestCaseSummary {
                     kind: Some(kind),
                     ignored: true,
-                    filter_match: ignored_filter.filter_match(
-                        &test_binary,
-                        test_name,
-                        ecx,
-                        bound,
-                        true,
-                    ),
+                    filter_match,
                 },
             );
         }
@@ -1127,6 +1154,15 @@ impl<'a> TestInstance<'a> {
         if self.test_info.ignored {
             cli.push("--ignored");
         }
+        match test_list.mode() {
+            NextestRunMode::Benchmark => cli.push("--bench"),
+            NextestRunMode::Test => {
+                // We don't pass in additional arguments like "--test" here
+                // because our ad-hoc custom harness protocol doesn't document
+                // that as a requirement. This doesn't seem to be an issue in
+                // practice, though.
+            }
+        }
         cli.extend(extra_args.iter().map(String::as_str));
 
         let lctx = LocalExecuteContext {
@@ -1301,6 +1337,7 @@ mod tests {
         let cx = ParseContext::new(&PACKAGE_GRAPH_FIXTURE);
 
         let test_filter = TestFilterBuilder::new(
+            NextestRunMode::Test,
             RunIgnored::Default,
             None,
             TestFilterPatterns::default(),
@@ -1410,7 +1447,7 @@ mod tests {
                                 filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                             },
                             "tests::baz::test_ignored".to_owned() => RustTestCaseSummary {
-                                kind: None,
+                                kind: Some(RustTestKind::TEST),
                                 ignored: true,
                                 filter_match: FilterMatch::Mismatch { reason: MismatchReason::Ignored },
                             },
@@ -1539,6 +1576,7 @@ mod tests {
                       }
                     },
                     "tests::baz::test_ignored": {
+                      "kind": "test",
                       "ignored": true,
                       "filter-match": {
                         "status": "mismatch",
