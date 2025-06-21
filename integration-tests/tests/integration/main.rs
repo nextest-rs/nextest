@@ -968,6 +968,30 @@ fn run_archive(archive_file: &Utf8Path) -> (TempProject, Utf8PathBuf) {
 }
 
 #[test]
+fn test_bench() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "bench",
+            // Set the dev profile here to avoid a rebuild.
+            "--cargo-profile",
+            "dev",
+            "--no-capture",
+        ])
+        .unchecked(true)
+        .output();
+    assert_eq!(
+        output.exit_status.code(),
+        Some(0),
+        "correct exit code for command\n{output}",
+    );
+    check_run_output(&output.stderr, RunProperty::Benchmarks as u64);
+}
+
+#[test]
 fn test_show_config_test_groups() {
     set_env_vars();
     let p = TempProject::new().unwrap();

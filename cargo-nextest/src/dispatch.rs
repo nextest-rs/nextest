@@ -24,6 +24,7 @@ use nextest_runner::{
     },
     double_spawn::DoubleSpawnInfo,
     errors::{TargetTripleError, WriteTestListError},
+    helpers::plural,
     input::InputHandlerKind,
     list::{
         BinaryList, OutputFormat, RustTestArtifact, SerializableFormat, TestExecuteContext,
@@ -34,10 +35,11 @@ use nextest_runner::{
     redact::Redactor,
     reporter::{
         FinalStatusLevel, ReporterBuilder, StatusLevel, TestOutputDisplay, TestOutputErrorSlice,
-        events::{FinalRunStats, RunStatsFailureKind},
+        events::{FinalRunStats, RunStats, RunStatsFailureKind},
         highlight_end, structured,
     },
     reuse_build::{ArchiveReporter, PathMapper, ReuseBuildInfo, archive_to_file},
+    run_mode::NextestRunMode,
     runner::{TestRunnerBuilder, configure_handle_inheritance},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
@@ -195,6 +197,24 @@ impl AppOpts {
                     output_writer,
                 )?;
                 app.exec_archive(&archive_file, archive_format, zstd_level, output_writer)?;
+                Ok(0)
+            }
+            Command::Bench(bench_opts) => {
+                let base = BaseApp::new(
+                    output,
+                    ReuseBuildOpts::default(),
+                    bench_opts.cargo_options,
+                    self.common.config_opts,
+                    self.common.manifest_path,
+                    output_writer,
+                )?;
+                let app = App::new(base, bench_opts.build_filter)?;
+                app.exec_bench(
+                    bench_opts.runner_opts,
+                    bench_opts.reporter_opts,
+                    cli_args,
+                    output_writer,
+                )?;
                 Ok(0)
             }
             Command::ShowConfig { command } => command.exec(
@@ -397,6 +417,8 @@ enum Command {
         zstd_level: i32,
         // ReuseBuildOpts, while it can theoretically work, is way too confusing so skip it.
     },
+    /// Run benchmarks
+    Bench(BenchOpts),
     /// Show information about nextest's configuration in this workspace.
     ///
     /// This command shows configuration information about nextest, including overrides applied to
@@ -486,6 +508,31 @@ struct RunOpts {
 
     #[clap(flatten)]
     reuse_build: ReuseBuildOpts,
+}
+
+#[derive(Debug, Args)]
+struct BenchOpts {
+    #[clap(flatten)]
+    cargo_options: CargoOptions,
+
+    #[clap(flatten)]
+    build_filter: TestBuildFilter,
+
+    #[clap(flatten)]
+    runner_opts: BenchRunnerOpts,
+
+    /// Run benchmarks serially and do not capture output (currently always enabled).
+    #[clap(
+        long,
+        name = "no-capture",
+        alias = "nocapture",
+        help_heading = "Runner options",
+        display_order = 100
+    )]
+    no_capture: bool,
+
+    #[clap(flatten)]
+    reporter_opts: BenchReporterOpts,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -649,13 +696,18 @@ impl TestBuildFilter {
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }
 
-    fn make_test_filter_builder(&self, filter_exprs: Vec<Filterset>) -> Result<TestFilterBuilder> {
+    fn make_test_filter_builder(
+        &self,
+        mode: NextestRunMode,
+        filter_exprs: Vec<Filterset>,
+    ) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
         let mut patterns = TestFilterPatterns::new(self.pre_double_dash_filters.clone());
         self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
 
         Ok(TestFilterBuilder::new(
+            mode,
             run_ignored.unwrap_or_default(),
             self.partition.clone(),
             patterns,
@@ -780,6 +832,7 @@ impl From<RunIgnoredOpt> for RunIgnored {
 impl CargoOptions {
     fn compute_binary_list(
         &self,
+        cargo_command: &str,
         graph: &PackageGraph,
         manifest_path: Option<&Utf8Path>,
         output: OutputContext,
@@ -787,7 +840,7 @@ impl CargoOptions {
     ) -> Result<BinaryList> {
         // Don't use the manifest path from the graph to ensure that if the user cd's into a
         // particular crate and runs cargo nextest, then it behaves identically to cargo test.
-        let mut cargo_cli = CargoCli::new("test", manifest_path, output);
+        let mut cargo_cli = CargoCli::new(cargo_command, manifest_path, output);
 
         // Only build tests in the cargo test invocation, do not run them.
         cargo_cli.add_args(["--no-run", "--message-format", "json-render-diagnostics"]);
@@ -947,6 +1000,106 @@ fn no_run_no_capture_reasons(no_run: bool, no_capture: bool) -> Option<&'static 
         (true, false) => Some("--no-run is specified"),
         (false, true) => Some("--no-capture is specified"),
         (false, false) => None,
+    }
+}
+
+/// Bench runner options.
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "Runner options")]
+pub struct BenchRunnerOpts {
+    /// Compile, but don't run benchmarks.
+    #[arg(long, name = "no-run")]
+    no_run: bool,
+
+    /// Cancel benchmark run on the first failure.
+    #[arg(
+        long,
+        visible_alias = "ff",
+        name = "fail-fast",
+        // TODO: It would be nice to warn rather than error if fail-fast is used
+        // with no-run, so that this matches the other options like
+        // test-threads. But there seem to be issues with that: clap 4.5 doesn't
+        // appear to like `Option<bool>` very much. With `ArgAction::SetTrue` it
+        // always sets the value to false or true rather than leaving it unset.
+        conflicts_with = "no-run"
+    )]
+    fail_fast: bool,
+
+    /// Run all benchmarks regardless of failure.
+    #[arg(
+        long,
+        visible_alias = "nff",
+        name = "no-fail-fast",
+        conflicts_with = "no-run",
+        overrides_with = "fail-fast"
+    )]
+    no_fail_fast: bool,
+
+    /// Number of benchmarks that can fail before exiting run [possible
+    /// values: integer or "all"]
+    #[arg(
+        long,
+        name = "max-fail",
+        value_name = "N",
+        conflicts_with_all = &["no-run", "fail-fast", "no-fail-fast"],
+    )]
+    max_fail: Option<MaxFail>,
+
+    /// Behavior if there are no benchmarks to run [default: fail]
+    #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
+    no_tests: Option<NoTestsBehavior>,
+}
+
+impl BenchRunnerOpts {
+    fn to_builder(&self, cap_strat: CaptureStrategy) -> Option<TestRunnerBuilder> {
+        if self.no_tests.is_some() && self.no_run {
+            warn!("ignoring --no-tests because --no-run is specified");
+        }
+
+        // ---
+
+        if self.no_run {
+            return None;
+        }
+        let mut builder = TestRunnerBuilder::default();
+        builder.set_capture_strategy(cap_strat);
+        if let Some(max_fail) = self.max_fail {
+            builder.set_max_fail(max_fail);
+            debug!(max_fail = ?max_fail, "set max fail");
+        } else if self.no_fail_fast {
+            builder.set_max_fail(MaxFail::from_fail_fast(false));
+            debug!("set max fail via from_fail_fast(false)");
+        } else if self.fail_fast {
+            builder.set_max_fail(MaxFail::from_fail_fast(true));
+            debug!("set max fail via from_fail_fast(true)");
+        }
+
+        // Benchmarks always run serially and use 1 test thread.
+        builder.set_test_threads(TestThreads::Count(1));
+
+        Some(builder)
+    }
+}
+
+/// Bench runner options.
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "Runner options")]
+pub struct BenchReporterOpts {
+    /// Disable handling of input keys from the terminal.
+    ///
+    /// By default, when running a terminal, nextest accepts the `t` key to dump
+    /// test information. This flag disables that behavior.
+    #[arg(long, env = "NEXTEST_NO_INPUT_HANDLER", value_parser = BoolishValueParser::new())]
+    no_input_handler: bool,
+}
+
+impl BenchReporterOpts {
+    fn to_builder(&self, should_colorize: bool) -> ReporterBuilder {
+        let mut builder = ReporterBuilder::default();
+        builder.set_no_capture(true);
+        builder.set_colorize(should_colorize);
+        builder.set_hide_progress_bar(true);
+        builder
     }
 }
 
@@ -1277,7 +1430,11 @@ impl BaseApp {
         })
     }
 
-    fn load_config(&self, pcx: &ParseContext<'_>) -> Result<(VersionOnlyConfig, NextestConfig)> {
+    fn load_config(
+        &self,
+        pcx: &ParseContext<'_>,
+        required_experimental: &BTreeSet<ConfigExperimental>,
+    ) -> Result<(VersionOnlyConfig, NextestConfig)> {
         // Load the version-only config first to avoid incompatibilities with parsing the rest of
         // the config.
         let version_only_config = self
@@ -1285,7 +1442,24 @@ impl BaseApp {
             .make_version_only_config(&self.workspace_root)?;
         self.check_version_config_initial(version_only_config.nextest_version())?;
 
-        let experimental = version_only_config.experimental();
+        let mut experimental = ConfigExperimental::from_env();
+        experimental.extend(version_only_config.experimental());
+        let missing = required_experimental
+            .difference(&experimental)
+            .copied()
+            .collect::<Vec<_>>();
+
+        if !missing.is_empty() {
+            let config_file = version_only_config
+                .config_file()
+                .unwrap_or_else(|| Utf8Path::new(".config/nextest.toml"))
+                .to_owned();
+            return Err(ExpectedError::ConfigExperimentalFeaturesNotEnabled {
+                config_file,
+                missing,
+            });
+        }
+
         if !experimental.is_empty() {
             info!(
                 "experimental features enabled: {}",
@@ -1472,12 +1646,12 @@ impl BaseApp {
     ) -> Result<()> {
         // Do format detection first so we fail immediately.
         let format = format.to_archive_format(output_file)?;
-        let binary_list = self.build_binary_list()?;
+        let binary_list = self.build_binary_list("test")?;
         let path_mapper = PathMapper::noop();
 
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
         let pcx = ParseContext::new(self.graph());
-        let (_, config) = self.load_config(&pcx)?;
+        let (_, config) = self.load_config(&pcx, &BTreeSet::new())?;
         let profile = self
             .load_profile(&config)?
             .apply_build_platforms(&build_platforms);
@@ -1526,10 +1700,11 @@ impl BaseApp {
         Ok(())
     }
 
-    fn build_binary_list(&self) -> Result<Arc<BinaryList>> {
+    fn build_binary_list(&self, cargo_command: &str) -> Result<Arc<BinaryList>> {
         let binary_list = match self.reuse_build.binaries_metadata() {
             Some(m) => m.binary_list.clone(),
             None => Arc::new(self.cargo_opts.compute_binary_list(
+                cargo_command,
                 self.graph(),
                 self.manifest_path.as_deref(),
                 self.output,
@@ -1648,12 +1823,14 @@ impl App {
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
 
-        let (version_only_config, config) = self.base.load_config(&pcx)?;
+        let (version_only_config, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self
+            .build_filter
+            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
 
-        let binary_list = self.base.build_binary_list()?;
+        let binary_list = self.base.build_binary_list("test")?;
 
         match list_type {
             ListType::BinariesOnly => {
@@ -1709,7 +1886,7 @@ impl App {
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
-        let (_, config) = self.base.load_config(&pcx)?;
+        let (_, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
 
         // Validate test groups before doing any other work.
@@ -1722,9 +1899,11 @@ impl App {
         let settings = ShowTestGroupSettings { mode, show_default };
 
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self
+            .build_filter
+            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
 
-        let binary_list = self.base.build_binary_list()?;
+        let binary_list = self.base.build_binary_list("test")?;
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
 
         let double_spawn = self.base.load_double_spawn();
@@ -1764,7 +1943,7 @@ impl App {
         output_writer: &mut OutputWriter,
     ) -> Result<()> {
         let pcx = ParseContext::new(self.base.graph());
-        let (version_only_config, config) = self.base.load_config(&pcx)?;
+        let (version_only_config, config) = self.base.load_config(&pcx, &BTreeSet::new())?;
         let profile = self.base.load_profile(&config)?;
 
         // Construct this here so that errors are reported before the build step.
@@ -1819,9 +1998,11 @@ impl App {
         reporter_builder.set_verbose(self.base.output.verbose);
 
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self
+            .build_filter
+            .make_test_filter_builder(NextestRunMode::Test, filter_exprs)?;
 
-        let binary_list = self.base.build_binary_list()?;
+        let binary_list = self.base.build_binary_list("test")?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
         let double_spawn = self.base.load_double_spawn();
         let target_runner = self.base.load_runner(build_platforms);
@@ -1879,25 +2060,138 @@ impl App {
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
-        match run_stats.summarize_final() {
-            FinalRunStats::Success => Ok(()),
-            FinalRunStats::NoTestsRun => match runner_opts.no_tests {
-                Some(NoTestsBehavior::Pass) => Ok(()),
-                Some(NoTestsBehavior::Warn) => {
-                    warn!("no tests to run");
-                    Ok(())
-                }
-                Some(NoTestsBehavior::Fail) => Err(ExpectedError::NoTestsRun { is_default: false }),
-                None => Err(ExpectedError::NoTestsRun { is_default: true }),
-            },
-            FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
-            | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
-                Err(ExpectedError::setup_script_failed())
+        final_result(NextestRunMode::Test, run_stats, runner_opts.no_tests)
+    }
+
+    fn exec_bench(
+        &self,
+        runner_opts: BenchRunnerOpts,
+        reporter_opts: BenchReporterOpts,
+        cli_args: Vec<String>,
+        output_writer: &mut OutputWriter,
+    ) -> Result<()> {
+        let pcx = ParseContext::new(self.base.graph());
+        let (version_only_config, config) = self.base.load_config(
+            &pcx,
+            &[ConfigExperimental::Benchmarks].into_iter().collect(),
+        )?;
+        let profile = self.base.load_profile(&config)?;
+
+        // Construct this here so that errors are reported before the build step.
+        let structured_reporter = structured::StructuredReporter::new();
+        // TODO: support message format for benchmarks.
+        // TODO: support capture strategy for benchmarks?
+        let cap_strat = CaptureStrategy::None;
+
+        let should_colorize = self
+            .base
+            .output
+            .color
+            .should_colorize(supports_color::Stream::Stderr);
+
+        // Make the runner and reporter builders. Do them now so warnings are
+        // emitted before we start doing the build.
+        let runner_builder = runner_opts.to_builder(cap_strat);
+        let mut reporter_builder = reporter_opts.to_builder(should_colorize);
+        reporter_builder.set_verbose(self.base.output.verbose);
+
+        let filter_exprs = self.build_filtering_expressions(&pcx)?;
+        let test_filter_builder = self
+            .build_filter
+            .make_test_filter_builder(NextestRunMode::Benchmark, filter_exprs)?;
+
+        let binary_list = self.base.build_binary_list("bench")?;
+        let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
+        let double_spawn = self.base.load_double_spawn();
+        let target_runner = self.base.load_runner(build_platforms);
+
+        let profile = profile.apply_build_platforms(build_platforms);
+        let ctx = TestExecuteContext {
+            profile_name: profile.name(),
+            double_spawn,
+            target_runner,
+        };
+
+        let test_list = self.build_test_list(&ctx, binary_list, test_filter_builder, &profile)?;
+
+        let output = output_writer.reporter_output();
+
+        let signal_handler = SignalHandlerKind::Standard;
+        let input_handler = if reporter_opts.no_input_handler {
+            InputHandlerKind::Noop
+        } else {
+            // This means that the input handler determines whether it should be
+            // enabled.
+            InputHandlerKind::Standard
+        };
+
+        // Make the runner.
+        let Some(runner_builder) = runner_builder else {
+            // This means --no-run was passed in. Exit.
+            return Ok(());
+        };
+        let runner = runner_builder.build(
+            &test_list,
+            &profile,
+            cli_args,
+            signal_handler,
+            input_handler,
+            double_spawn.clone(),
+            target_runner.clone(),
+        )?;
+
+        // Make the reporter.
+        let mut reporter = reporter_builder.build(
+            &test_list,
+            &profile,
+            &self.base.cargo_configs,
+            output,
+            structured_reporter,
+        );
+
+        // TODO: no_capture is always true for benchmarks for now.
+        configure_handle_inheritance(true)?;
+        let run_stats = runner.try_execute(|event| {
+            // Write and flush the event.
+            reporter.report_event(event)
+        })?;
+        reporter.finish();
+        self.base
+            .check_version_config_final(version_only_config.nextest_version())?;
+
+        final_result(NextestRunMode::Benchmark, run_stats, runner_opts.no_tests)
+    }
+}
+
+fn final_result(
+    mode: NextestRunMode,
+    run_stats: RunStats,
+    no_tests: Option<NoTestsBehavior>,
+) -> Result<(), ExpectedError> {
+    match run_stats.summarize_final() {
+        FinalRunStats::Success => Ok(()),
+        FinalRunStats::NoTestsRun => match no_tests {
+            Some(NoTestsBehavior::Pass) => Ok(()),
+            Some(NoTestsBehavior::Warn) => {
+                warn!("no {} to run", plural::tests_plural(mode));
+                Ok(())
             }
-            FinalRunStats::Cancelled(RunStatsFailureKind::Test { .. })
-            | FinalRunStats::Failed(RunStatsFailureKind::Test { .. }) => {
-                Err(ExpectedError::test_run_failed())
-            }
+            Some(NoTestsBehavior::Fail) => Err(ExpectedError::NoTestsRun {
+                mode,
+                is_default: false,
+            }),
+            None => Err(ExpectedError::NoTestsRun {
+                mode,
+                is_default: true,
+            }),
+        },
+        FinalRunStats::Cancelled(RunStatsFailureKind::SetupScript)
+        | FinalRunStats::Failed(RunStatsFailureKind::SetupScript) => {
+            Err(ExpectedError::setup_script_failed())
+        }
+        FinalRunStats::Cancelled(RunStatsFailureKind::Test { .. })
+        | FinalRunStats::Failed(RunStatsFailureKind::Test { .. }) => {
+            Err(ExpectedError::test_run_failed())
         }
     }
 }
@@ -2735,7 +3029,8 @@ mod tests {
         fn get_test_filter_builder(cmd: &str) -> Result<TestFilterBuilder> {
             let app = TestCli::try_parse_from(shell_words::split(cmd).expect("valid command line"))
                 .unwrap_or_else(|_| panic!("{cmd} should have successfully parsed"));
-            app.build_filter.make_test_filter_builder(vec![])
+            app.build_filter
+                .make_test_filter_builder(NextestRunMode::Test, vec![])
         }
 
         let valid = &[
@@ -2829,9 +3124,14 @@ mod tests {
             let builder =
                 get_test_filter_builder(args).unwrap_or_else(|_| panic!("failed to parse {args}"));
 
-            let builder2 =
-                TestFilterBuilder::new(RunIgnored::Default, None, patterns.clone(), Vec::new())
-                    .unwrap_or_else(|_| panic!("failed to build TestFilterBuilder"));
+            let builder2 = TestFilterBuilder::new(
+                NextestRunMode::Test,
+                RunIgnored::Default,
+                None,
+                patterns.clone(),
+                Vec::new(),
+            )
+            .unwrap_or_else(|_| panic!("failed to build TestFilterBuilder"));
 
             assert_eq!(builder, builder2, "{args} matches expected");
         }
