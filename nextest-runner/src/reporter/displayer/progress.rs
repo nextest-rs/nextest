@@ -1,14 +1,19 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::reporter::{displayer::formatters::DisplayBracketedHhMmSs, events::*, helpers::Styles};
+use crate::{
+    cargo_config::{CargoConfigs, DiscoveredConfig},
+    reporter::{displayer::formatters::DisplayBracketedHhMmSs, events::*, helpers::Styles},
+};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use owo_colors::OwoColorize;
 use std::{
-    io::{self, Write},
+    env, fmt,
+    io::{self, IsTerminal, Write},
     time::Duration,
 };
 use swrite::{SWrite, swrite};
+use tracing::debug;
 
 #[derive(Debug)]
 pub(super) struct ProgressBarState {
@@ -161,6 +166,189 @@ impl ProgressBarState {
 
     fn should_hide(&self) -> bool {
         self.hidden_no_capture || self.hidden_run_paused || self.hidden_info_response
+    }
+}
+
+/// OSC 9 terminal progress reporting.
+pub(super) struct TerminalProgress {}
+
+impl TerminalProgress {
+    const ENV: &str = "CARGO_TERM_PROGRESS_TERM_INTEGRATION";
+
+    pub(super) fn new(configs: &CargoConfigs, stream: &dyn IsTerminal) -> Option<Self> {
+        // See whether terminal integration is enabled in Cargo.
+        for config in configs.discovered_configs() {
+            match config {
+                DiscoveredConfig::CliOption { config, source } => {
+                    if let Some(v) = config.term.progress.term_integration {
+                        if v {
+                            debug!("enabling terminal progress reporting based on {source:?}");
+                            return Some(Self {});
+                        } else {
+                            debug!("disabling terminal progress reporting based on {source:?}");
+                            return None;
+                        }
+                    }
+                }
+                DiscoveredConfig::Env => {
+                    if let Some(v) = env::var_os(Self::ENV) {
+                        if v == "true" {
+                            debug!(
+                                "enabling terminal progress reporting based on \
+                                 CARGO_TERM_PROGRESS_TERM_INTEGRATION environment variable"
+                            );
+                            return Some(Self {});
+                        } else if v == "false" {
+                            debug!(
+                                "disabling terminal progress reporting based on \
+                                 CARGO_TERM_PROGRESS_TERM_INTEGRATION environment variable"
+                            );
+                            return None;
+                        } else {
+                            debug!(
+                                "invalid value for CARGO_TERM_PROGRESS_TERM_INTEGRATION \
+                                 environment variable: {v:?}, ignoring"
+                            );
+                        }
+                    }
+                }
+                DiscoveredConfig::File { config, source } => {
+                    if let Some(v) = config.term.progress.term_integration {
+                        if v {
+                            debug!("enabling terminal progress reporting based on {source:?}");
+                            return Some(Self {});
+                        } else {
+                            debug!("disabling terminal progress reporting based on {source:?}");
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+
+        supports_osc_9_4(stream).then_some(TerminalProgress {})
+    }
+
+    pub(super) fn update_progress(
+        &self,
+        event: &TestEvent<'_>,
+        writer: &mut dyn Write,
+    ) -> Result<(), io::Error> {
+        let value = match &event.kind {
+            TestEventKind::RunStarted { .. }
+            | TestEventKind::SetupScriptStarted { .. }
+            | TestEventKind::SetupScriptSlow { .. }
+            | TestEventKind::SetupScriptFinished { .. } => TerminalProgressValue::None,
+            TestEventKind::TestStarted {
+                current_stats,
+                cancel_state,
+                ..
+            }
+            | TestEventKind::TestFinished {
+                current_stats,
+                cancel_state,
+                ..
+            } => {
+                let percentage = (current_stats.finished_count as f64
+                    / current_stats.initial_run_count as f64)
+                    * 100.0;
+                if current_stats.has_failures() || cancel_state.is_some() {
+                    TerminalProgressValue::Error(percentage)
+                } else {
+                    TerminalProgressValue::Value(percentage)
+                }
+            }
+            TestEventKind::TestSlow { .. }
+            | TestEventKind::TestAttemptFailedWillRetry { .. }
+            | TestEventKind::TestRetryStarted { .. }
+            | TestEventKind::TestSkipped { .. }
+            | TestEventKind::InfoStarted { .. }
+            | TestEventKind::InfoResponse { .. }
+            | TestEventKind::InfoFinished { .. }
+            | TestEventKind::InputEnter { .. } => TerminalProgressValue::None,
+            TestEventKind::RunBeginCancel { current_stats, .. }
+            | TestEventKind::RunBeginKill { current_stats, .. } => {
+                // In this case, always indicate an error.
+                let percentage = (current_stats.finished_count as f64
+                    / current_stats.initial_run_count as f64)
+                    * 100.0;
+                TerminalProgressValue::Error(percentage)
+            }
+            TestEventKind::RunPaused { .. }
+            | TestEventKind::RunContinued { .. }
+            | TestEventKind::RunFinished { .. } => {
+                // Reset the terminal state to nothing, since nextest is giving
+                // up control of the terminal at this point.
+                TerminalProgressValue::Remove
+            }
+        };
+
+        write!(writer, "{value}")
+    }
+}
+
+/// Determines whether the terminal supports ANSI OSC 9;4.
+fn supports_osc_9_4(stream: &dyn IsTerminal) -> bool {
+    if !stream.is_terminal() {
+        debug!(
+            "autodetect terminal progress reporting: disabling since \
+             pass in stream (usually stderr) is not a terminal"
+        );
+        return false;
+    }
+    if std::env::var("WT_SESSION").is_ok() {
+        debug!("autodetect terminal progress reporting: enabling since WT_SESSION is set");
+        return true;
+    };
+    if std::env::var("ConEmuANSI").ok() == Some("ON".into()) {
+        debug!("autodetect terminal progress reporting: enabling since ConEmuANSI is ON");
+        return true;
+    }
+    if std::env::var("TERM_PROGRAM").ok() == Some("WezTerm".into()) {
+        debug!("autodetect terminal progress reporting: enabling since TERM_PROGRAM is WezTerm");
+        return true;
+    }
+
+    false
+}
+
+/// A progress status value printable as an ANSI OSC 9;4 escape code.
+///
+/// Adapted from Cargo 1.87.
+#[derive(PartialEq, Debug)]
+enum TerminalProgressValue {
+    /// No output.
+    None,
+    /// Remove progress.
+    Remove,
+    /// Progress value (0-100).
+    Value(f64),
+    /// Indeterminate state (no bar, just animation)
+    ///
+    /// We don't use this yet, but might in the future.
+    #[expect(dead_code)]
+    Indeterminate,
+    /// Progress value in an error state (0-100).
+    Error(f64),
+}
+
+impl fmt::Display for TerminalProgressValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // From https://conemu.github.io/en/AnsiEscapeCodes.html#ConEmu_specific_OSC
+        // ESC ] 9 ; 4 ; st ; pr ST
+        // When st is 0: remove progress.
+        // When st is 1: set progress value to pr (number, 0-100).
+        // When st is 2: set error state in taskbar, pr is optional.
+        // When st is 3: set indeterminate state, pr is ignored.
+        // When st is 4: set paused state, pr is optional.
+        let (state, progress) = match self {
+            Self::None => return Ok(()), // No output
+            Self::Remove => (0, 0.0),
+            Self::Value(v) => (1, *v),
+            Self::Indeterminate => (3, 0.0),
+            Self::Error(v) => (2, *v),
+        };
+        write!(f, "\x1b]9;4;{state};{progress:.0}\x1b\\")
     }
 }
 

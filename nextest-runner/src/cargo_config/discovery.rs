@@ -425,6 +425,8 @@ pub(crate) struct CargoConfig {
     pub(crate) target: Option<BTreeMap<String, CargoConfigRunner>>,
     #[serde(default)]
     pub(crate) env: BTreeMap<String, CargoConfigEnv>,
+    #[serde(default)]
+    pub(crate) term: CargoConfigTerm,
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -443,6 +445,20 @@ pub(crate) struct CargoConfigRunner {
 pub(crate) enum Runner {
     Simple(String),
     List(Vec<String>),
+}
+
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct CargoConfigTerm {
+    #[serde(default)]
+    pub(crate) progress: CargoConfigTermProgress,
+}
+
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct CargoConfigTermProgress {
+    #[serde(default)]
+    pub(crate) term_integration: Option<bool>,
 }
 
 #[cfg(test)]

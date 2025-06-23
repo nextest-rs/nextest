@@ -10,6 +10,7 @@ use super::{
     displayer::{DisplayReporter, DisplayReporterBuilder, StatusLevels},
 };
 use crate::{
+    cargo_config::CargoConfigs,
     config::EvaluatableProfile,
     errors::WriteEventError,
     list::TestList,
@@ -110,6 +111,7 @@ impl ReporterBuilder {
         &self,
         test_list: &TestList,
         profile: &EvaluatableProfile<'a>,
+        cargo_configs: &CargoConfigs,
         output: ReporterStderr<'a>,
         structured_reporter: StructuredReporter<'a>,
     ) -> Reporter<'a> {
@@ -134,7 +136,7 @@ impl ReporterBuilder {
             hide_progress_bar: self.hide_progress_bar,
             no_output_indent: self.no_output_indent,
         }
-        .build(output);
+        .build(cargo_configs, output);
 
         Reporter {
             display_reporter,

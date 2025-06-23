@@ -764,6 +764,7 @@ where
             // signal.
             self.basic_callback(TestEventKind::RunBeginKill {
                 setup_scripts_running: self.setup_scripts_running(),
+                current_stats: self.run_stats,
                 running: self.running(),
                 // This is always a second signal.
                 reason: CancelReason::SecondSignal,
@@ -773,6 +774,7 @@ where
             self.cancel_state = Some(reason);
             self.basic_callback(TestEventKind::RunBeginCancel {
                 setup_scripts_running: self.setup_scripts_running(),
+                current_stats: self.run_stats,
                 running: self.running(),
                 reason,
             });
@@ -933,6 +935,7 @@ mod tests {
             let event = events.pop().unwrap();
             let TestEventKind::RunBeginCancel {
                 setup_scripts_running,
+                current_stats: _,
                 running,
                 reason,
             } = event.kind
@@ -977,6 +980,7 @@ mod tests {
                     let event = events.pop().unwrap();
                     let TestEventKind::RunBeginCancel {
                         setup_scripts_running,
+                        current_stats: _,
                         running,
                         reason,
                     } = event.kind
@@ -1005,6 +1009,7 @@ mod tests {
                     let event = events.pop().unwrap();
                     let TestEventKind::RunBeginKill {
                         setup_scripts_running,
+                        current_stats: _,
                         running,
                         reason,
                     } = event.kind

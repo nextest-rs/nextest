@@ -269,6 +269,9 @@ pub enum TestEventKind<'a> {
         /// The number of setup scripts still running.
         setup_scripts_running: usize,
 
+        /// Current statistics for number of tests so far.
+        current_stats: RunStats,
+
         /// The number of tests still running.
         running: usize,
 
@@ -280,6 +283,9 @@ pub enum TestEventKind<'a> {
     RunBeginKill {
         /// The number of setup scripts still running.
         setup_scripts_running: usize,
+
+        /// Current statistics for number of tests so far.
+        current_stats: RunStats,
 
         /// The number of tests still running.
         running: usize,
