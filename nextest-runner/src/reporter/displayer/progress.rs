@@ -292,7 +292,7 @@ fn supports_osc_9_4(stream: &dyn IsTerminal) -> bool {
     if !stream.is_terminal() {
         debug!(
             "autodetect terminal progress reporting: disabling since \
-             pass in stream (usually stderr) is not a terminal"
+             passed-in stream (usually stderr) is not a terminal"
         );
         return false;
     }
