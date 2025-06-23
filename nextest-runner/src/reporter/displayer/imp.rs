@@ -16,11 +16,14 @@ use super::{
     unit_output::TestOutputDisplay,
 };
 use crate::{
+    cargo_config::CargoConfigs,
     config::{CompiledDefaultFilter, LeakTimeoutResult, ScriptId},
     errors::WriteEventError,
     helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
     list::{TestInstance, TestInstanceId},
-    reporter::{events::*, helpers::Styles, imp::ReporterStderr},
+    reporter::{
+        displayer::progress::TerminalProgress, events::*, helpers::Styles, imp::ReporterStderr,
+    },
 };
 use debug_ignore::DebugIgnore;
 use indent_write::io::IndentWriter;
@@ -46,7 +49,11 @@ pub(crate) struct DisplayReporterBuilder {
 }
 
 impl DisplayReporterBuilder {
-    pub(crate) fn build(self, output: ReporterStderr<'_>) -> DisplayReporter<'_> {
+    pub(crate) fn build<'a>(
+        self,
+        configs: &CargoConfigs,
+        output: ReporterStderr<'a>,
+    ) -> DisplayReporter<'a> {
         let mut styles: Box<Styles> = Box::default();
         if self.should_colorize {
             styles.colorize();
@@ -72,31 +79,37 @@ impl DisplayReporterBuilder {
         }
 
         let stderr = match output {
-            ReporterStderr::Terminal if self.no_capture => {
-                // Do not use a progress bar if --no-capture is passed in. This is required since we
-                // pass down stderr to the child process.
-                //
-                // In the future, we could potentially switch to using a pty, in which case we could
-                // still potentially use the progress bar as a status bar. However, that brings
-                // about its own complications: what if a test's output doesn't include a newline?
-                // We might have to use a curses-like UI which would be a lot of work for not much
-                // gain.
-                ReporterStderrImpl::TerminalWithoutBar
-            }
-            ReporterStderr::Terminal if is_ci::uncached() => {
-                // Some CI environments appear to pretend to be a terminal. Disable the progress bar
-                // in these environments.
-                ReporterStderrImpl::TerminalWithoutBar
-            }
-            ReporterStderr::Terminal if self.hide_progress_bar => {
-                ReporterStderrImpl::TerminalWithoutBar
-            }
-
             ReporterStderr::Terminal => {
-                let state = ProgressBarState::new(self.test_count, theme_characters.progress_chars);
-                // Note: even if we create a progress bar here, if stderr is
-                // piped, indicatif will not show it.
-                ReporterStderrImpl::TerminalWithBar { state }
+                let progress_bar = if self.no_capture {
+                    // Do not use a progress bar if --no-capture is passed in.
+                    // This is required since we pass down stderr to the child
+                    // process.
+                    //
+                    // In the future, we could potentially switch to using a
+                    // pty, in which case we could still potentially use the
+                    // progress bar as a status bar. However, that brings about
+                    // its own complications: what if a test's output doesn't
+                    // include a newline? We might have to use a curses-like UI
+                    // which would be a lot of work for not much gain.
+                    None
+                } else if is_ci::uncached() {
+                    // Some CI environments appear to pretend to be a terminal.
+                    // Disable the progress bar in these environments.
+                    None
+                } else if self.hide_progress_bar {
+                    None
+                } else {
+                    let state =
+                        ProgressBarState::new(self.test_count, theme_characters.progress_chars);
+                    // Note: even if we create a progress bar here, if stderr is
+                    // piped, indicatif will not show it.
+                    Some(state)
+                };
+                let term_progress = TerminalProgress::new(configs, &io::stderr());
+                ReporterStderrImpl::Terminal {
+                    progress_bar,
+                    term_progress,
+                }
             }
             ReporterStderr::Buffer(buf) => ReporterStderrImpl::Buffer(buf),
         };
@@ -142,23 +155,37 @@ pub(crate) struct DisplayReporter<'a> {
 impl<'a> DisplayReporter<'a> {
     pub(crate) fn write_event(&mut self, event: &TestEvent<'a>) -> Result<(), WriteEventError> {
         match &mut self.stderr {
-            ReporterStderrImpl::TerminalWithBar { state } => {
-                // Write to a string that will be printed as a log line.
-                let mut buf: Vec<u8> = Vec::new();
-                self.inner
-                    .write_event_impl(event, &mut buf)
-                    .map_err(WriteEventError::Io)?;
+            ReporterStderrImpl::Terminal {
+                progress_bar,
+                term_progress,
+            } => {
+                if let Some(state) = progress_bar {
+                    // Write to a string that will be printed as a log line.
+                    let mut buf: Vec<u8> = Vec::new();
+                    self.inner
+                        .write_event_impl(event, &mut buf)
+                        .map_err(WriteEventError::Io)?;
 
-                state.update_progress_bar(event, &self.inner.styles);
-                state.write_buf(&buf).map_err(WriteEventError::Io)
-            }
-            ReporterStderrImpl::TerminalWithoutBar => {
-                // Write to a buffered stderr.
-                let mut writer = BufWriter::new(std::io::stderr());
-                self.inner
-                    .write_event_impl(event, &mut writer)
-                    .map_err(WriteEventError::Io)?;
-                writer.flush().map_err(WriteEventError::Io)
+                    state.update_progress_bar(event, &self.inner.styles);
+                    if let Some(term_progress) = term_progress {
+                        term_progress
+                            .update_progress(event, &mut buf)
+                            .map_err(WriteEventError::Io)?;
+                    }
+                    state.write_buf(&buf).map_err(WriteEventError::Io)
+                } else {
+                    // Write to a buffered stderr.
+                    let mut writer = BufWriter::new(std::io::stderr());
+                    self.inner
+                        .write_event_impl(event, &mut writer)
+                        .map_err(WriteEventError::Io)?;
+                    if let Some(state) = term_progress {
+                        state
+                            .update_progress(event, &mut writer)
+                            .map_err(WriteEventError::Io)?;
+                    }
+                    writer.flush().map_err(WriteEventError::Io)
+                }
             }
             ReporterStderrImpl::Buffer(buf) => self
                 .inner
@@ -173,21 +200,26 @@ impl<'a> DisplayReporter<'a> {
 }
 
 enum ReporterStderrImpl<'a> {
-    TerminalWithBar {
-        // Reporter-specific progress bar state.
-        state: ProgressBarState,
+    Terminal {
+        // Reporter-specific progress bar state. None if the progress bar is not
+        // enabled.
+        progress_bar: Option<ProgressBarState>,
+        // OSC 9 code progress reporting.
+        term_progress: Option<TerminalProgress>,
     },
-    TerminalWithoutBar,
     Buffer(&'a mut Vec<u8>),
 }
 
 impl ReporterStderrImpl<'_> {
     fn finish_and_clear_bar(&self) {
         match self {
-            ReporterStderrImpl::TerminalWithBar { state } => {
+            ReporterStderrImpl::Terminal {
+                progress_bar: Some(state),
+                ..
+            } => {
                 state.finish_and_clear();
             }
-            ReporterStderrImpl::TerminalWithoutBar | ReporterStderrImpl::Buffer(_) => {}
+            ReporterStderrImpl::Terminal { .. } | ReporterStderrImpl::Buffer(_) => {}
         }
     }
 
@@ -512,6 +544,7 @@ impl<'a> DisplayReporterImpl<'a> {
             }
             TestEventKind::RunBeginCancel {
                 setup_scripts_running,
+                current_stats: _,
                 running,
                 reason,
             } => {
@@ -544,6 +577,7 @@ impl<'a> DisplayReporterImpl<'a> {
             }
             TestEventKind::RunBeginKill {
                 setup_scripts_running,
+                current_stats: _,
                 running,
                 reason,
             } => {
@@ -1794,6 +1828,7 @@ mod tests {
         test_output::{ChildExecutionOutput, ChildOutput, ChildSplitOutput},
     };
     use bytes::Bytes;
+    use camino::Utf8PathBuf;
     use chrono::Local;
     use nextest_metadata::RustBinaryId;
     use smol_str::SmolStr;
@@ -1806,6 +1841,18 @@ mod tests {
     where
         F: FnOnce(DisplayReporter<'a>),
     {
+        // Start and end the search at the cwd -- we expect this to not match
+        // any results since it'll be the nextest-runner directory.
+        let current_dir = Utf8PathBuf::try_from(std::env::current_dir().expect("obtained cwd"))
+            .expect("cwd is valid UTF_8");
+        let configs = CargoConfigs::new_with_isolation(
+            Vec::<String>::new(),
+            &current_dir,
+            &current_dir,
+            Vec::new(),
+        )
+        .unwrap();
+
         let builder = DisplayReporterBuilder {
             default_filter: CompiledDefaultFilter::for_default_config(),
             status_levels: StatusLevels {
@@ -1821,7 +1868,7 @@ mod tests {
             no_output_indent: false,
         };
         let output = ReporterStderr::Buffer(out);
-        let reporter = builder.build(output);
+        let reporter = builder.build(&configs, output);
         f(reporter);
     }
 

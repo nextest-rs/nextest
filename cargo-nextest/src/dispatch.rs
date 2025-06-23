@@ -1861,8 +1861,13 @@ impl App {
         )?;
 
         // Make the reporter.
-        let mut reporter =
-            reporter_builder.build(&test_list, &profile, output, structured_reporter);
+        let mut reporter = reporter_builder.build(
+            &test_list,
+            &profile,
+            &self.base.cargo_configs,
+            output,
+            structured_reporter,
+        );
 
         configure_handle_inheritance(no_capture)?;
         let run_stats = runner.try_execute(|event| {
