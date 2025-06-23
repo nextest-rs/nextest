@@ -1460,21 +1460,6 @@ mod tests {
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-    struct WrapperScriptWarning {
-        tool: Option<String>,
-        config_file: Utf8PathBuf,
-        script_id: ScriptId,
-    }
-
-    impl IdHashItem for WrapperScriptWarning {
-        type Key<'a> = &'a ScriptId;
-        fn key(&self) -> Self::Key<'_> {
-            &self.script_id
-        }
-        id_upcast!();
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct EmptyScriptSections {
         tool: Option<String>,
         config_file: Utf8PathBuf,
