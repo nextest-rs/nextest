@@ -93,7 +93,7 @@ nextest-metadata = { version = "0.12.2", path = "nextest-metadata" }
 nextest-workspace-hack = "0.1.0"
 nix = { version = "0.30.1", default-features = false, features = ["signal"] }
 num_threads = "0.1.7"
-owo-colors = "4.2.1"
+owo-colors = "4.2.2"
 pathdiff = { version = "0.2.3", features = ["camino"] }
 pin-project-lite = "0.2.16"
 pretty_assertions = "1.4.1"
