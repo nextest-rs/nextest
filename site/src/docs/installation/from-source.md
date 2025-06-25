@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v3
       # Install a Rust toolchain here.
       - name: Install cargo-nextest
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v3
         with:
           crate: cargo-nextest
           locked: true
