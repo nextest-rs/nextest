@@ -244,10 +244,7 @@ pub(crate) fn dylib_path() -> Vec<PathBuf> {
 #[cfg(windows)]
 pub(crate) fn convert_rel_path_to_forward_slash(rel_path: &Utf8Path) -> Utf8PathBuf {
     if !rel_path.is_relative() {
-        panic!(
-            "path for conversion to forward slash '{}' is not relative",
-            rel_path
-        );
+        panic!("path for conversion to forward slash '{rel_path}' is not relative");
     }
     rel_path.as_str().replace('\\', "/").into()
 }
@@ -261,10 +258,7 @@ pub(crate) fn convert_rel_path_to_forward_slash(rel_path: &Utf8Path) -> Utf8Path
 #[cfg(windows)]
 pub(crate) fn convert_rel_path_to_main_sep(rel_path: &Utf8Path) -> Utf8PathBuf {
     if !rel_path.is_relative() {
-        panic!(
-            "path for conversion to backslash '{}' is not relative",
-            rel_path
-        );
+        panic!("path for conversion to backslash '{rel_path}' is not relative");
     }
     rel_path.as_str().replace('/', "\\").into()
 }
@@ -300,7 +294,7 @@ pub(crate) fn display_exited_with(exit_status: ExitStatus) -> String {
     match AbortStatus::extract(exit_status) {
         Some(abort_status) => display_abort_status(abort_status),
         None => match exit_status.code() {
-            Some(code) => format!("exited with exit code {}", code),
+            Some(code) => format!("exited with exit code {code}"),
             None => "exited with an unknown error".to_owned(),
         },
     }

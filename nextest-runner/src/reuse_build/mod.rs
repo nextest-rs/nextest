@@ -323,7 +323,7 @@ impl PathMapper {
             });
         }
 
-        Ok(canonicalized_path)
+        Ok(os_imp::strip_verbatim(canonicalized_path))
     }
 
     pub(super) fn new_target_dir(&self) -> Option<&Utf8Path> {
@@ -393,6 +393,96 @@ impl PlatformLibdirMapper {
     }
 }
 
+#[cfg(windows)]
+mod os_imp {
+    use camino::Utf8PathBuf;
+    use std::ptr;
+    use windows_sys::Win32::Storage::FileSystem::GetFullPathNameW;
+
+    /// Strips verbatim prefix from a path if possible.
+    pub(super) fn strip_verbatim(path: Utf8PathBuf) -> Utf8PathBuf {
+        let path_str = String::from(path);
+        if path_str.starts_with(r"\\?\UNC") {
+            // In general we don't expect UNC paths, so just return the path as is.
+            path_str.into()
+        } else if path_str.starts_with(r"\\?\") {
+            const START_LEN: usize = r"\\?\".len();
+
+            let is_absolute_exact = {
+                let mut v = path_str[START_LEN..].encode_utf16().collect::<Vec<u16>>();
+                // Ensure null termination.
+                v.push(0);
+                is_absolute_exact(&v)
+            };
+
+            if is_absolute_exact {
+                path_str[START_LEN..].into()
+            } else {
+                path_str.into()
+            }
+        } else {
+            // Not a verbatim path, so return it as is.
+            path_str.into()
+        }
+    }
+
+    /// Test that the path is absolute, fully qualified and unchanged when processed by the Windows API.Add commentMore actions
+    ///
+    /// For example:
+    ///
+    /// - `C:\path\to\file` will return true.
+    /// - `C:\path\to\nul` returns false because the Windows API will convert it to \\.\NUL
+    /// - `C:\path\to\..\file` returns false because it will be resolved to `C:\path\file`.
+    ///
+    /// This is a useful property because it means the path can be converted from and to and verbatim
+    /// path just by changing the prefix.
+    fn is_absolute_exact(path: &[u16]) -> bool {
+        // Adapted from the Rust project: https://github.com/rust-lang/rust/commit/edfc74722556c659de6fa03b23af3b9c8ceb8ac2
+
+        // This is implemented by checking that passing the path through
+        // GetFullPathNameW does not change the path in any way.
+
+        // Windows paths are limited to i16::MAX length
+        // though the API here accepts a u32 for the length.
+        if path.is_empty() || path.len() > u32::MAX as usize || path.last() != Some(&0) {
+            return false;
+        }
+        // The path returned by `GetFullPathNameW` must be the same length as the
+        // given path, otherwise they're not equal.
+        let buffer_len = path.len();
+        let mut new_path = Vec::with_capacity(buffer_len);
+        let result = unsafe {
+            GetFullPathNameW(
+                path.as_ptr(),
+                new_path.capacity() as u32,
+                new_path.as_mut_ptr(),
+                ptr::null_mut(),
+            )
+        };
+        // Note: if non-zero, the returned result is the length of the buffer without the null termination
+        if result == 0 || result as usize != buffer_len - 1 {
+            false
+        } else {
+            // SAFETY: `GetFullPathNameW` initialized `result` bytes and does not exceed `nBufferLength - 1` (capacity).
+            unsafe {
+                new_path.set_len((result as usize) + 1);
+            }
+            path == new_path
+        }
+    }
+}
+
+#[cfg(unix)]
+mod os_imp {
+    use camino::Utf8PathBuf;
+
+    pub(super) fn strip_verbatim(path: Utf8PathBuf) -> Utf8PathBuf {
+        // On Unix, there aren't any verbatin paths, so just return the path as
+        // is.
+        path
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,23 +496,27 @@ mod tests {
             .expect("current dir is valid UTF-8");
 
         let temp_workspace_root = Utf8TempDir::new().expect("new temp dir created");
-        let workspace_root_path: Utf8PathBuf = temp_workspace_root
-            .path()
-            // On Mac, the temp dir is a symlink, so canonicalize it.
-            .canonicalize()
-            .expect("workspace root canonicalized correctly")
-            .try_into()
-            .expect("workspace root is valid UTF-8");
+        let workspace_root_path: Utf8PathBuf = os_imp::strip_verbatim(
+            temp_workspace_root
+                .path()
+                // On Mac, the temp dir is a symlink, so canonicalize it.
+                .canonicalize()
+                .expect("workspace root canonicalized correctly")
+                .try_into()
+                .expect("workspace root is valid UTF-8"),
+        );
         let rel_workspace_root = pathdiff::diff_utf8_paths(&workspace_root_path, &current_dir)
             .expect("abs to abs diff is non-None");
 
         let temp_target_dir = Utf8TempDir::new().expect("new temp dir created");
-        let target_dir_path: Utf8PathBuf = temp_target_dir
-            .path()
-            .canonicalize()
-            .expect("target dir canonicalized correctly")
-            .try_into()
-            .expect("target dir is valid UTF-8");
+        let target_dir_path: Utf8PathBuf = os_imp::strip_verbatim(
+            temp_target_dir
+                .path()
+                .canonicalize()
+                .expect("target dir canonicalized correctly")
+                .try_into()
+                .expect("target dir is valid UTF-8"),
+        );
         let rel_target_dir = pathdiff::diff_utf8_paths(&target_dir_path, &current_dir)
             .expect("abs to abs diff is non-None");
 

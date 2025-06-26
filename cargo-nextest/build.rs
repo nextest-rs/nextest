@@ -65,7 +65,7 @@ impl CommitInfo {
             return None;
         }
 
-        println!("cargo:rerun-if-changed={}", path);
+        println!("cargo:rerun-if-changed={path}");
 
         let content = std::fs::read_to_string(path).ok()?;
         Self::from_string(&content)

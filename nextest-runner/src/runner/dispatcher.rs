@@ -963,7 +963,7 @@ mod tests {
         // yet.
         for sig1 in ShutdownEvent::ALL_VARIANTS {
             for sig2 in ShutdownEvent::ALL_VARIANTS {
-                eprintln!("** testing {:?} -> {:?}", sig1, sig2);
+                eprintln!("** testing {sig1:?} -> {sig2:?}");
                 // Separate test for each signal to avoid mixing up state.
                 let mut cx = cx.clone();
 

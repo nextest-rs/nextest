@@ -32,7 +32,7 @@ impl fmt::Display for DisplayBracketedHhMmSs {
 
         // Buffer the output internally to provide padding.
         let out = format!("{hours:02}:{mins:02}:{secs:02}");
-        write!(f, "[{:>9}] ", out)
+        write!(f, "[{out:>9}] ")
     }
 }
 

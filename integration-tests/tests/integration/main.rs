@@ -78,18 +78,18 @@ fn test_version_info() {
 
     // Line 2 is of the form "release: 0.9.0".
     let release_line = lines.next().unwrap();
-    assert_eq!(release_line, format!("release: {}", version));
+    assert_eq!(release_line, format!("release: {version}"));
 
     // Line 3 is the commit hash.
     let commit_hash_line = lines.next().unwrap();
     assert!(
-        commit_hash_line.starts_with(&format!("commit-hash: {}", short_hash)),
+        commit_hash_line.starts_with(&format!("commit-hash: {short_hash}")),
         "commit hash line matches short hash: {commit_hash_line}"
     );
 
     // Line 4 is the commit date.
     let commit_date_line = lines.next().unwrap();
-    assert_eq!(commit_date_line, format!("commit-date: {}", date));
+    assert_eq!(commit_date_line, format!("commit-date: {date}"));
 
     // Line 5 is the host. Just check that it begins with "host: ".
     let host_line = lines.next().unwrap();

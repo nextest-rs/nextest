@@ -966,7 +966,7 @@ impl ExpectedError {
             } => {
                 let current_dir_str = match current_dir {
                     Ok(dir) => dir.to_string_lossy().into_owned(),
-                    Err(e) => format!("(error: {})", e),
+                    Err(e) => format!("(error: {e})"),
                 };
                 error!(
                     "[double-spawn] failed to exec `{command:?}`, current_dir: `{current_dir_str}`"

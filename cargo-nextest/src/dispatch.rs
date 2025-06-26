@@ -2233,7 +2233,7 @@ impl DebugCommand {
                 let build_platforms = detect_build_platforms(&cargo_configs, target.as_deref())?;
                 match output_format {
                     BuildPlatformsOutputFormat::Debug => {
-                        println!("{:#?}", build_platforms);
+                        println!("{build_platforms:#?}");
                     }
                     BuildPlatformsOutputFormat::Triple => {
                         println!(

@@ -881,9 +881,9 @@ impl fmt::Debug for AbortStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             #[cfg(unix)]
-            AbortStatus::UnixSignal(signal) => write!(f, "UnixSignal({})", signal),
+            AbortStatus::UnixSignal(signal) => write!(f, "UnixSignal({signal})"),
             #[cfg(windows)]
-            AbortStatus::WindowsNtStatus(status) => write!(f, "WindowsNtStatus({:x})", status),
+            AbortStatus::WindowsNtStatus(status) => write!(f, "WindowsNtStatus({status:x})"),
             #[cfg(windows)]
             AbortStatus::JobObject => write!(f, "JobObject"),
         }

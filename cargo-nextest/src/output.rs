@@ -191,7 +191,7 @@ struct MessageVisitor<'writer, 'a> {
 impl Visit for MessageVisitor<'_, '_> {
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         if field.name() == MESSAGE_FIELD {
-            if let Err(error) = write!(self.writer, "{:?}", value) {
+            if let Err(error) = write!(self.writer, "{value:?}") {
                 self.error = Some(error);
             }
         } else if self.show_other {

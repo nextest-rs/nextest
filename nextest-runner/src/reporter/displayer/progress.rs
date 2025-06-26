@@ -36,7 +36,7 @@ impl ProgressBarState {
     pub(super) fn new(test_count: usize, progress_chars: &str) -> Self {
         let bar = ProgressBar::new(test_count as u64);
 
-        let test_count_width = format!("{}", test_count).len();
+        let test_count_width = format!("{test_count}").len();
         // Create the template using the width as input. This is a
         // little confusing -- {{foo}} is what's passed into the
         // ProgressBar, while {bar} is inserted by the format!()

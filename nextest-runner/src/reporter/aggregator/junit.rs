@@ -258,8 +258,8 @@ enum SuiteKey<'cfg> {
 impl fmt::Display for SuiteKey<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SuiteKey::SetupScript(script_id) => write!(f, "@setup-script:{}", script_id),
-            SuiteKey::TestBinary(binary_id) => write!(f, "{}", binary_id),
+            SuiteKey::SetupScript(script_id) => write!(f, "@setup-script:{script_id}"),
+            SuiteKey::TestBinary(binary_id) => write!(f, "{binary_id}"),
         }
     }
 }

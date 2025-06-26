@@ -345,7 +345,7 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
 
     let tests_str = if run_count == 1 { "test" } else { "tests" };
     let leak_fail_regex_str = if leak_fail_count > 0 {
-        format!(r" \({} due to being leaky\)", leak_fail_count)
+        format!(r" \({leak_fail_count} due to being leaky\)")
     } else {
         String::new()
     };

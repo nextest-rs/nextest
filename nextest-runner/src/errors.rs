@@ -468,7 +468,7 @@ where
         loop {
             writeln!(writer)?;
             let mut indent = IndentWriter::new_skip_initial("    ", writer);
-            write!(indent, "  - {}", cause)?;
+            write!(indent, "  - {cause}")?;
 
             let Some(next_cause) = cause.source() else {
                 break Ok(());
@@ -1115,7 +1115,7 @@ pub struct TestRunnerExecuteErrors<E> {
 impl<E: std::error::Error> fmt::Display for TestRunnerExecuteErrors<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(report_error) = &self.report_error {
-            write!(f, "error reporting results: {}", report_error)?;
+            write!(f, "error reporting results: {report_error}")?;
         }
 
         if !self.join_errors.is_empty() {
@@ -1130,7 +1130,7 @@ impl<E: std::error::Error> fmt::Display for TestRunnerExecuteErrors<E> {
                     write!(f, ", ")?;
                 }
 
-                write!(f, "{}", join_error)?;
+                write!(f, "{join_error}")?;
             }
         }
 
