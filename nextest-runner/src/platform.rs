@@ -262,8 +262,7 @@ fn detect_host_platform() -> Result<Platform, HostPlatformDetectError> {
         Some(ForceBuildTarget::Error) => Err(target_spec::Error::RustcVersionVerboseParse(
             RustcVersionVerboseParseError::MissingHostLine {
                 output: format!(
-                    "({} set to \"error\", forcibly failing build target detection)\n",
-                    FORCE_BUILD_TARGET_VAR
+                    "({FORCE_BUILD_TARGET_VAR} set to \"error\", forcibly failing build target detection)\n"
                 ),
             },
         )),

@@ -67,7 +67,7 @@ fn version_verbose_error() -> Option<VersionVerboseError> {
             "non-zero" => Some(VersionVerboseError::NonZeroExitCode),
             "invalid-stdout" => Some(VersionVerboseError::InvalidStdout),
             "invalid-triple" => Some(VersionVerboseError::InvalidTriple),
-            _ => panic!("unrecognized value for {}: {}", VAR, s),
+            _ => panic!("unrecognized value for {VAR}: {s}"),
         },
         Err(_) => None,
     }

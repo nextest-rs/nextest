@@ -1421,7 +1421,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     let AbortStatus::UnixSignal(sig) = abort_status;
                     write!(writer, " with signal {}", sig.style(self.styles.count))?;
                     if let Some(s) = crate::helpers::signal_str(sig) {
-                        write!(writer, ": SIG{}", s)?;
+                        write!(writer, ": SIG{s}")?;
                     }
                 }
                 #[cfg(windows)]
@@ -1525,7 +1525,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     result: LeakTimeoutResult::Pass,
                 } => self.styles.skip,
                 ExecutionResult::Pass => self.styles.pass,
-                other => panic!("success means leak-pass or pass, found {:?}", other),
+                other => panic!("success means leak-pass or pass, found {other:?}"),
             }
         } else {
             self.styles.fail
