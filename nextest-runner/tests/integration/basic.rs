@@ -23,6 +23,7 @@ use nextest_runner::{
             ExecutionDescription, ExecutionResult, FinalRunStats, RunStatsFailureKind, UnitKind,
         },
     },
+    run_mode::NextestRunMode,
     runner::TestRunnerBuilder,
     signal::SignalHandlerKind,
     target_runner::TargetRunner,
@@ -72,7 +73,7 @@ fn test_list_binaries() -> Result<()> {
 fn test_list_tests() -> Result<()> {
     set_env_vars();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -118,7 +119,7 @@ fn test_list_tests() -> Result<()> {
 fn test_run() -> Result<()> {
     set_env_vars();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -251,6 +252,7 @@ fn test_run_ignored() -> Result<()> {
     .unwrap();
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),
@@ -351,6 +353,7 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
     .expect("filterset is valid");
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::new(vec![
@@ -423,6 +426,7 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
     .expect("filterset is valid");
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::default(),
@@ -456,6 +460,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
     set_env_vars();
 
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Default,
         None,
         TestFilterPatterns::new(vec![
@@ -500,7 +505,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
 fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
     set_env_vars();
 
-    let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
+    let test_filter = TestFilterBuilder::default_set(NextestRunMode::Test, RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
         NextestConfig::DEFAULT_PROFILE,
         &test_filter,
@@ -673,6 +678,7 @@ fn test_termination() -> Result<()> {
     )
     .unwrap();
     let test_filter = TestFilterBuilder::new(
+        NextestRunMode::Test,
         RunIgnored::Only,
         None,
         TestFilterPatterns::default(),

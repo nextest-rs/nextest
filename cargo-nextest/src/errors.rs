@@ -7,7 +7,7 @@ use indent_write::indentable::Indented;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::{errors::*, helpers::plural, redact::Redactor};
+use nextest_runner::{errors::*, helpers::plural, redact::Redactor, run_mode::NextestRunMode};
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, io, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
@@ -212,6 +212,7 @@ pub enum ExpectedError {
     TestRunFailed,
     #[error("no tests to run")]
     NoTestsRun {
+        mode: NextestRunMode,
         /// The no-tests-run error was chosen because it was the default (we show a hint in this
         /// case)
         is_default: bool,
@@ -870,13 +871,16 @@ impl ExpectedError {
                 error!("test run failed");
                 None
             }
-            Self::NoTestsRun { is_default } => {
+            Self::NoTestsRun { mode, is_default } => {
                 let hint_str = if *is_default {
                     "\n(hint: use `--no-tests` to customize)"
                 } else {
                     ""
                 };
-                error!("no tests to run{hint_str}");
+                error!(
+                    "no {} to run{hint_str}",
+                    plural::tests_plural_if(*mode, true),
+                );
                 None
             }
             Self::ShowTestGroupsError { err } => {

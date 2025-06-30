@@ -115,7 +115,7 @@ impl ReporterBuilder {
         output: ReporterStderr<'a>,
         structured_reporter: StructuredReporter<'a>,
     ) -> Reporter<'a> {
-        let aggregator = EventAggregator::new(profile);
+        let aggregator = EventAggregator::new(test_list.mode(), profile);
 
         let status_level = self.status_level.unwrap_or_else(|| profile.status_level());
         let final_status_level = self
@@ -123,6 +123,7 @@ impl ReporterBuilder {
             .unwrap_or_else(|| profile.final_status_level());
 
         let display_reporter = DisplayReporterBuilder {
+            mode: test_list.mode(),
             default_filter: profile.default_filter().clone(),
             status_levels: StatusLevels {
                 status_level,
