@@ -73,7 +73,7 @@ iddqd = "0.3.8"
 idna_adapter = "=1.0.0"
 indenter = "0.3.3"
 indent_write = "2.2.0"
-indexmap = "2.9.0"
+indexmap = "2.10.0"
 indicatif = "0.17.12"
 indoc = "2.0.6"
 insta = { version = "1.43.1", default-features = false }
