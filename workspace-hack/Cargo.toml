@@ -39,7 +39,7 @@ serde_json = { version = "1.0.140", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.4.2", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.4", default-features = false, features = ["fixtures"] }
-tokio = { version = "1.45.1", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
+tokio = { version = "1.46.0", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
 toml = { version = "0.8.23", features = ["preserve_order"] }
 toml_edit = { version = "0.22.27", features = ["serde"] }
 tracing-core = { version = "0.1.33" }
@@ -65,7 +65,7 @@ mio = { version = "1.0.4", features = ["net", "os-ext"] }
 percent-encoding = { version = "2.3.1" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-tokio = { version = "1.45.1", default-features = false, features = ["net"] }
+tokio = { version = "1.46.0", default-features = false, features = ["net"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 bitflags = { version = "2.9.1", default-features = false, features = ["std"] }
@@ -82,7 +82,7 @@ mio = { version = "1.0.4", features = ["net", "os-ext"] }
 percent-encoding = { version = "2.3.1" }
 rustix = { version = "1.0.7", features = ["fs", "stdio", "termios"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-tokio = { version = "1.45.1", default-features = false, features = ["net"] }
+tokio = { version = "1.46.0", default-features = false, features = ["net"] }
 
 [target.x86_64-apple-darwin.build-dependencies]
 bitflags = { version = "2.9.1", default-features = false, features = ["std"] }
@@ -94,7 +94,7 @@ futures-core = { version = "0.3.31" }
 futures-sink = { version = "0.3.31" }
 percent-encoding = { version = "2.3.1" }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_new"] }
-tokio = { version = "1.45.1", default-features = false, features = ["net"] }
+tokio = { version = "1.46.0", default-features = false, features = ["net"] }
 windows-sys-73dcd821b1037cfd = { package = "windows-sys", version = "0.59.0", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Wdk_System_IO", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
 windows-sys-b21d60becc0929df = { package = "windows-sys", version = "0.52.0", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Environment", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 
