@@ -21,7 +21,7 @@ use future_queue::{FutureQueueContext, StreamExt};
 use futures::prelude::*;
 use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
-use std::{convert::Infallible, fmt, sync::Arc};
+use std::{convert::Infallible, fmt, sync::Arc, time::Instant};
 use tokio::{
     runtime::Runtime,
     sync::{mpsc::unbounded_channel, oneshot},
@@ -255,6 +255,7 @@ impl<'a> TestRunnerInner<'a> {
             self.cli_args.clone(),
             self.test_list.run_count(),
             self.max_fail,
+            Instant::now() + self.profile.global_timeout().period,
         );
 
         let executor_cx = ExecutorContext::new(
