@@ -97,6 +97,11 @@ slow-timeout = { period = "60s" }
 # See <https://nexte.st/docs/features/leaky-tests> for more information.
 leak-timeout = "100ms"
 
+# Stop all tests after the configured global timeout.
+# Defaults to 30 year, which is a large enough value to feel "infinite" without
+# running into overflows on various platforms.
+global-timeout = "30y"
+
 # `nextest archive` automatically includes any build output required by a standard build.
 # However sometimes extra non-standard files are required.
 # To address this, "archive.include" specifies additional paths that will be included in the archive.

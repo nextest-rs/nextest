@@ -44,6 +44,7 @@ pub(super) struct DispatcherContext<'a, F> {
     stopwatch: StopwatchStart,
     run_stats: RunStats,
     max_fail: MaxFail,
+    global_timeout: Duration,
     running_setup_script: Option<ContextSetupScript<'a>>,
     running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
     cancel_state: Option<CancelReason>,
@@ -63,6 +64,7 @@ where
         cli_args: Vec<String>,
         initial_run_count: usize,
         max_fail: MaxFail,
+        global_timeout: Duration,
     ) -> Self {
         Self {
             callback: DebugIgnore(callback),
@@ -75,6 +77,7 @@ where
                 ..RunStats::default()
             },
             max_fail,
+            global_timeout,
             running_setup_script: None,
             running_tests: BTreeMap::new(),
             cancel_state: None,
@@ -103,9 +106,14 @@ where
         let mut signals_done = false;
         let mut inputs_done = false;
         let mut report_cancel_rx_done = false;
+        let mut global_timeout_sleep =
+            std::pin::pin!(crate::time::pausable_sleep(self.global_timeout));
 
         loop {
             let internal_event = tokio::select! {
+                _ = &mut global_timeout_sleep => {
+                    InternalEvent::GlobalTimeout
+                },
                 internal_event = executor_rx.recv() => {
                     match internal_event {
                         Some(event) => InternalEvent::Executor(event),
@@ -201,6 +209,9 @@ where
                     // Restore the terminal state.
                     input_handler.suspend();
 
+                    // Pause the global timeout while suspended.
+                    global_timeout_sleep.as_mut().pause();
+
                     // Now stop nextest itself.
                     super::os::raise_stop();
                 }
@@ -208,6 +219,10 @@ where
                 HandleEventResponse::JobControl(JobControlEvent::Continue) => {
                     // Nextest has been resumed. Resume the input handler, as well as all the tests.
                     input_handler.resume();
+
+                    // Resume the global timeout.
+                    global_timeout_sleep.as_mut().resume();
+
                     self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                 }
                 #[cfg(not(unix))]
@@ -283,6 +298,10 @@ where
                         }
                         CancelEvent::TestFailure => {
                             // A test failure has caused cancellation to begin.
+                            self.broadcast_request(RunUnitRequest::OtherCancel);
+                        }
+                        CancelEvent::GlobalTimeout => {
+                            // The global timeout has expired, causing cancellation to begin.
                             self.broadcast_request(RunUnitRequest::OtherCancel);
                         }
                         CancelEvent::Signal(req) => {
@@ -534,6 +553,9 @@ where
                 })
             }
             InternalEvent::Signal(event) => self.handle_signal_event(event),
+            InternalEvent::GlobalTimeout => {
+                self.begin_cancel(CancelReason::GlobalTimeout, CancelEvent::GlobalTimeout)
+            }
             InternalEvent::Input(InputEvent::Info) => {
                 // Print current statistics.
                 HandleEventResponse::Info(InfoEvent::Input)
@@ -850,6 +872,7 @@ enum InternalEvent<'a> {
     Signal(SignalEvent),
     Input(InputEvent),
     ReportCancel,
+    GlobalTimeout,
 }
 
 /// The return result of `handle_event`.
@@ -883,6 +906,7 @@ enum InfoEvent {
 enum CancelEvent {
     Report,
     TestFailure,
+    GlobalTimeout,
     Signal(ShutdownRequest),
 }
 
@@ -919,7 +943,9 @@ mod tests {
             vec![],
             0,
             MaxFail::All,
+            crate::time::far_future_duration(),
         );
+
         cx.disable_signal_3_times_panic = true;
 
         // Begin cancellation with a report error.

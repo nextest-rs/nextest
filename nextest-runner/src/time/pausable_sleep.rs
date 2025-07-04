@@ -126,11 +126,15 @@ enum SleepPauseState {
 
 // Cribbed from tokio.
 fn far_future() -> Instant {
+    Instant::now() + far_future_duration()
+}
+
+pub(crate) const fn far_future_duration() -> Duration {
     // Roughly 30 years from now.
     // API does not provide a way to obtain max `Instant`
     // or convert specific date in the future to instant.
     // 1000 years overflows on macOS, 100 years overflows on FreeBSD.
-    Instant::now() + Duration::from_secs(86400 * 365 * 30)
+    Duration::from_secs(86400 * 365 * 30)
 }
 
 #[cfg(test)]
