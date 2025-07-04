@@ -175,4 +175,5 @@ pub enum TestCaseFixtureProperty {
     MatchesCdylib = 4,
     MatchesTestMultiplyTwo = 8,
     NotInDefaultSetUnix = 16,
+    IsBenchmark = 32,
 }
