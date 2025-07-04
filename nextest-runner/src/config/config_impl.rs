@@ -4,9 +4,9 @@
 use super::{
     ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
     CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
-    JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy, ScriptConfig,
-    ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig, TestSettings,
-    TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
+    GlobalTimeout, JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy,
+    ScriptConfig, ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig,
+    TestSettings, TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
 };
 use crate::{
     config::{ListSettings, ProfileScriptType, ScriptInfo, SetupScriptConfig},
@@ -1009,6 +1009,13 @@ impl<'cfg> EvaluatableProfile<'cfg> {
             .unwrap_or(self.default_profile.slow_timeout)
     }
 
+    /// Returns the time after which we should stop running tests.
+    pub fn global_timeout(&self) -> GlobalTimeout {
+        self.custom_profile
+            .and_then(|profile| profile.global_timeout)
+            .unwrap_or(self.default_profile.global_timeout)
+    }
+
     /// Returns the time after which a child process that hasn't closed its handles is marked as
     /// leaky.
     pub fn leak_timeout(&self) -> LeakTimeout {
@@ -1210,6 +1217,7 @@ pub(super) struct DefaultProfileImpl {
     success_output: TestOutputDisplay,
     max_fail: MaxFail,
     slow_timeout: SlowTimeout,
+    global_timeout: GlobalTimeout,
     leak_timeout: LeakTimeout,
     overrides: Vec<DeserializedOverride>,
     scripts: Vec<DeserializedProfileScriptConfig>,
@@ -1249,6 +1257,9 @@ impl DefaultProfileImpl {
             slow_timeout: p
                 .slow_timeout
                 .expect("slow-timeout present in default profile"),
+            global_timeout: p
+                .global_timeout
+                .expect("global-timeout present in default profile"),
             leak_timeout: p
                 .leak_timeout
                 .expect("leak-timeout present in default profile"),
@@ -1302,6 +1313,8 @@ pub(super) struct CustomProfileImpl {
     max_fail: Option<MaxFail>,
     #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
+    #[serde(default)]
+    global_timeout: Option<GlobalTimeout>,
     #[serde(default, deserialize_with = "super::deserialize_leak_timeout")]
     leak_timeout: Option<LeakTimeout>,
     #[serde(default)]

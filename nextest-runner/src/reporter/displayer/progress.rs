@@ -482,6 +482,7 @@ fn progress_bar_cancel_prefix(reason: CancelReason, styles: &Styles) -> String {
         CancelReason::SetupScriptFailure
         | CancelReason::TestFailure
         | CancelReason::ReportError
+        | CancelReason::GlobalTimeout
         | CancelReason::Signal
         | CancelReason::Interrupt => "Cancelling",
         CancelReason::SecondSignal => "Killing",

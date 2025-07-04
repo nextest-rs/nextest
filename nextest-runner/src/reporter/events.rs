@@ -904,6 +904,9 @@ pub enum CancelReason {
     /// An error occurred while reporting results.
     ReportError,
 
+    /// The global timeout was exceeded.
+    GlobalTimeout,
+
     /// A termination signal (on Unix, SIGTERM or SIGHUP) was received.
     Signal,
 
@@ -922,6 +925,7 @@ impl CancelReason {
             CancelReason::ReportError => "reporting error",
             CancelReason::Signal => "signal",
             CancelReason::Interrupt => "interrupt",
+            CancelReason::GlobalTimeout => "timeout",
             CancelReason::SecondSignal => "second signal",
         }
     }

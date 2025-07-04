@@ -255,6 +255,7 @@ impl<'a> TestRunnerInner<'a> {
             self.cli_args.clone(),
             self.test_list.run_count(),
             self.max_fail,
+            self.profile.global_timeout().period,
         );
 
         let executor_cx = ExecutorContext::new(
