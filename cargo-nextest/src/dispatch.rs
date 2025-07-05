@@ -2459,7 +2459,7 @@ fn log_platform_runner(prefix: &str, runner: &PlatformRunner, styles: &StderrSty
     )
 }
 
-fn warn_on_err(thing: &str, err: &(dyn std::error::Error), styles: &StderrStyles) {
+fn warn_on_err(thing: &str, err: &dyn std::error::Error, styles: &StderrStyles) {
     let mut s = String::with_capacity(256);
     swrite!(s, "could not determine {thing}: {err}");
     let mut next_error = err.source();
