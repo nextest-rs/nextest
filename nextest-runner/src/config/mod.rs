@@ -21,6 +21,7 @@
 
 mod archive;
 mod config_impl;
+mod global_timeout;
 mod helpers;
 mod identifier;
 mod junit;
@@ -40,6 +41,7 @@ mod track_default;
 
 pub use archive::*;
 pub use config_impl::*;
+pub use global_timeout::*;
 pub use identifier::*;
 pub use junit::*;
 pub use leak_timeout::*;

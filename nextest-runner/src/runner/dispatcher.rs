@@ -23,7 +23,10 @@ use crate::{
 use chrono::Local;
 use debug_ignore::DebugIgnore;
 use quick_junit::ReportUuid;
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+    collections::BTreeMap,
+    time::{Duration, Instant},
+};
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     oneshot,
@@ -44,6 +47,7 @@ pub(super) struct DispatcherContext<'a, F> {
     stopwatch: StopwatchStart,
     run_stats: RunStats,
     max_fail: MaxFail,
+    timeout_at: Instant,
     running_setup_script: Option<ContextSetupScript<'a>>,
     running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
     cancel_state: Option<CancelReason>,
@@ -63,6 +67,7 @@ where
         cli_args: Vec<String>,
         initial_run_count: usize,
         max_fail: MaxFail,
+        timeout_at: Instant,
     ) -> Self {
         Self {
             callback: DebugIgnore(callback),
@@ -75,6 +80,7 @@ where
                 ..RunStats::default()
             },
             max_fail,
+            timeout_at,
             running_setup_script: None,
             running_tests: BTreeMap::new(),
             cancel_state: None,
@@ -106,6 +112,9 @@ where
 
         loop {
             let internal_event = tokio::select! {
+                _ = tokio::time::sleep_until(self.timeout_at.into()) => {
+                    InternalEvent::Timeout
+                },
                 internal_event = executor_rx.recv() => {
                     match internal_event {
                         Some(event) => InternalEvent::Executor(event),
@@ -283,6 +292,10 @@ where
                         }
                         CancelEvent::TestFailure => {
                             // A test failure has caused cancellation to begin.
+                            self.broadcast_request(RunUnitRequest::OtherCancel);
+                        }
+                        CancelEvent::Timeout => {
+                            // The global timeout has expired, causing cancellation to begin.
                             self.broadcast_request(RunUnitRequest::OtherCancel);
                         }
                         CancelEvent::Signal(req) => {
@@ -534,6 +547,9 @@ where
                 })
             }
             InternalEvent::Signal(event) => self.handle_signal_event(event),
+            InternalEvent::Timeout => {
+                self.begin_cancel(CancelReason::Timeout, CancelEvent::Timeout)
+            }
             InternalEvent::Input(InputEvent::Info) => {
                 // Print current statistics.
                 HandleEventResponse::Info(InfoEvent::Input)
@@ -850,6 +866,7 @@ enum InternalEvent<'a> {
     Signal(SignalEvent),
     Input(InputEvent),
     ReportCancel,
+    Timeout,
 }
 
 /// The return result of `handle_event`.
@@ -883,6 +900,7 @@ enum InfoEvent {
 enum CancelEvent {
     Report,
     TestFailure,
+    Timeout,
     Signal(ShutdownRequest),
 }
 
@@ -919,7 +937,9 @@ mod tests {
             vec![],
             0,
             MaxFail::All,
+            Instant::now() + Duration::from_secs(86400 * 365 * 30),
         );
+
         cx.disable_signal_3_times_panic = true;
 
         // Begin cancellation with a report error.
