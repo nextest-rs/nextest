@@ -19,7 +19,7 @@ Configuration is loaded in the following order (higher priority overrides lower)
 
 Tool-specific configs allow tools to provide their own nextest configuration that integrates with repository settings.
 
-For more information about configuration hierarchy, see thhe [_Hierarchical configuration_](index.md#hierarchical-configuration).
+For more information about configuration hierarchy, see [_Hierarchical configuration_](index.md#hierarchical-configuration).
 
 ## Top-level configuration
 
