@@ -67,6 +67,9 @@ Nextest also reads the following environment variables to emulate Cargo's behavi
 `CARGO_TERM_COLOR`
 : Default color mode: `always`, `auto`, or `never`
 
+`CARGO_TERM_PROGRESS_TERM_INTEGRATION`
+: <!-- md:version 0.9.100 --> Report progress to the terminal emulator for display in places like the task bar: `true` or `false`
+
 </div>
 
 ### Cargo-related environment variables nextest reads

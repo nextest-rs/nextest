@@ -8,9 +8,17 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.100-rc.2] - 2025-06-18
+## [0.9.100] - 2025-07-07
 
-This is a test release.
+### Added
+
+- A new `global-timeout` option allows setting a global timeout for the entire run. This is an alternative to the Unix `timeout` command that also works on Windows.
+
+  For more information, see [_Setting a global timeout_](https://nexte.st/docs/features/slow-tests/#setting-a-global-timeout).
+
+- Nextest now reports progress to the terminal emulator for display in places like the task bar, similar to Cargo 1.87 and above. Terminal progress integration uses `OSC 9;4`, and is enabled by default in Windows Terminal, ConEmu, and WezTerm.
+
+  To configure this, use Cargo's [`term.progress.term-integration` option](https://doc.rust-lang.org/cargo/reference/config.html#termprogressterm-integration).
 
 ## [0.9.99] - 2025-06-16
 
