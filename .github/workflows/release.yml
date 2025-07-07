@@ -127,30 +127,23 @@ jobs:
             # https://github.com/nextest-rs/nextest/issues/1055
             build-target: x86_64-unknown-linux-gnu.2.27
             build-tool: cargo-zigbuild
-            dry-run: false
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             build-target: x86_64-pc-windows-msvc
             build-tool: cargo
-            # The Windows builds go through a signing process, so we set dry-run
-            # in the upload-rust-binary-action to true
-            dry-run: true
           - target: i686-pc-windows-msvc
             os: windows-latest
             build-target: i686-pc-windows-msvc
             build-tool: cargo
-            dry-run: true
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             build-target: aarch64-pc-windows-msvc
             build-tool: cargo
-            dry-run: true
           - target: universal-apple-darwin
             # macos-14 for M1 runners
             os: macos-14
             build-target: universal-apple-darwin
             build-tool: cargo
-            dry-run: false
 
           # Builds using cross
           - target: x86_64-unknown-linux-musl
@@ -158,22 +151,18 @@ jobs:
             build-target: x86_64-unknown-linux-musl
             # musl is statically linked and uses cross
             build-tool: cross
-            dry-run: false
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
             build-target: aarch64-unknown-linux-gnu
             build-tool: cross
-            dry-run: false
           - target: x86_64-unknown-freebsd
             os: ubuntu-22.04
             build-target: x86_64-unknown-freebsd
             build-tool: cross
-            dry-run: false
           - target: x86_64-unknown-illumos
             os: ubuntu-22.04
             build-target: x86_64-unknown-illumos
             build-tool: cross
-            dry-run: false
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -183,7 +172,6 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         run: |
           brew install b2sum
-
       - uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c # v1.27.0
         with:
           bin: cargo-nextest
@@ -192,104 +180,12 @@ jobs:
           build-tool: ${{ matrix.build-tool }}
           target: ${{ matrix.build-target }}
           tar: all
+          zip: windows
           checksum: b2,sha256
-          dry-run: ${{ matrix.dry-run }}
-          dry-run-intended: ${{ matrix.dry-run }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_PROFILE_RELEASE_LTO: true
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
-
-      - name: Install just on Windows
-        if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: taiki-e/install-action@just
-      - name: Download verpatch on Windows
-        if: endsWith(matrix.target, '-pc-windows-msvc')
-        shell: bash
-        run: |
-          set -x
-          mkdir -p target/unsigned
-          cd target/unsigned
-          cp ../${{ matrix.build-target }}/release/cargo-nextest.exe .
-          curl -LsSfO "https://github.com/nextest-rs/mukti/releases/download/verpatch-1.0.10/verpatch-bin-1.0.10.zip"
-          unzip verpatch-bin-1.0.10.zip
-      - name: Add metadata to Windows binary
-        if: endsWith(matrix.target, '-pc-windows-msvc')
-        # Bash seems to screw up argument parsing for verpatch. We really should
-        # rewrite this tool in Rust at some point.
-        shell: powershell
-        run: |
-          cd target/unsigned
-          # Extract version from ref_name, e.g. cargo-nextest-0.9.97 -> 0.9.97
-          $refName = "${{ github.ref_name }}"
-          if ($refName -match "^cargo-nextest-(.+)$") {
-            $version = $Matches[1]
-          } else {
-            Write-Error "Could not extract version from ref_name: $refName"
-            exit 1
-          }
-          .\verpatch.exe /va .\cargo-nextest.exe `
-            $version /high `
-            /pv $version `
-            /s product "cargo-nextest" `
-            /s "(c)" "(c) The nextest Contributors. License: MIT OR Apache-2.0"
-      - name: Get the Windows signing policy slug
-        if: endsWith(matrix.target, '-pc-windows-msvc')
-        id: get-signing-policy-slug
-        shell: bash
-        run: |
-          just win-signing-policy-slug "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-
-      - name: Upload unsigned Windows artifact
-        id: upload-unsigned-artifact
-        if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.target }}-unsigned
-          path: target/unsigned/cargo-nextest.exe
-      - run: mkdir -p target/signed
-        if: endsWith(matrix.target, '-pc-windows-msvc')
-      - name: Submit Windows artifact signing request
-        id: submit-signing-request
-        if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: signpath/github-action-submit-signing-request@v1.1
-        with:
-          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
-          organization-id: '34634019-2ee0-4162-830a-72cd1a0cb73f'
-          project-slug: 'nextest'
-          signing-policy-slug: '${{ steps.get-signing-policy-slug.outputs.signing-policy-slug }}'
-          github-artifact-id: '${{ steps.upload-unsigned-artifact.outputs.artifact-id }}'
-          wait-for-completion: true
-          output-artifact-directory: 'target/signed'
-      - name: Archive and upload Windows artifacts
-        id: archive-windows-artifact
-        if: endsWith(matrix.target, '-pc-windows-msvc')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -x
-          cd target/signed
-
-          tar -czf ${{ github.ref_name }}-${{ matrix.target }}.tar.gz cargo-nextest.exe
-          # Windows has 7z, not zip.
-          7z a ${{ github.ref_name }}-${{ matrix.target }}.zip cargo-nextest.exe
-
-          sha256sum --binary \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            > ${{ github.ref_name }}-${{ matrix.target }}.sha256
-          b2sum --binary \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            > ${{ github.ref_name }}-${{ matrix.target }}.b2
-
-          gh release upload ${{ github.ref_name }} \
-            ${{ github.ref_name }}-${{ matrix.target }}.tar.gz \
-            ${{ github.ref_name }}-${{ matrix.target }}.zip \
-            ${{ github.ref_name }}-${{ matrix.target }}.sha256 \
-            ${{ github.ref_name }}-${{ matrix.target }}.b2
-
       - name: Set archive output variable
         id: archive-output
         shell: bash
