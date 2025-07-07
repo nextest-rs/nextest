@@ -27,6 +27,8 @@ These parameters are specified at the root level of the configuration file.
 
 ### `nextest-version`
 
+<!-- md:version 0.9.55 -->
+
 - **Type**: String or object
 - **Description**: Specifies the minimum required version of nextest
 - **Documentation**: [_Minimum nextest versions_](minimum-versions.md)
@@ -44,7 +46,9 @@ These parameters are specified at the root level of the configuration file.
 - **Description**: Enables experimental features
 - **Documentation**: [_Setup scripts_](setup-scripts.md), [_wrapper scripts_](wrapper-scripts.md)
 - **Default**: `[]`: no experimental features are enabled
-- **Valid values**: `["setup-scripts", "wrapper-scripts"]`
+- **Valid values**:
+  - `"setup-scripts"` <!-- md:version 0.9.98 --> (originally <!-- md:version 0.9.59 -->)
+  - `"wrapper-scripts"` <!-- md:version 0.9.98 -->
 - **Example**:
   ```toml
   experimental = ["setup-scripts"]
@@ -75,6 +79,16 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 - **Default**: `all()`: all tests are run
 - **Example**: `default-filter = "not test(very_slow_tests)"`
 
+#### `profile.<name>.global-timeout`
+
+<!-- md:version 0.9.100 -->
+
+- **Type**: String (duration)
+- **Description**: A global timeout for test execution
+- **Documentation**: [_Setting a global timeout_](../features/slow-tests.md#setting-a-global-timeout)
+- **Default**: none
+- **Example**: `global-timeout = "2h"`
+
 #### `profile.<name>.test-threads`
 
 - **Type**: Integer or string
@@ -92,6 +106,8 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 - **Default**: `1`
 
 #### `profile.<name>.run-extra-args`
+
+<!-- md:version 0.9.86 -->
 
 - **Type**: Array of strings
 - **Description**: Extra arguments to pass to test binaries
@@ -196,6 +212,8 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 
 #### `profile.<name>.test-group`
 
+<!-- md:version 0.9.48 -->
+
 - **Type**: String
 - **Description**: Assigns tests to a custom group for resource management
 - **Documentation**: [_Test groups for mutual exclusion_](test-groups.md)
@@ -234,6 +252,8 @@ Profiles are configured under `[profile.<name>]`. The default profile is called 
 - **Default**: `true`
 
 ### Archive configuration
+
+<!-- md:version 0.9.70 -->
 
 #### `profile.<name>.archive.include`
 
@@ -276,6 +296,8 @@ At least one of these filters must be specified.
 
 #### `platform`
 
+<!-- md:version 0.9.58 -->
+
 - **Type**: String or Object
 - **Description**: Platform specification for when override applies
 - **Documentation**: [_Specifying platforms_](specifying-platforms.md)
@@ -291,12 +313,16 @@ At least one of these filters must be specified.
 
 #### `default-filter`
 
+<!-- md:version 0.9.84 -->
+
 - **Type**: String (filterset expression)
 - **Description**: Override the default filter for specific platforms
 - **Documentation**: [_Running a subset of tests by default_](../running.md#running-a-subset-of-tests-by-default)
 - **Note**: Can only be used with `platform` specification
 
 #### `priority`
+
+<!-- md:version 0.9.91 -->
 
 - **Type**: Integer (-100 to 100)
 - **Description**: Test priority (a greater number means a higher priority)
@@ -320,6 +346,8 @@ All profile-level settings can be overridden:
 
 ## Test group configuration
 
+<!-- md:version 0.9.48 -->
+
 Custom test groups are defined under `[test-groups.<name>]` sections.
 
 For detailed information, see [_Test groups for mutual exclusion_](test-groups.md).
@@ -332,9 +360,13 @@ For detailed information, see [_Test groups for mutual exclusion_](test-groups.m
 
 ## Script configuration
 
+<!-- md:version 0.9.59 -->
+
 Scripts are configured under `[scripts.setup.<name>]` and `[scripts.wrapper.<name>]` sections.
 
 ### Setup scripts
+
+<!-- md:version 0.9.98 -->
 
 For detailed information, see [_Setup scripts_](setup-scripts.md).
 
@@ -401,6 +433,8 @@ For detailed information, see [_Setup scripts_](setup-scripts.md).
 
 ### Wrapper scripts
 
+<!-- md:version 0.9.98 -->
+
 For detailed information, see [_Wrapper scripts_](wrapper-scripts.md).
 
 #### `scripts.wrapper.<name>.command`
@@ -425,6 +459,8 @@ For detailed information, see [_Wrapper scripts_](wrapper-scripts.md).
 - **Default**: `"ignore"`
 
 ## Profile script configuration
+
+<!-- md:version 0.9.59 -->
 
 Profile-specific script configuration under `[[profile.<name>.scripts]]` sections.
 

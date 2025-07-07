@@ -923,9 +923,9 @@ impl CancelReason {
             CancelReason::SetupScriptFailure => "setup script failure",
             CancelReason::TestFailure => "test failure",
             CancelReason::ReportError => "reporting error",
+            CancelReason::GlobalTimeout => "global timeout",
             CancelReason::Signal => "signal",
             CancelReason::Interrupt => "interrupt",
-            CancelReason::GlobalTimeout => "timeout",
             CancelReason::SecondSignal => "second signal",
         }
     }

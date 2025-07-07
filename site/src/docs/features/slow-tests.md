@@ -98,6 +98,19 @@ waits indefinitely for the test to shut down.
 [process group]: https://en.wikipedia.org/wiki/Process_group
 [job objects]: https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects
 
+## Setting a global timeout
+
+<!-- md:version 0.9.100 -->
+
+You can set a global timeout for the entire test run via the `global-timeout` configuration. Test runs will be terminated if they take longer than this timeout.
+
+```toml title="Setting a global timeout"
+[profile.default]
+global-timeout = "2h"
+```
+
+This is an alternative to the [Unix `timeout` command](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/timeout.html) that also works on Windows.
+
 ## Per-test settings
 
 Nextest supports [per-test settings](../configuration/per-test-overrides.md) for `slow-timeout` and `terminate-after`.
