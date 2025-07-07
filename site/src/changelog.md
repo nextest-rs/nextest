@@ -16,6 +16,8 @@ policy](https://nexte.st/docs/stability/) for how versioning works with cargo-ne
 
   For more information, see [_Setting a global timeout_](https://nexte.st/docs/features/slow-tests/#setting-a-global-timeout).
 
+  Thanks to [robabla](https://github.com/roblabla) for your first contribution!
+
 - Nextest now reports progress to the terminal emulator for display in places like the task bar, similar to Cargo 1.87 and above. Terminal progress integration uses `OSC 9;4`, and is enabled by default in Windows Terminal, ConEmu, and WezTerm.
 
   To configure this, use Cargo's [`term.progress.term-integration` option](https://doc.rust-lang.org/cargo/reference/config.html#termprogressterm-integration).
