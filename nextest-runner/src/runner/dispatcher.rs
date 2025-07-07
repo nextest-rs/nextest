@@ -302,7 +302,11 @@ where
                         }
                         CancelEvent::GlobalTimeout => {
                             // The global timeout has expired, causing cancellation to begin.
-                            self.broadcast_request(RunUnitRequest::OtherCancel);
+                            self.broadcast_request(RunUnitRequest::Signal(
+                                SignalRequest::Shutdown(ShutdownRequest::Once(
+                                    ShutdownEvent::GLOBAL_TIMEOUT,
+                                )),
+                            ));
                         }
                         CancelEvent::Signal(req) => {
                             // A signal has caused cancellation to begin. Let all the child

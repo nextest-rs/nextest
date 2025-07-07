@@ -109,6 +109,8 @@ You can set a global timeout for the entire test run via the `global-timeout` co
 global-timeout = "2h"
 ```
 
+When a global timeout occurs, nextest follows the procedure in [_How nextest terminates tests_](#how-nextest-terminates-tests) above.
+
 This is an alternative to the [Unix `timeout` command](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/timeout.html) that also works on Windows.
 
 ## Per-test settings

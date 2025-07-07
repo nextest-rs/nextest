@@ -237,6 +237,14 @@ pub(crate) enum ShutdownEvent {
 }
 
 impl ShutdownEvent {
+    // On Unix, send SIGTERM on global timeout.
+    #[cfg(unix)]
+    pub(crate) const GLOBAL_TIMEOUT: Self = Self::Term;
+
+    // On Windows, the best we can do is to interrupt the process.
+    #[cfg(not(unix))]
+    pub(crate) const GLOBAL_TIMEOUT: Self = Self::Interrupt;
+
     #[cfg(test)]
     pub(crate) const ALL_VARIANTS: &'static [Self] = &[
         #[cfg(unix)]
