@@ -41,7 +41,6 @@ smallvec = { version = "1.15.1", default-features = false, features = ["const_ge
 target-spec = { version = "3.5.0", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.4", default-features = false, features = ["fixtures"] }
 tokio = { version = "1.46.1", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time", "tracing"] }
-toml_edit = { version = "0.22.27", features = ["serde"] }
 tracing-core = { version = "0.1.33" }
 xxhash-rust = { version = "0.8.15", default-features = false, features = ["xxh3", "xxh64"] }
 
