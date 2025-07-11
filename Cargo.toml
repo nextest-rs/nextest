@@ -25,7 +25,7 @@ bytes = "1.10.1"
 camino = "1.1.10"
 camino-tempfile = "1.4.1"
 camino-tempfile-ext = "0.3.2"
-cargo_metadata = "0.20.0"
+cargo_metadata = "0.21.0"
 # We specify default-no-update here because if users just run:
 #
 # cargo build --no-default-features --features default-no-update
