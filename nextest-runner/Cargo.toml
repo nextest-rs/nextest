@@ -147,6 +147,7 @@ pretty_assertions.workspace = true
 proptest.workspace = true
 test-strategy.workspace = true
 test-case.workspace = true
+tracing-subscriber.workspace = true
 
 [[bin]]
 name = "passthrough"

@@ -35,7 +35,7 @@ use test_case::test_case;
 
 #[test]
 fn test_list_binaries() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let graph = &*PACKAGE_GRAPH;
     let build_platforms = BuildPlatforms::new_with_no_target()?;
@@ -70,7 +70,7 @@ fn test_list_binaries() -> Result<()> {
 
 #[test]
 fn test_list_tests() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
@@ -116,7 +116,7 @@ fn test_list_tests() -> Result<()> {
 
 #[test]
 fn test_run() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
@@ -240,7 +240,7 @@ fn test_run() -> Result<()> {
 
 #[test]
 fn test_run_ignored() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let pcx = ParseContext::new(&PACKAGE_GRAPH);
     let expr = Filterset::parse(
@@ -340,7 +340,7 @@ fn test_run_ignored() -> Result<()> {
 /// Test that filtersets with regular substring filters behave as expected.
 #[test]
 fn test_filter_expr_with_string_filters() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let pcx = ParseContext::new(&PACKAGE_GRAPH);
     let expr = Filterset::parse(
@@ -412,7 +412,7 @@ fn test_filter_expr_with_string_filters() -> Result<()> {
 /// Test that filtersets without regular substring filters behave as expected.
 #[test]
 fn test_filter_expr_without_string_filters() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let pcx = ParseContext::new(&PACKAGE_GRAPH);
     let expr = Filterset::parse(
@@ -453,7 +453,7 @@ fn test_filter_expr_without_string_filters() -> Result<()> {
 
 #[test]
 fn test_string_filters_without_filter_expr() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let test_filter = TestFilterBuilder::new(
         RunIgnored::Default,
@@ -498,7 +498,7 @@ fn test_string_filters_without_filter_expr() -> Result<()> {
     ; "retry overrides ignored"
 )]
 fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
@@ -663,7 +663,7 @@ fn test_retries(retries: Option<RetryPolicy>) -> Result<()> {
 
 #[test]
 fn test_termination() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let pcx = ParseContext::new(&PACKAGE_GRAPH);
     let expr = Filterset::parse(

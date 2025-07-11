@@ -2206,7 +2206,6 @@ dependencies = [
  "tokio",
  "toml_edit",
  "tracing-core",
- "tracing-subscriber",
  "windows-sys 0.52.0",
  "windows-sys 0.59.0",
  "xxhash-rust",

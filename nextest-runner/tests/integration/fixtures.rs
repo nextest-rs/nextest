@@ -154,7 +154,11 @@ pub(crate) fn ensure_execution_result(
 }
 
 #[track_caller]
-pub(crate) fn set_env_vars() {
+pub(crate) fn test_init() {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+
     // The dynamic library tests require this flag.
     // SAFETY:
     // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
