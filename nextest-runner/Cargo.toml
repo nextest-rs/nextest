@@ -58,7 +58,6 @@ serde_ignored.workspace = true
 serde_json.workspace = true
 serde_path_to_error.workspace = true
 shell-words.workspace = true
-smallvec.workspace = true
 smol_str = { workspace = true, features = ["serde"] }
 strip-ansi-escapes.workspace = true
 supports-unicode.workspace = true

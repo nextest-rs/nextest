@@ -20,7 +20,6 @@ dialoguer.workspace = true
 duct.workspace = true
 enable-ansi-support.workspace = true
 guppy.workspace = true
-idna_adapter.workspace = true
 indent_write.workspace = true
 itertools.workspace = true
 miette = { workspace = true, features = ["fancy"] }
@@ -31,10 +30,8 @@ nextest-metadata = { version = "=0.12.2", path = "../nextest-metadata" }
 nextest-runner = { version = "=0.83.0", path = "../nextest-runner" }
 nextest-workspace-hack.workspace = true
 owo-colors.workspace = true
-pathdiff.workspace = true
 quick-junit.workspace = true
 semver.workspace = true
-serde_json.workspace = true
 shell-words.workspace = true
 supports-color.workspace = true
 supports-unicode.workspace = true
@@ -45,9 +42,6 @@ tracing-subscriber = { workspace = true, default-features = false }
 
 [build-dependencies]
 camino.workspace = true
-
-[dev-dependencies]
-camino-tempfile.workspace = true
 
 [features]
 default = ["default-no-update", "self-update"]

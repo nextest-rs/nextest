@@ -7,9 +7,7 @@ authors = [
     "Author 2 <author2@example.org>",
 ]
 homepage = "https://fake-homepage.example.com"
-# Specify both a license and a license file for test_cargo_env_vars.
 license = "MIT OR Apache-2.0"
-license-file = "foo.md"
 repository = "https://example.com/fake/repository"
 edition = "2018"
 # This was previously "1.56", but that causes a divergence between compile-time and runtime because

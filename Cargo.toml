@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-rust-version = "1.85"
+rust-version = "1.86"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
@@ -25,7 +25,7 @@ bytes = "1.10.1"
 camino = "1.1.10"
 camino-tempfile = "1.4.1"
 camino-tempfile-ext = "0.3.2"
-cargo_metadata = "0.20.0"
+cargo_metadata = "0.21.0"
 # We specify default-no-update here because if users just run:
 #
 # cargo build --no-default-features --features default-no-update
@@ -53,11 +53,9 @@ datatest-stable = { version = "0.3.2", features = ["include-dir"] }
 dialoguer = "0.11.0"
 debug-ignore = "1.0.5"
 derive-where = "1.5.0"
-duct = "0.13.7"
+duct = "1.0.0"
 dunce = "1.0.5"
 enable-ansi-support = "0.2.1"
-# we don't use the default formatter so we don't need default features
-env_logger = { version = "0.11.8", default-features = false }
 fixture-data = { path = "fixture-data" }
 fs-err = "3.1.1"
 future-queue = "0.4.0"
@@ -71,7 +69,6 @@ humantime-serde = "1.1.1"
 iddqd = "0.3.8"
 # Disable punycode parsing since we only access well-known domains.
 idna_adapter = "=1.0.0"
-indenter = "0.3.3"
 indent_write = "2.2.0"
 indexmap = "2.10.0"
 indicatif = "0.18.0"
@@ -129,7 +126,7 @@ thiserror = "2.0.12"
 tokio = "1.46.1"
 tokio-stream = "0.1.17"
 toml = "0.8.23"
-toml_edit = "0.22.27"
+toml_edit = "0.23.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", default-features = false, features = ["std", "tracing-log", "fmt"] }
 unicode-ident = "1.0.18"
