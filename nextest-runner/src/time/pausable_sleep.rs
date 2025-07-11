@@ -40,7 +40,7 @@ impl PausableSleep {
             SleepPauseState::Running => {
                 // Figure out how long there is until the deadline.
                 let deadline = this.sleep.deadline();
-                this.sleep.reset(far_future());
+                this.sleep.reset(one_year());
                 // This will return 0 if the deadline has passed. That's fine because we'll just
                 // reset the timer back to 0 in resume, which will behave correctly.
                 let remaining = deadline.duration_since(Instant::now());
@@ -124,17 +124,14 @@ enum SleepPauseState {
     Paused { remaining: Duration },
 }
 
-// Cribbed from tokio.
-fn far_future() -> Instant {
-    Instant::now() + far_future_duration()
+fn one_year() -> Instant {
+    Instant::now() + one_year_duration()
 }
 
-pub(crate) const fn far_future_duration() -> Duration {
-    // Roughly 30 years from now.
-    // API does not provide a way to obtain max `Instant`
-    // or convert specific date in the future to instant.
-    // 1000 years overflows on macOS, 100 years overflows on FreeBSD.
-    Duration::from_secs(86400 * 365 * 30)
+pub(crate) const fn one_year_duration() -> Duration {
+    // 365 days from now. Tokio's timer wheel's top level goes to 2 years, so 1
+    // year is half of that which should be suitable for this use case.
+    Duration::from_secs(86400 * 365)
 }
 
 #[cfg(test)]

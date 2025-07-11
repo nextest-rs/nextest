@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::time::far_future_duration;
+use crate::time::one_year_duration;
 use serde::{Deserialize, de::IntoDeserializer};
 use std::{fmt, num::NonZeroUsize, time::Duration};
 
@@ -20,7 +20,7 @@ pub struct SlowTimeout {
 impl SlowTimeout {
     /// A reasonable value for "maximum slow timeout".
     pub(crate) const VERY_LARGE: Self = Self {
-        period: far_future_duration(),
+        period: one_year_duration(),
         terminate_after: None,
         grace_period: Duration::from_secs(10),
     };
