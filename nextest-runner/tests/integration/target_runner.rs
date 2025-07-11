@@ -50,7 +50,7 @@ fn runner_for_target(triple: Option<&str>) -> Result<(BuildPlatforms, TargetRunn
 
 #[test]
 fn parses_cargo_env() {
-    set_env_vars();
+    test_init();
     // SAFETY:
     // https://nexte.st/docs/configuration/env-vars/#altering-the-environment-within-tests
     unsafe { std::env::set_var(current_runner_env_var(), "cargo_with_default --arg --arg2") };
@@ -188,7 +188,7 @@ fn current_runner_env_var() -> String {
 
 #[test]
 fn test_listing_with_target_runner() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
     let test_list = FIXTURE_TARGETS.make_test_list(
@@ -233,7 +233,7 @@ fn test_listing_with_target_runner() -> Result<()> {
 
 #[test]
 fn test_run_with_target_runner() -> Result<()> {
-    set_env_vars();
+    test_init();
 
     let test_filter = TestFilterBuilder::default_set(RunIgnored::Default);
 

@@ -24,6 +24,7 @@ setup = "build-seed-archive"
 [profile.ci]
 # Don't fail fast in CI to run the full test suite.
 fail-fast = false
+slow-timeout = { period = "60s", terminate-after = 1 }
 
 [profile.ci.junit]
 path = 'junit.xml'
