@@ -9,7 +9,7 @@ use super::{
     TestSettings, TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
 };
 use crate::{
-    config::{ListSettings, ProfileScriptType, ScriptInfo, SetupScriptConfig},
+    config::{ListSettings, ProfileScriptType, ScriptInfo, SetupScriptConfig, bench::BenchConfig},
     errors::{
         ConfigParseError, ConfigParseErrorKind, ProfileListScriptUsesRunFiltersError,
         ProfileNotFound, ProfileScriptErrors, ProfileUnknownScriptError,
@@ -19,6 +19,7 @@ use crate::{
     list::TestList,
     platform::BuildPlatforms,
     reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
+    run_mode::NextestRunMode,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{
@@ -1003,10 +1004,16 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns the time after which tests are treated as slow for this profile.
-    pub fn slow_timeout(&self) -> SlowTimeout {
+    pub fn slow_timeout(&self, run_mode: NextestRunMode) -> SlowTimeout {
         self.custom_profile
-            .and_then(|profile| profile.slow_timeout)
-            .unwrap_or(self.default_profile.slow_timeout)
+            .and_then(|profile| match run_mode {
+                NextestRunMode::Test => profile.slow_timeout,
+                NextestRunMode::Benchmark => profile.bench.as_ref().map(|b| b.slow_timeout),
+            })
+            .unwrap_or(match run_mode {
+                NextestRunMode::Test => self.default_profile.slow_timeout,
+                NextestRunMode::Benchmark => self.default_profile.bench.slow_timeout,
+            })
     }
 
     /// Returns the time after which we should stop running tests.
@@ -1077,16 +1084,21 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns settings for individual tests.
-    pub fn settings_for(&self, query: &TestQuery<'_>) -> TestSettings<'_> {
-        TestSettings::new(self, query)
+    pub fn settings_for(
+        &self,
+        run_mode: NextestRunMode,
+        query: &TestQuery<'_>,
+    ) -> TestSettings<'_> {
+        TestSettings::new(self, run_mode, query)
     }
 
     /// Returns override settings for individual tests, with sources attached.
     pub(crate) fn settings_with_source_for(
         &self,
+        run_mode: NextestRunMode,
         query: &TestQuery<'_>,
     ) -> TestSettings<'_, SettingSource<'_>> {
-        TestSettings::new(self, query)
+        TestSettings::new(self, run_mode, query)
     }
 
     /// Returns the JUnit configuration for this profile.
@@ -1223,6 +1235,7 @@ pub(super) struct DefaultProfileImpl {
     scripts: Vec<DeserializedProfileScriptConfig>,
     junit: DefaultJunitImpl,
     archive: ArchiveConfig,
+    bench: BenchConfig,
 }
 
 impl DefaultProfileImpl {
@@ -1267,6 +1280,7 @@ impl DefaultProfileImpl {
             scripts: p.scripts,
             junit: DefaultJunitImpl::for_default_profile(p.junit),
             archive: p.archive.expect("archive present in default profile"),
+            bench: p.bench.expect("bench present in default profile"),
         }
     }
 
@@ -1325,6 +1339,8 @@ pub(super) struct CustomProfileImpl {
     junit: JunitImpl,
     #[serde(default)]
     archive: Option<ArchiveConfig>,
+    #[serde(default)]
+    bench: Option<BenchConfig>,
 }
 
 impl CustomProfileImpl {

@@ -20,6 +20,7 @@
 //! errors early leads to a better user experience.
 
 mod archive;
+mod bench;
 mod config_impl;
 mod global_timeout;
 mod helpers;

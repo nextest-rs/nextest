@@ -388,6 +388,8 @@ pub struct RunStats {
     pub exec_failed: usize,
 
     /// The number of tests that were skipped.
+    ///
+    /// Does not include regular tests when nextest is run in benchmark mode.
     pub skipped: usize,
 }
 
@@ -958,15 +960,6 @@ impl UnitKind {
         match self {
             UnitKind::Test => Self::EXECUTING_TEST_MESSAGE,
             UnitKind::Script => Self::EXECUTING_SCRIPT_MESSAGE,
-        }
-    }
-}
-
-impl fmt::Display for UnitKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UnitKind::Script => write!(f, "script"),
-            UnitKind::Test => write!(f, "test"),
         }
     }
 }
