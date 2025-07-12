@@ -38,7 +38,8 @@ banner doctests
 ptime -m cargo test --doc
 
 banner local-nt
-ptime -m cargo local-nt run --profile ci
+# Run tests in a loop until failure.
+while cargo local-nt run --profile ci; do sleep 1; rm -r fixtures/nextest-tests/target && echo "Running tests"; done
 
 banner release
 ptime -m cargo nextest run --profile ci
