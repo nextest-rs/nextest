@@ -8,6 +8,17 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.101] - 2025-07-11
+
+### Fixed
+
+- Restored compatibility with Cargo's unstable `bindeps` feature in some circumstances.
+
+### Changed
+
+- Tokio downgraded to 1.45.0 to try and get to the bottom of hangs in some configurations. If you encounter nextest 0.9.100 or 0.9.101 getting stuck, please comment in [#2463](https://github.com/nextest-rs/nextest/issues/2463). Thank you!
+- MSRV updated to Rust 1.86.
+
 ## [0.9.100] - 2025-07-07
 
 ### Added
@@ -1487,6 +1498,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.101]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.101
 [0.9.100]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.100
 [0.9.99]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.99
 [0.9.98]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.98
