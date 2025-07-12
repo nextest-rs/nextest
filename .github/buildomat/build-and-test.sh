@@ -41,5 +41,6 @@ ptime -m cargo test --doc
 # # Run tests in a loop until failure.
 # while cargo local-nt run --profile ci; do sleep 1; rm -r fixtures/nextest-tests/target && echo "Running tests"; done
 
+export CARGO_CACHE_AUTO_CLEAN_FREQUENCY=never
 banner release
 while cargo nextest run --profile ci; do sleep 1; rm -r fixtures/nextest-tests/target && echo "Running tests"; done
