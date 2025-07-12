@@ -11,7 +11,7 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     ffi::OsString,
-    fmt,
+    fmt, iter,
     process::{Command, ExitStatus},
 };
 
@@ -114,10 +114,16 @@ impl CargoNextestCli {
     }
 
     pub fn output(&self) -> CargoNextestOutput {
-        let mut command = std::process::Command::new(&self.bin);
+        let mut command = Command::new(&self.bin);
         command.args(&self.args);
         command.envs(&self.envs);
-        let output = command.output().expect("failed to execute");
+
+        let command_str = shell_words::join(
+            iter::once(self.bin.as_str()).chain(self.args.iter().map(|s| s.as_str())),
+        );
+        eprintln!("*** executing: {command_str}");
+        // TODO: tee output rather than capturing it
+        let output = command.output().expect("process spawn succeeeded");
 
         let ret = CargoNextestOutput {
             command: Box::new(command),
@@ -125,6 +131,11 @@ impl CargoNextestCli {
             stdout: output.stdout,
             stderr: output.stderr,
         };
+
+        eprintln!(
+            "*** command {} exited with status {}",
+            command_str, output.status
+        );
 
         if !self.unchecked && !output.status.success() {
             panic!("command failed:\n\n{ret}");

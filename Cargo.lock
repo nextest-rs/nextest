@@ -1746,6 +1746,7 @@ dependencies = [
  "regex",
  "serde_json",
  "sha2",
+ "shell-words",
  "target-spec",
  "target-spec-miette",
  "tokio",

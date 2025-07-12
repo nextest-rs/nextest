@@ -47,6 +47,7 @@ nextest-metadata.workspace = true
 nextest-workspace-hack.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+shell-words.workspace = true
 whoami.workspace = true
 
 [dev-dependencies]
