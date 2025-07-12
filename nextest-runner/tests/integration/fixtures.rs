@@ -266,6 +266,7 @@ fn init_fixture_raw_cargo_test_output() -> Vec<u8> {
     // This environment variable is required to test the #[bench] fixture. Note that THIS IS FOR
     // TEST CODE ONLY. NEVER USE THIS IN PRODUCTION.
     .env("RUSTC_BOOTSTRAP", "1")
+    .env("CARGO_LOG", "debug")
     .dir(workspace_root())
     .stdout_capture();
 
