@@ -4,15 +4,17 @@
 use camino::Utf8PathBuf;
 use color_eyre::{
     Result,
-    eyre::{Context, bail},
+    eyre::{Context, bail, eyre},
 };
 use nextest_metadata::TestListSummary;
 use std::{
     borrow::Cow,
     collections::HashMap,
     ffi::OsString,
-    fmt, iter,
-    process::{Command, ExitStatus},
+    fmt,
+    io::{self, Read, Write},
+    iter,
+    process::{Command, ExitStatus, Stdio},
 };
 
 pub fn cargo_bin() -> String {
@@ -117,28 +119,89 @@ impl CargoNextestCli {
         let mut command = Command::new(&self.bin);
         command.args(&self.args);
         command.envs(&self.envs);
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
         let command_str = shell_words::join(
             iter::once(self.bin.as_str()).chain(self.args.iter().map(|s| s.as_str())),
         );
         eprintln!("*** executing: {command_str}");
-        // TODO: tee output rather than capturing it
-        let output = command.output().expect("process spawn succeeeded");
+
+        let mut child = command.spawn().expect("process spawn succeeded");
+        let mut stdout = child.stdout.take().expect("stdout is a pipe");
+        let mut stderr = child.stderr.take().expect("stderr is a pipe");
+
+        let stdout_thread = std::thread::spawn(move || {
+            let mut stdout_buf = Vec::new();
+            loop {
+                let mut buffer = [0; 1024];
+                match stdout.read(&mut buffer) {
+                    Ok(n @ 1..) => {
+                        stdout_buf.extend_from_slice(&buffer[..n]);
+                        let mut io_stdout = std::io::stdout().lock();
+                        io_stdout
+                            .write_all(&buffer[..n])
+                            .wrap_err("error writing to our stdout")?;
+                        io_stdout.flush().wrap_err("error flushing our stdout")?;
+                    }
+                    Ok(0) => break Ok(stdout_buf),
+                    Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(error) => {
+                        break Err(eyre!(error).wrap_err("error reading from child stdout"));
+                    }
+                }
+            }
+        });
+
+        let stderr_thread = std::thread::spawn(move || {
+            let mut stderr_buf = Vec::new();
+            loop {
+                let mut buffer = [0; 1024];
+                match stderr.read(&mut buffer) {
+                    Ok(n @ 1..) => {
+                        stderr_buf.extend_from_slice(&buffer[..n]);
+                        let mut io_stderr = std::io::stderr().lock();
+                        io_stderr
+                            .write_all(&buffer[..n])
+                            .wrap_err("error writing to our stderr")?;
+                        io_stderr.flush().wrap_err("error flushing our stderr")?;
+                    }
+                    Ok(0) => break Ok(stderr_buf),
+                    Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(error) => {
+                        break Err(eyre!(error).wrap_err("error reading from child stderr"));
+                    }
+                }
+            }
+        });
+
+        // Wait for the child process to finish first. The stdout and stderr
+        // threads will exit once the process has exited and the pipes' write
+        // ends have been closed.
+        let exit_status = child.wait().expect("child process exited");
+
+        let stdout_buf = stdout_thread
+            .join()
+            .expect("stdout thread exited without panicking")
+            .expect("wrote to our stdout successfully");
+        let stderr_buf = stderr_thread
+            .join()
+            .expect("stderr thread exited without panicking")
+            .expect("wrote to our stderr successfully");
 
         let ret = CargoNextestOutput {
             command: Box::new(command),
-            exit_status: output.status,
-            stdout: output.stdout,
-            stderr: output.stderr,
+            exit_status,
+            stdout: stdout_buf,
+            stderr: stderr_buf,
         };
 
-        eprintln!(
-            "*** command {} exited with status {}",
-            command_str, output.status
-        );
+        eprintln!("*** command {command_str} exited with status {exit_status}");
 
-        if !self.unchecked && !output.status.success() {
-            panic!("command failed:\n\n{ret}");
+        if !self.unchecked && !exit_status.success() {
+            panic!("command failed");
         }
 
         ret
