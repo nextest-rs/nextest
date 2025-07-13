@@ -289,6 +289,8 @@ pub enum ExpectedError {
         #[source]
         err: std::io::Error,
     },
+    #[error("failed to clear failed test history")]
+    ClearFailedTestsError { error: String },
 }
 
 impl ExpectedError {
@@ -433,7 +435,8 @@ impl ExpectedError {
             | Self::SignalHandlerSetupError { .. }
             | Self::ShowTestGroupsError { .. }
             | Self::InvalidMessageFormatVersion { .. }
-            | Self::DebugExtractReadError { .. } => NextestExitCode::SETUP_ERROR,
+            | Self::DebugExtractReadError { .. }
+            | Self::ClearFailedTestsError { .. } => NextestExitCode::SETUP_ERROR,
             Self::ConfigParseError { err } => {
                 // Experimental features not being enabled are their own error.
                 match err.kind() {
@@ -984,6 +987,10 @@ impl ExpectedError {
             Self::DebugExtractWriteError { format, err } => {
                 error!("error writing {format} output");
                 Some(err as &dyn Error)
+            }
+            Self::ClearFailedTestsError { error } => {
+                error!("failed to clear failed test history: {}", error);
+                None
             }
         };
 

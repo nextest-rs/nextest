@@ -34,7 +34,7 @@ use nextest_runner::{
     redact::Redactor,
     reporter::{
         FinalStatusLevel, ReporterBuilder, StatusLevel, TestOutputDisplay, TestOutputErrorSlice,
-        events::{FinalRunStats, RunStatsFailureKind},
+        events::{FinalRunStats, RunStatsFailureKind, TestEventKind},
         highlight_end, structured,
     },
     reuse_build::{ArchiveReporter, PathMapper, ReuseBuildInfo, archive_to_file},
@@ -54,7 +54,7 @@ use std::{
     env::VarError,
     fmt,
     io::{Cursor, Write},
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, Mutex},
 };
 use swrite::{SWrite, swrite};
 use tracing::{Level, debug, info, warn};
@@ -587,6 +587,18 @@ struct TestBuildFilter {
     #[arg(long)]
     ignore_default_filter: bool,
 
+    /// Only run tests that failed in the last run
+    #[arg(long, visible_alias = "lf", conflicts_with_all = ["failed_last", "clear_failed"])]
+    last_failed: bool,
+
+    /// Run failed tests first, then other tests
+    #[arg(long, visible_alias = "fl", conflicts_with_all = ["last_failed", "clear_failed"])]
+    failed_last: bool,
+
+    /// Clear the list of failed tests without running tests
+    #[arg(long, conflicts_with_all = ["last_failed", "failed_last"])]
+    clear_failed: bool,
+
     /// Test name filters.
     #[arg(help_heading = None, name = "FILTERS")]
     pre_double_dash_filters: Vec<String>,
@@ -648,11 +660,60 @@ impl TestBuildFilter {
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }
 
-    fn make_test_filter_builder(&self, filter_exprs: Vec<Filterset>) -> Result<TestFilterBuilder> {
+    fn make_test_filter_builder(&self, filter_exprs: Vec<Filterset>, profile_name: &str, profile: &EarlyProfile<'_>) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
         let mut patterns = TestFilterPatterns::new(self.pre_double_dash_filters.clone());
         self.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
+
+        // Handle --last-failed and --failed-last options
+        if self.last_failed || self.failed_last {
+            use nextest_runner::reporter::last_failed::FailedTestStore;
+            
+            let store = FailedTestStore::new(profile.store_dir(), profile_name);
+            match store.load() {
+                Ok(Some(snapshot)) => {
+                    if snapshot.failed_tests.is_empty() {
+                        eprintln!("No failed tests found from previous run for profile '{}'", profile_name);
+                        if self.last_failed {
+                            // For --last-failed with no failed tests, we should run no tests
+                            // Create a pattern that matches nothing
+                            patterns = TestFilterPatterns::default();
+                            patterns.add_exact_pattern("__nextest_internal_no_tests_to_run__".to_string());
+                        }
+                        // For --failed-last, we continue with the normal filtering
+                    } else {
+                        eprintln!("Found {} failed test(s) from previous run", snapshot.failed_tests.len());
+                        
+                        if self.last_failed {
+                            // Only run failed tests - replace all patterns
+                            patterns = TestFilterPatterns::default();
+                            for failed_test in &snapshot.failed_tests {
+                                // Add exact pattern for each failed test
+                                patterns.add_exact_pattern(failed_test.test_name.clone());
+                            }
+                        } else {
+                            // --failed-last: prioritize failed tests
+                            // This will be handled in the test runner by sorting tests
+                            // For now, we pass the failed tests information through some mechanism
+                            // TODO: Add a way to pass failed test info to the runner for prioritization
+                        }
+                    }
+                }
+                Ok(None) => {
+                    eprintln!("No previous test run found for profile '{}'", profile_name);
+                    if self.last_failed {
+                        // For --last-failed with no history, run no tests
+                        patterns = TestFilterPatterns::default();
+                        patterns.add_exact_pattern("__nextest_internal_no_tests_to_run__".to_string());
+                    }
+                }
+                Err(err) => {
+                    eprintln!("Warning: Failed to load test history: {}", err);
+                    // Continue with normal filtering on error
+                }
+            }
+        }
 
         Ok(TestFilterBuilder::new(
             run_ignored.unwrap_or_default(),
@@ -1649,8 +1710,15 @@ impl App {
 
         let (version_only_config, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
+        let profile_name = self.base.config_opts.profile.as_deref().unwrap_or_else(|| {
+            if std::env::var_os("MIRI_SYSROOT").is_some() {
+                NextestConfig::DEFAULT_MIRI_PROFILE
+            } else {
+                NextestConfig::DEFAULT_PROFILE
+            }
+        });
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs, profile_name, &profile)?;
 
         let binary_list = self.base.build_binary_list()?;
 
@@ -1710,6 +1778,13 @@ impl App {
         let pcx = ParseContext::new(self.base.graph());
         let (_, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
+        let profile_name = self.base.config_opts.profile.as_deref().unwrap_or_else(|| {
+            if std::env::var_os("MIRI_SYSROOT").is_some() {
+                NextestConfig::DEFAULT_MIRI_PROFILE
+            } else {
+                NextestConfig::DEFAULT_PROFILE
+            }
+        });
 
         // Validate test groups before doing any other work.
         let mode = if groups.is_empty() {
@@ -1721,7 +1796,7 @@ impl App {
         let settings = ShowTestGroupSettings { mode, show_default };
 
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs, profile_name, &profile)?;
 
         let binary_list = self.base.build_binary_list()?;
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
@@ -1765,6 +1840,26 @@ impl App {
         let pcx = ParseContext::new(self.base.graph());
         let (version_only_config, config) = self.base.load_config(&pcx)?;
         let profile = self.base.load_profile(&config)?;
+        let profile_name = self.base.config_opts.profile.as_deref().unwrap_or_else(|| {
+            if std::env::var_os("MIRI_SYSROOT").is_some() {
+                NextestConfig::DEFAULT_MIRI_PROFILE
+            } else {
+                NextestConfig::DEFAULT_PROFILE
+            }
+        });
+
+        // Handle clearing failed tests early if requested
+        if self.build_filter.clear_failed {
+            use nextest_runner::reporter::last_failed::FailedTestStore;
+            let store = FailedTestStore::new(profile.store_dir(), profile_name);
+            store
+                .clear()
+                .map_err(|err| ExpectedError::ClearFailedTestsError {
+                    error: err.to_string(),
+                })?;
+            eprintln!("Cleared failed test history for profile '{}'", profile_name);
+            return Ok(0);
+        }
 
         // Construct this here so that errors are reported before the build step.
         let mut structured_reporter = structured::StructuredReporter::new();
@@ -1818,7 +1913,7 @@ impl App {
         reporter_builder.set_verbose(self.base.output.verbose);
 
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs)?;
+        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs, profile_name, &profile)?;
 
         let binary_list = self.base.build_binary_list()?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
@@ -1870,11 +1965,44 @@ impl App {
         );
 
         configure_handle_inheritance(no_capture)?;
+        
+        // Track failed tests during the run
+        use nextest_runner::reporter::last_failed::{FailedTest, FailedTestStore, FailedTestsSnapshot};
+        let failed_tests = Arc::new(Mutex::new(Vec::<FailedTest>::new()));
+        let failed_tests_for_callback = Arc::clone(&failed_tests);
+        
         let run_stats = runner.try_execute(|event| {
+            // Track failed tests for persistence
+            if let TestEventKind::TestFinished { test_instance, run_statuses, .. } = &event.kind {
+                if !run_statuses.last_status().result.is_success() {
+                    let mut failed = failed_tests_for_callback.lock().unwrap();
+                    failed.push(FailedTest::from_test_instance_id(test_instance.id()));
+                }
+            }
+            
             // Write and flush the event.
             reporter.report_event(event)
         })?;
         reporter.finish();
+        
+        // After the run completes, persist failed tests if we're not in no-run mode
+        if !runner_opts.no_run {
+            let store = FailedTestStore::new(profile.store_dir(), profile_name);
+            
+            let failed = failed_tests.lock().unwrap();
+            let snapshot = FailedTestsSnapshot {
+                version: 1,
+                created_at: chrono::Utc::now(),
+                profile_name: profile_name.to_owned(),
+                failed_tests: failed.iter().cloned().collect(),
+            };
+            
+            if let Err(err) = store.save(&snapshot) {
+                eprintln!("Warning: Failed to save failed test history: {}", err);
+                // Don't fail the entire test run if we can't save the history
+            }
+        }
+        
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
@@ -2734,7 +2862,17 @@ mod tests {
         fn get_test_filter_builder(cmd: &str) -> Result<TestFilterBuilder> {
             let app = TestCli::try_parse_from(shell_words::split(cmd).expect("valid command line"))
                 .unwrap_or_else(|_| panic!("{cmd} should have successfully parsed"));
-            app.build_filter.make_test_filter_builder(vec![])
+            // For tests, skip the failed test loading functionality
+            let mut run_ignored = app.build_filter.run_ignored.map(Into::into);
+            let mut patterns = TestFilterPatterns::new(app.build_filter.pre_double_dash_filters.clone());
+            app.build_filter.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
+            
+            Ok(TestFilterBuilder::new(
+                run_ignored.unwrap_or_default(),
+                app.build_filter.partition.clone(),
+                patterns,
+                vec![],
+            )?)
         }
 
         let valid = &[

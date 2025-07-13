@@ -1266,6 +1266,156 @@ fn test_run_with_default_filter() {
 }
 
 #[test]
+fn test_last_failed() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // First run - some tests will fail
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "initial run should have failures\n{output}"
+    );
+
+    // Run with --last-failed, should only run the failed tests
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--last-failed",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "last-failed run should still have failures\n{output}"
+    );
+
+    // Check that only failed tests were run by looking at the output
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("Running only tests that failed in the last run"),
+        "should show last-failed message: {stderr}"
+    );
+
+    // Run with --failed-last, should run failed tests first, then others
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--failed-last",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "failed-last run should have failures\n{output}"
+    );
+
+    // Clear failed tests
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--clear-failed",
+        ])
+        .output();
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("Cleared failed test history"),
+        "should show clear message: {stderr}"
+    );
+
+    // Now --last-failed should show no tests
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--last-failed",
+        ])
+        .output();
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("No failed tests found from previous run"),
+        "should show no failed tests message: {stderr}"
+    );
+}
+
+#[test]
+fn test_last_failed_with_filtersets() {
+    set_env_vars();
+    let p = TempProject::new().unwrap();
+
+    // First run specific tests that will fail
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "-E",
+            "test(test_flaky)",
+        ])
+        .unchecked(true)
+        .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::TEST_RUN_FAILED),
+        "initial run should have failures\n{output}"
+    );
+
+    // Run with --last-failed plus additional filter
+    let output = CargoNextestCli::for_test()
+        .args([
+            "--manifest-path",
+            p.manifest_path().as_str(),
+            "run",
+            "--workspace",
+            "--all-targets",
+            "--last-failed",
+            "-E",
+            "package(nextest-tests)",
+        ])
+        .unchecked(true)
+        .output();
+
+    let stderr = output.stderr_as_str();
+    assert!(
+        stderr.contains("Running only tests that failed in the last run"),
+        "should show last-failed message: {stderr}"
+    );
+}
+
+#[test]
 fn test_show_config_version() {
     set_env_vars();
     let p = TempProject::new().unwrap();
