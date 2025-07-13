@@ -693,10 +693,14 @@ impl TestBuildFilter {
                         }
                         // For --failed-last, we continue with the normal filtering
                     } else {
-                        eprintln!(
-                            "Found {} failed test(s) from previous run",
-                            snapshot.failed_tests.len()
-                        );
+                        if self.last_failed {
+                            eprintln!("Running only tests that failed in the last run");
+                        } else {
+                            eprintln!(
+                                "Found {} failed test(s) from previous run",
+                                snapshot.failed_tests.len()
+                            );
+                        }
 
                         if self.last_failed {
                             // Only run failed tests - replace all patterns
@@ -714,7 +718,11 @@ impl TestBuildFilter {
                     }
                 }
                 Ok(None) => {
-                    eprintln!("No previous test run found for profile '{}'", profile_name);
+                    if self.last_failed {
+                        eprintln!("No failed tests found from previous run");
+                    } else {
+                        eprintln!("No previous test run found for profile '{}'", profile_name);
+                    }
                     if self.last_failed {
                         // For --last-failed with no history, run no tests
                         patterns = TestFilterPatterns::default();
@@ -1875,7 +1883,7 @@ impl App {
                 .map_err(|err| ExpectedError::ClearFailedTestsError {
                     error: err.to_string(),
                 })?;
-            eprintln!("Cleared failed test history for profile '{}'", profile_name);
+            eprintln!("Cleared failed test history");
             return Ok(0);
         }
 
