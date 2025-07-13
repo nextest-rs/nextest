@@ -54,7 +54,7 @@ use std::{
     env::VarError,
     fmt,
     io::{Cursor, Write},
-    sync::{Arc, OnceLock, Mutex},
+    sync::{Arc, Mutex, OnceLock},
 };
 use swrite::{SWrite, swrite};
 use tracing::{Level, debug, info, warn};
@@ -660,7 +660,12 @@ impl TestBuildFilter {
         .map_err(|err| ExpectedError::CreateTestListError { err })
     }
 
-    fn make_test_filter_builder(&self, filter_exprs: Vec<Filterset>, profile_name: &str, profile: &EarlyProfile<'_>) -> Result<TestFilterBuilder> {
+    fn make_test_filter_builder(
+        &self,
+        filter_exprs: Vec<Filterset>,
+        profile_name: &str,
+        profile: &EarlyProfile<'_>,
+    ) -> Result<TestFilterBuilder> {
         // Merge the test binary args into the patterns.
         let mut run_ignored = self.run_ignored.map(Into::into);
         let mut patterns = TestFilterPatterns::new(self.pre_double_dash_filters.clone());
@@ -669,22 +674,30 @@ impl TestBuildFilter {
         // Handle --last-failed and --failed-last options
         if self.last_failed || self.failed_last {
             use nextest_runner::reporter::last_failed::FailedTestStore;
-            
+
             let store = FailedTestStore::new(profile.store_dir(), profile_name);
             match store.load() {
                 Ok(Some(snapshot)) => {
                     if snapshot.failed_tests.is_empty() {
-                        eprintln!("No failed tests found from previous run for profile '{}'", profile_name);
+                        eprintln!(
+                            "No failed tests found from previous run for profile '{}'",
+                            profile_name
+                        );
                         if self.last_failed {
                             // For --last-failed with no failed tests, we should run no tests
                             // Create a pattern that matches nothing
                             patterns = TestFilterPatterns::default();
-                            patterns.add_exact_pattern("__nextest_internal_no_tests_to_run__".to_string());
+                            patterns.add_exact_pattern(
+                                "__nextest_internal_no_tests_to_run__".to_string(),
+                            );
                         }
                         // For --failed-last, we continue with the normal filtering
                     } else {
-                        eprintln!("Found {} failed test(s) from previous run", snapshot.failed_tests.len());
-                        
+                        eprintln!(
+                            "Found {} failed test(s) from previous run",
+                            snapshot.failed_tests.len()
+                        );
+
                         if self.last_failed {
                             // Only run failed tests - replace all patterns
                             patterns = TestFilterPatterns::default();
@@ -705,7 +718,8 @@ impl TestBuildFilter {
                     if self.last_failed {
                         // For --last-failed with no history, run no tests
                         patterns = TestFilterPatterns::default();
-                        patterns.add_exact_pattern("__nextest_internal_no_tests_to_run__".to_string());
+                        patterns
+                            .add_exact_pattern("__nextest_internal_no_tests_to_run__".to_string());
                     }
                 }
                 Err(err) => {
@@ -1718,7 +1732,9 @@ impl App {
             }
         });
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs, profile_name, &profile)?;
+        let test_filter_builder =
+            self.build_filter
+                .make_test_filter_builder(filter_exprs, profile_name, &profile)?;
 
         let binary_list = self.base.build_binary_list()?;
 
@@ -1796,7 +1812,9 @@ impl App {
         let settings = ShowTestGroupSettings { mode, show_default };
 
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs, profile_name, &profile)?;
+        let test_filter_builder =
+            self.build_filter
+                .make_test_filter_builder(filter_exprs, profile_name, &profile)?;
 
         let binary_list = self.base.build_binary_list()?;
         let build_platforms = binary_list.rust_build_meta.build_platforms.clone();
@@ -1913,7 +1931,9 @@ impl App {
         reporter_builder.set_verbose(self.base.output.verbose);
 
         let filter_exprs = self.build_filtering_expressions(&pcx)?;
-        let test_filter_builder = self.build_filter.make_test_filter_builder(filter_exprs, profile_name, &profile)?;
+        let test_filter_builder =
+            self.build_filter
+                .make_test_filter_builder(filter_exprs, profile_name, &profile)?;
 
         let binary_list = self.base.build_binary_list()?;
         let build_platforms = &binary_list.rust_build_meta.build_platforms.clone();
@@ -1965,30 +1985,37 @@ impl App {
         );
 
         configure_handle_inheritance(no_capture)?;
-        
+
         // Track failed tests during the run
-        use nextest_runner::reporter::last_failed::{FailedTest, FailedTestStore, FailedTestsSnapshot};
+        use nextest_runner::reporter::last_failed::{
+            FailedTest, FailedTestStore, FailedTestsSnapshot,
+        };
         let failed_tests = Arc::new(Mutex::new(Vec::<FailedTest>::new()));
         let failed_tests_for_callback = Arc::clone(&failed_tests);
-        
+
         let run_stats = runner.try_execute(|event| {
             // Track failed tests for persistence
-            if let TestEventKind::TestFinished { test_instance, run_statuses, .. } = &event.kind {
+            if let TestEventKind::TestFinished {
+                test_instance,
+                run_statuses,
+                ..
+            } = &event.kind
+            {
                 if !run_statuses.last_status().result.is_success() {
                     let mut failed = failed_tests_for_callback.lock().unwrap();
                     failed.push(FailedTest::from_test_instance_id(test_instance.id()));
                 }
             }
-            
+
             // Write and flush the event.
             reporter.report_event(event)
         })?;
         reporter.finish();
-        
+
         // After the run completes, persist failed tests if we're not in no-run mode
         if !runner_opts.no_run {
             let store = FailedTestStore::new(profile.store_dir(), profile_name);
-            
+
             let failed = failed_tests.lock().unwrap();
             let snapshot = FailedTestsSnapshot {
                 version: 1,
@@ -1996,13 +2023,13 @@ impl App {
                 profile_name: profile_name.to_owned(),
                 failed_tests: failed.iter().cloned().collect(),
             };
-            
+
             if let Err(err) = store.save(&snapshot) {
                 eprintln!("Warning: Failed to save failed test history: {}", err);
                 // Don't fail the entire test run if we can't save the history
             }
         }
-        
+
         self.base
             .check_version_config_final(version_only_config.nextest_version())?;
 
@@ -2864,9 +2891,11 @@ mod tests {
                 .unwrap_or_else(|_| panic!("{cmd} should have successfully parsed"));
             // For tests, skip the failed test loading functionality
             let mut run_ignored = app.build_filter.run_ignored.map(Into::into);
-            let mut patterns = TestFilterPatterns::new(app.build_filter.pre_double_dash_filters.clone());
-            app.build_filter.merge_test_binary_args(&mut run_ignored, &mut patterns)?;
-            
+            let mut patterns =
+                TestFilterPatterns::new(app.build_filter.pre_double_dash_filters.clone());
+            app.build_filter
+                .merge_test_binary_args(&mut run_ignored, &mut patterns)?;
+
             Ok(TestFilterBuilder::new(
                 run_ignored.unwrap_or_default(),
                 app.build_filter.partition.clone(),

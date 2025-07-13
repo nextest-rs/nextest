@@ -16,13 +16,13 @@ use std::fs;
 pub struct FailedTestsSnapshot {
     /// Version of the snapshot format.
     pub version: u32,
-    
+
     /// When this snapshot was created.
     pub created_at: DateTime<Utc>,
-    
+
     /// The profile that was used for this test run.
     pub profile_name: String,
-    
+
     /// Set of failed tests.
     pub failed_tests: BTreeSet<FailedTest>,
 }
@@ -32,7 +32,7 @@ pub struct FailedTestsSnapshot {
 pub struct FailedTest {
     /// The binary ID.
     pub binary_id: RustBinaryId,
-    
+
     /// The test name.
     pub test_name: String,
 }
@@ -56,23 +56,23 @@ pub struct FailedTestStore {
 impl FailedTestStore {
     /// Current version of the snapshot format.
     const CURRENT_VERSION: u32 = 1;
-    
+
     /// Creates a new failed test store with the given path.
     pub fn new(store_dir: &Utf8Path, profile_name: &str) -> Self {
         let path = store_dir.join(format!("{profile_name}-last-failed.json"));
         Self { path }
     }
-    
+
     /// Loads the failed test snapshot from disk.
     pub fn load(&self) -> Result<Option<FailedTestsSnapshot>, LoadError> {
         match fs::read_to_string(&self.path) {
             Ok(contents) => {
-                let snapshot: FailedTestsSnapshot = serde_json::from_str(&contents)
-                    .map_err(|err| LoadError::DeserializeError {
+                let snapshot: FailedTestsSnapshot =
+                    serde_json::from_str(&contents).map_err(|err| LoadError::DeserializeError {
                         path: self.path.clone(),
                         error: err,
                     })?;
-                
+
                 if snapshot.version != Self::CURRENT_VERSION {
                     return Err(LoadError::VersionMismatch {
                         path: self.path.clone(),
@@ -80,7 +80,7 @@ impl FailedTestStore {
                         actual: snapshot.version,
                     });
                 }
-                
+
                 Ok(Some(snapshot))
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -90,7 +90,7 @@ impl FailedTestStore {
             }),
         }
     }
-    
+
     /// Saves the failed test snapshot to disk.
     pub fn save(&self, snapshot: &FailedTestsSnapshot) -> Result<(), SaveError> {
         // Ensure the parent directory exists
@@ -100,18 +100,18 @@ impl FailedTestStore {
                 error: err,
             })?;
         }
-        
+
         let contents = serde_json::to_string_pretty(snapshot)
             .map_err(|err| SaveError::SerializeError { error: err })?;
-        
+
         fs::write(&self.path, contents).map_err(|err| SaveError::WriteError {
             path: self.path.clone(),
             error: err,
         })?;
-        
+
         Ok(())
     }
-    
+
     /// Clears the failed test snapshot by removing the file.
     pub fn clear(&self) -> Result<(), ClearError> {
         match fs::remove_file(&self.path) {
@@ -137,7 +137,7 @@ pub enum LoadError {
         #[source]
         error: std::io::Error,
     },
-    
+
     /// Error deserializing the snapshot.
     #[error("failed to deserialize snapshot at {path}")]
     DeserializeError {
@@ -147,7 +147,7 @@ pub enum LoadError {
         #[source]
         error: serde_json::Error,
     },
-    
+
     /// Version mismatch in the snapshot file.
     #[error("snapshot version mismatch at {path}: expected {expected}, got {actual}")]
     VersionMismatch {
@@ -172,7 +172,7 @@ pub enum SaveError {
         #[source]
         error: std::io::Error,
     },
-    
+
     /// Error serializing the snapshot.
     #[error("failed to serialize snapshot")]
     SerializeError {
@@ -180,7 +180,7 @@ pub enum SaveError {
         #[source]
         error: serde_json::Error,
     },
-    
+
     /// Error writing the snapshot to disk.
     #[error("failed to write snapshot to {path}")]
     WriteError {
@@ -206,20 +206,19 @@ pub enum ClearError {
     },
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use camino_tempfile::Utf8TempDir;
-    
+
     #[test]
     fn test_store_lifecycle() {
         let temp_dir = Utf8TempDir::new().unwrap();
         let store = FailedTestStore::new(temp_dir.path(), "default");
-        
+
         // Initially, there should be no snapshot
         assert!(store.load().unwrap().is_none());
-        
+
         // Create and save a snapshot
         let snapshot = FailedTestsSnapshot {
             version: FailedTestStore::CURRENT_VERSION,
@@ -236,17 +235,17 @@ mod tests {
                 },
             ]),
         };
-        
+
         store.save(&snapshot).unwrap();
-        
+
         // Load and verify
         let loaded = store.load().unwrap().unwrap();
         assert_eq!(loaded.version, snapshot.version);
         assert_eq!(loaded.profile_name, snapshot.profile_name);
         assert_eq!(loaded.failed_tests, snapshot.failed_tests);
-        
+
         // Clear and verify
         store.clear().unwrap();
         assert!(store.load().unwrap().is_none());
     }
-} 
+}

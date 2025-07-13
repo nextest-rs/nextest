@@ -1359,7 +1359,14 @@ fn test_last_failed() {
             "--all-targets",
             "--last-failed",
         ])
+        .unchecked(true)
         .output();
+
+    assert_eq!(
+        output.exit_status.code(),
+        Some(NextestExitCode::NO_TESTS_RUN),
+        "correct exit code for command\n{output}"
+    );
 
     let stderr = output.stderr_as_str();
     assert!(
