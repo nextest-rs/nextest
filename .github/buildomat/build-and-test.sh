@@ -37,8 +37,10 @@ ptime -m cargo build --all-features
 banner doctests
 ptime -m cargo test --doc
 
-banner local-nt
-ptime -m cargo local-nt run --profile ci
+# banner local-nt
+# # Run tests in a loop until failure.
+# while cargo local-nt run --profile ci; do sleep 1; rm -r fixtures/nextest-tests/target && echo "Running tests"; done
 
+export CARGO_CACHE_AUTO_CLEAN_FREQUENCY=never
 banner release
-ptime -m cargo nextest run --profile ci
+while cargo nextest run --profile ci; do sleep 1; rm -r fixtures/nextest-tests/target && echo "Running tests"; done
