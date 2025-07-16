@@ -15,6 +15,7 @@ use crate::{
     },
     platform::BuildPlatforms,
     reporter::TestOutputDisplay,
+    run_mode::NextestRunMode,
 };
 use guppy::graph::cargo::BuildPlatform;
 use nextest_filtering::{
@@ -233,7 +234,11 @@ impl<'p> TestSettings<'p> {
 
 #[expect(dead_code)]
 impl<'p, Source: Copy> TestSettings<'p, Source> {
-    pub(super) fn new(profile: &'p EvaluatableProfile<'_>, query: &TestQuery<'_>) -> Self
+    pub(super) fn new(
+        profile: &'p EvaluatableProfile<'_>,
+        run_mode: NextestRunMode,
+        query: &TestQuery<'_>,
+    ) -> Self
     where
         Source: TrackSource<'p>,
     {
@@ -350,7 +355,7 @@ impl<'p, Source: Copy> TestSettings<'p, Source> {
             run_extra_args.unwrap_or_else(|| Source::track_profile(profile.run_extra_args()));
         let retries = retries.unwrap_or_else(|| Source::track_profile(profile.retries()));
         let slow_timeout =
-            slow_timeout.unwrap_or_else(|| Source::track_profile(profile.slow_timeout()));
+            slow_timeout.unwrap_or_else(|| Source::track_profile(profile.slow_timeout(run_mode)));
         let leak_timeout =
             leak_timeout.unwrap_or_else(|| Source::track_profile(profile.leak_timeout()));
         let test_group = test_group.unwrap_or_else(|| Source::track_profile(TestGroup::Global));
@@ -1086,7 +1091,7 @@ mod tests {
             binary_query: host_binary_query.to_query(),
             test_name: "test",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
 
         assert_eq!(overrides.threads_required(), ThreadsRequired::Count(8));
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(3));
@@ -1127,7 +1132,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "test",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
 
         assert_eq!(overrides.threads_required(), ThreadsRequired::Count(8));
         assert_eq!(
@@ -1172,7 +1177,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "override3",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(5));
 
         // This query matches override 5.
@@ -1180,7 +1185,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "override5",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(8));
 
         // This query does not match any overrides.
@@ -1188,7 +1193,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "no_match",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(overrides.retries(), RetryPolicy::new_without_delay(0));
     }
 
@@ -1435,7 +1440,7 @@ mod tests {
             binary_query: target_binary_query.to_query(),
             test_name: "test",
         };
-        let overrides = profile.settings_for(&query);
+        let overrides = profile.settings_for(NextestRunMode::Test, &query);
         assert_eq!(
             overrides.retries(),
             RetryPolicy::new_without_delay(5),

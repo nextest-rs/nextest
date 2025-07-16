@@ -7,7 +7,10 @@ use indent_write::indentable::Indented;
 use itertools::Itertools;
 use nextest_filtering::errors::FiltersetParseErrors;
 use nextest_metadata::NextestExitCode;
-use nextest_runner::{errors::*, helpers::plural, redact::Redactor};
+use nextest_runner::{
+    config::ConfigExperimental, errors::*, helpers::plural, redact::Redactor,
+    run_mode::NextestRunMode,
+};
 use owo_colors::OwoColorize;
 use semver::Version;
 use std::{error::Error, io, path::PathBuf, process::ExitStatus, string::FromUtf8Error};
@@ -212,6 +215,7 @@ pub enum ExpectedError {
     TestRunFailed,
     #[error("no tests to run")]
     NoTestsRun {
+        mode: NextestRunMode,
         /// The no-tests-run error was chosen because it was the default (we show a hint in this
         /// case)
         is_default: bool,
@@ -248,6 +252,11 @@ pub enum ExpectedError {
     ExperimentalFeatureNotEnabled {
         name: &'static str,
         var_name: &'static str,
+    },
+    #[error("config experimental features not enabled")]
+    ConfigExperimentalFeaturesNotEnabled {
+        config_file: Utf8PathBuf,
+        missing: Vec<ConfigExperimental>,
     },
     #[error("filterset parse error")]
     FiltersetParseError {
@@ -467,9 +476,7 @@ impl ExpectedError {
             | Self::DebugExtractWriteError { .. } => NextestExitCode::WRITE_OUTPUT_ERROR,
             #[cfg(feature = "self-update")]
             Self::UpdateError { .. } => NextestExitCode::UPDATE_ERROR,
-            Self::ExperimentalFeatureNotEnabled { .. } => {
-                NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED
-            }
+            Self::ExperimentalFeatureNotEnabled { .. } | Self::ConfigExperimentalFeaturesNotEnabled { .. } => NextestExitCode::EXPERIMENTAL_FEATURE_NOT_ENABLED,
             Self::FiltersetParseError { .. } => NextestExitCode::INVALID_FILTERSET,
         }
     }
@@ -870,13 +877,16 @@ impl ExpectedError {
                 error!("test run failed");
                 None
             }
-            Self::NoTestsRun { is_default } => {
+            Self::NoTestsRun { mode, is_default } => {
                 let hint_str = if *is_default {
                     "\n(hint: use `--no-tests` to customize)"
                 } else {
                     ""
                 };
-                error!("no tests to run{hint_str}");
+                error!(
+                    "no {} to run{hint_str}",
+                    plural::tests_plural_if(*mode, true),
+                );
                 None
             }
             Self::ShowTestGroupsError { err } => {
@@ -934,6 +944,34 @@ impl ExpectedError {
                     "{} is an experimental feature and must be enabled with {}=1",
                     name, var_name
                 );
+                None
+            }
+            Self::ConfigExperimentalFeaturesNotEnabled {
+                config_file,
+                missing,
+            } => {
+                if missing.len() == 1 {
+                    let env_hint = if let Some(env_var) = missing[0].env_var() {
+                        format!(" or set {env_var}=1")
+                    } else {
+                        String::new()
+                    };
+                    error!(
+                        "experimental feature not enabled: {}\n(hint: add to the {} list in {}{})",
+                        missing[0].style(styles.bold),
+                        "experimental".style(styles.bold),
+                        config_file.style(styles.bold),
+                        env_hint,
+                    );
+                } else {
+                    error!(
+                        "experimental features not enabled: {}\n(hint: add to the {} list in {})",
+                        missing.iter().map(|f| f.style(styles.bold)).join(", "),
+                        "experimental".style(styles.bold),
+                        config_file.style(styles.bold),
+                    );
+                    // TODO: env_hint?
+                }
                 None
             }
             Self::FiltersetParseError { all_errors } => {
