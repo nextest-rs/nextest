@@ -36,7 +36,7 @@ rand_chacha = { version = "0.9.0", default-features = false, features = ["std"] 
 regex-automata = { version = "0.4.9", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "unicode"] }
 regex-syntax = { version = "0.8.5" }
 serde = { version = "1.0.219", features = ["alloc", "derive"] }
-serde_json = { version = "1.0.140", features = ["unbounded_depth"] }
+serde_json = { version = "1.0.141", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
 target-spec = { version = "3.5.0", default-features = false, features = ["custom", "summaries"] }
 target-spec-miette = { version = "0.4.4", default-features = false, features = ["fixtures"] }
