@@ -11,6 +11,7 @@ mod error_description;
 pub mod events;
 mod helpers;
 mod imp;
+pub mod last_failed;
 pub mod structured;
 
 pub use displayer::{FinalStatusLevel, StatusLevel, TestOutputDisplay};

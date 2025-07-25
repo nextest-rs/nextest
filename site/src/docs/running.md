@@ -182,6 +182,51 @@ cargo nextest run -E 'platform(host)'
 
 [^doctest]: Doctests are currently [not supported](https://github.com/nextest-rs/nextest/issues/16) because of limitations in stable Rust. For now, run doctests in a separate step with `cargo test --doc`.
 
+## Rerunning only failed tests
+
+<!-- md:version 0.9.XX -->
+
+Nextest can rerun only tests that failed in the previous run, similar to pytest's `--last-failed` option. This is useful when working on fixing a set of failing tests.
+
+To only run tests that failed in the last run:
+
+```
+cargo nextest run --last-failed
+# or use the short alias:
+cargo nextest run --lf
+```
+
+This will:
+- Run only the tests that failed in the previous test run for the current profile
+- Show a message if no failed tests were found
+- Can be combined with other filters (tests must match both the failed set and the filter)
+
+### Running failed tests first
+
+To run all tests, but prioritize failed tests to run first:
+
+```
+cargo nextest run --failed-last
+# or use the short alias:
+cargo nextest run --fl
+```
+
+This is useful to get quick feedback on whether previously failing tests are now fixed.
+
+### Clearing failed test history
+
+To clear the history of failed tests:
+
+```
+cargo nextest run --clear-failed
+```
+
+This removes the stored information about which tests failed, without running any tests.
+
+!!! note "Profile-specific storage"
+
+    Failed test history is stored per [profile](configuration/index.md#profiles). Tests that failed with one profile won't affect runs with a different profile.
+
 ## Failing fast
 
 By default, nextest cancels the test run on encountering a single failure. Tests currently running are run to completion, but new tests are not started.
