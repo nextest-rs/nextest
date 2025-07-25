@@ -947,7 +947,7 @@ mod tests {
             vec![],
             0,
             MaxFail::All,
-            crate::time::far_future_duration(),
+            crate::time::one_year_duration(),
         );
 
         cx.disable_signal_3_times_panic = true;
