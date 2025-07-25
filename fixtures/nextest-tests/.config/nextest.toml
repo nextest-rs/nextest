@@ -5,7 +5,7 @@
 nextest-version = { required = "0.9.54", recommended = "0.9.56" }
 
 # This must be on one line for test_setup_scripts_not_enabled to work.
-experimental = ["setup-scripts", "wrapper-scripts"]
+experimental = ["benchmarks", "setup-scripts", "wrapper-scripts"]
 
 [profile.default]
 # disable fail-fast to ensure a deterministic test run

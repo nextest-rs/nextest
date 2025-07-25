@@ -10,6 +10,7 @@ use crate::{
     helpers::QuotedDisplay,
     indenter::indented,
     list::{TestInstance, TestList, TestListDisplayFilter},
+    run_mode::NextestRunMode,
     write_str::WriteStr,
 };
 use indexmap::IndexMap;
@@ -69,7 +70,7 @@ impl<'a> ShowTestGroups<'a> {
             for (test_name, test_case) in suite.status.test_cases() {
                 let test_instance = TestInstance::new(test_name, suite, test_case);
                 let query = test_instance.to_test_query();
-                let test_settings = profile.settings_with_source_for(&query);
+                let test_settings = profile.settings_with_source_for(NextestRunMode::Test, &query);
                 let (test_group, source) = test_settings.test_group_with_source();
 
                 match source {

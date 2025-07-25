@@ -174,6 +174,7 @@ pub enum RunProperty {
     WithSkipCdylibFilter = 4,
     // --exact test_multiply_two tests::test_multiply_two_cdylib
     WithMultiplyTwoExactFilter = 8,
+    Benchmarks = 16,
 }
 
 fn debug_run_properties(properties: u64) -> String {
@@ -189,6 +190,9 @@ fn debug_run_properties(properties: u64) -> String {
     }
     if properties & RunProperty::WithMultiplyTwoExactFilter as u64 != 0 {
         ret.push_str("with-exact-filter ");
+    }
+    if properties & RunProperty::Benchmarks as u64 != 0 {
+        ret.push_str("benchmarks ");
     }
     ret
 }
@@ -228,6 +232,13 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
 
         for test in &fixture.test_cases {
             let name = format!("{} {}", binary_id, test.name);
+
+            if properties & RunProperty::Benchmarks as u64 != 0 {
+                // We don't consider skipped tests while running benchmarks.
+                if !test.has_property(TestCaseFixtureProperty::IsBenchmark) {
+                    continue;
+                }
+            }
 
             if test.has_property(TestCaseFixtureProperty::NotInDefaultSet)
                 && properties & RunProperty::WithDefaultFilter as u64 != 0
@@ -343,7 +354,12 @@ pub fn check_run_output(stderr: &[u8], properties: u64) {
         }
     }
 
-    let tests_str = if run_count == 1 { "test" } else { "tests" };
+    let tests_str = match (run_count, properties & RunProperty::Benchmarks as u64 != 0) {
+        (1, false) => "test",
+        (1, true) => "benchmark",
+        (_, false) => "tests",
+        (_, true) => "benchmarks",
+    };
     let leak_fail_regex_str = if leak_fail_count > 0 {
         format!(r" \({leak_fail_count} due to being leaky\)")
     } else {

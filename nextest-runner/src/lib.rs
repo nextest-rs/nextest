@@ -28,6 +28,7 @@ pub mod runner;
 // TODO: move this module to the cargo-nextest crate and make it a private module once we get rid of
 // the tests in nextest-runner/tests/integration which depend on this to provide correct host and
 // target libdir.
+pub mod run_mode;
 mod rustc_cli;
 pub mod show_config;
 pub mod signal;

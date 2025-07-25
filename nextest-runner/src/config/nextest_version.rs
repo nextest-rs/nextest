@@ -5,10 +5,10 @@
 
 use super::{NextestConfig, ToolConfigFile};
 use crate::errors::{ConfigParseError, ConfigParseErrorKind};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use semver::Version;
 use serde::{Deserialize, Deserializer};
-use std::{borrow::Cow, collections::BTreeSet, fmt, str::FromStr};
+use std::{borrow::Cow, collections::BTreeSet, env, fmt, str::FromStr};
 
 /// A "version-only" form of the nextest configuration.
 ///
@@ -16,6 +16,9 @@ use std::{borrow::Cow, collections::BTreeSet, fmt, str::FromStr};
 /// of the configuration. That avoids issues parsing incompatible configuration.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct VersionOnlyConfig {
+    /// The main configuration file that this config was read from.
+    config_file: Option<Utf8PathBuf>,
+
     /// The nextest version configuration.
     nextest_version: NextestVersionConfig,
 
@@ -38,6 +41,11 @@ impl VersionOnlyConfig {
         let tool_config_files_rev = tool_config_files.into_iter().rev();
 
         Self::read_from_sources(workspace_root, config_file, tool_config_files_rev)
+    }
+
+    /// Returns the main config file that was read.
+    pub fn config_file(&self) -> Option<&Utf8Path> {
+        self.config_file.as_deref()
     }
 
     /// Returns the nextest version requirement.
@@ -73,8 +81,8 @@ impl VersionOnlyConfig {
                 config_file.exists().then_some(Cow::Owned(config_file))
             }
         };
-        if let Some(config_file) = config_file {
-            let d = Self::read_and_deserialize(&config_file, None)?;
+        if let Some(config_file) = &config_file {
+            let d = Self::read_and_deserialize(config_file, None)?;
             if let Some(v) = d.nextest_version {
                 nextest_version.accumulate(v, None);
             }
@@ -95,7 +103,7 @@ impl VersionOnlyConfig {
             if !unknown.is_empty() {
                 let known = ConfigExperimental::known().collect();
                 return Err(ConfigParseError::new(
-                    config_file.into_owned(),
+                    config_file.clone().into_owned(),
                     None,
                     ConfigParseErrorKind::UnknownExperimentalFeatures { unknown, known },
                 ));
@@ -103,6 +111,7 @@ impl VersionOnlyConfig {
         }
 
         Ok(Self {
+            config_file: config_file.map(|p| p.into_owned()),
             nextest_version,
             experimental,
         })
@@ -234,11 +243,35 @@ pub enum ConfigExperimental {
     SetupScripts,
     /// Enable support for wrapper scripts.
     WrapperScripts,
+    /// Enable support for running benchmarks.
+    Benchmarks,
 }
 
 impl ConfigExperimental {
+    /// Returns the list of experimental features enabled in the environment.
+    pub fn from_env() -> BTreeSet<Self> {
+        let mut features = BTreeSet::new();
+        if env::var("NEXTEST_EXPERIMENTAL_BENCHMARKS").as_deref() == Ok("1") {
+            features.insert(Self::Benchmarks);
+        }
+        // We don't support setting setup or wrapper scripts through the
+        // environment, because configuring them requires editing the config
+        // file anyway.
+        features
+    }
+
+    /// Returns the environment variable that can be used to enable this
+    /// experimental feature, if any.
+    pub fn env_var(&self) -> Option<&'static str> {
+        match self {
+            Self::SetupScripts => None,
+            Self::WrapperScripts => None,
+            Self::Benchmarks => Some("NEXTEST_EXPERIMENTAL_BENCHMARKS"),
+        }
+    }
+
     fn known() -> impl Iterator<Item = Self> {
-        vec![Self::SetupScripts, Self::WrapperScripts].into_iter()
+        vec![Self::SetupScripts, Self::WrapperScripts, Self::Benchmarks].into_iter()
     }
 }
 
@@ -249,6 +282,7 @@ impl FromStr for ConfigExperimental {
         match s {
             "setup-scripts" => Ok(Self::SetupScripts),
             "wrapper-scripts" => Ok(Self::WrapperScripts),
+            "benchmarks" => Ok(Self::Benchmarks),
             _ => Err(()),
         }
     }
@@ -259,6 +293,7 @@ impl fmt::Display for ConfigExperimental {
         match self {
             Self::SetupScripts => write!(f, "setup-scripts"),
             Self::WrapperScripts => write!(f, "wrapper-scripts"),
+            Self::Benchmarks => write!(f, "benchmarks"),
         }
     }
 }
