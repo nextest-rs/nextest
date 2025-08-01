@@ -78,9 +78,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        NextestConfig,
-        test_helpers::{build_platforms, temp_workspace},
+    use crate::{
+        config::{
+            NextestConfig,
+            test_helpers::{build_platforms, temp_workspace},
+        },
+        run_mode::NextestRunMode,
     };
     use camino_tempfile::tempdir;
     use indoc::indoc;
@@ -204,7 +207,7 @@ mod tests {
                         .profile("default")
                         .expect("default profile should exist")
                         .apply_build_platforms(&build_platforms())
-                        .slow_timeout(),
+                        .slow_timeout(NextestRunMode::Test),
                     expected_default,
                 );
 
@@ -214,7 +217,7 @@ mod tests {
                             .profile("ci")
                             .expect("ci profile should exist")
                             .apply_build_platforms(&build_platforms())
-                            .slow_timeout(),
+                            .slow_timeout(NextestRunMode::Test),
                         expected_ci,
                     );
                 }

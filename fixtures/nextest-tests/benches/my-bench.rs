@@ -5,9 +5,14 @@
 
 extern crate test;
 
-// TODO: add benchmarks
 #[bench]
 fn bench_add_two(b: &mut test::Bencher) {
+    b.iter(|| 2 + 2);
+}
+
+#[bench]
+#[ignore]
+fn bench_ignored(b: &mut test::Bencher) {
     b.iter(|| 2 + 2);
 }
 

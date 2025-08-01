@@ -15,6 +15,8 @@ use std::{fmt, io, path::PathBuf, process::ExitStatus, time::Duration};
 
 /// Utilities for pluralizing various words based on count or plurality.
 pub mod plural {
+    use crate::run_mode::NextestRunMode;
+
     /// Returns "were" if `plural` is true, otherwise "was".
     pub fn were_plural_if(plural: bool) -> &'static str {
         if plural { "were" } else { "was" }
@@ -29,14 +31,33 @@ pub mod plural {
         }
     }
 
-    /// Returns "test" if `count` is 1, otherwise "tests".
-    pub fn tests_str(count: usize) -> &'static str {
-        tests_plural_if(count != 1)
+    /// Returns:
+    ///
+    /// * If `mode` is `Test`: "test" if `count` is 1, otherwise "tests".
+    /// * If `mode` is `Benchmark`: "benchmark" if `count` is 1, otherwise "benchmarks".
+    pub fn tests_str(mode: NextestRunMode, count: usize) -> &'static str {
+        tests_plural_if(mode, count != 1)
     }
 
-    /// Returns "tests" if `plural` is true, otherwise "test".
-    pub fn tests_plural_if(plural: bool) -> &'static str {
-        if plural { "tests" } else { "test" }
+    /// Returns:
+    ///
+    /// * If `mode` is `Test`: "tests" if `plural` is true, otherwise "test".
+    /// * If `mode` is `Benchmark`: "benchmarks" if `plural` is true, otherwise "benchmark".
+    pub fn tests_plural_if(mode: NextestRunMode, plural: bool) -> &'static str {
+        match (mode, plural) {
+            (NextestRunMode::Test, true) => "tests",
+            (NextestRunMode::Test, false) => "test",
+            (NextestRunMode::Benchmark, true) => "benchmarks",
+            (NextestRunMode::Benchmark, false) => "benchmark",
+        }
+    }
+
+    /// Returns "tests" or "benchmarks" based on the run mode.
+    pub fn tests_plural(mode: NextestRunMode) -> &'static str {
+        match mode {
+            NextestRunMode::Test => "tests",
+            NextestRunMode::Benchmark => "benchmarks",
+        }
     }
 
     /// Returns "binary" if `count` is 1, otherwise "binaries".
