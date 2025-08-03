@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::config::{NextestVersionConfig, NextestVersionEval, NextestVersionReq};
+use crate::config::core::{NextestVersionConfig, NextestVersionEval, NextestVersionReq};
 use owo_colors::{OwoColorize, Style};
 use semver::Version;
 use std::io::{self, Write};
@@ -103,7 +103,7 @@ impl<'a> ShowNextestVersion<'a> {
                         "overridden".style(styles.overridden),
                     )?;
                 }
-                crate::config::NextestVersionEval::WarnOverride { .. } => {
+                crate::config::core::NextestVersionEval::WarnOverride { .. } => {
                     writeln!(
                         writer,
                         "does not meet recommended version, but is {}",

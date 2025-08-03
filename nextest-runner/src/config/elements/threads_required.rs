@@ -1,7 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::get_num_cpus;
+use crate::config::core::get_num_cpus;
 use serde::Deserialize;
 use std::{cmp::Ordering, fmt};
 
@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for ThreadsRequired {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{NextestConfig, test_helpers::*};
+    use crate::config::{core::NextestConfig, utils::test_helpers::*};
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use nextest_filtering::ParseContext;

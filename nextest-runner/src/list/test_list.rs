@@ -5,8 +5,9 @@ use super::{DisplayFilterMatcher, TestListDisplayFilter};
 use crate::{
     cargo_config::EnvironmentMap,
     config::{
-        EvaluatableProfile, ListSettings, TestSettings, WrapperScriptConfig,
-        WrapperScriptTargetRunner,
+        core::EvaluatableProfile,
+        overrides::{ListSettings, TestSettings},
+        scripts::{WrapperScriptConfig, WrapperScriptTargetRunner},
     },
     double_spawn::DoubleSpawnInfo,
     errors::{CreateTestListError, FromMessagesError, WriteTestListError},
@@ -1263,7 +1264,7 @@ mod tests {
     use super::*;
     use crate::{
         cargo_config::{TargetDefinitionLocation, TargetTriple, TargetTripleSource},
-        config::{ScriptCommand, ScriptCommandRelativeTo},
+        config::scripts::{ScriptCommand, ScriptCommandRelativeTo},
         list::SerializableFormat,
         platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
         target_runner::PlatformRunnerSource,

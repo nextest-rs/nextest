@@ -3,11 +3,12 @@
 
 //! Setup scripts.
 
-use super::{
-    ConfigIdentifier, EvaluatableProfile, FinalConfig, LeakTimeout, MaybeTargetSpec,
-    PlatformStrings, PreBuildPlatform, SlowTimeout,
-};
 use crate::{
+    config::{
+        core::{ConfigIdentifier, EvaluatableProfile, FinalConfig, PreBuildPlatform},
+        elements::{LeakTimeout, SlowTimeout},
+        overrides::{MaybeTargetSpec, PlatformStrings},
+    },
     double_spawn::{DoubleSpawnContext, DoubleSpawnInfo},
     errors::{
         ChildStartError, ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection,
@@ -50,14 +51,14 @@ pub struct ScriptConfig {
 }
 
 impl ScriptConfig {
-    pub(super) fn is_empty(&self) -> bool {
+    pub(in crate::config) fn is_empty(&self) -> bool {
         self.setup.is_empty() && self.wrapper.is_empty()
     }
 
     /// Returns information about the script with the given ID.
     ///
     /// Panics if the ID is invalid.
-    pub(super) fn script_info(&self, id: ScriptId) -> ScriptInfo {
+    pub(in crate::config) fn script_info(&self, id: ScriptId) -> ScriptInfo {
         let script_type = if self.setup.contains_key(&id) {
             ScriptType::Setup
         } else if self.wrapper.contains_key(&id) {
@@ -73,13 +74,13 @@ impl ScriptConfig {
     }
 
     /// Returns an iterator over the names of all scripts of all types.
-    pub(super) fn all_script_ids(&self) -> impl Iterator<Item = &ScriptId> {
+    pub(in crate::config) fn all_script_ids(&self) -> impl Iterator<Item = &ScriptId> {
         self.setup.keys().chain(self.wrapper.keys())
     }
 
     /// Returns an iterator over names that are used by more than one type of
     /// script.
-    pub(super) fn duplicate_ids(&self) -> impl Iterator<Item = &ScriptId> {
+    pub(in crate::config) fn duplicate_ids(&self) -> impl Iterator<Item = &ScriptId> {
         self.wrapper.keys().filter(|k| self.setup.contains_key(*k))
     }
 }
@@ -113,7 +114,7 @@ pub enum ScriptType {
 }
 
 impl ScriptType {
-    pub(super) fn matches(self, profile_script_type: ProfileScriptType) -> bool {
+    pub(in crate::config) fn matches(self, profile_script_type: ProfileScriptType) -> bool {
         match self {
             ScriptType::Setup => profile_script_type == ProfileScriptType::Setup,
             ScriptType::Wrapper => {
@@ -162,7 +163,10 @@ pub struct SetupScripts<'profile> {
 }
 
 impl<'profile> SetupScripts<'profile> {
-    pub(super) fn new(profile: &'profile EvaluatableProfile<'_>, test_list: &TestList<'_>) -> Self {
+    pub(in crate::config) fn new(
+        profile: &'profile EvaluatableProfile<'_>,
+        test_list: &TestList<'_>,
+    ) -> Self {
         Self::new_with_queries(
             profile,
             test_list
@@ -379,15 +383,15 @@ impl<'profile> SetupScriptExecuteData<'profile> {
 
 #[derive(Clone, Debug)]
 pub(crate) struct CompiledProfileScripts<State> {
-    pub(super) setup: Vec<ScriptId>,
-    pub(super) list_wrapper: Option<ScriptId>,
-    pub(super) run_wrapper: Option<ScriptId>,
-    pub(super) data: ProfileScriptData,
-    pub(super) state: State,
+    pub(in crate::config) setup: Vec<ScriptId>,
+    pub(in crate::config) list_wrapper: Option<ScriptId>,
+    pub(in crate::config) run_wrapper: Option<ScriptId>,
+    pub(in crate::config) data: ProfileScriptData,
+    pub(in crate::config) state: State,
 }
 
 impl CompiledProfileScripts<PreBuildPlatform> {
-    pub(super) fn new(
+    pub(in crate::config) fn new(
         pcx: &ParseContext<'_>,
         profile_name: &str,
         index: usize,
@@ -455,7 +459,7 @@ impl CompiledProfileScripts<PreBuildPlatform> {
         }
     }
 
-    pub(super) fn apply_build_platforms(
+    pub(in crate::config) fn apply_build_platforms(
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledProfileScripts<FinalConfig> {
@@ -483,7 +487,7 @@ impl CompiledProfileScripts<PreBuildPlatform> {
 }
 
 impl CompiledProfileScripts<FinalConfig> {
-    pub(super) fn is_enabled_binary(
+    pub(in crate::config) fn is_enabled_binary(
         &self,
         query: &BinaryQuery<'_>,
         cx: &EvalContext<'_>,
@@ -505,7 +509,11 @@ impl CompiledProfileScripts<FinalConfig> {
         }
     }
 
-    pub(super) fn is_enabled(&self, query: &TestQuery<'_>, cx: &EvalContext<'_>) -> bool {
+    pub(in crate::config) fn is_enabled(
+        &self,
+        query: &TestQuery<'_>,
+        cx: &EvalContext<'_>,
+    ) -> bool {
         if !self.state.host_eval {
             return false;
         }
@@ -564,14 +572,14 @@ impl fmt::Display for ScriptId {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ProfileScriptData {
+pub(in crate::config) struct ProfileScriptData {
     host_spec: MaybeTargetSpec,
     target_spec: MaybeTargetSpec,
     expr: Option<Filterset>,
 }
 
 impl ProfileScriptData {
-    pub(super) fn expr(&self) -> Option<&Filterset> {
+    pub(in crate::config) fn expr(&self) -> Option<&Filterset> {
         self.expr.as_ref()
     }
 }
@@ -579,10 +587,10 @@ impl ProfileScriptData {
 /// Deserialized form of profile-specific script configuration before compilation.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub(super) struct DeserializedProfileScriptConfig {
+pub(in crate::config) struct DeserializedProfileScriptConfig {
     /// The host and/or target platforms to match against.
     #[serde(default)]
-    pub(super) platform: PlatformStrings,
+    pub(in crate::config) platform: PlatformStrings,
 
     /// The filterset to match against.
     #[serde(default)]
@@ -612,11 +620,17 @@ pub struct SetupScriptConfig {
     pub command: ScriptCommand,
 
     /// An optional slow timeout for this command.
-    #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
+    #[serde(
+        default,
+        deserialize_with = "crate::config::elements::deserialize_slow_timeout"
+    )]
     pub slow_timeout: Option<SlowTimeout>,
 
     /// An optional leak timeout for this command.
-    #[serde(default, deserialize_with = "super::deserialize_leak_timeout")]
+    #[serde(
+        default,
+        deserialize_with = "crate::config::elements::deserialize_leak_timeout"
+    )]
     pub leak_timeout: Option<LeakTimeout>,
 
     /// Whether to capture standard output for this command.
@@ -993,7 +1007,10 @@ impl<'de> Deserialize<'de> for ScriptCommandRelativeTo {
 mod tests {
     use super::*;
     use crate::{
-        config::{ConfigExperimental, NextestConfig, ToolConfigFile, test_helpers::*},
+        config::{
+            core::{ConfigExperimental, NextestConfig, ToolConfigFile},
+            utils::test_helpers::*,
+        },
         errors::{
             ConfigParseErrorKind, DisplayErrorChain, ProfileListScriptUsesRunFiltersError,
             ProfileScriptErrors, ProfileUnknownScriptError, ProfileWrongConfigScriptTypeError,

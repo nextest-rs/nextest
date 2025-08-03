@@ -1,14 +1,17 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{
-    CompiledProfileScripts, DeserializedProfileScriptConfig, EvaluatableProfile, LeakTimeout,
-    NextestConfig, NextestConfigImpl, TestPriority, WrapperScriptConfig,
-};
 use crate::{
     config::{
-        FinalConfig, PreBuildPlatform, RetryPolicy, ScriptId, SlowTimeout, TestGroup,
-        ThreadsRequired,
+        core::{
+            EvaluatableProfile, FinalConfig, NextestConfig, NextestConfigImpl, PreBuildPlatform,
+        },
+        elements::{
+            LeakTimeout, RetryPolicy, SlowTimeout, TestGroup, TestPriority, ThreadsRequired,
+        },
+        scripts::{
+            CompiledProfileScripts, DeserializedProfileScriptConfig, ScriptId, WrapperScriptConfig,
+        },
     },
     errors::{
         ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection, ConfigParseErrorKind,
@@ -33,7 +36,10 @@ pub struct ListSettings<'p, Source = ()> {
 }
 
 impl<'p, Source: Copy> ListSettings<'p, Source> {
-    pub(super) fn new(profile: &'p EvaluatableProfile<'_>, query: &BinaryQuery<'_>) -> Self
+    pub(in crate::config) fn new(
+        profile: &'p EvaluatableProfile<'_>,
+        query: &BinaryQuery<'_>,
+    ) -> Self
     where
         Source: TrackSource<'p>,
     {
@@ -233,7 +239,7 @@ impl<'p> TestSettings<'p> {
 
 #[expect(dead_code)]
 impl<'p, Source: Copy> TestSettings<'p, Source> {
-    pub(super) fn new(profile: &'p EvaluatableProfile<'_>, query: &TestQuery<'_>) -> Self
+    pub(in crate::config) fn new(profile: &'p EvaluatableProfile<'_>, query: &TestQuery<'_>) -> Self
     where
         Source: TrackSource<'p>,
     {
@@ -430,13 +436,13 @@ where
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct CompiledByProfile {
-    pub(super) default: CompiledData<PreBuildPlatform>,
-    pub(super) other: HashMap<String, CompiledData<PreBuildPlatform>>,
+pub(in crate::config) struct CompiledByProfile {
+    pub(in crate::config) default: CompiledData<PreBuildPlatform>,
+    pub(in crate::config) other: HashMap<String, CompiledData<PreBuildPlatform>>,
 }
 
 impl CompiledByProfile {
-    pub(super) fn new(
+    pub(in crate::config) fn new(
         pcx: &ParseContext<'_>,
         config: &NextestConfigImpl,
     ) -> Result<Self, ConfigParseErrorKind> {
@@ -478,7 +484,7 @@ impl CompiledByProfile {
     /// The default config does not depend on the package graph, so we create it separately here.
     /// But we don't implement `Default` to make sure that the value is for the default _config_,
     /// not the default _profile_ (which repo config can customize).
-    pub(super) fn for_default_config() -> Self {
+    pub(in crate::config) fn for_default_config() -> Self {
         Self {
             default: CompiledData {
                 profile_default_filter: Some(CompiledDefaultFilter::for_default_config()),
@@ -553,14 +559,14 @@ pub enum CompiledDefaultFilterSection {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct CompiledData<State> {
+pub(in crate::config) struct CompiledData<State> {
     // The default filter specified at the profile level.
     //
     // Overrides might also specify their own filters, and in that case the
     // overrides take priority.
-    pub(super) profile_default_filter: Option<CompiledDefaultFilter>,
-    pub(super) overrides: Vec<CompiledOverride<State>>,
-    pub(super) scripts: Vec<CompiledProfileScripts<State>>,
+    pub(in crate::config) profile_default_filter: Option<CompiledDefaultFilter>,
+    pub(in crate::config) overrides: Vec<CompiledOverride<State>>,
+    pub(in crate::config) scripts: Vec<CompiledProfileScripts<State>>,
 }
 
 impl CompiledData<PreBuildPlatform> {
@@ -616,7 +622,7 @@ impl CompiledData<PreBuildPlatform> {
         }
     }
 
-    pub(super) fn extend_reverse(&mut self, other: Self) {
+    pub(in crate::config) fn extend_reverse(&mut self, other: Self) {
         // For the default filter, other wins (it is last, and after reversing, it will be first).
         if other.profile_default_filter.is_some() {
             self.profile_default_filter = other.profile_default_filter;
@@ -625,13 +631,13 @@ impl CompiledData<PreBuildPlatform> {
         self.scripts.extend(other.scripts.into_iter().rev());
     }
 
-    pub(super) fn reverse(&mut self) {
+    pub(in crate::config) fn reverse(&mut self) {
         self.overrides.reverse();
         self.scripts.reverse();
     }
 
     /// Chains this data with another set of data, treating `other` as lower-priority than `self`.
-    pub(super) fn chain(self, other: Self) -> Self {
+    pub(in crate::config) fn chain(self, other: Self) -> Self {
         let profile_default_filter = self.profile_default_filter.or(other.profile_default_filter);
         let mut overrides = self.overrides;
         let mut scripts = self.scripts;
@@ -644,7 +650,7 @@ impl CompiledData<PreBuildPlatform> {
         }
     }
 
-    pub(super) fn apply_build_platforms(
+    pub(in crate::config) fn apply_build_platforms(
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledData<FinalConfig> {
@@ -671,7 +677,7 @@ impl CompiledData<PreBuildPlatform> {
 pub(crate) struct CompiledOverride<State> {
     id: OverrideId,
     state: State,
-    pub(super) data: ProfileOverrideData,
+    pub(in crate::config) data: ProfileOverrideData,
 }
 
 impl<State> CompiledOverride<State> {
@@ -687,7 +693,7 @@ pub(crate) struct OverrideId {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ProfileOverrideData {
+pub(in crate::config) struct ProfileOverrideData {
     host_spec: MaybeTargetSpec,
     target_spec: MaybeTargetSpec,
     filter: Option<FilterOrDefaultFilter>,
@@ -697,7 +703,7 @@ pub(super) struct ProfileOverrideData {
     retries: Option<RetryPolicy>,
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<LeakTimeout>,
-    pub(super) test_group: Option<TestGroup>,
+    pub(in crate::config) test_group: Option<TestGroup>,
     success_output: Option<TestOutputDisplay>,
     failure_output: Option<TestOutputDisplay>,
     junit: DeserializedJunitOutput,
@@ -809,7 +815,7 @@ impl CompiledOverride<PreBuildPlatform> {
         }
     }
 
-    pub(super) fn apply_build_platforms(
+    pub(in crate::config) fn apply_build_platforms(
         self,
         build_platforms: &BuildPlatforms,
     ) -> CompiledOverride<FinalConfig> {
@@ -874,7 +880,7 @@ pub(crate) enum MaybeTargetSpec {
 }
 
 impl MaybeTargetSpec {
-    pub(super) fn new(platform_str: Option<&str>) -> Result<Self, target_spec::Error> {
+    pub(in crate::config) fn new(platform_str: Option<&str>) -> Result<Self, target_spec::Error> {
         Ok(match platform_str {
             Some(platform_str) => {
                 MaybeTargetSpec::Provided(TargetSpec::new(platform_str.to_owned())?)
@@ -883,7 +889,7 @@ impl MaybeTargetSpec {
         })
     }
 
-    pub(super) fn eval(&self, platform: &Platform) -> bool {
+    pub(in crate::config) fn eval(&self, platform: &Platform) -> bool {
         match self {
             MaybeTargetSpec::Provided(spec) => spec
                 .eval(platform)
@@ -905,7 +911,7 @@ pub(crate) enum FilterOrDefaultFilter {
 /// Deserialized form of profile overrides before compilation.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub(super) struct DeserializedOverride {
+pub(in crate::config) struct DeserializedOverride {
     /// The host and/or target platforms to match against.
     #[serde(default)]
     platform: PlatformStrings,
@@ -922,11 +928,21 @@ pub(super) struct DeserializedOverride {
     threads_required: Option<ThreadsRequired>,
     #[serde(default)]
     run_extra_args: Option<Vec<String>>,
-    #[serde(default, deserialize_with = "super::deserialize_retry_policy")]
+    /// Retry policy for this override.
+    #[serde(
+        default,
+        deserialize_with = "crate::config::elements::deserialize_retry_policy"
+    )]
     retries: Option<RetryPolicy>,
-    #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
+    #[serde(
+        default,
+        deserialize_with = "crate::config::elements::deserialize_slow_timeout"
+    )]
     slow_timeout: Option<SlowTimeout>,
-    #[serde(default, deserialize_with = "super::deserialize_leak_timeout")]
+    #[serde(
+        default,
+        deserialize_with = "crate::config::elements::deserialize_leak_timeout"
+    )]
     leak_timeout: Option<LeakTimeout>,
     #[serde(default)]
     test_group: Option<TestGroup>,
@@ -940,15 +956,15 @@ pub(super) struct DeserializedOverride {
 
 #[derive(Copy, Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub(super) struct DeserializedJunitOutput {
+pub(in crate::config) struct DeserializedJunitOutput {
     store_success_output: Option<bool>,
     store_failure_output: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct PlatformStrings {
-    pub(super) host: Option<String>,
-    pub(super) target: Option<String>,
+pub(in crate::config) struct PlatformStrings {
+    pub(in crate::config) host: Option<String>,
+    pub(in crate::config) target: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for PlatformStrings {
@@ -1005,7 +1021,7 @@ impl<'de> Deserialize<'de> for PlatformStrings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{LeakTimeoutResult, NextestConfig, test_helpers::*};
+    use crate::config::{core::NextestConfig, elements::LeakTimeoutResult, utils::test_helpers::*};
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use std::{num::NonZeroUsize, time::Duration};

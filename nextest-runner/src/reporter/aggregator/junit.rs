@@ -4,7 +4,10 @@
 //! Code to generate JUnit XML reports from test events.
 
 use crate::{
-    config::{JunitConfig, LeakTimeoutResult, ScriptId},
+    config::{
+        elements::{JunitConfig, LeakTimeoutResult},
+        scripts::ScriptId,
+    },
     errors::{DisplayErrorChain, WriteEventError},
     list::TestInstanceId,
     reporter::{

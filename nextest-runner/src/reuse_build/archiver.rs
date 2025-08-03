@@ -4,7 +4,8 @@
 use super::{ArchiveCounts, ArchiveEvent, BINARIES_METADATA_FILE_NAME, CARGO_METADATA_FILE_NAME};
 use crate::{
     config::{
-        ArchiveConfig, ArchiveIncludeOnMissing, EvaluatableProfile, RecursionDepth, get_num_cpus,
+        core::{EvaluatableProfile, get_num_cpus},
+        elements::{ArchiveConfig, ArchiveIncludeOnMissing, RecursionDepth},
     },
     errors::{ArchiveCreateError, UnknownArchiveFormat},
     helpers::{convert_rel_path_to_forward_slash, rel_path_join},

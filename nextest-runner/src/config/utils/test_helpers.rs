@@ -1,12 +1,14 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
+//! Test helpers for configuration.
 
 use crate::{
     cargo_config::{CargoConfigs, TargetDefinitionLocation, TargetTriple, TargetTripleSource},
-    config::{CustomTestGroup, TestGroup},
+    config::elements::{CustomTestGroup, TestGroup},
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},
 };
 use camino::{Utf8Path, Utf8PathBuf};
+use camino_tempfile::Utf8TempDir;
 use camino_tempfile_ext::prelude::*;
 use guppy::{
     MetadataCommand, PackageId,
@@ -18,7 +20,10 @@ use serde::Deserialize;
 use std::{path::PathBuf, process::Command};
 use target_spec::{Platform, TargetFeatures};
 
-pub(super) fn temp_workspace(temp_dir: &Utf8TempDir, config_contents: &str) -> PackageGraph {
+pub(in crate::config) fn temp_workspace(
+    temp_dir: &Utf8TempDir,
+    config_contents: &str,
+) -> PackageGraph {
     Command::new(cargo_path())
         .args(["init", "--lib", "--name=test-package", "--vcs=none"])
         .current_dir(temp_dir)
@@ -43,7 +48,7 @@ pub(super) fn cargo_path() -> Utf8PathBuf {
     }
 }
 
-pub(super) struct BinaryQueryCreator<'a> {
+pub(in crate::config) struct BinaryQueryCreator<'a> {
     package_id: &'a PackageId,
     binary_id: RustBinaryId,
     kind: RustTestBinaryKind,
@@ -52,7 +57,7 @@ pub(super) struct BinaryQueryCreator<'a> {
 }
 
 impl BinaryQueryCreator<'_> {
-    pub(super) fn to_query(&self) -> BinaryQuery<'_> {
+    pub(in crate::config) fn to_query(&self) -> BinaryQuery<'_> {
         BinaryQuery {
             package_id: self.package_id,
             binary_id: &self.binary_id,
@@ -63,7 +68,7 @@ impl BinaryQueryCreator<'_> {
     }
 }
 
-pub(super) fn binary_query<'a>(
+pub(in crate::config) fn binary_query<'a>(
     graph: &'a PackageGraph,
     package_id: &'a PackageId,
     kind: &str,
@@ -82,7 +87,7 @@ pub(super) fn binary_query<'a>(
     }
 }
 
-pub(super) fn build_platforms() -> BuildPlatforms {
+pub(in crate::config) fn build_platforms() -> BuildPlatforms {
     BuildPlatforms {
         host: HostPlatform {
             platform: Platform::new("x86_64-unknown-linux-gnu", TargetFeatures::Unknown).unwrap(),
@@ -104,7 +109,7 @@ pub(super) fn build_platforms() -> BuildPlatforms {
 }
 
 // XXX: do we need workspace_dir at all? Seems unnecessary.
-pub(super) fn custom_build_platforms(workspace_dir: &Utf8Path) -> BuildPlatforms {
+pub(in crate::config) fn custom_build_platforms(workspace_dir: &Utf8Path) -> BuildPlatforms {
     let configs = CargoConfigs::new_with_isolation(
         Vec::<String>::new(),
         workspace_dir,
@@ -150,29 +155,29 @@ pub(super) fn custom_build_platforms(workspace_dir: &Utf8Path) -> BuildPlatforms
     }
 }
 
-pub(super) fn test_group(name: &str) -> TestGroup {
+pub(in crate::config) fn test_group(name: &str) -> TestGroup {
     TestGroup::Custom(custom_test_group(name))
 }
 
-pub(super) fn custom_test_group(name: &str) -> CustomTestGroup {
+pub(in crate::config) fn custom_test_group(name: &str) -> CustomTestGroup {
     CustomTestGroup::new(name.into())
         .unwrap_or_else(|error| panic!("invalid custom test group {name}: {error}"))
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct MietteJsonReport {
-    pub(super) message: String,
-    pub(super) labels: Vec<MietteJsonLabel>,
+pub(in crate::config) struct MietteJsonReport {
+    pub(in crate::config) message: String,
+    pub(in crate::config) labels: Vec<MietteJsonLabel>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct MietteJsonLabel {
-    pub(super) label: String,
-    pub(super) span: MietteJsonSpan,
+pub(in crate::config) struct MietteJsonLabel {
+    pub(in crate::config) label: String,
+    pub(in crate::config) span: MietteJsonSpan,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct MietteJsonSpan {
-    pub(super) offset: usize,
-    pub(super) length: usize,
+pub(in crate::config) struct MietteJsonSpan {
+    pub(in crate::config) offset: usize,
+    pub(in crate::config) length: usize,
 }

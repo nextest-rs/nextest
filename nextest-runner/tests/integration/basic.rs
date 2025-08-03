@@ -12,7 +12,10 @@ use iddqd::IdOrdMap;
 use nextest_filtering::{Filterset, FiltersetKind, ParseContext};
 use nextest_metadata::{FilterMatch, MismatchReason};
 use nextest_runner::{
-    config::{LeakTimeoutResult, NextestConfig, RetryPolicy},
+    config::{
+        core::NextestConfig,
+        elements::{LeakTimeoutResult, RetryPolicy},
+    },
     double_spawn::DoubleSpawnInfo,
     input::InputHandlerKind,
     list::BinaryList,

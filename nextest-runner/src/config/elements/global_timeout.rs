@@ -24,10 +24,7 @@ impl<'de> Deserialize<'de> for GlobalTimeout {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        NextestConfig,
-        test_helpers::{build_platforms, temp_workspace},
-    };
+    use crate::config::{core::NextestConfig, utils::test_helpers::*};
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use nextest_filtering::ParseContext;

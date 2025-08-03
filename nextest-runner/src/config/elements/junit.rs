@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 /// Global JUnit configuration stored within a profile.
 ///
-/// Returned by an [`EvaluatableProfile`](crate::config::EvaluatableProfile).
+/// Returned by an [`EvaluatableProfile`](crate::config::core::EvaluatableProfile).
 #[derive(Clone, Debug)]
 pub struct JunitConfig<'cfg> {
     path: Utf8PathBuf,
@@ -16,7 +16,7 @@ pub struct JunitConfig<'cfg> {
 }
 
 impl<'cfg> JunitConfig<'cfg> {
-    pub(super) fn new(
+    pub(in crate::config) fn new(
         store_dir: &Utf8Path,
         custom_data: Option<&'cfg JunitImpl>,
         default_data: &'cfg DefaultJunitImpl,
@@ -68,7 +68,7 @@ impl<'cfg> JunitConfig<'cfg> {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct DefaultJunitImpl {
+pub(in crate::config) struct DefaultJunitImpl {
     path: Option<Utf8PathBuf>,
     report_name: String,
     store_success_output: bool,
@@ -95,7 +95,7 @@ impl DefaultJunitImpl {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub(super) struct JunitImpl {
+pub(in crate::config) struct JunitImpl {
     #[serde(default)]
     path: Option<Utf8PathBuf>,
     #[serde(default)]

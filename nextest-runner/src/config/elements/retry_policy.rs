@@ -68,7 +68,7 @@ impl RetryPolicy {
     }
 }
 
-pub(super) fn deserialize_retry_policy<'de, D>(
+pub(in crate::config) fn deserialize_retry_policy<'de, D>(
     deserializer: D,
 ) -> Result<Option<RetryPolicy>, D::Error>
 where
@@ -166,10 +166,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        config::{
-            NextestConfig,
-            test_helpers::{binary_query, build_platforms, temp_workspace},
-        },
+        config::{core::NextestConfig, utils::test_helpers::*},
         errors::ConfigParseErrorKind,
     };
     use camino_tempfile::tempdir;

@@ -23,7 +23,7 @@
 //! using before
 
 use crate::{
-    config::LeakTimeoutResult,
+    config::elements::LeakTimeoutResult,
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::RustTestSuite,
     reporter::events::{ExecutionResult, TestEvent, TestEventKind},

@@ -10,7 +10,9 @@ use serde::{
 /// Deserializes a well-formed relative path.
 ///
 /// Returns an error on absolute paths, and on other kinds of relative paths.
-pub(super) fn deserialize_relative_path<'de, D>(deserializer: D) -> Result<Utf8PathBuf, D::Error>
+pub(in crate::config) fn deserialize_relative_path<'de, D>(
+    deserializer: D,
+) -> Result<Utf8PathBuf, D::Error>
 where
     D: serde::Deserializer<'de>,
 {

@@ -57,8 +57,9 @@ impl FromStr for ToolConfigFile {
 mod tests {
     use super::*;
     use crate::config::{
-        NextestConfig, NextestVersionConfig, NextestVersionReq, RetryPolicy, TestGroup,
-        VersionOnlyConfig, test_helpers::*,
+        core::{NextestConfig, NextestVersionConfig, NextestVersionReq, VersionOnlyConfig},
+        elements::{RetryPolicy, TestGroup},
+        utils::test_helpers::*,
     };
     use camino_tempfile::tempdir;
     use camino_tempfile_ext::prelude::*;

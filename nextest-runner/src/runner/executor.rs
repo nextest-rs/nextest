@@ -14,9 +14,10 @@
 use super::HandleSignalResult;
 use crate::{
     config::{
-        EvaluatableProfile, LeakTimeout, LeakTimeoutResult, RetryPolicy, ScriptId,
-        SetupScriptCommand, SetupScriptConfig, SetupScriptExecuteData, SlowTimeout, TestGroup,
-        TestSettings,
+        core::EvaluatableProfile,
+        elements::{LeakTimeout, LeakTimeoutResult, RetryPolicy, SlowTimeout, TestGroup},
+        overrides::TestSettings,
+        scripts::{ScriptId, SetupScriptCommand, SetupScriptConfig, SetupScriptExecuteData},
     },
     double_spawn::DoubleSpawnInfo,
     errors::{ChildError, ChildFdError, ChildStartError, ErrorList},

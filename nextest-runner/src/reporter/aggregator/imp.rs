@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::junit::MetadataJunit;
-use crate::{config::EvaluatableProfile, errors::WriteEventError, reporter::events::TestEvent};
+use crate::{
+    config::core::EvaluatableProfile, errors::WriteEventError, reporter::events::TestEvent,
+};
 use camino::Utf8PathBuf;
 
 #[derive(Clone, Debug)]
