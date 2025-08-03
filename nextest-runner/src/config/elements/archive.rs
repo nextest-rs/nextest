@@ -1,8 +1,7 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::TrackDefault;
-use crate::config::helpers::deserialize_relative_path;
+use crate::config::utils::{TrackDefault, deserialize_relative_path};
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, de::Unexpected};
 use std::fmt;
@@ -238,10 +237,7 @@ impl<'de> Deserialize<'de> for RecursionDepth {
 mod tests {
     use super::*;
     use crate::{
-        config::{
-            NextestConfig,
-            test_helpers::{build_platforms, temp_workspace},
-        },
+        config::{core::NextestConfig, utils::test_helpers::*},
         errors::ConfigParseErrorKind,
     };
     use camino::Utf8Path;

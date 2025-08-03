@@ -4,7 +4,7 @@
 //! Display helpers for durations.
 
 use crate::{
-    config::CompiledDefaultFilter,
+    config::overrides::CompiledDefaultFilter,
     helpers::plural,
     list::SkipCounts,
     reporter::{
@@ -215,7 +215,7 @@ pub(super) fn write_final_warnings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::CompiledDefaultFilterSection;
+    use crate::config::overrides::CompiledDefaultFilterSection;
     use nextest_filtering::CompiledExpr;
 
     #[test]

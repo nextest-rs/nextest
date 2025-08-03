@@ -41,7 +41,7 @@ pub enum LeakTimeoutResult {
     Pass,
 }
 
-pub(super) fn deserialize_leak_timeout<'de, D>(
+pub(in crate::config) fn deserialize_leak_timeout<'de, D>(
     deserializer: D,
 ) -> Result<Option<LeakTimeout>, D::Error>
 where
@@ -84,10 +84,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        NextestConfig,
-        test_helpers::{build_platforms, temp_workspace},
-    };
+    use crate::config::{core::NextestConfig, utils::test_helpers::*};
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use nextest_filtering::ParseContext;

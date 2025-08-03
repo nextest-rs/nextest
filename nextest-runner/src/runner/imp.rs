@@ -4,7 +4,9 @@
 use super::{DispatcherContext, ExecutorContext, RunnerTaskState};
 use crate::{
     config::{
-        EvaluatableProfile, MaxFail, RetryPolicy, SetupScriptExecuteData, TestGroup, TestThreads,
+        core::EvaluatableProfile,
+        elements::{MaxFail, RetryPolicy, TestGroup, TestThreads},
+        scripts::SetupScriptExecuteData,
     },
     double_spawn::DoubleSpawnInfo,
     errors::{ConfigureHandleInheritanceError, TestRunnerBuildError, TestRunnerExecuteErrors},
@@ -477,7 +479,7 @@ pub fn configure_handle_inheritance(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::NextestConfig, platform::BuildPlatforms};
+    use crate::{config::core::NextestConfig, platform::BuildPlatforms};
 
     #[test]
     fn no_capture_settings() {

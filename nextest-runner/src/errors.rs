@@ -6,7 +6,9 @@
 use crate::{
     cargo_config::{TargetTriple, TargetTripleSource},
     config::{
-        ConfigExperimental, CustomTestGroup, ProfileScriptType, ScriptId, ScriptType, TestGroup,
+        core::ConfigExperimental,
+        elements::{CustomTestGroup, TestGroup},
+        scripts::{ProfileScriptType, ScriptId, ScriptType},
     },
     helpers::{display_exited_with, dylib_path_envvar},
     redact::Redactor,
@@ -646,7 +648,7 @@ pub struct InvalidCustomTestGroupName(pub InvalidIdentifier);
 #[error("invalid configuration script name: {0}")]
 pub struct InvalidConfigScriptName(pub InvalidIdentifier);
 
-/// Error returned while parsing a [`ToolConfigFile`](crate::config::ToolConfigFile) value.
+/// Error returned while parsing a [`ToolConfigFile`](crate::config::core::ToolConfigFile) value.
 #[derive(Clone, Debug, Error)]
 pub enum ToolConfigFileParseError {
     #[error(
@@ -680,7 +682,7 @@ pub enum ToolConfigFileParseError {
     },
 }
 
-/// Error returned while parsing a [`MaxFail`](crate::config::MaxFail) input.
+/// Error returned while parsing a [`MaxFail`](crate::config::elements::MaxFail) input.
 #[derive(Clone, Debug, Error)]
 #[error(
     "unrecognized value for max-fail: {input}\n(hint: expected either a positive integer or \"all\")"
@@ -698,7 +700,7 @@ impl MaxFailParseError {
     }
 }
 
-/// Error returned while parsing a [`TestThreads`](crate::config::TestThreads) value.
+/// Error returned while parsing a [`TestThreads`](crate::config::elements::TestThreads) value.
 #[derive(Clone, Debug, Error)]
 #[error(
     "unrecognized value for test-threads: {input}\n(hint: expected either an integer or \"num-cpus\")"

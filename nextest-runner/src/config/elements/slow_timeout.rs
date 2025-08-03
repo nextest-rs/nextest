@@ -20,6 +20,7 @@ pub struct SlowTimeout {
 impl SlowTimeout {
     /// A reasonable value for "maximum slow timeout".
     pub(crate) const VERY_LARGE: Self = Self {
+        // See far_future() in pausable_sleep.rs for why this is roughly 30 years.
         period: far_future_duration(),
         terminate_after: None,
         grace_period: Duration::from_secs(10),
@@ -30,7 +31,7 @@ fn default_grace_period() -> Duration {
     Duration::from_secs(10)
 }
 
-pub(super) fn deserialize_slow_timeout<'de, D>(
+pub(in crate::config) fn deserialize_slow_timeout<'de, D>(
     deserializer: D,
 ) -> Result<Option<SlowTimeout>, D::Error>
 where
@@ -78,10 +79,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        NextestConfig,
-        test_helpers::{build_platforms, temp_workspace},
-    };
+    use crate::config::{core::NextestConfig, utils::test_helpers::*};
     use camino_tempfile::tempdir;
     use indoc::indoc;
     use nextest_filtering::ParseContext;

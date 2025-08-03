@@ -17,7 +17,7 @@ use super::{
 };
 use crate::{
     cargo_config::CargoConfigs,
-    config::{CompiledDefaultFilter, LeakTimeoutResult, ScriptId},
+    config::{elements::LeakTimeoutResult, overrides::CompiledDefaultFilter, scripts::ScriptId},
     errors::WriteEventError,
     helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
     list::{TestInstance, TestInstanceId},

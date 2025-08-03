@@ -18,9 +18,12 @@ use nextest_runner::{
     RustcCli,
     cargo_config::{CargoConfigs, EnvironmentMap, TargetTriple},
     config::{
-        ConfigExperimental, EarlyProfile, EvaluatableProfile, MaxFail, NextestConfig,
-        NextestVersionConfig, NextestVersionEval, RetryPolicy, TestGroup, TestThreads,
-        ToolConfigFile, VersionOnlyConfig, get_num_cpus,
+        core::{
+            ConfigExperimental, EarlyProfile, EvaluatableProfile, NextestConfig,
+            NextestVersionConfig, NextestVersionEval, ToolConfigFile, VersionOnlyConfig,
+            get_num_cpus,
+        },
+        elements::{MaxFail, RetryPolicy, TestGroup, TestThreads},
     },
     double_spawn::DoubleSpawnInfo,
     errors::{TargetTripleError, WriteTestListError},

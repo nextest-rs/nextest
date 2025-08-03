@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
     cargo_config::CargoConfigs,
-    config::EvaluatableProfile,
+    config::core::EvaluatableProfile,
     errors::WriteEventError,
     list::TestList,
     reporter::{aggregator::EventAggregator, events::*, structured::StructuredReporter},

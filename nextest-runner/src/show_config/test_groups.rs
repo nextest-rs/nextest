@@ -3,8 +3,9 @@
 
 use crate::{
     config::{
-        CompiledOverride, CustomTestGroup, EarlyProfile, EvaluatableProfile, FinalConfig,
-        MaybeTargetSpec, OverrideId, SettingSource, TestGroup, TestGroupConfig,
+        core::{EarlyProfile, EvaluatableProfile, FinalConfig},
+        elements::{CustomTestGroup, TestGroup, TestGroupConfig},
+        overrides::{CompiledOverride, MaybeTargetSpec, OverrideId, SettingSource},
     },
     errors::ShowTestGroupsError,
     helpers::QuotedDisplay,

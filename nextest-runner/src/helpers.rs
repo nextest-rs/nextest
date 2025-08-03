@@ -4,7 +4,7 @@
 //! General support code for nextest-runner.
 
 use crate::{
-    config::ScriptId,
+    config::scripts::ScriptId,
     list::{Styles, TestInstanceId},
     reporter::events::AbortStatus,
     write_str::WriteStr,

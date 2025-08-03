@@ -9,7 +9,10 @@
 
 use super::{RunUnitRequest, RunnerTaskState, ShutdownRequest};
 use crate::{
-    config::{MaxFail, ScriptId, SetupScriptConfig},
+    config::{
+        elements::MaxFail,
+        scripts::{ScriptId, SetupScriptConfig},
+    },
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{

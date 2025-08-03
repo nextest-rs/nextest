@@ -56,7 +56,9 @@ impl fmt::Display for MaxFail {
 }
 
 /// Deserializes a fail-fast configuration.
-pub(super) fn deserialize_fail_fast<'de, D>(deserializer: D) -> Result<Option<MaxFail>, D::Error>
+pub(in crate::config) fn deserialize_fail_fast<'de, D>(
+    deserializer: D,
+) -> Result<Option<MaxFail>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -160,10 +162,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        config::{
-            NextestConfig,
-            test_helpers::{build_platforms, temp_workspace},
-        },
+        config::{core::NextestConfig, utils::test_helpers::*},
         errors::ConfigParseErrorKind,
     };
     use camino_tempfile::tempdir;

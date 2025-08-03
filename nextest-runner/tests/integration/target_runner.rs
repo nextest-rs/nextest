@@ -8,7 +8,7 @@ use fixture_data::nextest_tests::EXPECTED_TEST_SUITES;
 use nextest_runner::{
     RustcCli,
     cargo_config::{CargoConfigs, TargetTriple},
-    config::NextestConfig,
+    config::core::NextestConfig,
     double_spawn::DoubleSpawnInfo,
     input::InputHandlerKind,
     platform::{BuildPlatforms, HostPlatform, PlatformLibdir, TargetPlatform},

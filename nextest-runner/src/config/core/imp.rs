@@ -1,15 +1,25 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{
-    ArchiveConfig, CompiledByProfile, CompiledData, CompiledDefaultFilter, ConfigExperimental,
-    CustomTestGroup, DefaultJunitImpl, DeserializedOverride, DeserializedProfileScriptConfig,
-    GlobalTimeout, JunitConfig, JunitImpl, MaxFail, NextestVersionDeserialize, RetryPolicy,
-    ScriptConfig, ScriptId, SettingSource, SetupScripts, SlowTimeout, TestGroup, TestGroupConfig,
-    TestSettings, TestThreads, ThreadsRequired, ToolConfigFile, leak_timeout::LeakTimeout,
-};
+use super::{NextestVersionDeserialize, ToolConfigFile};
 use crate::{
-    config::{ListSettings, ProfileScriptType, ScriptInfo, SetupScriptConfig},
+    config::{
+        core::ConfigExperimental,
+        elements::{
+            ArchiveConfig, CustomTestGroup, DefaultJunitImpl, GlobalTimeout, JunitConfig,
+            JunitImpl, LeakTimeout, MaxFail, RetryPolicy, SlowTimeout, TestGroup, TestGroupConfig,
+            TestThreads, ThreadsRequired, deserialize_fail_fast, deserialize_leak_timeout,
+            deserialize_retry_policy, deserialize_slow_timeout,
+        },
+        overrides::{
+            CompiledByProfile, CompiledData, CompiledDefaultFilter, DeserializedOverride,
+            ListSettings, SettingSource, TestSettings,
+        },
+        scripts::{
+            DeserializedProfileScriptConfig, ProfileScriptType, ScriptConfig, ScriptId, ScriptInfo,
+            SetupScriptConfig, SetupScripts,
+        },
+    },
     errors::{
         ConfigParseError, ConfigParseErrorKind, ProfileListScriptUsesRunFiltersError,
         ProfileNotFound, ProfileScriptErrors, ProfileUnknownScriptError,
@@ -206,7 +216,7 @@ impl NextestConfig {
     /// Contains the default config as a TOML file.
     ///
     /// Repository-specific configuration is layered on top of the default config.
-    pub const DEFAULT_CONFIG: &'static str = include_str!("../../default-config.toml");
+    pub const DEFAULT_CONFIG: &'static str = include_str!("../../../default-config.toml");
 
     /// Environment configuration uses this prefix, plus a _.
     pub const ENVIRONMENT_PREFIX: &'static str = "NEXTEST";
@@ -840,19 +850,19 @@ impl NextestConfig {
 
 /// The state of nextest profiles before build platforms have been applied.
 #[derive(Clone, Debug, Default)]
-pub(super) struct PreBuildPlatform {}
+pub(in crate::config) struct PreBuildPlatform {}
 
 /// The state of nextest profiles after build platforms have been applied.
 #[derive(Clone, Debug)]
 pub(crate) struct FinalConfig {
     // Evaluation result for host_spec on the host platform.
-    pub(super) host_eval: bool,
+    pub(in crate::config) host_eval: bool,
     // Evaluation result for target_spec corresponding to tests that run on the host platform (e.g.
     // proc-macro tests).
-    pub(super) host_test_eval: bool,
+    pub(in crate::config) host_test_eval: bool,
     // Evaluation result for target_spec corresponding to tests that run on the target platform
     // (most regular tests).
-    pub(super) target_eval: bool,
+    pub(in crate::config) target_eval: bool,
 }
 
 /// A nextest profile that can be obtained without identifying the host and
@@ -868,7 +878,7 @@ pub struct EarlyProfile<'cfg> {
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
     // Invariant: `compiled_data.default_filter` is always present.
-    pub(super) compiled_data: CompiledData<PreBuildPlatform>,
+    pub(in crate::config) compiled_data: CompiledData<PreBuildPlatform>,
 }
 
 impl<'cfg> EarlyProfile<'cfg> {
@@ -935,7 +945,7 @@ pub struct EvaluatableProfile<'cfg> {
     // This is ordered because the scripts are used in the order they're defined.
     scripts: &'cfg ScriptConfig,
     // Invariant: `compiled_data.default_filter` is always present.
-    pub(super) compiled_data: CompiledData<FinalConfig>,
+    pub(in crate::config) compiled_data: CompiledData<FinalConfig>,
     // The default filter that's been resolved after considering overrides (i.e.
     // platforms).
     resolved_default_filter: CompiledDefaultFilter,
@@ -1099,13 +1109,13 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     #[cfg(test)]
-    pub(super) fn custom_profile(&self) -> Option<&'cfg CustomProfileImpl> {
+    pub(in crate::config) fn custom_profile(&self) -> Option<&'cfg CustomProfileImpl> {
         self.custom_profile
     }
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct NextestConfigImpl {
+pub(in crate::config) struct NextestConfigImpl {
     store: StoreConfigImpl,
     test_groups: BTreeMap<CustomTestGroup, TestGroupConfig>,
     scripts: ScriptConfig,
@@ -1133,11 +1143,13 @@ impl NextestConfigImpl {
             .chain(std::iter::once(NextestConfig::DEFAULT_PROFILE))
     }
 
-    pub(super) fn default_profile(&self) -> &DefaultProfileImpl {
+    pub(in crate::config) fn default_profile(&self) -> &DefaultProfileImpl {
         &self.default_profile
     }
 
-    pub(super) fn other_profiles(&self) -> impl Iterator<Item = (&str, &CustomProfileImpl)> {
+    pub(in crate::config) fn other_profiles(
+        &self,
+    ) -> impl Iterator<Item = (&str, &CustomProfileImpl)> {
         self.other_profiles
             .iter()
             .map(|(key, value)| (key.as_str(), value))
@@ -1205,7 +1217,7 @@ struct StoreConfigImpl {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct DefaultProfileImpl {
+pub(in crate::config) struct DefaultProfileImpl {
     default_filter: String,
     test_threads: TestThreads,
     threads_required: ThreadsRequired,
@@ -1270,26 +1282,26 @@ impl DefaultProfileImpl {
         }
     }
 
-    pub(super) fn default_filter(&self) -> &str {
+    pub(in crate::config) fn default_filter(&self) -> &str {
         &self.default_filter
     }
 
-    pub(super) fn overrides(&self) -> &[DeserializedOverride] {
+    pub(in crate::config) fn overrides(&self) -> &[DeserializedOverride] {
         &self.overrides
     }
 
-    pub(super) fn setup_scripts(&self) -> &[DeserializedProfileScriptConfig] {
+    pub(in crate::config) fn setup_scripts(&self) -> &[DeserializedProfileScriptConfig] {
         &self.scripts
     }
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub(super) struct CustomProfileImpl {
+pub(in crate::config) struct CustomProfileImpl {
     /// The default set of tests run by `cargo nextest run`.
     #[serde(default)]
     default_filter: Option<String>,
-    #[serde(default, deserialize_with = "super::deserialize_retry_policy")]
+    #[serde(default, deserialize_with = "deserialize_retry_policy")]
     retries: Option<RetryPolicy>,
     #[serde(default)]
     test_threads: Option<TestThreads>,
@@ -1308,14 +1320,14 @@ pub(super) struct CustomProfileImpl {
     #[serde(
         default,
         rename = "fail-fast",
-        deserialize_with = "super::deserialize_fail_fast"
+        deserialize_with = "deserialize_fail_fast"
     )]
     max_fail: Option<MaxFail>,
-    #[serde(default, deserialize_with = "super::deserialize_slow_timeout")]
+    #[serde(default, deserialize_with = "deserialize_slow_timeout")]
     slow_timeout: Option<SlowTimeout>,
     #[serde(default)]
     global_timeout: Option<GlobalTimeout>,
-    #[serde(default, deserialize_with = "super::deserialize_leak_timeout")]
+    #[serde(default, deserialize_with = "deserialize_leak_timeout")]
     leak_timeout: Option<LeakTimeout>,
     #[serde(default)]
     overrides: Vec<DeserializedOverride>,
@@ -1329,19 +1341,19 @@ pub(super) struct CustomProfileImpl {
 
 impl CustomProfileImpl {
     #[cfg(test)]
-    pub(super) fn test_threads(&self) -> Option<TestThreads> {
+    pub(in crate::config) fn test_threads(&self) -> Option<TestThreads> {
         self.test_threads
     }
 
-    pub(super) fn default_filter(&self) -> Option<&str> {
+    pub(in crate::config) fn default_filter(&self) -> Option<&str> {
         self.default_filter.as_deref()
     }
 
-    pub(super) fn overrides(&self) -> &[DeserializedOverride] {
+    pub(in crate::config) fn overrides(&self) -> &[DeserializedOverride] {
         &self.overrides
     }
 
-    pub(super) fn scripts(&self) -> &[DeserializedProfileScriptConfig] {
+    pub(in crate::config) fn scripts(&self) -> &[DeserializedProfileScriptConfig] {
         &self.scripts
     }
 }
@@ -1349,7 +1361,7 @@ impl CustomProfileImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::test_helpers::*;
+    use crate::config::utils::test_helpers::*;
     use camino_tempfile::tempdir;
     use iddqd::{IdHashItem, IdHashMap, id_hash_map, id_upcast};
 

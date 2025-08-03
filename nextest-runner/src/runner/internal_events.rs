@@ -9,7 +9,7 @@
 
 use super::{SetupScriptPacket, TestPacket};
 use crate::{
-    config::{ScriptId, SetupScriptConfig},
+    config::scripts::{ScriptId, SetupScriptConfig},
     list::TestInstance,
     reporter::{
         TestOutputDisplay,

@@ -1,8 +1,10 @@
 // Copyright (c) The nextest Contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{ConfigIdentifier, TestThreads};
-use crate::errors::InvalidCustomTestGroupName;
+use crate::{
+    config::{core::ConfigIdentifier, elements::TestThreads},
+    errors::InvalidCustomTestGroupName,
+};
 use serde::Deserialize;
 use smol_str::SmolStr;
 use std::{fmt, str::FromStr};
@@ -126,7 +128,10 @@ pub struct TestGroupConfig {
 mod tests {
     use super::*;
     use crate::{
-        config::{NextestConfig, ToolConfigFile, test_helpers::*},
+        config::{
+            core::{NextestConfig, ToolConfigFile},
+            utils::test_helpers::*,
+        },
         errors::{ConfigParseErrorKind, UnknownTestGroupError},
     };
     use camino_tempfile::tempdir;

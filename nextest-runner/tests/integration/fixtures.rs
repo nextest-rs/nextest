@@ -12,8 +12,12 @@ use nextest_metadata::{MismatchReason, RustBinaryId};
 use nextest_runner::{
     cargo_config::{CargoConfigs, EnvironmentMap},
     config::{
-        ConfigExperimental, LeakTimeoutResult, ListSettings, NextestConfig, ScriptCommand,
-        ScriptCommandRelativeTo, WrapperScriptConfig, WrapperScriptTargetRunner, get_num_cpus,
+        core::{ConfigExperimental, NextestConfig, get_num_cpus},
+        elements::LeakTimeoutResult,
+        overrides::ListSettings,
+        scripts::{
+            ScriptCommand, ScriptCommandRelativeTo, WrapperScriptConfig, WrapperScriptTargetRunner,
+        },
     },
     double_spawn::DoubleSpawnInfo,
     list::{

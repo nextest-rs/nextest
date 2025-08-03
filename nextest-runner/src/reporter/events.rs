@@ -8,7 +8,7 @@
 
 use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::{
-    config::{LeakTimeoutResult, ScriptId},
+    config::{elements::LeakTimeoutResult, scripts::ScriptId},
     list::{TestInstance, TestInstanceId, TestList},
     test_output::ChildExecutionOutput,
 };
