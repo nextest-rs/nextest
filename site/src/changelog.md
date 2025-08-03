@@ -8,9 +8,15 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
-## [0.9.102-rc.2] - 2025-08-03
+## [0.9.102] - 2025-08-03
 
-This is a test release.
+### Added
+
+- Windows releases are now digitally signed. Thanks to the SignPath Foundation for signing nextest's Windows builds.
+
+### Known issues
+
+- Nextest's test suite can nondeterministically hang on machines with a large number of cores. This is a bug in Cargo 1.88, and is fixed in Cargo 1.89. See [#2463](https://github.com/nextest-rs/nextest/issues/2463) for more information.
 
 ## [0.9.101] - 2025-07-11
 
@@ -1502,7 +1508,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
-[0.9.102-rc.2]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.102-rc.2
+[0.9.102]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.102
 [0.9.101]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.101
 [0.9.100]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.100
 [0.9.99]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.99
