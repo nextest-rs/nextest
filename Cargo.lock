@@ -922,9 +922,9 @@ dependencies = [
 
 [[package]]
 name = "duct"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6ce170a0e8454fa0f9b0e5ca38a6ba17ed76a50916839d217eb5357e05cdfde"
+checksum = "d7478638a31d1f1f3d6c9f5e57c76b906a04ac4879d6fd0fb6245bc88f73fd0b"
 dependencies = [
  "libc",
  "os_pipe",
@@ -3159,19 +3159,20 @@ dependencies = [
 
 [[package]]
 name = "shared_child"
-version = "1.0.2"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e297bd52991bbe0686c086957bee142f13df85d1e79b0b21630a99d374ae9dc"
+checksum = "1e362d9935bc50f019969e2f9ecd66786612daae13e8f277be7bfb66e8bed3f7"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "sigchld",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
 name = "shared_thread"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7a6f98357c6bb0ebace19b22220e5543801d9de90ffe77f8abb27c056bac064"
+checksum = "52b86057fcb5423f5018e331ac04623e32d6b5ce85e33300f92c79a1973928b0"
 
 [[package]]
 name = "shell-words"
@@ -3184,6 +3185,17 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "sigchld"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47106eded3c154e70176fc83df9737335c94ce22f821c32d17ed1db1f83badb1"
+dependencies = [
+ "libc",
+ "os_pipe",
+ "signal-hook",
+]
 
 [[package]]
 name = "signal-hook"
