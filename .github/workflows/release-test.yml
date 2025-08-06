@@ -114,7 +114,7 @@ jobs:
       - name: Submit signing request
         id: submit-signing-request
         if: endsWith(matrix.target, '-pc-windows-msvc')
-        uses: signpath/github-action-submit-signing-request@4f13d373e8f0cd8d3c0465ff4877feff27aed2ae # v1.2
+        uses: signpath/github-action-submit-signing-request@ced31329c0317e779dad2eec2a7c3bb46ea1343e # v1.3
         with:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '34634019-2ee0-4162-830a-72cd1a0cb73f'
