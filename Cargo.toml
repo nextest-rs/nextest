@@ -71,7 +71,7 @@ humantime-serde = "1.1.1"
 iddqd = "0.3.9"
 # Disable punycode parsing since we only access well-known domains.
 idna_adapter = "=1.0.0"
-indenter = "0.3.3"
+indenter = "0.3.4"
 indent_write = "2.2.0"
 indexmap = "2.10.0"
 indicatif = "0.18.0"
