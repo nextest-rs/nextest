@@ -45,7 +45,7 @@ config = { version = "0.15.13", default-features = false, features = [
     "preserve_order",
 ] }
 chrono = "0.4.41"
-clap = { version = "4.5.42", features = ["derive", "unstable-markdown"] }
+clap = { version = "4.5.43", features = ["derive", "unstable-markdown"] }
 console-subscriber = "0.4.1"
 cp_r = "0.5.2"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
