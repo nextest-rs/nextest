@@ -17,7 +17,7 @@ use crate::{
         ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection, ConfigParseErrorKind,
     },
     platform::BuildPlatforms,
-    reporter::TestOutputDisplay,
+    reporter::{TestOutputDisplay, displayer::TestOutputDisplayStreams},
 };
 use guppy::graph::cargo::BuildPlatform;
 use nextest_filtering::{
@@ -109,8 +109,8 @@ pub struct TestSettings<'p, Source = ()> {
     slow_timeout: (SlowTimeout, Source),
     leak_timeout: (LeakTimeout, Source),
     test_group: (TestGroup, Source),
-    success_output: (TestOutputDisplay, Source),
-    failure_output: (TestOutputDisplay, Source),
+    success_output: (TestOutputDisplayStreams, Source),
+    failure_output: (TestOutputDisplayStreams, Source),
     junit_store_success_output: (bool, Source),
     junit_store_failure_output: (bool, Source),
 }
@@ -217,12 +217,12 @@ impl<'p> TestSettings<'p> {
     }
 
     /// Returns the success output setting for this test.
-    pub fn success_output(&self) -> TestOutputDisplay {
+    pub fn success_output(&self) -> TestOutputDisplayStreams {
         self.success_output.0
     }
 
     /// Returns the failure output setting for this test.
-    pub fn failure_output(&self) -> TestOutputDisplay {
+    pub fn failure_output(&self) -> TestOutputDisplayStreams {
         self.failure_output.0
     }
 
@@ -704,8 +704,8 @@ pub(in crate::config) struct ProfileOverrideData {
     slow_timeout: Option<SlowTimeout>,
     leak_timeout: Option<LeakTimeout>,
     pub(in crate::config) test_group: Option<TestGroup>,
-    success_output: Option<TestOutputDisplay>,
-    failure_output: Option<TestOutputDisplay>,
+    success_output: Option<TestOutputDisplayStreams>,
+    failure_output: Option<TestOutputDisplayStreams>,
     junit: DeserializedJunitOutput,
 }
 
@@ -947,9 +947,9 @@ pub(in crate::config) struct DeserializedOverride {
     #[serde(default)]
     test_group: Option<TestGroup>,
     #[serde(default)]
-    success_output: Option<TestOutputDisplay>,
+    success_output: Option<TestOutputDisplayStreams>,
     #[serde(default)]
-    failure_output: Option<TestOutputDisplay>,
+    failure_output: Option<TestOutputDisplayStreams>,
     #[serde(default)]
     junit: DeserializedJunitOutput,
 }
@@ -1122,8 +1122,14 @@ mod tests {
             }
         );
         assert_eq!(overrides.test_group(), &test_group("my-group"));
-        assert_eq!(overrides.success_output(), TestOutputDisplay::Never);
-        assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
+        assert_eq!(
+            overrides.success_output(),
+            TestOutputDisplayStreams::create_never()
+        );
+        assert_eq!(
+            overrides.failure_output(),
+            TestOutputDisplayStreams::create_final()
+        );
         // For clarity.
         #[expect(clippy::bool_assert_comparison)]
         {
@@ -1173,9 +1179,12 @@ mod tests {
         assert_eq!(overrides.test_group(), &test_group("my-group"));
         assert_eq!(
             overrides.success_output(),
-            TestOutputDisplay::ImmediateFinal
+            TestOutputDisplayStreams::create_immediate_final()
         );
-        assert_eq!(overrides.failure_output(), TestOutputDisplay::Final);
+        assert_eq!(
+            overrides.failure_output(),
+            TestOutputDisplayStreams::create_final()
+        );
         // For clarity.
         #[expect(clippy::bool_assert_comparison)]
         {

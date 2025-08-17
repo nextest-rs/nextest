@@ -6,7 +6,10 @@
 //! Status levels play a role that's similar to log levels in typical loggers.
 
 use super::TestOutputDisplay;
-use crate::reporter::events::CancelReason;
+use crate::reporter::{
+    displayer::{DisplayOutput, TestOutputDisplayStreams},
+    events::CancelReason,
+};
 use serde::Deserialize;
 
 /// Status level to show in the reporter output.
@@ -89,17 +92,18 @@ pub(crate) struct StatusLevels {
 impl StatusLevels {
     pub(super) fn compute_output_on_test_finished(
         &self,
-        display: TestOutputDisplay,
+        display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         test_status_level: StatusLevel,
         test_final_status_level: FinalStatusLevel,
     ) -> OutputOnTestFinished {
         let write_status_line = self.status_level >= test_status_level;
 
-        let is_immediate = display.is_immediate();
+        let is_immediate = display.display_output_immediate();
         // We store entries in the final output map if either the final status level is high enough or
         // if `display` says we show the output at the end.
-        let is_final = display.is_final() || self.final_status_level >= test_final_status_level;
+        let is_final = display.display_output_final().is_some()
+            || self.final_status_level >= test_final_status_level;
 
         // This table is tested below. The basic invariant is that we generally follow what
         // is_immediate and is_final suggests, except:
@@ -124,19 +128,24 @@ impl StatusLevels {
         //
         // [2] If there's a signal, we shouldn't display output twice at the end since it's
         // redundant -- instead, just show the output as part of the immediate display.
-        let show_immediate = is_immediate && cancel_status <= Some(CancelReason::Signal);
+        let show_immediate = if cancel_status <= Some(CancelReason::Signal) {
+            is_immediate
+        } else {
+            None
+        };
 
         let store_final = if is_final && cancel_status < Some(CancelReason::Signal)
-            || !is_immediate && is_final && cancel_status == Some(CancelReason::Signal)
+            || is_immediate.is_none() && is_final && cancel_status == Some(CancelReason::Signal)
         {
             OutputStoreFinal::Yes {
-                display_output: display.is_final(),
+                display_output: display.display_output_final(),
             }
-        } else if is_immediate && is_final && cancel_status == Some(CancelReason::Signal) {
+        } else if is_immediate.is_some() && is_final && cancel_status == Some(CancelReason::Signal)
+        {
             // In this special case, we already display the output once as the test is being
             // cancelled, so don't display it again at the end since that's redundant.
             OutputStoreFinal::Yes {
-                display_output: false,
+                display_output: None,
             }
         } else {
             OutputStoreFinal::No
@@ -153,7 +162,7 @@ impl StatusLevels {
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct OutputOnTestFinished {
     pub(super) write_status_line: bool,
-    pub(super) show_immediate: bool,
+    pub(super) show_immediate: Option<DisplayOutput>,
     pub(super) store_final: OutputStoreFinal,
 }
 
@@ -164,7 +173,9 @@ pub(super) enum OutputStoreFinal {
 
     /// Store the output. display_output controls whether stdout and stderr should actually be
     /// displayed at the end.
-    Yes { display_output: bool },
+    Yes {
+        display_output: Option<DisplayOutput>,
+    },
 }
 
 #[cfg(test)]
@@ -179,7 +190,7 @@ mod tests {
 
     #[proptest(cases = 64)]
     fn on_test_finished_dont_write_status_line(
-        display: TestOutputDisplay,
+        display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         #[filter(StatusLevel::Pass < #test_status_level)] test_status_level: StatusLevel,
         test_final_status_level: FinalStatusLevel,
@@ -201,7 +212,7 @@ mod tests {
 
     #[proptest(cases = 64)]
     fn on_test_finished_write_status_line(
-        display: TestOutputDisplay,
+        display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         #[filter(StatusLevel::Pass >= #test_status_level)] test_status_level: StatusLevel,
         test_final_status_level: FinalStatusLevel,
@@ -223,7 +234,7 @@ mod tests {
     #[proptest(cases = 64)]
     fn on_test_finished_with_interrupt(
         // We always hide output on interrupt.
-        display: TestOutputDisplay,
+        display: TestOutputDisplayStreams,
         // cancel_status is fixed to Interrupt.
 
         // In this case, the status levels are not relevant for is_immediate and is_final.
@@ -241,13 +252,13 @@ mod tests {
             test_status_level,
             test_final_status_level,
         );
-        assert!(!actual.show_immediate);
+        assert!(actual.show_immediate.is_none());
         assert_eq!(actual.store_final, OutputStoreFinal::No);
     }
 
     #[proptest(cases = 64)]
     fn on_test_finished_dont_show_immediate(
-        #[filter(!#display.is_immediate())] display: TestOutputDisplay,
+        #[filter(#display.display_output_immediate().is_none())] display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         // The status levels are not relevant for show_immediate.
         test_status_level: StatusLevel,
@@ -264,12 +275,12 @@ mod tests {
             test_status_level,
             test_final_status_level,
         );
-        assert!(!actual.show_immediate);
+        assert!(actual.show_immediate.is_none());
     }
 
     #[proptest(cases = 64)]
     fn on_test_finished_show_immediate(
-        #[filter(#display.is_immediate())] display: TestOutputDisplay,
+        #[filter(#display.display_output_immediate().is_none())] display: TestOutputDisplayStreams,
         #[filter(#cancel_status <= Some(CancelReason::Signal))] cancel_status: Option<CancelReason>,
         // The status levels are not relevant for show_immediate.
         test_status_level: StatusLevel,
@@ -286,14 +297,14 @@ mod tests {
             test_status_level,
             test_final_status_level,
         );
-        assert!(actual.show_immediate);
+        assert!(actual.show_immediate.is_some());
     }
 
     // Where we don't store final output: if display.is_final() is false, and if the test final
     // status level is too high.
     #[proptest(cases = 64)]
     fn on_test_finished_dont_store_final(
-        #[filter(!#display.is_final())] display: TestOutputDisplay,
+        #[filter(#display.display_output_final().is_none())] display: TestOutputDisplayStreams,
         cancel_status: Option<CancelReason>,
         // The status level is not relevant for store_final.
         test_status_level: StatusLevel,
@@ -330,7 +341,7 @@ mod tests {
         };
 
         let actual = status_levels.compute_output_on_test_finished(
-            TestOutputDisplay::Final,
+            TestOutputDisplayStreams::create_final(),
             cancel_status,
             test_status_level,
             test_final_status_level,
@@ -338,7 +349,10 @@ mod tests {
         assert_eq!(
             actual.store_final,
             OutputStoreFinal::Yes {
-                display_output: true
+                display_output: Some(DisplayOutput {
+                    stdout: true,
+                    stderr: true,
+                })
             }
         );
     }
@@ -357,7 +371,7 @@ mod tests {
         };
 
         let actual = status_levels.compute_output_on_test_finished(
-            TestOutputDisplay::ImmediateFinal,
+            TestOutputDisplayStreams::create_immediate_final(),
             cancel_status,
             test_status_level,
             test_final_status_level,
@@ -365,7 +379,7 @@ mod tests {
         assert_eq!(
             actual.store_final,
             OutputStoreFinal::Yes {
-                display_output: true
+                display_output: None,
             }
         );
     }
@@ -383,7 +397,7 @@ mod tests {
         };
 
         let actual = status_levels.compute_output_on_test_finished(
-            TestOutputDisplay::ImmediateFinal,
+            TestOutputDisplayStreams::create_immediate_final(),
             Some(CancelReason::Signal),
             test_status_level,
             test_final_status_level,
@@ -391,7 +405,7 @@ mod tests {
         assert_eq!(
             actual.store_final,
             OutputStoreFinal::Yes {
-                display_output: false,
+                display_output: None,
             }
         );
     }
@@ -399,7 +413,7 @@ mod tests {
     // Case 4: if display.is_final() is *false* but the test_final_status_level is low enough.
     #[proptest(cases = 64)]
     fn on_test_finished_store_final_4(
-        #[filter(!#display.is_final())] display: TestOutputDisplay,
+        #[filter(#display.display_output_final().is_none())] display: TestOutputDisplayStreams,
         #[filter(#cancel_status <= Some(CancelReason::Signal))] cancel_status: Option<CancelReason>,
         // The status level is not relevant for store_final.
         test_status_level: StatusLevel,
@@ -421,7 +435,7 @@ mod tests {
         assert_eq!(
             actual.store_final,
             OutputStoreFinal::Yes {
-                display_output: false,
+                display_output: None,
             }
         );
     }

@@ -11,6 +11,7 @@ use crate::{
     config::{elements::LeakTimeoutResult, scripts::ScriptId},
     list::{TestInstance, TestInstanceId, TestList},
     runner::{StressCondition, StressCount},
+    reporter::displayer::TestOutputDisplayStreams,
     test_output::ChildExecutionOutput,
 };
 use chrono::{DateTime, FixedOffset};
@@ -199,7 +200,7 @@ pub enum TestEventKind<'a> {
         delay_before_next_attempt: Duration,
 
         /// Whether failure outputs are printed out.
-        failure_output: TestOutputDisplay,
+        failure_output: TestOutputDisplayStreams,
     },
 
     /// A retry has started.
@@ -223,10 +224,10 @@ pub enum TestEventKind<'a> {
         test_instance: TestInstance<'a>,
 
         /// Test setting for success output.
-        success_output: TestOutputDisplay,
+        success_output: TestOutputDisplayStreams,
 
         /// Test setting for failure output.
-        failure_output: TestOutputDisplay,
+        failure_output: TestOutputDisplayStreams,
 
         /// Whether the JUnit report should store success output for this test.
         junit_store_success_output: bool,

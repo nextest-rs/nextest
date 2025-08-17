@@ -28,7 +28,9 @@ use crate::{
     helpers::plural,
     list::TestList,
     platform::BuildPlatforms,
-    reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplay},
+    reporter::{
+        FinalStatusLevel, StatusLevel, TestOutputDisplay, displayer::TestOutputDisplayStreams,
+    },
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{
@@ -1049,14 +1051,14 @@ impl<'cfg> EvaluatableProfile<'cfg> {
     }
 
     /// Returns the failure output config for this profile.
-    pub fn failure_output(&self) -> TestOutputDisplay {
+    pub fn failure_output(&self) -> TestOutputDisplayStreams {
         self.custom_profile
             .and_then(|profile| profile.failure_output)
             .unwrap_or(self.default_profile.failure_output)
     }
 
     /// Returns the failure output config for this profile.
-    pub fn success_output(&self) -> TestOutputDisplay {
+    pub fn success_output(&self) -> TestOutputDisplayStreams {
         self.custom_profile
             .and_then(|profile| profile.success_output)
             .unwrap_or(self.default_profile.success_output)
@@ -1225,8 +1227,8 @@ pub(in crate::config) struct DefaultProfileImpl {
     retries: RetryPolicy,
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
-    failure_output: TestOutputDisplay,
-    success_output: TestOutputDisplay,
+    failure_output: TestOutputDisplayStreams,
+    success_output: TestOutputDisplayStreams,
     max_fail: MaxFail,
     slow_timeout: SlowTimeout,
     global_timeout: GlobalTimeout,
@@ -1314,9 +1316,9 @@ pub(in crate::config) struct CustomProfileImpl {
     #[serde(default)]
     final_status_level: Option<FinalStatusLevel>,
     #[serde(default)]
-    failure_output: Option<TestOutputDisplay>,
+    failure_output: Option<TestOutputDisplayStreams>,
     #[serde(default)]
-    success_output: Option<TestOutputDisplay>,
+    success_output: Option<TestOutputDisplayStreams>,
     #[serde(
         default,
         rename = "fail-fast",

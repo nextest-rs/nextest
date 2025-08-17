@@ -17,9 +17,169 @@ use indent_write::io::IndentWriter;
 use owo_colors::Style;
 use serde::Deserialize;
 use std::{
-    fmt,
+    fmt::{self, Formatter},
     io::{self, Write},
+    str::FromStr,
 };
+
+/// When to display test output in the reporter.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(test, derive(test_strategy::Arbitrary))]
+pub struct TestOutputDisplayStreams {
+    /// When to display the stdout output of a test in the reporter
+    pub stdout: Option<TestOutputDisplay>,
+    /// When to display the stderr output of a test in the reporter
+    pub stderr: Option<TestOutputDisplay>,
+}
+
+impl TestOutputDisplayStreams {
+    /// Create a `TestOutputDisplayStreams` with both stdout and stderr set to `Immediate`
+    pub fn create_immediate() -> Self {
+        Self {
+            stdout: Some(TestOutputDisplay::Immediate),
+            stderr: Some(TestOutputDisplay::Immediate),
+        }
+    }
+    /// Create a `TestOutputDisplayStreams` with both stdout and stderr set to `Final`
+    pub fn create_final() -> Self {
+        Self {
+            stdout: Some(TestOutputDisplay::Final),
+            stderr: Some(TestOutputDisplay::Final),
+        }
+    }
+    /// Create a `TestOutputDisplayStreams` with both stdout and stderr set to `ImmediateFinal`
+    pub fn create_immediate_final() -> Self {
+        Self {
+            stdout: Some(TestOutputDisplay::ImmediateFinal),
+            stderr: Some(TestOutputDisplay::ImmediateFinal),
+        }
+    }
+    /// Create a `TestOutputDisplayStreams` with both stdout and stderr set to `Never`
+    pub fn create_never() -> Self {
+        Self {
+            stdout: Some(TestOutputDisplay::Never),
+            stderr: Some(TestOutputDisplay::Never),
+        }
+    }
+
+    /// Which output streams should be output immediately
+    ///
+    /// # Returns
+    /// Returns `None` when no output streams should be output
+    pub fn display_output_immediate(&self) -> Option<DisplayOutput> {
+        let stdout = self.stdout.map_or(false, |t| t.is_immediate());
+        let stderr = self.stderr.map_or(false, |t| t.is_immediate());
+        if stdout || stderr {
+            Some(DisplayOutput { stdout, stderr })
+        } else {
+            None
+        }
+    }
+
+    /// Which output streams should be output at the end
+    ///
+    /// # Returns
+    /// Returns `None` when no output streams should be output
+    pub fn display_output_final(&self) -> Option<DisplayOutput> {
+        let stdout = self.stdout.map_or(false, |t| t.is_final());
+        let stderr = self.stderr.map_or(false, |t| t.is_final());
+        if stdout || stderr {
+            Some(DisplayOutput { stdout, stderr })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TestOutputDisplayStreams {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(TestOutputDisplayStreamsVisitor)
+    }
+}
+
+struct TestOutputDisplayStreamsVisitor;
+impl<'de> serde::de::Visitor<'de> for TestOutputDisplayStreamsVisitor {
+    type Value = TestOutputDisplayStreams;
+
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+        formatter.write_str(
+            "a string with 'never', 'immediate', 'immediate-final' or 'final',\
+or a map with 'stdout' and/or 'stderr' as keys and the preceding values",
+        )
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        // the input is a string so we expect a TestOutputDisplay value
+        match v {
+            "never" => Ok(TestOutputDisplayStreams::create_never()),
+            "immediate" => Ok(TestOutputDisplayStreams::create_immediate()),
+            "immediate-final" => Ok(TestOutputDisplayStreams::create_immediate_final()),
+            "final" => Ok(TestOutputDisplayStreams::create_final()),
+            _ => Err(E::invalid_value(
+                serde::de::Unexpected::Str(v),
+                &"unrecognized value, expected 'never', 'immediate', 'immediate-final' or 'final'\
+or a map with 'stdout' and/or 'stderr' as keys and the preceding values",
+            )),
+        }
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        use serde::de::Error;
+
+        // the input is a map, so we expect stdout and/or stderr as keys and TestOutputDisplay values
+        // as the value
+        let mut stdout = None;
+        let mut stderr = None;
+        while let Some((key, value)) = map.next_entry::<&str, &str>()? {
+            match key {
+                "stdout" => {
+                    if stdout.is_some() {
+                        return Err(A::Error::duplicate_field("stdout"));
+                    }
+                    stdout = Some(TestOutputDisplay::from_str(value).map_err(|_| {
+                        A::Error::invalid_value(
+                            serde::de::Unexpected::Str(value),
+                            &"'never', 'immediate', 'immediate-final', or 'final'",
+                        )
+                    })?);
+                }
+                "stderr" => {
+                    if stderr.is_some() {
+                        return Err(A::Error::duplicate_field("stderr"));
+                    }
+                    stderr = Some(TestOutputDisplay::from_str(value).map_err(|_| {
+                        A::Error::invalid_value(
+                            serde::de::Unexpected::Str(value),
+                            &"'never', 'immediate', 'immediate-final', or 'final'",
+                        )
+                    })?);
+                }
+                _ => return Err(A::Error::unknown_field(key, &["stdout", "stderr"])),
+            }
+        }
+        Ok(TestOutputDisplayStreams { stdout, stderr })
+    }
+}
+
+/// Simplified [`TestOutputDisplayStreams`] to tell which output streams should be output
+///
+/// Used after the Never/Immediate/Final distinction has been made.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DisplayOutput {
+    /// Display the stdout output of the test
+    pub stdout: bool,
+    /// Display the stderr output of the test
+    pub stderr: bool,
+}
 
 /// When to display test output in the reporter.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -59,6 +219,22 @@ impl TestOutputDisplay {
     }
 }
 
+impl FromStr for TestOutputDisplay {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "immediate" => Ok(TestOutputDisplay::Immediate),
+            "immediate-final" => Ok(TestOutputDisplay::ImmediateFinal),
+            "final" => Ok(TestOutputDisplay::Final),
+            "never" => Ok(TestOutputDisplay::Never),
+            _ => Err(
+                "unrecognized value, expected 'never', 'immediate', 'immediate-final', or 'final'",
+            ),
+        }
+    }
+}
+
 /// Formatting options for writing out child process output.
 ///
 /// TODO: should these be lazily generated? Can't imagine this ever being
@@ -74,15 +250,15 @@ pub(super) struct ChildOutputSpec {
 }
 
 pub(super) struct UnitOutputReporter {
-    force_success_output: Option<TestOutputDisplay>,
-    force_failure_output: Option<TestOutputDisplay>,
+    force_success_output: TestOutputDisplayStreams,
+    force_failure_output: TestOutputDisplayStreams,
     display_empty_outputs: bool,
 }
 
 impl UnitOutputReporter {
     pub(super) fn new(
-        force_success_output: Option<TestOutputDisplay>,
-        force_failure_output: Option<TestOutputDisplay>,
+        force_success_output: TestOutputDisplayStreams,
+        force_failure_output: TestOutputDisplayStreams,
     ) -> Self {
         // Ordinarily, empty stdout and stderr are not displayed. This
         // environment variable is set in integration tests to ensure that they
@@ -97,23 +273,35 @@ impl UnitOutputReporter {
         }
     }
 
-    pub(super) fn success_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_success_output.unwrap_or(test_setting)
+    pub(super) fn success_output(
+        &self,
+        test_setting: TestOutputDisplayStreams,
+    ) -> TestOutputDisplayStreams {
+        TestOutputDisplayStreams {
+            stdout: self.force_success_output.stdout.or(test_setting.stdout),
+            stderr: self.force_success_output.stderr.or(test_setting.stderr),
+        }
     }
 
-    pub(super) fn failure_output(&self, test_setting: TestOutputDisplay) -> TestOutputDisplay {
-        self.force_failure_output.unwrap_or(test_setting)
+    pub(super) fn failure_output(
+        &self,
+        test_setting: TestOutputDisplayStreams,
+    ) -> TestOutputDisplayStreams {
+        TestOutputDisplayStreams {
+            stdout: self.force_failure_output.stdout.or(test_setting.stdout),
+            stderr: self.force_failure_output.stderr.or(test_setting.stderr),
+        }
     }
 
     // These are currently only used by tests, but there's no principled
     // objection to using these functions elsewhere in the displayer.
     #[cfg(test)]
-    pub(super) fn force_success_output(&self) -> Option<TestOutputDisplay> {
+    pub(super) fn force_success_output(&self) -> TestOutputDisplayStreams {
         self.force_success_output
     }
 
     #[cfg(test)]
-    pub(super) fn force_failure_output(&self) -> Option<TestOutputDisplay> {
+    pub(super) fn force_failure_output(&self) -> TestOutputDisplayStreams {
         self.force_failure_output
     }
 
@@ -122,6 +310,7 @@ impl UnitOutputReporter {
         styles: &Styles,
         spec: &ChildOutputSpec,
         exec_output: &ChildExecutionOutput,
+        display_output: DisplayOutput,
         mut writer: &mut dyn Write,
     ) -> io::Result<()> {
         match exec_output {
@@ -151,7 +340,14 @@ impl UnitOutputReporter {
                 } else {
                     None
                 };
-                self.write_child_output(styles, spec, output, highlight_slice, writer)?;
+                self.write_child_output(
+                    styles,
+                    spec,
+                    output,
+                    highlight_slice,
+                    display_output,
+                    writer,
+                )?;
             }
 
             ChildExecutionOutput::StartError(error) => {
@@ -175,12 +371,13 @@ impl UnitOutputReporter {
         spec: &ChildOutputSpec,
         output: &ChildOutput,
         highlight_slice: Option<TestOutputErrorSlice<'_>>,
+        display_output: DisplayOutput,
         mut writer: &mut dyn Write,
     ) -> io::Result<()> {
         match output {
             ChildOutput::Split(split) => {
                 if let Some(stdout) = &split.stdout {
-                    if self.display_empty_outputs || !stdout.is_empty() {
+                    if self.display_empty_outputs || (!stdout.is_empty() && display_output.stdout) {
                         writeln!(writer, "{}", spec.stdout_header)?;
 
                         // If there's no output indent, this is a no-op, though
@@ -200,7 +397,7 @@ impl UnitOutputReporter {
                 }
 
                 if let Some(stderr) = &split.stderr {
-                    if self.display_empty_outputs || !stderr.is_empty() {
+                    if self.display_empty_outputs || (!stderr.is_empty() && display_output.stderr) {
                         writeln!(writer, "{}", spec.stderr_header)?;
 
                         let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
@@ -215,7 +412,7 @@ impl UnitOutputReporter {
                 }
             }
             ChildOutput::Combined { output } => {
-                if self.display_empty_outputs || !output.is_empty() {
+                if self.display_empty_outputs || (!output.is_empty() && display_output.stdout) {
                     writeln!(writer, "{}", spec.combined_header)?;
 
                     let mut indent_writer = IndentWriter::new(spec.output_indent, writer);
