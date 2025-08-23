@@ -271,8 +271,6 @@ impl<'a> TestRunnerInner<'a> {
         );
 
         // Send the initial event.
-        // (Don't need to set the cancelled atomic if this fails because the run hasn't started
-        // yet.)
         dispatcher_cx.run_started(self.test_list);
 
         let executor_cx_ref = &executor_cx;
