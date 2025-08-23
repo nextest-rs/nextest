@@ -22,8 +22,12 @@ use crate::{
     helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
     list::{TestInstance, TestInstanceId},
     reporter::{
-        displayer::progress::TerminalProgress, events::*, helpers::Styles, imp::ReporterStderr,
+        displayer::{formatters::DisplayHhMmSs, progress::TerminalProgress},
+        events::*,
+        helpers::Styles,
+        imp::ReporterStderr,
     },
+    runner::StressCount,
 };
 use debug_ignore::DebugIgnore;
 use indent_write::io::IndentWriter;
@@ -259,7 +263,7 @@ struct DisplayReporterImpl<'a> {
     theme_characters: ThemeCharacters,
     cancel_status: Option<CancelReason>,
     unit_output: UnitOutputReporter,
-    final_outputs: DebugIgnore<Vec<(TestInstance<'a>, FinalOutput)>>,
+    final_outputs: DebugIgnore<Vec<(Option<StressIndex>, TestInstance<'a>, FinalOutput)>>,
 }
 
 impl<'a> DisplayReporterImpl<'a> {
@@ -274,6 +278,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 run_id,
                 profile_name,
                 cli_args: _,
+                stress_condition: _,
             } => {
                 writeln!(writer, "{}", self.theme_characters.hbar(12))?;
                 write!(writer, "{:>12} ", "Nextest run".style(self.styles.pass))?;
@@ -307,7 +312,109 @@ impl<'a> DisplayReporterImpl<'a> {
 
                 writeln!(writer)?;
             }
+            TestEventKind::StressSubRunStarted { progress } => {
+                write!(
+                    writer,
+                    "{}\n{:>12} ",
+                    self.theme_characters.hbar(12),
+                    "Stress test".style(self.styles.pass)
+                )?;
+
+                match progress {
+                    StressProgress::Count {
+                        total: StressCount::Count(total),
+                        elapsed,
+                        completed,
+                    } => {
+                        write!(
+                            writer,
+                            "iteration {}/{} ({} elapsed so far",
+                            (completed + 1).style(self.styles.count),
+                            total.style(self.styles.count),
+                            DisplayHhMmSs {
+                                duration: *elapsed,
+                                floor: true,
+                            }
+                            .style(self.styles.count),
+                        )?;
+                    }
+                    StressProgress::Count {
+                        total: StressCount::Infinite,
+                        elapsed,
+                        completed,
+                    } => {
+                        write!(
+                            writer,
+                            "iteration {} ({} elapsed so far",
+                            (completed + 1).style(self.styles.count),
+                            DisplayHhMmSs {
+                                duration: *elapsed,
+                                floor: true,
+                            }
+                            .style(self.styles.count),
+                        )?;
+                    }
+                    StressProgress::Time {
+                        total,
+                        elapsed,
+                        completed,
+                    } => {
+                        write!(
+                            writer,
+                            "iteration {} ({}/{} elapsed so far",
+                            (completed + 1).style(self.styles.count),
+                            DisplayHhMmSs {
+                                duration: *elapsed,
+                                floor: true,
+                            }
+                            .style(self.styles.count),
+                            DisplayHhMmSs {
+                                duration: *total,
+                                floor: true,
+                            }
+                            .style(self.styles.count),
+                        )?;
+                    }
+                }
+
+                if let Some(remaining) = progress.remaining() {
+                    match remaining {
+                        StressRemaining::Count(n) => {
+                            write!(
+                                writer,
+                                ", {} iterations remaining",
+                                n.style(self.styles.count)
+                            )?;
+                        }
+                        StressRemaining::Infinite => {
+                            // There isn't anything to display here.
+                        }
+                        StressRemaining::Time(t) => {
+                            write!(
+                                writer,
+                                ", {} remaining",
+                                DisplayHhMmSs {
+                                    duration: t,
+                                    // Display the remaining time as a ceiling
+                                    // so that we show something like:
+                                    //
+                                    // 00:02:05/00:30:00 elapsed so far, 00:27:55 remaining
+                                    //
+                                    // rather than
+                                    //
+                                    // 00:02:05/00:30:00 elapsed so far, 00:27:54 remaining
+                                    floor: false,
+                                }
+                                .style(self.styles.count)
+                            )?;
+                        }
+                    }
+                }
+
+                writeln!(writer, ")")?;
+            }
             TestEventKind::SetupScriptStarted {
+                stress_index,
                 index,
                 total,
                 script_id,
@@ -321,10 +428,11 @@ impl<'a> DisplayReporterImpl<'a> {
                     "SETUP".style(self.styles.pass),
                     // index + 1 so that it displays as e.g. "1/2" and "2/2".
                     format!("{}/{}", index + 1, total),
-                    self.display_script_instance(script_id.clone(), program, args)
+                    self.display_script_instance(*stress_index, script_id.clone(), program, args)
                 )?;
             }
             TestEventKind::SetupScriptSlow {
+                stress_index,
                 script_id,
                 program,
                 args,
@@ -341,24 +449,36 @@ impl<'a> DisplayReporterImpl<'a> {
                     writer,
                     "{}{}",
                     DisplaySlowDuration(*elapsed),
-                    self.display_script_instance(script_id.clone(), program, args)
+                    self.display_script_instance(*stress_index, script_id.clone(), program, args)
                 )?;
             }
             TestEventKind::SetupScriptFinished {
+                stress_index,
                 script_id,
                 program,
                 args,
                 run_status,
                 ..
             } => {
-                self.write_setup_script_status_line(script_id, program, args, run_status, writer)?;
-                // Always display failing setup script output if it exists. We may change this in
-                // the future.
+                self.write_setup_script_status_line(
+                    *stress_index,
+                    script_id,
+                    program,
+                    args,
+                    run_status,
+                    writer,
+                )?;
+                // Always display failing setup script output if it exists. We
+                // may change this in the future.
                 if !run_status.result.is_success() {
                     self.write_setup_script_execute_status(run_status, writer)?;
                 }
             }
-            TestEventKind::TestStarted { test_instance, .. } => {
+            TestEventKind::TestStarted {
+                stress_index,
+                test_instance,
+                ..
+            } => {
                 // In no-capture mode, print out a test start event.
                 if self.no_capture {
                     // The spacing is to align test instances.
@@ -366,11 +486,12 @@ impl<'a> DisplayReporterImpl<'a> {
                         writer,
                         "{:>12}             {}",
                         "START".style(self.styles.pass),
-                        self.display_test_instance(test_instance.id()),
+                        self.display_test_instance(*stress_index, test_instance.id()),
                     )?;
                 }
             }
             TestEventKind::TestSlow {
+                stress_index,
                 test_instance,
                 retry_data,
                 elapsed,
@@ -409,11 +530,12 @@ impl<'a> DisplayReporterImpl<'a> {
                     writer,
                     "{}{}",
                     DisplaySlowDuration(*elapsed),
-                    self.display_test_instance(test_instance.id())
+                    self.display_test_instance(*stress_index, test_instance.id())
                 )?;
             }
 
             TestEventKind::TestAttemptFailedWillRetry {
+                stress_index,
                 test_instance,
                 run_status,
                 delay_before_next_attempt,
@@ -435,7 +557,11 @@ impl<'a> DisplayReporterImpl<'a> {
                     )?;
 
                     // Print the name of the test.
-                    writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
+                    writeln!(
+                        writer,
+                        "{}",
+                        self.display_test_instance(*stress_index, test_instance.id())
+                    )?;
 
                     // This test is guaranteed to have failed.
                     assert!(
@@ -468,11 +594,16 @@ impl<'a> DisplayReporterImpl<'a> {
                         )?;
 
                         // Print the name of the test.
-                        writeln!(writer, "{}", self.display_test_instance(test_instance.id()))?;
+                        writeln!(
+                            writer,
+                            "{}",
+                            self.display_test_instance(*stress_index, test_instance.id())
+                        )?;
                     }
                 }
             }
             TestEventKind::TestRetryStarted {
+                stress_index,
                 test_instance,
                 retry_data:
                     RetryData {
@@ -488,10 +619,11 @@ impl<'a> DisplayReporterImpl<'a> {
                     writer,
                     "[{:<9}] {}",
                     "",
-                    self.display_test_instance(test_instance.id())
+                    self.display_test_instance(*stress_index, test_instance.id())
                 )?;
             }
             TestEventKind::TestFinished {
+                stress_index,
                 test_instance,
                 success_output,
                 failure_output,
@@ -513,7 +645,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 );
 
                 if output_on_test_finished.write_status_line {
-                    self.write_status_line(*test_instance, describe, writer)?;
+                    self.write_status_line(*stress_index, *test_instance, describe, writer)?;
                 }
                 if output_on_test_finished.show_immediate {
                     self.write_test_execute_status(last_status, false, writer)?;
@@ -522,6 +654,7 @@ impl<'a> DisplayReporterImpl<'a> {
                     output_on_test_finished.store_final
                 {
                     self.final_outputs.push((
+                        *stress_index,
                         *test_instance,
                         FinalOutput::Executed {
                             run_statuses: run_statuses.clone(),
@@ -531,15 +664,19 @@ impl<'a> DisplayReporterImpl<'a> {
                 }
             }
             TestEventKind::TestSkipped {
+                stress_index,
                 test_instance,
                 reason,
             } => {
                 if self.status_levels.status_level >= StatusLevel::Skip {
-                    self.write_skip_line(test_instance.id(), writer)?;
+                    self.write_skip_line(*stress_index, test_instance.id(), writer)?;
                 }
                 if self.status_levels.final_status_level >= FinalStatusLevel::Skip {
-                    self.final_outputs
-                        .push((*test_instance, FinalOutput::Skipped(*reason)));
+                    self.final_outputs.push((
+                        *stress_index,
+                        *test_instance,
+                        FinalOutput::Skipped(*reason),
+                    ));
                 }
             }
             TestEventKind::RunBeginCancel {
@@ -732,6 +869,92 @@ impl<'a> DisplayReporterImpl<'a> {
                     )
                 )?;
             }
+            TestEventKind::StressSubRunFinished {
+                progress,
+                sub_elapsed,
+                sub_stats,
+            } => {
+                let stats_summary = sub_stats.summarize_final();
+                let summary_style = match stats_summary {
+                    FinalRunStats::Success => self.styles.pass,
+                    FinalRunStats::NoTestsRun => self.styles.skip,
+                    FinalRunStats::Failed(_) | FinalRunStats::Cancelled(_) => self.styles.fail,
+                };
+
+                write!(
+                    writer,
+                    "{:>12} {}",
+                    "Stress test".style(summary_style),
+                    DisplayBracketedDuration(*sub_elapsed),
+                )?;
+                match progress {
+                    StressProgress::Count {
+                        total: StressCount::Count(total),
+                        elapsed: _,
+                        completed,
+                    } => {
+                        write!(
+                            writer,
+                            "iteration {}/{}: ",
+                            // We do not add +1 to completed here because it
+                            // represents the number of stress runs actually
+                            // completed.
+                            completed.style(self.styles.count),
+                            total.style(self.styles.count),
+                        )?;
+                    }
+                    StressProgress::Count {
+                        total: StressCount::Infinite,
+                        elapsed: _,
+                        completed,
+                    } => {
+                        write!(
+                            writer,
+                            "iteration {}: ",
+                            // We do not add +1 to completed here because it
+                            // represents the number of stress runs actually
+                            // completed.
+                            completed.style(self.styles.count),
+                        )?;
+                    }
+                    StressProgress::Time {
+                        total: _,
+                        elapsed: _,
+                        completed,
+                    } => {
+                        write!(
+                            writer,
+                            "iteration {}: ",
+                            // We do not add +1 to completed here because it
+                            // represents the number of stress runs actually
+                            // completed.
+                            completed.style(self.styles.count),
+                        )?;
+                    }
+                }
+
+                write!(
+                    writer,
+                    "{}",
+                    sub_stats.finished_count.style(self.styles.count)
+                )?;
+                if sub_stats.finished_count != sub_stats.initial_run_count {
+                    write!(
+                        writer,
+                        "/{}",
+                        sub_stats.initial_run_count.style(self.styles.count)
+                    )?;
+                }
+
+                // Both initial and finished counts must be 1 for the singular form.
+                let tests_str = plural::tests_plural_if(
+                    sub_stats.initial_run_count != 1 || sub_stats.finished_count != 1,
+                );
+
+                let mut summary_str = String::new();
+                write_summary_str(sub_stats, &self.styles, &mut summary_str);
+                writeln!(writer, " {tests_str} run: {summary_str}")?;
+            }
             TestEventKind::RunFinished {
                 start_time: _start_time,
                 elapsed,
@@ -783,20 +1006,22 @@ impl<'a> DisplayReporterImpl<'a> {
                 // SIGHUP since those tend to be automated tasks performing kills.
                 if self.cancel_status < Some(CancelReason::Interrupt) {
                     // Sort the final outputs for a friendlier experience.
-                    self.final_outputs
-                        .sort_by_key(|(test_instance, final_output)| {
+                    self.final_outputs.sort_by_key(
+                        |(stress_index, test_instance, final_output)| {
                             // Use the final status level, reversed (i.e.
                             // failing tests are printed at the very end).
                             (
                                 Reverse(final_output.final_status_level()),
+                                *stress_index,
                                 test_instance.id(),
                             )
-                        });
+                        },
+                    );
 
-                    for (test_instance, final_output) in &*self.final_outputs {
+                    for (stress_index, test_instance, final_output) in &*self.final_outputs {
                         match final_output {
                             FinalOutput::Skipped(_) => {
-                                self.write_skip_line(test_instance.id(), writer)?;
+                                self.write_skip_line(*stress_index, test_instance.id(), writer)?;
                             }
                             FinalOutput::Executed {
                                 run_statuses,
@@ -805,6 +1030,7 @@ impl<'a> DisplayReporterImpl<'a> {
                                 let last_status = run_statuses.last_status();
 
                                 self.write_final_status_line(
+                                    *stress_index,
                                     test_instance.id(),
                                     run_statuses.describe(),
                                     writer,
@@ -827,6 +1053,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
     fn write_skip_line(
         &self,
+        stress_index: Option<StressIndex>,
         test_instance: TestInstanceId<'a>,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
@@ -835,7 +1062,7 @@ impl<'a> DisplayReporterImpl<'a> {
         writeln!(
             writer,
             "[         ] {}",
-            self.display_test_instance(test_instance)
+            self.display_test_instance(stress_index, test_instance)
         )?;
 
         Ok(())
@@ -843,6 +1070,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
     fn write_setup_script_status_line(
         &self,
+        stress_index: Option<StressIndex>,
         script_id: &ScriptId,
         command: &str,
         args: &[String],
@@ -875,7 +1103,7 @@ impl<'a> DisplayReporterImpl<'a> {
             writer,
             "{}{}",
             DisplayBracketedDuration(status.time_taken),
-            self.display_script_instance(script_id.clone(), command, args)
+            self.display_script_instance(stress_index, script_id.clone(), command, args)
         )?;
 
         Ok(())
@@ -883,6 +1111,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
     fn write_status_line(
         &self,
+        stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         describe: ExecutionDescription<'_>,
         writer: &mut dyn Write,
@@ -932,7 +1161,7 @@ impl<'a> DisplayReporterImpl<'a> {
             writer,
             "{}{}",
             DisplayBracketedDuration(last_status.time_taken),
-            self.display_test_instance(test_instance.id())
+            self.display_test_instance(stress_index, test_instance.id())
         )?;
 
         // On Windows, also print out the exception if available.
@@ -950,6 +1179,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
     fn write_final_status_line(
         &self,
+        stress_index: Option<StressIndex>,
         test_instance: TestInstanceId<'a>,
         describe: ExecutionDescription<'_>,
         writer: &mut dyn Write,
@@ -1021,7 +1251,7 @@ impl<'a> DisplayReporterImpl<'a> {
             writer,
             "{}{}",
             DisplayBracketedDuration(last_status.time_taken),
-            self.display_test_instance(test_instance),
+            self.display_test_instance(stress_index, test_instance),
         )?;
 
         // On Windows, also print out the exception if available.
@@ -1037,17 +1267,29 @@ impl<'a> DisplayReporterImpl<'a> {
         Ok(())
     }
 
-    fn display_test_instance(&self, instance: TestInstanceId<'a>) -> DisplayTestInstance<'_> {
-        DisplayTestInstance::new(instance, &self.styles.list_styles)
+    fn display_test_instance(
+        &self,
+        stress_index: Option<StressIndex>,
+        instance: TestInstanceId<'a>,
+    ) -> DisplayTestInstance<'_> {
+        DisplayTestInstance::new(stress_index, instance, &self.styles.list_styles)
     }
 
     fn display_script_instance(
         &self,
+        stress_index: Option<StressIndex>,
         script_id: ScriptId,
         command: &str,
         args: &[String],
     ) -> DisplayScriptInstance {
-        DisplayScriptInstance::new(script_id, command, args, self.styles.script_id)
+        DisplayScriptInstance::new(
+            stress_index,
+            script_id,
+            command,
+            args,
+            self.styles.script_id,
+            self.styles.count,
+        )
     }
 
     fn write_info_response(
@@ -1086,6 +1328,7 @@ impl<'a> DisplayReporterImpl<'a> {
 
         match response {
             InfoResponse::SetupScript(SetupScriptInfoResponse {
+                stress_index,
                 script_id,
                 program,
                 args,
@@ -1096,7 +1339,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 writeln!(
                     writer,
                     "{}",
-                    self.display_script_instance(script_id.clone(), program, args)
+                    self.display_script_instance(*stress_index, script_id.clone(), program, args)
                 )?;
 
                 // Write the state of the script.
@@ -1119,13 +1362,18 @@ impl<'a> DisplayReporterImpl<'a> {
                 }
             }
             InfoResponse::Test(TestInfoResponse {
+                stress_index,
                 test_instance,
                 retry_data,
                 state,
                 output,
             }) => {
                 // Write the test name.
-                writeln!(writer, "{}", self.display_test_instance(*test_instance))?;
+                writeln!(
+                    writer,
+                    "{}",
+                    self.display_test_instance(*stress_index, *test_instance)
+                )?;
 
                 // We want to show an attached attempt string either if this is
                 // a DelayBeforeNextAttempt message or if this is a retry. (This
@@ -1832,7 +2080,7 @@ mod tests {
     use chrono::Local;
     use nextest_metadata::RustBinaryId;
     use smol_str::SmolStr;
-    use std::sync::Arc;
+    use std::{num::NonZero, sync::Arc};
 
     /// Creates a test reporter with default settings and calls the given function with it.
     ///
@@ -1930,6 +2178,7 @@ mod tests {
                 reporter
                     .inner
                     .write_final_status_line(
+                        None,
                         test_instance,
                         fail_describe,
                         reporter.stderr.buf_mut().unwrap(),
@@ -1939,6 +2188,23 @@ mod tests {
                 reporter
                     .inner
                     .write_final_status_line(
+                        Some(StressIndex {
+                            current: 1,
+                            total: None,
+                        }),
+                        test_instance,
+                        flaky_describe,
+                        reporter.stderr.buf_mut().unwrap(),
+                    )
+                    .unwrap();
+
+                reporter
+                    .inner
+                    .write_final_status_line(
+                        Some(StressIndex {
+                            current: 2,
+                            total: Some(NonZero::new(3).unwrap()),
+                        }),
                         test_instance,
                         flaky_describe,
                         reporter.stderr.buf_mut().unwrap(),
@@ -2008,6 +2274,7 @@ mod tests {
                             // Technically, you won't get setup script and test responses in the
                             // same response, but it's easiest to test in this manner.
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                stress_index: None,
                                 script_id: ScriptId::new(SmolStr::new("setup")).unwrap(),
                                 program: "setup".to_owned(),
                                 args: &args,
@@ -2036,6 +2303,7 @@ mod tests {
                             index: 1,
                             total: 20,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                stress_index: None,
                                 script_id: ScriptId::new(SmolStr::new("setup-slow")).unwrap(),
                                 program: "setup-slow".to_owned(),
                                 args: &args,
@@ -2065,6 +2333,7 @@ mod tests {
                             index: 2,
                             total: 20,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                stress_index: None,
                                 script_id: ScriptId::new(SmolStr::new("setup-terminating"))
                                     .unwrap(),
                                 program: "setup-terminating".to_owned(),
@@ -2106,6 +2375,10 @@ mod tests {
                             index: 3,
                             total: 20,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                stress_index: Some(StressIndex {
+                                    current: 0,
+                                    total: None,
+                                }),
                                 script_id: ScriptId::new(SmolStr::new("setup-exiting")).unwrap(),
                                 program: "setup-exiting".to_owned(),
                                 args: &args,
@@ -2137,6 +2410,10 @@ mod tests {
                             index: 4,
                             total: 20,
                             response: InfoResponse::SetupScript(SetupScriptInfoResponse {
+                                stress_index: Some(StressIndex {
+                                    current: 1,
+                                    total: Some(NonZero::new(3).unwrap()),
+                                }),
                                 script_id: ScriptId::new(SmolStr::new("setup-exited")).unwrap(),
                                 program: "setup-exited".to_owned(),
                                 args: &args,
@@ -2165,6 +2442,7 @@ mod tests {
                             index: 5,
                             total: 20,
                             response: InfoResponse::Test(TestInfoResponse {
+                                stress_index: None,
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
                                     test_name: "test1",
@@ -2193,6 +2471,10 @@ mod tests {
                             index: 6,
                             total: 20,
                             response: InfoResponse::Test(TestInfoResponse {
+                                stress_index: Some(StressIndex {
+                                    current: 0,
+                                    total: None,
+                                }),
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
                                     test_name: "test2",
@@ -2224,6 +2506,7 @@ mod tests {
                             index: 7,
                             total: 20,
                             response: InfoResponse::Test(TestInfoResponse {
+                                stress_index: None,
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
                                     test_name: "test3",
@@ -2255,6 +2538,10 @@ mod tests {
                             index: 8,
                             total: 20,
                             response: InfoResponse::Test(TestInfoResponse {
+                                stress_index: Some(StressIndex {
+                                    current: 1,
+                                    total: Some(NonZero::new(3).unwrap()),
+                                }),
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
                                     test_name: "test4",
@@ -2289,6 +2576,7 @@ mod tests {
                             index: 9,
                             total: 20,
                             response: InfoResponse::Test(TestInfoResponse {
+                                stress_index: None,
                                 test_instance: TestInstanceId {
                                     binary_id: &binary_id,
                                     test_name: "test4",

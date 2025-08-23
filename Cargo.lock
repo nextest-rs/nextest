@@ -385,6 +385,7 @@ dependencies = [
  "duct",
  "enable-ansi-support",
  "guppy",
+ "humantime",
  "idna_adapter",
  "indent_write",
  "itertools",

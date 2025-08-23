@@ -6,7 +6,7 @@
 use crate::{
     config::scripts::ScriptId,
     list::{Styles, TestInstanceId},
-    reporter::events::AbortStatus,
+    reporter::events::{AbortStatus, StressIndex},
     write_str::WriteStr,
 };
 use camino::{Utf8Path, Utf8PathBuf};
@@ -89,18 +89,38 @@ pub mod plural {
 }
 
 pub(crate) struct DisplayTestInstance<'a> {
+    stress_index: Option<StressIndex>,
     instance: TestInstanceId<'a>,
     styles: &'a Styles,
 }
 
 impl<'a> DisplayTestInstance<'a> {
-    pub(crate) fn new(instance: TestInstanceId<'a>, styles: &'a Styles) -> Self {
-        Self { instance, styles }
+    pub(crate) fn new(
+        stress_index: Option<StressIndex>,
+        instance: TestInstanceId<'a>,
+        styles: &'a Styles,
+    ) -> Self {
+        Self {
+            stress_index,
+            instance,
+            styles,
+        }
     }
 }
 
 impl fmt::Display for DisplayTestInstance<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(stress_index) = self.stress_index {
+            write!(
+                f,
+                "[{}] ",
+                DisplayStressIndex {
+                    stress_index,
+                    count_style: self.styles.count,
+                }
+            )?;
+        }
+
         write!(
             f,
             "{} ",
@@ -111,37 +131,80 @@ impl fmt::Display for DisplayTestInstance<'_> {
 }
 
 pub(crate) struct DisplayScriptInstance {
+    stress_index: Option<StressIndex>,
     script_id: ScriptId,
     full_command: String,
     script_id_style: Style,
+    count_style: Style,
 }
 
 impl DisplayScriptInstance {
     pub(crate) fn new(
+        stress_index: Option<StressIndex>,
         script_id: ScriptId,
         command: &str,
         args: &[String],
         script_id_style: Style,
+        count_style: Style,
     ) -> Self {
         let full_command =
             shell_words::join(std::iter::once(command).chain(args.iter().map(|arg| arg.as_ref())));
 
         Self {
+            stress_index,
             script_id,
             full_command,
             script_id_style,
+            count_style,
         }
     }
 }
 
 impl fmt::Display for DisplayScriptInstance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(stress_index) = self.stress_index {
+            write!(
+                f,
+                "[{}] ",
+                DisplayStressIndex {
+                    stress_index,
+                    count_style: self.count_style,
+                }
+            )?;
+        }
         write!(
             f,
             "{}: {}",
             self.script_id.style(self.script_id_style),
             self.full_command,
         )
+    }
+}
+
+struct DisplayStressIndex {
+    stress_index: StressIndex,
+    count_style: Style,
+}
+
+impl fmt::Display for DisplayStressIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.stress_index.total {
+            Some(total) => {
+                write!(
+                    f,
+                    "{}/{}",
+                    (self.stress_index.current + 1).style(self.count_style),
+                    total.style(self.count_style)
+                )
+            }
+            None => {
+                write!(
+                    f,
+                    "{}",
+                    (self.stress_index.current + 1).style(self.count_style)
+                )
+            }
+        }
     }
 }
 

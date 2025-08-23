@@ -82,6 +82,11 @@ struct LibtestSuite<'cfg> {
     filtered: usize,
     /// The number of tests in this suite that are still running
     running: usize,
+
+    // Note: we don't store the stress_index here because we reset all our
+    // libtest JSON state after each stress sub-run. If we start running
+    // multiple instances of a test within a sub-run, we'll want to store and
+    // index by the stress index as well.
     meta: &'cfg RustTestSuite<'cfg>,
     /// The accumulated duration of every test that has been executed
     total: std::time::Duration,
@@ -222,20 +227,24 @@ impl<'cfg> LibtestReporter<'cfg> {
         let mut retries = None;
 
         // Write the pieces of data that are the same across all events
-        let (kind, eve, test_instance) = match &event.kind {
-            TestEventKind::TestStarted { test_instance, .. } => {
-                (KIND_TEST, EVENT_STARTED, test_instance)
-            }
+        let (kind, eve, stress_index, test_instance) = match &event.kind {
+            TestEventKind::TestStarted {
+                stress_index,
+                test_instance,
+                ..
+            } => (KIND_TEST, EVENT_STARTED, stress_index, test_instance),
             TestEventKind::TestSkipped {
+                stress_index,
                 test_instance,
                 reason: MismatchReason::Ignored,
             } => {
                 // Note: unfortunately, libtest does not expose the message test in `#[ignore = "<message>"]`
                 // so we can't replicate the behavior of libtest exactly by emitting
                 // that message as additional metadata
-                (KIND_TEST, EVENT_STARTED, test_instance)
+                (KIND_TEST, EVENT_STARTED, stress_index, test_instance)
             }
             TestEventKind::TestFinished {
+                stress_index,
                 test_instance,
                 run_statuses,
                 ..
@@ -258,10 +267,11 @@ impl<'cfg> LibtestReporter<'cfg> {
                         | ExecutionResult::ExecFail
                         | ExecutionResult::Timeout => EVENT_FAILED,
                     },
+                    stress_index,
                     test_instance,
                 )
             }
-            TestEventKind::RunFinished { .. } => {
+            TestEventKind::StressSubRunFinished { .. } | TestEventKind::RunFinished { .. } => {
                 for test_suite in std::mem::take(&mut self.test_suites).into_values() {
                     self.finalize(test_suite)?;
                 }
@@ -350,6 +360,9 @@ impl<'cfg> LibtestReporter<'cfg> {
         )
         .map_err(fmt_err)?;
 
+        if let Some(stress_index) = stress_index {
+            write!(out, "@stress-{}", stress_index.current).map_err(fmt_err)?;
+        }
         if let Some(retry_count) = retries {
             write!(out, "#{retry_count}\"").map_err(fmt_err)?;
         } else {

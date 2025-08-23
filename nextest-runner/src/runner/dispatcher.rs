@@ -16,17 +16,18 @@ use crate::{
     input::{InputEvent, InputHandler},
     list::{TestInstance, TestInstanceId, TestList},
     reporter::events::{
-        CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats, TestEvent,
-        TestEventKind,
+        CancelReason, ExecuteStatus, ExecutionStatuses, InfoResponse, RunStats, StressIndex,
+        StressProgress, TestEvent, TestEventKind,
     },
-    runner::{ExecutorEvent, RunUnitQuery, SignalRequest},
+    runner::{ExecutorEvent, RunUnitQuery, SignalRequest, StressCondition, StressCount},
     signal::{JobControlEvent, ShutdownEvent, SignalEvent, SignalHandler, SignalInfoEvent},
     time::StopwatchStart,
 };
 use chrono::Local;
 use debug_ignore::DebugIgnore;
+use futures::future::{Fuse, FusedFuture};
 use quick_junit::ReportUuid;
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, pin::Pin, time::Duration};
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     oneshot,
@@ -52,6 +53,7 @@ pub(super) struct DispatcherContext<'a, F> {
     running_tests: BTreeMap<TestInstanceId<'a>, ContextTestInstance<'a>>,
     cancel_state: Option<CancelReason>,
     signal_count: Option<SignalCount>,
+    stress_cx: DispatcherStressContext,
     #[cfg(test)]
     disable_signal_3_times_panic: bool,
 }
@@ -60,6 +62,7 @@ impl<'a, F> DispatcherContext<'a, F>
 where
     F: FnMut(TestEvent<'a>) + Send,
 {
+    #[expect(clippy::too_many_arguments)]
     pub(super) fn new(
         callback: F,
         run_id: ReportUuid,
@@ -68,6 +71,7 @@ where
         initial_run_count: usize,
         max_fail: MaxFail,
         global_timeout: Duration,
+        stress_condition: Option<StressCondition>,
     ) -> Self {
         Self {
             callback: DebugIgnore(callback),
@@ -85,6 +89,7 @@ where
             running_tests: BTreeMap::new(),
             cancel_state: None,
             signal_count: None,
+            stress_cx: DispatcherStressContext::new(stress_condition),
             #[cfg(test)]
             disable_signal_3_times_panic: false,
         }
@@ -92,9 +97,9 @@ where
 
     /// Runs the dispatcher to completion, until `resp_rx` is closed.
     ///
-    /// `resp_rx` is the main communication channel between the dispatcher and
-    /// the executor. It receives events, but some of those events also include
-    /// senders for the dispatcher to communicate back to the executor.
+    /// `executor_rx` is the main communication channel between the dispatcher
+    /// and the executor. It receives events, but some of those events also
+    /// include senders for the dispatcher to communicate back to the executor.
     ///
     /// This is expected to be spawned as a task via [`async_scoped`].
     pub(super) async fn run(
@@ -102,13 +107,12 @@ where
         mut executor_rx: UnboundedReceiver<ExecutorEvent<'a>>,
         signal_handler: &mut SignalHandler,
         input_handler: &mut InputHandler,
-        report_cancel_rx: oneshot::Receiver<()>,
+        mut report_cancel_rx: Pin<&mut Fuse<oneshot::Receiver<()>>>,
     ) -> RunnerTaskState {
-        let mut report_cancel_rx = std::pin::pin!(report_cancel_rx);
-
         let mut signals_done = false;
         let mut inputs_done = false;
-        let mut report_cancel_rx_done = false;
+        // For stress tests, this function is called for each sub-run -- in
+        // other words, we reinitialize the global timeout for each sub-run.
         let mut global_timeout_sleep =
             std::pin::pin!(crate::time::pausable_sleep(self.global_timeout));
 
@@ -144,8 +148,7 @@ where
                         }
                     }
                 }
-                res = &mut report_cancel_rx, if !report_cancel_rx_done => {
-                    report_cancel_rx_done = true;
+                res = &mut report_cancel_rx, if !report_cancel_rx.as_ref().is_terminated() => {
                     match res {
                         Ok(()) => {
                             InternalEvent::ReportCancel
@@ -215,6 +218,9 @@ where
                     // Pause the global timeout while suspended.
                     global_timeout_sleep.as_mut().pause();
 
+                    // Also pause the stress stopwatch while suspended.
+                    self.stress_cx.pause_stopwatch();
+
                     // Now stop nextest itself.
                     super::os::raise_stop();
                 }
@@ -225,6 +231,9 @@ where
 
                     // Resume the global timeout.
                     global_timeout_sleep.as_mut().resume();
+
+                    // Also resume the stress stopwatch.
+                    self.stress_cx.resume_stopwatch();
 
                     self.broadcast_request(RunUnitRequest::Signal(SignalRequest::Continue));
                 }
@@ -336,7 +345,48 @@ where
             run_id: self.run_id,
             profile_name: self.profile_name.clone(),
             cli_args: self.cli_args.clone(),
+            stress_condition: self.stress_cx.condition(),
         })
+    }
+
+    pub(super) fn stress_sub_run_started(&mut self, progress: StressProgress) {
+        // Reset run stats since we're starting over. Do this here rather than
+        // in stress_sub_run_finished because we sometimes fetch run_stats after
+        // stress_sub_run_finished and want it to be accurate until the next
+        // sub-run starts.
+        let sub_stats = self.run_stats;
+        self.run_stats = RunStats {
+            initial_run_count: sub_stats.initial_run_count,
+            ..Default::default()
+        };
+
+        self.basic_callback(TestEventKind::StressSubRunStarted { progress })
+    }
+
+    pub(super) fn stress_sub_run_finished(&mut self) {
+        let sub_elapsed = self.stress_cx.mark_completed();
+        let progress = self
+            .stress_progress()
+            .expect("stress_sub_run_finished called in non-stress test context");
+
+        self.basic_callback(TestEventKind::StressSubRunFinished {
+            progress,
+            sub_elapsed,
+            sub_stats: self.run_stats,
+        })
+    }
+
+    pub(super) fn stress_index(&self) -> Option<StressIndex> {
+        self.stress_cx.stress_index()
+    }
+
+    pub(super) fn stress_progress(&self) -> Option<StressProgress> {
+        self.stress_cx.progress(self.stopwatch.snapshot().active)
+    }
+
+    /// Returns the reason for cancellation, or `None` if the run is not cancelled.
+    pub(super) fn cancel_reason(&self) -> Option<CancelReason> {
+        self.cancel_state
     }
 
     #[inline]
@@ -363,6 +413,7 @@ where
     fn handle_event(&mut self, event: InternalEvent<'a>) -> HandleEventResponse {
         match event {
             InternalEvent::Executor(ExecutorEvent::SetupScriptStarted {
+                stress_index,
                 script_id,
                 config,
                 program,
@@ -386,6 +437,7 @@ where
                 }
                 self.new_setup_script(script_id.clone(), config, index, total, req_tx);
                 self.callback_none_response(TestEventKind::SetupScriptStarted {
+                    stress_index,
                     index,
                     total,
                     script_id,
@@ -395,12 +447,14 @@ where
                 })
             }
             InternalEvent::Executor(ExecutorEvent::SetupScriptSlow {
+                stress_index,
                 script_id,
                 config,
                 program,
                 elapsed,
                 will_terminate,
             }) => self.callback_none_response(TestEventKind::SetupScriptSlow {
+                stress_index,
                 script_id,
                 program,
                 args: &config.command.args,
@@ -408,6 +462,7 @@ where
                 will_terminate: will_terminate.is_some(),
             }),
             InternalEvent::Executor(ExecutorEvent::SetupScriptFinished {
+                stress_index,
                 script_id,
                 config,
                 program,
@@ -422,6 +477,7 @@ where
                 let fail_cancel = !status.result.is_success();
 
                 self.basic_callback(TestEventKind::SetupScriptFinished {
+                    stress_index,
                     index,
                     total,
                     script_id,
@@ -440,6 +496,7 @@ where
                 }
             }
             InternalEvent::Executor(ExecutorEvent::Started {
+                stress_index,
                 test_instance,
                 req_rx_tx,
             }) => {
@@ -459,6 +516,7 @@ where
                 }
                 self.new_test(test_instance, req_tx);
                 self.callback_none_response(TestEventKind::TestStarted {
+                    stress_index,
                     test_instance,
                     current_stats: self.run_stats,
                     running: self.running_tests.len(),
@@ -466,17 +524,20 @@ where
                 })
             }
             InternalEvent::Executor(ExecutorEvent::Slow {
+                stress_index,
                 test_instance,
                 retry_data,
                 elapsed,
                 will_terminate,
             }) => self.callback_none_response(TestEventKind::TestSlow {
+                stress_index,
                 test_instance,
                 retry_data,
                 elapsed,
                 will_terminate: will_terminate.is_some(),
             }),
             InternalEvent::Executor(ExecutorEvent::AttemptFailedWillRetry {
+                stress_index,
                 test_instance,
                 failure_output,
                 run_status,
@@ -485,6 +546,7 @@ where
                 let instance = self.existing_test(test_instance.id());
                 instance.attempt_failed_will_retry(run_status.clone());
                 self.callback_none_response(TestEventKind::TestAttemptFailedWillRetry {
+                    stress_index,
                     test_instance,
                     failure_output,
                     run_status,
@@ -492,6 +554,7 @@ where
                 })
             }
             InternalEvent::Executor(ExecutorEvent::RetryStarted {
+                stress_index,
                 test_instance,
                 retry_data,
                 tx,
@@ -512,11 +575,13 @@ where
                 }
 
                 self.callback_none_response(TestEventKind::TestRetryStarted {
+                    stress_index,
                     test_instance,
                     retry_data,
                 })
             }
             InternalEvent::Executor(ExecutorEvent::Finished {
+                stress_index,
                 test_instance,
                 success_output,
                 failure_output,
@@ -531,6 +596,7 @@ where
                 let fail_cancel = self.max_fail.is_exceeded(self.run_stats.failed_count());
 
                 self.basic_callback(TestEventKind::TestFinished {
+                    stress_index,
                     test_instance,
                     success_output,
                     failure_output,
@@ -550,11 +616,13 @@ where
                 }
             }
             InternalEvent::Executor(ExecutorEvent::Skipped {
+                stress_index,
                 test_instance,
                 reason,
             }) => {
                 self.run_stats.skipped += 1;
                 self.callback_none_response(TestEventKind::TestSkipped {
+                    stress_index,
                     test_instance,
                     reason,
                 })
@@ -828,6 +896,119 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
+enum DispatcherStressContext {
+    None,
+    Stress {
+        condition: StressCondition,
+        sub_stopwatch: StopwatchStart,
+        completed: u32,
+    },
+}
+
+impl DispatcherStressContext {
+    fn new(condition: Option<StressCondition>) -> Self {
+        if let Some(condition) = condition {
+            Self::Stress {
+                condition,
+                sub_stopwatch: crate::time::stopwatch(),
+                completed: 0,
+            }
+        } else {
+            Self::None
+        }
+    }
+
+    fn condition(&self) -> Option<StressCondition> {
+        match self {
+            Self::None => None,
+            Self::Stress { condition, .. } => Some(condition.clone()),
+        }
+    }
+
+    fn progress(&self, total_elapsed: Duration) -> Option<StressProgress> {
+        match self {
+            Self::None => None,
+            Self::Stress {
+                condition,
+                sub_stopwatch: _,
+                completed,
+            } => match condition {
+                StressCondition::Count(total) => Some(StressProgress::Count {
+                    total: *total,
+                    elapsed: total_elapsed,
+                    completed: *completed,
+                }),
+                StressCondition::Duration(total) => Some(StressProgress::Time {
+                    total: *total,
+                    elapsed: total_elapsed,
+                    completed: *completed,
+                }),
+            },
+        }
+    }
+
+    #[inline]
+    fn stress_index(&self) -> Option<StressIndex> {
+        match self {
+            Self::None => None,
+            Self::Stress {
+                condition,
+                completed,
+                ..
+            } => {
+                // The index starts from 0 so it is the same as the number of
+                // completed runs.
+                let current = *completed;
+                let total = match condition {
+                    StressCondition::Count(StressCount::Count(total)) => Some(*total),
+                    StressCondition::Count(StressCount::Infinite)
+                    | StressCondition::Duration(_) => None,
+                };
+                Some(StressIndex { current, total })
+            }
+        }
+    }
+
+    fn mark_completed(&mut self) -> Duration {
+        match self {
+            Self::None => {
+                panic!("mark_completed called in a non-stress test context");
+            }
+            Self::Stress {
+                condition: _,
+                sub_stopwatch,
+                completed,
+            } => {
+                *completed += 1;
+                let duration = sub_stopwatch.snapshot().active;
+                *sub_stopwatch = crate::time::stopwatch();
+                duration
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn pause_stopwatch(&mut self) {
+        match self {
+            Self::None => {}
+            Self::Stress { sub_stopwatch, .. } => {
+                sub_stopwatch.pause();
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn resume_stopwatch(&mut self) {
+        match self {
+            Self::None => {}
+            Self::Stress { sub_stopwatch, .. } => {
+                sub_stopwatch.resume();
+            }
+        }
+    }
+}
+
 fn event_to_cancel_reason(event: ShutdownEvent) -> CancelReason {
     match event {
         #[cfg(unix)]
@@ -951,6 +1132,7 @@ mod tests {
             0,
             MaxFail::All,
             crate::time::far_future_duration(),
+            None,
         );
 
         cx.disable_signal_3_times_panic = true;

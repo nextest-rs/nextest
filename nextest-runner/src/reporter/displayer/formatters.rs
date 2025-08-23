@@ -36,6 +36,32 @@ impl fmt::Display for DisplayBracketedHhMmSs {
     }
 }
 
+pub(super) struct DisplayHhMmSs {
+    pub(super) duration: Duration,
+    // True if floor, false if ceiling.
+    pub(super) floor: bool,
+}
+
+impl fmt::Display for DisplayHhMmSs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // This matches indicatif's elapsed_precise display.
+        let total_secs = self.duration.as_secs();
+        let total_secs = if !self.floor && self.duration.subsec_millis() > 0 {
+            total_secs + 1
+        } else {
+            total_secs
+        };
+        let secs = total_secs % 60;
+        let total_mins = total_secs / 60;
+        let mins = total_mins % 60;
+        let hours = total_mins / 60;
+
+        // Buffer the output internally to provide padding.
+        let out = format!("{hours:02}:{mins:02}:{secs:02}");
+        write!(f, "{out}")
+    }
+}
+
 pub(super) struct DisplayBracketedDuration(pub(super) Duration);
 
 impl fmt::Display for DisplayBracketedDuration {

@@ -13,8 +13,8 @@ use crate::{
     reporter::{
         UnitErrorDescription,
         events::{
-            ExecutionDescription, ExecutionResult, FailureStatus, TestEvent, TestEventKind,
-            UnitKind,
+            ExecutionDescription, ExecutionResult, FailureStatus, StressIndex, TestEvent,
+            TestEventKind, UnitKind,
         },
     },
     test_output::{ChildExecutionOutput, ChildOutput},
@@ -49,10 +49,13 @@ impl<'cfg> MetadataJunit<'cfg> {
     pub(super) fn write_event(&mut self, event: TestEvent<'cfg>) -> Result<(), WriteEventError> {
         match event.kind {
             TestEventKind::RunStarted { .. }
+            | TestEventKind::StressSubRunStarted { .. }
             | TestEventKind::RunPaused { .. }
-            | TestEventKind::RunContinued { .. } => {}
+            | TestEventKind::RunContinued { .. }
+            | TestEventKind::StressSubRunFinished { .. } => {}
             TestEventKind::SetupScriptStarted { .. } | TestEventKind::SetupScriptSlow { .. } => {}
             TestEventKind::SetupScriptFinished {
+                stress_index,
                 index: _,
                 total: _,
                 script_id,
@@ -65,7 +68,7 @@ impl<'cfg> MetadataJunit<'cfg> {
             } => {
                 let is_success = run_status.result.is_success();
 
-                let test_suite = self.testsuite_for_setup_script(script_id.clone());
+                let test_suite = self.testsuite_for_setup_script(stress_index, script_id.clone());
                 let testcase_status = if is_success {
                     TestCaseStatus::success()
                 } else {
@@ -117,13 +120,14 @@ impl<'cfg> MetadataJunit<'cfg> {
                 // Retries are recorded in TestFinished.
             }
             TestEventKind::TestFinished {
+                stress_index,
                 test_instance,
                 run_statuses,
                 junit_store_success_output,
                 junit_store_failure_output,
                 ..
             } => {
-                let testsuite = self.testsuite_for_test(test_instance.id());
+                let testsuite = self.testsuite_for_test(stress_index, test_instance.id());
 
                 let (mut testcase_status, main_status, reruns) = match run_statuses.describe() {
                     ExecutionDescription::Success { single_status } => {
@@ -236,15 +240,29 @@ impl<'cfg> MetadataJunit<'cfg> {
         Ok(())
     }
 
-    fn testsuite_for_setup_script(&mut self, script_id: ScriptId) -> &mut TestSuite {
-        let key = SuiteKey::SetupScript(script_id.clone());
+    fn testsuite_for_setup_script(
+        &mut self,
+        stress_index: Option<StressIndex>,
+        script_id: ScriptId,
+    ) -> &mut TestSuite {
+        let key = SuiteKey::SetupScript {
+            script_id: script_id.clone(),
+            stress_index,
+        };
         self.test_suites
             .entry(key.clone())
             .or_insert_with(|| TestSuite::new(key.to_string()))
     }
 
-    fn testsuite_for_test(&mut self, test_instance: TestInstanceId<'cfg>) -> &mut TestSuite {
-        let key = SuiteKey::TestBinary(test_instance.binary_id);
+    fn testsuite_for_test(
+        &mut self,
+        stress_index: Option<StressIndex>,
+        test_instance: TestInstanceId<'cfg>,
+    ) -> &mut TestSuite {
+        let key = SuiteKey::TestBinary {
+            binary_id: test_instance.binary_id,
+            stress_index,
+        };
         self.test_suites
             .entry(key.clone())
             .or_insert_with(|| TestSuite::new(key.to_string()))
@@ -253,16 +271,40 @@ impl<'cfg> MetadataJunit<'cfg> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 enum SuiteKey<'cfg> {
-    // Each script gets a separate suite, because in the future we'll likely want to set u
-    SetupScript(ScriptId),
-    TestBinary(&'cfg RustBinaryId),
+    // Each script gets a separate suite, because in the future we'll likely want to set up
+    SetupScript {
+        script_id: ScriptId,
+        stress_index: Option<StressIndex>,
+    },
+    TestBinary {
+        binary_id: &'cfg RustBinaryId,
+        stress_index: Option<StressIndex>,
+    },
 }
 
 impl fmt::Display for SuiteKey<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SuiteKey::SetupScript(script_id) => write!(f, "@setup-script:{script_id}"),
-            SuiteKey::TestBinary(binary_id) => write!(f, "{binary_id}"),
+            SuiteKey::SetupScript {
+                script_id,
+                stress_index,
+            } => {
+                write!(f, "@setup-script:{script_id}")?;
+                if let Some(stress_index) = stress_index {
+                    write!(f, "@stress-{}", stress_index.current)?;
+                }
+                Ok(())
+            }
+            SuiteKey::TestBinary {
+                binary_id,
+                stress_index,
+            } => {
+                write!(f, "{binary_id}")?;
+                if let Some(stress_index) = stress_index {
+                    write!(f, "@stress-{}", stress_index.current)?;
+                }
+                Ok(())
+            }
         }
     }
 }

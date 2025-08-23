@@ -20,6 +20,7 @@ dialoguer.workspace = true
 duct.workspace = true
 enable-ansi-support.workspace = true
 guppy.workspace = true
+humantime.workspace = true
 idna_adapter.workspace = true
 indent_write.workspace = true
 itertools.workspace = true

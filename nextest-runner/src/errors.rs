@@ -700,6 +700,25 @@ impl MaxFailParseError {
     }
 }
 
+/// Error returned while parsing a [`StressCount`](crate::runner::StressCount) input.
+#[derive(Clone, Debug, Error)]
+#[error(
+    "unrecognized value for stress-count: {input}\n\
+     (hint: expected either a positive integer or \"infinite\")"
+)]
+pub struct StressCountParseError {
+    /// The input that failed to parse.
+    pub input: String,
+}
+
+impl StressCountParseError {
+    pub(crate) fn new(input: impl Into<String>) -> Self {
+        Self {
+            input: input.into(),
+        }
+    }
+}
+
 /// Error returned while parsing a [`TestThreads`](crate::config::elements::TestThreads) value.
 #[derive(Clone, Debug, Error)]
 #[error(

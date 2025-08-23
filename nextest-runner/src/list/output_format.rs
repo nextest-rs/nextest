@@ -57,6 +57,7 @@ pub(crate) struct Styles {
     pub(crate) test_name: Style,
     pub(crate) module_path: Style,
     pub(crate) field: Style,
+    pub(crate) count: Style,
 }
 
 impl Styles {
@@ -65,5 +66,6 @@ impl Styles {
         self.test_name = Style::new().blue().bold();
         self.field = Style::new().yellow().bold();
         self.module_path = Style::new().cyan();
+        self.count = Style::new().bold();
     }
 }

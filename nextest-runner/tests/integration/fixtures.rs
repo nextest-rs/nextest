@@ -451,6 +451,7 @@ pub(crate) fn execute_collect(
         .execute(|event| {
             let (test_instance, status) = match event.kind {
                 TestEventKind::TestSkipped {
+                    stress_index: _,
                     test_instance,
                     reason,
                 } => (test_instance, InstanceStatus::Skipped(reason)),
