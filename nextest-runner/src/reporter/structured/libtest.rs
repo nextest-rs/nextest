@@ -431,10 +431,10 @@ impl<'cfg> LibtestReporter<'cfg> {
             stdout.flush().map_err(WriteEventError::Io)?;
             out.clear();
 
-            if test_suite.running == 0
-                && let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str())
-            {
-                self.finalize(test_suite)?;
+            if test_suite.running == 0 {
+                if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
+                    self.finalize(test_suite)?;
+                }
             }
         } else {
             // If this is the last test of the suite, emit the test suite summary
