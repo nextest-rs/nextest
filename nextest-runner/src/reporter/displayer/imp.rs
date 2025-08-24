@@ -22,7 +22,10 @@ use crate::{
     helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
     list::{TestInstance, TestInstanceId},
     reporter::{
-        displayer::progress::TerminalProgress, events::*, helpers::Styles, imp::ReporterStderr,
+        displayer::{DisplayOutput, TestOutputDisplayStreams, progress::TerminalProgress},
+        events::*,
+        helpers::Styles,
+        imp::ReporterStderr,
     },
 };
 use debug_ignore::DebugIgnore;
@@ -40,8 +43,8 @@ pub(crate) struct DisplayReporterBuilder {
     pub(crate) default_filter: CompiledDefaultFilter,
     pub(crate) status_levels: StatusLevels,
     pub(crate) test_count: usize,
-    pub(crate) success_output: Option<TestOutputDisplay>,
-    pub(crate) failure_output: Option<TestOutputDisplay>,
+    pub(crate) success_output: TestOutputDisplayStreams,
+    pub(crate) failure_output: TestOutputDisplayStreams,
     pub(crate) should_colorize: bool,
     pub(crate) no_capture: bool,
     pub(crate) hide_progress_bar: bool,
@@ -116,14 +119,14 @@ impl DisplayReporterBuilder {
 
         // failure_output and success_output are meaningless if the runner isn't capturing any
         // output.
-        let force_success_output = match self.no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.success_output,
-        };
-        let force_failure_output = match self.no_capture {
-            true => Some(TestOutputDisplay::Never),
-            false => self.failure_output,
-        };
+        let mut force_success_output = self.success_output;
+        let mut force_failure_output = self.failure_output;
+        if self.no_capture {
+            force_success_output.stdout = Some(TestOutputDisplay::Never);
+            force_success_output.stderr = Some(TestOutputDisplay::Never);
+            force_failure_output.stdout = Some(TestOutputDisplay::Never);
+            force_failure_output.stderr = Some(TestOutputDisplay::Never);
+        }
 
         DisplayReporter {
             inner: DisplayReporterImpl {
@@ -237,7 +240,7 @@ enum FinalOutput {
     Skipped(#[expect(dead_code)] MismatchReason),
     Executed {
         run_statuses: ExecutionStatuses,
-        display_output: bool,
+        display_output: Option<DisplayOutput>,
     },
 }
 
@@ -355,7 +358,7 @@ impl<'a> DisplayReporterImpl<'a> {
                 // Always display failing setup script output if it exists. We may change this in
                 // the future.
                 if !run_status.result.is_success() {
-                    self.write_setup_script_execute_status(run_status, writer)?;
+                    self.write_setup_script_execute_status(run_status, display_output, writer)?;
                 }
             }
             TestEventKind::TestStarted { test_instance, .. } => {
@@ -442,12 +445,12 @@ impl<'a> DisplayReporterImpl<'a> {
                         !run_status.result.is_success(),
                         "only failing tests are retried"
                     );
-                    if self
+                    if let Some(display_output) = self
                         .unit_output
                         .failure_output(*failure_output)
-                        .is_immediate()
+                        .display_output_immediate()
                     {
-                        self.write_test_execute_status(run_status, true, writer)?;
+                        self.write_test_execute_status(run_status, true, display_output, writer)?;
                     }
 
                     // The final output doesn't show retries, so don't store this result in
@@ -515,8 +518,8 @@ impl<'a> DisplayReporterImpl<'a> {
                 if output_on_test_finished.write_status_line {
                     self.write_status_line(*test_instance, describe, writer)?;
                 }
-                if output_on_test_finished.show_immediate {
-                    self.write_test_execute_status(last_status, false, writer)?;
+                if let Some(display_output) = output_on_test_finished.show_immediate {
+                    self.write_test_execute_status(last_status, false, display_output, writer)?;
                 }
                 if let OutputStoreFinal::Yes { display_output } =
                     output_on_test_finished.store_final
@@ -809,8 +812,13 @@ impl<'a> DisplayReporterImpl<'a> {
                                     run_statuses.describe(),
                                     writer,
                                 )?;
-                                if *display_output {
-                                    self.write_test_execute_status(last_status, false, writer)?;
+                                if let Some(display_output) = *display_output {
+                                    self.write_test_execute_status(
+                                        last_status,
+                                        false,
+                                        display_output,
+                                        writer,
+                                    )?;
                                 }
                             }
                         }
@@ -1114,6 +1122,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         &self.styles,
                         &self.output_spec_for_info(UnitKind::Script),
                         output,
+                        display_output,
                         &mut writer,
                     )?;
                 }
@@ -1156,6 +1165,7 @@ impl<'a> DisplayReporterImpl<'a> {
                         &self.styles,
                         &self.output_spec_for_info(UnitKind::Test),
                         output,
+                        display_output,
                         &mut writer,
                     )?;
                 }
@@ -1466,6 +1476,7 @@ impl<'a> DisplayReporterImpl<'a> {
     fn write_setup_script_execute_status(
         &self,
         run_status: &SetupScriptExecuteStatus,
+        display_output: DisplayOutput,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let spec = self.output_spec_for_finished(run_status.result, false);
@@ -1473,6 +1484,7 @@ impl<'a> DisplayReporterImpl<'a> {
             &self.styles,
             &spec,
             &run_status.output,
+            display_output,
             writer,
         )?;
 
@@ -1493,6 +1505,7 @@ impl<'a> DisplayReporterImpl<'a> {
         &self,
         run_status: &ExecuteStatus,
         is_retry: bool,
+        display_output: DisplayOutput,
         writer: &mut dyn Write,
     ) -> io::Result<()> {
         let spec = self.output_spec_for_finished(run_status.result, is_retry);
@@ -1500,6 +1513,7 @@ impl<'a> DisplayReporterImpl<'a> {
             &self.styles,
             &spec,
             &run_status.output,
+            display_output,
             writer,
         )?;
 
@@ -1860,8 +1874,8 @@ mod tests {
                 final_status_level: FinalStatusLevel::Fail,
             },
             test_count: 0,
-            success_output: Some(TestOutputDisplay::Immediate),
-            failure_output: Some(TestOutputDisplay::Immediate),
+            success_output: TestOutputDisplayStreams::create_immediate(),
+            failure_output: TestOutputDisplayStreams::create_immediate(),
             should_colorize: false,
             no_capture: true,
             hide_progress_bar: false,
@@ -2393,14 +2407,24 @@ mod tests {
             |reporter| {
                 assert!(reporter.inner.no_capture, "no_capture is true");
                 assert_eq!(
-                    reporter.inner.unit_output.force_failure_output(),
-                    Some(TestOutputDisplay::Never),
-                    "failure output is never, overriding other settings"
+                    reporter.inner.unit_output.force_failure_output().stdout,
+                    TestOutputDisplayStreams::create_never().stdout,
+                    "failure output for stdout is never, overriding other settings"
                 );
                 assert_eq!(
-                    reporter.inner.unit_output.force_success_output(),
-                    Some(TestOutputDisplay::Never),
-                    "success output is never, overriding other settings"
+                    reporter.inner.unit_output.force_failure_output().stderr,
+                    TestOutputDisplayStreams::create_never().stderr,
+                    "failure output for stderr is never, overriding other settings"
+                );
+                assert_eq!(
+                    reporter.inner.unit_output.force_success_output().stdout,
+                    TestOutputDisplayStreams::create_never().stdout,
+                    "success output for stdout is never, overriding other settings"
+                );
+                assert_eq!(
+                    reporter.inner.unit_output.force_success_output().stderr,
+                    TestOutputDisplayStreams::create_never().stderr,
+                    "success output for stderr is never, overriding other settings"
                 );
                 assert_eq!(
                     reporter.inner.status_levels.status_level,

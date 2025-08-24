@@ -6,7 +6,7 @@
 //! The main type here is [`Reporter`], which is constructed via a [`ReporterBuilder`].
 
 mod aggregator;
-mod displayer;
+pub mod displayer;
 mod error_description;
 pub mod events;
 mod helpers;
