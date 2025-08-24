@@ -273,17 +273,38 @@ impl<'a> TestRunnerInner<'a> {
         // Send the initial event.
         dispatcher_cx.run_started(self.test_list);
 
-        let executor_cx_ref = &executor_cx;
-        let dispatcher_cx_mut = &mut dispatcher_cx;
-
         let _guard = self.runtime.enter();
 
+        self.do_run(
+            &mut dispatcher_cx,
+            &executor_cx,
+            signal_handler,
+            input_handler,
+            report_cancel_rx,
+        )?;
+
+        dispatcher_cx.run_finished();
+
+        Ok(dispatcher_cx.run_stats())
+    }
+
+    fn do_run<F>(
+        &self,
+        dispatcher_cx: &mut DispatcherContext<'a, F>,
+        executor_cx: &ExecutorContext<'a>,
+        signal_handler: &mut SignalHandler,
+        input_handler: &mut InputHandler,
+        report_cancel_rx: oneshot::Receiver<()>,
+    ) -> Result<(), Vec<JoinError>>
+    where
+        F: FnMut(TestEvent<'a>) + Send,
+    {
         let ((), results) = TokioScope::scope_and_block(move |scope| {
             let (resp_tx, resp_rx) = unbounded_channel::<ExecutorEvent<'a>>();
 
             // Run the dispatcher to completion in a task.
             let dispatcher_fut =
-                dispatcher_cx_mut.run(resp_rx, signal_handler, input_handler, report_cancel_rx);
+                dispatcher_cx.run(resp_rx, signal_handler, input_handler, report_cancel_rx);
             scope.spawn_cancellable(dispatcher_fut, || RunnerTaskState::Cancelled);
 
             let (script_tx, mut script_rx) = unbounded_channel::<SetupScriptExecuteData<'a>>();
@@ -291,7 +312,7 @@ impl<'a> TestRunnerInner<'a> {
             let run_scripts_fut = async move {
                 // Since script tasks are run serially, we just reuse the one
                 // script task.
-                let script_data = executor_cx_ref.run_setup_scripts(script_resp_tx).await;
+                let script_data = executor_cx.run_setup_scripts(script_resp_tx).await;
                 if script_tx.send(script_data).is_err() {
                     // The dispatcher has shut down, so we should too.
                     debug!("script_tx.send failed, shutting down");
@@ -377,7 +398,7 @@ impl<'a> TestRunnerInner<'a> {
                             // could likely do our own channels here.)
                             let ((), mut ret) = unsafe {
                                 TokioScope::scope_and_collect(move |scope| {
-                                    scope.spawn(executor_cx_ref.run_test_instance(
+                                    scope.spawn(executor_cx.run_test_instance(
                                         test,
                                         cx,
                                         resp_tx.clone(),
@@ -417,8 +438,6 @@ impl<'a> TestRunnerInner<'a> {
             scope.spawn_cancellable(run_tests_fut, || RunnerTaskState::Cancelled);
         });
 
-        dispatcher_cx.run_finished();
-
         // Were there any join errors in tasks?
         //
         // If one of the tasks panics, we likely end up stuck because the
@@ -452,7 +471,8 @@ impl<'a> TestRunnerInner<'a> {
         if !join_errors.is_empty() {
             return Err(join_errors);
         }
-        Ok(dispatcher_cx.run_stats())
+
+        Ok(())
     }
 }
 
