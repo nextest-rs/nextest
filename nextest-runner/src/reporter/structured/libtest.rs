@@ -424,12 +424,14 @@ impl<'cfg> LibtestReporter<'cfg> {
         out.extend_from_slice(b"}\n");
 
         if self.emit_nextest_obj {
-            use std::io::Write as _;
+            {
+                use std::io::Write as _;
 
-            let mut stdout = std::io::stdout().lock();
-            stdout.write_all(out).map_err(WriteEventError::Io)?;
-            stdout.flush().map_err(WriteEventError::Io)?;
-            out.clear();
+                let mut stdout = std::io::stdout().lock();
+                stdout.write_all(out).map_err(WriteEventError::Io)?;
+                stdout.flush().map_err(WriteEventError::Io)?;
+                out.clear();
+            }
 
             if test_suite.running == 0 {
                 if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
