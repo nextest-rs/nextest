@@ -423,14 +423,31 @@ impl<'cfg> LibtestReporter<'cfg> {
 
         out.extend_from_slice(b"}\n");
 
-        // If this is the last test of the suite, emit the test suite summary
-        // before emitting the entire block
-        if test_suite.running > 0 {
-            return Ok(());
-        }
+        if self.emit_nextest_obj {
+            {
+                use std::io::Write as _;
 
-        if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
-            self.finalize(test_suite)?;
+                let mut stdout = std::io::stdout().lock();
+                stdout.write_all(out).map_err(WriteEventError::Io)?;
+                stdout.flush().map_err(WriteEventError::Io)?;
+                out.clear();
+            }
+
+            if test_suite.running == 0 {
+                if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
+                    self.finalize(test_suite)?;
+                }
+            }
+        } else {
+            // If this is the last test of the suite, emit the test suite summary
+            // before emitting the entire block
+            if test_suite.running > 0 {
+                return Ok(());
+            }
+
+            if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
+                self.finalize(test_suite)?;
+            }
         }
 
         Ok(())

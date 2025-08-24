@@ -340,7 +340,7 @@ fn heuristic_error_str(stderr: &[u8]) -> Option<ByteSubslice<'_>> {
 
 // This regex works for the default panic handler for Rust -- other panic handlers may not work,
 // which is why this is heuristic.
-static PANICKED_AT_REGEX_STR: &str = "^thread '([^']+)' panicked at ";
+static PANICKED_AT_REGEX_STR: &str = "^thread '([^']+)' (\\(\\d+\\) )?panicked at ";
 static PANICKED_AT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     let mut builder = RegexBuilder::new(PANICKED_AT_REGEX_STR);
     builder.multi_line(true);
