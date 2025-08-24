@@ -24,7 +24,7 @@ use crate::{
     list::{TestExecuteContext, TestInstance, TestInstanceWithSettings, TestList},
     reporter::events::{
         ExecutionResult, FailureStatus, InfoResponse, RetryData, SetupScriptInfoResponse,
-        TestInfoResponse, UnitKind, UnitState,
+        StressIndex, TestInfoResponse, UnitKind, UnitState,
     },
     runner::{
         ExecutorEvent, InternalExecuteStatus, InternalSetupScriptExecuteStatus,
@@ -93,6 +93,7 @@ impl<'a> ExecutorContext<'a> {
     /// Run scripts, returning data about each successfully executed script.
     pub(super) async fn run_setup_scripts(
         &self,
+        stress_index: Option<StressIndex>,
         resp_tx: UnboundedSender<ExecutorEvent<'a>>,
     ) -> SetupScriptExecuteData<'a> {
         let setup_scripts = self.profile.setup_scripts(self.test_list);
@@ -115,6 +116,7 @@ impl<'a> ExecutorContext<'a> {
             let script_fut = async move {
                 let (req_rx_tx, req_rx_rx) = oneshot::channel();
                 let _ = this_resp_tx.send(ExecutorEvent::SetupScriptStarted {
+                    stress_index,
                     script_id: script_id.clone(),
                     config,
                     program: program.clone(),
@@ -132,6 +134,7 @@ impl<'a> ExecutorContext<'a> {
                 };
 
                 let packet = SetupScriptPacket {
+                    stress_index,
                     script_id: script_id.clone(),
                     config,
                     program: program.clone(),
@@ -149,6 +152,7 @@ impl<'a> ExecutorContext<'a> {
                 let env_map = status.env_map.clone();
 
                 let _ = this_resp_tx.send(ExecutorEvent::SetupScriptFinished {
+                    stress_index,
                     script_id,
                     config,
                     program,
@@ -172,6 +176,7 @@ impl<'a> ExecutorContext<'a> {
     /// Returns a future that runs all attempts of a single test instance.
     pub(super) async fn run_test_instance(
         &self,
+        stress_index: Option<StressIndex>,
         test: TestInstanceWithSettings<'a>,
         cx: FutureQueueContext,
         resp_tx: UnboundedSender<ExecutorEvent<'a>>,
@@ -192,6 +197,7 @@ impl<'a> ExecutorContext<'a> {
             );
             // Failure to send means the receiver was dropped.
             let _ = resp_tx.send(ExecutorEvent::Skipped {
+                stress_index,
                 test_instance: test.instance,
                 reason,
             });
@@ -203,6 +209,7 @@ impl<'a> ExecutorContext<'a> {
         // Wait for the Started event to be processed by the
         // execution future.
         _ = resp_tx.send(ExecutorEvent::Started {
+            stress_index,
             test_instance: test.instance,
             req_rx_tx,
         });
@@ -230,6 +237,7 @@ impl<'a> ExecutorContext<'a> {
                 // dropping the receiver.
                 let (tx, rx) = oneshot::channel();
                 _ = resp_tx.send(ExecutorEvent::RetryStarted {
+                    stress_index,
                     test_instance: test.instance,
                     retry_data,
                     tx,
@@ -249,6 +257,7 @@ impl<'a> ExecutorContext<'a> {
             // it's a lot easier to pass it in than to try and hook on
             // additional information later.
             let packet = TestPacket {
+                stress_index,
                 test_instance: test.instance,
                 cx: cx.clone(),
                 retry_data,
@@ -273,6 +282,7 @@ impl<'a> ExecutorContext<'a> {
                 let previous_slow = run_status.is_slow;
 
                 let _ = resp_tx.send(ExecutorEvent::AttemptFailedWillRetry {
+                    stress_index,
                     test_instance: test.instance,
                     failure_output: settings.failure_output(),
                     run_status,
@@ -301,6 +311,7 @@ impl<'a> ExecutorContext<'a> {
         // In either case, the test is finished.
         let last_run_status = last_run_status.into_external();
         let _ = resp_tx.send(ExecutorEvent::Finished {
+            stress_index,
             test_instance: test.instance,
             success_output: settings.success_output(),
             failure_output: settings.failure_output(),
@@ -1000,6 +1011,7 @@ impl UnitPacket<'_> {
 
 #[derive(Clone)]
 pub(super) struct TestPacket<'a> {
+    stress_index: Option<StressIndex>,
     test_instance: TestInstance<'a>,
     cx: FutureQueueContext,
     retry_data: RetryData,
@@ -1011,6 +1023,7 @@ pub(super) struct TestPacket<'a> {
 impl<'a> TestPacket<'a> {
     fn slow_event(&self, elapsed: Duration, will_terminate: Option<Duration>) -> ExecutorEvent<'a> {
         ExecutorEvent::Slow {
+            stress_index: self.stress_index,
             test_instance: self.test_instance,
             retry_data: self.retry_data,
             elapsed,
@@ -1032,6 +1045,7 @@ impl<'a> TestPacket<'a> {
         output: ChildExecutionOutput,
     ) -> InfoResponse<'a> {
         InfoResponse::Test(TestInfoResponse {
+            stress_index: self.stress_index,
             test_instance: self.test_instance.id(),
             state,
             retry_data: self.retry_data,
@@ -1051,6 +1065,7 @@ impl fmt::Debug for TestPacket<'_> {
 
 #[derive(Clone, Debug)]
 pub(super) struct SetupScriptPacket<'a> {
+    stress_index: Option<StressIndex>,
     script_id: ScriptId,
     config: &'a SetupScriptConfig,
     program: String,
@@ -1069,6 +1084,7 @@ impl<'a> SetupScriptPacket<'a> {
 
     fn slow_event(&self, elapsed: Duration, will_terminate: Option<Duration>) -> ExecutorEvent<'a> {
         ExecutorEvent::SetupScriptSlow {
+            stress_index: self.stress_index,
             script_id: self.script_id.clone(),
             config: self.config,
             program: self.program.clone(),
@@ -1083,6 +1099,7 @@ impl<'a> SetupScriptPacket<'a> {
         output: ChildExecutionOutput,
     ) -> InfoResponse<'a> {
         InfoResponse::SetupScript(SetupScriptInfoResponse {
+            stress_index: self.stress_index,
             script_id: self.script_id.clone(),
             program: self.program.clone(),
             args: &self.config.command.args,

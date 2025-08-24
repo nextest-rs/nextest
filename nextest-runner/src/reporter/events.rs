@@ -10,12 +10,13 @@ use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
 use crate::{
     config::{elements::LeakTimeoutResult, scripts::ScriptId},
     list::{TestInstance, TestInstanceId, TestList},
+    runner::{StressCondition, StressCount},
     test_output::ChildExecutionOutput,
 };
 use chrono::{DateTime, FixedOffset};
 use nextest_metadata::MismatchReason;
 use quick_junit::ReportUuid;
-use std::{collections::BTreeMap, fmt, process::ExitStatus, time::Duration};
+use std::{collections::BTreeMap, fmt, num::NonZero, process::ExitStatus, time::Duration};
 
 /// A test event.
 ///
@@ -53,10 +54,22 @@ pub enum TestEventKind<'a> {
 
         /// The command-line arguments for the process.
         cli_args: Vec<String>,
+
+        /// The stress condition for this run, if any.
+        stress_condition: Option<StressCondition>,
+    },
+
+    /// When running stress tests serially, a sub-run started.
+    StressSubRunStarted {
+        /// The amount of progress completed so far.
+        progress: StressProgress,
     },
 
     /// A setup script started.
     SetupScriptStarted {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The setup script index.
         index: usize,
 
@@ -78,6 +91,9 @@ pub enum TestEventKind<'a> {
 
     /// A setup script was slow.
     SetupScriptSlow {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The script ID.
         script_id: ScriptId,
 
@@ -96,6 +112,9 @@ pub enum TestEventKind<'a> {
 
     /// A setup script completed execution.
     SetupScriptFinished {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The setup script index.
         index: usize,
 
@@ -129,6 +148,9 @@ pub enum TestEventKind<'a> {
     // binary).
     /// A test started running.
     TestStarted {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The test instance that was started.
         test_instance: TestInstance<'a>,
 
@@ -144,6 +166,9 @@ pub enum TestEventKind<'a> {
 
     /// A test was slower than a configured soft timeout.
     TestSlow {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The test instance that was slow.
         test_instance: TestInstance<'a>,
 
@@ -161,6 +186,9 @@ pub enum TestEventKind<'a> {
     ///
     /// This event does not occur on the final run of a failing test.
     TestAttemptFailedWillRetry {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The test instance that is being retried.
         test_instance: TestInstance<'a>,
 
@@ -176,6 +204,9 @@ pub enum TestEventKind<'a> {
 
     /// A retry has started.
     TestRetryStarted {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The test instance that is being retried.
         test_instance: TestInstance<'a>,
 
@@ -185,6 +216,9 @@ pub enum TestEventKind<'a> {
 
     /// A test finished running.
     TestFinished {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The test instance that finished running.
         test_instance: TestInstance<'a>,
 
@@ -215,6 +249,9 @@ pub enum TestEventKind<'a> {
 
     /// A test was skipped.
     TestSkipped {
+        /// If a stress test is being run, the stress index, starting from 0.
+        stress_index: Option<StressIndex>,
+
         /// The test instance that was skipped.
         test_instance: TestInstance<'a>,
 
@@ -312,6 +349,18 @@ pub enum TestEventKind<'a> {
         running: usize,
     },
 
+    /// When running stress tests serially, a sub-run finished.
+    StressSubRunFinished {
+        /// The amount of progress completed so far.
+        progress: StressProgress,
+
+        /// The amount of time it took for this sub-run to complete.
+        sub_elapsed: Duration,
+
+        /// Statistics for the sub-run.
+        sub_stats: RunStats,
+    },
+
     /// The test run finished.
     RunFinished {
         /// The unique ID for this run.
@@ -323,9 +372,87 @@ pub enum TestEventKind<'a> {
         /// The amount of time it took for the tests to run.
         elapsed: Duration,
 
-        /// Statistics for the run.
+        /// Statistics for the run (last sub-run if this is a stress test).
         run_stats: RunStats,
     },
+}
+
+/// Progress for a stress test.
+#[derive(Clone, Debug)]
+pub enum StressProgress {
+    /// This is a count-based stress run.
+    Count {
+        /// The total number of stress runs.
+        total: StressCount,
+
+        /// The total time that has elapsed across all stress runs so far.
+        elapsed: Duration,
+
+        /// The number of stress runs that have been completed.
+        completed: u32,
+    },
+
+    /// This is a time-based stress run.
+    Time {
+        /// The total time for the stress run.
+        total: Duration,
+
+        /// The total time that has elapsed across all stress runs so far.
+        elapsed: Duration,
+
+        /// The number of stress runs that have been completed.
+        completed: u32,
+    },
+}
+
+impl StressProgress {
+    /// Returns the remaining amount of work if the progress indicates there's
+    /// still more to do, otherwise `None`.
+    pub fn remaining(&self) -> Option<StressRemaining> {
+        match self {
+            Self::Count {
+                total: StressCount::Count(total),
+                elapsed: _,
+                completed,
+            } => total
+                .get()
+                .checked_sub(*completed)
+                .and_then(|remaining| NonZero::try_from(remaining).ok())
+                .map(StressRemaining::Count),
+            Self::Count {
+                total: StressCount::Infinite,
+                ..
+            } => Some(StressRemaining::Infinite),
+            Self::Time {
+                total,
+                elapsed,
+                completed: _,
+            } => total.checked_sub(*elapsed).map(StressRemaining::Time),
+        }
+    }
+}
+
+/// For a stress test, the amount of time or number of stress runs remaining.
+#[derive(Clone, Debug)]
+pub enum StressRemaining {
+    /// The number of stress runs remaining, guaranteed to be non-zero.
+    Count(NonZero<u32>),
+
+    /// Infinite number of stress runs remaining.
+    Infinite,
+
+    /// The amount of time remaining.
+    Time(Duration),
+}
+
+/// The index of the current stress run.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct StressIndex {
+    /// The 0-indexed index.
+    pub current: u32,
+
+    /// The total number of stress runs, if that is available.
+    pub total: Option<NonZero<u32>>,
 }
 
 /// Statistics for a test run.
@@ -984,6 +1111,9 @@ pub enum InfoResponse<'a> {
 /// A setup script's response to an information request.
 #[derive(Clone, Debug)]
 pub struct SetupScriptInfoResponse<'a> {
+    /// The stress index of the setup script.
+    pub stress_index: Option<StressIndex>,
+
     /// The identifier of the setup script instance.
     pub script_id: ScriptId,
 
@@ -1003,6 +1133,9 @@ pub struct SetupScriptInfoResponse<'a> {
 /// A test's response to an information request.
 #[derive(Clone, Debug)]
 pub struct TestInfoResponse<'a> {
+    /// The stress index of the test.
+    pub stress_index: Option<StressIndex>,
+
     /// The test instance that the information is about.
     pub test_instance: TestInstanceId<'a>,
 

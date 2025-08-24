@@ -9,10 +9,13 @@ use crate::{
         scripts::SetupScriptExecuteData,
     },
     double_spawn::DoubleSpawnInfo,
-    errors::{ConfigureHandleInheritanceError, TestRunnerBuildError, TestRunnerExecuteErrors},
+    errors::{
+        ConfigureHandleInheritanceError, StressCountParseError, TestRunnerBuildError,
+        TestRunnerExecuteErrors,
+    },
     input::{InputHandler, InputHandlerKind, InputHandlerStatus},
     list::{TestInstanceWithSettings, TestList},
-    reporter::events::{RunStats, TestEvent},
+    reporter::events::{RunStats, StressIndex, TestEvent},
     runner::ExecutorEvent,
     signal::{SignalHandler, SignalHandlerKind},
     target_runner::TargetRunner,
@@ -20,10 +23,12 @@ use crate::{
 };
 use async_scoped::TokioScope;
 use future_queue::{FutureQueueContext, StreamExt};
-use futures::prelude::*;
+use futures::{future::Fuse, prelude::*};
 use nextest_metadata::FilterMatch;
 use quick_junit::ReportUuid;
-use std::{convert::Infallible, fmt, sync::Arc};
+use std::{
+    convert::Infallible, fmt, num::NonZero, pin::Pin, str::FromStr, sync::Arc, time::Duration,
+};
 use tokio::{
     runtime::Runtime,
     sync::{mpsc::unbounded_channel, oneshot},
@@ -38,6 +43,7 @@ pub struct TestRunnerBuilder {
     retries: Option<RetryPolicy>,
     max_fail: Option<MaxFail>,
     test_threads: Option<TestThreads>,
+    stress_condition: Option<StressCondition>,
 }
 
 impl TestRunnerBuilder {
@@ -71,6 +77,12 @@ impl TestRunnerBuilder {
     /// Sets the number of tests to run simultaneously.
     pub fn set_test_threads(&mut self, test_threads: TestThreads) -> &mut Self {
         self.test_threads = Some(test_threads);
+        self
+    }
+
+    /// Sets the stress testing condition.
+    pub fn set_stress_condition(&mut self, stress_condition: StressCondition) -> &mut Self {
+        self.stress_condition = Some(stress_condition);
         self
     }
 
@@ -119,11 +131,47 @@ impl TestRunnerBuilder {
                 force_retries: self.retries,
                 cli_args,
                 max_fail,
+                stress_condition: self.stress_condition,
                 runtime,
             },
             signal_handler,
             input_handler,
         })
+    }
+}
+
+/// Stress testing condition.
+#[derive(Clone, Debug)]
+pub enum StressCondition {
+    /// Run each test `count` times.
+    Count(StressCount),
+
+    /// Run until this duration has elapsed.
+    Duration(Duration),
+}
+
+/// A count for stress testing.
+#[derive(Clone, Copy, Debug)]
+pub enum StressCount {
+    /// Run each test `count` times.
+    Count(NonZero<u32>),
+
+    /// Run indefinitely.
+    Infinite,
+}
+
+impl FromStr for StressCount {
+    type Err = StressCountParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "infinite" {
+            Ok(StressCount::Infinite)
+        } else {
+            match s.parse() {
+                Ok(count) => Ok(StressCount::Count(count)),
+                Err(_) => Err(StressCountParseError::new(s)),
+            }
+        }
     }
 }
 
@@ -234,6 +282,7 @@ struct TestRunnerInner<'a> {
     force_retries: Option<RetryPolicy>,
     cli_args: Vec<String>,
     max_fail: MaxFail,
+    stress_condition: Option<StressCondition>,
     runtime: Runtime,
 }
 
@@ -258,6 +307,7 @@ impl<'a> TestRunnerInner<'a> {
             self.test_list.run_count(),
             self.max_fail,
             self.profile.global_timeout().period,
+            self.stress_condition.clone(),
         );
 
         let executor_cx = ExecutorContext::new(
@@ -271,21 +321,72 @@ impl<'a> TestRunnerInner<'a> {
         );
 
         // Send the initial event.
-        // (Don't need to set the cancelled atomic if this fails because the run hasn't started
-        // yet.)
         dispatcher_cx.run_started(self.test_list);
-
-        let executor_cx_ref = &executor_cx;
-        let dispatcher_cx_mut = &mut dispatcher_cx;
 
         let _guard = self.runtime.enter();
 
+        let mut report_cancel_rx = std::pin::pin!(report_cancel_rx.fuse());
+
+        if self.stress_condition.is_some() {
+            loop {
+                let progress = dispatcher_cx
+                    .stress_progress()
+                    .expect("stress_condition is Some => stress progress is Some");
+                if progress.remaining().is_some() {
+                    dispatcher_cx.stress_sub_run_started(progress);
+
+                    self.do_run(
+                        dispatcher_cx.stress_index(),
+                        &mut dispatcher_cx,
+                        &executor_cx,
+                        signal_handler,
+                        input_handler,
+                        report_cancel_rx.as_mut(),
+                    )?;
+
+                    dispatcher_cx.stress_sub_run_finished();
+
+                    if dispatcher_cx.cancel_reason().is_some() {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        } else {
+            self.do_run(
+                None,
+                &mut dispatcher_cx,
+                &executor_cx,
+                signal_handler,
+                input_handler,
+                report_cancel_rx,
+            )?;
+        }
+
+        dispatcher_cx.run_finished();
+
+        Ok(dispatcher_cx.run_stats())
+    }
+
+    fn do_run<F>(
+        &self,
+        stress_index: Option<StressIndex>,
+        dispatcher_cx: &mut DispatcherContext<'a, F>,
+        executor_cx: &ExecutorContext<'a>,
+        signal_handler: &mut SignalHandler,
+        input_handler: &mut InputHandler,
+        report_cancel_rx: Pin<&mut Fuse<oneshot::Receiver<()>>>,
+    ) -> Result<(), Vec<JoinError>>
+    where
+        F: FnMut(TestEvent<'a>) + Send,
+    {
         let ((), results) = TokioScope::scope_and_block(move |scope| {
             let (resp_tx, resp_rx) = unbounded_channel::<ExecutorEvent<'a>>();
 
             // Run the dispatcher to completion in a task.
             let dispatcher_fut =
-                dispatcher_cx_mut.run(resp_rx, signal_handler, input_handler, report_cancel_rx);
+                dispatcher_cx.run(resp_rx, signal_handler, input_handler, report_cancel_rx);
             scope.spawn_cancellable(dispatcher_fut, || RunnerTaskState::Cancelled);
 
             let (script_tx, mut script_rx) = unbounded_channel::<SetupScriptExecuteData<'a>>();
@@ -293,7 +394,9 @@ impl<'a> TestRunnerInner<'a> {
             let run_scripts_fut = async move {
                 // Since script tasks are run serially, we just reuse the one
                 // script task.
-                let script_data = executor_cx_ref.run_setup_scripts(script_resp_tx).await;
+                let script_data = executor_cx
+                    .run_setup_scripts(stress_index, script_resp_tx)
+                    .await;
                 if script_tx.send(script_data).is_err() {
                     // The dispatcher has shut down, so we should too.
                     debug!("script_tx.send failed, shutting down");
@@ -336,6 +439,7 @@ impl<'a> TestRunnerInner<'a> {
                         {
                             // Failure to send means the receiver was dropped.
                             let _ = filter_resp_tx.send(ExecutorEvent::Skipped {
+                                stress_index,
                                 test_instance: test.instance,
                                 reason,
                             });
@@ -379,7 +483,8 @@ impl<'a> TestRunnerInner<'a> {
                             // could likely do our own channels here.)
                             let ((), mut ret) = unsafe {
                                 TokioScope::scope_and_collect(move |scope| {
-                                    scope.spawn(executor_cx_ref.run_test_instance(
+                                    scope.spawn(executor_cx.run_test_instance(
+                                        stress_index,
                                         test,
                                         cx,
                                         resp_tx.clone(),
@@ -419,8 +524,6 @@ impl<'a> TestRunnerInner<'a> {
             scope.spawn_cancellable(run_tests_fut, || RunnerTaskState::Cancelled);
         });
 
-        dispatcher_cx.run_finished();
-
         // Were there any join errors in tasks?
         //
         // If one of the tasks panics, we likely end up stuck because the
@@ -454,7 +557,8 @@ impl<'a> TestRunnerInner<'a> {
         if !join_errors.is_empty() {
             return Err(join_errors);
         }
-        Ok(dispatcher_cx.run_stats())
+
+        Ok(())
     }
 }
 

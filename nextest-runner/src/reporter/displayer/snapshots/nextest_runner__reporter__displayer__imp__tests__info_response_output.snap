@@ -48,7 +48,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 4/20:   setup-exiting: setup-exiting arg1 arg2
+* 4/20:   [1] setup-exiting: setup-exiting arg1 arg2
   status: script failed to execute after 1.234s (marked slow after 1.000s)
   note:   spent 10.467s waiting for script PID 9987 to shut down, will mark as leaky after another 0.335s
   errors:
@@ -59,7 +59,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 5/20:   setup-exited: setup-exited arg1 arg2
+* 5/20:   [2/3] setup-exited: setup-exited arg1 arg2
   status: script failed with exit code 1, and leaked handles after 9.999s (marked slow after 3.000s)
   errors:
     error spawning child process
@@ -79,7 +79,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 7/20:   my-binary-id test2
+* 7/20:   [1] my-binary-id test2
   status: (attempt 2/3) terminating test PID 12346 due to timeout (test ran for 99.999s)
   note:   fake termination method; spent 6.789s waiting for test to exit, will kill after another 9.786s
   stdout:
@@ -100,7 +100,7 @@ info: 30 running, 17 passed (4 slow, 2 flaky, 1 leaky), 2 failed (2 due to being
 
 ────────
 
-* 9/20:   my-binary-id test4
+* 9/20:   [2/3] my-binary-id test4
   status: test passed after 99.999s (marked slow after 33.333s)
   errors:
     error waiting for child process to exit

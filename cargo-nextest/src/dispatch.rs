@@ -41,7 +41,7 @@ use nextest_runner::{
         highlight_end, structured,
     },
     reuse_build::{ArchiveReporter, PathMapper, ReuseBuildInfo, archive_to_file},
-    runner::{TestRunnerBuilder, configure_handle_inheritance},
+    runner::{StressCondition, StressCount, TestRunnerBuilder, configure_handle_inheritance},
     show_config::{ShowNextestVersion, ShowTestGroupSettings, ShowTestGroups, ShowTestGroupsMode},
     signal::SignalHandlerKind,
     target_runner::{PlatformRunner, TargetRunner},
@@ -58,6 +58,7 @@ use std::{
     fmt,
     io::{Cursor, Write},
     sync::{Arc, OnceLock},
+    time::Duration,
 };
 use swrite::{SWrite, swrite};
 use tracing::{Level, debug, info, warn};
@@ -874,6 +875,10 @@ pub struct TestRunnerOpts {
     /// Behavior if there are no tests to run [default: fail]
     #[arg(long, value_enum, value_name = "ACTION", env = "NEXTEST_NO_TESTS")]
     no_tests: Option<NoTestsBehavior>,
+
+    /// Stress testing options
+    #[clap(flatten)]
+    stress: StressOptions,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -939,6 +944,10 @@ impl TestRunnerOpts {
             builder.set_test_threads(test_threads);
         }
 
+        if let Some(condition) = self.stress.condition.as_ref() {
+            builder.set_stress_condition(condition.stress_condition());
+        }
+
         Some(builder)
     }
 }
@@ -968,6 +977,51 @@ enum MessageFormat {
     /// Output test information in the same format as libtest, with a `nextest` subobject that
     /// includes additional metadata.
     LibtestJsonPlus,
+}
+
+#[derive(Debug, Default, Args)]
+#[command(next_help_heading = "Stress testing options")]
+struct StressOptions {
+    /// Stress testing condition.
+    #[clap(flatten)]
+    condition: Option<StressConditionOpt>,
+    // TODO: modes other than serial
+}
+
+#[derive(Clone, Debug, Default, Args)]
+#[group(id = "stress_condition", multiple = false)]
+struct StressConditionOpt {
+    /// The number of times to run each test, or `infinite` to run indefinitely.
+    #[arg(long, value_name = "COUNT")]
+    stress_count: Option<StressCount>,
+
+    /// How long to run stress tests until (e.g. 24h).
+    #[arg(long, value_name = "DURATION", value_parser = non_zero_duration)]
+    stress_duration: Option<Duration>,
+}
+
+impl StressConditionOpt {
+    fn stress_condition(&self) -> StressCondition {
+        if let Some(count) = self.stress_count {
+            StressCondition::Count(count)
+        } else if let Some(duration) = self.stress_duration {
+            StressCondition::Duration(duration)
+        } else {
+            unreachable!(
+                "if StressOptions::condition is Some, \
+                 one of these should be set"
+            )
+        }
+    }
+}
+
+fn non_zero_duration(input: &str) -> Result<Duration, String> {
+    let duration = humantime::parse_duration(input).map_err(|error| error.to_string())?;
+    if duration.is_zero() {
+        Err("duration must be non-zero".to_string())
+    } else {
+        Ok(duration)
+    }
 }
 
 #[derive(Debug, Default, Args)]
@@ -2560,6 +2614,13 @@ mod tests {
             "cargo nextest run --filter-expr 'test(bar)' --package=my-package test-filter",
             "cargo nextest list -E 'deps(foo)' --ignore-default-filter",
             // ---
+            // Stress test options
+            // ---
+            "cargo nextest run --stress-count 4",
+            "cargo nextest run --stress-count infinite",
+            "cargo nextest run --stress-duration 60m",
+            "cargo nextest run --stress-duration 24h",
+            // ---
             // Test binary arguments
             // ---
             "cargo nextest run -- --a an arbitrary arg",
@@ -2663,6 +2724,10 @@ mod tests {
             // Test threads must be a number
             ("cargo nextest run --jobs -twenty", UnknownArgument),
             ("cargo nextest run --build-jobs -inf1", UnknownArgument),
+            // Invalid stress count: 0
+            ("cargo nextest run --stress-count 0", ValueValidation),
+            // Invalid stress duration: 0
+            ("cargo nextest run --stress-duration 0m", ValueValidation),
         ];
 
         // Unset all NEXTEST_ env vars because they can conflict with the try_parse_from below.

@@ -15,7 +15,7 @@ use crate::{
         TestOutputDisplay,
         events::{
             ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptEnvMap,
-            SetupScriptExecuteStatus, UnitState,
+            SetupScriptExecuteStatus, StressIndex, UnitState,
         },
     },
     signal::ShutdownEvent,
@@ -40,6 +40,7 @@ use tokio::{
 #[derive(Debug)]
 pub(super) enum ExecutorEvent<'a> {
     SetupScriptStarted {
+        stress_index: Option<StressIndex>,
         script_id: ScriptId,
         config: &'a SetupScriptConfig,
         program: String,
@@ -49,6 +50,7 @@ pub(super) enum ExecutorEvent<'a> {
         req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest<'a>>>,
     },
     SetupScriptSlow {
+        stress_index: Option<StressIndex>,
         script_id: ScriptId,
         config: &'a SetupScriptConfig,
         program: String,
@@ -56,6 +58,7 @@ pub(super) enum ExecutorEvent<'a> {
         will_terminate: Option<Duration>,
     },
     SetupScriptFinished {
+        stress_index: Option<StressIndex>,
         script_id: ScriptId,
         config: &'a SetupScriptConfig,
         program: String,
@@ -64,6 +67,7 @@ pub(super) enum ExecutorEvent<'a> {
         status: SetupScriptExecuteStatus,
     },
     Started {
+        stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         // The channel over which to return the unit request.
         //
@@ -78,24 +82,28 @@ pub(super) enum ExecutorEvent<'a> {
         req_rx_tx: oneshot::Sender<UnboundedReceiver<RunUnitRequest<'a>>>,
     },
     Slow {
+        stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         retry_data: RetryData,
         elapsed: Duration,
         will_terminate: Option<Duration>,
     },
     AttemptFailedWillRetry {
+        stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         failure_output: TestOutputDisplay,
         run_status: ExecuteStatus,
         delay_before_next_attempt: Duration,
     },
     RetryStarted {
+        stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         retry_data: RetryData,
         // This is used to indicate that the dispatcher still wants to run the test.
         tx: oneshot::Sender<()>,
     },
     Finished {
+        stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         success_output: TestOutputDisplay,
         failure_output: TestOutputDisplay,
@@ -104,6 +112,7 @@ pub(super) enum ExecutorEvent<'a> {
         last_run_status: ExecuteStatus,
     },
     Skipped {
+        stress_index: Option<StressIndex>,
         test_instance: TestInstance<'a>,
         reason: MismatchReason,
     },
