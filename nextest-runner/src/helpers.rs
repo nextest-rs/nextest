@@ -86,6 +86,15 @@ pub mod plural {
     pub fn sections_str(count: usize) -> &'static str {
         if count == 1 { "section" } else { "sections" }
     }
+
+    /// Returns "iteration" if `count` is 1, otherwise "iterations".
+    pub fn iterations_str(count: u32) -> &'static str {
+        if count == 1 {
+            "iteration"
+        } else {
+            "iterations"
+        }
+    }
 }
 
 pub(crate) struct DisplayTestInstance<'a> {

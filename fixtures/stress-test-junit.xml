@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="nextest-run" tests="4" failures="0" errors="0" uuid="64f8ba6c-b032-4093-8323-0960f2b47fc9" timestamp="2025-08-24T20:53:16.476+00:00" time="0.020">
+    <testsuite name="nextest-filtering::match@stress-0" tests="2" disabled="0" errors="0" failures="0">
+        <testcase name="test_expr_deps" classname="nextest-filtering::match" timestamp="2025-08-24T20:53:16.478+00:00" time="0.007">
+        </testcase>
+        <testcase name="test_expr_package_regex" classname="nextest-filtering::match" timestamp="2025-08-24T20:53:16.478+00:00" time="0.007">
+        </testcase>
+    </testsuite>
+    <testsuite name="nextest-filtering::match@stress-1" tests="2" disabled="0" errors="0" failures="0">
+        <testcase name="test_expr_package_regex" classname="nextest-filtering::match" timestamp="2025-08-24T20:53:16.489+00:00" time="0.006">
+        </testcase>
+        <testcase name="test_expr_deps" classname="nextest-filtering::match" timestamp="2025-08-24T20:53:16.489+00:00" time="0.007">
+        </testcase>
+    </testsuite>
+</testsuites>
