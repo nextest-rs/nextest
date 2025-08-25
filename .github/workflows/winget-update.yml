@@ -21,19 +21,16 @@ jobs:
               run: |
                   latest_tag=$(git ls-remote --tags --sort=-version:refname https://github.com/nextest-rs/nextest.git 'cargo-nextest-*' | grep -Eo 'cargo-nextest-[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
                   latest_version=${latest_tag#cargo-nextest-}
-                  echo "latest_version=${latest_version}" >> $GITHUB_ENV
-                  # Quote the URLs here because the winget-updater action doesn't like inline-quoted URLs
-                  echo $'urls=\'https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-aarch64-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-i686-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-x86_64-pc-windows-msvc.zip\'' >> $GITHUB_ENV
-            - name: Update nextest
-              uses: michidk/winget-updater@latest
+                  echo "LATEST_VERSION=${latest_version}" >> $GITHUB_ENV
+                  echo "URLS='https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-aarch64-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-i686-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-x86_64-pc-windows-msvc.zip'" >> $GITHUB_ENV
+            # We run komac ourselves because the current version of
+            # michidk/winget-updater as of this writing (1.1.6) doesn't support
+            # a custom version (which we need above).
+            - name: Update nextest on WinGet
+              uses: michidk/run-komac@latest
               with:
-                  komac-token: ${{ secrets.KOMAC_TOKEN }}
-                  identifier: nextest.cargo-nextest
-                  repo: nextest-rs/nextest
-                  url: ${{ env.urls }}
+                  args: "update nextest.cargo-nextest --version $LATEST_VERSION --urls $URLS --submit --token ${{ inputs.komac-token }}"
                   custom-fork-owner: nextest-rs
-              env:
-                  VERSION: ${{ env.latest_version }}
 
     cleanup:
         name: Cleanup branches
