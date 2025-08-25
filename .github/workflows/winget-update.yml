@@ -15,6 +15,7 @@ jobs:
               uses: michidk/run-komac@latest
               with:
                   args: "sync --token=${{ secrets.KOMAC_TOKEN }}"
+                  custom-fork-owner: nextest-rs
             - name: Get latest nextest version
               id: get_latest_version
               run: |
@@ -41,3 +42,4 @@ jobs:
               uses: michidk/run-komac@latest
               with:
                   args: "cleanup --only-merged --token=${{ secrets.KOMAC_TOKEN }}"
+                  custom-fork-owner: nextest-rs
