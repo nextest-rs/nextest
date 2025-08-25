@@ -22,7 +22,7 @@ jobs:
                   latest_tag=$(git ls-remote --tags --sort=-version:refname https://github.com/nextest-rs/nextest.git 'cargo-nextest-*' | grep -Eo 'cargo-nextest-[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
                   latest_version=${latest_tag#cargo-nextest-}
                   echo "LATEST_VERSION=${latest_version}" >> $GITHUB_ENV
-                  echo "URLS='https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-aarch64-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-i686-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-x86_64-pc-windows-msvc.zip'" >> $GITHUB_ENV
+                  echo "URLS=https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-aarch64-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-i686-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/${latest_tag}/${latest_tag}-x86_64-pc-windows-msvc.zip" >> $GITHUB_ENV
             # We run komac ourselves because the current version of
             # michidk/winget-updater as of this writing (1.1.6) doesn't support
             # a custom version (which we need above).
