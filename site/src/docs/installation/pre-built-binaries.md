@@ -70,77 +70,141 @@ The instructions below are suitable for both end users and CI. These links will 
 
 === ":material-microsoft-windows: Windows x86_64"
 
-    !!! info
+    === "Using WinGet"
 
-        The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+        Run in a terminal:
 
-        If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
+        ```
+        winget install nextest.cargo-nextest
+        ```
 
-    Run in PowerShell:
+    === "PowerShell"
 
-    ```powershell
-    $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
-    Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows
-    $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
-    $tmp | Expand-Archive -DestinationPath $outputDir -Force
-    $tmp | Remove-Item
-    ```
+        !!! info
 
-    Or, using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
+            The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
 
-    ```
-    curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-    ```
+            If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
+
+        Run in PowerShell:
+
+        ```powershell
+        $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+        Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows
+        $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
+        $tmp | Expand-Archive -DestinationPath $outputDir -Force
+        $tmp | Remove-Item
+        ```
+
+    === "Unix shell"
+
+        !!! info
+
+            The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+
+            If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
+
+        Using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
+
+        ```
+        curl -LsSf https://get.nexte.st/latest/windows-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        ```
 
     Windows Subsystem for Linux (WSL) users should follow the **Linux x86_64** instructions.
 
 ??? info "Other platforms"
 
-    === "Windows aarch64"
+    === ":material-microsoft-windows: Windows aarch64"
 
-        <!-- md:version 0.9.94 -->
+        === "Windows aarch64 using WinGet"
 
-        Run in PowerShell:
+            Run in a terminal:
 
-        ```powershell
-        $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
-        Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows-arm
-        $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
-        $tmp | Expand-Archive -DestinationPath $outputDir -Force
-        $tmp | Remove-Item
-        ```
+            ```
+            winget install nextest.cargo-nextest
+            ```
 
-        Or, using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
+        === "Windows aarch64 with PowerShell"
 
-        ```
-        curl -LsSf https://get.nexte.st/latest/windows-arm-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-        ```
+            !!! info
 
-    === "Windows i686"
+                The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
 
-        Run in PowerShell:
+                If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
 
-        ```powershell
-        $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
-        Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows-x86
-        $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
-        $tmp | Expand-Archive -DestinationPath $outputDir -Force
-        $tmp | Remove-Item
-        ```
+            Run in PowerShell:
 
-        Or, using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
+            ```powershell
+            $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+            Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows-arm
+            $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
+            $tmp | Expand-Archive -DestinationPath $outputDir -Force
+            $tmp | Remove-Item
+            ```
 
-        ```
-        curl -LsSf https://get.nexte.st/latest/windows-x86-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-        ```
+        === "Windows aarch64 with a Unix shell"
 
-    === "FreeBSD x86_64"
+            !!! info
+
+                The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+
+                If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
+
+            Using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
+
+            ```
+            curl -LsSf https://get.nexte.st/latest/windows-arm-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+            ```
+
+    === ":material-microsoft-windows: Windows i686"
+
+        === "Windows i686 using WinGet"
+
+            Run in a terminal:
+
+            ```
+            winget install nextest.cargo-nextest
+            ```
+
+        === "Windows i686 with PowerShell"
+
+            !!! info
+
+                The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+
+                If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
+
+            Run in PowerShell:
+
+            ```powershell
+            $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+            Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows-x86
+            $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
+            $tmp | Expand-Archive -DestinationPath $outputDir -Force
+            $tmp | Remove-Item
+            ```
+
+        === "Windows i686 with a Unix shell"
+
+            !!! info
+
+                The commands below assume that your Rust installation is managed via [rustup](https://rustup.rs). You can extract the archive to a different directory in your PATH if required.
+
+                If you'd like to stay on the 0.9 series to avoid breaking changes (see the [stability policy](../stability/index.md) for more), replace `latest` in the URL with `0.9`.
+
+            Using a Unix shell, `curl`, and `tar` _natively_ on Windows (e.g. `shell: bash` on GitHub Actions, or Git Bash):
+
+            ```
+            curl -LsSf https://get.nexte.st/latest/windows-x86-tar | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+            ```
+
+    === ":material-freebsd: FreeBSD x86_64"
 
         ```
         curl -LsSf https://get.nexte.st/latest/freebsd | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
         ```
 
-    === "illumos x86_64"
+    === ":material-bird: illumos x86_64"
 
         ```
         curl -LsSf https://get.nexte.st/latest/illumos | gunzip | tar xf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -245,7 +309,7 @@ For a full specification of release URLs, see [_Release URLs_](release-urls.md).
 
 ## Code signing policy
 
-Nextest's Windows binaries will soon be signed. Free code signing is provided by SignPath.io, and the certificate by SignPath Foundation.
+Nextest's Windows binaries are digitally signed. Free code signing is provided by SignPath.io, and the certificate by SignPath Foundation.
 
 * Committers and reviewers: [Members team](https://github.com/orgs/nextest-rs/teams/members)
 * Approvers: [Owners](https://github.com/orgs/nextest-rs/people?query=role%3Aowner)
