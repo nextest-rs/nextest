@@ -8,6 +8,24 @@ toc_depth: 1
 This page documents new features and bugfixes for cargo-nextest. Please see the [stability
 policy](https://nexte.st/docs/stability/) for how versioning works with cargo-nextest.
 
+## [0.9.103] - 2025-08-24
+
+### Added
+
+- Initial support for [stress tests](https://nexte.st/docs/features/stress-tests/): running tests a large number of times in a loop.
+
+### Changed
+
+- The `libtest-json-plus` output now produces test results immediately rather than at the end of the run. This is allowed by the fact that with the `libtest-json-plus` output, it is possible to distinguish between different test binaries based on the additional `nextest` property.
+
+  Thanks to [dnbln](https://github.com/dnbln) for your first contribution!
+
+### Fixed
+
+- The heuristic detection for `panicked at` in tests now handles the new output format in Rust nightlies (Rust 1.91 and above): on Unix platforms, the thread ID is now also included.
+
+  Thanks again to dnbln for fixing this.
+
 ## [0.9.102] - 2025-08-03
 
 ### Added
@@ -1508,6 +1526,7 @@ Supported in this initial release:
 - [Test retries](https://nexte.st/book/retries.md) and flaky test detection
 - [JUnit support](https://nexte.st/book/junit.md) for integration with other test tooling
 
+[0.9.103]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.102
 [0.9.102]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.102
 [0.9.101]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.101
 [0.9.100]: https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-0.9.100
