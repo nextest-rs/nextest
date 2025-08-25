@@ -23,7 +23,7 @@ jobs:
                   latest_version=${latest_tag#cargo-nextest-}
                   echo "latest_version=${latest_version}" >> $GITHUB_ENV
                   # Quote the URLs here because the winget-updater action doesn't like inline-quoted URLs
-                  echo $'urls=\'"https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-aarch64-pc-windows-msvc.zip" "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-i686-pc-windows-msvc.zip" "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-x86_64-pc-windows-msvc.zip"\'' >> $GITHUB_ENV
+                  echo $'urls=\'https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-aarch64-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-i686-pc-windows-msvc.zip https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-x86_64-pc-windows-msvc.zip\'' >> $GITHUB_ENV
             - name: Update nextest
               uses: michidk/winget-updater@latest
               with:
@@ -31,8 +31,9 @@ jobs:
                   identifier: nextest.cargo-nextest
                   repo: nextest-rs/nextest
                   url: ${{ env.urls }}
-                  version: ${{ env.latest_version }}
                   custom-fork-owner: nextest-rs
+              env:
+                  VERSION: ${{ env.latest_version }}
 
     cleanup:
         name: Cleanup branches
