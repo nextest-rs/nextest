@@ -34,7 +34,7 @@ Welcome to the home page for **cargo-nextest**, a next-generation test runner fo
 
     ---
 
-    Treat tests as cattle, not pets. Detect slow tests and terminate them if they take too long.
+    Treat tests as cattle, not pets. Detect [slow tests](docs/features/slow-tests.md) and terminate them if they take too long. Loop over tests many times with [stress tests](docs/features/stress-tests.md).
 
     [:octicons-arrow-right-24: Slow tests and timeouts](docs/features/slow-tests.md)
 
