@@ -34,7 +34,7 @@ ppv-lite86 = { version = "0.2.21", default-features = false, features = ["simd",
 rand = { version = "0.9.2" }
 rand_chacha = { version = "0.9.0", default-features = false, features = ["std"] }
 regex-automata = { version = "0.4.9", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "unicode"] }
-regex-syntax = { version = "0.8.5" }
+regex-syntax = { version = "0.8.6" }
 serde = { version = "1.0.219", features = ["alloc", "derive"] }
 serde_json = { version = "1.0.142", features = ["unbounded_depth"] }
 smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
