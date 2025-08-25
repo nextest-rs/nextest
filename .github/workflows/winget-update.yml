@@ -30,8 +30,8 @@ jobs:
                   komac-token: ${{ secrets.KOMAC_TOKEN }}
                   identifier: nextest.cargo-nextest
                   repo: nextest-rs/nextest
-                  url: ${{ steps.get_latest_version.outputs.urls }}
-                  version: ${{ steps.get_latest_version.outputs.latest_version }}
+                  url: ${{ env.urls }}
+                  version: ${{ env.latest_version }}
                   custom-fork-owner: nextest-rs
 
     cleanup:
