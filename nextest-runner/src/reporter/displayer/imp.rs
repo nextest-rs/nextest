@@ -382,8 +382,9 @@ impl<'a> DisplayReporterImpl<'a> {
                         StressRemaining::Count(n) => {
                             write!(
                                 writer,
-                                ", {} iterations remaining",
-                                n.style(self.styles.count)
+                                ", {} {} remaining",
+                                n.style(self.styles.count),
+                                plural::iterations_str(n.get()),
                             )?;
                         }
                         StressRemaining::Infinite => {

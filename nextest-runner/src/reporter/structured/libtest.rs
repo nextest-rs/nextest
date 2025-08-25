@@ -26,7 +26,7 @@ use crate::{
     config::elements::LeakTimeoutResult,
     errors::{DisplayErrorChain, FormatVersionError, FormatVersionErrorInner, WriteEventError},
     list::RustTestSuite,
-    reporter::events::{ExecutionResult, TestEvent, TestEventKind},
+    reporter::events::{ExecutionResult, StressIndex, TestEvent, TestEventKind},
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;
@@ -83,10 +83,7 @@ struct LibtestSuite<'cfg> {
     /// The number of tests in this suite that are still running
     running: usize,
 
-    // Note: we don't store the stress_index here because we reset all our
-    // libtest JSON state after each stress sub-run. If we start running
-    // multiple instances of a test within a sub-run, we'll want to store and
-    // index by the stress index as well.
+    stress_index: Option<StressIndex>,
     meta: &'cfg RustTestSuite<'cfg>,
     /// The accumulated duration of every test that has been executed
     total: std::time::Duration,
@@ -309,11 +306,21 @@ impl<'cfg> LibtestReporter<'cfg> {
 
                 if self.emit_nextest_obj {
                     write!(
-                        &mut out,
-                        r#","nextest":{{"crate":"{crate_name}","test_binary":"{binary_name}","kind":"{}"}}"#,
+                        out,
+                        r#","nextest":{{"crate":"{crate_name}","test_binary":"{binary_name}","kind":"{}""#,
                         suite_info.kind,
                     )
                     .map_err(fmt_err)?;
+
+                    if let Some(stress_index) = stress_index {
+                        write!(out, r#","stress_index":{}"#, stress_index.current)
+                            .map_err(fmt_err)?;
+                        if let Some(total) = stress_index.total {
+                            write!(out, r#","stress_total":{total}"#).map_err(fmt_err)?;
+                        }
+                    }
+
+                    write!(out, "}}").map_err(fmt_err)?;
                 }
 
                 out.extend_from_slice(b"}\n");
@@ -324,6 +331,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                     succeeded: 0,
                     ignored,
                     filtered,
+                    stress_index: *stress_index,
                     meta: test_instance.suite_info,
                     total: std::time::Duration::new(0, 0),
                     ignore_block: None,
@@ -353,16 +361,16 @@ impl<'cfg> LibtestReporter<'cfg> {
         // as libtest does not support that functionality
         write!(
             out,
-            r#"{{"type":"{kind}","event":"{eve}","name":"{}::{}${}"#,
+            r#"{{"type":"{kind}","event":"{eve}","name":"{}::{}"#,
             suite_info.package.name(),
             suite_info.binary_name,
-            test_instance.name,
         )
         .map_err(fmt_err)?;
 
         if let Some(stress_index) = stress_index {
             write!(out, "@stress-{}", stress_index.current).map_err(fmt_err)?;
         }
+        write!(out, "${}", test_instance.name).map_err(fmt_err)?;
         if let Some(retry_count) = retries {
             write!(out, "#{retry_count}\"").map_err(fmt_err)?;
         } else {
@@ -499,10 +507,19 @@ impl<'cfg> LibtestReporter<'cfg> {
             let binary_name = &suite_info.binary_name;
             write!(
                 out,
-                r#","nextest":{{"crate":"{crate_name}","test_binary":"{binary_name}","kind":"{}"}}"#,
+                r#","nextest":{{"crate":"{crate_name}","test_binary":"{binary_name}","kind":"{}""#,
                 suite_info.kind,
             )
             .map_err(fmt_err)?;
+
+            if let Some(stress_index) = test_suite.stress_index {
+                write!(out, r#","stress_index":{}"#, stress_index.current).map_err(fmt_err)?;
+                if let Some(total) = stress_index.total {
+                    write!(out, r#","stress_total":{total}"#).map_err(fmt_err)?;
+                }
+            }
+
+            write!(out, "}}").map_err(fmt_err)?;
         }
 
         out.extend_from_slice(b"}\n");

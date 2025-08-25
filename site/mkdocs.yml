@@ -90,6 +90,7 @@ nav:
           - docs/features/slow-tests.md
           - "More features":
                 - docs/features/leaky-tests.md
+                - docs/features/stress-tests.md
                 - docs/features/target-runners.md
                 - docs/ci-features/archiving.md
                 - "Partitioning and sharding runs": docs/ci-features/partitioning.md

@@ -1,0 +1,18 @@
+[32;1m    Starting[0m [1m2[0m tests across [1m2[0m binaries ([1m49[0m tests [33;1mskipped[0m)
+────────────
+[32;1m Stress test[0m iteration [1m1[0m/[1m3[0m ([1m00:00:00[0m elapsed so far, [1m3[0m iterations remaining)
+[32;1m        PASS[0m [   0.006s] [[1m1[0m/[1m3[0m] [35;1mnextest-filtering::match[0m [34;1mtest_expr_deps[0m
+[32;1m        PASS[0m [   0.006s] [[1m1[0m/[1m3[0m] [35;1mnextest-filtering::match[0m [34;1mtest_expr_package_regex[0m
+[32;1m Stress test[0m [   0.007s] iteration [1m1[0m/[1m3[0m: [1m2[0m tests run: [1m2[0m [32;1mpassed[0m, [1m49[0m [33;1mskipped[0m
+────────────
+[32;1m Stress test[0m iteration [1m2[0m/[1m3[0m ([1m00:00:00[0m elapsed so far, [1m2[0m iterations remaining)
+[32;1m        PASS[0m [   0.006s] [[1m2[0m/[1m3[0m] [35;1mnextest-filtering::match[0m [34;1mtest_expr_package_regex[0m
+[32;1m        PASS[0m [   0.006s] [[1m2[0m/[1m3[0m] [35;1mnextest-filtering::match[0m [34;1mtest_expr_deps[0m
+[32;1m Stress test[0m [   0.006s] iteration [1m2[0m/[1m3[0m: [1m2[0m tests run: [1m2[0m [32;1mpassed[0m, [1m49[0m [33;1mskipped[0m
+────────────
+[32;1m Stress test[0m iteration [1m3[0m/[1m3[0m ([1m00:00:00[0m elapsed so far, [1m1[0m iteration remaining)
+[32;1m        PASS[0m [   0.006s] [[1m3[0m/[1m3[0m] [35;1mnextest-filtering::match[0m [34;1mtest_expr_package_regex[0m
+[32;1m        PASS[0m [   0.006s] [[1m3[0m/[1m3[0m] [35;1mnextest-filtering::match[0m [34;1mtest_expr_deps[0m
+[32;1m Stress test[0m [   0.006s] iteration [1m3[0m/[1m3[0m: [1m2[0m tests run: [1m2[0m [32;1mpassed[0m, [1m49[0m [33;1mskipped[0m
+────────────
+[32;1m     Summary[0m [   0.020s] [1m2[0m tests run: [1m2[0m [32;1mpassed[0m, [1m49[0m [33;1mskipped[0m
