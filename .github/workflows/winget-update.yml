@@ -1,0 +1,42 @@
+name: Update nextest on WinGet
+
+on:
+    workflow_dispatch:
+    schedule:
+        - cron: "0 3 * * *" # Scheduled to run daily at 03:00
+
+jobs:
+    update:
+        name: Update nextest on WinGet
+        runs-on: ubuntu-22.04
+
+        steps:
+            - name: Sync winget-pkgs
+              uses: michidk/run-komac@latest
+              with:
+                  args: "sync --token=${{ secrets.KOMAC_TOKEN }}"
+            - name: Get latest nextest version
+              id: get_latest_version
+              run: |
+                  latest_tag=$(git ls-remote --tags --sort=-version:refname https://github.com/nextest-rs/nextest.git 'cargo-nextest-*' | grep -Eo 'cargo-nextest-[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+                  latest_version=${latest_tag#cargo-nextest-}
+                  echo "latest_version=${latest_version}" >> $GITHUB_ENV
+            - name: Update nextest
+              uses: michidk/winget-updater@latest
+              with:
+                  komac-token: ${{ secrets.KOMAC_TOKEN }}
+                  identifier: nextest.cargo-nextest
+                  repo: nextest-rs/nextest
+                  url: '"https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-aarch64-pc-windows-msvc.zip" "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-i686-pc-windows-msvc.zip" "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-x86_64-pc-windows-msvc.zip"'
+                  version: ${{ steps.get_latest_version.outputs.latest_version }}
+
+    cleanup:
+        name: Cleanup branches
+        needs: update # Not necessarily needed as PRs don't get closed that quick but still nice to have it in order
+        runs-on: ubuntu-22.04
+
+        steps:
+            - name: Run Komac
+              uses: michidk/run-komac@latest
+              with:
+                  args: "cleanup --only-merged --token=${{ secrets.KOMAC_TOKEN }}"
