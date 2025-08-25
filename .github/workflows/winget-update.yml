@@ -8,7 +8,7 @@ on:
 jobs:
     update:
         name: Update nextest on WinGet
-        runs-on: ubuntu-22.04
+        runs-on: ubuntu-latest
 
         steps:
             - name: Sync winget-pkgs
@@ -29,11 +29,12 @@ jobs:
                   repo: nextest-rs/nextest
                   url: '"https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-aarch64-pc-windows-msvc.zip" "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-i686-pc-windows-msvc.zip" "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{VERSION}/cargo-nextest-{VERSION}-x86_64-pc-windows-msvc.zip"'
                   version: ${{ steps.get_latest_version.outputs.latest_version }}
+                  custom-fork-owner: nextest-rs
 
     cleanup:
         name: Cleanup branches
         needs: update # Not necessarily needed as PRs don't get closed that quick but still nice to have it in order
-        runs-on: ubuntu-22.04
+        runs-on: ubuntu-latest
 
         steps:
             - name: Run Komac
