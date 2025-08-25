@@ -29,7 +29,7 @@ jobs:
             - name: Update nextest on WinGet
               uses: michidk/run-komac@latest
               with:
-                  args: "update nextest.cargo-nextest --version $LATEST_VERSION --urls $URLS --submit --token ${{ inputs.komac-token }}"
+                  args: "update nextest.cargo-nextest --version $LATEST_VERSION --urls $URLS --submit --token ${{ secrets.KOMAC_TOKEN }}"
                   custom-fork-owner: nextest-rs
 
     cleanup:
