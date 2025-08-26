@@ -5,7 +5,6 @@
 //!
 //! Status levels play a role that's similar to log levels in typical loggers.
 
-use super::TestOutputDisplay;
 use crate::reporter::{
     displayer::{DisplayOutput, TestOutputDisplayStreams},
     events::CancelReason,

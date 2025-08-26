@@ -6,14 +6,14 @@
 //! The main type here is [`Reporter`], which is constructed via a [`ReporterBuilder`].
 
 mod aggregator;
-pub mod displayer;
+mod displayer;
 mod error_description;
 pub mod events;
 mod helpers;
 mod imp;
 pub mod structured;
 
-pub use displayer::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
+pub use displayer::{FinalStatusLevel, StatusLevel, TestOutputDisplay, TestOutputDisplayStreams};
 pub use error_description::*;
 pub use helpers::highlight_end;
 pub use imp::*;

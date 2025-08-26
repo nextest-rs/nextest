@@ -6,7 +6,7 @@
 //! The main structure in this module is [`TestReporter`].
 
 use super::{
-    FinalStatusLevel, StatusLevel, TestOutputDisplay,
+    FinalStatusLevel, StatusLevel,
     displayer::{DisplayReporter, DisplayReporterBuilder, StatusLevels},
 };
 use crate::{

@@ -6,12 +6,12 @@
 //! These types form the interface between the test runner and the test
 //! reporter. The root structure for all events is [`TestEvent`].
 
-use super::{FinalStatusLevel, StatusLevel, TestOutputDisplay};
+use super::{FinalStatusLevel, StatusLevel};
 use crate::{
     config::{elements::LeakTimeoutResult, scripts::ScriptId},
     list::{TestInstance, TestInstanceId, TestList},
-    runner::{StressCondition, StressCount},
     reporter::displayer::TestOutputDisplayStreams,
+    runner::{StressCondition, StressCount},
     test_output::ChildExecutionOutput,
 };
 use chrono::{DateTime, FixedOffset};

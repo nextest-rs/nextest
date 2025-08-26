@@ -12,8 +12,7 @@ use crate::{
     config::scripts::{ScriptId, SetupScriptConfig},
     list::TestInstance,
     reporter::{
-        TestOutputDisplay,
-        displayer::TestOutputDisplayStreams,
+        TestOutputDisplayStreams,
         events::{
             ExecuteStatus, ExecutionResult, InfoResponse, RetryData, SetupScriptEnvMap,
             SetupScriptExecuteStatus, StressIndex, UnitState,

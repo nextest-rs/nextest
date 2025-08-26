@@ -19,11 +19,12 @@ use crate::{
     cargo_config::CargoConfigs,
     config::{elements::LeakTimeoutResult, overrides::CompiledDefaultFilter, scripts::ScriptId},
     errors::WriteEventError,
-    helpers::{plural, DisplayScriptInstance, DisplayTestInstance},
+    helpers::{DisplayScriptInstance, DisplayTestInstance, plural},
     list::{TestInstance, TestInstanceId},
     reporter::{
         displayer::{
-            formatters::DisplayHhMmSs, progress::TerminalProgress, DisplayOutput, TestOutputDisplayStreams
+            DisplayOutput, TestOutputDisplayStreams, formatters::DisplayHhMmSs,
+            progress::TerminalProgress,
         },
         events::*,
         helpers::Styles,

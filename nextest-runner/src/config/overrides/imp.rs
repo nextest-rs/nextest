@@ -17,7 +17,7 @@ use crate::{
         ConfigCompileError, ConfigCompileErrorKind, ConfigCompileSection, ConfigParseErrorKind,
     },
     platform::BuildPlatforms,
-    reporter::{TestOutputDisplay, displayer::TestOutputDisplayStreams},
+    reporter::TestOutputDisplayStreams,
 };
 use guppy::graph::cargo::BuildPlatform;
 use nextest_filtering::{

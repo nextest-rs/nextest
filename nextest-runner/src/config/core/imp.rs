@@ -28,9 +28,7 @@ use crate::{
     helpers::plural,
     list::TestList,
     platform::BuildPlatforms,
-    reporter::{
-        FinalStatusLevel, StatusLevel, TestOutputDisplay, displayer::TestOutputDisplayStreams,
-    },
+    reporter::{FinalStatusLevel, StatusLevel, TestOutputDisplayStreams},
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use config::{
