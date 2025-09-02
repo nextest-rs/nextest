@@ -27,6 +27,7 @@ use guppy::{
     PackageId,
     graph::{PackageGraph, PackageMetadata},
 };
+use iddqd::{IdOrdItem, IdOrdMap, id_upcast};
 use nextest_filtering::{BinaryQuery, EvalContext, TestQuery};
 use nextest_metadata::{
     BuildPlatform, FilterMatch, MismatchReason, RustBinaryId, RustNonTestBinaryKind,
@@ -168,7 +169,7 @@ impl<'g> RustTestArtifact<'g> {
     // ---
     // Helper methods
     // ---
-    fn into_test_suite(self, status: RustTestSuiteStatus) -> (RustBinaryId, RustTestSuite<'g>) {
+    fn into_test_suite(self, status: RustTestSuiteStatus) -> RustTestSuite<'g> {
         let Self {
             binary_id,
             package,
@@ -179,20 +180,18 @@ impl<'g> RustTestArtifact<'g> {
             cwd,
             build_platform,
         } = self;
-        (
-            binary_id.clone(),
-            RustTestSuite {
-                binary_id,
-                binary_path,
-                package,
-                binary_name,
-                kind,
-                non_test_binaries,
-                cwd,
-                build_platform,
-                status,
-            },
-        )
+
+        RustTestSuite {
+            binary_id,
+            binary_path,
+            package,
+            binary_name,
+            kind,
+            non_test_binaries,
+            cwd,
+            build_platform,
+            status,
+        }
     }
 }
 
@@ -217,7 +216,7 @@ pub struct SkipCounts {
 pub struct TestList<'g> {
     test_count: usize,
     rust_build_meta: RustBuildMeta<TestListState>,
-    rust_suites: BTreeMap<RustBinaryId, RustTestSuite<'g>>,
+    rust_suites: IdOrdMap<RustTestSuite<'g>>,
     workspace_root: Utf8PathBuf,
     env: EnvironmentMap,
     updated_dylib_path: OsString,
@@ -281,7 +280,7 @@ impl<'g> TestList<'g> {
                         let (non_ignored, ignored) = test_binary
                             .exec(&lctx, &list_settings, ctx.target_runner)
                             .await?;
-                        let (bin, info) = Self::process_output(
+                        let info = Self::process_output(
                             test_binary,
                             filter,
                             &ecx,
@@ -289,7 +288,7 @@ impl<'g> TestList<'g> {
                             non_ignored.as_str(),
                             ignored.as_str(),
                         )?;
-                        Ok::<_, CreateTestListError>((bin, info))
+                        Ok::<_, CreateTestListError>(info)
                     }
                     FilterBinaryMatch::Mismatch { reason } => {
                         debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
@@ -300,14 +299,14 @@ impl<'g> TestList<'g> {
         });
         let fut = stream.buffer_unordered(list_threads).try_collect();
 
-        let rust_suites: BTreeMap<_, _> = runtime.block_on(fut)?;
+        let rust_suites: IdOrdMap<_> = runtime.block_on(fut)?;
 
         // Ensure that the runtime doesn't stay hanging even if a custom test framework misbehaves
         // (can be an issue on Windows).
         runtime.shutdown_background();
 
         let test_count = rust_suites
-            .values()
+            .iter()
             .map(|suite| suite.status.test_count())
             .sum();
 
@@ -350,7 +349,7 @@ impl<'g> TestList<'g> {
                             (match result is {binary_match:?}): {}",
                             test_binary.binary_id,
                         );
-                        let (bin, info) = Self::process_output(
+                        let info = Self::process_output(
                             test_binary,
                             filter,
                             ecx,
@@ -359,7 +358,7 @@ impl<'g> TestList<'g> {
                             ignored.as_ref(),
                         )?;
                         test_count += info.status.test_count();
-                        Ok((bin, info))
+                        Ok(info)
                     }
                     FilterBinaryMatch::Mismatch { reason } => {
                         debug!("skipping test binary: {reason}: {}", test_binary.binary_id,);
@@ -367,7 +366,7 @@ impl<'g> TestList<'g> {
                     }
                 }
             })
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
+            .collect::<Result<IdOrdMap<_>, _>>()?;
 
         Ok(Self {
             rust_suites,
@@ -411,7 +410,7 @@ impl<'g> TestList<'g> {
             let mut skipped_binaries_default_filter = 0;
             let skipped_binaries = self
                 .rust_suites
-                .values()
+                .iter()
                 .filter(|suite| match suite.status {
                     RustTestSuiteStatus::Skipped {
                         reason: BinaryMismatchReason::DefaultSet,
@@ -469,7 +468,7 @@ impl<'g> TestList<'g> {
     pub fn to_summary(&self) -> TestListSummary {
         let rust_suites = self
             .rust_suites
-            .values()
+            .iter()
             .map(|test_suite| {
                 let (status, test_cases) = test_suite.status.to_summary();
                 let testsuite = RustTestSuiteSummary {
@@ -512,12 +511,12 @@ impl<'g> TestList<'g> {
 
     /// Iterates over all the test suites.
     pub fn iter(&self) -> impl Iterator<Item = &RustTestSuite<'_>> + '_ {
-        self.rust_suites.values()
+        self.rust_suites.iter()
     }
 
     /// Iterates over the list of tests, returning the path and test name.
     pub fn iter_tests(&self) -> impl Iterator<Item = TestInstance<'_>> + '_ {
-        self.rust_suites.values().flat_map(|test_suite| {
+        self.rust_suites.iter().flat_map(|test_suite| {
             test_suite
                 .status
                 .test_cases()
@@ -553,7 +552,7 @@ impl<'g> TestList<'g> {
             rust_build_meta: RustBuildMeta::empty(),
             env: EnvironmentMap::empty(),
             updated_dylib_path: OsString::new(),
-            rust_suites: BTreeMap::new(),
+            rust_suites: IdOrdMap::new(),
             skip_counts: OnceLock::new(),
         }
     }
@@ -599,7 +598,7 @@ impl<'g> TestList<'g> {
         bound: FilterBound,
         non_ignored: impl AsRef<str>,
         ignored: impl AsRef<str>,
-    ) -> Result<(RustBinaryId, RustTestSuite<'g>), CreateTestListError> {
+    ) -> Result<RustTestSuite<'g>, CreateTestListError> {
         let mut test_cases = BTreeMap::new();
 
         // Treat ignored and non-ignored as separate sets of single filters, so that partitioning
@@ -650,7 +649,7 @@ impl<'g> TestList<'g> {
     fn process_skipped(
         test_binary: RustTestArtifact<'g>,
         reason: BinaryMismatchReason,
-    ) -> (RustBinaryId, RustTestSuite<'g>) {
+    ) -> RustTestSuite<'g> {
         test_binary.into_test_suite(RustTestSuiteStatus::Skipped { reason })
     }
 
@@ -721,7 +720,7 @@ impl<'g> TestList<'g> {
             styles.colorize();
         }
 
-        for info in self.rust_suites.values() {
+        for info in &self.rust_suites {
             let matcher = match filter {
                 Some(filter) => match filter.matcher_for(&info.binary_id) {
                     Some(matcher) => matcher,
@@ -891,6 +890,19 @@ pub struct RustTestSuite<'g> {
 
     /// Test suite status and test case names.
     pub status: RustTestSuiteStatus,
+}
+
+impl IdOrdItem for RustTestSuite<'_> {
+    type Key<'a>
+        = &'a RustBinaryId
+    where
+        Self: 'a;
+
+    fn key(&self) -> Self::Key<'_> {
+        &self.binary_id
+    }
+
+    id_upcast!();
 }
 
 impl RustTestArtifact<'_> {
@@ -1271,6 +1283,7 @@ mod tests {
         test_filter::{RunIgnored, TestFilterPatterns},
     };
     use guppy::CargoMetadata;
+    use iddqd::id_ord_map;
     use indoc::indoc;
     use maplit::btreemap;
     use nextest_filtering::{CompiledExpr, Filterset, FiltersetKind, ParseContext};
@@ -1380,8 +1393,8 @@ mod tests {
         .expect("valid output");
         assert_eq!(
             test_list.rust_suites,
-            btreemap! {
-                fake_binary_id.clone() => RustTestSuite {
+            id_ord_map! {
+                RustTestSuite {
                     status: RustTestSuiteStatus::Listed {
                         test_cases: btreemap! {
                             "tests::foo::test_bar".to_owned() => RustTestCaseSummary {
@@ -1419,7 +1432,7 @@ mod tests {
                     kind: RustTestBinaryKind::LIB,
                     non_test_binaries: BTreeSet::new(),
                 },
-                skipped_binary_id.clone() => RustTestSuite {
+                RustTestSuite {
                     status: RustTestSuiteStatus::Skipped {
                         reason: BinaryMismatchReason::Expression,
                     },
