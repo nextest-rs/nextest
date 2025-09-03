@@ -30,8 +30,9 @@ use crate::{
     test_output::{ChildExecutionOutput, ChildOutput, ChildSingleOutput},
 };
 use bstr::ByteSlice;
-use nextest_metadata::MismatchReason;
-use std::{collections::BTreeMap, fmt::Write as _};
+use iddqd::{IdOrdItem, IdOrdMap, id_ord_map, id_upcast};
+use nextest_metadata::{MismatchReason, RustBinaryId};
+use std::fmt::Write as _;
 
 /// To support pinning the version of the output, we just use this simple enum
 /// to document changes as libtest output changes
@@ -99,6 +100,19 @@ struct LibtestSuite<'cfg> {
     output_block: bytes::BytesMut,
 }
 
+impl IdOrdItem for LibtestSuite<'_> {
+    type Key<'a>
+        = &'a RustBinaryId
+    where
+        Self: 'a;
+
+    fn key(&self) -> Self::Key<'_> {
+        &self.meta.binary_id
+    }
+
+    id_upcast!();
+}
+
 /// Determines whether the `nextest` subobject is added with additional metadata
 /// to events
 #[derive(Copy, Clone, Debug)]
@@ -127,7 +141,7 @@ fn fmt_err(err: std::fmt::Error) -> WriteEventError {
 pub struct LibtestReporter<'cfg> {
     _minor: FormatMinorVersion,
     _major: FormatMajorVersion,
-    test_suites: BTreeMap<&'cfg str, LibtestSuite<'cfg>>,
+    test_suites: IdOrdMap<LibtestSuite<'cfg>>,
     /// If true, we emit a `nextest` subobject with additional metadata in it
     /// that consumers can use for easier integration if they wish
     emit_nextest_obj: bool,
@@ -154,7 +168,7 @@ impl<'cfg> LibtestReporter<'cfg> {
             return Ok(Self {
                 _minor: FormatMinorVersion::First,
                 _major: FormatMajorVersion::Unstable,
-                test_suites: BTreeMap::new(),
+                test_suites: IdOrdMap::new(),
                 emit_nextest_obj,
             });
         };
@@ -215,7 +229,7 @@ impl<'cfg> LibtestReporter<'cfg> {
         Ok(Self {
             _major: major,
             _minor: minor,
-            test_suites: BTreeMap::new(),
+            test_suites: IdOrdMap::new(),
             emit_nextest_obj,
         })
     }
@@ -269,7 +283,7 @@ impl<'cfg> LibtestReporter<'cfg> {
                 )
             }
             TestEventKind::StressSubRunFinished { .. } | TestEventKind::RunFinished { .. } => {
-                for test_suite in std::mem::take(&mut self.test_suites).into_values() {
+                for test_suite in std::mem::take(&mut self.test_suites) {
                     self.finalize(test_suite)?;
                 }
 
@@ -283,8 +297,8 @@ impl<'cfg> LibtestReporter<'cfg> {
         let binary_name = &suite_info.binary_name;
 
         // Emit the suite start if this is the first test of the suite
-        let test_suite = match self.test_suites.entry(suite_info.binary_id.as_str()) {
-            std::collections::btree_map::Entry::Vacant(e) => {
+        let mut test_suite = match self.test_suites.entry(&suite_info.binary_id) {
+            id_ord_map::Entry::Vacant(e) => {
                 let (running, ignored, filtered) =
                     suite_info.status.test_cases().fold((0, 0, 0), |acc, tc| {
                         if tc.1.ignored {
@@ -338,15 +352,16 @@ impl<'cfg> LibtestReporter<'cfg> {
                     output_block: out,
                 })
             }
-            std::collections::btree_map::Entry::Occupied(e) => e.into_mut(),
+            id_ord_map::Entry::Occupied(e) => e.into_mut(),
         };
 
-        let out = &mut test_suite.output_block;
+        let test_suite_mut = &mut *test_suite;
+        let out = &mut test_suite_mut.output_block;
 
         // After all the tests have been started or ignored, put the block of
         // tests that were ignored just as libtest does
         if matches!(event.kind, TestEventKind::TestFinished { .. }) {
-            if let Some(ib) = test_suite.ignore_block.take() {
+            if let Some(ib) = test_suite_mut.ignore_block.take() {
                 out.extend_from_slice(&ib);
             }
         }
@@ -381,8 +396,8 @@ impl<'cfg> LibtestReporter<'cfg> {
             TestEventKind::TestFinished { run_statuses, .. } => {
                 let last_status = run_statuses.last_status();
 
-                test_suite.total += last_status.time_taken;
-                test_suite.running -= 1;
+                test_suite_mut.total += last_status.time_taken;
+                test_suite_mut.running -= 1;
 
                 // libtest actually requires an additional `--report-time` flag to be
                 // passed for the exec_time information to be written. This doesn't
@@ -397,7 +412,7 @@ impl<'cfg> LibtestReporter<'cfg> {
 
                 match last_status.result {
                     ExecutionResult::Fail { .. } | ExecutionResult::ExecFail => {
-                        test_suite.failed += 1;
+                        test_suite_mut.failed += 1;
 
                         // Write the output from the test into the `stdout` (even
                         // though it could contain stderr output as well).
@@ -411,22 +426,22 @@ impl<'cfg> LibtestReporter<'cfg> {
                         out.extend_from_slice(b"\"");
                     }
                     ExecutionResult::Timeout => {
-                        test_suite.failed += 1;
+                        test_suite_mut.failed += 1;
                         out.extend_from_slice(br#","reason":"time limit exceeded""#);
                     }
                     _ => {
-                        test_suite.succeeded += 1;
+                        test_suite_mut.succeeded += 1;
                     }
                 }
             }
             TestEventKind::TestSkipped { .. } => {
-                test_suite.running -= 1;
+                test_suite_mut.running -= 1;
 
-                if test_suite.ignore_block.is_none() {
-                    test_suite.ignore_block = Some(bytes::BytesMut::with_capacity(1024));
+                if test_suite_mut.ignore_block.is_none() {
+                    test_suite_mut.ignore_block = Some(bytes::BytesMut::with_capacity(1024));
                 }
 
-                let ib = test_suite
+                let ib = test_suite_mut
                     .ignore_block
                     .get_or_insert_with(|| bytes::BytesMut::with_capacity(1024));
 
@@ -454,19 +469,23 @@ impl<'cfg> LibtestReporter<'cfg> {
                 out.clear();
             }
 
-            if test_suite.running == 0 {
-                if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
+            if test_suite_mut.running == 0 {
+                std::mem::drop(test_suite);
+
+                if let Some(test_suite) = self.test_suites.remove(&suite_info.binary_id) {
                     self.finalize(test_suite)?;
                 }
             }
         } else {
             // If this is the last test of the suite, emit the test suite summary
             // before emitting the entire block
-            if test_suite.running > 0 {
+            if test_suite_mut.running > 0 {
                 return Ok(());
             }
 
-            if let Some(test_suite) = self.test_suites.remove(suite_info.binary_id.as_str()) {
+            std::mem::drop(test_suite);
+
+            if let Some(test_suite) = self.test_suites.remove(&suite_info.binary_id) {
                 self.finalize(test_suite)?;
             }
         }
